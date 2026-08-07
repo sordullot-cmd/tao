@@ -18,12 +18,10 @@ import {
   CatIcon as RpgCatIcon,
 } from "@/lib/lifeRpgCategories";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5", bg: "#F5F5F5",
-  text: "#0D0D0D", textSub: "#5C5C5C", textMut: "#8E8E8E",
-  accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", red: "#EF4444", blue: "#3B82F6", amber: "#F59E0B",
-};
+import { T as BaseT } from "@/lib/ui/tokens";
+// `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
+// thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
+const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
 
 export const GOALS_STORAGE_KEY = "tr4de_goals_v2";
 export const GOALS_CLOUD_KEY = "goals";
@@ -416,7 +414,7 @@ function Donut({ pct, color, size = 56, stroke = 5 }) {
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
         strokeDasharray={c} strokeDashoffset={off}
         transform={`rotate(-90 ${size/2} ${size/2})`}
-        style={{ transition: "stroke-dashoffset .5s ease" }} />
+        style={{ transition: "stroke-dashoffset .45s var(--ease-out)" }} />
     </svg>
   );
 }
@@ -480,7 +478,11 @@ export default function GoalsPage() {
   // (édition → mise à jour live, création → insertion unique au 1er passage valide).
   useEffect(() => {
     if (!showForm) return;
-    if (!form.label.trim() || !form.target) return;
+    // Validation stricte avant insertion : évite les « objectifs fantômes » créés
+    // par l'auto-save sur une saisie partielle. On exige un label ET une cible
+    // numérique finie strictement positive (parseFloat filtre NaN / « 12ab »).
+    const targetNum = parseFloat(form.target);
+    if (!form.label.trim() || !Number.isFinite(targetNum) || targetNum <= 0) return;
     const horizon = horizonFromDeadline(form.deadline);
     const handle = setTimeout(() => {
       // Lien Vie RPG : catégorie rattachée + XP versée (au prorata) à 100 %.
@@ -630,9 +632,8 @@ export default function GoalsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       {/* Header : pleine largeur au-dessus du drawer */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>{t("nav.goals")}</h1>
         <button onClick={openCreate}
-          style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <Plus size={14} strokeWidth={2} /> Nouvel objectif
         </button>
       </div>
@@ -678,7 +679,7 @@ export default function GoalsPage() {
                 }}>
                 {Icon && <Icon size={11} strokeWidth={1.75} />}
                 {c.label}
-                <span style={{ padding: "0 6px", borderRadius: 999, fontSize: 10, background: catFilter === c.id ? "rgba(255,255,255,0.18)" : T.accentBg, color: catFilter === c.id ? "#fff" : T.textSub }}>{count}</span>
+                <span style={{ padding: "0 6px", borderRadius: 999, fontSize: 10, background: catFilter === c.id ? "rgba(255,255,255,0.18)" : T.accentBg, color: catFilter === c.id ? T.white : T.textSub }}>{count}</span>
               </button>
             );
           });
@@ -779,12 +780,12 @@ export default function GoalsPage() {
             width: 360, flexShrink: 0,
             background: T.white,
             border: `1px solid ${T.border}`,
-            borderRadius: 12,
+            borderRadius: "var(--radius-card)",
             display: "flex", flexDirection: "column",
             alignSelf: "stretch",
             minHeight: "100%",
             overflow: "hidden",
-            animation: "goalDrawerIn .22s cubic-bezier(.2,.8,.2,1) both",
+            animation: "goalDrawerIn .28s var(--ease-drawer) both",
             fontFamily: "var(--font-sans)",
           }}>
             <style>{`
@@ -803,7 +804,7 @@ export default function GoalsPage() {
               <h3 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {editingId ? "Détail de l'objectif" : "Nouvel objectif"}
               </h3>
-              <button onClick={close}
+              <button onClick={close} aria-label="Fermer"
                 style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
@@ -947,7 +948,7 @@ export default function GoalsPage() {
                           color: active ? "#fff" : T.textSub,
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
                           transition: "all .15s ease",
-                          boxShadow: active ? `0 2px 8px ${c.color}40` : "none",
+                          boxShadow: active ? `0 2px 8px color-mix(in srgb, ${c.color} 25%, transparent)` : "none",
                         }}>
                           <Icon size={14} strokeWidth={1.75} />
                         </div>
@@ -1049,7 +1050,7 @@ export default function GoalsPage() {
                       <button onClick={() => adjustManual(g.id, -1)}
                         style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${T.border}`, background: T.white, color: T.text, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>−</button>
                       <button onClick={() => adjustManual(g.id, 1)}
-                        style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${T.text}`, background: T.text, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>+</button>
+                        style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${T.text}`, background: T.text, color: T.white, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>+</button>
                     </div>
                   </StackField>
                 );
@@ -1066,7 +1067,7 @@ export default function GoalsPage() {
                       return (
                         <button key={c.id} type="button"
                           onClick={() => setForm({ ...form, rpgCategory: active ? "" : c.id })}
-                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `${c.color}14` : T.white, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                           {active
                             ? <Check size={13} strokeWidth={2.5} color={c.color} />
                             : <RpgCatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
@@ -1145,7 +1146,7 @@ function StatStrip({ kpis, goals, compute }) {
   const successRate = kpis.total > 0 ? Math.round((kpis.achieved / kpis.total) * 100) : 0;
 
   return (
-    <div style={{ display: "flex", background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+    <div style={{ display: "flex", background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
       <StatCell
         icon={Calendar}
         label="Objectifs ce mois"
@@ -1179,7 +1180,7 @@ function StatCell({ icon: Icon, label, subLabel, value, isLast }) {
     <div style={{ flex: 1, minWidth: 0, padding: 16, borderRight: isLast ? "none" : `1px solid ${T.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         {Icon && (
-          <div style={{ width: 26, height: 26, borderRadius: 8, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 26, height: 26, borderRadius: "var(--radius-card)", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Icon size={14} strokeWidth={1.75} color={T.text} />
           </div>
         )}
@@ -1379,14 +1380,14 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           gap: nested ? 10 : 12,
           alignItems: "center",
           padding: nested ? "8px 10px" : "12px 16px",
-          background: overMode === "into" ? "#EAF3FF" : (hover || open ? "#FAFAFA" : (nested ? "#FFFFFF" : "transparent")),
+          background: overMode === "into" ? T.blueBg : (hover || open ? T.accentBg : (nested ? T.white : "transparent")),
           border: nested ? `1px solid ${T.border}` : "none",
-          borderRadius: 8,
+          borderRadius: "var(--radius-card)",
           cursor: armed ? "grabbing" : "pointer",
           transition: "background .12s ease",
           opacity: isDragging ? 0.45 : 1,
-          boxShadow: overMode === "before" ? "inset 0 2px 0 0 #3B82F6"
-                  : overMode === "after"  ? "inset 0 -2px 0 0 #3B82F6"
+          boxShadow: overMode === "before" ? `inset 0 2px 0 0 ${T.blue}`
+                  : overMode === "after"  ? `inset 0 -2px 0 0 ${T.blue}`
                   : "none",
           userSelect: armed ? "none" : "auto",
           touchAction: armed ? "none" : "auto",
@@ -1401,7 +1402,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
               icône en blanc pour le contraste. */}
           <div style={{
             width: nested ? 26 : 34, height: nested ? 26 : 34, borderRadius: "50%",
-            background: isAchieved ? T.accentBg : `${cat.color}CC`,
+            background: isAchieved ? T.accentBg : `color-mix(in srgb, ${cat.color} 80%, transparent)`,
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
             color: isAchieved ? T.textMut : "#FFFFFF",
           }}>
@@ -1423,7 +1424,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
                     fontSize: 10, fontWeight: 600,
                     padding: "2px 8px", borderRadius: 999,
                     color: lv.color,
-                    background: lv.color + "18",
+                    background: `color-mix(in srgb, ${lv.color} 10%, transparent)`,
                   }}>{lv.label}</span>
                 );
               })()}
@@ -1454,7 +1455,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
                   style={{
                     fontSize: 10, fontWeight: 600,
                     padding: "2px 8px", borderRadius: 999,
-                    color: pace.color, background: pace.color + "18",
+                    color: pace.color, background: `color-mix(in srgb, ${pace.color} 10%, transparent)`,
                     flexShrink: 0,
                   }}>{pace.label}</span>
               ) : (atRisk && <span style={{ color: T.amber, marginLeft: 2, fontWeight: 600 }}>· à risque</span>)}
@@ -1479,7 +1480,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
               cursor: g.autoType === "manual" && !editing ? "ns-resize" : "default",
               padding: g.autoType === "manual" ? "1px 5px" : 0,
               margin: g.autoType === "manual" ? "0 -5px" : 0,
-              borderRadius: 5,
+              borderRadius: "var(--radius-field)",
               background: g.autoType === "manual" && hover && !editing ? T.accentBg : "transparent",
               transition: "background .12s ease",
             }}>
@@ -1494,7 +1495,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
                   else if (e.key === "Escape") setEditing(false);
                 }}
                 onBlur={commitEdit}
-                style={{ width: 52, padding: "1px 4px", border: `1px solid ${T.text}`, borderRadius: 4, background: T.white, fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", outline: "none", textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }}
+                style={{ width: 52, padding: "1px 4px", border: `1px solid ${T.text}`, borderRadius: "var(--radius-field)", background: T.white, fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", outline: "none", textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }}
               />
             ) : (
               <span
@@ -1518,8 +1519,9 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
                     borderTop: `4px solid ${T.textMut}`,
                   }} />
               )}
-              <div style={{ height: 3, background: T.accentBg, borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${pct}%`, background: isNegative ? T.red : isAchieved ? T.green : pct >= 50 ? T.blue : T.amber, borderRadius: 2, transition: "width .4s ease" }} />
+              <div role="progressbar" aria-valuenow={Math.max(0, Math.min(100, Math.round(pct)))} aria-valuemin={0} aria-valuemax={100} aria-label={`Progression : ${Math.round(displayPct)}%`}
+                style={{ height: 3, background: T.accentBg, borderRadius: "var(--radius-field)", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${pct}%`, background: isNegative ? T.red : isAchieved ? T.green : pct >= 50 ? T.blue : T.amber, borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
               </div>
             </div>
             {/* Pourcentage d'avancement à droite de la barre (négatif si dans le rouge). */}
@@ -1532,7 +1534,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           {/* Rythme requis pour tenir l'échéance (métriques additives uniquement). */}
           {!isAchieved && pace?.requiredRate != null && (
             <div title="Ce qu'il reste à accomplir, réparti sur le temps restant jusqu'à l'échéance (jours de bourse pour le trading : le week-end ne compte pas)"
-              style={{ fontSize: 9.5, color: T.textMut, fontWeight: 500, marginTop: 4, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              style={{ fontSize: 9, color: T.textMut, fontWeight: 500, marginTop: 4, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               ≈ {fmtVal(pace.requiredRate, unit)}/{pace.rateUnit === "semaine" ? "sem." : pace.rateUnit === "mois" ? "mois" : "j"} requis
             </div>
           )}
@@ -1585,8 +1587,9 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
             </button>
           )}
           <button onClick={(e) => { e.stopPropagation(); onDelete(g.id); }}
+            aria-label="Supprimer"
             style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background .15s ease, color .12s ease" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; e.currentTarget.style.color = T.red; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
             <Trash2 size={11} strokeWidth={1.75} />
           </button>
@@ -1598,8 +1601,8 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
         <div style={{
           margin: nested ? "0 0 4px" : "0 16px 8px",
           padding: nested ? "8px 10px" : "4px 14px 12px",
-          background: nested ? "#F4F4F4" : "#FAFAFA",
-          borderRadius: 8,
+          background: T.accentBg,
+          borderRadius: "var(--radius-card)",
           borderTop: `1px solid ${T.border}`,
           marginTop: -2,
         }}>
@@ -1615,8 +1618,8 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
               })().map((s) => (
                 s.autoType ? (
                   <div key={s.id} style={{ position: "relative", paddingLeft: 28 }}>
-                    <div style={{ position: "absolute", left: 10, top: 0, bottom: 0, width: 2, background: T.border, borderRadius: 1 }} />
-                    <div style={{ position: "absolute", left: 10, top: "50%", width: 14, height: 2, background: T.border, borderRadius: 1 }} />
+                    <div style={{ position: "absolute", left: 10, top: 0, bottom: 0, width: 2, background: T.border, borderRadius: "var(--radius-field)" }} />
+                    <div style={{ position: "absolute", left: 10, top: "50%", width: 14, height: 2, background: T.border, borderRadius: "var(--radius-field)" }} />
                     <TimelineRow
                       goal={s}
                       compute={compute} unitOf={unitOf} fmtVal={fmtVal}
@@ -1635,8 +1638,8 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
                   </div>
                 ) : (
                   <div key={s.id} style={{ position: "relative", paddingLeft: 28 }}>
-                    <div style={{ position: "absolute", left: 10, top: 0, bottom: 0, width: 2, background: T.border, borderRadius: 1 }} />
-                    <div style={{ position: "absolute", left: 10, top: 14, width: 14, height: 2, background: T.border, borderRadius: 1 }} />
+                    <div style={{ position: "absolute", left: 10, top: 0, bottom: 0, width: 2, background: T.border, borderRadius: "var(--radius-field)" }} />
+                    <div style={{ position: "absolute", left: 10, top: 14, width: 14, height: 2, background: T.border, borderRadius: "var(--radius-field)" }} />
                     <SubtaskNode
                       node={s}
                       onChange={(next) => onSubtasksChange(g.id, subtasks.map(x => x.id === s.id ? next : x))}
@@ -1660,7 +1663,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
 function EmptyState({ onClick }) {
   return (
     <div style={{ background: T.white, border: `1px dashed ${T.border}`, borderRadius: 14, padding: "56px 24px", textAlign: "center" }}>
-      <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 12, background: T.accentBg, marginBottom: 12 }}>
+      <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: "var(--radius-card)", background: T.accentBg, marginBottom: 12 }}>
         <Target size={22} strokeWidth={1.75} color={T.textSub} />
       </div>
       <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>Pas d&apos;objectif pour le moment</div>
@@ -1806,8 +1809,8 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
   return (
     <div style={{
       position: "absolute", top: "calc(100% + 6px)", right: 0,
-      width: 280, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
-      boxShadow: "0 12px 32px rgba(0,0,0,0.10)", zIndex: 200, padding: 12,
+      width: 280, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
+      boxShadow: "var(--elev-overlay)", zIndex: 200, padding: 12,
     }}>
       {/* Header mois */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -1846,7 +1849,7 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
                 width: "100%", aspectRatio: "1 / 1",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 12, fontWeight: isSel ? 600 : 500,
-                color: isSel ? "#fff" : T.text,
+                color: isSel ? T.white : T.text,
                 background: isSel ? T.text : "transparent",
                 border: isToday && !isSel ? `1px solid ${T.border2 || T.border}` : "none",
                 borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
@@ -2004,7 +2007,7 @@ function FancyDropdown({ value, options, onChange, renderValue, renderOption, al
     top: rect.bottom + 6,
     minWidth: Math.max(200, rect.width),
     background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
-    boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+    boxShadow: "var(--elev-overlay)",
     padding: 4, zIndex: 10000, maxHeight: 320, overflowY: "auto",
     ...(align === "left"
       ? { left: rect.left }
@@ -2216,9 +2219,9 @@ function RoadmapDot({ item: it, pct, color }) {
           padding: "8px 10px",
           background: T.white, color: T.text,
           border: `1px solid ${T.border}`,
-          borderRadius: 8, fontSize: 11, lineHeight: 1.35,
+          borderRadius: "var(--radius-card)", fontSize: 11, lineHeight: 1.35,
           whiteSpace: "nowrap", maxWidth: 260,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.06)",
+          boxShadow: "var(--elev-overlay)",
           pointerEvents: "none", zIndex: 10,
         }}>
           {ancestors.length > 0 && (
@@ -2286,16 +2289,16 @@ function RoadmapStrip({ subtasks, deadline, createdAt }) {
   };
 
   return (
-    <div style={{ marginBottom: 18, padding: "10px 12px", background: T.white, border: `1px solid ${T.border}`, borderRadius: 8 }}>
+    <div style={{ marginBottom: 18, padding: "10px 12px", background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 10, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 }}>
         <span>{start.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}</span>
         <span>{end.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}</span>
       </div>
       <div style={{ position: "relative", height: 22 }}>
         {/* Rail de fond */}
-        <div style={{ position: "absolute", top: 10, left: 0, right: 0, height: 2, background: T.accentBg, borderRadius: 1 }} />
+        <div style={{ position: "absolute", top: 10, left: 0, right: 0, height: 2, background: T.accentBg, borderRadius: "var(--radius-field)" }} />
         {/* Portion écoulée (de la création à aujourd'hui) */}
-        <div style={{ position: "absolute", top: 10, left: 0, width: `${todayPct}%`, height: 2, background: T.text, borderRadius: 1 }} />
+        <div style={{ position: "absolute", top: 10, left: 0, width: `${todayPct}%`, height: 2, background: T.text, borderRadius: "var(--radius-field)" }} />
         {/* Curseur "Aujourd'hui" : pastille noire qui se déplace */}
         {todayPct >= 0 && todayPct <= 100 && (
           <div title="Aujourd'hui"
@@ -2370,7 +2373,7 @@ function SubtaskNode({ node, onChange, onRemove, depth = 0 }) {
         <button type="button" onClick={() => setOpen(v => !v)} aria-label={open ? "Replier" : "Déplier"}
           title={hasChildren ? (open ? "Replier" : "Déplier") : "Ajouter un sous-objectif"}
           style={{
-            width: 18, height: 18, flexShrink: 0, borderRadius: 4,
+            width: 18, height: 18, flexShrink: 0, borderRadius: "var(--radius-field)",
             border: "none", background: "transparent",
             color: T.textSub,
             cursor: "pointer",
@@ -2382,7 +2385,7 @@ function SubtaskNode({ node, onChange, onRemove, depth = 0 }) {
         </button>
         <button type="button" onClick={() => onChange({ ...node, done: !node.done })}
           style={{
-            width: 18, height: 18, flexShrink: 0, borderRadius: 4,
+            width: 18, height: 18, flexShrink: 0, borderRadius: "var(--radius-field)",
             border: `1.5px solid ${node.done ? T.green : T.border}`,
             background: node.done ? T.green : T.white,
             color: "#fff", cursor: "pointer",
@@ -2412,8 +2415,8 @@ function SubtaskNode({ node, onChange, onRemove, depth = 0 }) {
         )}
         <button type="button" onClick={onRemove}
           title="Supprimer"
-          style={{ width: 22, height: 22, borderRadius: 5, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; e.currentTarget.style.color = T.red; }}
+          style={{ width: 22, height: 22, borderRadius: "var(--radius-field)", border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
           <Trash2 size={11} strokeWidth={1.75} />
         </button>
@@ -2537,7 +2540,7 @@ function FormField({ label, required, hint, children }) {
 
 function DetailField({ label, children }) {
   return (
-    <div style={{ background: T.bg, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ background: T.bg, borderRadius: "var(--radius-card)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ fontSize: 10, color: T.textMut, fontWeight: 500, textTransform: "none", letterSpacing: 0.2 }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 22 }}>
         {children}
@@ -2555,7 +2558,7 @@ function Field({ label, children }) {
   );
 }
 function inputStyle() {
-  return { width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: T.white };
+  return { width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: T.white };
 }
 function iconBtnStyle() {
   return { width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };

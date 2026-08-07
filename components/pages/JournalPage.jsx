@@ -18,7 +18,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
   const { notes: tradeNotes } = useTradeNotes();
   const { notes: dailyNotes, setNote: updateDailyNote } = useDailySessionNotes();
 
-  const noteColor = (s) => (s >= 7 ? T.green : s >= 4 ? "#F97316" : T.red);
+  const noteColor = (s) => (s >= 7 ? T.green : s >= 4 ? T.amber : T.red);
   const fmtTime = (v) => {
     if (!v) return "—";
     if (/^\d{1,2}:\d{2}/.test(String(v))) return String(v).slice(0, 5);
@@ -43,8 +43,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: "#0D0D0D", margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>{t("journal.title")}</h1>
-        <button
+                <button
           type="button"
           aria-label={t("journal.exportAria")}
           disabled={trades.length === 0}
@@ -102,7 +101,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
             const fillBaseY = lastVal >= 0 ? zeroY : h;
 
             return (
-              <div key={dateStr} className="tr4de-journal-row" style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <div key={dateStr} className="tr4de-journal-row" style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
                 {/* CARTE DU JOUR (gauche) */}
                 <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16, width: 220, flexShrink: 0, display: "flex", flexDirection: "column" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: T.text, textTransform: "capitalize" }}>{dateLabel}</div>
@@ -151,7 +150,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
                     onChange={(next) => updateDailyNote(dateStr, next)}
                     height={220}
                     micSize={32}
-                    textareaStyle={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, fontSize: 13, color: T.text, background: T.white }}
+                    textareaStyle={{ border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 14, fontSize: 13, color: T.text, background: T.white }}
                   />
 
                   {/* Tableau identique à la page Trades, borné à 2 lignes par
@@ -172,8 +171,8 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
           })}
         </div>
       ) : (
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: "40px 40px", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "40px 40px", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+          <div style={{ width: 48, height: 48, borderRadius: "var(--radius-card)", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
             <BookOpen size={22} strokeWidth={1.75} color={T.text} />
           </div>
           <div style={{ fontSize: 17, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>{t("journal.empty")}</div>

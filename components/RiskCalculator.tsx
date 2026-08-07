@@ -112,7 +112,7 @@ export default function RiskCalculator() {
     <div style={{
       background: T.white,
       border: `1px solid ${T.border}`,
-      borderRadius: 12,
+      borderRadius: "var(--radius-card)",
       padding: 18,
       fontFamily: "var(--font-sans)",
     }}>
@@ -190,7 +190,7 @@ export default function RiskCalculator() {
       ) : (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          padding: 12, background: T.bg, borderRadius: 8,
+          padding: 12, background: T.bg, borderRadius: "var(--radius-card)",
           fontSize: 12, color: T.textMut,
         }}>
           <Info size={14} strokeWidth={1.75} />
@@ -230,7 +230,7 @@ function inputStyle(): React.CSSProperties {
     width: "100%",
     padding: "8px 10px",
     border: `1px solid ${T.border}`,
-    borderRadius: 8,
+    borderRadius: "var(--radius-card)",
     fontSize: 13,
     fontFamily: "inherit",
     color: T.text,

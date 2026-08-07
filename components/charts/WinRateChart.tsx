@@ -9,7 +9,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 
 interface WinRateChartProps {
@@ -20,10 +19,13 @@ export function WinRateChart({ trades }: WinRateChartProps) {
   // Calculer le win rate par jour
   const dataByDay = trades.reduce(
     (acc: any, trade: any) => {
-      const date = new Date(trade.entry_time).toLocaleDateString("fr-FR");
+      const dObj = new Date(trade.entry_time);
+      const date = dObj.toLocaleDateString("fr-FR");
+      const ts = dObj.getTime();
       if (!acc[date]) {
-        acc[date] = { date, wins: 0, total: 0, winRate: 0 };
+        acc[date] = { date, ts, wins: 0, total: 0, winRate: 0 };
       }
+      if (!isNaN(ts)) acc[date].ts = Math.min(acc[date].ts || ts, ts);
       acc[date].total++;
       if (trade.pnl > 0) acc[date].wins++;
       acc[date].winRate = ((acc[date].wins / acc[date].total) * 100).toFixed(1);
@@ -33,6 +35,7 @@ export function WinRateChart({ trades }: WinRateChartProps) {
   );
 
   const data = Object.values(dataByDay)
+    .sort((a: any, b: any) => (a.ts || 0) - (b.ts || 0))
     .slice(-30)
     .map((d: any) => ({
       ...d,
@@ -44,10 +47,10 @@ export function WinRateChart({ trades }: WinRateChartProps) {
       <div
         style={{
           padding: 24,
-          background: "#FAFAFA",
+          background: "var(--color-bg-subtle, #FAFAFA)",
           borderRadius: 12,
           textAlign: "center",
-          color: "#8E8E8E",
+          color: "var(--color-text-muted, #6B6B6B)",
         }}
       >
         Pas assez de données
@@ -56,17 +59,19 @@ export function WinRateChart({ trades }: WinRateChartProps) {
   }
 
   return (
-    <div style={{ background: "#FFFFFF", padding: 20, borderRadius: 12 }}>
-      <h3 style={{ margin: "0 0 16px 0", fontSize: 16, fontWeight: 600 }}>
-        📈 Win Rate Évolution (30 derniers jours)
+    <div style={{ background: "var(--color-card-bg, #FFFFFF)", padding: 20, borderRadius: 12 }}>
+      <h3 style={{ margin: "0 0 16px 0", fontSize: 16, fontWeight: 600, color: "var(--color-text)" }}>
+        Évolution du win rate (30 derniers jours)
       </h3>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border, #E5E5E5)" />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 12 }}
-            stroke="#8E8E8E"
+            tick={{ fontSize: 12, fill: "var(--color-text-muted, #6B6B6B)" }}
+            stroke="var(--color-border-strong, #D4D4D4)"
+            interval="preserveStartEnd"
+            minTickGap={24}
             tickFormatter={(val) => {
               const parts = val.split("/");
               return `${parts[0]}/${parts[1]}`;
@@ -74,27 +79,27 @@ export function WinRateChart({ trades }: WinRateChartProps) {
           />
           <YAxis
             domain={[0, 100]}
-            tick={{ fontSize: 12 }}
-            stroke="#8E8E8E"
-            label={{ value: "%", angle: -90, position: "insideLeft" }}
+            tick={{ fontSize: 12, fill: "var(--color-text-muted, #6B6B6B)" }}
+            stroke="var(--color-border-strong, #D4D4D4)"
+            label={{ value: "%", angle: -90, position: "insideLeft", fill: "var(--color-text-muted, #6B6B6B)" }}
           />
           <Tooltip
             contentStyle={{
-              background: "#FFFFFF",
-              border: "1px solid #ccc",
+              background: "var(--color-card-bg, #FFFFFF)",
+              border: "1px solid var(--color-border, #E5E5E5)",
               borderRadius: 8,
               padding: 8,
+              color: "var(--color-text)",
             }}
             formatter={(value: any) => [`${value.toFixed(1)}%`, "Win Rate"]}
-            labelFormatter={(label) => `Date: ${label}`}
+            labelFormatter={(label) => `Date : ${label}`}
           />
-          <Legend />
           <Line
             type="monotone"
             dataKey="winRate"
-            stroke="#16A34A"
+            stroke="var(--color-green, #16A34A)"
             strokeWidth={3}
-            dot={{ fill: "#16A34A", r: 4 }}
+            dot={{ fill: "var(--color-green, #16A34A)", r: 4 }}
             activeDot={{ r: 6 }}
             name="Win Rate %"
           />

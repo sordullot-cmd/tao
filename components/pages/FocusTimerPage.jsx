@@ -15,13 +15,9 @@ import { Play, Pause, RotateCcw, SkipForward, Square, Coffee, Focus, Flame, Chec
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { notify, ensureNotifyPermission } from "@/lib/notify";
 import { Stat } from "@/components/ui/Stat";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5",
-  text: "#0D0D0D", textSub: "#5C5C5C", textMut: "#8E8E8E",
-  accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", red: "#EF4444", blue: "#3B82F6", amber: "#F59E0B",
-};
+const T = { ...BaseT };
 
 const LOG_KEY = "tr4de_focus_sessions";
 
@@ -260,16 +256,15 @@ export default function FocusTimerPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>{t("nav.focus")}</h1>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
 
       {/* Header stats — 4 blocs collés dans un seul conteneur (séparateurs fins) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-        <Stat flat icon={Focus}        label="Aujourd'hui"     value={`${todayMinutes}m`}  subtext={`${todaysSessions.length} session${todaysSessions.length > 1 ? "s" : ""}`} size="sm" />
-        <Stat flat icon={Coffee}       label="Cette semaine"   value={`${weekMinutes}m`}   subtext={`${weekSessions.length} session${weekSessions.length > 1 ? "s" : ""}`} size="sm" />
-        <Stat flat icon={CheckCircle2} label="Sessions totales" value={sessions.length}     size="sm" />
-        <Stat flat icon={Flame}        label="Streak"          value={`${streak}j`}        subtext={streak > 0 ? "jours consécutifs" : "aucun jour"} size="sm" positive={streak > 0} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+        <Stat flat icon={Focus}        label="Aujourd'hui"     countUp={todayMinutes} suffix="m"  subtext={`${todaysSessions.length} session${todaysSessions.length > 1 ? "s" : ""}`} size="sm" />
+        <Stat flat icon={Coffee}       label="Cette semaine"   countUp={weekMinutes}  suffix="m"  subtext={`${weekSessions.length} session${weekSessions.length > 1 ? "s" : ""}`} size="sm" />
+        <Stat flat icon={CheckCircle2} label="Sessions totales" countUp={sessions.length}         size="sm" />
+        <Stat flat icon={Flame}        label="Streak"          countUp={streak}       suffix="j"  subtext={streak > 0 ? "jours consécutifs" : "aucun jour"} size="sm" positive={streak > 0} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
@@ -297,7 +292,7 @@ export default function FocusTimerPage() {
               <circle cx="140" cy="140" r={radius} fill="none" stroke={T.accentBg} strokeWidth="8" />
               {!isStopwatch && (
                 <circle cx="140" cy="140" r={radius} fill="none" stroke={modeConf.color} strokeWidth="8" strokeLinecap="round"
-                  strokeDasharray={circ} strokeDashoffset={offset} style={{ transition: "stroke-dashoffset 0.6s linear" }} />
+                  strokeDasharray={circ} strokeDashoffset={offset} style={{ transition: "stroke-dashoffset 0.25s linear" }} />
               )}
               {isStopwatch && (
                 <circle cx="140" cy="140" r={radius} fill="none" stroke={modeConf.color} strokeWidth="8" strokeLinecap="round"
@@ -337,7 +332,7 @@ export default function FocusTimerPage() {
                   {["min", "h"].map(u => (
                     <button key={u} onClick={() => setDurationUnit(u)}
                       style={{
-                        padding: "2px 8px", border: "none", borderRadius: 4,
+                        padding: "2px 8px", border: "none", borderRadius: "var(--radius-field)",
                         background: durationUnit === u ? T.white : "transparent",
                         color: durationUnit === u ? T.text : T.textSub,
                         fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
@@ -375,7 +370,7 @@ export default function FocusTimerPage() {
             <button onClick={toggleRun} aria-label={running ? "Mettre en pause" : "Démarrer"} style={{ ...ctrlBtn(true, modeConf.color), width: 56, height: 56 }} title={running ? "Pause" : "Start"}>
               {running ? <Pause size={20} strokeWidth={2} /> : <Play size={20} strokeWidth={2} style={{ marginLeft: 3 }} />}
             </button>
-            <button onClick={skip} style={ctrlBtn(false)} title={isStopwatch ? "Terminer & enregistrer" : "Skip"}>
+            <button onClick={skip} aria-label={isStopwatch ? "Terminer et enregistrer la session" : "Passer à la phase suivante"} style={ctrlBtn(false)} title={isStopwatch ? "Terminer & enregistrer" : "Skip"}>
               {isStopwatch ? <Square size={14} strokeWidth={2} /> : <SkipForward size={16} strokeWidth={1.75} />}
             </button>
           </div>
@@ -383,7 +378,7 @@ export default function FocusTimerPage() {
 
         {/* Log */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
             <div style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}` }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Historique</div>
             </div>
@@ -424,15 +419,4 @@ function ctrlBtn(primary, color) {
     color: primary ? "#fff" : T.textSub,
     cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
   };
-}
-function StatCard({ icon: Icon, label, value, sub }) {
-  return (
-    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
-        <Icon size={12} strokeWidth={1.75} /> {label}
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: T.text, letterSpacing: -0.3, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginTop: 4 }}>{sub}</div>
-    </div>
-  );
 }

@@ -9,19 +9,10 @@ import {
 } from "@/lib/hooks/useUserData";
 import { useTrades, useTradingAccounts, useTradeDetails } from "@/lib/hooks/useTradeData";
 import { useState } from "react";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  white: "#FFFFFF",
-  bg: "#F8FAFB",
-  surface: "#FFFFFF",
-  border: "#E3E6EB",
-  text: "#1A1F2E",
-  textMut: "#8B95AA",
-  green: "#16A34A",
-  greenBg: "#DCFCE7",
-  red: "#AD6B6B",
-  blue: "#5F7FB4",
-};
+// Écran de debug : tokens partagés (dark-aware) au lieu de hex en dur.
+const T = { ...BaseT };
 
 export default function DataMigrationTest() {
   const { user } = useAuth();
@@ -47,7 +38,7 @@ export default function DataMigrationTest() {
       style={{
         background: T.surface,
         border: `1px solid ${T.border}`,
-        borderRadius: 8,
+        borderRadius: "var(--radius-card)",
         marginBottom: 16,
         overflow: "hidden",
       }}
@@ -141,7 +132,7 @@ export default function DataMigrationTest() {
             marginTop: 16,
             padding: "12px 16px",
             background: T.surface,
-            borderRadius: 8,
+            borderRadius: "var(--radius-card)",
             border: `1px solid ${T.border}`,
             fontSize: 12,
             color: T.textMut,
@@ -242,7 +233,7 @@ export default function DataMigrationTest() {
         style={{
           background: T.surface,
           border: `1px solid ${T.border}`,
-          borderRadius: 8,
+          borderRadius: "var(--radius-card)",
           padding: 16,
         }}
       >
@@ -273,7 +264,7 @@ function StatCard({ label, value, icon }) {
       style={{
         background: T.surface,
         border: `1px solid ${T.border}`,
-        borderRadius: 8,
+        borderRadius: "var(--radius-card)",
         padding: "16px",
         textAlign: "center",
       }}

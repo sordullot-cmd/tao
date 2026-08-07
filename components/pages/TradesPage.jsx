@@ -44,18 +44,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
   const { errorTags: errorsFromHook, addError, removeError } = useTradeErrorTags();
   const [selectedTrade, setSelectedTrade] = useState(null);
   const isMobile = useIsMobile();
-  // Date range filter (default = current week)
-  const getInitWeekRange = () => {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + (dayOfWeek === 0 ? -6 : 1 - dayOfWeek));
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return { start: monday.toISOString().split('T')[0], end: sunday.toISOString().split('T')[0] };
-  };
-  const [filterStartDate, setFilterStartDate] = useState(() => getInitWeekRange().start);
-  const [filterEndDate, setFilterEndDate] = useState(() => getInitWeekRange().end);
+  // (Le filtrage par plage de dates est géré globalement dans le layout.)
   // Selection multiple via checkbox
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   // Index de la dernière case cochée pour permettre Shift+Clic = sélectionner la plage
@@ -69,17 +58,27 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
   // HORIZONTALE reste toujours visible sans devoir scroller jusqu'en bas.
   // On écrit directement le style (pas de re-render) pour rester fluide au scroll.
   const tradesMainRef = useRef(null);
+  const tradeSideRef = useRef(null);
   useEffect(() => {
     let raf = 0;
     const apply = () => {
       raf = 0;
       const node = tradesMainRef.current;
+      const side = tradeSideRef.current;
       if (!node) return;
       // Désactivé en mobile (la CSS passe en max-height:none, layout empilé).
-      if (window.innerWidth <= 767) { node.style.maxHeight = ""; return; }
+      if (window.innerWidth <= 767) {
+        node.style.maxHeight = "";
+        if (side) side.style.maxHeight = "";
+        return;
+      }
       const top = node.getBoundingClientRect().top;
       const h = Math.max(240, Math.round(window.innerHeight - top - 16));
       node.style.maxHeight = h + "px";
+      // Le panneau « Trade info » partage la même origine verticale que le
+      // tableau : on lui donne la même hauteur pour qu'il descende lui aussi
+      // jusqu'au bas de la page.
+      if (side) side.style.maxHeight = h + "px";
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
     schedule();
@@ -864,19 +863,6 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
     }
   }, [trades]);
 
-  // Filtrage par plage de dates (debut + fin)
-  const getFilteredTrades = () => {
-    if (!filterStartDate || !filterEndDate) return trades;
-    const start = new Date(filterStartDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(filterEndDate);
-    end.setHours(23, 59, 59, 999);
-    return trades.filter(t => {
-      const tradeDate = new Date(t.date);
-      return tradeDate >= start && tradeDate <= end;
-    });
-  };
-
   // Le filtrage par date est désormais géré globalement dans le layout.
   const filteredTrades = trades;
 
@@ -885,11 +871,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
     return (
       <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <h1 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)"}}>{t("journal.title")}</h1>
-          <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
+                    <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
         </div>
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:12,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-          <div style={{width:48,height:48,borderRadius:12,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+          <div style={{width:48,height:48,borderRadius:"var(--radius-card)",background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <LucideTrendingUp size={22} strokeWidth={1.75} color={T.text}/>
           </div>
           <div style={{fontSize:17,fontWeight:600,color:T.text,marginBottom:6,letterSpacing:-0.1}}>{t("journal.empty")}</div>
@@ -942,8 +927,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
     <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
       {!embedded && (
         <div style={{display:"flex",alignItems:"center",marginBottom:8,gap:12,flexWrap:"wrap"}}>
-          <h1 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)"}}>{t("trades.title")}</h1>
-          <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",fontFamily:"var(--font-sans)"}}>
+                    <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",fontFamily:"var(--font-sans)"}}>
             <button onClick={onImportClick} style={{padding:"7px 16px",height:34,borderRadius:999,background:"#0D0D0D",border:"1px solid #0D0D0D",color:"#FFFFFF",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"var(--font-sans)"}}>{t("trades.importBtn")}</button>
           </div>
           <div id="tr4de-page-header-slot" />
@@ -966,10 +950,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
             style={{
               width: "min(560px, 100%)", maxHeight: "min(80vh, 720px)",
               background: T.white, borderRadius: 14,
-              boxShadow: "0 24px 64px rgba(0,0,0,0.28)",
+              boxShadow: "var(--elev-overlay)",
               display: "flex", flexDirection: "column", overflow: "hidden",
               fontFamily: "var(--font-sans)",
-              animation: "scaleIn .18s cubic-bezier(.2,.8,.2,1)",
+              animation: "scaleIn var(--dur-modal) var(--ease-out)",
             }}>
             <style>{`
               @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -992,7 +976,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                 onClick={() => setColumnsMenuOpen(false)}
                 aria-label="Fermer"
                 style={{
-                  marginLeft: "auto", width: 30, height: 30, borderRadius: 8,
+                  marginLeft: "auto", width: 30, height: 30, borderRadius: "var(--radius-card)",
                   border: "none", background: "transparent", color: T.textSub, cursor: "pointer",
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                 }}
@@ -1024,7 +1008,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                   <label key={id}
                     style={{
                       display: "flex", alignItems: "center", gap: 10,
-                      padding: "9px 12px", borderRadius: 8, cursor: "pointer",
+                      padding: "9px 12px", borderRadius: "var(--radius-card)", cursor: "pointer",
                       fontSize: 13, color: T.text, fontWeight: 500,
                       transition: "background .12s ease",
                     }}
@@ -1050,10 +1034,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
       <div className="tr4de-trades-layout" style={{display:"flex",gap:16,alignItems:"flex-start"}}>
 
         {/* LEFT - TRADES TABLE */}
-        <div ref={tradesMainRef} className="tr4de-trades-main" style={{flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,background:T.white,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column",maxHeight:"calc(100vh - 200px)"}}>
+        <div ref={tradesMainRef} className="tr4de-trades-main" style={{flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden",display:"flex",flexDirection:"column",maxHeight:"calc(100vh - 200px)"}}>
           
 
-          <div className="tr4de-trades-scroll" style={{overflowX:embedded?"auto":"scroll",overflowY:"auto",overscrollBehavior:"contain",flex:1,minHeight:0}}>
+          <div className="tr4de-trades-scroll" style={{overflowX:"auto",overflowY:"auto",overscrollBehavior:"contain",flex:1,minHeight:0}}>
             <table style={{width:"max-content",minWidth:"100%",borderCollapse:"collapse",fontSize:13,fontFamily:"var(--font-sans)"}}>
               <thead style={{position:"sticky",top:0,background:T.bg,zIndex:10}}>
                 <tr
@@ -1115,6 +1099,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                     </span>
                   </th>
                   {(() => {
+                    const NUMERIC_COLS = new Set(["entry","exit","lots","volume","pnl","pnlPct","r","fees","netPnl"]);
                     const labels = {
                       asset:     { label: t("trades.colAsset") },
                       side:      { label: t("trades.colSide") },
@@ -1158,7 +1143,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                           style={{
                             position: "relative",
                             padding: "12px 22px",
-                            textAlign: "left", fontSize: 11, fontWeight: 500,
+                            textAlign: NUMERIC_COLS.has(id) ? "right" : "left", fontSize: 11, fontWeight: 500,
                             color: T.textMut,
                             whiteSpace: "nowrap",
                             background: T.bg,
@@ -1184,8 +1169,8 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                     <button
                       aria-label="Configurer colonnes"
                       onClick={(e) => { e.stopPropagation(); setColumnsMenuOpen(v => !v); }}
-                      style={{background: columnsMenuOpen ? "#F0F0F0" : "transparent",border:"none",padding:4,cursor:"pointer",color:T.textMut,display:"inline-flex",alignItems:"center",borderRadius:6,transition:"background .12s ease"}}
-                      onMouseEnter={(e)=>{ if(!columnsMenuOpen) e.currentTarget.style.background="#F0F0F0" }}
+                      style={{background: columnsMenuOpen ? "var(--color-hover-bg, #F0F0F0)" : "transparent",border:"none",padding:4,cursor:"pointer",color:T.textMut,display:"inline-flex",alignItems:"center",borderRadius:6,transition:"background .12s ease"}}
+                      onMouseEnter={(e)=>{ if(!columnsMenuOpen) e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)" }}
                       onMouseLeave={(e)=>{ if(!columnsMenuOpen) e.currentTarget.style.background="transparent" }}
                     >
                       <LucideSlidersHorizontal size={14} strokeWidth={1.75} />
@@ -1308,9 +1293,9 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                     setSelectedIds(next);
                     setLastSelectedIndex(i);
                   };
-                  const selectedBg = "#F0F0F0";
-                  const hoverBg = "#FAFAFA";
-                  const openBg = "#F5F5F5";
+                  const selectedBg = "var(--color-hover-bg, #F0F0F0)";
+                  const hoverBg = "var(--color-hover-bg, #F0F0F0)";
+                  const openBg = "var(--color-hover-bg, #F0F0F0)";
 
                   return (
                     <tr
@@ -1446,19 +1431,19 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                           side:      <td key="side" style={cellStyle("side",{...tdBase,fontWeight:500,color:T.text,fontSize:13})}>{t.direction}</td>,
                           entryDate: <td key="entryDate" style={cellStyle("entryDate",{...tdBase,color:T.textSub})}>{openDate}</td>,
                           entryTime: <td key="entryTime" style={cellStyle("entryTime",{...tdBase,color:T.textSub,fontSize:12})}>{openTime}</td>,
-                          entry:     <td key="entry" style={cellStyle("entry",{...tdBase,color:T.text,fontFamily:"var(--font-sans)",fontSize:13})}>${t.entry.toFixed(2)}</td>,
+                          entry:     <td key="entry" style={cellStyle("entry",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.text,fontFamily:"var(--font-sans)",fontSize:13})}>${t.entry.toFixed(2)}</td>,
                           exitDate:  <td key="exitDate" style={cellStyle("exitDate",{...tdBase,color:T.textSub})}>{closeDate}</td>,
                           exitTime:  <td key="exitTime" style={cellStyle("exitTime",{...tdBase,color:T.textSub,fontSize:12})}>{closeTime}</td>,
-                          exit:      <td key="exit" style={cellStyle("exit",{...tdBase,color:T.text,fontFamily:"var(--font-sans)",fontSize:13})}>${t.exit.toFixed(2)}</td>,
-                          lots:      <td key="lots" style={cellStyle("lots",{...tdBase,color:T.textSub})}>{(() => { const q = t._groupQty != null && t._groupQty > 0 ? t._groupQty : qtyOf(t); return q != null ? q : "—"; })()}</td>,
-                          volume:    <td key="volume" style={cellStyle("volume",{...tdBase,color:T.textSub})}>{(() => { const v = t._groupVolume != null && t._groupVolume > 0 ? t._groupVolume : volOf(t); return v != null ? fmt(v, false) : "—"; })()}</td>,
-                          pnl:       (() => { const p = t._groupPnl != null ? t._groupPnl : t.pnl; return <td key="pnl" style={cellStyle("pnl",{...tdBase,fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)"})}>{p>=0?"+":""}{fmt(p,false)}{tradeOutcome(rowNet)==="be"?" BE":""}</td>; })(),
-                          pnlPct:    <td key="pnlPct" style={cellStyle("pnlPct",{...tdBase,fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)"})}>{ret>0?"+":""}{ret}%</td>,
-                          r:         <td key="r" style={cellStyle("r",{...tdBase,fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)",fontSize:12,whiteSpace:"nowrap"})}>{fmtR(rMultiple({...t, pnl: rowNet}))}</td>,
+                          exit:      <td key="exit" style={cellStyle("exit",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.text,fontFamily:"var(--font-sans)",fontSize:13})}>${t.exit.toFixed(2)}</td>,
+                          lots:      <td key="lots" style={cellStyle("lots",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.textSub})}>{(() => { const q = t._groupQty != null && t._groupQty > 0 ? t._groupQty : qtyOf(t); return q != null ? q : "—"; })()}</td>,
+                          volume:    <td key="volume" style={cellStyle("volume",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.textSub})}>{(() => { const v = t._groupVolume != null && t._groupVolume > 0 ? t._groupVolume : volOf(t); return v != null ? fmt(v, false) : "—"; })()}</td>,
+                          pnl:       (() => { const p = t._groupPnl != null ? t._groupPnl : t.pnl; return <td key="pnl" style={cellStyle("pnl",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)"})}>{p>=0?"+":""}{fmt(p,false)}{tradeOutcome(rowNet)==="be"?" BE":""}</td>; })(),
+                          pnlPct:    <td key="pnlPct" style={cellStyle("pnlPct",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)"})}>{ret>0?"+":""}{ret}%</td>,
+                          r:         <td key="r" style={cellStyle("r",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)",fontSize:12,whiteSpace:"nowrap"})}>{fmtR(rMultiple({...t, pnl: rowNet}))}</td>,
                           duration:  <td key="duration" style={cellStyle("duration",{...tdBase,color:T.textSub,fontSize:12})}>{duration}</td>,
                           // Nouvelles cellules
-                          fees:      <td key="fees" style={cellStyle("fees",{...tdBase,color:T.textSub,fontFamily:"var(--font-sans)",fontSize:12})}>{fees > 0 ? `$${fees.toFixed(2)}` : "—"}</td>,
-                          netPnl:    <td key="netPnl" style={cellStyle("netPnl",{...tdBase,fontWeight:600,color:pnlColorFor(netPnl),fontFamily:"var(--font-sans)"})}>{netPnl>=0?"+":""}{fmt(netPnl,false)}{tradeOutcome(netPnl)==="be"?" BE":""}</td>,
+                          fees:      <td key="fees" style={cellStyle("fees",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.textSub,fontFamily:"var(--font-sans)",fontSize:12})}>{fees > 0 ? `$${fees.toFixed(2)}` : "—"}</td>,
+                          netPnl:    <td key="netPnl" style={cellStyle("netPnl",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(netPnl),fontFamily:"var(--font-sans)"})}>{netPnl>=0?"+":""}{fmt(netPnl,false)}{tradeOutcome(netPnl)==="be"?" BE":""}</td>,
                           strategy:  <td key="strategy" style={cellStyle("strategy",{...tdBase,color:T.textSub,fontSize:12,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}>{stratNames.length ? stratNames.join(", ") : "—"}</td>,
                           session:   <td key="session" style={cellStyle("session",{...tdBase,color:T.textSub,fontSize:12})}>{sessionLabel}</td>,
                           weekday:   <td key="weekday" style={cellStyle("weekday",{...tdBase,color:T.textSub,fontSize:12,textTransform:"capitalize"})}>{weekdayLabel}</td>,
@@ -1505,7 +1490,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
           // (paddings et marges verticales réduits). Le même panneau, plus dense.
           const compact = embedded;
           const panel = (
-          <div className="tr4de-trade-side" style={{width:360,maxHeight:"calc(100vh - 200px)",background:T.white,border:`1px solid ${T.border}`,borderRadius:12,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div ref={tradeSideRef} className="tr4de-trade-side" style={{width:360,maxHeight:"calc(100vh - 200px)",background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
             
             {/* HEADER WITH TABS */}
             <div style={{padding:compact?"8px 14px":"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1547,12 +1532,12 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                     {/* Symbole · sens · horodatage */}
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:compact?5:14}}>
                       <span style={{fontSize:16,fontWeight:700,color:T.text,letterSpacing:0.2}}>{selectedTrade.symbol || "—"}</span>
-                      <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:600,background:isLong?`${T.green}14`:`${T.red}14`,color:isLong?T.green:T.red}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:600,background:isLong?`color-mix(in srgb, ${T.green} 8%, transparent)`:`color-mix(in srgb, ${T.red} 8%, transparent)`,color:isLong?T.green:T.red}}>
                         {isLong ? <LucideTrendingUp size={11} strokeWidth={2.25}/> : <LucideArrowDown size={11} strokeWidth={2.25}/>}
                         {isLong ? "Long" : "Short"}
                       </span>
                       {isBe && (
-                        <span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:600,background:`${T.textMut}1F`,color:T.textMut}}>
+                        <span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:600,background:`color-mix(in srgb, ${T.textMut} 12%, transparent)`,color:T.textMut}}>
                           BE
                         </span>
                       )}
@@ -1591,11 +1576,11 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                   {/* UNITÉ DE TEMPS (timeframe d'analyse) — sélection unique */}
                   <div style={{padding:compact?"12px 14px":"16px 16px",borderBottom:`1px solid ${T.border}`}}>
                     <div style={{fontSize:11,fontWeight:600,color:T.textMut,marginBottom:compact?6:10,letterSpacing:0.5}}>Unité de temps</div>
-                    <div style={{display:"flex",gap:2,padding:3,background:T.accentBg,borderRadius:999}}>
+                    <div role="radiogroup" aria-label="Unité de temps" style={{display:"flex",gap:2,padding:3,background:T.accentBg,borderRadius:999}}>
                       {TIMEFRAME_OPTIONS.map((opt)=>{
                         const active = (tradeTimeframe[selectedTrade.id] || "") === opt;
                         return (
-                          <button key={opt} type="button" onClick={()=>setTimeframeFor(selectedTrade, opt)}
+                          <button key={opt} type="button" role="radio" aria-checked={active} aria-label={opt} onClick={()=>setTimeframeFor(selectedTrade, opt)}
                             style={{
                               flex:1,padding:"6px 0",borderRadius:999,border:"none",
                               background:active?T.white:"transparent",
@@ -1619,7 +1604,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                         const isChecked = (tradeEntryTags[selectedTrade.id] || []).includes(tag.id);
                         const rc = tag.color;
                         return (
-                          <button key={tag.id} type="button" onClick={()=>toggleEntryTag(selectedTrade, tag.id)}
+                          <button key={tag.id} type="button" role="checkbox" aria-checked={isChecked} aria-label={tag.label} onClick={()=>toggleEntryTag(selectedTrade, tag.id)}
                             style={{
                               display:"inline-flex",alignItems:"center",gap:7,
                               padding:"6px 11px 6px 8px",borderRadius:999,border:"none",
@@ -1628,7 +1613,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                               transition:"background .12s ease",
                             }}>
                             <span style={{
-                              width:15,height:15,borderRadius:5,flexShrink:0,
+                              width:15,height:15,borderRadius:"var(--radius-field)",flexShrink:0,
                               display:"inline-flex",alignItems:"center",justifyContent:"center",
                               border:`1.5px solid ${isChecked?rc:T.border}`,
                               background:isChecked?rc:T.white,
@@ -1651,7 +1636,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                         const isChecked = (tradeLiquidityTags[selectedTrade.id] || []).includes(tag.id);
                         const rc = tag.color;
                         return (
-                          <button key={tag.id} type="button" onClick={()=>toggleLiquidityTag(selectedTrade, tag.id)}
+                          <button key={tag.id} type="button" role="checkbox" aria-checked={isChecked} aria-label={tag.label} onClick={()=>toggleLiquidityTag(selectedTrade, tag.id)}
                             style={{
                               display:"inline-flex",alignItems:"center",gap:7,
                               padding:"6px 11px 6px 8px",borderRadius:999,border:"none",
@@ -1660,7 +1645,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                               transition:"background .12s ease",
                             }}>
                             <span style={{
-                              width:15,height:15,borderRadius:5,flexShrink:0,
+                              width:15,height:15,borderRadius:"var(--radius-field)",flexShrink:0,
                               display:"inline-flex",alignItems:"center",justifyContent:"center",
                               border:`1.5px solid ${isChecked?rc:T.border}`,
                               background:isChecked?rc:T.white,
@@ -1736,7 +1721,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                         </div>
                         {url ? (
                           <button type="button" onClick={() => setLightboxUrl(url)}
-                            style={{display:"block",width:"100%",padding:0,border:`1px solid ${T.border}`,borderRadius:8,overflow:"hidden",background:T.bg,cursor:"zoom-in",fontFamily:"inherit"}}>
+                            style={{display:"block",width:"100%",padding:0,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden",background:T.bg,cursor:"zoom-in",fontFamily:"inherit"}}>
                             <img src={url} alt="Trade screenshot" style={{display:"block",width:"100%",maxHeight:320,objectFit:"contain",background:T.bg}} />
                           </button>
                         ) : (
@@ -1746,7 +1731,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                               const f = extractImageFromClipboard(e);
                               if (f) { e.preventDefault(); await handleFile(f); }
                             }}
-                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = "#F0F0F0"; e.currentTarget.style.borderColor = T.text; }}
+                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = "var(--color-hover-bg, #F0F0F0)"; e.currentTarget.style.borderColor = T.text; }}
                             onDragLeave={(e) => { e.currentTarget.style.background = T.bg; e.currentTarget.style.borderColor = T.border; }}
                             onDrop={async (e) => {
                               e.preventDefault();
@@ -1757,7 +1742,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                             }}
                             style={{
                               display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,
-                              padding:compact?"16px":"28px 16px",border:`1.5px dashed ${T.border}`,borderRadius:12,
+                              padding:compact?"16px":"28px 16px",border:`1.5px dashed ${T.border}`,borderRadius:"var(--radius-card)",
                               cursor:screenshotBusy?"not-allowed":"pointer",background:T.bg,
                               color:T.textMut,fontSize:12,fontWeight:500,
                               outline: "none",
@@ -1794,7 +1779,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                         flex:1,
                         minHeight:100,
                         border:`1px solid ${T.border}`,
-                        borderRadius:8,
+                        borderRadius:"var(--radius-card)",
                         padding:12,
                         fontSize:12,
                         fontFamily:"var(--font-sans)",
@@ -1884,8 +1869,8 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                               marginTop:8,
                               background:T.white,
                               border:`1px solid ${T.border}`,
-                              borderRadius:8,
-                              boxShadow:"0 4px 12px rgba(0,0,0,0.1)",
+                              borderRadius:"var(--radius-card)",
+                              boxShadow:"var(--elev-overlay)",
                               zIndex:100,
                               maxHeight:200,
                               overflowY:"auto"
@@ -1910,8 +1895,8 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                                       setTradeStrategies(newTradeStrategies);
                                       setShowStrategyDropdown(false);
                                     }} style={{width:"100%",padding:"8px 12px",borderBottom:`1px solid ${T.border}`,background:isSelected?T.accentBg:T.white,border:"none",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:6,transition:"all .2s"}}>
-                                    <div style={{width:10,height:10,borderRadius:3,background:strat.color}}/>
-                                    <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:T.text}}>{strat.name}</div><div style={{fontSize:9,color:T.textSub}}>{t("trades.detail.groupCount").replace("{n}", String(strat.groups?.length || 0))}{tradeCount > 0 ? ` · ${tradeCount} trade${tradeCount > 1 ? "s" : ""}` : ""}</div></div>
+                                    <div style={{width:10,height:10,borderRadius:"var(--radius-field)",background:strat.color}}/>
+                                    <div style={{flex:1}}><div style={{fontSize: 9,fontWeight:600,color:T.text}}>{strat.name}</div><div style={{fontSize: 9,color:T.textSub}}>{t("trades.detail.groupCount").replace("{n}", String(strat.groups?.length || 0))}{tradeCount > 0 ? ` · ${tradeCount} trade${tradeCount > 1 ? "s" : ""}` : ""}</div></div>
                                     {isSelected && <span style={{fontSize:12}}>✓</span>}
                                     </button>
                                   );
@@ -1939,14 +1924,14 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                               <div key={strat.id} style={{display:"flex",flexDirection:"column"}}>
                                 <div style={{borderBottom:`1px solid ${T.border}`,paddingBottom:12}}>
                                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                                    <div style={{width:12,height:12,borderRadius:3,background:strat.color}}/>
+                                    <div style={{width:12,height:12,borderRadius:"var(--radius-field)",background:strat.color}}/>
                                     <div style={{fontSize:12,fontWeight:700,color:T.text}}>{strat.name}</div>
                                     <div data-strat-menu style={{marginLeft:"auto",position:"relative"}}>
                                       <button
                                         onClick={(e)=>{e.stopPropagation();setOpenStratMenuId(openStratMenuId===strat.id?null:strat.id);}}
                                         aria-label="Options stratégie"
                                         style={{background:"transparent",border:"none",cursor:"pointer",color:T.textMut,padding:4,display:"inline-flex",alignItems:"center",borderRadius:6,transition:"background .12s ease"}}
-                                        onMouseEnter={(e)=>{e.currentTarget.style.background="#F0F0F0"}}
+                                        onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)"}}
                                         onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
                                       >
                                         <LucideMoreHorizontal size={16} strokeWidth={2} />
@@ -1958,10 +1943,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                                             position:"absolute",
                                             top:"calc(100% + 4px)",
                                             right:0,
-                                            background:"#FFFFFF",
-                                            border:"1px solid #E5E5E5",
-                                            borderRadius:8,
-                                            boxShadow:"0 8px 24px rgba(0,0,0,0.10)",
+                                            background:T.white,
+                                            border:`1px solid ${T.border}`,
+                                            borderRadius:"var(--radius-card)",
+                                            boxShadow:"var(--elev-overlay)",
                                             minWidth:180,
                                             padding:4,
                                             zIndex:50,
@@ -2010,10 +1995,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                                             style={{
                                               display:"flex",alignItems:"center",gap:8,width:"100%",
                                               padding:"8px 10px",borderRadius:6,border:"none",
-                                              background:"transparent",color:"#EF4444",
+                                              background:"transparent",color:T.red,
                                               fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",textAlign:"left",
                                             }}
-                                            onMouseEnter={(e)=>{e.currentTarget.style.background="#FEF2F2"}}
+                                            onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-red-bg, #FEF2F2)"}}
                                             onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
                                           >
                                             <LucideTrash2 size={14} strokeWidth={1.75} />
@@ -2026,7 +2011,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                                   {/* PROGRESS BAR */}
                                   <div style={{width:"100%",marginBottom:12}}>
                                     <div style={{fontSize:10,fontWeight:600,color:T.textMut,marginBottom:4}}>Règles suivies: {checkedCount}/{allRules.length}</div>
-                                    <div style={{width:"100%",height:6,background:T.bg,borderRadius:3,overflow:"hidden"}}>
+                                    <div style={{width:"100%",height:6,background:T.bg,borderRadius:"var(--radius-field)",overflow:"hidden"}}>
                                       <div style={{height:"100%",background:T.accent,width:`${stratProgressPercent}%`,transition:"width 0.3s ease"}}/>
                                     </div>
                                   </div>
@@ -2042,7 +2027,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                                           const isChecked = checkedRules[ruleKey] || false;
                                           const rc = T.text;
                                           return (
-                                            <button key={rule.id} type="button" onClick={()=>setCheckedRules({...checkedRules,[ruleKey]:!isChecked})}
+                                            <button key={rule.id} type="button" role="checkbox" aria-checked={isChecked} aria-label={rule.text} onClick={()=>setCheckedRules({...checkedRules,[ruleKey]:!isChecked})}
                                               style={{
                                                 display:"inline-flex",alignItems:"center",gap:7,
                                                 padding:"6px 11px 6px 8px",borderRadius:999,border:"none",
@@ -2051,7 +2036,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                                                 transition:"background .12s ease",
                                               }}>
                                               <span style={{
-                                                width:15,height:15,borderRadius:5,flexShrink:0,
+                                                width:15,height:15,borderRadius:"var(--radius-field)",flexShrink:0,
                                                 display:"inline-flex",alignItems:"center",justifyContent:"center",
                                                 border:`1.5px solid ${isChecked?rc:T.border}`,
                                                 background:isChecked?rc:T.white,
@@ -2094,24 +2079,24 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
         >
           <div
             onClick={(e)=>e.stopPropagation()}
-            style={{background:"#FFFFFF",borderRadius:14,maxWidth:420,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.22)",border:"1px solid #E5E5E5",overflow:"hidden"}}
+            style={{background:T.white,borderRadius:14,maxWidth:420,width:"100%",boxShadow:"var(--elev-overlay)",border:`1px solid ${T.border}`,overflow:"hidden"}}
           >
             <div style={{padding:"20px 24px 8px",display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:36,height:36,borderRadius:10,background:"#FEF2F2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <LucideTrash2 size={16} strokeWidth={1.75} color="#EF4444"/>
+              <div style={{width:36,height:36,borderRadius:10,background:T.redBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <LucideTrash2 size={16} strokeWidth={1.75} color={T.red}/>
               </div>
-              <h3 style={{fontSize:15,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1}}>
+              <h3 style={{fontSize:15,fontWeight:600,color:T.text,margin:0,letterSpacing:-0.1}}>
                 {t("trades.deleteConfirm").replace("{n}", String(selectedIds.size)).replace("{s}", selectedIds.size > 1 ? "s" : "")}
               </h3>
             </div>
-            <div style={{padding:"4px 24px 20px",fontSize:13,color:"#5C5C5C",lineHeight:1.5}}>
+            <div style={{padding:"4px 24px 20px",fontSize:13,color:T.textSub,lineHeight:1.5}}>
               {t("trades.deleteWarning")}
             </div>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end",padding:"14px 24px",borderTop:"1px solid #F0F0F0",background:"#FAFAFA"}}>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",padding:"14px 24px",borderTop:`1px solid ${T.border}`,background:"var(--color-hover-bg, #F0F0F0)"}}>
               <button
                 onClick={()=>setConfirmDeleteOpen(false)}
                 disabled={isDeletingTrades}
-                style={{padding:"0 16px",height:36,borderRadius:8,border:"1px solid #E5E5E5",background:"#FFFFFF",color:"#0D0D0D",fontSize:13,fontWeight:500,cursor:isDeletingTrades?"not-allowed":"pointer",fontFamily:"inherit",opacity:isDeletingTrades?0.5:1}}
+                style={{padding:"0 16px",height:36,borderRadius:"var(--radius-card)",border:`1px solid ${T.border}`,background:T.white,color:T.text,fontSize:13,fontWeight:500,cursor:isDeletingTrades?"not-allowed":"pointer",fontFamily:"inherit",opacity:isDeletingTrades?0.5:1}}
               >
                 {t("common.cancel")}
               </button>
@@ -2131,7 +2116,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                   }
                 }}
                 disabled={isDeletingTrades}
-                style={{padding:"0 16px",height:36,borderRadius:8,border:"1px solid #EF4444",background:"#EF4444",color:"#FFFFFF",fontSize:13,fontWeight:600,cursor:isDeletingTrades?"not-allowed":"pointer",fontFamily:"inherit",opacity:isDeletingTrades?0.7:1}}
+                style={{padding:"0 16px",height:36,borderRadius:"var(--radius-card)",border:`1px solid ${T.red}`,background:T.red,color:"#FFFFFF",fontSize:13,fontWeight:600,cursor:isDeletingTrades?"not-allowed":"pointer",fontFamily:"inherit",opacity:isDeletingTrades?0.7:1}}
               >
                 {isDeletingTrades ? t("trades.deleting") : t("common.delete")}
               </button>
@@ -2149,9 +2134,9 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
           left:"50%",
           transform:"translateX(-50%)",
           maxWidth:"calc(100vw - 24px)",
-          background:"#FFFFFF",
-          color:"#0D0D0D",
-          borderRadius:12,
+          background:T.white,
+          color:T.text,
+          borderRadius:"var(--radius-card)",
           padding:"10px 14px",
           display:"flex",
           alignItems:"center",
@@ -2160,22 +2145,22 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
           gap:14,
           fontFamily:"var(--font-sans)",
           fontSize:13,
-          border:"1px solid #E5E5E5",
-          boxShadow:"0 12px 32px rgba(0,0,0,0.14)",
+          border:`1px solid ${T.border}`,
+          boxShadow:"var(--elev-overlay)",
           zIndex:100,
         }}>
           <span style={{fontWeight:600}}>
             {t("trades.selected").replace("{n}", String(selectedIds.size)).replace(/\{s\}/g, selectedIds.size > 1 ? "s" : "")}
           </span>
 
-          <span style={{width:1,height:18,background:"#E5E5E5"}} />
+          <span style={{width:1,height:18,background:T.border}} />
 
           {/* Ajouter une strategie */}
           <div style={{position:"relative"}}>
             <button
               onClick={() => setShowBulkStrategyDropdown(v => !v)}
-              style={{background:"transparent",border:"none",color:"#0D0D0D",fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px",borderRadius:6,display:"inline-flex",alignItems:"center",gap:4}}
-              onMouseEnter={(e)=>{e.currentTarget.style.background="#F0F0F0"}}
+              style={{background:"transparent",border:"none",color:T.text,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px",borderRadius:6,display:"inline-flex",alignItems:"center",gap:4}}
+              onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)"}}
               onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
             >
               {t("trades.addStrategy")}
@@ -2185,11 +2170,11 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                 position:"absolute",
                 bottom:"calc(100% + 6px)",
                 left:0,
-                background:"#FFFFFF",
-                color:"#0D0D0D",
-                border:"1px solid #E5E5E5",
+                background:T.white,
+                color:T.text,
+                border:`1px solid ${T.border}`,
                 borderRadius:10,
-                boxShadow:"0 8px 24px rgba(0,0,0,0.10)",
+                boxShadow:"var(--elev-overlay)",
                 minWidth:200,
                 maxHeight:240,
                 overflowY:"auto",
@@ -2216,29 +2201,29 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                       setShowBulkStrategyDropdown(false);
                       setSelectedIds(new Set());
                     }}
-                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,color:"#0D0D0D",borderRadius:6,textAlign:"left"}}
-                    onMouseEnter={(e)=>{e.currentTarget.style.background="#F0F0F0"}}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,color:T.text,borderRadius:6,textAlign:"left"}}
+                    onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)"}}
                     onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
                   >
                     <span style={{width:8,height:8,borderRadius:"50%",background:s.color||"#16A34A"}}/>
                     <span style={{flex:1}}>{s.name}</span>
                     {(strategyTradeCounts[s.id] || 0) > 0 && (
-                      <span style={{fontSize:11,color:"#8E8E8E",fontWeight:500}}>{strategyTradeCounts[s.id]}</span>
+                      <span style={{fontSize:11,color:T.textMut,fontWeight:500}}>{strategyTradeCounts[s.id]}</span>
                     )}
                   </button>
                 )) : (
-                  <div style={{padding:"10px 10px",fontSize:12,color:"#8E8E8E"}}>Aucune stratégie disponible</div>
+                  <div style={{padding:"10px 10px",fontSize:12,color:T.textMut}}>Aucune stratégie disponible</div>
                 )}
               </div>
             )}
           </div>
 
-          <span style={{width:1,height:18,background:"#E5E5E5"}} />
+          <span style={{width:1,height:18,background:T.border}} />
 
           <button
             onClick={() => setConfirmDeleteOpen(true)}
-            style={{background:"transparent",border:"none",color:"#EF4444",fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px",borderRadius:6}}
-            onMouseEnter={(e)=>{e.currentTarget.style.background="#FEF2F2"}}
+            style={{background:"transparent",border:"none",color:T.red,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px",borderRadius:6}}
+            onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-red-bg, #FEF2F2)"}}
             onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
           >
             Supprimer
@@ -2247,9 +2232,9 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
           <button
             onClick={() => setSelectedIds(new Set())}
             aria-label="Tout désélectionner"
-            style={{background:"transparent",border:"none",color:"#8E8E8E",fontSize:16,cursor:"pointer",fontFamily:"inherit",padding:"2px 6px",lineHeight:1}}
-            onMouseEnter={(e)=>{e.currentTarget.style.color="#0D0D0D"}}
-            onMouseLeave={(e)=>{e.currentTarget.style.color="#8E8E8E"}}
+            style={{background:"transparent",border:"none",color:T.textMut,fontSize:16,cursor:"pointer",fontFamily:"inherit",padding:"2px 6px",lineHeight:1}}
+            onMouseEnter={(e)=>{e.currentTarget.style.color=T.text}}
+            onMouseLeave={(e)=>{e.currentTarget.style.color=T.textMut}}
           >
             ×
           </button>
@@ -2262,7 +2247,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
           style={{position:"fixed",top:0,left:0,right:0,bottom:0,width:"100vw",height:"100vh",background:"rgba(0,0,0,0.2)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
           <div onClick={(e)=>e.stopPropagation()} style={{position:"relative",display:"inline-block",lineHeight:0}}>
             <img src={lightboxUrl} alt="Trade screenshot"
-              style={{display:"block",maxWidth:"70vw",maxHeight:"75vh",objectFit:"contain",borderRadius:8,boxShadow:"0 12px 48px rgba(0,0,0,0.4)"}} />
+              style={{display:"block",maxWidth:"70vw",maxHeight:"75vh",objectFit:"contain",borderRadius:"var(--radius-card)",boxShadow:"var(--elev-overlay)"}} />
             <button type="button" aria-label="Fermer" onClick={()=>setLightboxUrl(null)}
               style={{position:"absolute",top:8,right:8,width:24,height:24,borderRadius:999,background:"rgba(0,0,0,0.55)",border:"none",color:"#fff",fontSize:14,lineHeight:1,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
               ×
@@ -2302,15 +2287,15 @@ function TagMultiSelect({ placeholder, allTags, selected, onToggle }) {
         <LucideChevronDown size={15} strokeWidth={2} color={T.textMut} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }} />
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "0 10px 30px rgba(0,0,0,0.14)", maxHeight: 260, overflowY: "auto" }}>
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)", maxHeight: 260, overflowY: "auto" }}>
           {allTags.map((tg) => {
             const on = selected.includes(tg.id);
             return (
-              <button key={tg.id} type="button" onClick={() => onToggle(tg.id)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: 8, background: on ? T.accentBg : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+              <button key={tg.id} type="button" role="checkbox" aria-checked={on} aria-label={tg.label} onClick={() => onToggle(tg.id)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: "var(--radius-card)", background: on ? T.accentBg : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
                 onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = T.bg || "#FAFAFA"; }}
                 onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}>
-                <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? tg.color : T.border}`, background: on ? tg.color : T.white, color: "#fff", fontSize: 11, lineHeight: 1 }}>{on ? "✓" : ""}</span>
+                <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? tg.color : T.border}`, background: on ? tg.color : T.white, color: "#fff", fontSize: 11, lineHeight: 1 }}>{on ? "✓" : ""}</span>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: tg.color, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, color: T.text }}>{tg.label}</span>
               </button>

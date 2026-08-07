@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import {
   Check as LucideCheck,
   Upload as LucideUpload,
@@ -13,11 +14,18 @@ import { createClient } from "@/lib/supabase/client";
 import { parseCSV } from "@/lib/csvParsers";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import QuickAccountSelector from "@/components/QuickAccountSelector";
+import { PLATFORMS } from "@/lib/brokers/platforms";
 
-export default function AddTradePage({ trades, setPage, setAccounts, setSelectedAccountIds, accountType, setAccountType, selectedEvalAccount, setSelectedEvalAccount, accounts = [], selectedAccountIds = [], addTrade, addStrategy, strategies = [], user }) {
+export default function AddTradePage({ trades, setPage, setAccounts, setSelectedAccountIds, accounts = [], selectedAccountIds = [], addTrade, addStrategy, strategies = [], user }) {
   useLang();
   const [accountNames, setAccountNames] = useState([]);
   const accountName = accountNames.length === 1 ? accountNames[0] : "";
+  // Comptes réellement sélectionnés (résolus par nom) — sert au récapitulatif
+  // en lecture seule du type / de la taille.
+  const selectedAccountObjects = React.useMemo(
+    () => accountNames.map((n) => (accounts || []).find((a) => a.name === n)).filter(Boolean),
+    [accountNames, accounts]
+  );
   const [selectedBroker, setSelectedBroker] = useState("tradovate");
 
   // Favoris brokers : localStorage = cache rapide, Supabase = source de vérité.
@@ -74,9 +82,8 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
   const [files, setFiles] = useState([]);
   const [preview, setPreview] = useState([]);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isEditingAccount, setIsEditingAccount] = useState(false);
-  const [saveStatus, setSaveStatus] = useState("");
   const [selectedImportStrategy, setSelectedImportStrategy] = useState("");
   const [showStrategyForm, setShowStrategyForm] = useState(false);
   const [strategyFormData, setStrategyFormData] = useState({ name: "", description: "", color: "#5F7FB4", groups: [{ id: Date.now(), name: "", rules: [{ id: Date.now() + 1, text: "" }] }] });
@@ -165,31 +172,8 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
     });
   };
 
-  const brokers = [
-    // Plateformes / Brokers futures (exécution)
-    { id: "tradovate",     name: "Tradovate",            format: "csv",  iconPath: "/trado.png" },
-    { id: "rithmic",       name: "Rithmic R|Trader",     format: "csv",  iconPath: "/brokers/rithmic.png" },
-    { id: "ninjatrader",   name: "NinjaTrader",          format: "csv",  iconPath: "/brokers/ninja%20trader.png" },
-    // Prop firms futures
-    { id: "topstep",       name: "Topstep",              format: "csv",  iconPath: "/brokers/Topstep_Logo.jpg" },
-    { id: "apex",          name: "Apex Trader Funding",  format: "csv",  iconPath: "/brokers/apex.avif" },
-    { id: "alphafutures",  name: "Alpha Futures",        format: "csv",  iconPath: "/brokers/alpha%20futur.svg" },
-    { id: "tradeify",      name: "Tradeify",             format: "csv",  iconPath: "/brokers/Tradeify.png" },
-    { id: "lucid",         name: "Lucid Trading",        format: "csv",  iconPath: "/brokers/lucid.png" },
-    // Prop firms forex / CFD
-    { id: "ftmo",          name: "FTMO",                 format: "csv",  iconPath: "/brokers/ftmo.png" },
-    // Plateformes
-    { id: "tradingview",   name: "TradingView",          format: "csv",  iconPath: "/brokers/tradingview.webp" },
-    { id: "mt5",           name: "MetaTrader 5",         format: "html", iconPath: "/MetaTrader_5.png" },
-    { id: "mt4",           name: "MetaTrader 4",         format: "html", iconPath: "/brokers/MetaTrader_4.png" },
-    { id: "thinkorswim",   name: "thinkorswim",          format: "csv",  iconPath: "/brokers/thinkorswim.png" },
-    { id: "wealthcharts",  name: "WealthCharts",         format: "csv",  iconPath: "/weal.webp" },
-    // Brokers actions / CFD
-    { id: "ibkr",          name: "Interactive Brokers",  format: "csv",  iconPath: "/brokers/Interactive%20broker.png" },
-    { id: "capitalcom",    name: "Capital.com",          format: "csv",  iconPath: "/brokers/capital.png" },
-    { id: "ig",            name: "IG",                   format: "csv",  iconPath: "/brokers/ig%20logo.png" },
-    { id: "webull",        name: "Webull",               format: "csv",  iconPath: "/brokers/webull.png" },
-  ];
+  // Catalogue partagé avec les modales de création de compte / firme.
+  const brokers = PLATFORMS;
 
   const getBrokerInstructions = () => {
     const broker = brokers.find(b => b.id === selectedBroker);
@@ -489,127 +473,20 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
     };
   };
 
-  const lastSavedRef = useRef({ broker: null, type: null, size: null });
-  // Compte pour lequel le formulaire a déjà été initialisé. Évite de
-  // ré-initialiser (et de réécraser lastSavedRef) quand `accounts` change suite
-  // à une MAJ optimiste — sinon l'auto-sauvegarde serait court-circuitée.
-  const initializedForRef = useRef(null);
-
-  // Charger les infos du compte quand le compte sélectionné change
+  // Le format de fichier à parser suit la plateforme du compte sélectionné.
+  // Cette page ne MODIFIE plus le compte : la création et l'édition des comptes
+  // se font depuis la page Comptes (compte isolé) ou la page détail d'une firme.
   useEffect(() => {
-    if (accountName && accounts.length > 0) {
-      // Déjà initialisé pour ce compte : on ne réécrase pas l'état du formulaire
-      // (l'utilisateur est peut-être en train d'éditer le broker/type/taille).
-      if (initializedForRef.current === accountName) return;
-      const selectedAccount = accounts.find(acc => acc.name === accountName);
-      if (selectedAccount) {
-        const brokerMatch = brokers.find(b =>
-          b.name.toLowerCase() === String(selectedAccount.broker || "").toLowerCase() ||
-          b.id.toLowerCase() === String(selectedAccount.broker || "").toLowerCase()
-        );
-        const bId = brokerMatch?.id || "tradovate";
-        const aType = selectedAccount.account_type || "live";
-        const aSize = selectedAccount.eval_account_size
-          ? selectedAccount.eval_account_size
-          : (aType === "live" ? "" : "25k");
-
-        lastSavedRef.current = { broker: bId, type: aType, size: aSize };
-        initializedForRef.current = accountName;
-        setSelectedBroker(bId);
-        setAccountType(aType);
-        setSelectedEvalAccount(aSize);
-        setIsEditingAccount(true);
-      }
-    } else {
-      initializedForRef.current = null;
-      setIsEditingAccount(false);
-    }
-  }, [accountName, accounts]);
-
-  // Auto-sauvegarde : ne fire que si la valeur diffère de ce qui est en DB
-  useEffect(() => {
-    if (!isEditingAccount) return;
-    const saved = lastSavedRef.current;
-    if (
-      saved.broker === selectedBroker &&
-      saved.type === accountType &&
-      saved.size === selectedEvalAccount
-    ) return;
-    const t = setTimeout(() => {
-      lastSavedRef.current = {
-        broker: selectedBroker,
-        type: accountType,
-        size: selectedEvalAccount,
-      };
-      saveAccountChanges();
-    }, 300);
-    return () => clearTimeout(t);
+    if (!accountName || accounts.length === 0) return;
+    const selectedAccount = accounts.find(acc => acc.name === accountName);
+    if (!selectedAccount?.broker) return;
+    const brokerMatch = brokers.find(b =>
+      b.name.toLowerCase() === String(selectedAccount.broker).toLowerCase() ||
+      b.id.toLowerCase() === String(selectedAccount.broker).toLowerCase()
+    );
+    if (brokerMatch) setSelectedBroker(brokerMatch.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBroker, accountType, selectedEvalAccount, isEditingAccount]);
-
-  // Sauvegarder les changements du compte
-  const saveAccountChanges = async () => {
-    
-    if (!isEditingAccount || !accountName || accounts.length === 0) {
-      return;
-    }
-    
-    setSaveStatus("saving");
-    try {
-      const supabase = createClient();
-      const selectedAccount = accounts.find(acc => acc.name === accountName);
-      
-      if (!selectedAccount) {
-        setSaveStatus("error");
-        return;
-      }
-      
-      const brokerObj = brokers.find(b => b.id === selectedBroker);
-      const updateData = {
-        broker: brokerObj?.name || "Tradovate",
-        account_type: accountType,
-        eval_account_size: selectedEvalAccount || null,
-      };
-
-      const { error } = await supabase
-        .from("trading_accounts")
-        .update(updateData)
-        .eq("id", selectedAccount.id);
-      
-        
-      if (error) {
-        console.error("❌ Erreur DB:", error);
-        setSaveStatus("error");
-      } else {
-        
-        // RECHARGER les comptes depuis la DB
-        const userId = user?.id;
-        const { data: refreshedAccounts } = await supabase
-          .from("trading_accounts")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false });
-        
-        
-        if (setAccounts) {
-          setAccounts(refreshedAccounts || []);
-        }
-
-        // Notifier les autres composants (sidebar, selecteurs) pour rafraichir le logo
-        try {
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("tr4de:accounts-changed"));
-          }
-        } catch {}
-
-        setSaveStatus("success");
-        setTimeout(() => setSaveStatus(""), 2000);
-      }
-    } catch (err) {
-      console.error("❌ Exception:", err);
-      setSaveStatus("error");
-    }
-  };
+  }, [accountName, accounts]);
 
   const handleFileSelect = async (e) => {
     const selected = Array.from(e.target.files || []);
@@ -664,6 +541,8 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
     }
 
     setLoading(true);
+    setError("");
+    setSuccessMsg("");
 
     try {
       const supabase = createClient();
@@ -675,12 +554,10 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
         return;
       }
 
-      // Nom officiel du broker pour enregistrement DB
-      const brokerObj = brokers.find(b => b.id === selectedBroker);
-      const brokerFormatted = brokerObj?.name || "Tradovate";
-
-      // Résoudre / créer chaque compte sélectionné
+      // Résoudre chaque compte sélectionné. L'import ne CRÉE plus de compte :
+      // un nom inconnu est une erreur explicite qui renvoie vers la page Comptes.
       const targetAccountIds = [];
+      const missing = [];
       for (const rawName of accountNames) {
         const name = String(rawName).trim();
         if (!name) continue;
@@ -692,34 +569,14 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
           .eq("name", name)
           .maybeSingle();
 
-        if (existingAccount?.id) {
-          targetAccountIds.push(existingAccount.id);
-          continue;
-        }
+        if (existingAccount?.id) targetAccountIds.push(existingAccount.id);
+        else missing.push(name);
+      }
 
-        const { data: newAccount, error: createError } = await supabase
-          .from("trading_accounts")
-          .insert([{
-            user_id: userId,
-            name,
-            broker: brokerFormatted,
-            account_type: accountType,
-            eval_account_size: selectedEvalAccount || null,
-          }])
-          .select();
-
-        if (createError) {
-          console.error("Error creating account:", createError);
-          setError(t("addTrade.err.createAccount").replace("{msg}", createError.message));
-          setLoading(false);
-          return;
-        }
-        if (!newAccount || newAccount.length === 0) {
-          setError(t("addTrade.err.accountNotCreated"));
-          setLoading(false);
-          return;
-        }
-        targetAccountIds.push(newAccount[0].id);
+      if (missing.length > 0) {
+        setError(t("addTrade.err.unknownAccount").replace("{names}", missing.join(", ")));
+        setLoading(false);
+        return;
       }
 
       if (targetAccountIds.length === 0) {
@@ -910,13 +767,20 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
       setPreview([]);
       setSelectedBroker("tradovate");
       setSelectedImportStrategy("");
-      setError(duplicateCount > 0
-        ? t("addTrade.info.imported")
-            .replace("{n}", String(totalInserted))
-            .replace("{d}", String(duplicateCount))
-            .replace(/\{s\}/g, totalInserted > 1 ? "s" : "")
-            .replace(/\{ds\}/g, duplicateCount > 1 ? "s" : "")
-        : "");
+      setError("");
+      setSuccessMsg(
+        duplicateCount > 0
+          ? t("addTrade.info.imported")
+              .replace("{n}", String(totalInserted))
+              .replace("{d}", String(duplicateCount))
+              .replace(/\{s\}/g, totalInserted > 1 ? "s" : "")
+              .replace(/\{ds\}/g, duplicateCount > 1 ? "s" : "")
+          : t("addTrade.info.imported")
+              .replace("{n}", String(totalInserted))
+              .replace("{d}", "0")
+              .replace(/\{s\}/g, totalInserted > 1 ? "s" : "")
+              .replace(/\{ds\}/g, "")
+      );
       setLoading(false);
       
       // Rediriger vers la page des trades après 1.5s
@@ -924,6 +788,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
         setPage("trades");
       }, 1500);
     } catch (err) {
+      setSuccessMsg("");
       setError(t("addTrade.err.import").replace("{msg}", err.message));
       console.error("Import error:", err);
       setLoading(false);
@@ -943,24 +808,41 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
       <div style={{ display: "flex", flexDirection: "column", padding: 0, background: "#fff", flex: 1, minWidth: 0 }}>
           <div style={{ padding: 24 }}>
           
-          {/* ACCOUNT SELECTOR */}
+          {/* ACCOUNT SELECTOR — sélection seule : cette page n'ajoute pas de
+              compte, elle rattache les trades importés à des comptes existants. */}
           <div style={{ paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
-              {t("addTrade.account")}
-            </label>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: "#5C5C5C" }}>
+                {t("addTrade.account")}
+              </label>
+              <button
+                type="button"
+                onClick={() => setPage?.("accounts")}
+                style={{
+                  marginLeft: "auto", padding: 0, border: "none", background: "transparent",
+                  color: T.text, fontSize: 11, fontWeight: 500, cursor: "pointer",
+                  fontFamily: "inherit", textDecoration: "underline",
+                }}
+              >
+                {t("addTrade.manageAccounts")}
+              </button>
+            </div>
             <QuickAccountSelector
               multi
               selectedAccountNames={accountNames}
               onAccountNamesChange={setAccountNames}
               accounts={accounts}
-              allowDelete
-              onAccountDeleted={(id) => {
-                if (setAccounts) setAccounts(prev => (prev || []).filter(a => a.id !== id));
-              }}
+              selectionOnly
+              onRequestCreate={() => setPage?.("accounts")}
               T={T}
             />
+            {accounts.length === 0 && (
+              <div style={{ fontSize: 11, color: T.textMut, marginTop: 8, lineHeight: 1.5 }}>
+                {t("addTrade.noAccountHint")}
+              </div>
+            )}
           </div>
-          {/* BROKER */}
+          {/* BROKER — sert uniquement à choisir le parseur du fichier */}
           <div style={{ marginTop: "14px", paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
               {t("addTrade.broker")}
@@ -970,14 +852,6 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
               onChange={(id) => {
                 setSelectedBroker(id);
                 setError("");
-                // MAJ optimiste du compte sélectionné → l'icône à gauche du
-                // compte se met à jour immédiatement (sans attendre la DB).
-                const brokerObj = brokers.find(b => b.id === id);
-                if (accountName && setAccounts && brokerObj) {
-                  setAccounts(prev => (prev || []).map(a =>
-                    a.name === accountName ? { ...a, broker: brokerObj.name } : a
-                  ));
-                }
               }}
               options={(() => {
                 const isFav = (id) => favoriteBrokers.includes(id);
@@ -1020,109 +894,47 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
               emptyLabel={t("addTrade.noBroker")}
             />
           </div>
-          {/* ACCOUNT TYPE — pill selector live/eval/funded */}
-          <div style={{ paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
-              {t("addTrade.accountType")}
-            </label>
-            <div
-              role="radiogroup"
-              aria-label={t("addTrade.accountType")}
-              style={{
-                display: "flex",
-                gap: 8,
-                flexWrap: "wrap",
-              }}
-            >
-              {[
-                { id: "live",   label: t("addTrade.live") },
-                { id: "eval",   label: t("addTrade.eval") },
-                { id: "funded", label: t("addTrade.funded") },
-                { id: "demo",   label: t("addTrade.demo") },
-              ].map((opt) => {
-                const active = accountType === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setAccountType(opt.id)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "8px 14px",
-                      borderRadius: 999,
-                      border: `1px solid ${active ? T.text : T.border}`,
-                      background: active ? T.text : "#FFFFFF",
-                      color: active ? "#FFFFFF" : T.text,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      cursor: "pointer",
-                      transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
-                      fontFamily: "var(--font-sans)",
-                    }}
-                  >
-                    {active && <LucideCheck size={13} strokeWidth={2.5} />}
-                    {opt.label}
-                  </button>
-                );
-              })}
+          {/* RÉCAPITULATIF — type et taille des comptes visés, en lecture seule.
+              Ces réglages se modifient depuis la page Comptes / la firme. */}
+          {selectedAccountObjects.length > 0 && (
+            <div style={{ paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
+                {t("addTrade.accountType")}
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {selectedAccountObjects.map((acc) => {
+                  const type = acc.account_type || "live";
+                  const label = type === "eval" ? t("addTrade.eval")
+                    : type === "funded" ? t("addTrade.funded")
+                    : type === "demo" ? t("addTrade.demo")
+                    : t("addTrade.live");
+                  const dot = type === "eval" ? T.amber
+                    : type === "funded" ? T.blue
+                    : type === "demo" ? T.purple
+                    : T.green;
+                  return (
+                    <span key={acc.id} style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "5px 10px", borderRadius: 999,
+                      border: `1px solid ${T.border}`, background: T.white,
+                      fontSize: 12, color: T.textSub, fontWeight: 500, maxWidth: "100%",
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {acc.name}
+                      </span>
+                      <span style={{ color: T.textMut }}>
+                        · {label}{acc.eval_account_size ? ` ${acc.eval_account_size}` : ""}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: T.textMut, marginTop: 8, lineHeight: 1.5 }}>
+                {t("addTrade.typeReadOnly")}
+              </div>
             </div>
-            {(accountType === "eval" || accountType === "funded") && (
-              <div style={{ marginTop: "12px" }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
-                  {t("addTrade.accountSize")}
-                </label>
-                <SearchableSelect
-                  value={selectedEvalAccount}
-                  onChange={setSelectedEvalAccount}
-                  options={[
-                    { id: "25k", label: "$25,000" },
-                    { id: "50k", label: "$50,000" },
-                    { id: "100k", label: "$100,000" },
-                    { id: "150k", label: "$150,000" },
-                    { id: "250k", label: "$250,000" },
-                  ]}
-                  searchable={false}
-                />
-              </div>
-            )}
-            {(accountType === "live" || accountType === "demo") && (
-              <div style={{ marginTop: "12px" }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
-                  {t("addTrade.initialBalance")}
-                </label>
-                <div style={{ position: "relative", width: "100%" }}>
-                  <span style={{
-                    position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
-                    color: T.textSub, fontSize: 13, pointerEvents: "none",
-                  }}>$</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="any"
-                    placeholder="10000"
-                    value={selectedEvalAccount && /^\d+(\.\d+)?$/.test(String(selectedEvalAccount)) ? selectedEvalAccount : ""}
-                    onChange={(e) => setSelectedEvalAccount(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "9px 12px 9px 22px",
-                      borderRadius: 8,
-                      border: `1px solid ${T.border}`,
-                      background: "#FFFFFF",
-                      fontSize: 13,
-                      color: T.text,
-                      fontFamily: "inherit",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+          )}
           {/* FILE */}
           <div style={{ paddingBottom: 20, marginBottom: 20 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
@@ -1243,7 +1055,8 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
               </div>
             </div>
           )}
-          {error && <div style={{ padding: "12px", background: "#FEE2E2", border: `1px solid #FCA5A5`, borderRadius: "6px", fontSize: "12px", color: "#991B1B", marginBottom: "16px" }}>{error}</div>}
+          {error && <div role="alert" style={{ padding: "12px", background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: "6px", fontSize: "12px", color: T.red, marginBottom: "16px" }}>{error}</div>}
+          {successMsg && <div role="status" style={{ padding: "12px", background: T.greenBg, border: `1px solid ${T.greenBd}`, borderRadius: "6px", fontSize: "12px", color: T.green, marginBottom: "16px" }}>{successMsg}</div>}
 
           <button
             onClick={handleImport}

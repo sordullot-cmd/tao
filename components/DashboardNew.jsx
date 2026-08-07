@@ -8,11 +8,6 @@ import { getLocalDateString } from "@/lib/dateUtils";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { useTrades } from "@/lib/hooks/useTradeData";
 import { useStrategies, useUserPreferences } from "@/lib/hooks/useUserData";
-import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
-import { useTradeEmotionTags, useTradeErrorTags } from "@/lib/hooks/useTradeEmotionTags";
-import { useDailySessionNotes } from "@/lib/hooks/useDailySessionNotes";
-import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
-import { useCustomDisciplineRules } from "@/lib/hooks/useCustomDisciplineRules";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { useTradeAlerts } from "@/lib/hooks/useTradeAlerts";
@@ -43,19 +38,18 @@ import BacktestPage from "@/components/pages/BacktestPage";
 import BrokersPage from "@/components/pages/BrokersPage";
 import AccountsPage from "@/components/pages/AccountsPage";
 import AccountDetailPage from "@/components/pages/AccountDetailPage";
+import PropFirmDetailPage from "@/components/pages/PropFirmDetailPage";
+import { usePropFirms } from "@/lib/hooks/usePropFirms";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import QuickAccountSelector from "@/components/QuickAccountSelector";
 import MultiAccountSelector from "@/components/MultiAccountSelector";
-import ApexChatNew from "@/components/ApexChatNew";
 import AlertToast from "@/components/AlertToast";
 import CommandPalette from "@/components/CommandPalette";
-import AgentPanel from "@/components/AgentPanel";
-import AIReportSummaryCard from "@/components/AIReportSummaryCard";
 import SettingsPage from "@/components/pages/SettingsPage";
 import Sidebar from "@/components/ui/Sidebar";
 import SearchableSelect from "@/components/ui/SearchableSelect";
-import DateRangePicker from "@/components/ui/DateRangePicker";
 import { getCurrencySymbol, getUserTimezone } from "@/lib/userPrefs";
+import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
   LayoutDashboard,
@@ -64,7 +58,6 @@ import {
   NotebookPen,
   ShieldCheck,
   Target as LucideTarget,
-  Bot,
   Upload as LucideUpload,
   FileText as LucideFileText,
   X as LucideX,
@@ -92,38 +85,20 @@ import {
   Mic as LucideMic,
 } from "lucide-react";
 
-/* ─── TOKENS (OpenAI palette) ──────────────────────────────────────── */
-const T = {
-  white:   "#FFFFFF",
-  bg:      "#FFFFFF",
-  surface: "#FFFFFF",
-  border:  "#E5E5E5",
-  border2: "#D4D4D4",
-  text:    "#0D0D0D",
-  textSub: "#5C5C5C",
-  textMut: "#8E8E8E",
-  green:   "#16A34A",
-  greenBg: "#F0FDF4",
-  greenBd: "#86EFAC",
-  red:     "#EF4444",
-  redBg:   "#FEF2F2",
-  redBd:   "#FECACA",
-  accent:  "#0D0D0D",
-  accentBg:"#F0F0F0",
-  accentBd:"#D4D4D4",
-  amber:   "#F97316",
-  amberBg: "#FFF4E6",
-  blue:    "#3B82F6",
-  blueBg:  "#EFF6FF",
-};
+/* ─── TOKENS ───────────────────────────────────────────────────────────
+   Source unique et dark-aware : lib/ui/tokens.ts (les valeurs sont des
+   var(--color-*), donc le thème sombre bascule nativement). */
 
 const css = `
   body { background: ${T.bg}; color: ${T.text}; font-family: var(--font-sans); min-height: 100vh; font-size: 14px; }
   button { font-family: inherit; cursor: pointer; }
   select { font-family: inherit; }
+  /* anim-1 / anim-2 sont désormais définis globalement (globals.css) sur le
+     token --ease-out. On garde le keyframe local par sécurité mais on route
+     l'animation vers la courbe partagée. */
   @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-  .anim-1 { animation: fadeUp .25s ease both; }
-  .anim-2 { animation: fadeUp .25s .05s ease both; }
+  .anim-1 { animation: fadeUp .25s var(--ease-out) both; }
+  .anim-2 { animation: fadeUp .25s .05s var(--ease-out) both; }
   .nav-item:hover { background: ${T.accentBg} !important; }
   .card-hover:hover { border-color: ${T.border2} !important; box-shadow: 0 4px 12px rgba(0,0,0,.06) !important; }
 `;
@@ -167,7 +142,7 @@ function NavItem({ icon, label, active, onClick, badge }) {
     <button className="nav-item" onClick={onClick} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderRadius:8,border:"none",background: active ? T.accentBg : "transparent",color: active ? T.accent : T.textSub,fontSize:13,fontWeight: active ? 600 : 400,transition:"all .15s",textAlign:"left",}}>
       <span style={{fontSize:15,opacity: active?1:.7}}>{icon}</span>
       <span>{label}</span>
-      {badge && <span style={{marginLeft:"auto",fontSize:10,padding:"1px 6px",borderRadius:20,background:T.red+"20",color:T.red,fontWeight:600}}>{badge}</span>}
+      {badge && <span style={{marginLeft:"auto",fontSize:10,padding:"1px 6px",borderRadius:20,background:T.redBg,color:T.red,fontWeight:600}}>{badge}</span>}
     </button>
   );
 }
@@ -208,26 +183,8 @@ export default function App() {
   });
   const [selectedStrategyId, setSelectedStrategyId] = useState(null);
   const [selectedAccountDetailId, setSelectedAccountDetailId] = useState(null);
-  const [aiReportsUnread, setAiReportsUnread] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchUnread = async () => {
-      try {
-        const res = await fetch("/api/ai/reports?limit=30", { credentials: "include" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-        const unread = (data.reports || []).filter((r) => !r.is_read).length;
-        setAiReportsUnread(unread);
-      } catch (e) {
-        // silent
-      }
-    };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 60000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [page]);
+  // Firme dont on affiche les paramètres (page "firm-detail").
+  const [selectedFirmId, setSelectedFirmId] = useState(null);
   // ✅ Utiliser les hooks pour Trades et Stratégies (auto-stockés dans Supabase)
   const { trades, addTrade, updateTrade, deleteTrade } = useTrades();
   const { pushUndo } = useUndo();
@@ -236,15 +193,11 @@ export default function App() {
   // Rappels d'agenda → vraies notifications système, quelle que soit la page.
   useAgendaReminders();
   const { strategies, addStrategy, updateStrategy, deleteStrategy } = useStrategies();
-  const { notes: agentTradeNotes } = useTradeNotes();
-  const { notes: agentDailyNotes } = useDailySessionNotes();
-  const { emotionTags: agentEmotionTags } = useTradeEmotionTags();
-  const { errorTags: agentErrorTags } = useTradeErrorTags();
-  const { disciplineData: agentDisciplineData, baseRules: agentBaseRules } = useDisciplineTracking();
-  const { customRules: agentCustomRules } = useCustomDisciplineRules();
   const [userId, setUserId] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [accounts, setAccounts] = useState([]);
+  // Firmes de prop trading (parents des comptes) — voir lib/propFirms.
+  const { firms, setFirms } = usePropFirms(user?.id);
   const [selectedAccountIdHeader, setSelectedAccountIdHeader] = useState(null);
   const [selectedAccountIds, setSelectedAccountIds] = useState(() => {
     try {
@@ -401,6 +354,11 @@ export default function App() {
     if (user?.id) {
       loadAccounts();
     }
+    // Resynchronise quand un compte est créé/modifié/supprimé ailleurs
+    // (modales de la page Comptes, page détail d'une firme, sélecteurs).
+    const onAccountsChanged = () => { if (user?.id) loadAccounts(); };
+    window.addEventListener("tr4de:accounts-changed", onAccountsChanged);
+    return () => window.removeEventListener("tr4de:accounts-changed", onAccountsChanged);
   }, [user?.id]);
 
   // Fonction pour se déconnecter
@@ -445,45 +403,12 @@ export default function App() {
   // dans une section « Comptes eval passés »).
   const visibleAccounts = accounts.filter(acc => !isPlaceholderAccount(acc.id) && !isArchivedAccount(acc.id, archivedMeta));
 
-  // Plage de dates par page (chaque page garde sa propre sélection).
-  const iso = (d) => d.toISOString().split("T")[0];
-  const defaultDateRange = (pageId) => {
-    const today = new Date();
-    // Dashboard / Stratégies / Agent IA : tout depuis le premier trade
-    if (pageId === "dashboard" || pageId === "strategies" || pageId === "calendar" || pageId === "discipline" || pageId === "agent") {
-      const earliest = (trades || []).reduce((min, t) => {
-        try {
-          const d = new Date(t.date);
-          if (isNaN(d.getTime())) return min;
-          return !min || d < min ? d : min;
-        } catch { return min; }
-      }, null);
-      const start = earliest || new Date(today.getFullYear(), 0, 1);
-      return { start: iso(start), end: iso(today) };
-    }
-    // Trades / Journal : mois en cours (du 1er au dernier jour du mois)
-    const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { start: iso(firstOfMonth), end: iso(lastOfMonth) };
-  };
-  // Conservé en mémoire seulement : la sélection est gardée quand on change de
-  // page, mais un rechargement de la page réinitialise au défaut (mois en cours).
-  const [dateRangesByPage, setDateRangesByPage] = useState({});
-  const globalDateRange = dateRangesByPage[page] || defaultDateRange(page);
-  const setGlobalDateRange = (r) => setDateRangesByPage(prev => ({ ...prev, [page]: r }));
-
+  // Aucun filtre de dates : toutes les pages affichent l'historique complet,
+  // depuis le premier trade déposé. Seule la sélection de comptes filtre.
   const filteredTrades = (() => {
     const realSelected = selectedAccountIds.filter(id => !isPlaceholderAccount(id) && !isArchivedAccount(id, archivedMeta));
     if (realSelected.length === 0) return [];
-    const byAccount = trades.filter(t => realSelected.includes(t.account_id));
-    const { start, end } = globalDateRange || {};
-    if (!start || !end) return byAccount;
-    return byAccount.filter(t => {
-      try {
-        const d = (t.date || "").split("T")[0];
-        return d >= start && d <= end;
-      } catch { return true; }
-    });
+    return trades.filter(t => realSelected.includes(t.account_id));
   })();
 
   // Ids des trades des comptes eval passés (comptes supprimés → account_id NULL,
@@ -496,17 +421,11 @@ export default function App() {
 
   // Trades passés à la page Discipline : les trades filtrés (comptes actifs
   // sélectionnés) PLUS les trades des comptes eval passés, pour que l'historique
-  // de discipline de ces anciens trades reste conservé. Filtrés sur la même
-  // plage de dates, dédoublonnés par id.
+  // de discipline de ces anciens trades reste conservé. Dédoublonnés par id.
   const disciplineTrades = (() => {
     if (archivedTradeIds.size === 0) return filteredTrades;
     const seen = new Set(filteredTrades.map(t => t.id));
-    const { start, end } = globalDateRange || {};
-    const extra = trades.filter(t => {
-      if (!archivedTradeIds.has(t.id) || seen.has(t.id)) return false;
-      if (!start || !end) return true;
-      try { const d = (t.date || "").split("T")[0]; return d >= start && d <= end; } catch { return true; }
-    });
+    const extra = trades.filter(t => archivedTradeIds.has(t.id) && !seen.has(t.id));
     return extra.length ? [...filteredTrades, ...extra] : filteredTrades;
   })();
 
@@ -754,7 +673,6 @@ export default function App() {
       items: [
         { id: "journal",    icon: NotebookPen,        label: t("nav.journal"), badge: filteredTrades.filter(tr => {try { const d = new Date(tr.date); return getLocalDateString(d) === getLocalDateString(); } catch (e) { return false; }}).length },
         { id: "discipline", icon: ShieldCheck,        label: t("nav.discipline") },
-        { id: "agent",      icon: Bot,                label: t("nav.agent"), badge: aiReportsUnread > 0 ? aiReportsUnread : 0 },
       ],
     },
     {
@@ -804,19 +722,20 @@ export default function App() {
   ]);
 
   const pages = {
-    dashboard:  <DashboardPage trades={filteredTrades} allTrades={trades} accounts={accounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} setDateRangesByPage={setDateRangesByPage} />,
-    "add-trade": <AddTradePage trades={filteredTrades} setPage={setPage} setAccounts={setAccounts} setSelectedAccountIds={setSelectedAccountIds} accountType={accountType} setAccountType={setAccountType} selectedEvalAccount={selectedEvalAccount} setSelectedEvalAccount={setSelectedEvalAccount} accounts={accounts} selectedAccountIds={selectedAccountIds} addTrade={addTrade} addStrategy={addStrategy} strategies={strategies} user={user} />,
+    dashboard:  <DashboardPage trades={filteredTrades} allTrades={trades} accounts={accounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
+    "add-trade": <AddTradePage trades={filteredTrades} setPage={setPage} setAccounts={setAccounts} setSelectedAccountIds={setSelectedAccountIds} accounts={accounts} selectedAccountIds={selectedAccountIds} addTrade={addTrade} addStrategy={addStrategy} strategies={strategies} user={user} />,
     trades:     <TradesPage trades={filteredTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     "trade-chart": <TradeChartPage trades={filteredTrades} />,
-    calendar:   <CalendarPage trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={accounts} selectedAccountIds={selectedAccountIds} setPage={setPage} setDateRangesByPage={setDateRangesByPage} />,
+    calendar:   <CalendarPage trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={accounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,
     journal: <JournalPage trades={filteredTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
     backtest: <BacktestPage />,
     brokers: <BrokersPage />,
-    accounts: <AccountsPage accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountIds={setSelectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
+    accounts: <AccountsPage accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountIds={setSelectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
     "account-detail": <AccountDetailPage accountId={selectedAccountDetailId} accounts={accounts} trades={trades} strategies={strategies} setPage={setPage} setSelectedAccountIds={setSelectedAccountIds} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
+    "firm-detail": <PropFirmDetailPage firmId={selectedFirmId} firms={firms} accounts={accounts} trades={trades} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedAccountIds={setSelectedAccountIds} />,
     goals: <GoalsPage />,
     "daily-planner": <DailyPlannerPage />,
     agenda: <AgendaPage />,
@@ -826,189 +745,7 @@ export default function App() {
     drive: <DrivePage />,
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,
-    agent: (() => {
-      // Convertir la map { [tradeId]: "note" } en tableau pour l'API
-      const journalNotesArr = Object.entries(agentTradeNotes || {})
-        .filter(([, n]) => n && String(n).trim())
-        .map(([trade_id, notes]) => {
-          const emotions = (agentEmotionTags || {})[trade_id] || [];
-          const errors = (agentErrorTags || {})[trade_id] || [];
-          return { trade_id, notes: String(notes), emotion_tags: emotions, error_tags: errors };
-        });
-
-      // Calculer les stats par stratégie en utilisant le mapping localStorage
-      let assignments = {};
-      try {
-        const raw = localStorage.getItem("tr4de_trade_strategies");
-        assignments = raw ? JSON.parse(raw) : {};
-      } catch {}
-
-      const strategyStats = (strategies || []).map((strategy) => {
-        const stratTrades = filteredTrades.filter((t) => {
-          const byId = assignments[t.id] || [];
-          const byComposite = assignments[`${t.date}${t.symbol}${t.entry}`] || [];
-          return byId.includes(strategy.id) || byComposite.includes(strategy.id);
-        });
-        if (!stratTrades.length) return null;
-        const wins = stratTrades.filter((t) => (t.pnl || 0) > 0).length;
-        const losses = stratTrades.filter((t) => (t.pnl || 0) < 0).length;
-        const totalPnL = stratTrades.reduce((s, t) => s + (t.pnl || 0), 0);
-        return {
-          id: strategy.id,
-          name: strategy.name,
-          tradeCount: stratTrades.length,
-          wins,
-          losses,
-          winRate: stratTrades.length ? ((wins / stratTrades.length) * 100).toFixed(1) : "0",
-          totalPnL: totalPnL.toFixed(2),
-          avgPnL: (totalPnL / stratTrades.length).toFixed(2),
-        };
-      }).filter(Boolean);
-
-      // Infos compte
-      const accountInfo = {
-        type: accountType,
-        evalSize: accountType === "eval" ? selectedEvalAccount : null,
-        selectedAccountsCount: (selectedAccountIds || []).length,
-        totalAccountsCount: (accounts || []).length,
-      };
-
-      // Helpers dates
-      const dayKey = (d) => {
-        try { return getLocalDateString(new Date(d)); } catch { return null; }
-      };
-      const weekKey = (d) => {
-        try {
-          const dt = new Date(d);
-          const day = (dt.getDay() + 6) % 7; // Monday = 0
-          const monday = new Date(dt);
-          monday.setDate(dt.getDate() - day);
-          return getLocalDateString(monday);
-        } catch { return null; }
-      };
-      const monthKey = (d) => {
-        try { const dt = new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; } catch { return null; }
-      };
-
-      const aggregate = (list, keyFn) => {
-        const map = {};
-        (list || []).forEach((t) => {
-          const k = keyFn(t.entry_time || t.date);
-          if (!k) return;
-          if (!map[k]) map[k] = { key: k, trades: 0, wins: 0, losses: 0, pnl: 0 };
-          map[k].trades += 1;
-          const p = Number(t.pnl) || 0;
-          if (p > 0) map[k].wins += 1;
-          else if (p < 0) map[k].losses += 1;
-          map[k].pnl += p;
-        });
-        return Object.values(map)
-          .sort((a, b) => (a.key < b.key ? 1 : -1))
-          .slice(0, 12)
-          .map((r) => ({
-            period: r.key,
-            trades: r.trades,
-            wins: r.wins,
-            losses: r.losses,
-            winRate: r.trades ? ((r.wins / r.trades) * 100).toFixed(1) : "0",
-            pnl: r.pnl.toFixed(2),
-          }));
-      };
-
-      const weeklyStats = aggregate(filteredTrades, weekKey);
-      const monthlyStats = aggregate(filteredTrades, monthKey);
-
-      // Discipline: synthèse par jour (% de règles respectées)
-      const allRuleIds = [
-        ...(agentBaseRules || []).map((r) => ({ id: r.id, label: r.label })),
-        ...(agentCustomRules || []).map((r) => ({ id: r.rule_id || r.id, label: r.text })),
-      ];
-      const disciplineSummary = Object.entries(agentDisciplineData || {})
-        .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-        .slice(0, 14)
-        .map(([date, rules]) => {
-          const total = allRuleIds.length || Object.keys(rules || {}).length;
-          const respected = Object.values(rules || {}).filter(Boolean).length;
-          const violated = allRuleIds
-            .filter((r) => rules && rules[r.id] === false)
-            .map((r) => r.label);
-          return {
-            date,
-            respected,
-            total,
-            score: total ? Math.round((respected / total) * 100) : 0,
-            violated,
-          };
-        });
-
-      // Événements psychologiques (heuristiques simples)
-      const psychEvents = [];
-      const tradesByDay = {};
-      (filteredTrades || []).forEach((t) => {
-        const k = dayKey(t.entry_time || t.date);
-        if (!k) return;
-        (tradesByDay[k] = tradesByDay[k] || []).push(t);
-      });
-      Object.entries(tradesByDay).forEach(([date, dayTrades]) => {
-        dayTrades.sort((a, b) => new Date(a.entry_time || a.date) - new Date(b.entry_time || b.date));
-        // Overtrading
-        if (dayTrades.length >= 6) {
-          psychEvents.push({ date, type: "overtrading", detail: `${dayTrades.length} trades dans la journée` });
-        }
-        // Revenge trading: trade <15min après une perte
-        for (let i = 1; i < dayTrades.length; i++) {
-          const prev = dayTrades[i - 1];
-          const cur = dayTrades[i];
-          if ((Number(prev.pnl) || 0) < 0) {
-            const dt = (new Date(cur.entry_time || cur.date) - new Date(prev.entry_time || prev.date)) / 60000;
-            if (dt > 0 && dt < 15) {
-              psychEvents.push({ date, type: "revenge_trading", detail: `Trade ${dt.toFixed(0)}min après une perte de ${prev.pnl}$` });
-              break;
-            }
-          }
-        }
-        // Tilted: 3 pertes consécutives
-        let streak = 0, maxStreak = 0;
-        dayTrades.forEach((t) => {
-          if ((Number(t.pnl) || 0) < 0) { streak += 1; maxStreak = Math.max(maxStreak, streak); }
-          else streak = 0;
-        });
-        if (maxStreak >= 3) {
-          psychEvents.push({ date, type: "losing_streak", detail: `${maxStreak} pertes consécutives` });
-        }
-      });
-      // Émotions négatives répétées
-      const negativeEmotions = ["angry", "colère", "fear", "peur", "fomo", "frustré", "revenge", "tilt"];
-      const emotionCount = {};
-      Object.values(agentEmotionTags || {}).forEach((tags) => {
-        (tags || []).forEach((tag) => {
-          const low = String(tag).toLowerCase();
-          if (negativeEmotions.some((n) => low.includes(n))) {
-            emotionCount[tag] = (emotionCount[tag] || 0) + 1;
-          }
-        });
-      });
-      Object.entries(emotionCount).forEach(([tag, count]) => {
-        if (count >= 2) psychEvents.push({ date: "", type: "emotional_pattern", detail: `"${tag}" signalé sur ${count} trades` });
-      });
-
-      return (
-        <AgentPanel
-          userId={user?.id}
-          trades={filteredTrades}
-          strategies={strategies || []}
-          strategyStats={strategyStats}
-          journalNotes={journalNotesArr}
-          dailyNotes={agentDailyNotes || {}}
-          accountInfo={accountInfo}
-          weeklyStats={weeklyStats}
-          monthlyStats={monthlyStats}
-          disciplineSummary={disciplineSummary}
-          psychEvents={psychEvents.slice(0, 20)}
-        />
-      );
-    })(),
-    settings: <SettingsPage user={user} onBack={() => setPage("dashboard")} />,
+    settings: <SettingsPage user={user} onBack={() => setPage("dashboard")} setPage={setPage} />,
   };
 
   // ✅ Afficher un écran de chargement pendant que l'authentification se charge
@@ -1027,7 +764,7 @@ export default function App() {
       <style>{css}</style>
       <AlertToast />
       <CommandPalette />
-      <div className="tr4de-root" style={{display:"flex",minHeight:"100vh",background:"#F5F5F5"}}>
+      <div className="tr4de-root" style={{display:"flex",minHeight:"100vh",background:"var(--color-bg-subtle, #F5F5F5)"}}>
         {/* SIDEBAR (OpenAI-style) */}
         <Sidebar
           mobileOpen={mobileNavOpen}
@@ -1082,7 +819,7 @@ export default function App() {
 
         {/* MAIN */}
         <div className="tr4de-main" style={{flex:1,minWidth:0,height:"100vh",display:"flex",flexDirection:"column",background:"transparent"}}>
-          <div className="tr4de-topbar" style={{flexShrink:0,zIndex:10,background:"#F5F5F5",padding:"10px 28px",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
+          <div className="tr4de-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #F5F5F5)",padding:"10px 28px",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
             <button
               type="button"
               className="tr4de-hamburger"
@@ -1093,14 +830,22 @@ export default function App() {
               <LucideMenu size={18} strokeWidth={1.75} />
             </button>
           </div>
-          <div style={{flex:1,minHeight:0,padding: "0 8px 8px 0",display:"flex"}}>
+          {/* Le dashboard suit la nouvelle DA : ses sections sont déjà des cartes
+              blanches individuelles posées sur le fond de page. Il ne doit donc
+              pas être enveloppé dans la carte blanche commune aux autres pages. */}
+          {/* Pages déjà passées à la nouvelle DA : leurs sections sont des cartes
+              blanches individuelles posées sur le fond de page, elles ne doivent
+              donc pas être enveloppées dans la carte blanche commune. */}
+          {(() => { const daPage = ["dashboard", "accounts", "account-detail"].includes(page); return (
+          <div style={{flex:1,minHeight:0,padding: daPage ? "0 0 8px 0" : "0 8px 8px 0",display:"flex"}}>
             <div className="scroll-thin" style={{
-              background: "#FFFFFF",
-              border: "1px solid rgba(0, 0, 0, 0.06)",
-              borderRadius: 10,
+              background: daPage ? "transparent" : "var(--color-card-bg, #FFFFFF)",
+              border: daPage ? "none" : "1px solid rgba(0, 0, 0, 0.06)",
+              borderRadius: daPage ? 0 : 10,
               boxShadow: "none",
-              padding: (page === "add-trade" || page === "agent") ? "0" : "20px 24px",
-              display: (page === "add-trade" || page === "agent") ? "flex" : "block",
+              // 24 px de gouttière de chaque côté, comme sur la maquette.
+              padding: (page === "add-trade") ? "0" : daPage ? "0 24px 24px" : "20px 24px",
+              display: (page === "add-trade") ? "flex" : "block",
               width: "100%",
               flex: 1,
               overflowY: "auto",
@@ -1108,7 +853,7 @@ export default function App() {
               position: "relative",
             }}>
               {(() => {
-                // Pages de productivité : pas de DateRangePicker ni de sélecteur de comptes.
+                // Pages de productivité : pas de sélecteur de comptes.
                 const PRODUCTIVITY_PAGES = ["daily-planner", "agenda", "goals", "reading", "sport", "notes", "drive", "life-rpg"];
                 const isProductivity = PRODUCTIVITY_PAGES.includes(page);
                 if (page === "add-trade") return null;
@@ -1116,19 +861,13 @@ export default function App() {
                 return (
                   <HeaderSlotPortal>
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"100%",minWidth:0}}>
-                      {["dashboard","strategies","journal","trades","discipline"].includes(page) && (
-                        <DateRangePicker
-                          value={globalDateRange}
-                          onChange={(r) => setGlobalDateRange(r)}
-                        />
-                      )}
-                      {page !== "accounts" && page !== "account-detail" && (
+                      {page !== "accounts" && page !== "account-detail" && page !== "firm-detail" && (
                         <MultiAccountSelector
                           accounts={visibleAccounts}
                           selectedAccountIds={selectedAccountIds}
                           onSelectionChange={setSelectedAccountIds}
                           onDeleteAccount={handleDeleteAccount}
-                          onCreateAccount={() => setPage("add-trade")}
+                          onCreateAccount={() => setPage("accounts")}
                           T={T}
                         />
                       )}
@@ -1140,15 +879,16 @@ export default function App() {
                 key={page}
                 style={{
                   width: "100%",
-                  flex: (page === "add-trade" || page === "agent") ? 1 : undefined,
+                  flex: (page === "add-trade") ? 1 : undefined,
                   minWidth: 0,
-                  display: (page === "add-trade" || page === "agent") ? "flex" : undefined,
+                  display: (page === "add-trade") ? "flex" : undefined,
                 }}
               >
                 {pages[page] || pages.dashboard}
               </div>
             </div>
           </div>
+          ); })()}
         </div>
       </div>
     </>

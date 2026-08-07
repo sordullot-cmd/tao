@@ -77,9 +77,9 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
       {/* Drawer latéral */}
       <aside style={{
         position:"fixed",top:0,right:0,bottom:0,width:"min(440px, 92vw)",
-        background:"#FFFFFF",borderLeft:"1px solid #E5E5E5",
+        background:T.white,borderLeft:"1px solid #E5E5E5",
         zIndex:9999,display:"flex",flexDirection:"column",
-        boxShadow:"-12px 0 40px rgba(0,0,0,0.10)",
+        boxShadow:"var(--elev-overlay)",
         fontFamily:"var(--font-sans)",
         animation:"tr4de-drawer-slide 240ms cubic-bezier(0.22, 1, 0.36, 1) both",
       }}>
@@ -89,13 +89,13 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
           <div style={{width:3,background:accent,flexShrink:0}}/>
           <div style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"18px 20px"}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:11,fontWeight:600,color:"#8E8E8E",textTransform:"uppercase",letterSpacing:0.5,marginBottom:2}}>Édition</div>
-              <h2 style={{fontSize:16,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</h2>
+              <div style={{fontSize:11,fontWeight:600,color:T.textMut,textTransform:"uppercase",letterSpacing:0.5,marginBottom:2}}>Édition</div>
+              <h2 style={{fontSize:16,fontWeight:600,color:T.text,margin:0,letterSpacing:-0.15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</h2>
             </div>
             <button onClick={onClose} aria-label="Fermer"
-              style={{display:"flex",alignItems:"center",justifyContent:"center",width:32,height:32,background:"transparent",border:"none",cursor:"pointer",color:"#8E8E8E",borderRadius:8,flexShrink:0}}
-              onMouseEnter={(e)=>{e.currentTarget.style.background="#F5F5F5";e.currentTarget.style.color="#0D0D0D"}}
-              onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#8E8E8E"}}>
+              style={{display:"flex",alignItems:"center",justifyContent:"center",width:32,height:32,background:"transparent",border:"none",cursor:"pointer",color:T.textMut,borderRadius:"var(--radius-card)",flexShrink:0}}
+              onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F5F5F5)";e.currentTarget.style.color=T.text}}
+              onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMut}}>
               <LucideX size={18} strokeWidth={1.75}/>
             </button>
           </div>
@@ -104,9 +104,9 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
         {/* Liste éditable */}
         <div className="scroll-thin" style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
           {draft.length === 0 ? (
-            <div style={{padding:"48px 16px",textAlign:"center",color:"#8E8E8E",fontSize:13}}>
+            <div style={{padding:"48px 16px",textAlign:"center",color:T.textMut,fontSize:13}}>
               Aucune règle pour l'instant.<br/>
-              <span style={{fontSize:12,color:"#B4B4B4"}}>Ajoute-en une avec le bouton ci-dessous.</span>
+              <span style={{fontSize:12,color:T.textMut}}>Ajoute-en une avec le bouton ci-dessous.</span>
             </div>
           ) : (
             <ol style={{listStyle:"none",margin:0,padding:0,display:"flex",flexDirection:"column",gap:8}}>
@@ -120,25 +120,25 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
                   onDragEnd={()=>{setDragIdx(null);setOverIdx(null)}}
                   style={{
                     display:"flex",alignItems:"center",gap:6,
-                    background: overIdx===i && dragIdx!==i ? "#F5F5F5" : "#FFFFFF",
-                    border:`1px solid ${overIdx===i && dragIdx!==i ? accent : "#E5E5E5"}`,
+                    background: overIdx===i && dragIdx!==i ? "var(--color-hover-bg, #F5F5F5)" : T.white,
+                    border:`1px solid ${overIdx===i && dragIdx!==i ? accent : T.border}`,
                     borderRadius:10,
                     padding:"4px 8px 4px 4px",
                     opacity: dragIdx===i ? 0.4 : 1,
                     transition:"border-color .12s ease, background .12s ease, opacity .12s ease",
                   }}>
-                  <span style={{cursor:"grab",color:"#C8C8C8",display:"inline-flex",padding:"6px 4px",flexShrink:0}} title="Glisser pour réordonner">
+                  <span style={{cursor:"grab",color:T.textMut,display:"inline-flex",padding:"6px 4px",flexShrink:0}} title="Glisser pour réordonner">
                     <GripVertical size={14} strokeWidth={1.75}/>
                   </span>
                   <input
                     type="text" value={it.label} placeholder={`Règle ${i+1}`}
                     onChange={(e)=>update(i, e.target.value)}
-                    style={{flex:1,padding:"8px 0",border:"none",outline:"none",fontSize:13,fontFamily:"inherit",color:"#0D0D0D",background:"transparent"}}
+                    style={{flex:1,padding:"8px 0",border:"none",outline:"none",fontSize:13,fontFamily:"inherit",color:T.text,background:"transparent"}}
                   />
                   <button type="button" onClick={()=>remove(i)} title="Supprimer"
-                    style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:"#B4B4B4",borderRadius:6,flexShrink:0,transition:"color .12s ease, background .12s ease"}}
-                    onMouseEnter={(e)=>{e.currentTarget.style.color="#EF4444";e.currentTarget.style.background="#FEF2F2"}}
-                    onMouseLeave={(e)=>{e.currentTarget.style.color="#B4B4B4";e.currentTarget.style.background="transparent"}}>
+                    style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:T.textMut,borderRadius:6,flexShrink:0,transition:"color .12s ease, background .12s ease"}}
+                    onMouseEnter={(e)=>{e.currentTarget.style.color=T.red;e.currentTarget.style.background=T.redBg}}
+                    onMouseLeave={(e)=>{e.currentTarget.style.color=T.textMut;e.currentTarget.style.background="transparent"}}>
                     <LucideTrash2 size={14} strokeWidth={1.75}/>
                   </button>
                 </li>
@@ -151,25 +151,25 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
             style={{
               display:"flex",alignItems:"center",justifyContent:"center",gap:6,
               padding:"10px",fontSize:13,fontWeight:500,
-              color:"#0D0D0D",background:"transparent",
+              color:T.text,background:"transparent",
               border:"1px dashed #D4D4D4",cursor:"pointer",borderRadius:10,
               fontFamily:"inherit",width:"100%",marginTop:draft.length === 0 ? 0 : 8,
               transition:"background .12s ease, border-color .12s ease",
             }}
             onMouseEnter={(e)=>{e.currentTarget.style.background=accent+"14";e.currentTarget.style.borderColor=accent}}
-            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#D4D4D4"}}>
+            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=T.border2}}>
             <Plus size={14} strokeWidth={2}/> Ajouter une règle
           </button>
         </div>
 
         {/* Footer */}
-        <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderTop:"1px solid #F0F0F0",background:"#FAFAFA"}}>
-          <span style={{fontSize:11,color:"#8E8E8E",fontVariantNumeric:"tabular-nums"}}>
+        <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderTop:"1px solid #F0F0F0",background:"var(--color-hover-bg, #FAFAFA)"}}>
+          <span style={{fontSize:11,color:T.textMut,fontVariantNumeric:"tabular-nums"}}>
             {draft.filter(d => (d.label || "").trim()).length} règle{draft.length > 1 ? "s" : ""}
           </span>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={onClose} style={{padding:"0 18px",height:34,borderRadius:999,border:"1px solid #E5E5E5",background:"#FFFFFF",color:"#0D0D0D",fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
-            <button onClick={save} style={{padding:"0 18px",height:34,borderRadius:999,border:"1px solid #0D0D0D",background:"#FFFFFF",color:"#0D0D0D",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Enregistrer</button>
+            <button onClick={onClose} style={{padding:"0 18px",height:34,borderRadius:999,border:`1px solid ${T.border}`,background:T.white,color:T.text,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+            <button onClick={save} style={{padding:"0 18px",height:34,borderRadius:999,border:"1px solid #0D0D0D",background:T.white,color:T.text,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Enregistrer</button>
           </div>
         </div>
 
@@ -202,23 +202,23 @@ function EditableTextList({ title, iconBg, icon, items, onSave, renderPrefix, ac
   const move = (from, to) => setDraft(d => reorder(d, from, to));
   return (
     <div
-      style={{background:"#FFFFFF",border:`1px solid ${editing ? accent : "#E5E5E5"}`,borderRadius:12,overflow:"hidden",transition:"border-color .15s ease"}}
+      style={{background:T.white,border:`1px solid ${editing ? accent : T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden",transition:"border-color .15s ease"}}
       onMouseEnter={(e)=>{ if (!editing) { const btn = e.currentTarget.querySelector('[data-edit-btn]'); if (btn) btn.style.opacity = 1; } }}
       onMouseLeave={(e)=>{ if (!editing) { const btn = e.currentTarget.querySelector('[data-edit-btn]'); if (btn) btn.style.opacity = 0; } }}>
       {/* Header */}
-      <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${editing ? accent + "30" : "#E5E5E5"}`,display:"flex",alignItems:"center",gap:10}}>
+      <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${editing ? accent + "30" : T.border}`,display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:24,height:24,borderRadius:6,background:iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{icon}</div>
-        <div style={{fontSize:13,fontWeight:600,color:"#0D0D0D",letterSpacing:-0.1,flex:1}}>{title}</div>
+        <div style={{fontSize:13,fontWeight:600,color:T.text,letterSpacing:-0.1,flex:1}}>{title}</div>
         {editing ? (
           <div style={{display:"flex",gap:6}}>
-            <button onClick={cancelEdit} style={{height:26,padding:"0 10px",border:"1px solid #E5E5E5",background:"#FFFFFF",color:"#5C5C5C",fontSize:12,fontWeight:500,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>Annuler</button>
-            <button onClick={saveEdit} style={{height:26,padding:"0 10px",border:`1px solid ${accent}`,background:accent,color:"#FFFFFF",fontSize:12,fontWeight:600,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>OK</button>
+            <button onClick={cancelEdit} style={{height:26,padding:"0 10px",border:`1px solid ${T.border}`,background:T.white,color:T.textSub,fontSize:12,fontWeight:500,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>Annuler</button>
+            <button onClick={saveEdit} style={{height:26,padding:"0 10px",border:`1px solid ${accent}`,background:accent,color:T.white,fontSize:12,fontWeight:600,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>OK</button>
           </div>
         ) : (
           <button data-edit-btn type="button" onClick={enterEdit} title="Modifier"
-            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,border:"none",background:"transparent",cursor:"pointer",color:"#8E8E8E",borderRadius:6,opacity:0,transition:"opacity .15s ease"}}
-            onMouseEnter={(e)=>{e.currentTarget.style.background="#F0F0F0";e.currentTarget.style.color="#0D0D0D"}}
-            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#8E8E8E"}}>
+            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,border:"none",background:"transparent",cursor:"pointer",color:T.textMut,borderRadius:6,opacity:0,transition:"opacity .15s ease"}}
+            onMouseEnter={(e)=>{e.currentTarget.style.background=T.border;e.currentTarget.style.color=T.text}}
+            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMut}}>
             <Pencil size={13} strokeWidth={1.75}/>
           </button>
         )}
@@ -237,45 +237,45 @@ function EditableTextList({ title, iconBg, icon, items, onSave, renderPrefix, ac
                 onDrop={()=>{ if (dragIdx!==null && dragIdx!==i) move(dragIdx,i); setDragIdx(null); setOverIdx(null); }}
                 onDragEnd={()=>{setDragIdx(null);setOverIdx(null)}}
                 style={{display:"flex",alignItems:"center",gap:4,padding:"2px 4px",borderRadius:6,
-                  background: overIdx===i && dragIdx!==i ? "#F5F5F5" : "transparent",
+                  background: overIdx===i && dragIdx!==i ? "var(--color-hover-bg, #F5F5F5)" : "transparent",
                   opacity: dragIdx===i ? 0.4 : 1,
                   transition:"background .12s ease",
                 }}>
-                <span style={{cursor:"grab",color:"#C8C8C8",display:"inline-flex",padding:4,flexShrink:0}}><GripVertical size={12} strokeWidth={1.75}/></span>
+                <span style={{cursor:"grab",color:T.textMut,display:"inline-flex",padding:4,flexShrink:0}}><GripVertical size={12} strokeWidth={1.75}/></span>
                 <input
                   type="text" value={it.label} placeholder={`Règle ${i+1}`}
                   onChange={(e)=>update(i, e.target.value)}
                   onKeyDown={(e)=>{ if (e.key==="Enter"){ e.preventDefault(); addRow(); } }}
-                  style={{flex:1,fontSize:12,padding:"6px 8px",border:"1px solid transparent",borderRadius:6,outline:"none",fontFamily:"inherit",color:"#0D0D0D",background:"#FAFAFA"}}
-                  onFocus={(e)=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.background="#FFFFFF"}}
-                  onBlur={(e)=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="#FAFAFA"}}
+                  style={{flex:1,fontSize:12,padding:"6px 8px",border:"1px solid transparent",borderRadius:6,outline:"none",fontFamily:"inherit",color:T.text,background:"var(--color-hover-bg, #FAFAFA)"}}
+                  onFocus={(e)=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.background=T.white}}
+                  onBlur={(e)=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="var(--color-hover-bg, #FAFAFA)"}}
                 />
                 <button type="button" onClick={()=>removeRow(i)} title="Supprimer"
-                  style={{width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:"#B4B4B4",borderRadius:4,flexShrink:0}}
-                  onMouseEnter={(e)=>{e.currentTarget.style.color="#EF4444"}} onMouseLeave={(e)=>{e.currentTarget.style.color="#B4B4B4"}}>
+                  style={{width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:T.textMut,borderRadius:"var(--radius-field)",flexShrink:0}}
+                  onMouseEnter={(e)=>{e.currentTarget.style.color=T.red}} onMouseLeave={(e)=>{e.currentTarget.style.color=T.textMut}}>
                   <LucideTrash2 size={12} strokeWidth={1.75}/>
                 </button>
               </div>
             ))}
           </div>
           <button type="button" onClick={addRow}
-            style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,padding:"6px 8px",fontSize:12,color:"#5C5C5C",background:"transparent",border:"none",cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}
-            onMouseEnter={(e)=>{e.currentTarget.style.background="#F5F5F5";e.currentTarget.style.color="#0D0D0D"}}
-            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#5C5C5C"}}>
+            style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,padding:"6px 8px",fontSize:12,color:T.textSub,background:"transparent",border:"none",cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}
+            onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F5F5F5)";e.currentTarget.style.color=T.text}}
+            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textSub}}>
             <Plus size={12} strokeWidth={2}/> Ajouter
           </button>
         </div>
       ) : (
         <div style={{display:"flex",flexDirection:"column",padding:"8px 6px"}}>
           {items.length === 0 && (
-            <div style={{padding:"12px",fontSize:12,color:"#8E8E8E",textAlign:"center"}}>Aucun élément. Survolez et cliquez ✎ pour ajouter.</div>
+            <div style={{padding:"12px",fontSize:12,color:T.textMut,textAlign:"center"}}>Aucun élément. Survolez et cliquez ✎ pour ajouter.</div>
           )}
           {items.map((txt,i)=>(
             <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"6px 10px",borderRadius:6,transition:"background .12s ease"}}
-              onMouseEnter={(e)=>{e.currentTarget.style.background="#F5F5F5"}}
+              onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F5F5F5)"}}
               onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}>
               {renderPrefix?.(i)}
-              <div style={{fontSize:12,color:"#0D0D0D",fontWeight:400,lineHeight:1.5,flex:1}}>{txt}</div>
+              <div style={{fontSize:12,color:T.text,fontWeight:400,lineHeight:1.5,flex:1}}>{txt}</div>
             </div>
           ))}
         </div>
@@ -302,24 +302,24 @@ function EditableCheckList({ title, iconBg, icon, items, checkedRuleIds, onToggl
   const addRow = () => setDraft(d => [...d, { id: `personal_${Date.now()}_${d.length}`, label: "" }]);
   const move = (from, to) => setDraft(d => reorder(d, from, to));
   return (
-    <div style={{background:"#FFFFFF",border:`1px solid ${editing ? accent : "#E5E5E5"}`,borderRadius:12,overflow:"hidden",transition:"border-color .15s ease"}}
+    <div style={{background:T.white,border:`1px solid ${editing ? accent : T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden",transition:"border-color .15s ease"}}
       onMouseEnter={(e)=>{ if (!editing) { const btn = e.currentTarget.querySelector('[data-edit-btn]'); if (btn) btn.style.opacity = 1; } }}
       onMouseLeave={(e)=>{ if (!editing) { const btn = e.currentTarget.querySelector('[data-edit-btn]'); if (btn) btn.style.opacity = 0; } }}>
-      <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${editing ? accent + "30" : "#E5E5E5"}`,display:"flex",alignItems:"center",gap:10}}>
+      <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${editing ? accent + "30" : T.border}`,display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:24,height:24,borderRadius:6,background:iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{icon}</div>
-        <div style={{fontSize:13,fontWeight:600,color:"#0D0D0D",letterSpacing:-0.1,flex:1}}>{title}</div>
+        <div style={{fontSize:13,fontWeight:600,color:T.text,letterSpacing:-0.1,flex:1}}>{title}</div>
         {editing ? (
           <div style={{display:"flex",gap:6}}>
-            <button onClick={cancelEdit} style={{height:26,padding:"0 10px",border:"1px solid #E5E5E5",background:"#FFFFFF",color:"#5C5C5C",fontSize:12,fontWeight:500,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>Annuler</button>
-            <button onClick={saveEdit} style={{height:26,padding:"0 10px",border:`1px solid ${accent}`,background:accent,color:"#FFFFFF",fontSize:12,fontWeight:600,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>OK</button>
+            <button onClick={cancelEdit} style={{height:26,padding:"0 10px",border:`1px solid ${T.border}`,background:T.white,color:T.textSub,fontSize:12,fontWeight:500,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>Annuler</button>
+            <button onClick={saveEdit} style={{height:26,padding:"0 10px",border:`1px solid ${accent}`,background:accent,color:T.white,fontSize:12,fontWeight:600,cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}>OK</button>
           </div>
         ) : (
           <>
-            <div style={{fontSize:11,color:"#8E8E8E",fontVariantNumeric:"tabular-nums"}}>{checkedCount}/{items.length}</div>
+            <div style={{fontSize:11,color:T.textMut,fontVariantNumeric:"tabular-nums"}}>{checkedCount}/{items.length}</div>
             <button data-edit-btn type="button" onClick={enterEdit} title="Modifier"
-              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,border:"none",background:"transparent",cursor:"pointer",color:"#8E8E8E",borderRadius:6,opacity:0,transition:"opacity .15s ease"}}
-              onMouseEnter={(e)=>{e.currentTarget.style.background="#F0F0F0";e.currentTarget.style.color="#0D0D0D"}}
-              onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#8E8E8E"}}>
+              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,border:"none",background:"transparent",cursor:"pointer",color:T.textMut,borderRadius:6,opacity:0,transition:"opacity .15s ease"}}
+              onMouseEnter={(e)=>{e.currentTarget.style.background=T.border;e.currentTarget.style.color=T.text}}
+              onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMut}}>
               <Pencil size={13} strokeWidth={1.75}/>
             </button>
           </>
@@ -338,49 +338,49 @@ function EditableCheckList({ title, iconBg, icon, items, checkedRuleIds, onToggl
                 onDrop={()=>{ if (dragIdx!==null && dragIdx!==i) move(dragIdx,i); setDragIdx(null); setOverIdx(null); }}
                 onDragEnd={()=>{setDragIdx(null);setOverIdx(null)}}
                 style={{display:"flex",alignItems:"center",gap:4,padding:"2px 4px",borderRadius:6,
-                  background: overIdx===i && dragIdx!==i ? "#F5F5F5" : "transparent",
+                  background: overIdx===i && dragIdx!==i ? "var(--color-hover-bg, #F5F5F5)" : "transparent",
                   opacity: dragIdx===i ? 0.4 : 1,
                   transition:"background .12s ease",
                 }}>
-                <span style={{cursor:"grab",color:"#C8C8C8",display:"inline-flex",padding:4,flexShrink:0}}><GripVertical size={12} strokeWidth={1.75}/></span>
+                <span style={{cursor:"grab",color:T.textMut,display:"inline-flex",padding:4,flexShrink:0}}><GripVertical size={12} strokeWidth={1.75}/></span>
                 <input
                   type="text" value={it.label} placeholder={`Règle ${i+1}`}
                   onChange={(e)=>update(i, e.target.value)}
                   onKeyDown={(e)=>{ if (e.key==="Enter"){ e.preventDefault(); addRow(); } }}
-                  style={{flex:1,fontSize:12,padding:"6px 8px",border:"1px solid transparent",borderRadius:6,outline:"none",fontFamily:"inherit",color:"#0D0D0D",background:"#FAFAFA"}}
-                  onFocus={(e)=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.background="#FFFFFF"}}
-                  onBlur={(e)=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="#FAFAFA"}}
+                  style={{flex:1,fontSize:12,padding:"6px 8px",border:"1px solid transparent",borderRadius:6,outline:"none",fontFamily:"inherit",color:T.text,background:"var(--color-hover-bg, #FAFAFA)"}}
+                  onFocus={(e)=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.background=T.white}}
+                  onBlur={(e)=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="var(--color-hover-bg, #FAFAFA)"}}
                 />
                 <button type="button" onClick={()=>removeRow(i)} title="Supprimer"
-                  style={{width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:"#B4B4B4",borderRadius:4,flexShrink:0}}
-                  onMouseEnter={(e)=>{e.currentTarget.style.color="#EF4444"}} onMouseLeave={(e)=>{e.currentTarget.style.color="#B4B4B4"}}>
+                  style={{width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:T.textMut,borderRadius:"var(--radius-field)",flexShrink:0}}
+                  onMouseEnter={(e)=>{e.currentTarget.style.color=T.red}} onMouseLeave={(e)=>{e.currentTarget.style.color=T.textMut}}>
                   <LucideTrash2 size={12} strokeWidth={1.75}/>
                 </button>
               </div>
             ))}
           </div>
           <button type="button" onClick={addRow}
-            style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,padding:"6px 8px",fontSize:12,color:"#5C5C5C",background:"transparent",border:"none",cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}
-            onMouseEnter={(e)=>{e.currentTarget.style.background="#F5F5F5";e.currentTarget.style.color="#0D0D0D"}}
-            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#5C5C5C"}}>
+            style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:6,padding:"6px 8px",fontSize:12,color:T.textSub,background:"transparent",border:"none",cursor:"pointer",borderRadius:6,fontFamily:"inherit"}}
+            onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F5F5F5)";e.currentTarget.style.color=T.text}}
+            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textSub}}>
             <Plus size={12} strokeWidth={2}/> Ajouter
           </button>
         </div>
       ) : (
         <div style={{display:"flex",flexDirection:"column",padding:"8px 6px"}}>
           {items.length === 0 && (
-            <div style={{padding:"12px",fontSize:12,color:"#8E8E8E",textAlign:"center"}}>Aucune règle. Survolez et cliquez ✎ pour en ajouter.</div>
+            <div style={{padding:"12px",fontSize:12,color:T.textMut,textAlign:"center"}}>Aucune règle. Survolez et cliquez ✎ pour en ajouter.</div>
           )}
           {items.map(r => {
             const checked = !!checkedRuleIds[r.id];
             return (
               <label key={r.id}
                 style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",borderRadius:6,cursor:"pointer",background:"transparent",transition:"background .12s ease"}}
-                onMouseEnter={(e)=>{e.currentTarget.style.background="#F5F5F5"}}
+                onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F5F5F5)"}}
                 onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}>
                 <input type="checkbox" checked={checked} onChange={()=>onToggleCheck(r.id)}
-                  style={{width:14,height:14,accentColor:"#16A34A",cursor:"pointer",margin:0,flexShrink:0}}/>
-                <span style={{fontSize:12, color: checked ? "#8E8E8E" : "#0D0D0D", fontWeight:400, lineHeight:1.5, textDecoration: checked ? "line-through" : "none"}}>
+                  style={{width:14,height:14,accentColor:T.green,cursor:"pointer",margin:0,flexShrink:0}}/>
+                <span style={{fontSize:12, color: checked ? T.textMut : T.text, fontWeight:400, lineHeight:1.5, textDecoration: checked ? "line-through" : "none"}}>
                   {r.label}
                 </span>
               </label>
@@ -399,13 +399,13 @@ function ComplianceRulesCard() {
   const activeCount = liveRules.length;
 
   return (
-    <div style={{background:"#FFFFFF",border:`1px solid #E5E5E5`,borderRadius:12,overflow:"hidden"}}>
+    <div style={{background:T.white,border:`1px solid #E5E5E5`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
       <div style={{padding:"14px 16px 12px",borderBottom:`1px solid #E5E5E5`,display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:24,height:24,borderRadius:6,background:"#EFEFEF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <ShieldCheck size={13} strokeWidth={1.75} color={T.green}/>
         </div>
-        <div style={{fontSize:13,fontWeight:600,color:"#0D0D0D",letterSpacing:-0.1,flex:1}}>Règles automatiques</div>
-        <div style={{fontSize:11,color:"#8E8E8E",fontVariantNumeric:"tabular-nums"}}>{activeCount}/{total}</div>
+        <div style={{fontSize:13,fontWeight:600,color:T.text,letterSpacing:-0.1,flex:1}}>Règles automatiques</div>
+        <div style={{fontSize:11,color:T.textMut,fontVariantNumeric:"tabular-nums"}}>{activeCount}/{total}</div>
       </div>
 
       <div style={{padding:"12px 14px"}}>
@@ -605,6 +605,30 @@ export default function DisciplinePage({ trades = [] }) {
     };
   }, [showRoutinePopover]);
   const [heatmapVersion, setHeatmapVersion] = useState(0);
+  // Historique des checklists de routine, indexé par date, MÉMOÏSÉ.
+  // Auparavant reconstruit dans le rendu de la heatmap en balayant tout
+  // localStorage à CHAQUE render → coûteux. Recalculé uniquement quand la
+  // routine change (heatmapVersion, bumpé à chaque toggle) ou quand la
+  // définition des règles change (routineItems).
+  const routineByDay = React.useMemo(() => {
+    const map = new Map();
+    const totalRules = ROUTINE_ITEMS.length;
+    if (!totalRules) return map;
+    try {
+      const prefix = "tr4de_routine_checklist_";
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(prefix)) continue;
+        const date = k.slice(prefix.length);
+        let obj;
+        try { obj = JSON.parse(localStorage.getItem(k) || "{}"); } catch { obj = {}; }
+        if (!obj || Object.keys(obj).length === 0) continue; // aucune donnée
+        const done = ROUTINE_ITEMS.reduce((n, it) => n + (obj[it.id] ? 1 : 0), 0);
+        map.set(date, { done, total: totalRules });
+      }
+    } catch {}
+    return map;
+  }, [heatmapVersion, routineItems]);
   // Mémorise la dernière règle cochée pour gérer Shift+clic (sélection plage)
   const [lastClickedRuleId, setLastClickedRuleId] = useState(null);
   const [checkedRuleIds, setCheckedRuleIds] = useState(() => {
@@ -932,7 +956,6 @@ export default function DisciplinePage({ trades = [] }) {
     <>
       <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <h1 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)"}}>{t("disc.title")}</h1>
           <div style={{marginLeft:"auto", display:"flex", alignItems:"center", gap:8}}>
             <div ref={routineBtnRef} style={{position:"relative", fontFamily:"var(--font-sans)"}}>
               <button
@@ -944,31 +967,31 @@ export default function DisciplinePage({ trades = [] }) {
                   padding:"7px 14px",
                   height:34,
                   borderRadius:999,
-                  background:"#FFFFFF",
-                  border:`1px solid ${showRoutinePopover ? "#D4D4D4" : "#E5E5E5"}`,
+                  background:T.white,
+                  border:`1px solid ${showRoutinePopover ? T.border2 : T.border}`,
                   fontSize:13,
                   fontWeight:500,
                   cursor:"pointer",
                   display:"flex",
                   alignItems:"center",
                   gap:8,
-                  color:"#0D0D0D",
+                  color:T.text,
                   fontFamily:"inherit",
                   transition:"border-color 120ms ease",
                 }}
               >
-                <ClipboardCheck size={14} strokeWidth={1.75} color="#0D0D0D" />
+                <ClipboardCheck size={14} strokeWidth={1.75} color={T.text} />
                 <span>Routine</span>
                 <span style={{
                   fontSize:11, fontWeight:600, fontVariantNumeric:"tabular-nums",
                   padding:"1px 7px", borderRadius:999,
-                  background:"#F5F5F5", color:"#5C5C5C",
+                  background:"var(--color-hover-bg, #F5F5F5)", color:T.textSub,
                 }}>
                   {routineDoneCount}/{ROUTINE_ITEMS.length}
                 </span>
                 {showRoutinePopover
-                  ? <ChevronUp size={14} strokeWidth={2} color="#8E8E8E" />
-                  : <ChevronDown size={14} strokeWidth={2} color="#8E8E8E" />}
+                  ? <ChevronUp size={14} strokeWidth={2} color={T.textMut} />
+                  : <ChevronDown size={14} strokeWidth={2} color={T.textMut} />}
               </button>
 
               {showRoutinePopover && (
@@ -981,10 +1004,10 @@ export default function DisciplinePage({ trades = [] }) {
                     left:0,
                     right:0,
                     minWidth:280,
-                    background:"#FFFFFF",
-                    border:"1px solid #E5E5E5",
-                    borderRadius:16,
-                    boxShadow:"0 8px 24px rgba(0, 0, 0, 0.10)",
+                    background:T.white,
+                    border:`1px solid ${T.border}`,
+                    borderRadius:"var(--radius-modal)",
+                    boxShadow:"var(--elev-overlay)",
                     zIndex:100,
                     overflow:"hidden",
                     display:"flex",
@@ -996,7 +1019,7 @@ export default function DisciplinePage({ trades = [] }) {
                     display:"flex", alignItems:"center", justifyContent:"space-between",
                     padding:"4px 6px 4px 10px",
                   }}>
-                    <span style={{ fontSize:11, color:"#8E8E8E", fontWeight:500 }}>
+                    <span style={{ fontSize:11, color:T.textMut, fontWeight:500 }}>
                       Routine du jour
                     </span>
                     <button
@@ -1007,11 +1030,11 @@ export default function DisciplinePage({ trades = [] }) {
                       style={{
                         display:"inline-flex", alignItems:"center", justifyContent:"center",
                         width:22, height:22, border:"none", background:"transparent",
-                        cursor:"pointer", color:"#8E8E8E", borderRadius:4,
+                        cursor:"pointer", color:T.textMut, borderRadius:"var(--radius-field)",
                         transition:"background .12s ease, color .12s ease",
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = "#0D0D0D"; e.currentTarget.style.background = "#EBEBEB"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = "#8E8E8E"; e.currentTarget.style.background = "transparent"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = T.text; e.currentTarget.style.background = "var(--color-hover-bg, #EBEBEB)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; e.currentTarget.style.background = "transparent"; }}
                     >
                       <Plus size={13} strokeWidth={2} />
                     </button>
@@ -1031,14 +1054,14 @@ export default function DisciplinePage({ trades = [] }) {
                             padding:"7px 10px",
                             borderRadius:10,
                             fontFamily:"inherit",
-                            color:"#0D0D0D",
+                            color:T.text,
                             fontSize:13,
                             fontWeight:500,
                             boxSizing:"border-box",
                             transition:"background .12s ease",
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "#F5F5F5";
+                            e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)";
                             const act = e.currentTarget.querySelector('[data-rule-actions]'); if (act) act.style.opacity = 1;
                           }}
                           onMouseLeave={(e) => {
@@ -1051,7 +1074,7 @@ export default function DisciplinePage({ trades = [] }) {
                             checked={checked}
                             disabled={isEditing}
                             onChange={() => toggleRoutineCheck(it.id)}
-                            style={{ width:14, height:14, accentColor:"#0D0D0D", cursor: isEditing ? "default" : "pointer", margin:0, flexShrink:0, opacity: isEditing ? 0.4 : 1 }}
+                            style={{ width:14, height:14, accentColor:T.text, cursor: isEditing ? "default" : "pointer", margin:0, flexShrink:0, opacity: isEditing ? 0.4 : 1 }}
                           />
                           {isEditing ? (
                             <input
@@ -1068,11 +1091,11 @@ export default function DisciplinePage({ trades = [] }) {
                               style={{
                                 flex:1, minWidth:0,
                                 padding:"4px 8px",
-                                border:`1px solid #D4D4D4`,
+                                border:`1px solid ${T.border2}`,
                                 borderRadius:6,
                                 fontSize:13, fontWeight:500,
-                                outline:"none", fontFamily:"inherit", color:"#0D0D0D",
-                                background:"#FFFFFF",
+                                outline:"none", fontFamily:"inherit", color:T.text,
+                                background:T.white,
                               }}
                             />
                           ) : (
@@ -1080,7 +1103,7 @@ export default function DisciplinePage({ trades = [] }) {
                               onClick={() => startEditRule(it)}
                               style={{
                                 flex:1, minWidth:0,
-                                color: checked ? "#8E8E8E" : "#0D0D0D",
+                                color: checked ? T.textMut : T.text,
                                 textDecoration: checked ? "line-through" : "none",
                                 cursor:"text",
                                 overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
@@ -1102,11 +1125,11 @@ export default function DisciplinePage({ trades = [] }) {
                                 style={{
                                   display:"inline-flex", alignItems:"center", justifyContent:"center",
                                   width:22, height:22, border:"none", background:"transparent",
-                                  cursor:"pointer", color:"#8E8E8E", borderRadius:4,
+                                  cursor:"pointer", color:T.textMut, borderRadius:"var(--radius-field)",
                                   transition:"background .12s ease, color .12s ease",
                                 }}
-                                onMouseEnter={(e) => { e.currentTarget.style.color = "#0D0D0D"; e.currentTarget.style.background = "#EBEBEB"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.color = "#8E8E8E"; e.currentTarget.style.background = "transparent"; }}
+                                onMouseEnter={(e) => { e.currentTarget.style.color = T.text; e.currentTarget.style.background = "var(--color-hover-bg, #EBEBEB)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; e.currentTarget.style.background = "transparent"; }}
                               >
                                 <Pencil size={12} strokeWidth={1.75} />
                               </button>
@@ -1118,18 +1141,18 @@ export default function DisciplinePage({ trades = [] }) {
                               style={{
                                 display:"inline-flex", alignItems:"center", justifyContent:"center",
                                 width:22, height:22, border:"none", background:"transparent",
-                                cursor:"pointer", color:"#8E8E8E", borderRadius:4,
+                                cursor:"pointer", color:T.textMut, borderRadius:"var(--radius-field)",
                                 transition:"background .12s ease, color .12s ease",
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "#EF4444"; e.currentTarget.style.background = "#FEF2F2"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.color = "#8E8E8E"; e.currentTarget.style.background = "transparent"; }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = T.red; e.currentTarget.style.background = T.redBg; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; e.currentTarget.style.background = "transparent"; }}
                             >
                               <LucideTrash2 size={12} strokeWidth={1.75} />
                             </button>
                           </div>
                         </div>
                         {idx < ROUTINE_ITEMS.length - 1 && (
-                          <div style={{ height:1, background:"#F0F0F0", margin:"0 8px" }} />
+                          <div style={{ height:1, background:T.border, margin:"0 8px" }} />
                         )}
                       </React.Fragment>
                     );
@@ -1143,12 +1166,14 @@ export default function DisciplinePage({ trades = [] }) {
         </div>
 
         {/* UNIFIED CARD — KPIs (4 cells) + Discipline quotidienne (heatmap, gauche) + Insights (droite) */}
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
           {/* Row 1 : 4 KPIs */}
           <ComplianceKpiRow trades={trades} flat />
 
           {/* Row 2 : Heatmap (gauche) + Insights (droite), avec border-top et separateur vertical */}
-          <div style={{display:"grid",gridTemplateColumns:"2.2fr 1fr",borderTop:`1px solid ${T.border}`,alignItems:"stretch"}}>
+          {/* 2fr 1fr : collapse en 1 colonne sous 1024px via le sélecteur responsive
+              de globals.css ([style*="grid-template-columns: 2fr 1fr"]). */}
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",borderTop:`1px solid ${T.border}`,alignItems:"stretch"}}>
           {/* HEATMAP CALENDAR - DISCIPLINE TRACKER */}
           <div key={heatmapVersion} style={{minWidth:0,overflow:"hidden",borderRight:`1px solid ${T.border}`}}>
             {(() => {
@@ -1164,11 +1189,11 @@ export default function DisciplinePage({ trades = [] }) {
                 <div style={{padding:"16px 20px 0",display:"flex",alignItems:"flex-start",gap:10}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:13,fontWeight:600,color:T.text}}>Discipline quotidienne</div>
-                    <div style={{fontSize:11,color:"#8E8E8E",marginTop:2}}>
+                    <div style={{fontSize:11,color:T.textMut,marginTop:2}}>
                       {streak >= 2 ? t("disc.streakDays").replace("{n}", String(streak)) : t("disc.noStreak")}
                     </div>
                   </div>
-                  <div style={{fontSize:11,color:"#8E8E8E",fontVariantNumeric:"tabular-nums",marginTop:2}}>
+                  <div style={{fontSize:11,color:T.textMut,fontVariantNumeric:"tabular-nums",marginTop:2}}>
                     {todayTotal > 0 ? `${todayClean}/${todayTotal}` : "—"}
                   </div>
                 </div>
@@ -1208,8 +1233,9 @@ export default function DisciplinePage({ trades = [] }) {
                  * - 61-80%: Vert Clair
                  * - 81-100%: Vert Vif
                  */
-                const getColorByDiscipline = (percentage) => {
-                  if (percentage === 0) return null;        // Pas de couleur = gris clair
+                const getColorByDiscipline = (percentage, hasData = true) => {
+                  if (!hasData) return null;                // Aucune donnée = gris clair (fallback)
+                  if (percentage === 0) return '#FCA5A5';   // Activité mais 0% respecté = rouge
                   if (percentage < 100) {
                     if (percentage <= 25) return '#DCFCE7'; // Vert très pâle
                     if (percentage <= 50) return '#86EFAC'; // Vert pâle
@@ -1225,25 +1251,8 @@ export default function DisciplinePage({ trades = [] }) {
                 // pouvoir colorer chaque case du calendrier. Le total de règles
                 // est celui de la définition courante (ROUTINE_ITEMS) ; un jour
                 // sans aucune donnée de routine n'entre pas dans le calcul.
-                const routineByDay = (() => {
-                  const map = new Map();
-                  const totalRules = ROUTINE_ITEMS.length;
-                  if (!totalRules) return map;
-                  try {
-                    const prefix = "tr4de_routine_checklist_";
-                    for (let i = 0; i < localStorage.length; i++) {
-                      const k = localStorage.key(i);
-                      if (!k || !k.startsWith(prefix)) continue;
-                      const date = k.slice(prefix.length);
-                      let obj;
-                      try { obj = JSON.parse(localStorage.getItem(k) || "{}"); } catch { obj = {}; }
-                      if (!obj || Object.keys(obj).length === 0) continue; // aucune donnée
-                      const done = ROUTINE_ITEMS.reduce((n, it) => n + (obj[it.id] ? 1 : 0), 0);
-                      map.set(date, { done, total: totalRules });
-                    }
-                  } catch {}
-                  return map;
-                })();
+                // routineByDay est désormais mémoïsé au niveau composant (voir plus haut)
+                // pour éviter de rebalayer localStorage à chaque render.
 
                 // La heatmap combine le moteur de compliance (règles automatiques
                 // sur les trades) ET les règles de routine cochées ce jour-là.
@@ -1321,7 +1330,8 @@ export default function DisciplinePage({ trades = [] }) {
                   if (inRange) {
                     const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
                     const dailyData = getDailyData(dateStr);
-                    const color = getColorByDiscipline(dailyData.percentage);
+                    // hasData = il y a des trades et/ou une routine ce jour-là (denominator > 0).
+                    const color = getColorByDiscipline(dailyData.percentage, dailyData.totalRules > 0);
                     currentWeek[adjustedDow] = { dateStr, ...dailyData, color };
                   }
                   
@@ -1418,36 +1428,35 @@ export default function DisciplinePage({ trades = [] }) {
                                       width:28,
                                       height:28,
                                       background:"transparent",
-                                      borderRadius:4,
+                                      borderRadius:"var(--radius-field)",
                                       flexShrink:0
                                     }}
                                   />
                                 );
                               }
                               
+                              const cellLabel =
+                                `${day.dateStr} : ${day.percentage}% discipline` +
+                                (day.routineTotal ? ` · routine ${day.routineDone}/${day.routineTotal}` : "") +
+                                (day.tradesTotal ? ` · trades clean ${day.tradesClean}/${day.tradesTotal}` : "");
                               return (
                                 <div
                                   key={`${weekIdx}-${dayIdx}`}
-                                  onClick={() => {
-                                    // TODO: Open daily checklist for this date
-                                    console.log('Clicked:', day.dateStr, 'Discipline:', day.percentage + '%');
-                                  }}
+                                  role="img"
+                                  aria-label={cellLabel}
                                   style={{
                                     width:28,
                                     height:28,
-                                    background: day.color || '#F1F5F9',
-                                    borderRadius:4,
-                                    cursor:"pointer",
+                                    // Aucune donnée → gris (var), 0% avec activité → rouge (voir getColorByDiscipline)
+                                    background: day.color || "var(--color-hover-bg, #F1F5F9)",
+                                    borderRadius:"var(--radius-field)",
+                                    // Pas de cursor:pointer : pas de handler réel (évite une fausse affordance).
                                     flexShrink:0,
                                     transition:"all 0.2s",
                                     border: 'none',
                                     opacity: 1
                                   }}
-                                  title={
-                                    `${day.dateStr} : ${day.percentage}% discipline` +
-                                    (day.routineTotal ? ` · routine ${day.routineDone}/${day.routineTotal}` : "") +
-                                    (day.tradesTotal ? ` · trades clean ${day.tradesClean}/${day.tradesTotal}` : "")
-                                  }
+                                  title={cellLabel}
                                 />
                               );
                             })}
@@ -1477,7 +1486,7 @@ export default function DisciplinePage({ trades = [] }) {
                     width:16,
                     height:16,
                     background:color,
-                    borderRadius:2,
+                    borderRadius:"var(--radius-field)",
                     border:'none'
                   }}
                 />
@@ -1500,7 +1509,7 @@ export default function DisciplinePage({ trades = [] }) {
       {/* MODAL MODIFIER REGLES */}
       {showRulesModal && (
         <div {...backdropDismiss(() => setShowRulesModal(false))} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,fontFamily:"var(--font-sans)",padding:24}}>
-          <div onClick={(e) => e.stopPropagation()} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:16,maxWidth:480,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,0.18)"}}>
+          <div onClick={(e) => e.stopPropagation()} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-modal)",maxWidth:480,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"var(--elev-overlay)"}}>
             {/* HEADER */}
             <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div>
@@ -1524,7 +1533,7 @@ export default function DisciplinePage({ trades = [] }) {
               {/* AUTOMATED */}
               <div>
                 <div style={{fontSize:12,fontWeight:600,color:T.textSub,marginBottom:8}}>{t("disc.dailyRulesSection")}</div>
-                <div style={{borderRadius:12,overflow:"hidden",background:T.white}}>
+                <div style={{borderRadius:"var(--radius-card)",overflow:"hidden",background:T.white}}>
                   {(() => {
                     const dailyArr = allRules.filter(r => ["premarket", "biais", "news", "followall", "journal"].includes(r.id));
                     const dailyIds = dailyArr.map(r => r.id);
@@ -1550,7 +1559,7 @@ export default function DisciplinePage({ trades = [] }) {
               {/* PERSONAL — custom rules + add row */}
               <div>
                 <div style={{fontSize:12,fontWeight:600,color:T.textSub,marginBottom:8}}>{t("disc.personalRules")}</div>
-                <div style={{borderRadius:12,overflow:"hidden",background:T.white}}>
+                <div style={{borderRadius:"var(--radius-card)",overflow:"hidden",background:T.white}}>
                   {(() => {
                     const personalArr = allRules.filter(r => !["premarket", "biais", "news", "followall", "journal"].includes(r.id));
                     const personalIds = personalArr.map(r => r.id);
@@ -1570,7 +1579,7 @@ export default function DisciplinePage({ trades = [] }) {
                         aria-label={t("disc.removeAria")}
                         title={t("disc.removeAria")}
                         style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",borderRadius:6,color:T.textMut,cursor:"pointer",flexShrink:0}}
-                        onMouseEnter={(e)=>{e.currentTarget.style.background="#FEF2F2";e.currentTarget.style.color=T.red;}}
+                        onMouseEnter={(e)=>{e.currentTarget.style.background=T.redBg;e.currentTarget.style.color=T.red;}}
                         onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMut;}}
                       >
                         <LucideTrash2 size={12} strokeWidth={1.75}/>
@@ -1586,7 +1595,7 @@ export default function DisciplinePage({ trades = [] }) {
                       value={newManualRule}
                       onChange={(e) => setNewManualRule(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && newManualRule.trim()) addManualRule(); }}
-                      style={{flex:1,padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,background:T.white,color:T.text,outline:"none",fontFamily:"inherit"}}
+                      style={{flex:1,padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",fontSize:12,background:T.white,color:T.text,outline:"none",fontFamily:"inherit"}}
                     />
                     <button
                       type="button"

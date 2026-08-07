@@ -4,10 +4,30 @@ import React from "react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
-import { ArrowLeft, ArrowRight, TrendingUp as LucideTrendingUp } from "lucide-react";
-import TradesPage from "@/components/pages/TradesPage";
+import { ArrowLeft, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import { ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
+import {
+  CARD, TH, SectionTitle, SectionAction, KpiCard, HeroAmount, StackedAmount,
+  DirectionTag, SymbolBadge, symbolLabel, PeriodPills, windowSeries, accountColor,
+} from "@/components/ui/da";
+
+/* ---------------------------------------------------------------------------
+   Page « détail d'un compte » — portée depuis la maquette Figma
+   (fichier mqFgieIhnaljGeybhJRY0V, node 323:1410).
+
+   Règle du projet : aucune couleur en dur, tout passe par les tokens `T`
+   (ce sont des var(--color-*), c'est ce qui fait suivre le thème sombre).
+   ------------------------------------------------------------------------- */
+
+// Palette des courbes secondaires (comparaison entre comptes). Uniquement des
+// tokens existants : pas de nouvelle couleur introduite.
+const SERIES_COLORS = [T.blue, T.pnlPos, T.amber, T.purple, T.cyan, T.pnlNeg, T.kraken];
+// Opacité des courbes des autres comptes, en arrière-plan de la courbe du
+// compte affiché (la maquette montre plusieurs séries pâles derrière la série
+// principale). // TODO token DA — pas d'équivalent dans tokens.ts
+// Opacité des séries secondaires — token DA (dark-aware).
+const SERIES_BG_OPACITY = "var(--opacity-series-bg, 0.35)";
 
 const fmtNoCents = (n) => {
   const sym = getCurrencySymbol();
@@ -52,6 +72,28 @@ const BROKER_LOGOS = {
 };
 const getBrokerLogo = (b) => b ? (BROKER_LOGOS[String(b).trim().toLowerCase()] || null) : null;
 
+const dayKey = (d) => String(d || "").slice(0, 10);
+const msOf = (d) => new Date(d).getTime();
+
+/** Cumul du P&L par jour (dernier cumul connu de la journée). */
+function cumulativeByDay(list) {
+  const sorted = [...(list || [])].sort(
+    (a, b) => msOf(a.date || a.entry_time || 0) - msOf(b.date || b.entry_time || 0)
+  );
+  const byDay = new Map();
+  let cum = 0;
+  for (const tr of sorted) {
+    const k = dayKey(tr.date || tr.entry_time);
+    if (!k) continue;
+    cum += Number(tr.pnl) || 0;
+    byDay.set(k, cum);
+  }
+  return Array.from(byDay.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([date, value]) => ({ date, cum: value }))
+    .filter(p => !isNaN(msOf(p.date)));
+}
+
 export default function AccountDetailPage({ accountId, accounts = [], trades = [], strategies = [], setPage, setSelectedAccountIds, archivedMeta = {} }) {
   useLang();
   // Vue agrégée « Comptes eval passés » : accountId === ARCHIVED_VIEW_ID.
@@ -82,6 +124,8 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
   }, [archivedAccts, trades]);
 
   const [filterId, setFilterId] = React.useState("all"); // "all" | id d'un compte passé
+  const [period, setPeriod] = React.useState("1A");
+  const [statsExpanded, setStatsExpanded] = React.useState(false);
   React.useEffect(() => {
     if (isArchivedView && filterId !== "all" && !archivedAccts.some(a => a.id === filterId)) {
       setFilterId("all");
@@ -253,17 +297,42 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
     };
   }, [accountTrades]);
 
+  // Courbe du compte (cumul par jour) puis fenêtre 1S/1M/3M/6M/1A.
+  const fullCurve = React.useMemo(() => cumulativeByDay(accountTrades), [accountTrades]);
+  const curve = React.useMemo(() => windowSeries(fullCurve, period, p => p.date), [fullCurve, period]);
+
+  // Séries des autres comptes : la maquette montre plusieurs courbes. On ne les
+  // invente pas, ce sont les vrais autres comptes de l'utilisateur (c'est ce que
+  // faisait l'onglet « Comparer » de l'ancienne version).
+  const otherSeries = React.useMemo(() => {
+    const srcTrades = isArchivedView ? archivedTrades : (trades || []);
+    const srcAccounts = isArchivedView ? archivedAccts : (accounts || []);
+    const currentId = isArchivedView ? (filterId !== "all" ? filterId : null) : accountId;
+    return srcAccounts
+      .filter(a => a.id !== currentId)
+      .map((a, i) => ({
+        id: a.id,
+        name: a.name || "Compte",
+        color: SERIES_COLORS[i % SERIES_COLORS.length],
+        points: cumulativeByDay(srcTrades.filter(tr => tr.account_id === a.id)),
+      }))
+      .filter(s => s.points.length > 1);
+  }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId]);
+
   // Vue normale sans compte, ou vue archivée sans aucun compte archivé.
   if ((!isArchivedView && !account) || (isArchivedView && archivedAccts.length === 0)) {
     return (
-      <div style={{ padding: 32, color: T.textSub }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
         <button
+          type="button"
           onClick={() => setPage?.("accounts")}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 16, padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: "var(--color-card-bg, #fff)", cursor: "pointer", fontSize: 12 }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 14, color: T.text }}
         >
-          <ArrowLeft size={13} /> Retour
+          <ArrowLeft size={18} strokeWidth={1.75} /> Retour
         </button>
-        <p>{isArchivedView ? "Aucun compte eval passé." : "Compte introuvable."}</p>
+        <p style={{ margin: 0, fontSize: 16, color: T.textSub }}>
+          {isArchivedView ? "Aucun compte eval passé." : "Compte introuvable."}
+        </p>
       </div>
     );
   }
@@ -288,320 +357,474 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
   const capitalAgg = archivedAccts.reduce((s, a) => s + (parseEvalSize(a.eval_account_size) || 0), 0);
   const capital = aggregatedAll ? (capitalAgg > 0 ? capitalAgg : null) : parseEvalSize(account?.eval_account_size);
   const balance = capital !== null ? capital + stats.pnl : null;
-  const pnlPct = capital ? (stats.pnl / capital) * 100 : null;
+
+  // Delta affiché sous le chiffre héros : variation sur la fenêtre choisie.
+  const firstCum = curve.length ? curve[0].cum : 0;
+  const lastCum = curve.length ? curve[curve.length - 1].cum : 0;
+  const deltaAbs = lastCum - firstCum;
+  const deltaPct = capital
+    ? Math.abs((deltaAbs / capital) * 100)
+    : (firstCum !== 0 ? Math.abs((deltaAbs / firstCum) * 100) : 0);
+  const deltaColor = deltaAbs > 0 ? T.pnlPos : deltaAbs < 0 ? T.pnlNeg : T.textSub;
+  const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
+
+  const brokerLine = [account?.broker || null, typeLabel].filter(Boolean).join(" · ");
+  const brokerLogo = account ? getBrokerLogo(account.broker) : null;
+
+  const recentTrades = [...accountTrades]
+    .sort((a, b) => msOf(b.date || b.entry_time || 0) - msOf(a.date || a.entry_time || 0))
+    .slice(0, 5);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
-      {/* Header */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setPage?.("accounts")}
-            aria-label="Retour"
-            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 999, border: `1px solid ${T.border}`, background: "var(--color-card-bg, #FFFFFF)", color: T.text, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = T.bg; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}
-          >
-            <ArrowLeft size={14} strokeWidth={1.75} />
-          </button>
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: "#0D0D0D", letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-sans)" }}>
-            {displayName}
-          </h1>
-          {account && getBrokerLogo(account.broker) && (
-            <img src={getBrokerLogo(account.broker)} alt={account.broker || ""} style={{ height: 20, maxWidth: 64, objectFit: "contain" }} />
-          )}
-          <span style={{
-            fontSize: 11, fontWeight: 600,
-            padding: "3px 8px", borderRadius: 999,
-            background: T.bg, color: T.textSub, border: `1px solid ${T.border}`,
-          }}>
-            {typeLabel}
-          </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
 
-          {/* Vue archivée : filtre par compte + restauration */}
-          {isArchivedView && (
-            <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <select
-                value={filterId}
-                onChange={(e) => setFilterId(e.target.value)}
-                aria-label="Trier par compte"
-                style={{
-                  padding: "6px 10px", borderRadius: 999,
-                  border: `1px solid ${T.border}`, background: "var(--color-card-bg, #FFFFFF)",
-                  color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer",
-                  fontFamily: "inherit", outline: "none",
-                }}
-              >
-                <option value="all">Tous les comptes passés</option>
-                {archivedAccts.map(a => (
-                  <option key={a.id} value={a.id}>{a.name || "Compte"}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* ================= EN-TÊTE : retour + logo + nom / broker ================= */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          type="button"
+          onClick={() => setPage?.("accounts")}
+          aria-label="Retour"
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 18, height: 18, padding: 0, border: "none", background: "none",
+            color: T.text, cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          <ArrowLeft size={18} strokeWidth={1.75} />
+        </button>
 
-      {/* Séparateur entre l'en-tête et les KPIs */}
-      <div style={{ height: 1, background: T.border }} />
-
-      {/* KPIs principaux — collés au graphique en dessous */}
-      <div style={{ background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: "12px 12px 0 0", borderBottom: "none", overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
-          <KpiCell
-            label={t("accountsPage.accountBalance")}
-            value={balance !== null ? fmtNoCents(balance) : "—"}
-            sub={capital !== null ? `/ ${fmtNoCents(capital)}` : undefined}
-          />
-          <KpiCell
-            label={t("accountsPage.kpiPnL")}
-            value={fmt(stats.pnl, true)}
-            sub={pnlPct !== null ? `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%` : undefined}
-            valueColor={stats.pnl > 0 ? T.green : stats.pnl < 0 ? T.red : T.text}
-          />
-          <KpiCell
-            label="Trades"
-            value={String(stats.total)}
-            sub={`${stats.wins} W / ${stats.losses} L`}
-          />
-          <KpiCell
-            label={t("accountsPage.winRateL")}
-            value={stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
-            last
-          />
-        </div>
-        {/* Row 2 — KPIs secondaires */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderTop: `1px solid ${T.border}` }}>
-          <KpiCell
-            label={t("accountsPage.profitFactor")}
-            value={stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? stats.profitFactor.toFixed(2) : "—")}
-          />
-          <KpiCell
-            label={t("accountsPage.expectancyTrade")}
-            value={stats.total > 0 ? fmt(stats.expectancy, true) : "—"}
-            valueColor={stats.expectancy > 0 ? T.green : stats.expectancy < 0 ? T.red : T.text}
-          />
-          <KpiCell
-            label={t("accountsPage.maxDrawdown")}
-            value={stats.maxDD > 0 ? `-${fmtNoCents(stats.maxDD)}` : "—"}
-            valueColor={stats.maxDD > 0 ? T.red : T.text}
-          />
-          <KpiCell
-            label={t("accountsPage.avgWinLoss")}
-            value={stats.total > 0 ? `${fmtNoCents(stats.avgWin)} / -${fmtNoCents(stats.avgLoss)}` : "—"}
-            last
-          />
-        </div>
-      </div>
-
-      {/* Equity curve — collé à la carte KPIs */}
-      <ChartCard
-        currentAccountId={isArchivedView ? (filterId !== "all" ? filterId : "") : accountId}
-        currentName={displayName}
-        trades={isArchivedView ? archivedTrades : trades}
-        accounts={isArchivedView ? archivedAccts : accounts}
-        currentCurve={stats.curve}
-        currentTotal={stats.total}
-      />
-
-      {/* Séparateur avant le tableau de stats */}
-      <div style={{ height: 1, background: T.border }} />
-
-      {/* Tableau de stats détaillées */}
-      <StatsTable stats={stats} />
-
-      {/* Séparateur avant les trades récents */}
-      <div style={{ height: 1, background: T.border }} />
-
-      {/* Trades récents — header + tableau complet (TradesPage embedded),
-          filtré sur les trades du compte sélectionné. Même bloc unifié que
-          sur la page détail d'une stratégie. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "14px 18px",
-          background: "var(--color-card-bg, #FFFFFF)",
-          border: `1px solid ${T.border}`,
-          borderRadius: "12px 12px 0 0",
-          borderBottom: "none",
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Trades récents</div>
-          {/* « Tout voir » masqué en vue archivée : ces comptes sont exclus de
-              la page Trades globale (leur P&L ne compte plus sur le site). */}
-          {!isArchivedView && account && (
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedAccountIds?.([account.id]);
-                try { localStorage.setItem("selectedAccountIds", JSON.stringify([account.id])); } catch {}
-                setPage?.("trades");
-              }}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "6px 14px", borderRadius: 999,
-                border: `1px solid ${T.border}`, background: "var(--color-card-bg, #FFFFFF)",
-                color: T.textSub, fontSize: 11, fontWeight: 500, cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              Tout voir <ArrowRight size={11} />
-            </button>
-          )}
-        </div>
-
-        {/* Séparateur explicite entre le titre et le tableau */}
-        <div style={{ height: 1, background: T.border, borderLeft: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`, boxSizing: "border-box" }} />
-
-        {accountTrades.length === 0 ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          {/* Vignette du broker — 44×44, logo 36×36 à l'intérieur (maquette) */}
           <div style={{
-            background: "var(--color-card-bg, #FFFFFF)",
-            border: `1px solid ${T.border}`,
-            borderRadius: "0 0 12px 12px",
-            padding: "40px 24px", textAlign: "center", color: T.textSub, fontSize: 13,
+            width: 44, height: 44, borderRadius: 36, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: T.accentBg, overflow: "hidden",
           }}>
-            Aucun trade sur ce compte.
+            {brokerLogo ? (
+              <img
+                src={brokerLogo}
+                alt={account?.broker || ""}
+                width={36}
+                height={36}
+                style={{ width: 36, height: 36, objectFit: "contain", display: "block" }}
+              />
+            ) : (
+              <span style={{ fontSize: 14, fontWeight: 500, color: T.textSub }}>
+                {String(displayName).replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "—"}
+              </span>
+            )}
           </div>
-        ) : (
-          <TradesPage trades={accountTrades} strategies={strategies} embedded />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minWidth: 0 }}>
+            <h1 style={{
+              margin: 0, fontSize: 16, fontWeight: 500, lineHeight: 1.25, color: T.text,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {displayName}
+            </h1>
+            {brokerLine && (
+              <span style={{ fontSize: 14, lineHeight: 1.25, color: T.text, opacity: 0.4, whiteSpace: "nowrap" }}>
+                {brokerLine}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Vue archivée : filtre par compte passé (fonctionnalité conservée) */}
+        {isArchivedView && (
+          <select
+            value={filterId}
+            onChange={(e) => setFilterId(e.target.value)}
+            aria-label="Trier par compte"
+            style={{
+              marginLeft: "auto", padding: "6px 14px", borderRadius: 999,
+              border: "none", background: T.white, boxShadow: T.elevPill,
+              color: T.text, fontSize: 12, lineHeight: "18.6px", cursor: "pointer",
+              fontFamily: "inherit", outline: "none",
+            }}
+          >
+            <option value="all">Tous les comptes passés</option>
+            {archivedAccts.map(a => (
+              <option key={a.id} value={a.id}>{a.name || "Compte"}</option>
+            ))}
+          </select>
         )}
       </div>
 
-    </div>
-  );
-}
+      {/* ================= P&L + GRAPHIQUE ================= */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>P&amp;L</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <HeroAmount value={stats.pnl} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 500, lineHeight: "18.6px", color: deltaColor }}>
+                <span>{deltaAbs > 0 ? "+" : ""}{fmt(deltaAbs, false)}</span>
+                <span style={{ display: "inline-flex", alignItems: "center" }}>
+                  <span>(</span>
+                  <DeltaIcon size={20} strokeWidth={1.75} style={{ margin: "0 1px" }} />
+                  <span>{deltaPct.toFixed(2)}%</span>
+                  <span>&nbsp;)</span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <PeriodPills value={period} onChange={setPeriod} />
+        </div>
 
-function RecentTradesTable({ trades }) {
-  const fmtTime = (v) => {
-    if (!v) return "—";
-    if (/^\d{1,2}:\d{2}/.test(String(v))) return String(v).slice(0, 5);
-    const d = new Date(v);
-    if (isNaN(d.getTime())) return "—";
-    return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  };
-  const [hoveredId, setHoveredId] = React.useState(null);
+        <PnlChart points={curve} others={otherSeries} color={accountColor(account?.id)} />
+      </div>
 
-  return (
-    <div style={{ overflowX: "auto", overflowY: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: "var(--font-sans)" }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-            <Th2>Symbole</Th2>
-            <Th2>Date</Th2>
-            <Th2>Entrée</Th2>
-            <Th2>Sortie</Th2>
-            <Th2>Sens</Th2>
-            <Th2 align="right">Prix entrée</Th2>
-            <Th2 align="right">Prix sortie</Th2>
-            <Th2 align="right">P&amp;L</Th2>
-          </tr>
-        </thead>
-        <tbody>
-          {trades.map((t, i) => {
-            const p = Number(t.pnl) || 0;
-            const id = t.id || i;
-            const isHovered = hoveredId === id;
-            return (
-              <tr
-                key={id}
-                onMouseEnter={() => setHoveredId(id)}
-                onMouseLeave={() => setHoveredId(null)}
-                style={{
-                  borderBottom: `1px solid ${T.border}`,
-                  background: isHovered ? "#FAFAFA" : "#FFFFFF",
-                  transition: "background .12s ease",
+      {/* ================= 6 TUILES DE KPI (3 × 2) ================= */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+        <KpiCard label="Trade" value={String(stats.total)} />
+        <KpiCard
+          label={t("accountsPage.winRateL")}
+          value={stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
+        />
+        <KpiCard
+          label={t("accountsPage.profitFactor")}
+          value={stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? stats.profitFactor.toFixed(2) : "—")}
+        />
+        <KpiCard
+          label={t("accountsPage.expectancyTrade")}
+          value={stats.total > 0 ? fmt(stats.expectancy, true) : "—"}
+          tone={stats.expectancy > 0 ? "pos" : stats.expectancy < 0 ? "neg" : undefined}
+        />
+        <KpiCard
+          label={t("accountsPage.maxDrawdown")}
+          value={stats.maxDD > 0 ? `-${fmtNoCents(stats.maxDD)}` : "—"}
+          tone={stats.maxDD > 0 ? "neg" : undefined}
+        />
+        <KpiCard
+          label={t("accountsPage.avgWinLoss")}
+          value={stats.total > 0 ? `${fmtNoCents(stats.avgWin)} / -${fmtNoCents(stats.avgLoss)}` : "—"}
+        />
+      </div>
+
+      {/* ================= TRADES ================= */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <SectionTitle
+          action={
+            !isArchivedView && account ? (
+              <SectionAction
+                onClick={() => {
+                  setSelectedAccountIds?.([account.id]);
+                  try { localStorage.setItem("selectedAccountIds", JSON.stringify([account.id])); } catch {}
+                  setPage?.("trades");
                 }}
               >
-                <Td2>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 18, verticalAlign: "middle" }}>
-                    <span style={{ width: 22, height: 22, borderRadius: 6, background: T.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <LucideTrendingUp size={13} strokeWidth={1.75} color={T.textMut} />
-                    </span>
-                    <span style={{ fontWeight: 600, color: T.text }}>{t.symbol || "—"}</span>
-                  </span>
-                </Td2>
-                <Td2 muted>{formatDate(t.date)}</Td2>
-                <Td2 muted>{fmtTime(t.entry_time || t.entryTime)}</Td2>
-                <Td2 muted>{fmtTime(t.exit_time || t.exitTime)}</Td2>
-                <Td2>
-                  <span style={{ color: t.direction === "short" ? T.red : T.green, fontWeight: 500 }}>
-                    {t.direction === "short" ? "Short" : "Long"}
-                  </span>
-                </Td2>
-                <Td2 align="right" tabular>{t.entry != null ? Number(t.entry).toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</Td2>
-                <Td2 align="right" tabular>{t.exit != null ? Number(t.exit).toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}</Td2>
-                <Td2 align="right" tabular>
-                  <span style={{ color: p > 0 ? T.green : p < 0 ? T.red : T.text, fontWeight: 600 }}>
-                    {fmt(p, true)}
-                  </span>
-                </Td2>
-              </tr>
+                Voir plus
+              </SectionAction>
+            ) : null
+          }
+        >
+          <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
+            <span>Trades</span>
+            <span style={{ fontSize: 20, fontWeight: 400, color: T.text, opacity: 0.4 }}>{stats.total}</span>
+          </span>
+        </SectionTitle>
+
+        <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* En-tête de colonnes */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", opacity: 0.4 }}>
+            <div style={{ flex: "1 0 0", minWidth: 0 }}><span style={TH}>Actif</span></div>
+            <div style={{ width: 133, flexShrink: 0 }}><span style={TH}>type</span></div>
+            <div style={{ width: 100, flexShrink: 0 }}><span style={TH}>Date</span></div>
+            <div style={{ width: 117, flexShrink: 0, textAlign: "right" }}><span style={TH}>P&amp;L</span></div>
+          </div>
+
+          {/* Lignes */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {recentTrades.length === 0 ? (
+              <div style={{ fontSize: 14, color: T.textMut, padding: "12px 8px" }}>Aucun trade sur ce compte.</div>
+            ) : recentTrades.map((tr, i) => {
+              const d = new Date(tr.date);
+              const dateLabel = isNaN(d.getTime())
+                ? String(tr.date || "")
+                : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+              // % = part de ce trade dans le P&L total du compte.
+              const pct = stats.pnl !== 0 ? Math.abs(((tr.pnl || 0) / stats.pnl) * 100) : 0;
+              const { name, code } = symbolLabel(tr.symbol);
+              return (
+                <div
+                  key={tr.id || i}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: 12, borderRadius: 12, background: "transparent",
+                    transition: "background 140ms ease",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = T.rowHighlight; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{ flex: "1 0 0", minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    <SymbolBadge symbol={tr.symbol} />
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                      <span style={{ fontSize: 16, fontWeight: 500, lineHeight: "17.05px", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {name}
+                      </span>
+                      {code && (
+                        <span style={{ fontSize: 12, lineHeight: "13.95px", color: T.textMut, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {code}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ width: 133, flexShrink: 0, display: "flex", alignItems: "center" }}>
+                    <DirectionTag direction={tr.direction} />
+                  </div>
+                  <div style={{ width: 100, flexShrink: 0, fontSize: 16, fontWeight: 500, lineHeight: "17.05px", color: T.text }}>
+                    {dateLabel}
+                  </div>
+                  <div style={{ width: 117, flexShrink: 0 }}>
+                    <StackedAmount value={tr.pnl || 0} percent={pct} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ================= STATISTIQUES ================= */}
+      <StatsSection
+        stats={stats}
+        capital={capital}
+        balance={balance}
+        expanded={statsExpanded}
+        onToggle={() => setStatsExpanded(v => !v)}
+      />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Graphique multi-séries (maquette : courbe du compte en avant-plan avec une
+   trame de points sous la courbe, autres comptes en lignes fines derrière).
+   On dessine à l'échelle 1:1 : le viewBox reprend la largeur réellement
+   mesurée, sinon la trame de points serait écrasée en ellipses.
+   ------------------------------------------------------------------------- */
+function PnlChart({ points, others, color }) {
+  const ref = React.useRef(null);
+  const [width, setWidth] = React.useState(1160);
+  const [hover, setHover] = React.useState(null);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(entries => {
+      const w = Math.round(entries[0].contentRect.width);
+      if (w > 0) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Géométrie relevée sur la maquette.
+  const H = 358, W = width;
+  const topY = 30, plotBottom = 340;
+  const plotH = plotBottom - topY;
+
+  if (!points || points.length < 2) {
+    return (
+      <div ref={ref} style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: T.text, opacity: 0.4 }}>
+        Pas assez de données pour tracer la courbe.
+      </div>
+    );
+  }
+
+  const t0 = msOf(points[0].date);
+  const t1 = msOf(points[points.length - 1].date);
+  const tSpan = (t1 - t0) || 1;
+  const xFor = (date) => ((msOf(date) - t0) / tSpan) * W;
+
+  // Les autres comptes sont recadrés sur la même fenêtre temporelle.
+  const otherClipped = (others || [])
+    .map(s => ({ ...s, points: s.points.filter(p => msOf(p.date) >= t0 && msOf(p.date) <= t1) }))
+    .filter(s => s.points.length > 1);
+
+  const values = points.map(p => p.cum);
+  otherClipped.forEach(s => s.points.forEach(p => values.push(p.cum)));
+  const yMax = Math.max(...values);
+  const yMin = Math.min(...values);
+  const ySpan = (yMax - yMin) || 1;
+  const yFor = (v) => plotBottom - ((v - yMin) / ySpan) * plotH;
+
+  // Couleur d'identité du compte : la maquette montre le compte XTB en rouge
+  // ici ET sur sa carte de la liste. La couleur suit le compte, pas le P&L.
+  const lineColor = color || T.kraken;
+  const coords = points.map(p => [xFor(p.date), yFor(p.cum)]);
+  const pathD = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c[0].toFixed(2)} ${c[1].toFixed(2)}`).join(" ");
+  // Aire fermée sous la courbe : c'est elle qui porte la trame de points.
+  const areaD = `${pathD} L ${coords[coords.length - 1][0].toFixed(2)} ${H} L ${coords[0][0].toFixed(2)} ${H} Z`;
+
+  const fmtTick = (v) => {
+    const sign = v < 0 ? "-" : "";
+    const abs = Math.abs(v);
+    if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
+    return `${sign}${Math.round(abs)}`;
+  };
+  const ticks = [0, 1, 2, 3].map(i => {
+    const ratio = i / 3;
+    return { value: yMax - ratio * ySpan, top: 16 + ratio * (348 - 16) };
+  });
+
+  // 5 repères de date répartis sur la fenêtre affichée.
+  const xLabels = [0, 1, 2, 3, 4].map(i => {
+    const idx = Math.round((i / 4) * (points.length - 1));
+    const d = new Date(points[idx]?.date || "");
+    return isNaN(d.getTime())
+      ? ""
+      : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).toUpperCase();
+  });
+
+  const cellW = W / Math.max(points.length - 1, 1);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
+      <div
+        ref={ref}
+        style={{ position: "relative", width: "100%", height: H }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {/* 4 séparateurs verticaux à 10 % */}
+        <div style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "space-between", opacity: 0.10, pointerEvents: "none" }}>
+          {[0, 1, 2, 3].map(i => (
+            <span key={i} style={{ width: 1, height: "100%", background: T.text, display: "block" }} />
+          ))}
+        </div>
+
+        {/* Repères de valeur — libellés seuls, alignés à droite, sans trait */}
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          {ticks.map((tk, i) => (
+            <div key={i} style={{ position: "absolute", left: 0, right: 0, top: tk.top }}>
+              <span style={{ display: "block", fontSize: 14, color: T.text, opacity: 0.4, textAlign: "right", lineHeight: 1 }}>
+                {fmtTick(tk.value)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <svg
+          width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          style={{ display: "block", position: "absolute", inset: 0, overflow: "visible" }}
+        >
+          <defs>
+            {/* Trame de la maquette : pas 11 px, cercle r=1 à 15 % */}
+            <pattern id="acct-area-dots" width="11" height="11" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="1" fill={lineColor} fillOpacity="0.15" />
+            </pattern>
+          </defs>
+
+          {/* Autres comptes — lignes fines en arrière-plan */}
+          {otherClipped.map(s => {
+            const d = s.points
+              .map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(p.date).toFixed(2)} ${yFor(p.cum).toFixed(2)}`)
+              .join(" ");
+            return (
+              <path
+                key={s.id}
+                d={d}
+                fill="none"
+                stroke={s.color}
+                strokeOpacity={SERIES_BG_OPACITY}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+              />
             );
           })}
-        </tbody>
-      </table>
+
+          {/* Compte affiché — aire tramée + trait épais */}
+          <path d={areaD} fill="url(#acct-area-dots)" stroke="none" />
+          <path
+            d={pathD}
+            stroke={lineColor}
+            strokeWidth="4"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+
+          {hover !== null && coords[hover] && (
+            <line
+              x1={coords[hover][0]} y1={topY}
+              x2={coords[hover][0]} y2={plotBottom}
+              stroke={lineColor} strokeWidth="1" strokeDasharray="3 3"
+              vectorEffect="non-scaling-stroke" pointerEvents="none"
+            />
+          )}
+
+          {coords.map((c, i) => (
+            <rect
+              key={`hover-${i}`}
+              x={c[0] - cellW / 2}
+              y="0"
+              width={cellW}
+              height={H}
+              fill="transparent"
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => setHover(i)}
+            />
+          ))}
+        </svg>
+
+        {/* Tooltip */}
+        {hover !== null && points[hover] && (() => {
+          const p = points[hover];
+          const leftPct = (coords[hover][0] / W) * 100;
+          const topPct = (coords[hover][1] / H) * 100;
+          const flip = leftPct > 60;
+          const d = new Date(p.date);
+          const label = isNaN(d.getTime())
+            ? p.date
+            : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+          return (
+            <div style={{
+              position: "absolute",
+              left: `${leftPct}%`,
+              top: `${topPct}%`,
+              transform: `translateY(-100%) translateY(-12px) ${flip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
+              background: T.white,
+              borderRadius: 8,
+              boxShadow: T.elevCard,
+              padding: "8px 10px",
+              pointerEvents: "none",
+              zIndex: 20,
+              whiteSpace: "nowrap",
+              fontFamily: "var(--font-sans)",
+            }}>
+              <div style={{ fontSize: 12, color: T.textSub, marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: p.cum > 0 ? T.pnlPos : p.cum < 0 ? T.pnlNeg : T.text }}>
+                {p.cum > 0 ? "+" : ""}{fmt(p.cum, false)}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Axe des dates */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", fontSize: 14, color: T.text }}>
+        {xLabels.map((l, i) => (
+          <span key={i} style={{ opacity: 0.4, whiteSpace: "nowrap" }}>{l}</span>
+        ))}
+      </div>
     </div>
   );
 }
 
-function Th2({ children, align = "left" }) {
-  return (
-    <th style={{
-      padding: "12px 14px",
-      textAlign: align,
-      fontSize: 11,
-      fontWeight: 500,
-      color: T.textMut,
-      whiteSpace: "nowrap",
-      background: T.bg,
-      height: 42,
-    }}>
-      {children}
-    </th>
-  );
-}
-
-function Td2({ children, align = "left", muted, tabular }) {
-  return (
-    <td style={{
-      padding: "12px 14px",
-      textAlign: align,
-      color: muted ? T.textSub : T.text,
-      fontFamily: "var(--font-sans)",
-      fontVariantNumeric: tabular ? "tabular-nums" : undefined,
-      whiteSpace: "nowrap",
-    }}>
-      {children}
-    </td>
-  );
-}
-
-function KpiCell({ label, value, sub, desc, valueColor, last }) {
-  return (
-    <div style={{
-      padding: "14px 18px",
-      borderRight: last ? "none" : `1px solid ${T.border}`,
-      position: "relative",
-    }}>
-      <div style={{ fontSize: 12, color: "#5C5C5C", marginBottom: 8, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 4 }}>
-        {label} <span style={{ color: "#8E8E8E" }}>›</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-        <span style={{ fontSize: 20, fontWeight: 600, color: valueColor || T.text, letterSpacing: -0.2 }}>{value}</span>
-        {sub && <span style={{ fontSize: 11, color: T.textSub }}>{sub}</span>}
-      </div>
-      {desc && (
-        <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{desc}</div>
-      )}
-    </div>
-  );
-}
-
-function StatsTable({ stats }) {
-  const fmtMoney = (v) => fmtNoCents(v);
-  const fmtMoneyCents = (v) => fmt(v);
-  const fmtNum = (v, dec = 2) => Number(v).toFixed(dec);
-  const fmtMin = (m) => {
+/* ---------------------------------------------------------------------------
+   Statistiques : 3 cartes de listes « libellé → valeur ». La maquette n'en
+   montre que 4 lignes par carte ; « Voir plus » déplie la totalité des mesures
+   déjà calculées par la page (aucune statistique n'est perdue).
+   ------------------------------------------------------------------------- */
+function StatsSection({ stats, capital, balance, expanded, onToggle }) {
+  const money = (v) => fmt(v);
+  const num = (v, dec = 2) => Number(v).toFixed(dec);
+  const mins = (m) => {
     if (!m) return "—";
     if (m < 1) return `${Math.round(m * 60)}s`;
     const mm = Math.round(m);
@@ -610,532 +833,94 @@ function StatsTable({ stats }) {
     const r = mm % 60;
     return r === 0 ? `${h} h` : `${h} h ${r} min`;
   };
-  const sign = (v) => (v >= 0 ? "+" : "");
 
-  const cells = [
-    // Row 1
-    { label: t("accountsPage.totalTradesL"), value: String(stats.total) },
-    { label: t("accountsPage.winners"), value: String(stats.wins) },
-    { label: t("accountsPage.losers"), value: String(stats.losses) },
-    { label: t("accountsPage.scratch"), value: String(stats.scratch) },
-    { label: t("accountsPage.avgHoldWin"), value: fmtMin(stats.avgHoldWinMin) },
-    { label: t("accountsPage.avgHoldLoss"), value: fmtMin(stats.avgHoldLossMin) },
-    // Row 2
-    { label: t("accountsPage.maxWinStreakL"), value: String(stats.maxWinStreak) },
-    { label: t("accountsPage.maxLossStreakL"), value: String(stats.maxLossStreak) },
-    { label: t("accountsPage.bestTrade"), value: stats.bestTrade ? fmtMoneyCents(stats.bestTrade.pnl) : "—" },
-    { label: t("accountsPage.worstTrade"), value: stats.worstTrade ? fmtMoneyCents(stats.worstTrade.pnl) : "—" },
-    { label: t("accountsPage.totalExecsL"), value: String(stats.totalExecutions) },
-    { label: t("accountsPage.avgTradeVolume"), value: stats.avgTradeVolume ? fmtNum(stats.avgTradeVolume, 1) : "—" },
-    // Row 3
-    { label: t("accountsPage.totalPnL"), value: fmtMoneyCents(stats.pnl) },
-    { label: t("accountsPage.longTrades"), value: String(stats.longCount) },
-    { label: t("accountsPage.shortTrades"), value: String(stats.shortCount) },
-    { label: t("accountsPage.winRateL"), value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—" },
-    { label: t("accountsPage.totalFees"), value: fmtMoneyCents(stats.totalFees) },
-    { label: t("accountsPage.openPositions"), value: String(stats.openPositions) },
-    // Row 4
-    { label: t("accountsPage.avgTradePnl"), value: stats.total > 0 ? fmtMoneyCents(stats.avgTradePnL) : "—" },
-    { label: t("accountsPage.avgWinner"), value: stats.wins ? fmtMoneyCents(stats.avgWin) : "—" },
-    { label: t("accountsPage.avgLoser"), value: stats.losses ? `-${fmt(stats.avgLoss)}` : "—" },
-    { label: t("accountsPage.profitFactor"), value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? fmtNum(stats.profitFactor) : "—") },
-    { label: t("accountsPage.kRatio"), value: stats.curve.length > 2 ? fmtNum(stats.kRatio) : "—" },
-    { label: t("accountsPage.kellyPct"), value: stats.total > 0 ? `${stats.kellyPct.toFixed(1)}%` : "—" },
-    // Row 5
-    { label: t("accountsPage.totalDaysL"), value: String(stats.tradingDays) },
-    { label: t("accountsPage.winDays"), value: String(stats.winDays) },
-    { label: t("accountsPage.loseDays"), value: String(stats.loseDays) },
-    { label: t("accountsPage.maxDrawdown"), value: stats.maxDD > 0 ? `-${fmtMoney(stats.maxDD)}` : "—" },
-    { label: t("accountsPage.avgDailyVolume"), value: stats.tradingDays ? fmtNum(stats.avgDailyVolume, 1) : "—" },
-    { label: t("accountsPage.sqn"), value: stats.pnlStdDev > 0 ? fmtNum(stats.sqn) : "—" },
-    // Row 6
-    { label: t("accountsPage.avgDailyPnL"), value: stats.tradingDays ? fmtMoneyCents(stats.avgDailyPnL) : "—" },
-    { label: t("accountsPage.avgWinDayPnL"), value: stats.winDays ? fmtMoneyCents(stats.avgWinDayPnL) : "—" },
-    { label: t("accountsPage.avgLoseDayPnL"), value: stats.loseDays ? fmtMoneyCents(stats.avgLoseDayPnL) : "—" },
-    { label: t("accountsPage.pnlStdDevL"), value: stats.pnlStdDev > 0 ? fmtMoneyCents(stats.pnlStdDev) : "—" },
-    { label: t("accountsPage.expectancyL"), value: stats.total > 0 ? fmtMoneyCents(stats.expectancy) : "—" },
-    { label: t("accountsPage.expectancyRatioL"), value: stats.expectancyRatio > 0 ? fmtNum(stats.expectancyRatio) : "—" },
+  const groups = [
+    {
+      title: "Trades",
+      rows: [
+        { label: t("accountsPage.totalTradesL"), value: String(stats.total) },
+        { label: t("accountsPage.winners"), value: String(stats.wins) },
+        { label: t("accountsPage.losers"), value: String(stats.losses) },
+        { label: t("accountsPage.scratch"), value: String(stats.scratch) },
+        { label: t("accountsPage.longTrades"), value: String(stats.longCount) },
+        { label: t("accountsPage.shortTrades"), value: String(stats.shortCount) },
+        { label: t("accountsPage.winRateL"), value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—" },
+        { label: t("accountsPage.maxWinStreakL"), value: String(stats.maxWinStreak) },
+        { label: t("accountsPage.maxLossStreakL"), value: String(stats.maxLossStreak) },
+        { label: t("accountsPage.totalExecsL"), value: String(stats.totalExecutions) },
+        { label: t("accountsPage.avgTradeVolume"), value: stats.avgTradeVolume ? num(stats.avgTradeVolume, 1) : "—" },
+        { label: t("accountsPage.openPositions"), value: String(stats.openPositions) },
+      ],
+    },
+    {
+      title: "P&L",
+      rows: [
+        { label: t("accountsPage.totalPnL"), value: money(stats.pnl) },
+        { label: t("accountsPage.accountBalance"), value: balance !== null ? fmtNoCents(balance) : "—" },
+        { label: t("accountsPage.bestTrade"), value: stats.bestTrade ? money(stats.bestTrade.pnl) : "—" },
+        { label: t("accountsPage.worstTrade"), value: stats.worstTrade ? money(stats.worstTrade.pnl) : "—" },
+        { label: t("accountsPage.avgTradePnl"), value: stats.total > 0 ? money(stats.avgTradePnL) : "—" },
+        { label: t("accountsPage.avgWinner"), value: stats.wins ? money(stats.avgWin) : "—" },
+        { label: t("accountsPage.avgLoser"), value: stats.losses ? `-${fmt(stats.avgLoss)}` : "—" },
+        { label: t("accountsPage.profitFactor"), value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? num(stats.profitFactor) : "—") },
+        { label: t("accountsPage.expectancyL"), value: stats.total > 0 ? money(stats.expectancy) : "—" },
+        { label: t("accountsPage.expectancyRatioL"), value: stats.expectancyRatio > 0 ? num(stats.expectancyRatio) : "—" },
+        { label: t("accountsPage.totalFees"), value: money(stats.totalFees) },
+        { label: t("accountsPage.pnlStdDevL"), value: stats.pnlStdDev > 0 ? money(stats.pnlStdDev) : "—" },
+      ],
+    },
+    {
+      title: "Sessions",
+      rows: [
+        { label: t("accountsPage.totalDaysL"), value: String(stats.tradingDays) },
+        { label: t("accountsPage.winDays"), value: String(stats.winDays) },
+        { label: t("accountsPage.loseDays"), value: String(stats.loseDays) },
+        { label: t("accountsPage.maxDrawdown"), value: stats.maxDD > 0 ? `-${fmtNoCents(stats.maxDD)}` : "—" },
+        { label: t("accountsPage.avgDailyPnL"), value: stats.tradingDays ? money(stats.avgDailyPnL) : "—" },
+        { label: t("accountsPage.avgWinDayPnL"), value: stats.winDays ? money(stats.avgWinDayPnL) : "—" },
+        { label: t("accountsPage.avgLoseDayPnL"), value: stats.loseDays ? money(stats.avgLoseDayPnL) : "—" },
+        { label: t("accountsPage.avgDailyVolume"), value: stats.tradingDays ? num(stats.avgDailyVolume, 1) : "—" },
+        { label: t("accountsPage.avgHoldWin"), value: mins(stats.avgHoldWinMin) },
+        { label: t("accountsPage.avgHoldLoss"), value: mins(stats.avgHoldLossMin) },
+        { label: t("accountsPage.sqn"), value: stats.pnlStdDev > 0 ? num(stats.sqn) : "—" },
+        { label: t("accountsPage.kRatio"), value: stats.curve.length > 2 ? num(stats.kRatio) : "—" },
+      ],
+    },
   ];
 
+  // Capital connu → on l'expose plutôt que de le perdre (absent de la maquette).
+  if (capital !== null) {
+    groups[1].rows.splice(1, 0, { label: "Capital", value: fmtNoCents(capital) });
+  }
+
+  const VISIBLE = 4;
+
   return (
-    <div style={{ background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}>
-        {cells.map((c, i) => {
-          const col = i % 6;
-          const row = Math.floor(i / 6);
-          const lastRow = row === 5;
-          const lastCol = col === 5;
-          return (
-            <div
-              key={i}
-              style={{
-                padding: "14px 16px",
-                borderRight: lastCol ? "none" : `1px solid ${T.border}`,
-                borderBottom: lastRow ? "none" : `1px solid ${T.border}`,
-                minWidth: 0,
-                textAlign: "center",
-              }}
-            >
-              <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: c.color || T.text, fontVariantNumeric: "tabular-nums" }}>{c.value}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <SectionTitle
+        action={<SectionAction onClick={onToggle}>{expanded ? "Voir moins" : "Voir plus"}</SectionAction>}
+      >
+        Statistiques
+      </SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, alignItems: "stretch" }}>
+        {groups.map(g => (
+          <div key={g.title} style={{ ...CARD, display: "flex", flexDirection: "column", gap: 24 }}>
+            <span style={{ fontSize: 20, fontWeight: 500, lineHeight: "26.35px", color: T.text }}>{g.title}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {(expanded ? g.rows : g.rows.slice(0, VISIBLE)).map((r, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ fontSize: 14, color: T.text, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.label}
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.15, color: T.text, whiteSpace: "nowrap" }}>
+                    {r.value}
+                  </span>
+                </div>
+              ))}
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-const ACCOUNT_COLORS = ["#3B82F6", "#16A34A", "#F97316", "#A855F7", "#EAB308", "#0EA5E9", "#EC4899", "#EF4444"];
-
-function ChartCard({ currentAccountId, currentName, trades, accounts, currentCurve, currentTotal }) {
-  const [tab, setTab] = React.useState("self"); // "self" | "compare"
-  const tabs = [
-    { id: "self", label: t("accountsPage.myAccountTab") },
-    { id: "compare", label: t("accountsPage.compareTab"), disabled: (accounts || []).length < 2 },
-  ];
-  return (
-    <div style={{ background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: "0 0 12px 12px", overflow: "visible", marginTop: -16, position: "relative", zIndex: 1 }}>
-      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Évolution du P&L</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-            {tabs.map((tb, i) => {
-              const active = tab === tb.id;
-              return (
-                <React.Fragment key={tb.id}>
-                  {i > 0 && <span aria-hidden="true" style={{ width: 1, height: 14, background: T.border, margin: "0 2px" }} />}
-                  <button
-                    type="button"
-                    disabled={tb.disabled}
-                    onClick={() => !tb.disabled && setTab(tb.id)}
-                    style={{
-                      padding: "6px 14px",
-                      borderRadius: 999,
-                      border: "none",
-                      background: active ? "#F5F5F5" : "transparent",
-                      color: active ? T.text : T.textSub,
-                      fontSize: 13,
-                      fontWeight: active ? 600 : 500,
-                      cursor: tb.disabled ? "not-allowed" : "pointer",
-                      opacity: tb.disabled ? 0.45 : 1,
-                      fontFamily: "inherit",
-                      transition: "background 140ms ease, color 140ms ease",
-                    }}
-                    onMouseEnter={(e) => { if (!active && !tb.disabled) e.currentTarget.style.color = T.text; }}
-                    onMouseLeave={(e) => { if (!active && !tb.disabled) e.currentTarget.style.color = T.textSub; }}
-                  >
-                    {tb.label}
-                  </button>
-                </React.Fragment>
-              );
-            })}
           </div>
-        </div>
-        <div style={{ fontSize: 11, color: T.textMut, marginBottom: 12 }}>
-          {tab === "self" ? t("accountsPage.cumulativeDailyPnl").replace("{n}", String(currentTotal)) : t("accountsPage.cumulativeAccountsCompare")}
-        </div>
-        {tab === "self"
-          ? <EquityCurve curve={currentCurve} />
-          : <EquityCompare trades={trades} accounts={accounts} highlightId={currentAccountId} />
-        }
+        ))}
       </div>
     </div>
   );
-}
-
-function EquityCompare({ trades, accounts, highlightId }) {
-  const [hoverIdx, setHoverIdx] = React.useState(null);
-
-  const series = (accounts || []).map((acc, idx) => {
-    const accTrades = (trades || []).filter(t => t.account_id === acc.id);
-    if (accTrades.length === 0) return null;
-    const sorted = [...accTrades].sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
-    const byDay = {};
-    sorted.forEach(tr => {
-      const d = String(tr.date || "").slice(0, 10);
-      byDay[d] = (byDay[d] || 0) + (tr.pnl || 0);
-    });
-    const dates = Object.keys(byDay).sort();
-    let cum = 0;
-    const points = dates.map(d => { cum += byDay[d]; return { date: d, value: cum }; });
-    return { id: acc.id, name: acc.name || "Compte", color: ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length], points };
-  }).filter(Boolean);
-
-  if (series.length === 0) {
-    return <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: T.textSub, fontSize: 12 }}>Pas de données.</div>;
-  }
-
-  const allDatesSet = new Set();
-  series.forEach(s => s.points.forEach(p => allDatesSet.add(p.date)));
-  const allDates = Array.from(allDatesSet).sort();
-
-  // Forward-fill chaque compte
-  const seriesFilled = series.map(s => {
-    const map = Object.fromEntries(s.points.map(p => [p.date, p.value]));
-    let lastVal = 0;
-    const filled = allDates.map(d => {
-      if (map[d] !== undefined) lastVal = map[d];
-      return { date: d, value: lastVal };
-    });
-    return { ...s, filled };
-  });
-
-  let yMin = 0, yMax = 0;
-  seriesFilled.forEach(s => s.filled.forEach(p => { if (p.value < yMin) yMin = p.value; if (p.value > yMax) yMax = p.value; }));
-  const yRange = (yMax - yMin) || 1;
-
-  const W = 800, H = 220;
-  const padL = 0, padR = 28, padT = 10, padB = 18;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  const xFor = (i) => padL + (allDates.length === 1 ? plotW / 2 : (i / (allDates.length - 1)) * plotW);
-  const yFor = (v) => padT + plotH - ((v - yMin) / yRange) * plotH;
-  const cellW = allDates.length === 1 ? plotW : plotW / Math.max(1, allDates.length - 1);
-
-  const fmtVal = (v) => {
-    const sign = v >= 0 ? "+" : "-";
-    const abs = Math.abs(v);
-    if (abs >= 10000) return `${sign}${Math.round(abs / 10000) * 10}k`;
-    if (abs >= 1000) return `${sign}${Math.round(abs / 1000)}k`;
-    return `${sign}${Math.round(abs)}`;
-  };
-  const fmtD = (d) => {
-    const [, m, dd] = d.split("-");
-    const months = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
-    return `${parseInt(dd)} ${months[parseInt(m) - 1]}`;
-  };
-  const fullDate = (d) => {
-    const [y, m, dd] = d.split("-");
-    return `${parseInt(dd)} ${["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."][parseInt(m)-1]} ${y}`;
-  };
-
-  const yTicks = [];
-  for (let i = 0; i <= 3; i++) {
-    const ratio = i / 3;
-    yTicks.push({ y: padT + plotH * ratio, value: yMax - ratio * yRange });
-  }
-  const xLabels = allDates.map((d, i) => ({ i, date: d, anchor: i === 0 ? "start" : i === allDates.length - 1 ? "end" : "middle" }));
-
-  const hoverX = hoverIdx != null ? xFor(hoverIdx) : null;
-  const tooltipPct = hoverX != null ? Math.min(100, Math.max(0, (hoverX / W) * 100)) : 0;
-  const tooltipFlip = tooltipPct > 70;
-  const trackVal = hoverIdx != null ? Math.max(...seriesFilled.map(s => s.filled[hoverIdx]?.value ?? 0)) : 0;
-  const trackY = hoverIdx != null ? yFor(trackVal) : 0;
-  const topPct = hoverIdx != null ? (trackY / H) * 100 : 0;
-
-  return (
-    <div style={{ position: "relative" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible", aspectRatio: `${W} / ${H}` }}>
-        {/* Y labels */}
-        {yTicks.map((tk, i) => (
-          <text key={i} x={W - 2} y={tk.y + 2.5} fill={T.textMut} fontSize="6" fontWeight="500" textAnchor="end" dominantBaseline="middle">{fmtVal(tk.value)}</text>
-        ))}
-
-        <defs>
-          {/* Dégradé uniquement pour le compte principal */}
-          {seriesFilled.filter(s => s.id === highlightId).map(s => (
-            <linearGradient key={`g-${s.id}`} id={`acc-cmp-grad-${s.id}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={s.color} stopOpacity={0.22} />
-              <stop offset="100%" stopColor={s.color} stopOpacity="0" />
-            </linearGradient>
-          ))}
-        </defs>
-
-        {/* Lignes seules (sans dégradé) : comptes non principaux en arrière-plan */}
-        {seriesFilled.filter(s => s.id !== highlightId).map(s => {
-          const path = s.filled.map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(1)} ${yFor(p.value).toFixed(1)}`).join(" ");
-          return (
-            <path key={s.id} d={path} fill="none" stroke={s.color} strokeWidth="1" strokeOpacity="0.4" strokeLinecap="round" strokeLinejoin="round" />
-          );
-        })}
-        {/* Compte courant en avant-plan */}
-        {seriesFilled.filter(s => s.id === highlightId).map(s => {
-          const path = s.filled.map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(1)} ${yFor(p.value).toFixed(1)}`).join(" ");
-          const baselineY = yFor(yMin);
-          const lastX = xFor(s.filled.length - 1).toFixed(1);
-          const firstX = xFor(0).toFixed(1);
-          const areaPath = `${path} L ${lastX} ${baselineY.toFixed(1)} L ${firstX} ${baselineY.toFixed(1)} Z`;
-          return (
-            <g key={s.id}>
-              <path d={areaPath} fill={`url(#acc-cmp-grad-${s.id})`} stroke="none" />
-              <path d={path} fill="none" stroke={s.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </g>
-          );
-        })}
-
-        {/* Indicateur vertical au hover */}
-        {hoverIdx != null && (
-          <line x1={hoverX} y1={padT} x2={hoverX} y2={padT + plotH} stroke={T.textMut} strokeWidth="0.5" strokeDasharray="2 2" />
-        )}
-
-        {/* X labels */}
-        {xLabels.map((x, i) => (
-          <text key={i} x={xFor(x.i)} y={H - 5} fill={T.textMut} fontSize="6" textAnchor={x.anchor}>{fmtD(x.date)}</text>
-        ))}
-
-        {/* Capture rects */}
-        {allDates.map((d, i) => {
-          const x = xFor(i) - cellW / 2;
-          return (
-            <rect
-              key={`hov-${i}`}
-              x={Math.max(0, x)}
-              y={padT}
-              width={cellW}
-              height={plotH + padB}
-              fill="transparent"
-              style={{ cursor: "crosshair" }}
-              onMouseEnter={() => setHoverIdx(i)}
-              onMouseLeave={() => setHoverIdx(null)}
-            />
-          );
-        })}
-      </svg>
-
-      {/* Légende — toutes les courbes avec leur P&L final */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, padding: "8px 4px 0" }}>
-        {seriesFilled.map(s => {
-          const last = s.filled[s.filled.length - 1]?.value || 0;
-          const isCur = s.id === highlightId;
-          return (
-            <div key={s.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, opacity: isCur ? 1 : 0.7 }}>
-              <span style={{ width: 10, height: 2, background: s.color, borderRadius: 2 }} />
-              <span style={{ fontSize: 11, fontWeight: isCur ? 600 : 500, color: T.text }}>{s.name}</span>
-              <span style={{ fontSize: 11, fontWeight: 500, color: last >= 0 ? T.green : T.red }}>{fmt(last, true)}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Tooltip */}
-      {hoverIdx != null && (
-        <div
-          style={{
-            position: "absolute",
-            left: `${tooltipPct}%`,
-            top: `${topPct}%`,
-            transform: `translateY(-100%) translateY(-12px) ${tooltipFlip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
-            background: "var(--color-card-bg, #FFFFFF)",
-            color: T.text,
-            border: `1px solid ${T.border}`,
-            padding: "8px 10px",
-            borderRadius: 6,
-            fontSize: 11,
-            fontFamily: "var(--font-sans)",
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            zIndex: 9999,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-            minWidth: 140,
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 11, color: T.textSub }}>{fmtD(allDates[hoverIdx])}</div>
-          {seriesFilled.map(s => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 11, lineHeight: 1.5 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color }} />
-                {s.name}
-              </span>
-              {(() => { const v = s.filled[hoverIdx]?.value || 0; const c = v > 0 ? T.green : v < 0 ? T.red : T.text; return <span style={{ fontWeight: 600, color: c }}>{fmt(v, true)}</span>; })()}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HighlightCard({ label, value, sub, tone }) {
-  const color = tone === "green" ? T.green : tone === "red" ? T.red : T.text;
-  return (
-    <div style={{ background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 14px" }}>
-      <div style={{ fontSize: 11, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color, marginTop: 4 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: T.textSub, marginTop: 2 }}>{sub}</div>}
-    </div>
-  );
-}
-
-function EquityCurve({ curve }) {
-  const [hoverIdx, setHoverIdx] = React.useState(null);
-  if (!curve || curve.length < 2) {
-    return (
-      <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: T.textSub, fontSize: 12 }}>
-        Pas assez de données.
-      </div>
-    );
-  }
-
-  // Group by day (cumulative P&L per date)
-  const byDay = {};
-  let cum = 0;
-  const sorted = [...curve].sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
-  sorted.forEach(p => {
-    const d = String(p.date || "").slice(0, 10);
-    byDay[d] = p.cum;
-  });
-  const allDates = Object.keys(byDay).sort();
-  const points = allDates.map(d => ({ date: d, value: byDay[d] }));
-
-  const yMin = Math.min(0, ...points.map(p => p.value));
-  const yMax = Math.max(0, ...points.map(p => p.value));
-  const yRange = (yMax - yMin) || 1;
-
-  const W = 800, H = 220;
-  const padL = 0, padR = 28, padT = 10, padB = 18;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-
-  const xFor = (i) => padL + (allDates.length === 1 ? plotW / 2 : (i / (allDates.length - 1)) * plotW);
-  const yFor = (v) => padT + plotH - ((v - yMin) / yRange) * plotH;
-
-  const last = points[points.length - 1].value;
-  const lineColor = last >= 0 ? T.green : T.red;
-
-  const fmtVal = (v) => {
-    const sign = v >= 0 ? "+" : "-";
-    const abs = Math.abs(v);
-    if (abs >= 10000) return `${sign}${Math.round(abs / 10000) * 10}k`;
-    if (abs >= 1000)  return `${sign}${Math.round(abs / 1000)}k`;
-    return `${sign}${Math.round(abs)}`;
-  };
-  const fmtD = (d) => {
-    const [, m, dd] = d.split("-");
-    const months = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
-    return `${parseInt(dd)} ${months[parseInt(m) - 1]}`;
-  };
-
-  // Y ticks (4 niveaux)
-  const yTicks = [];
-  const N = 3;
-  for (let i = 0; i <= N; i++) {
-    const ratio = i / N;
-    const v = yMax - ratio * yRange;
-    yTicks.push({ y: padT + plotH * ratio, value: v });
-  }
-
-  // X labels — un par point (chaque jour où il y a un nouveau point)
-  const xLabels = allDates.map((d, i) => ({
-    i, date: d,
-    anchor: i === 0 ? "start" : i === allDates.length - 1 ? "end" : "middle",
-  }));
-
-  const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(1)} ${yFor(p.value).toFixed(1)}`).join(" ");
-  const areaPath = `${path} L ${xFor(points.length - 1).toFixed(1)} ${yFor(yMin).toFixed(1)} L ${xFor(0).toFixed(1)} ${yFor(yMin).toFixed(1)} Z`;
-  const zeroY = yFor(0);
-
-  const fullDate = (d) => {
-    const [y, m, dd] = d.split("-");
-    return `${parseInt(dd)} ${["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."][parseInt(m)-1]} ${y}`;
-  };
-  const cellW = allDates.length === 1 ? plotW : plotW / Math.max(1, allDates.length - 1);
-  const hovered = hoverIdx != null ? points[hoverIdx] : null;
-  const hoverX = hovered ? xFor(hoverIdx) : null;
-  const hoverY = hovered ? yFor(hovered.value) : null;
-  const tooltipPct = hoverX != null ? Math.min(100, Math.max(0, (hoverX / W) * 100)) : 0;
-  const tooltipFlip = tooltipPct > 70;
-  const topPct = hoverY != null ? (hoverY / H) * 100 : 0;
-
-  return (
-    <div style={{ position: "relative" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible", aspectRatio: `${W} / ${H}` }}>
-        <defs>
-          <linearGradient id="acc-equity-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={lineColor} stopOpacity="0.18" />
-            <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        {/* Y labels (à droite) */}
-        {yTicks.map((tk, i) => (
-          <text key={i} x={W - 2} y={tk.y + 2.5} fill={T.textMut} fontSize="6" fontWeight="500" textAnchor="end" dominantBaseline="middle">{fmtVal(tk.value)}</text>
-        ))}
-
-        {/* Ligne de zéro si dans l'échelle */}
-        {yMin < 0 && yMax > 0 && (
-          <line x1={padL} y1={zeroY} x2={padL + plotW} y2={zeroY} stroke="#F0F0F0" strokeWidth="0.5" strokeDasharray="2 2" />
-        )}
-
-        {/* Gradient sous la courbe */}
-        <path d={areaPath} fill="url(#acc-equity-grad)" />
-
-        {/* Courbe */}
-        <path d={path} fill="none" stroke={lineColor} strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
-
-        {/* Indicateur vertical au hover */}
-        {hovered && (
-          <line x1={hoverX} y1={padT} x2={hoverX} y2={padT + plotH} stroke={T.textMut} strokeWidth="0.5" strokeDasharray="2 2" pointerEvents="none" />
-        )}
-
-        {/* X labels */}
-        {xLabels.map((x, i) => (
-          <text key={i} x={xFor(x.i)} y={H - 5} fill={T.textMut} fontSize="6" textAnchor={x.anchor}>{fmtD(x.date)}</text>
-        ))}
-
-        {/* Capture rects pour le hover (transparents) */}
-        {allDates.map((d, i) => {
-          const x = xFor(i) - cellW / 2;
-          return (
-            <rect
-              key={`hov-${i}`}
-              x={Math.max(0, x)}
-              y={padT}
-              width={cellW}
-              height={plotH + padB}
-              fill="transparent"
-              style={{ cursor: "crosshair" }}
-              onMouseEnter={() => setHoverIdx(i)}
-              onMouseLeave={() => setHoverIdx(null)}
-            />
-          );
-        })}
-      </svg>
-
-      {/* Tooltip HTML */}
-      {hovered && (
-        <div
-          style={{
-            position: "absolute",
-            left: `${tooltipPct}%`,
-            top: `${topPct}%`,
-            transform: `translateY(-100%) translateY(-12px) ${tooltipFlip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
-            background: "var(--color-card-bg, #FFFFFF)",
-            color: T.text,
-            border: `1px solid ${T.border}`,
-            padding: "8px 10px",
-            borderRadius: 6,
-            fontSize: 11,
-            fontFamily: "var(--font-sans)",
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            zIndex: 9999,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-          }}
-        >
-          {(() => {
-            const prev = hoverIdx > 0 ? points[hoverIdx - 1].value : 0;
-            const day = hovered.value - prev;
-            return (
-              <>
-                <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 11, color: T.textSub }}>{fmtD(hovered.date)}</div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: day > 0 ? T.green : day < 0 ? T.red : T.text }}>{fmt(day, true)}</div>
-              </>
-            );
-          })()}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function formatDate(d) {
-  if (!d) return "—";
-  try {
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return String(d).slice(0, 10);
-    return dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-  } catch {
-    return String(d);
-  }
 }

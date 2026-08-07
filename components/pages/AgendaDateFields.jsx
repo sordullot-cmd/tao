@@ -35,7 +35,7 @@ const triggerBtn = {
 };
 const calNavBtn = {
   display: "inline-flex", alignItems: "center", justifyContent: "center",
-  width: 26, height: 26, borderRadius: 8, border: "none", background: "transparent",
+  width: 26, height: 26, borderRadius: "var(--radius-card)", border: "none", background: "transparent",
   color: T.text, cursor: "pointer",
 };
 
@@ -71,7 +71,7 @@ export function DateField({ value, min, onChange }) {
         <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 12, boxShadow: "0 12px 32px rgba(0,0,0,0.16)", width: 252 }}>
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 12, boxShadow: "var(--elev-overlay)", width: 252 }}>
           {/* En-tête mois + navigation */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Mois précédent" style={calNavBtn}>
@@ -99,7 +99,7 @@ export function DateField({ value, min, onChange }) {
                 <button key={i} type="button" disabled={disabled}
                   onClick={() => { onChange(dateKey(c)); setOpen(false); }}
                   style={{
-                    aspectRatio: "1 / 1", borderRadius: 8, border: "none", fontFamily: "inherit",
+                    aspectRatio: "1 / 1", borderRadius: "var(--radius-card)", border: "none", fontFamily: "inherit",
                     fontSize: 12, cursor: disabled ? "default" : "pointer",
                     background: isSel ? T.text : "transparent",
                     color: isSel ? "#fff" : disabled ? T.border : inMonth ? T.text : T.textMut,
@@ -162,8 +162,8 @@ export function TimeField({ value, onChange, placeholder = "", triggerStyle, por
         top: portal ? (rect ? rect.bottom + 6 : 0) : "calc(100% + 6px)",
         left: portal ? (rect ? rect.left : 0) : 0,
         zIndex: portal ? 11000 : 20,
-        background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6,
-        boxShadow: "0 12px 32px rgba(0,0,0,0.16)", width: 110, maxHeight: 240, overflowY: "auto",
+        background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6,
+        boxShadow: "var(--elev-overlay)", width: 110, maxHeight: 240, overflowY: "auto",
       }}>
       {slots.map((s) => {
         const isSel = s === value;
@@ -172,8 +172,8 @@ export function TimeField({ value, onChange, placeholder = "", triggerStyle, por
             onClick={() => { onChange(s); setOpen(false); }}
             style={{
               display: "block", width: "100%", textAlign: "left", border: "none", fontFamily: "inherit",
-              padding: "6px 10px", borderRadius: 7, cursor: "pointer", fontSize: 13,
-              background: isSel ? `${T.blue}1A` : "transparent",
+              padding: "6px 10px", borderRadius: "var(--radius-card)", cursor: "pointer", fontSize: 13,
+              background: isSel ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : "transparent",
               color: isSel ? T.blue : T.text, fontWeight: isSel ? 600 : 400,
             }}>
             {s}

@@ -41,13 +41,10 @@ import {
   Skull, Ghost, Bone, BicepsFlexed,
 } from "lucide-react";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5",
-  text: "#0D0D0D", textSub: "#5C5C5C", textMut: "#8E8E8E",
-  bg: "#F5F5F5",
-  accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", red: "#EF4444", blue: "#3B82F6", amber: "#F59E0B",
-};
+import { T as BaseT } from "@/lib/ui/tokens";
+// `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
+// thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
+const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
 
 /* ─────────────── Helpers de style du formulaire (alignés sur l'Agenda) ─────────────── */
 // Ligne de formulaire : icône à gauche + contenu, comme la fiche d'événement du calendrier.
@@ -86,7 +83,7 @@ const ghostBtn = () => ({
 const primaryBtn = (small = false) => ({
   display: "inline-flex", alignItems: "center",
   padding: small ? "7px 14px" : "10px 20px", height: small ? 34 : undefined, borderRadius: 999,
-  border: `1px solid ${T.text}`, background: T.text, color: "#fff",
+  border: `1px solid ${T.text}`, background: T.text, color: T.white,
   fontSize: small ? 13 : 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
 });
 
@@ -460,7 +457,6 @@ export default function DailyPlannerPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       {/* Header : titre + navigation entre les jours */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>{t("nav.dailyPlanner")}</h1>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
 
@@ -496,8 +492,8 @@ export default function DailyPlannerPage() {
             <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
               {habits.filter(h => habitHistory[h.id]?.[dateKey]).length}/{habits.length}
             </span>
-            <button onClick={openCreateHabit} title="Ajouter une habitude"
-              style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${T.text}`, background: T.text, color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", marginRight: isMobile ? 0 : 64 }}>
+            <button onClick={openCreateHabit} title="Ajouter une habitude" aria-label="Ajouter une habitude"
+              style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${T.text}`, background: T.text, color: T.white, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", marginRight: isMobile ? 0 : 64 }}>
               <Plus size={13} strokeWidth={2} />
             </button>
           </div>
@@ -520,12 +516,12 @@ export default function DailyPlannerPage() {
                 onKeyDown={(e) => { if (e.key === "Escape") closeHabitForm(); if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveHabit(); }}
                 style={{
                   background: T.white,
-                  borderRadius: 12,
+                  borderRadius: "var(--radius-card)",
                   padding: 0,
                   width: "100%", maxWidth: 540,
                   maxHeight: "92vh",
                   overflow: "auto",
-                  boxShadow: "0 6px 20px rgba(0,0,0,0.10)",
+                  boxShadow: "var(--elev-overlay)",
                   fontFamily: "var(--font-sans)",
                   display: "flex", flexDirection: "column",
                   transform: `translate(${modalPos.x}px, ${modalPos.y}px)`,
@@ -537,7 +533,7 @@ export default function DailyPlannerPage() {
                     position: "relative",
                     padding: "10px 16px 0", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2,
                     cursor: "move", userSelect: "none",
-                    borderTopLeftRadius: 12, borderTopRightRadius: 12,
+                    borderTopLeftRadius: "var(--radius-card)", borderTopRightRadius: "var(--radius-card)",
                   }}>
                   {/* Poignée de déplacement (barre grise centrée) */}
                   <div style={{
@@ -589,7 +585,7 @@ export default function DailyPlannerPage() {
                         <>
                           {/* Capte le clic en dehors pour refermer le sélecteur */}
                           <div onClick={() => setIconPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 4 }} />
-                          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5, width: "100%", background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.14)" }}>
+                          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5, width: "100%", background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 10, boxShadow: "var(--elev-overlay)" }}>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(34px, 1fr))", gap: 6, maxHeight: 220, overflowY: "auto" }}>
                               {(() => {
                                 const previewName = habitDraft.name?.trim() || "";
@@ -601,14 +597,14 @@ export default function DailyPlannerPage() {
                                     style={{
                                       width: "100%", aspectRatio: "1 / 1",
                                       display: "flex", alignItems: "center", justifyContent: "center",
-                                      borderRadius: 8,
+                                      borderRadius: "var(--radius-card)",
                                       border: `1px solid ${isAuto ? T.text : T.border}`,
                                       background: isAuto ? T.text : T.white,
-                                      color: isAuto ? "#fff" : T.text,
+                                      color: isAuto ? T.white : T.text,
                                       cursor: "pointer", padding: 0, position: "relative",
                                     }}>
                                     <AutoIco size={15} strokeWidth={1.75} />
-                                    <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 8, background: isAuto ? "#fff" : T.text, color: isAuto ? T.text : "#fff", borderRadius: 6, padding: "1px 3px", lineHeight: 1, fontWeight: 600 }}>A</span>
+                                    <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 8, background: isAuto ? T.white : T.text, color: isAuto ? T.text : T.white, borderRadius: 6, padding: "1px 3px", lineHeight: 1, fontWeight: 600 }}>A</span>
                                   </button>
                                 );
                               })()}
@@ -621,10 +617,10 @@ export default function DailyPlannerPage() {
                                     style={{
                                       width: "100%", aspectRatio: "1 / 1",
                                       display: "flex", alignItems: "center", justifyContent: "center",
-                                      borderRadius: 8,
+                                      borderRadius: "var(--radius-card)",
                                       border: `1px solid ${selected ? T.text : T.border}`,
                                       background: selected ? T.text : T.white,
-                                      color: selected ? "#fff" : T.text,
+                                      color: selected ? T.white : T.text,
                                       cursor: "pointer", padding: 0,
                                       transition: "background .12s ease, border-color .12s ease",
                                     }}
@@ -684,7 +680,7 @@ export default function DailyPlannerPage() {
                         const toggle = () => setHabitDraft({ ...habitDraft, attributes: active ? sel.filter(x => x !== c.id) : [...sel, c.id] });
                         return (
                           <button key={c.id} type="button" onClick={toggle}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `${c.color}14` : T.white, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                             {active
                               ? <Check size={13} strokeWidth={2.5} color={c.color} />
                               : <CatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
@@ -745,14 +741,14 @@ export default function DailyPlannerPage() {
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
                       padding: "12px 16px",
-                      borderRadius: 8,
+                      borderRadius: "var(--radius-card)",
                       transition: "background .12s ease, box-shadow .12s ease",
                       opacity: dragHabitId === h.id ? 0.4 : 1,
                       boxShadow: dragOverHabitId === h.id ? `inset 0 2px 0 ${T.text}` : "none",
                       cursor: "grab",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "#FAFAFA";
+                      e.currentTarget.style.background = T.accentBg;
                       const del = e.currentTarget.querySelector("[data-habit-del]"); if (del) del.style.opacity = 1;
                       const ed = e.currentTarget.querySelector("[data-habit-edit]"); if (ed) ed.style.opacity = 1;
                     }}
@@ -765,7 +761,7 @@ export default function DailyPlannerPage() {
                     {/* Pastille d'icône — teintée de la couleur de la carte Vie RPG rattachée */}
                     <div style={{
                       width: 34, height: 34, borderRadius: "50%",
-                      background: done ? T.bg : (color ? `${color}1A` : T.bg),
+                      background: done ? T.bg : (color ? `color-mix(in srgb, ${color} 10%, transparent)` : T.bg),
                       display: "flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0, color: done ? T.textMut : (color || T.text),
                       transition: "background .15s ease, color .15s ease",
@@ -811,9 +807,11 @@ export default function DailyPlannerPage() {
 
                     {/* Checkbox — collée au texte */}
                     <button onClick={() => toggleHabit(h.id)}
+                      role="checkbox" aria-checked={done}
+                      aria-label={`${h.name} — ${done ? "complétée" : "à faire"} aujourd'hui`}
                       style={{
-                        width: 18, height: 18, borderRadius: 5,
-                        border: done ? "none" : `2px solid ${color || T.border2 || "#D4D4D4"}`,
+                        width: 18, height: 18, borderRadius: "var(--radius-field)",
+                        border: done ? "none" : `2px solid ${color || T.border2}`,
                         background: done ? (color || T.green) : T.white,
                         cursor: "pointer",
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -822,18 +820,18 @@ export default function DailyPlannerPage() {
                       {done && <Check size={11} strokeWidth={3} color="#fff" />}
                     </button>
 
-                    {/* Edit (hidden until hover) */}
-                    <button data-habit-edit onClick={() => openEditHabit(h)} title="Modifier"
-                      style={{ width: 22, height: 22, borderRadius: 5, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity .15s ease, color .12s ease, background .12s ease", flexShrink: 0 }}
+                    {/* Edit (masqué au survol sur desktop, toujours visible au tactile) */}
+                    <button data-habit-edit onClick={() => openEditHabit(h)} title="Modifier" aria-label={`Modifier ${h.name}`}
+                      style={{ width: 22, height: 22, borderRadius: "var(--radius-field)", border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: isMobile ? 1 : 0, transition: "opacity .15s ease, color .12s ease, background .12s ease", flexShrink: 0 }}
                       onMouseEnter={(e) => { e.currentTarget.style.color = T.text; e.currentTarget.style.background = T.accentBg; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; e.currentTarget.style.background = "transparent"; }}>
                       <Pencil size={11} strokeWidth={1.75} />
                     </button>
 
-                    {/* Delete (hidden until hover) */}
-                    <button data-habit-del onClick={() => removeHabit(h.id)} title="Supprimer"
-                      style={{ width: 22, height: 22, borderRadius: 5, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity .15s ease, color .12s ease, background .12s ease", flexShrink: 0 }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = T.red; e.currentTarget.style.background = "#FEF2F2"; }}
+                    {/* Delete (masqué au survol sur desktop, toujours visible au tactile) */}
+                    <button data-habit-del onClick={() => removeHabit(h.id)} title="Supprimer" aria-label={`Supprimer ${h.name}`}
+                      style={{ width: 22, height: 22, borderRadius: "var(--radius-field)", border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: isMobile ? 1 : 0, transition: "opacity .15s ease, color .12s ease, background .12s ease", flexShrink: 0 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = T.red; e.currentTarget.style.background = T.redBg; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; e.currentTarget.style.background = "transparent"; }}>
                       <Trash2 size={11} strokeWidth={1.75} />
                     </button>
@@ -922,7 +920,7 @@ function HabitsChart({ habits, history }) {
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           {streak >= 2 && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#F59E0B", fontSize: 12, fontWeight: 700 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: T.amber, fontSize: 12, fontWeight: 700 }}>
               <Flame size={12} strokeWidth={2} /> {streak} j
             </span>
           )}
@@ -985,12 +983,12 @@ function HabitsChart({ habits, history }) {
                   transform: onLeftHalf
                     ? "translate(calc(-100% - 14px), -50%)"
                     : "translate(14px, -50%)",
-                  background: "#FFFFFF", color: T.text,
+                  background: T.white, color: T.text,
                   border: `1px solid ${T.border}`,
-                  borderRadius: 8, padding: "10px 12px",
+                  borderRadius: "var(--radius-card)", padding: "10px 12px",
                   fontSize: 11, lineHeight: 1.4,
                   minWidth: 170, maxWidth: 260,
-                  boxShadow: "0 12px 32px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.06)",
+                  boxShadow: "var(--elev-overlay)",
                   pointerEvents: "none", zIndex: 5,
                   fontFamily: "var(--font-sans)",
                 }}>
@@ -1035,7 +1033,7 @@ function HabitsChart({ habits, history }) {
                 <div key={`xh-${p.iso}`} style={{
                   position: "absolute", left: `${leftPct}%`, bottom: 4,
                   transform, fontSize: 10,
-                  color: "#8E8E8E",
+                  color: T.textMut,
                   fontWeight: 500,
                   whiteSpace: "nowrap",
                 }}>
@@ -1050,7 +1048,7 @@ function HabitsChart({ habits, history }) {
               const yPx = padT + chartH - (t / 100) * chartH;
               const topPct = (yPx / VB_H) * 100;
               return (
-                <div key={`yh-${t}`} style={{ position: "absolute", top: `${topPct}%`, right: 6, transform: "translateY(-50%)", fontSize: 10, color: "#8E8E8E", fontWeight: 500 }}>{t}%</div>
+                <div key={`yh-${t}`} style={{ position: "absolute", top: `${topPct}%`, right: 6, transform: "translateY(-50%)", fontSize: 10, color: T.textMut, fontWeight: 500 }}>{t}%</div>
               );
             })}
           </div>
@@ -1074,11 +1072,11 @@ function Row({ done, text, onToggle, onDelete, accent }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
       <button onClick={onToggle}
-        style={{ width: 18, height: 18, borderRadius: 4, border: `1.5px solid ${done ? accent : T.border}`, background: done ? accent : T.white, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        style={{ width: 18, height: 18, borderRadius: "var(--radius-field)", border: `1.5px solid ${done ? accent : T.border}`, background: done ? accent : T.white, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {done && <Check size={11} strokeWidth={2.5} color="#fff" />}
       </button>
       <div style={{ flex: 1, fontSize: 13, color: done ? T.textMut : T.text, textDecoration: done ? "line-through" : "none" }}>{text}</div>
-      <button onClick={onDelete} style={{ width: 22, height: 22, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 4, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+      <button onClick={onDelete} style={{ width: 22, height: 22, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: "var(--radius-field)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
         <Trash2 size={12} strokeWidth={1.75} />
       </button>
     </div>

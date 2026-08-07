@@ -16,9 +16,9 @@ export default function LoadingScreen({ label, fullscreen = true }: Props) {
         alignItems: "center",
         justifyContent: "center",
         gap: 18,
-        background: "#FFFFFF",
+        background: "var(--color-bg, #FFFFFF)",
         ...(fullscreen
-          ? { position: "fixed", inset: 0, zIndex: 9999, height: "100vh", width: "100vw" }
+          ? { position: "fixed", inset: 0, zIndex: 9999, height: "100dvh", width: "100vw" }
           : { width: "100%", padding: "48px 16px" }),
       }}
     >
@@ -34,8 +34,8 @@ export default function LoadingScreen({ label, fullscreen = true }: Props) {
           width: 64,
           height: 64,
           borderRadius: "50%",
-          background: "#FFFFFF",
-          border: "1px solid #E5E5E5",
+          background: "var(--color-card-bg, #FFFFFF)",
+          border: "1px solid var(--color-border, #E5E5E5)",
           boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
           display: "flex",
           alignItems: "center",
@@ -65,7 +65,7 @@ export default function LoadingScreen({ label, fullscreen = true }: Props) {
               width: 6,
               height: 6,
               borderRadius: "50%",
-              background: "#0D0D0D",
+              background: "var(--color-text, #0D0D0D)",
               display: "inline-block",
               animation: "tr4de-loading-dot 1.2s ease-in-out infinite",
               animationDelay: `${i * 0.18}s`,
@@ -75,7 +75,7 @@ export default function LoadingScreen({ label, fullscreen = true }: Props) {
       </div>
 
       {label && (
-        <div style={{ fontSize: 12, color: "#8E8E8E", letterSpacing: 0.2 }}>
+        <div style={{ fontSize: 12, color: "var(--color-text-muted, #6B6B6B)", letterSpacing: 0.2 }}>
           {label}
         </div>
       )}

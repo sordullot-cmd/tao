@@ -3,16 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { Bot, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  bg: "#FFFFFF",
-  text: "#0D0D0D",
-  textSub: "#5C5C5C",
-  textMuted: "#8E8E8E",
-  border: "#E5E5E5",
-  green: "#16A34A",
-  red: "#EF4444",
-};
+// `textMuted` est le seul alias local absent de BaseT (mappé sur textMut).
+const T = { ...BaseT, textMuted: BaseT.textMut };
 
 interface AIReport {
   id: string;
@@ -92,7 +86,7 @@ export default function AIReportSummaryCard({ onOpenReports }: AIReportSummaryCa
               background: "transparent", color: T.textSub, fontSize: 12, fontWeight: 500,
               cursor: "pointer", fontFamily: "inherit",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
             Voir tout <ArrowRight size={12} strokeWidth={2} />
@@ -137,7 +131,7 @@ export default function AIReportSummaryCard({ onOpenReports }: AIReportSummaryCa
                 <div
                   style={{
                     width: 32, height: 32, borderRadius: "50%",
-                    background: "#EEF8F5",
+                    background: T.greenBg,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     flexShrink: 0,
                   }}

@@ -7,31 +7,10 @@ import { withNetPnl } from "@/lib/tradeFees";
 import TradesPage from "@/components/pages/TradesPage";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import { t, useLang } from "@/lib/i18n";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-/* ─── TOKENS (OpenAI palette) ──────────────────────────────────────── */
-const T = {
-  white:   "#FFFFFF",
-  bg:      "#FFFFFF",
-  surface: "#FFFFFF",
-  border:  "#E5E5E5",
-  border2: "#D4D4D4",
-  text:    "#0D0D0D",
-  textSub: "#5C5C5C",
-  textMut: "#8E8E8E",
-  green:   "#16A34A",
-  greenBg: "#F0FDF4",
-  greenBd: "#86EFAC",
-  red:     "#EF4444",
-  redBg:   "#FEF2F2",
-  redBd:   "#FECACA",
-  accent:  "#0D0D0D",
-  accentBg: "#F0F0F0",
-  accentBd: "#D4D4D4",
-  amber:   "#F97316",
-  amberBg: "#FFF4E6",
-  blue:    "#3B82F6",
-  blueBg:  "#EFF6FF",
-};
+/* ─── TOKENS (palette monochrome partagée, dark-aware) ─────────────── */
+const T = { ...BaseT };
 
 const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencySymbol()}${Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
@@ -43,7 +22,7 @@ function Pill({ children, color="gray", small }) {
     gray:  { bg:T.bg,      bd:T.border,   txt:T.textSub },
   };
   const s = map[color] || map.gray;
-  return <span style={{display:"inline-flex", alignItems:"center", padding: small ? "1px 7px" : "3px 10px", borderRadius: 20, fontSize: small ? 11 : 12, fontWeight: 500, background: s.bg, border: `1px solid ${s.bd}`, color: s.txt,}}>{children}</span>;
+  return <span style={{display:"inline-flex", alignItems:"center", padding: small ? "1px 7px" : "3px 10px", borderRadius: "var(--radius-modal)", fontSize: small ? 11 : 12, fontWeight: 500, background: s.bg, border: `1px solid ${s.bd}`, color: s.txt,}}>{children}</span>;
 }
 
 export default function StrategyDetailPage({ setPage = () => {} }) {
@@ -527,7 +506,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
             cy={p.y}
             r="5"
             fill={selectedStrategy.color}
-            stroke="#fff"
+            stroke={T.white}
             strokeWidth="2"
           />
         ))}
@@ -599,14 +578,14 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
           type="button"
           onClick={() => setPage('strategies')}
           aria-label={t("strat.detail.back")}
-          style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:999,border:`1px solid ${T.border}`,background:"#FFFFFF",color:T.text,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
+          style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:999,border:`1px solid ${T.border}`,background:T.white,color:T.text,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
           onMouseEnter={(e) => { e.currentTarget.style.background = T.bg; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = T.white; }}
         >
           <ArrowLeft size={14} strokeWidth={1.75} />
         </button>
         <div>
-          <h1 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)",display:"flex",alignItems:"center",gap:8}}>
+          <h1 className="t-h2" style={{color:T.text,margin:0,display:"flex",alignItems:"center",gap:8}}>
             <span style={{width:10,height:10,borderRadius:"50%",background:selectedStrategy.color}}/>
             {selectedStrategy.name}
           </h1>
@@ -618,7 +597,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
 
       {/* CARD 1 : 8 KPIs en 2 rangées */}
       {filteredTrades.length > 0 && (
-        <div className="tr4de-kpi-row" style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"12px 12px 0 0",borderBottom:"none",overflow:"hidden"}}>
+        <div className="tr4de-kpi-row" style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card) var(--radius-card) 0 0",borderBottom:"none",overflow:"hidden"}}>
           {/* ROW 1 - 4 KPIs */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)"}}>
             {/* 1. P&L Net */}
@@ -807,7 +786,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
         }));
 
         return (
-          <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"0 0 12px 12px",overflow:"visible",marginTop:-24,position:"relative",zIndex:1}}>
+          <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"0 0 var(--radius-card) var(--radius-card)",overflow:"visible",marginTop:-24,position:"relative",zIndex:1}}>
             <div style={{padding:"16px 20px"}}>
               <div style={{fontSize:13,fontWeight:600,color:T.text}}>{t("strat.detail.compareTitle")}</div>
               <div style={{fontSize:11,color:T.textMut,marginTop:2}}>{t("strat.detail.compareSub")}</div>
@@ -919,14 +898,14 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                         left:`calc(12px + ${leftPct}% * (100% - 24px) / 100%)`,
                         top:`${topPct}%`,
                         transform: `translateY(-100%) translateY(-12px) ${shouldFlip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
-                        background:"#FFFFFF",
+                        background:T.white,
                         color:T.text,
                         border:`1px solid ${T.border}`,
                         padding:"8px 10px",
                         borderRadius:6,
                         fontSize:11,
                         fontFamily:"var(--font-sans)",
-                        boxShadow:"0 4px 12px rgba(0,0,0,0.08)",
+                        boxShadow:"var(--elev-overlay)",
                         pointerEvents:"none",
                         zIndex:9999,
                         whiteSpace:"nowrap",
@@ -940,7 +919,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                             <div key={it.strategy.id} style={{display:"flex",alignItems:"center",gap:6,opacity:isSelected ? 1 : 0.85}}>
                               <span style={{width:6,height:6,borderRadius:"50%",background:it.strategy.color,flexShrink:0}}/>
                               <span style={{fontWeight:isSelected ? 600 : 500,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis"}}>{it.strategy.name}</span>
-                              <span style={{marginLeft:"auto",fontWeight:600,color:it.value > 0 ? "#16A34A" : it.value < 0 ? "#EF4444" : T.text}}>{fmtVal(it.value)}</span>
+                              <span style={{marginLeft:"auto",fontWeight:600,color:it.value > 0 ? T.green : it.value < 0 ? T.red : T.text}}>{fmtVal(it.value)}</span>
                             </div>
                           );
                         })}
@@ -958,7 +937,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
       {filteredTrades.length > 0 && (
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"stretch"}}>
         {/* CARD 2 : Condition probabilite */}
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
           <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`}}>
             <div style={{fontSize:13,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
               {t("strat.detail.condProb")} <span style={{color:T.textMut,fontWeight:500}}>›</span>
@@ -1004,7 +983,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
         </div>
 
         {/* CARD 3 : tao score */}
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
           <div style={{padding:"16px 20px"}}>
             <div style={{fontSize:13,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
               tao score <span style={{color:T.textMut,fontWeight:500}}>›</span>
@@ -1024,14 +1003,14 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                 <span style={{fontSize:11,color:T.textMut,fontWeight:500}}>{t("strat.detail.overallScore")}</span>
               </div>
               <div style={{position:"relative",height:10,paddingTop:2}}>
-                <div style={{position:"relative",height:6,background:"var(--color-hover-bg, #F0F0F0)",borderRadius:3,overflow:"hidden"}}>
+                <div style={{position:"relative",height:6,background:"var(--color-hover-bg, #F0F0F0)",borderRadius:"var(--radius-field)",overflow:"hidden"}}>
                   <div
                     style={{
                       width:`${parseFloat(pentagonMetrics.overallScore)}%`,
                       height:"100%",
                       background:selectedStrategy.color,
                       transition:"width 0.6s ease",
-                      borderRadius:3,
+                      borderRadius:"var(--radius-field)",
                     }}
                   />
                   {[20,40,60,80].map(v => (
@@ -1048,7 +1027,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                     height:14,
                     borderRadius:"50%",
                     background:selectedStrategy.color,
-                    border:"2px solid #FFFFFF",
+                    border:`2px solid ${T.white}`,
                     boxShadow:"0 1px 3px rgba(0,0,0,0.15)",
                     transition:"left 0.6s ease",
                     pointerEvents:"none",
@@ -1059,7 +1038,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                 {[0,20,40,60,80,100].map(v => {
                   const tx = v === 0 ? "translateX(0)" : v === 100 ? "translateX(-100%)" : "translateX(-50%)";
                   return (
-                    <span key={v} style={{position:"absolute",left:`${v}%`,transform:tx,fontSize:9,color:T.textMut,fontWeight:500,fontVariantNumeric:"tabular-nums"}}>{v}</span>
+                    <span key={v} style={{position:"absolute",left:`${v}%`,transform:tx,fontSize: 9,color:T.textMut,fontWeight:500,fontVariantNumeric:"tabular-nums"}}>{v}</span>
                   );
                 })}
               </div>
@@ -1078,7 +1057,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
           padding:"14px 18px",
           background:T.white,
           border:`1px solid ${T.border}`,
-          borderRadius:"12px 12px 0 0",
+          borderRadius:"var(--radius-card) var(--radius-card) 0 0",
           borderBottom:"none",
           marginBottom:0,
         }}>
@@ -1089,7 +1068,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
             style={{
               display:"inline-flex",alignItems:"center",gap:6,
               padding:"6px 14px",borderRadius:999,
-              border:`1px solid ${T.border}`,background:"#FFFFFF",
+              border:`1px solid ${T.border}`,background:T.white,
               color:T.textSub,fontSize:11,fontWeight:500,cursor:"pointer",
               fontFamily:"inherit",
             }}
@@ -1105,7 +1084,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
           <div style={{
             background:T.white,
             border:`1px solid ${T.border}`,
-            borderRadius:"0 0 12px 12px",
+            borderRadius:"0 0 var(--radius-card) var(--radius-card)",
             padding:"40px 24px",textAlign:"center",color:T.textSub,fontSize:13,
           }}>
             {t("strat.detail.noTrade")}

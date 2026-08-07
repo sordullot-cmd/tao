@@ -101,12 +101,12 @@ function MonthGrid({
 
   return (
     <div style={{ flex: 1 }}>
-      <div style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: "#0D0D0D", marginBottom: 8 }}>
+      <div style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--color-text)", marginBottom: 8 }}>
         {MONTHS_EN[month]} {year}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
         {WEEKDAYS.map((w) => (
-          <div key={w} style={{ fontSize: 11, color: "#8E8E8E", textAlign: "center", padding: "6px 0", fontWeight: 500 }}>
+          <div key={w} style={{ fontSize: 11, color: "var(--color-text-muted)", textAlign: "center", padding: "6px 0", fontWeight: 500 }}>
             {w}
           </div>
         ))}
@@ -130,10 +130,10 @@ function MonthGrid({
                 justifyContent: "center",
                 fontSize: 12,
                 fontWeight: edge ? 600 : 500,
-                color: edge ? "#FFFFFF" : (inMonth ? "#0D0D0D" : "#C8C8C8"),
-                background: edge ? "#0D0D0D" : (within ? "#E5E5E5" : "transparent"),
+                color: edge ? "var(--color-bg)" : (inMonth ? "var(--color-text)" : "var(--color-text-muted)"),
+                background: edge ? "var(--color-text)" : (within ? "var(--color-active-bg)" : "transparent"),
                 border: "none",
-                borderRadius: 8,
+                borderRadius: "var(--radius-field)",
                 cursor: "pointer",
                 fontFamily: "inherit",
                 transition: "background 80ms ease",
@@ -178,6 +178,14 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  // Fermeture au clavier (Échap)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   const pickDate = (d: Date) => {
     if (!draftStart || (draftStart && draftEnd)) {
@@ -234,10 +242,10 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
           padding: "7px 14px",
           width: width ?? "auto",
           height: 34,
-          border: "1px solid #E5E5E5",
+          border: "1px solid var(--color-border)",
           borderRadius: 999,
-          background: "#FFFFFF",
-          color: "#0D0D0D",
+          background: "var(--color-card-bg, #FFFFFF)",
+          color: "var(--color-text)",
           fontSize: 12,
           fontWeight: 500,
           cursor: "pointer",
@@ -245,7 +253,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
           textAlign: "left",
         }}
       >
-        <Calendar size={14} strokeWidth={1.75} color="#5C5C5C" />
+        <Calendar size={14} strokeWidth={1.75} color="var(--color-text-sub)" />
         <span style={{ whiteSpace: "nowrap" }}>{fmtRange(value.start, value.end)}</span>
       </button>
 
@@ -255,18 +263,18 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
             position: "absolute",
             top: "calc(100% + 6px)",
             right: 0,
-            background: "#FFFFFF",
-            border: "1px solid #E5E5E5",
-            borderRadius: 16,
-            boxShadow: "0 12px 32px rgba(0,0,0,0.12)",
+            background: "var(--color-card-bg, #FFFFFF)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "var(--radius-modal)",
+            boxShadow: "var(--elev-overlay)",
             zIndex: 100,
             display: "flex",
             overflow: "hidden",
-            minWidth: 680,
+            minWidth: "min(680px, calc(100vw - 24px))",
           }}
         >
           {/* Presets */}
-          <div style={{ width: 130, borderRight: "1px solid #F0F0F0", padding: 8, display: "flex", flexDirection: "column", gap: 2, background: "#FAFAFA" }}>
+          <div style={{ width: 130, borderRight: "1px solid var(--color-border)", padding: 8, display: "flex", flexDirection: "column", gap: 2, background: "var(--color-hover-bg, #FAFAFA)" }}>
             {PRESETS.map((p) => (
               <button
                 key={p.key}
@@ -277,14 +285,14 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
                   padding: "8px 12px",
                   fontSize: 12,
                   fontWeight: 500,
-                  color: "#0D0D0D",
+                  color: "var(--color-text)",
                   background: "transparent",
                   border: "none",
-                  borderRadius: 8,
+                  borderRadius: "var(--radius-field)",
                   cursor: "pointer",
                   fontFamily: "inherit",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F0F0F0)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
                 {p.label}
@@ -298,8 +306,9 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
               <button
                 type="button"
                 onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
-                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", color: "#5C5C5C", borderRadius: 8 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}
+                aria-label="Mois précédent"
+                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", color: "var(--color-text-sub)", borderRadius: "var(--radius-field)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F0F0F0)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
                 <ChevronLeft size={16} />
@@ -308,8 +317,9 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
               <button
                 type="button"
                 onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}
-                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", color: "#5C5C5C", borderRadius: 8 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}
+                aria-label="Mois suivant"
+                style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", color: "var(--color-text-sub)", borderRadius: "var(--radius-field)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F0F0F0)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               >
                 <ChevronRight size={16} />
@@ -337,13 +347,13 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
             </div>
 
             {/* Footer */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: "1px solid #F0F0F0" }}>
-              <div style={{ fontSize: 12, color: "#5C5C5C" }}>{footerLabel}</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--color-border)" }}>
+              <div style={{ fontSize: 12, color: "var(--color-text-sub)" }}>{footerLabel}</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
                   onClick={clear}
-                  style={{ padding: "6px 16px", border: "1px solid #E5E5E5", background: "#FFFFFF", color: "#0D0D0D", fontSize: 12, fontWeight: 500, borderRadius: 999, cursor: "pointer", fontFamily: "inherit" }}
+                  style={{ padding: "6px 16px", border: "1px solid var(--color-border)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 12, fontWeight: 500, borderRadius: 999, cursor: "pointer", fontFamily: "inherit" }}
                 >
                   Clear
                 </button>
@@ -351,7 +361,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
                   type="button"
                   onClick={apply}
                   disabled={!draftStart}
-                  style={{ padding: "6px 16px", border: "1px solid #0D0D0D", background: "#FFFFFF", color: "#0D0D0D", fontSize: 12, fontWeight: 600, borderRadius: 999, cursor: draftStart ? "pointer" : "not-allowed", opacity: draftStart ? 1 : 0.5, fontFamily: "inherit" }}
+                  style={{ padding: "6px 16px", border: "1px solid var(--color-text)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 12, fontWeight: 600, borderRadius: 999, cursor: draftStart ? "pointer" : "not-allowed", opacity: draftStart ? 1 : 0.5, fontFamily: "inherit" }}
                 >
                   Apply
                 </button>

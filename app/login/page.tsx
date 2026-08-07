@@ -20,6 +20,7 @@ const TAURI_REDIRECT = "taotrade://auth/callback";
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -119,6 +120,7 @@ export default function LoginPage() {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setLoading(true);
 
     try {
@@ -133,7 +135,7 @@ export default function LoginPage() {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
         if (signUpError) throw signUpError;
         setError("");
-        alert("Vérifiez votre email pour confirmer votre inscription !");
+        setSuccess("Compte créé ! Vérifie ta boîte mail pour confirmer ton inscription.");
         setEmail("");
         setPassword("");
         setConfirmPassword("");
@@ -149,8 +151,8 @@ export default function LoginPage() {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        background: "#FFFFFF",
+        minHeight: "100dvh",
+        background: "var(--color-bg, #FFFFFF)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -162,14 +164,14 @@ export default function LoginPage() {
         {/* Logo + brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
           <img src="/favicon.svg" alt="tao" width={36} height={36} style={{ display: "block", borderRadius: "50%", objectFit: "cover" }} />
-          <div style={{ fontSize: 18, fontWeight: 600, color: "#0D0D0D" }}>tao trade</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--color-text, #0D0D0D)" }}>tao trade</div>
         </div>
 
         {/* Title */}
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0D0D0D", margin: 0, letterSpacing: -0.2 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--color-text, #0D0D0D)", margin: 0, letterSpacing: -0.2 }}>
           {isLogin ? "Connexion" : "Créer un compte"}
         </h1>
-        <p style={{ fontSize: 14, color: "#5C5C5C", marginTop: 4, marginBottom: 24 }}>
+        <p style={{ fontSize: 14, color: "var(--color-text-sub, #5C5C5C)", marginTop: 4, marginBottom: 24 }}>
           {isLogin ? "Accède à ton dashboard de trading" : "Quelques secondes pour commencer"}
         </p>
 
@@ -178,6 +180,9 @@ export default function LoginPage() {
           <Field label="Email">
             <input
               type="email"
+              name="email"
+              autoComplete="email"
+              inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="nom@email.com"
@@ -189,6 +194,8 @@ export default function LoginPage() {
           <Field label="Mot de passe">
             <input
               type="password"
+              name="password"
+              autoComplete={isLogin ? "current-password" : "new-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -201,6 +208,8 @@ export default function LoginPage() {
             <Field label="Confirme le mot de passe">
               <input
                 type="password"
+                name="confirmPassword"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
@@ -211,34 +220,35 @@ export default function LoginPage() {
           )}
 
           {error && (
-            <div style={{
+            <div role="alert" style={{
               display: "flex", alignItems: "flex-start", gap: 8,
-              padding: "10px 12px", background: "#FEF2F2", border: "1px solid #FECACA",
-              borderRadius: 8, color: "#991B1B", fontSize: 12,
+              padding: "10px 12px", background: "var(--color-red-bg, #FEF2F2)", border: "1px solid var(--color-red-bd, #FECACA)",
+              borderRadius: 8, color: "var(--color-red, #EF4444)", fontSize: 12,
             }}>
               <AlertTriangle size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
               <span>{error}</span>
             </div>
           )}
+          {success && (
+            <div role="status" style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+              padding: "10px 12px", background: "var(--color-green-bg, #F0FDF4)", border: "1px solid var(--color-green-bd, #86EFAC)",
+              borderRadius: 8, color: "var(--color-green, #16A34A)", fontSize: 12,
+            }}>
+              <span>{success}</span>
+            </div>
+          )}
 
-          <Button
-            type="submit"
-            loading={loading}
-            fullWidth
-            size="lg"
-            style={{ background: "#0D0D0D", color: "#FFFFFF", border: "1px solid #0D0D0D" }}
-            onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "#262626"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#0D0D0D"; }}
-          >
+          <Button type="submit" variant="primary" loading={loading} fullWidth size="lg">
             {isLogin ? "Se connecter" : "Créer mon compte"}
           </Button>
         </form>
 
         {/* Divider */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
-          <div style={{ flex: 1, height: 1, background: "#E5E5E5" }} />
-          <span style={{ fontSize: 11, color: "#8E8E8E", fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>OU</span>
-          <div style={{ flex: 1, height: 1, background: "#E5E5E5" }} />
+          <div style={{ flex: 1, height: 1, background: "var(--color-border, #E5E5E5)" }} />
+          <span style={{ fontSize: 11, color: "var(--color-text-muted, #6B6B6B)", fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>OU</span>
+          <div style={{ flex: 1, height: 1, background: "var(--color-border, #E5E5E5)" }} />
         </div>
 
         {/* Google */}
@@ -253,10 +263,11 @@ export default function LoginPage() {
             justifyContent: "center",
             gap: 8,
             padding: "10px 14px",
+            minHeight: 44,
             borderRadius: 8,
-            border: "1px solid #E5E5E5",
-            background: "#FFFFFF",
-            color: "#0D0D0D",
+            border: "1px solid var(--color-border, #E5E5E5)",
+            background: "var(--color-card-bg, #FFFFFF)",
+            color: "var(--color-text, #0D0D0D)",
             fontSize: 14,
             fontWeight: 500,
             cursor: loading ? "not-allowed" : "pointer",
@@ -264,8 +275,8 @@ export default function LoginPage() {
             opacity: loading ? 0.6 : 1,
             transition: "background 120ms ease",
           }}
-          onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "#F5F5F5"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}
+          onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-card-bg, #FFFFFF)"; }}
         >
           <svg width={16} height={16} viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -277,14 +288,14 @@ export default function LoginPage() {
         </button>
 
         {/* Switch mode */}
-        <p style={{ textAlign: "center", fontSize: 13, color: "#5C5C5C", marginTop: 24 }}>
+        <p style={{ textAlign: "center", fontSize: 13, color: "var(--color-text-sub, #5C5C5C)", marginTop: 24 }}>
           {isLogin ? "Pas encore de compte ? " : "Déjà inscrit ? "}
           <button
             type="button"
-            onClick={() => { setIsLogin(!isLogin); setError(""); }}
+            onClick={() => { setIsLogin(!isLogin); setError(""); setSuccess(""); }}
             style={{
               background: "transparent", border: "none", padding: 0,
-              color: "#0D0D0D", fontWeight: 600, cursor: "pointer",
+              color: "var(--color-text, #0D0D0D)", fontWeight: 600, cursor: "pointer",
               textDecoration: "underline", fontFamily: "inherit", fontSize: "inherit",
             }}
           >
@@ -299,7 +310,7 @@ export default function LoginPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#0D0D0D", marginBottom: 6 }}>{label}</label>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--color-text, #0D0D0D)", marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   );
@@ -308,12 +319,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function inputStyle(): React.CSSProperties {
   return {
     width: "100%",
-    padding: "10px 12px",
-    border: "1px solid #E5E5E5",
+    padding: "11px 12px",
+    border: "1px solid var(--color-border, #E5E5E5)",
     borderRadius: 8,
-    background: "#FFFFFF",
-    color: "#0D0D0D",
-    fontSize: 14,
+    background: "var(--color-card-bg, #FFFFFF)",
+    color: "var(--color-text, #0D0D0D)",
+    // 16px : évite le zoom automatique de Safari iOS au focus.
+    fontSize: 16,
     fontFamily: "inherit",
     outline: "none",
     transition: "border-color 120ms ease, box-shadow 120ms ease",

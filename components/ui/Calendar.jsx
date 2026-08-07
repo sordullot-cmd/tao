@@ -118,7 +118,7 @@ export default function Calendar() {
         .stat-card {
           background: white;
           padding: 16px;
-          border-radius: 8px;
+          border-radius: var(--radius-card);
           border: 1px solid #E8E9EF;
           text-align: center;
         }
@@ -154,7 +154,7 @@ export default function Calendar() {
 
         .calendar-panel {
           background: white;
-          border-radius: 12px;
+          border-radius: var(--radius-card);
           padding: 24px;
           border: 1px solid #E8E9EF;
         }
@@ -222,7 +222,7 @@ export default function Calendar() {
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 8px;
+          border-radius: var(--radius-field);
           cursor: pointer;
           font-weight: 600;
           font-size: 13px;
@@ -259,13 +259,13 @@ export default function Calendar() {
 
         .legend-label {
           color: #A0A1B0;
-          font-weight: 500;
+          font-weight: 400;
         }
 
         .legend-item {
           width: 20px;
           height: 20px;
-          border-radius: 4px;
+          border-radius: var(--radius-field);
           border: 1px solid #E8E9EF;
         }
 
@@ -301,7 +301,7 @@ export default function Calendar() {
 
         .day-item-date {
           color: #A0A1B0;
-          font-weight: 500;
+          font-weight: 400;
         }
 
         .day-item-pnl {

@@ -1214,9 +1214,6 @@ export default function AgendaPage() {
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-      <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>
-        {t("nav.agenda")}
-      </h1>
       {connected && !isMobile && (
         <>
           <button onClick={goToday} style={ghostBtn()}>Aujourd'hui</button>
@@ -1235,7 +1232,7 @@ export default function AgendaPage() {
               style={{
                 fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1,
                 background: "transparent", border: "none", cursor: "pointer",
-                padding: "4px 8px", borderRadius: 8, fontFamily: "var(--font-sans)",
+                padding: "4px 8px", borderRadius: "var(--radius-card)", fontFamily: "var(--font-sans)",
                 transition: "background .12s ease",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
@@ -1263,7 +1260,7 @@ export default function AgendaPage() {
             style={{
               fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1,
               background: "transparent", border: "none", cursor: "pointer",
-              padding: "4px 8px", borderRadius: 8, fontFamily: "var(--font-sans)",
+              padding: "4px 8px", borderRadius: "var(--radius-card)", fontFamily: "var(--font-sans)",
             }}
           >
             {monthYearLabel(view, cursor)}
@@ -1416,7 +1413,7 @@ export default function AgendaPage() {
                       <div style={{
                         position: "absolute", top: (lo / 60) * HOUR_H, height: Math.max(((hi - lo) / 60) * HOUR_H, 3),
                         left: 2, right: 2, background: "rgba(200, 222, 255, 0.45)", border: "none",
-                        borderRadius: 5, pointerEvents: "none", zIndex: 5,
+                        borderRadius: "var(--radius-field)", pointerEvents: "none", zIndex: 5,
                       }} />
                     );
                   })()}
@@ -1464,7 +1461,7 @@ export default function AgendaPage() {
                         style={{
                           position: "absolute", top, height, cursor: moving ? "grabbing" : "grab", touchAction: "none",
                           left: `calc(${left}% + 2px)`, width: `calc(${w}% - 4px)`,
-                          backgroundColor: T.white, backgroundImage: `linear-gradient(${tint}, ${tint})`, borderLeft: `2px solid ${dispCol}`, borderRadius: 5,
+                          backgroundColor: T.white, backgroundImage: `linear-gradient(${tint}, ${tint})`, borderLeft: `2px solid ${dispCol}`, borderRadius: "var(--radius-field)",
                           padding: "2px 5px", overflow: "hidden", zIndex: active ? 6 : ev.isTask ? 3 : 1,
                           boxShadow: active ? "0 4px 14px rgba(0,0,0,0.16)" : "0 1px 3px rgba(0,0,0,0.12)",
                           opacity: moving ? 0.92 : 1,
@@ -1479,8 +1476,8 @@ export default function AgendaPage() {
                           <span style={{ fontSize: 10.5, fontWeight: 600, color: txtCol, textDecoration: ev.isTask && ev.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.summary}</span>
                         </span>
                         {compact
-                          ? <span style={{ fontSize: 9.5, color: txtCol, flexShrink: 0, whiteSpace: "nowrap", opacity: 0.8 }}>{timeLbl}</span>
-                          : (height > 28 && <span style={{ fontSize: 9.5, color: txtCol, opacity: 0.8 }}>{timeLbl}</span>)}
+                          ? <span style={{ fontSize: 9, color: txtCol, flexShrink: 0, whiteSpace: "nowrap", opacity: 0.8 }}>{timeLbl}</span>
+                          : (height > 28 && <span style={{ fontSize: 9, color: txtCol, opacity: 0.8 }}>{timeLbl}</span>)}
                         {resizable && (
                           <div onPointerDown={(e) => startResize(e, ev, d, "bottom")} onClick={(e) => e.stopPropagation()} style={handleStyle("bottom")} />
                         )}
@@ -1534,7 +1531,7 @@ export default function AgendaPage() {
                   {shown.map((ev) => (
                     <div key={ev.id} title={ev.summary} onClick={(e) => { e.stopPropagation(); openEdit(ev); }} style={{
                       display: "flex", alignItems: "center", gap: 4, minWidth: 0, cursor: "pointer",
-                      fontSize: 10.5, color: ev.done ? T.textMut : eventTextColor(ev), background: ev.isTask ? `${lighten(eventColor(ev), 0.32)}26` : `${eventColor(ev)}33`, borderRadius: 4, padding: "1px 5px",
+                      fontSize: 10.5, color: ev.done ? T.textMut : eventTextColor(ev), background: ev.isTask ? `${lighten(eventColor(ev), 0.32)}26` : `${eventColor(ev)}33`, borderRadius: "var(--radius-field)", padding: "1px 5px",
                     }}>
                       {ev.isTask && <TaskCircle done={ev.done} onToggle={(e) => { e.stopPropagation(); onToggleDone(ev); }} size={12} />}
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: ev.isTask && ev.done ? "line-through" : "none" }}>
@@ -1584,7 +1581,7 @@ export default function AgendaPage() {
                       style={{
                         position: "relative", border: "none", cursor: "pointer", fontFamily: "inherit",
                         aspectRatio: "1 / 1", borderRadius: 6, fontSize: 10.5,
-                        background: isToday ? T.text : has ? `${T.blue}1A` : "transparent",
+                        background: isToday ? T.text : has ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : "transparent",
                         color: isToday ? "#fff" : T.text, fontWeight: isToday || has ? 700 : 400,
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
@@ -1637,7 +1634,7 @@ export default function AgendaPage() {
   } else if (!connected) {
     body = (
       <div style={{ ...card(), padding: "48px 32px", textAlign: "center" }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: T.accentBg, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+        <div style={{ width: 56, height: 56, borderRadius: "var(--radius-modal)", background: T.accentBg, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
           <CalendarIcon size={26} strokeWidth={1.5} color={T.text} />
         </div>
         <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 6 }}>Connecte ton Google Agenda</div>
@@ -1653,7 +1650,7 @@ export default function AgendaPage() {
     body = (
       <>
         {error && error !== "insufficient_scope" && (
-          <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: 8, padding: "8px 12px" }}>
+          <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: "var(--radius-card)", padding: "8px 12px" }}>
             {error}
           </div>
         )}
@@ -1678,7 +1675,7 @@ export default function AgendaPage() {
       {body}
       {modal && (
         <div onClick={() => !saving && setModal(null)} style={{ position: "fixed", inset: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24, overflowY: "auto" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ ...card(), width: "100%", maxWidth: 540, padding: 0, boxShadow: "0 6px 20px rgba(0,0,0,0.10)", transform: `translate(${modalPos.x}px, ${modalPos.y}px)` }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ ...card(), width: "100%", maxWidth: 540, padding: 0, boxShadow: "var(--elev-overlay)", transform: `translate(${modalPos.x}px, ${modalPos.y}px)` }}>
             {/* Barre du haut = poignée de déplacement (grise au survol, invisible sinon).
                 Les icônes sont à l'intérieur de cette zone pour ne pas ajouter de marge. */}
             <div onMouseDown={startModalDrag} title="Glisser pour déplacer la fenêtre"
@@ -1687,7 +1684,7 @@ export default function AgendaPage() {
                 position: "relative",
                 display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, padding: "4px 10px",
                 cursor: modalDragging ? "grabbing" : "grab", userSelect: "none",
-                borderTopLeftRadius: 12, borderTopRightRadius: 12,
+                borderTopLeftRadius: "var(--radius-card)", borderTopRightRadius: "var(--radius-card)",
                 background: (dragHover || modalDragging) ? "rgba(0,0,0,0.035)" : "transparent",
                 transition: "background-color 120ms ease",
               }}>
@@ -1732,7 +1729,7 @@ export default function AgendaPage() {
                         display: "inline-flex", alignItems: "center", gap: 6,
                         padding: "6px 14px", borderRadius: 999, border: "none", fontFamily: "inherit",
                         fontSize: 13, fontWeight: active ? 600 : 400,
-                        background: active ? `${T.blue}1A` : "transparent",
+                        background: active ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : "transparent",
                         color: active ? T.blue : T.textMut, cursor: "pointer",
                       }}>
                       {label}
@@ -1740,7 +1737,7 @@ export default function AgendaPage() {
                   );
                 })
               ) : (
-                <span style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, background: `${T.blue}1A`, color: T.blue }}>Tâche</span>
+                <span style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, background: `color-mix(in srgb, ${T.blue} 10%, transparent)`, color: T.blue }}>Tâche</span>
               )}
             </div>
 
@@ -1783,13 +1780,13 @@ export default function AgendaPage() {
                     <button type="button" onClick={() => setModal({ ...modal, allDay: !modal.allDay })}
                       style={{
                         ...pillBtn, alignSelf: "flex-start",
-                        background: modal.allDay ? `${T.blue}1A` : T.white,
-                        borderColor: modal.allDay ? `${T.blue}55` : T.border,
+                        background: modal.allDay ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : T.white,
+                        borderColor: modal.allDay ? `color-mix(in srgb, ${T.blue} 33%, transparent)` : T.border,
                         color: modal.allDay ? T.blue : T.text,
                         fontWeight: modal.allDay ? 600 : 500,
                       }}>
                       <span style={{
-                        width: 15, height: 15, borderRadius: 5, flexShrink: 0,
+                        width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0,
                         border: `1.5px solid ${modal.allDay ? T.blue : T.textMut}`,
                         background: modal.allDay ? T.blue : "transparent",
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -1810,7 +1807,7 @@ export default function AgendaPage() {
                       <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                     </button>
                     {recurOpen && (
-                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 240, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "0 10px 30px rgba(0,0,0,0.14)" }}>
+                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 240, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}>
                         {RECUR_PRESETS.map((p) => {
                           const selected = (modal.recur?.preset || "once") === p.id;
                           return (
@@ -1826,7 +1823,7 @@ export default function AgendaPage() {
                               }}
                               onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = T.bg; }}
                               onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
-                              style={{ width: "100%", textAlign: "left", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
+                              style={{ width: "100%", textAlign: "left", border: "none", borderRadius: "var(--radius-card)", padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
                               {p.label}
                             </button>
                           );
@@ -1840,9 +1837,9 @@ export default function AgendaPage() {
                               <span style={{ fontSize: 13, color: T.text }}>Tous les</span>
                               <input type="number" min={1} value={modal.recur.interval ?? 1}
                                 onChange={(e) => setRecur({ interval: e.target.value })}
-                                style={{ width: 52, padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, outline: "none" }} />
+                                style={{ width: 52, padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", outline: "none" }} />
                               <select value={modal.recur.freq || "WEEKLY"} onChange={(e) => setRecur({ freq: e.target.value })}
-                                style={{ padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, outline: "none", cursor: "pointer" }}>
+                                style={{ padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", outline: "none", cursor: "pointer" }}>
                                 <option value="DAILY">jour(s)</option>
                                 <option value="WEEKLY">semaine(s)</option>
                                 <option value="MONTHLY">mois</option>
@@ -1883,7 +1880,7 @@ export default function AgendaPage() {
                                 Après
                                 <input type="number" min={1} value={modal.recur.count ?? 10} disabled={modal.recur.end !== "count"}
                                   onChange={(e) => setRecur({ count: e.target.value })}
-                                  style={{ width: 52, padding: "4px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: 8, outline: "none", opacity: modal.recur.end === "count" ? 1 : 0.5 }} />
+                                  style={{ width: 52, padding: "4px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", outline: "none", opacity: modal.recur.end === "count" ? 1 : 0.5 }} />
                                 occurrences
                               </label>
                               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.text, cursor: "pointer" }}>
@@ -1937,7 +1934,7 @@ export default function AgendaPage() {
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                   </button>
                   {colorOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.14)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
                       <button type="button" onClick={() => { setModal({ ...modal, colorId: null }); setColorOpen(false); }} title="Par défaut" style={{ width: 24, height: 24, borderRadius: "50%", background: DEFAULT_EVENT_COLOR, border: modal.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
                       {Object.entries(GCAL_COLORS).map(([id, hex]) => (
                         <button key={id} type="button" onClick={() => { setModal({ ...modal, colorId: id }); setColorOpen(false); }} title={`Couleur ${id}`}
@@ -1956,7 +1953,7 @@ export default function AgendaPage() {
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                   </button>
                   {remindOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 200, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "0 10px 30px rgba(0,0,0,0.14)" }}>
+                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 200, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}>
                       {REMINDER_OPTS.map((r) => {
                         const selected = String(r.v) === String(modal.reminder);
                         return (
@@ -1964,7 +1961,7 @@ export default function AgendaPage() {
                             onClick={() => { setModal({ ...modal, reminder: r.v }); setRemindOpen(false); }}
                             onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = T.bg; }}
                             onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
-                            style={{ width: "100%", textAlign: "left", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
+                            style={{ width: "100%", textAlign: "left", border: "none", borderRadius: "var(--radius-card)", padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
                             {r.label}
                           </button>
                         );
@@ -2015,7 +2012,7 @@ export default function AgendaPage() {
               </>
 
               {modalError && (
-                <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: 8, padding: "8px 10px", marginTop: 8 }}>{modalError}</div>
+                <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: "var(--radius-card)", padding: "8px 10px", marginTop: 8 }}>{modalError}</div>
               )}
             </div>
 
@@ -2040,7 +2037,7 @@ export default function AgendaPage() {
         <div onClick={() => setOverdueOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 1100 }}>
           <div onClick={(e) => e.stopPropagation()} style={{
             position: "absolute", top: overduePos.top, left: overduePos.left, width: 320,
-            ...card(), boxShadow: "0 12px 40px rgba(0,0,0,0.18)", padding: "12px 18px 16px",
+            ...card(), boxShadow: "var(--elev-overlay)", padding: "12px 18px 16px",
             maxHeight: "70vh", overflowY: "auto",
           }}>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 2 }}>
@@ -2120,7 +2117,7 @@ function TaskRowChip({ item, onToggle, onOpen, overdue = false }) {
       style={{
         display: "flex", alignItems: "center", gap: 5, width: "100%",
         minWidth: 0, textAlign: "left", boxSizing: "border-box",
-        padding: "2px 6px", borderRadius: 5, cursor: "pointer", fontFamily: "inherit",
+        padding: "2px 6px", borderRadius: "var(--radius-field)", cursor: "pointer", fontFamily: "inherit",
         background: `${base}1A`, borderLeft: `2px solid ${base}`,
       }}
     >
@@ -2168,7 +2165,7 @@ function FormRow({ icon: Icon, children, top = false, iconColor }) {
 }
 
 /* ─────────────── Styles ─────────────── */
-const card = () => ({ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12 });
+const card = () => ({ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)" });
 const subInp = { padding: "5px 4px", fontSize: 14, fontFamily: "inherit", color: T.text, background: "transparent", border: "none", borderRadius: 6, outline: "none", cursor: "pointer" };
 const rowInp = { width: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 14, color: T.text, padding: "5px 0", boxSizing: "border-box" };
 // Bouton "pilule" moderne (couleur, notification)
@@ -2185,16 +2182,16 @@ const pillBtn = {
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
   fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
 };
-const codeStyle = { background: T.accentBg, padding: "1px 5px", borderRadius: 5, fontSize: 12 };
+const codeStyle = { background: T.accentBg, padding: "1px 5px", borderRadius: "var(--radius-field)", fontSize: 12 };
 const fieldLbl = { display: "block", fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 };
 const inp = () => ({
   width: "100%", padding: "9px 12px", fontSize: 13, fontFamily: "inherit",
-  color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: 8,
+  color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
   outline: "none", boxSizing: "border-box",
 });
 const iconBtn = () => ({
   display: "inline-flex", alignItems: "center", justifyContent: "center",
-  width: 32, height: 32, borderRadius: 8, border: `1px solid ${T.border}`,
+  width: 32, height: 32, borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`,
   background: T.white, color: T.text, cursor: "pointer", fontFamily: "inherit",
 });
 const ghostBtn = () => ({

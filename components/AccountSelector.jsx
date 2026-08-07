@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { T as BaseT } from "@/lib/ui/tokens";
 
 export default function AccountSelector({ userId, onAccountSelect, selectedAccountId }) {
   const [accounts, setAccounts] = useState([]);
@@ -51,24 +52,18 @@ export default function AccountSelector({ userId, onAccountSelect, selectedAccou
     return "💼";
   };
 
-  const T = {
-    border: "#E3E6EB",
-    text: "#1A1F2E",
-    textSub: "#5F6B7E",
-    accent: "#5F7FB4",
-    accentBg: "#E3ECFB",
-  };
+  const T = { ...BaseT };
 
   if (accounts.length === 0) {
     return (
       <div
         style={{
           padding: "12px 16px",
-          background: "#FEE2E2",
-          border: "1px solid #FECACA",
-          borderRadius: 4,
+          background: T.redBg,
+          border: `1px solid ${T.redBd}`,
+          borderRadius: "var(--radius-field)",
           fontSize: 13,
-          color: "#991B1B",
+          color: T.red,
           marginBottom: 16,
         }}
       >
@@ -93,6 +88,7 @@ export default function AccountSelector({ userId, onAccountSelect, selectedAccou
       <select
         value={selectedAccountId || ""}
         onChange={(e) => onAccountSelect(e.target.value)}
+        aria-label="Compte de Trading"
         style={{
           width: "100%",
           padding: "12px 12px",
@@ -101,7 +97,7 @@ export default function AccountSelector({ userId, onAccountSelect, selectedAccou
           fontSize: 13,
           outline: "none",
           fontFamily: "inherit",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: T.white,
           color: T.text,
           cursor: "pointer",
         }}

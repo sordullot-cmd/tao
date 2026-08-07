@@ -46,6 +46,7 @@ export default function SearchableSelect({
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const toggleOpen = () => {
@@ -72,8 +73,35 @@ export default function SearchableSelect({
     ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()) || (o.sublabel || "").toLowerCase().includes(query.toLowerCase()))
     : options;
 
+  // Réinitialise l'élément actif à l'ouverture / au changement de filtre.
+  useEffect(() => { setActive(0); }, [open, query]);
+
+  // Navigation clavier sur les options (flèches / Entrée / Échap).
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive(i => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive(i => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      const opt = filtered[active];
+      if (opt) {
+        e.preventDefault();
+        onChange(opt.id);
+        setOpen(false);
+        setQuery("");
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      setQuery("");
+    }
+  };
+
   return (
-    <div ref={containerRef} style={{ position: "relative", width, fontFamily: "var(--font-sans)" }}>
+    <div ref={containerRef} onKeyDown={onKeyDown} style={{ position: "relative", width, fontFamily: "var(--font-sans)" }}>
       <button
         type="button"
         onClick={toggleOpen}
@@ -85,10 +113,10 @@ export default function SearchableSelect({
           alignItems: "center",
           gap: 8,
           padding: small ? "6px 10px" : "8px 12px",
-          border: `1px solid ${open ? "#D4D4D4" : "#E5E5E5"}`,
-          borderRadius: 8,
-          background: "#FFFFFF",
-          color: selected ? "#0D0D0D" : "#8E8E8E",
+          border: `1px solid ${open ? "var(--color-border-strong)" : "var(--color-border)"}`,
+          borderRadius: "var(--radius-field)",
+          background: "var(--color-card-bg, #FFFFFF)",
+          color: selected ? "var(--color-text)" : "var(--color-text-muted)",
           fontSize: small ? 12 : 13,
           fontWeight: 500,
           cursor: "pointer",
@@ -105,13 +133,13 @@ export default function SearchableSelect({
             {selected.iconNode && <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>{selected.iconNode}</span>}
             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {selected.label}
-              {selected.sublabel && <span style={{ color: "#8E8E8E", fontSize: small ? 11 : 12, fontWeight: 400, marginLeft: 6 }}>{selected.sublabel}</span>}
+              {selected.sublabel && <span style={{ color: "var(--color-text-muted)", fontSize: small ? 11 : 12, fontWeight: 400, marginLeft: 6 }}>{selected.sublabel}</span>}
             </span>
           </>
         ) : (
           <span style={{ flex: 1 }}>{placeholder}</span>
         )}
-        {open ? <ChevronUp size={small ? 12 : 14} strokeWidth={2} color="#8E8E8E" /> : <ChevronDown size={small ? 12 : 14} strokeWidth={2} color="#8E8E8E" />}
+        {open ? <ChevronUp size={small ? 12 : 14} strokeWidth={2} color="var(--color-text-muted)" /> : <ChevronDown size={small ? 12 : 14} strokeWidth={2} color="var(--color-text-muted)" />}
       </button>
 
       {open && (
@@ -122,10 +150,10 @@ export default function SearchableSelect({
             top: "calc(100% + 4px)",
             left: 0,
             right: 0,
-            background: "#FFFFFF",
-            border: "1px solid #E5E5E5",
+            background: "var(--color-card-bg, #FFFFFF)",
+            border: "1px solid var(--color-border)",
             borderRadius: 10,
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.10)",
+            boxShadow: "var(--elev-overlay)",
             zIndex: 100,
             overflow: "hidden",
             display: "flex",
@@ -133,9 +161,9 @@ export default function SearchableSelect({
           }}
         >
           {searchable && options.length > 5 && (
-            <div style={{ padding: 4, borderBottom: "1px solid #F0F0F0", background: "#FAFAFA" }}>
+            <div style={{ padding: 4, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px" }}>
-                <Search size={12} strokeWidth={1.75} color="#8E8E8E" />
+                <Search size={12} strokeWidth={1.75} color="var(--color-text-muted)" />
                 <input
                   type="text"
                   autoFocus
@@ -149,7 +177,7 @@ export default function SearchableSelect({
                     outline: "none",
                     fontSize: 12,
                     fontFamily: "inherit",
-                    color: "#0D0D0D",
+                    color: "var(--color-text)",
                     padding: "4px 0",
                   }}
                 />
@@ -159,14 +187,18 @@ export default function SearchableSelect({
 
           <div style={{ overflowY: "auto", maxHeight: maxMenuHeight, padding: 4 }} className="scroll-thin">
             {filtered.length === 0 ? (
-              <div style={{ padding: "12px 14px", fontSize: 12, color: "#8E8E8E", textAlign: "center" }}>{emptyLabel}</div>
+              <div style={{ padding: "12px 14px", fontSize: 12, color: "var(--color-text-muted)", textAlign: "center" }}>{emptyLabel}</div>
             ) : (
               filtered.map((opt, idx) => {
                 const isSelected = opt.id === value;
+                const isActive = idx === active;
                 return (
                   <React.Fragment key={opt.id}>
                     <button
                       type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      onMouseEnter={() => setActive(idx)}
                       onClick={() => {
                         onChange(opt.id);
                         setOpen(false);
@@ -179,23 +211,21 @@ export default function SearchableSelect({
                         gap: 10,
                         padding: small ? "6px 10px" : "8px 10px",
                         border: "none",
-                        background: isSelected ? "#F0F0F0" : "transparent",
-                        color: opt.isAction ? "#0D0D0D" : "#0D0D0D",
+                        background: isSelected ? "var(--color-active-bg)" : (isActive ? "var(--color-hover-bg)" : "transparent"),
+                        color: "var(--color-text)",
                         fontSize: small ? 12 : 13,
-                        fontWeight: isSelected ? 600 : 500,
+                        fontWeight: isSelected ? 600 : 400,
                         cursor: "pointer",
                         fontFamily: "inherit",
                         textAlign: "left",
                         borderRadius: 6,
                         transition: "background 100ms ease",
                       }}
-                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#F5F5F5"; }}
-                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
                     >
                       {opt.iconUrl && <img src={opt.iconUrl} alt="" style={{ width: small ? 14 : 16, height: small ? 14 : 16, objectFit: "contain", flexShrink: 0 }} />}
                       {opt.iconNode && <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>{opt.iconNode}</span>}
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</span>
-                      {opt.sublabel && <span style={{ color: "#8E8E8E", fontSize: small ? 11 : 12 }}>{opt.sublabel}</span>}
+                      {opt.sublabel && <span style={{ color: "var(--color-text-muted)", fontSize: small ? 11 : 12 }}>{opt.sublabel}</span>}
                       {opt.accessory && (
                         <span
                           onClick={(e) => e.stopPropagation()}
@@ -205,10 +235,10 @@ export default function SearchableSelect({
                           {opt.accessory}
                         </span>
                       )}
-                      {isSelected && <Check size={small ? 12 : 14} strokeWidth={2} color="#0D0D0D" />}
+                      {isSelected && <Check size={small ? 12 : 14} strokeWidth={2} color="var(--color-text)" />}
                     </button>
                     {separated && idx < filtered.length - 1 && (
-                      <div style={{ height: 1, background: "#F0F0F0", margin: "0 8px" }} />
+                      <div style={{ height: 1, background: "var(--color-border)", margin: "0 8px" }} />
                     )}
                   </React.Fragment>
                 );

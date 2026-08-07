@@ -6,12 +6,11 @@ import { NavArrow, NavLabel } from "@/components/ui/DateNav";
 import { t, useLang } from "@/lib/i18n";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 
-export default function CalendarPage({ trades = [], accountType = "live", evalAccountSize = "25k", accounts = [], selectedAccountIds = [], setPage, setDateRangesByPage }) {
+export default function CalendarPage({ trades = [], accountType = "live", evalAccountSize = "25k", accounts = [], selectedAccountIds = [], setPage }) {
   useLang();
-  const goToTradesForDate = (iso) => {
-    if (typeof setDateRangesByPage === "function") {
-      setDateRangesByPage(prev => ({ ...(prev || {}), trades: { start: iso, end: iso } }));
-    }
+  // Le site n'a plus de filtre de dates : le clic sur un jour ouvre simplement
+  // la page Trades, qui liste tout l'historique.
+  const goToTradesForDate = () => {
     if (typeof setPage === "function") setPage("trades");
   };
   const [year, setYear] = useState(new Date().getFullYear());
@@ -223,7 +222,7 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
     }
 
     return (
-      <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
+      <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden", marginBottom: 24 }}>
         <div style={{ padding: "20px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{monthName}</div>
@@ -249,12 +248,12 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
               <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 160, alignItems: "flex-end" }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 500, color: T.textMut, marginBottom: 4 }}>{cumulativeLabel}</div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: evalCumulativePnL >= cumulativeObjective ? T.green : T.text }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: evalCumulativePnL >= cumulativeObjective ? T.green : T.text, fontVariantNumeric: "tabular-nums" }}>
                     {getCurrencySymbol()}{evalCumulativePnL.toFixed(2)} / {getCurrencySymbol()}{cumulativeObjective.toLocaleString("en-US")}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                  <div style={{ flex: 1, height: 6, background: T.border, borderRadius: 3, overflow: "hidden", minWidth: 100 }}>
+                  <div style={{ flex: 1, height: 6, background: T.border, borderRadius: "var(--radius-field)", overflow: "hidden", minWidth: 100 }}>
                     <div style={{ height: "100%", background: evalCumulativePnL >= cumulativeObjective ? T.green : "#8E8E8E", width: `${Math.min(100, (evalCumulativePnL / cumulativeObjective) * 100)}%`, transition: "width 0.3s" }} />
                   </div>
                   <div style={{ fontSize: 11, color: T.textMut, minWidth: 35, textAlign: "right" }}>{((evalCumulativePnL / cumulativeObjective) * 100).toFixed(0)}%</div>
@@ -323,6 +322,10 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
                             e.stopPropagation();
                             goToTradesForDate(dayIso);
                           }}
+                          role={clickable ? "button" : undefined}
+                          tabIndex={clickable ? 0 : undefined}
+                          aria-label={clickable ? `Trades du ${dayIso}, P&L ${pnl >= 0 ? "+" : ""}${getCurrencySymbol()}${pnl.toFixed(0)}` : undefined}
+                          onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToTradesForDate(dayIso); } } : undefined}
                           title={clickable ? t("cal.viewDayTrades") : undefined}
                           style={{
                             padding: "10px 12px", background: bg,
@@ -331,11 +334,11 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
                             cursor: clickable ? "pointer" : "default",
                             transition: "background .12s ease",
                           }}
-                          onMouseEnter={clickable ? (e) => { e.currentTarget.style.background = "#F5F5F5"; } : undefined}
+                          onMouseEnter={clickable ? (e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F0F0F0)"; } : undefined}
                           onMouseLeave={clickable ? (e) => { e.currentTarget.style.background = bg; } : undefined}
                         >
                           <div style={{ fontWeight: 500, color: textColor, fontSize: 13, marginBottom: 6 }}>{String(day).padStart(2, '0')}</div>
-                          <div style={{ color: tradesCount > 0 ? valueColor : T.textMut, fontWeight: 400, fontSize: 12, marginBottom: 2 }}>
+                          <div style={{ color: tradesCount > 0 ? valueColor : T.textMut, fontWeight: 400, fontSize: 12, marginBottom: 2, fontVariantNumeric: "tabular-nums" }}>
                             {tradesCount > 0 ? `${pnl >= 0 ? "+" : ""}${getCurrencySymbol()}${pnl.toFixed(0)}` : `${getCurrencySymbol()}0`}
                           </div>
                           <div style={{ color: T.textMut, fontSize: 10, fontWeight: 500 }}>{tradesCount} trade{tradesCount !== 1 ? "s" : ""}</div>
@@ -344,7 +347,7 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
                     })}
                     <td style={{ padding: "10px 12px", background: T.white, verticalAlign: "top", textAlign: "left", borderLeft: `1px solid ${T.border}` }}>
                       <div style={{ fontWeight: 400, color: T.text, fontSize: 13, marginBottom: 6 }}>{t("cal.weekN").replace("{n}", String(weekIdx + 1))}</div>
-                      <div style={{ color: weekPnL >= 0 ? T.green : weekPnL < 0 ? T.red : T.textMut, fontWeight: 400, fontSize: 12, marginBottom: 2 }}>
+                      <div style={{ color: weekPnL >= 0 ? T.green : weekPnL < 0 ? T.red : T.textMut, fontWeight: 400, fontSize: 12, marginBottom: 2, fontVariantNumeric: "tabular-nums" }}>
                         {weekPnL >= 0 ? "+" : ""}{getCurrencySymbol()}{weekPnL.toFixed(0)}
                       </div>
                       <div style={{ color: T.textMut, fontSize: 10, fontWeight: 500 }}>{weekTrades} trade{weekTrades !== 1 ? "s" : ""}</div>
@@ -362,8 +365,7 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, animation: "none" }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: "#0D0D0D", margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>{t("cal.title")}</h1>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
+                <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
       {renderMonthDetail()}
 
@@ -374,7 +376,7 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
       </div>
 
       {trades.length === 0 && (
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 40, textAlign: "center" }}>
+        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 40, textAlign: "center" }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 8 }}>{t("cal.noTradesImported")}</div>
           <p style={{ color: T.textSub }}>{t("cal.noTradesImportedSub")}</p>
         </div>
@@ -383,7 +385,7 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
       <div className="tr4de-cal-year-grid" style={{
         background: T.white,
         border: `1px solid ${T.border}`,
-        borderRadius: 12,
+        borderRadius: "var(--radius-card)",
         overflow: "hidden",
         display: "grid",
         gridTemplateColumns: "repeat(3,1fr)",
@@ -403,17 +405,17 @@ export default function CalendarPage({ trades = [], accountType = "live", evalAc
         })}
       </div>
 
-      <div style={{ display: "flex", gap: 24, fontSize: 12, padding: 16, background: T.white, borderRadius: 12, border: `1px solid ${T.border}` }}>
+      <div style={{ display: "flex", gap: 24, fontSize: 12, padding: 16, background: T.white, borderRadius: "var(--radius-card)", border: `1px solid ${T.border}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 20, height: 20, borderRadius: 4, background: T.greenBg, border: `2px solid ${T.green}` }} />
+          <div style={{ width: 20, height: 20, borderRadius: "var(--radius-field)", background: T.greenBg, border: `2px solid ${T.green}` }} />
           <span style={{ color: T.textSub }}>{t("cal.legendPositive")}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 20, height: 20, borderRadius: 4, background: T.redBg, border: `2px solid ${T.red}` }} />
+          <div style={{ width: 20, height: 20, borderRadius: "var(--radius-field)", background: T.redBg, border: `2px solid ${T.red}` }} />
           <span style={{ color: T.textSub }}>{t("cal.legendNegative")}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 20, height: 20, borderRadius: 4, background: T.border }} />
+          <div style={{ width: 20, height: 20, borderRadius: "var(--radius-field)", background: T.border }} />
           <span style={{ color: T.textSub }}>{t("cal.legendEmpty").replace("{n}", String(trades.length))}</span>
         </div>
       </div>

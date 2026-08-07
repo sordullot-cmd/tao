@@ -37,6 +37,7 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import MiniCalendar from "@/components/ui/MiniCalendar";
+import { XpBar } from "@/components/ui/XpBar";
 import { TimeField } from "@/components/pages/AgendaDateFields";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
@@ -62,12 +63,10 @@ import {
 } from "@/lib/lifeRpgCategories";
 import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5", bg: "#F5F5F5",
-  text: "#0D0D0D", textSub: "#5C5C5C", textMut: "#8E8E8E",
-  accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", red: "#EF4444", blue: "#3B82F6", amber: "#F59E0B",
-};
+import { T as BaseT } from "@/lib/ui/tokens";
+// `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
+// thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
+const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
 
 // Difficulté → récompense. Plus c'est dur, plus ça rapporte d'XP et de pièces.
 const DIFFICULTIES = [
@@ -701,16 +700,19 @@ export default function LifeRpgPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
       {/* En-tête */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1 }}>{t("nav.lifeRpg")}</h1>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {/* Niveau global — ligne compacte : « Nv X » + barre inline + XP */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>Nv {lvl.level}</span>
-            <div style={{ width: 110, height: 6, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-              <div style={{ width: `${lvl.pct}%`, height: "100%", background: T.text, borderRadius: 999, transition: "width .5s ease" }} />
-            </div>
-            <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{lvl.intoLevel} / {lvl.neededForNext} XP</span>
-          </div>
+          {/* Niveau global — barre avec feedback de gain d'XP + level-up */}
+          <XpBar
+            level={lvl.level}
+            pct={lvl.pct}
+            intoLevel={lvl.intoLevel}
+            neededForNext={lvl.neededForNext}
+            totalXp={progress.totalXp}
+            fillColor={T.text}
+            trackColor={T.accentBg}
+            textColor={T.text}
+            mutedColor={T.textMut}
+          />
           <button onClick={openNewCategory} style={btnPrimary()}><Plus size={14} strokeWidth={2} /> Nouvelle catégorie</button>
         </div>
       </div>
@@ -751,13 +753,14 @@ export default function LifeRpgPage() {
                     return (
                       <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < habitsList.length - 1 ? `1px solid ${T.border}` : "none" }}>
                         <button onClick={() => toggleHabit(h.id)} title={done ? "Décocher pour aujourd'hui" : "Compléter aujourd'hui"}
-                          style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, border: `1.5px solid ${done ? T.green : T.border}`, background: done ? T.green : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+                          role="checkbox" aria-checked={done} aria-label={`${h.name} — ${done ? "complétée" : "à faire"} aujourd'hui`}
+                          style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${done ? T.green : T.border}`, background: done ? T.green : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
                           {done && <Check size={10} strokeWidth={3} />}
                         </button>
                         <span style={{ fontSize: 13, color: T.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</span>
                         {st >= 2 && (
                           <span title={`Série de ${st} jours · XP ×${fmtMult(mult)}`}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 11, fontWeight: 700, color: T.amber, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 999, padding: "2px 8px", fontVariantNumeric: "tabular-nums" }}>
+                            style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 11, fontWeight: 700, color: T.amber, background: T.amberBg, border: `1px solid color-mix(in srgb, ${T.amber} 35%, transparent)`, borderRadius: 999, padding: "2px 8px", fontVariantNumeric: "tabular-nums" }}>
                             <Flame size={11} strokeWidth={2.25} /> {st} · ×{fmtMult(mult)}
                           </span>
                         )}
@@ -791,7 +794,7 @@ export default function LifeRpgPage() {
           onGoToAgenda={() => { setTaskModal(null); setPage("agenda"); }} />
       )}
 
-      <style>{`@media (max-width: 760px) { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } } .tr4de-portrait > * + * { margin-top: 18px; padding-top: 18px; border-top: 1px solid #F0F0F0; } .tr4de-portrait > *:nth-child(3) { margin-top: 20px; padding-top: 0; border-top: none; }`}</style>
+      <style>{`@media (max-width: 760px) { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } } .tr4de-portrait > * + * { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--color-border, #F0F0F0); } .tr4de-portrait > *:nth-child(3) { margin-top: 20px; padding-top: 0; border-top: none; }`}</style>
     </div>
   );
 }
@@ -826,9 +829,9 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
   };
   return (
     <div className="tr4de-portrait" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, background: T.white, display: "flex", flexDirection: "column", gap: 0 }}>
+      style={{ border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 20, background: T.white, display: "flex", flexDirection: "column", gap: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: `${cat.color}1A`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${cat.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <CatIcon name={cat.icon} size={18} strokeWidth={1.75} color={cat.color} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -836,9 +839,9 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
           <div style={{ fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>Niveau {cl.level} · {xp} XP</div>
         </div>
         {/* Boutons modifier / supprimer : masqués, visibles au survol de la carte */}
-        <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hover ? 1 : 0, pointerEvents: hover ? "auto" : "none", transition: "opacity .15s ease" }}>
-          <button onClick={onEdit} title="Modifier" style={iconBtnSm()}><Pencil size={12} strokeWidth={1.75} /></button>
-          {onDelete && <button onClick={onDelete} title="Supprimer" style={iconBtnSm()}><Trash2 size={12} strokeWidth={1.75} /></button>}
+        <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hover ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
+          <button onClick={onEdit} title="Modifier" aria-label={`Modifier ${cat.label}`} style={iconBtnSm()}><Pencil size={12} strokeWidth={1.75} /></button>
+          {onDelete && <button onClick={onDelete} title="Supprimer" aria-label={`Supprimer ${cat.label}`} style={iconBtnSm()}><Trash2 size={12} strokeWidth={1.75} /></button>}
         </div>
       </div>
 
@@ -848,8 +851,9 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
           <span>Vers le niveau {cl.level + 1}</span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{cl.intoLevel} / {cl.neededForNext} XP</span>
         </div>
-        <div style={{ height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-          <div style={{ width: `${cl.levelPct}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width .5s ease" }} />
+        <div role="progressbar" aria-valuenow={Math.round(cl.levelPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Progression vers le niveau ${cl.level + 1}`}
+          style={{ height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+          <div style={{ width: `${cl.levelPct}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
         </div>
       </div>
 
@@ -862,8 +866,8 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
 
       {/* Personne à qui je veux ressembler (modèle) — couleur atténuée, moins visible que l'objectif */}
       {cat.roleModel && (
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "12px 14px", borderRadius: 12, background: `${cat.color}08`, border: `1px solid ${cat.color}1C` }}>
-          <div style={{ width: 30, height: 30, borderRadius: 999, background: `${cat.color}14`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "12px 14px", borderRadius: "var(--radius-card)", background: `color-mix(in srgb, ${cat.color} 3%, transparent)`, border: `1px solid color-mix(in srgb, ${cat.color} 11%, transparent)` }}>
+          <div style={{ width: 30, height: 30, borderRadius: 999, background: `color-mix(in srgb, ${cat.color} 8%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <UserRound size={15} strokeWidth={1.75} color={cat.color} />
           </div>
           <div style={{ minWidth: 0 }}>
@@ -890,15 +894,16 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                     <span style={{ fontSize: 11.5, fontWeight: 700, color: reached ? T.green : T.textSub, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</span>
                     {onDetachObjective && (
-                      <button onClick={() => onDetachObjective(g.id)} title="Retirer de cette catégorie"
-                        style={{ ...iconBtnSm(), width: 18, height: 18, opacity: hover ? 1 : 0, pointerEvents: hover ? "auto" : "none", transition: "opacity .15s ease" }}>
+                      <button onClick={() => onDetachObjective(g.id)} title="Retirer de cette catégorie" aria-label={`Retirer « ${g.label} » de cette catégorie`}
+                        style={{ ...iconBtnSm(), width: 18, height: 18, opacity: hover ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
                         <X size={12} strokeWidth={2} />
                       </button>
                     )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }} title={`+${g.xpGained} / ${g.xpFull} XP`}>
-                    <div style={{ flex: 1, height: 6, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                      <div style={{ width: `${g.pct}%`, height: "100%", background: negative ? T.red : reached ? T.green : cat.color, borderRadius: 999, transition: "width .5s ease" }} />
+                    <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)}%`}
+                      style={{ flex: 1, height: 6, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+                      <div style={{ width: `${g.pct}%`, height: "100%", background: negative ? T.red : reached ? T.green : cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 600, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 32, textAlign: "right" }}>{reached ? "100%" : `${Math.round(g.rawPct)}%`}</span>
                   </div>
@@ -912,8 +917,9 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
                         return (
                           <div key={sg.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <span style={{ flexShrink: 0, maxWidth: "42%", fontSize: 11.5, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sg.label}</span>
-                            <div style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                              <div style={{ width: `${sg.pct}%`, height: "100%", background: sgNegative ? T.red : sgReached ? T.green : cat.color, borderRadius: 999, opacity: 0.75, transition: "width .5s ease" }} />
+                            <div role="progressbar" aria-valuenow={Math.round(sg.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${sg.label} : ${Math.round(sg.rawPct)}%`}
+                              style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+                              <div style={{ width: `${sg.pct}%`, height: "100%", background: sgNegative ? T.red : sgReached ? T.green : cat.color, borderRadius: 999, opacity: 0.75, transition: "width var(--dur-slow) var(--ease-out)" }} />
                             </div>
                             <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: sgNegative ? T.red : sgReached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtGoalVal(sg.current, sg.unit)} / {fmtGoalVal(sg.target, sg.unit)}</span>
                           </div>
@@ -955,7 +961,7 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
                     tant qu'elle n'existe pas ; champ de titre auto-focus. */}
                 {adding && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
-                    <span style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, border: `1.5px solid ${T.border}`, background: T.white }} />
+                    <span style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${T.border}`, background: T.white }} />
                     <input autoFocus value={newTitle} disabled={savingTask}
                       onChange={e => setNewTitle(e.target.value)}
                       onKeyDown={e => {
@@ -983,9 +989,9 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
             </button>
           ) : (
             <button onClick={openAdd}
-              style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed ${cat.color}66`, background: `${cat.color}0D`, color: cat.color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-              onMouseEnter={e => { e.currentTarget.style.background = `${cat.color}1A`; }}
-              onMouseLeave={e => { e.currentTarget.style.background = `${cat.color}0D`; }}>
+              style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+              onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 10%, transparent)`; }}
+              onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 5%, transparent)`; }}>
               <CalendarPlus size={14} strokeWidth={2} /> Ajouter une tâche
             </button>
           ))}
@@ -1030,7 +1036,8 @@ function TaskRow({ tk, cat, isLast, onToggle, onEdit, onDelete }) {
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: isLast ? "none" : `1px solid ${T.border}` }}>
       <button onClick={onToggle} title={tk.done ? "Marquer à faire" : "Marquer terminée"}
-        style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, border: `1.5px solid ${tk.done ? cat.color : T.border}`, background: tk.done ? cat.color : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+        role="checkbox" aria-checked={tk.done} aria-label={`${tk.title} — ${tk.done ? "terminée" : "à faire"}`}
+        style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${tk.done ? cat.color : T.border}`, background: tk.done ? cat.color : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
         {tk.done && <Check size={10} strokeWidth={3} />}
       </button>
       <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: tk.done ? T.textMut : T.text, textDecoration: tk.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tk.title}</span>
@@ -1048,8 +1055,8 @@ function TaskRow({ tk, cat, isLast, onToggle, onEdit, onDelete }) {
         tk.day && <span style={{ fontSize: 10.5, color: T.textMut, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{tk.startTime ? `${fmtDayShort(tk.day)} · ${tk.startTime}` : fmtDayShort(tk.day)}</span>
       )}
       {onDelete && (
-        <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hov ? 1 : 0, pointerEvents: hov ? "auto" : "none", transition: "opacity .15s ease" }}>
-          <button onClick={onDelete} title="Supprimer" style={iconBtnSm()}><Trash2 size={12} strokeWidth={1.75} /></button>
+        <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hov ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
+          <button onClick={onDelete} title="Supprimer" aria-label={`Supprimer la tâche ${tk.title}`} style={iconBtnSm()}><Trash2 size={12} strokeWidth={1.75} /></button>
         </div>
       )}
     </div>
@@ -1089,18 +1096,18 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
         </button>
       )}
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "0 10px 30px rgba(0,0,0,0.14)", maxHeight: 260, overflowY: "auto" }}>
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)", maxHeight: 260, overflowY: "auto" }}>
           {objectives.map(g => {
             const here = g.rpgCategory === catId;
             const elsewhere = !!g.rpgCategory && !here;
             return (
               <button key={g.id} type="button" onClick={() => onToggle(g.id)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: 8, background: here ? T.accentBg : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: "var(--radius-card)", background: here ? T.accentBg : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
                 onMouseEnter={e => { if (!here) e.currentTarget.style.background = T.bg; }}
                 onMouseLeave={e => { if (!here) e.currentTarget.style.background = "transparent"; }}>
-                <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${here ? color : T.border}`, background: here ? color : T.white, color: "#fff" }}>{here && <Check size={11} strokeWidth={3} />}</span>
+                <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${here ? color : T.border}`, background: here ? color : T.white, color: "#fff" }}>{here && <Check size={11} strokeWidth={3} />}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label || "Objectif"}</span>
-                {elsewhere && <span style={{ fontSize: 9.5, color: T.textMut, flexShrink: 0 }}>rattaché ailleurs</span>}
+                {elsewhere && <span style={{ fontSize: 9, color: T.textMut, flexShrink: 0 }}>rattaché ailleurs</span>}
               </button>
             );
           })}
@@ -1161,7 +1168,7 @@ function LevelChart({ habits, history, categories }) {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 12 }}>
               {lines.map(l => (
                 <span key={l.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textSub }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 3, background: l.color }} /> {l.label}
+                  <span style={{ width: 9, height: 9, borderRadius: "var(--radius-field)", background: l.color }} /> {l.label}
                 </span>
               ))}
             </div>
@@ -1257,7 +1264,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
       <Field label="Nom de la catégorie">
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={() => setShowStyle(v => !v)} title="Changer l'icône et la couleur"
-            style={{ width: 40, height: 40, borderRadius: 10, background: `${form.color}1A`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: showStyle ? `1.5px solid ${form.color}` : "1.5px solid transparent", padding: 0, cursor: "pointer" }}>
+            style={{ width: 40, height: 40, borderRadius: 10, background: `color-mix(in srgb, ${form.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: showStyle ? `1.5px solid ${form.color}` : "1.5px solid transparent", padding: 0, cursor: "pointer" }}>
             <CatIcon name={form.icon} size={18} strokeWidth={1.75} color={form.color} />
           </button>
           <input autoFocus value={form.label} onChange={e => setForm({ ...form, label: e.target.value })}
@@ -1283,7 +1290,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
                 const active = form.icon === key;
                 return (
                   <button key={key} onClick={() => setForm({ ...form, icon: key })}
-                    style={{ aspectRatio: "1", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 8, border: `1px solid ${active ? form.color : T.border}`, background: active ? `${form.color}14` : T.white, cursor: "pointer" }}>
+                    style={{ aspectRatio: "1", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-card)", border: `1px solid ${active ? form.color : T.border}`, background: active ? `color-mix(in srgb, ${form.color} 8%, transparent)` : T.white, cursor: "pointer" }}>
                     <CatIcon name={key} size={15} strokeWidth={1.75} color={active ? form.color : T.textSub} />
                   </button>
                 );
@@ -1322,7 +1329,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textMut }}>
           <Check size={12} strokeWidth={2.5} color={T.green} /> Enregistré automatiquement
         </span>
-        <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 999, border: `1px solid ${T.text}`, background: T.text, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
+        <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 999, border: `1px solid ${T.text}`, background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
       </div>
     </Overlay>
   );
@@ -1403,7 +1410,7 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
     <Overlay onClose={onClose} title={isEdit ? "Modifier la tâche" : "Nouvelle tâche"}>
       {/* Rappel de la carte à laquelle la tâche est rattachée */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 12.5, color: T.textSub }}>
-        <span style={{ width: 24, height: 24, borderRadius: 7, background: `${cat.color}1A`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ width: 24, height: 24, borderRadius: "var(--radius-card)", background: `color-mix(in srgb, ${cat.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <CatIcon name={cat.icon} size={14} strokeWidth={1.9} color={cat.color} />
         </span>
         <span>Rattachée à <strong style={{ color: cat.color }}>{cat.label}</strong></span>
@@ -1509,7 +1516,7 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
 function Section({ title, icon: Icon, action, children, bare, fill }) {
   const wrap = bare
     ? { padding: 0 }
-    : { background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 18 };
+    : { background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 18 };
   // `fill` : la carte occupe toute la hauteur de la cellule (grille) et son
   // contenu défile à l'intérieur — utile pour qu'elle épouse la colonne voisine.
   if (fill) Object.assign(wrap, { height: "100%", display: "flex", flexDirection: "column", minHeight: 0, boxSizing: "border-box" });
@@ -1572,7 +1579,7 @@ function Overlay({ title, children, onClose }) {
       style={{ position: "fixed", inset: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
       {/* Pas d'animation `transform` sur le modal : elle écraserait le translate du drag. */}
       <div onClick={e => e.stopPropagation()} role="dialog" aria-modal="true"
-        style={{ width: 440, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", background: T.white, borderRadius: 14, padding: 20, fontFamily: "var(--font-sans)", border: `1px solid ${T.border}`, boxShadow: "0 16px 48px rgba(0,0,0,0.18)", transform: `translate(${pos.x}px, ${pos.y}px)` }}>
+        style={{ width: 440, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", background: T.white, borderRadius: 14, padding: 20, fontFamily: "var(--font-sans)", border: `1px solid ${T.border}`, boxShadow: "var(--elev-overlay)", transform: `translate(${pos.x}px, ${pos.y}px)` }}>
         {/* En-tête = poignée de déplacement (barre grise centrée), façon Sport. */}
         <div onMouseDown={startWindowDrag} title="Glisser pour déplacer la fenêtre"
           style={{ position: "relative", display: "flex", alignItems: "center", marginBottom: 16, paddingTop: 8, cursor: "move", userSelect: "none" }}>
@@ -1618,11 +1625,11 @@ function AutoTextarea({ value, onChange, placeholder, minRows = 3, style }) {
 
 /* ---------- Styles partagés ---------- */
 function btnPrimary() {
-  return { marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 };
+  return { marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 };
 }
 // Bouton d'action principal d'une modale (fond sombre).
 function btnDark() {
-  return { padding: "9px 18px", borderRadius: 999, border: `1px solid ${T.text}`, background: T.text, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 };
+  return { padding: "9px 18px", borderRadius: 999, border: `1px solid ${T.text}`, background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 };
 }
 // Bouton secondaire d'une modale (contour discret).
 function btnGhost() {
@@ -1638,5 +1645,5 @@ function iconBtnSm() {
 // Petit libellé au-dessus des champs de la modale de catégorie.
 const objLbl = { fontSize: 11, color: T.textSub, fontWeight: 500, marginBottom: 4 };
 function input() {
-  return { width: "100%", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 8, background: T.white, fontSize: 14, color: T.text, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
+  return { width: "100%", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.white, fontSize: 14, color: T.text, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
 }

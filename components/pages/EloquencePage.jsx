@@ -50,9 +50,9 @@ function uid() {
 
 /* Styles partagés */
 const card = {
-  background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
+  background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
   padding: 20, boxSizing: "border-box",
-  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  boxShadow: "var(--elev-rest)",
 };
 const pill = (active) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
@@ -461,7 +461,7 @@ function ResultCard({ result, showFidelity }) {
   );
 }
 
-const metricBox = { flex: 1, minWidth: 120, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", background: T.bg };
+const metricBox = { flex: 1, minWidth: 120, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "10px 12px", background: T.bg };
 const metricLabel = { fontSize: 11, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 };
 const metricVal = { fontSize: 18, fontWeight: 700, color: T.text, marginTop: 2 };
 const sectionTitle = { fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 };
@@ -605,7 +605,7 @@ function StructureCheatSheet() {
         {STRUCTURE_FRAMEWORKS.map((f) => (
           <div
             key={f.id}
-            style={{ flex: "1 1 280px", minWidth: 260, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, background: T.bg }}
+            style={{ flex: "1 1 280px", minWidth: 260, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 14, background: T.bg }}
           >
             <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{f.name}</div>
             <div style={{ fontSize: 12, color: T.textMut, fontWeight: 600, marginBottom: 8 }}>{f.short}</div>
@@ -1759,7 +1759,7 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
           {review ? "Régénérer" : "Générer"}
         </button>
         <button type="button" title="Fermer le bilan" aria-label="Fermer le bilan" onClick={() => setDismissed(true)}
-          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, border: `1px solid ${T.border}`, borderRadius: 8, background: T.white, cursor: "pointer", color: T.textMut, padding: 0 }}>
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.white, cursor: "pointer", color: T.textMut, padding: 0 }}>
           <X size={16} />
         </button>
       </div>
@@ -1777,7 +1777,7 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
           {review.summary && <div style={{ fontSize: 14, color: T.text, lineHeight: 1.55 }}>{review.summary}</div>}
 
           {review.priority && (
-            <div style={{ background: T.accentBg, borderRadius: 12, padding: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ background: T.accentBg, borderRadius: "var(--radius-card)", padding: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
               <Sparkles size={16} color={T.text} style={{ flexShrink: 0, marginTop: 1 }} />
               <div style={{ fontSize: 13.5, color: T.text }}>
                 <span style={{ fontWeight: 700 }}>Priorité n°1 : </span>{review.priority}
@@ -1890,9 +1890,6 @@ export default function EloquencePage() {
 
       {/* En-tête de page — aligné sur les pages Productivité (titre 17/600) */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>
-          Éloquence
-        </h1>
         <span style={{ fontSize: 12, color: T.textMut }}>
           Structure, vocabulaire, clarté, confiance &amp; diction
         </span>

@@ -74,12 +74,12 @@ function RuleTypeDropdown({ value, onChange }) {
           fontFamily: "inherit",
           textAlign: "left",
           transition: "border-color 120ms ease, box-shadow 120ms ease",
-          boxShadow: open ? `0 0 0 3px ${T.text}14` : "none",
+          boxShadow: open ? `0 0 0 3px color-mix(in srgb, ${T.text} 8%, transparent)` : "none",
         }}
       >
         <span style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 28, height: 28, borderRadius: 8,
+          width: 28, height: 28, borderRadius: "var(--radius-card)",
           background: T.bg, color: T.text,
           flexShrink: 0,
         }}>
@@ -106,8 +106,8 @@ function RuleTypeDropdown({ value, onChange }) {
             position: "absolute", zIndex: 50, top: "calc(100% + 6px)", left: 0, right: 0,
             background: T.white,
             border: `1px solid ${T.border}`,
-            borderRadius: 12,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
+            borderRadius: "var(--radius-card)",
+            boxShadow: "var(--elev-overlay)",
             padding: 6,
             maxHeight: 320,
             overflowY: "auto",
@@ -131,7 +131,7 @@ function RuleTypeDropdown({ value, onChange }) {
                   padding: "9px 10px",
                   background: isSel ? T.bg : "transparent",
                   border: "none",
-                  borderRadius: 8,
+                  borderRadius: "var(--radius-card)",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   textAlign: "left",
@@ -140,7 +140,7 @@ function RuleTypeDropdown({ value, onChange }) {
               >
                 <span style={{
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 26, height: 26, borderRadius: 7,
+                  width: 26, height: 26, borderRadius: "var(--radius-card)",
                   background: isSel ? T.text : T.bg,
                   color: isSel ? "#FFF" : T.text,
                   flexShrink: 0,
@@ -164,7 +164,7 @@ function RuleTypeDropdown({ value, onChange }) {
 const card = (extra = {}) => ({
   background: T.white,
   border: `1px solid ${T.border}`,
-  borderRadius: 12,
+  borderRadius: "var(--radius-card)",
   padding: 20,
   ...extra,
 });
@@ -253,7 +253,7 @@ function KpiRow({ stats, sessionViolations, activeRules, totalRules, isClean, fl
   );
   if (flat) return grid;
   return (
-    <div className="tr4de-kpi-row" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+    <div className="tr4de-kpi-row" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
       {grid}
     </div>
   );
@@ -318,7 +318,7 @@ function ViolationsLog({ stats, rules }) {
                 gridTemplateColumns: "auto 1fr auto auto",
                 gap: 12, alignItems: "center",
                 padding: "10px 12px",
-                background: T.bg, borderRadius: 8,
+                background: T.bg, borderRadius: "var(--radius-card)",
               }}>
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.red }} />
                 <div style={{ minWidth: 0 }}>
@@ -418,7 +418,7 @@ function Insights({ stats, rules, flat = false }) {
             gridTemplateColumns: "auto 1fr auto",
             gap: 12, alignItems: "center",
             padding: "10px 12px",
-            background: T.bg, borderRadius: 8,
+            background: T.bg, borderRadius: "var(--radius-card)",
           }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.textMut, flexShrink: 0 }} />
             <div style={{ minWidth: 0 }}>
@@ -637,7 +637,7 @@ const inp = () => ({
   color: T.text,
   background: T.white,
   border: `1px solid ${T.border}`,
-  borderRadius: 8,
+  borderRadius: "var(--radius-card)",
   outline: "none",
 });
 const lbl = () => ({

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Outfit } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/supabaseAuthProvider";
@@ -24,6 +24,15 @@ const openAISans = localFont({
     { path: "../public/fonts/OpenAISans-Bold.woff2",          weight: "700", style: "normal" },
     { path: "../public/fonts/OpenAISans-BoldItalic.woff2",    weight: "700", style: "italic" },
   ],
+});
+
+// Outfit — police de la nouvelle direction artistique (maquette Figma).
+// Exposée en --font-outfit ; app/globals.css la câble sur --font-sans.
+const outfit = Outfit({
+  variable: "--font-outfit",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -100,7 +109,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${openAISans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${outfit.variable} ${openAISans.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { T as BaseT } from "@/lib/ui/tokens";
 
 export default function TradingAccountsManager({ userId, onAccountSelect }) {
   const [accounts, setAccounts] = useState([]);
@@ -162,13 +163,10 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
   };
 
   const T = {
-    bg: "#1a1a1a",
-    bgLight: "#252525",
-    text: "#ffffff",
-    textSub: "#999999",
-    border: "rgba(255, 255, 255, 0.1)",
-    accent: "#5F7FB4",
-    accentHover: "#7A96CA",
+    ...BaseT,
+    // Clés absentes de BaseT, en var pour rester dark-aware :
+    bgLight: "var(--color-card-bg, #FFFFFF)",
+    accentHover: "var(--color-hover-bg, #F0F0F0)",
   };
 
   return (
@@ -197,22 +195,33 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
           {accounts.map((account) => (
             <div
               key={account.id}
+              role="button"
+              tabIndex={0}
+              aria-pressed={selectedAccountId === account.id}
+              aria-label={account.name}
               onClick={() => {
                 setSelectedAccountId(account.id);
                 onAccountSelect?.(account.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelectedAccountId(account.id);
+                  onAccountSelect?.(account.id);
+                }
               }}
               style={{
                 padding: 16,
                 background: selectedAccountId === account.id ? T.accentHover : T.bgLight,
                 border: `2px solid ${selectedAccountId === account.id ? T.accent : T.border}`,
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 cursor: "pointer",
                 transition: "all 0.2s",
               }}
               onMouseEnter={(e) => {
                 if (selectedAccountId !== account.id) {
-                  e.currentTarget.style.background = "#2a2a2a";
-                  e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
+                  e.currentTarget.style.background = T.accentHover;
+                  e.currentTarget.style.borderColor = T.border2;
                 }
               }}
               onMouseLeave={(e) => {
@@ -250,12 +259,20 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                     e.stopPropagation();
                     handleDeleteAccount(account.id);
                   }}
+                  aria-label={`Supprimer le compte ${account.name}`}
+                  title="Supprimer le compte"
                   style={{
                     background: "transparent",
                     border: "none",
                     color: T.textSub,
                     cursor: "pointer",
                     fontSize: 18,
+                    lineHeight: 1,
+                    minWidth: 32,
+                    minHeight: 32,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     padding: 0,
                   }}
                 >
@@ -293,7 +310,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
             style={{
               padding: "10px 16px",
               background: T.accent,
-              color: T.text,
+              color: T.white,
               border: "none",
               borderRadius: 6,
               cursor: "pointer",
@@ -302,7 +319,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = T.accentHover;
+              e.currentTarget.style.background = T.textSub;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = T.accent;
@@ -317,7 +334,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
               padding: 16,
               background: T.bgLight,
               border: `1px solid ${T.border}`,
-              borderRadius: 8,
+              borderRadius: "var(--radius-card)",
               display: "flex",
               flexDirection: "column",
               gap: 12,
@@ -332,7 +349,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                 padding: "10px 12px",
                 background: T.bg,
                 border: `1px solid ${T.border}`,
-                borderRadius: 4,
+                borderRadius: "var(--radius-field)",
                 color: T.text,
                 fontSize: 13,
                 outline: "none",
@@ -348,7 +365,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                 padding: "10px 12px",
                 background: T.bg,
                 border: `1px solid ${T.border}`,
-                borderRadius: 4,
+                borderRadius: "var(--radius-field)",
                 color: T.text,
                 fontSize: 13,
                 outline: "none",
@@ -361,7 +378,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
             </select>
 
             {error && (
-              <div style={{ color: "#EF4444", fontSize: 12 }}>
+              <div style={{ color: T.red, fontSize: 12 }}>
                 ⚠️ {error}
               </div>
             )}
@@ -372,10 +389,10 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                 disabled={loading}
                 style={{
                   padding: "10px 16px",
-                  background: loading ? "#666" : T.accent,
-                  color: T.text,
+                  background: loading ? T.textMut : T.accent,
+                  color: T.white,
                   border: "none",
-                  borderRadius: 4,
+                  borderRadius: "var(--radius-field)",
                   cursor: loading ? "not-allowed" : "pointer",
                   fontSize: 13,
                   fontWeight: 500,
@@ -395,7 +412,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                   background: "transparent",
                   color: T.textSub,
                   border: `1px solid ${T.border}`,
-                  borderRadius: 4,
+                  borderRadius: "var(--radius-field)",
                   cursor: "pointer",
                   fontSize: 13,
                   fontWeight: 500,
@@ -415,7 +432,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
             padding: 20,
             background: T.bgLight,
             border: `1px dashed ${T.border}`,
-            borderRadius: 8,
+            borderRadius: "var(--radius-card)",
             textAlign: "center",
             color: T.textSub,
             fontSize: 13,

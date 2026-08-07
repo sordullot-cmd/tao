@@ -47,6 +47,13 @@ export default function QuickAccountSelector({
   accounts: accountsProp = null,
   // Active le bouton de suppression de compte dans le dropdown.
   allowDelete = false,
+  // Sélection seule : masque la création à la volée, le renommage et la
+  // suppression. Utilisé par la page Ajouter un trade, où la gestion des
+  // comptes est déportée vers la page Comptes / la page détail d'une firme.
+  selectionOnly = false,
+  // Appelé quand l'utilisateur cherche un compte inexistant en mode
+  // sélection seule (renvoie vers l'écran de création).
+  onRequestCreate = null,
   // Callback appelé après suppression (id du compte) — permet au parent de
   // resynchroniser sa propre liste de comptes en mode piloté par prop.
   onAccountDeleted = null,
@@ -143,7 +150,10 @@ export default function QuickAccountSelector({
 
   const queryTrim = query.trim();
   const exactMatch = accounts.some(a => (a.name || "").toLowerCase() === queryTrim.toLowerCase());
-  const showCreate = queryTrim.length > 0 && !exactMatch;
+  const showCreate = !selectionOnly && queryTrim.length > 0 && !exactMatch;
+  // En sélection seule, un nom inconnu ne crée rien : on propose d'aller à
+  // l'écran de gestion des comptes.
+  const showGoToCreate = selectionOnly && !!onRequestCreate && (queryTrim.length > 0 ? !exactMatch : accounts.length === 0);
 
   const selected = accounts.find(a => a.name === selectedAccountName);
 
@@ -248,10 +258,17 @@ export default function QuickAccountSelector({
     }
   };
 
-  const borderColor = T.border || "#E5E5E5";
+  const borderColor = T.border || "var(--color-border)";
 
   return (
     <div ref={containerRef} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
+      {/* Sur pointeur tactile (pas de hover) : boutons icône toujours visibles et
+          cible tactile ≥44px pour l'accessibilité. */}
+      <style>{`
+        @media (pointer: coarse) {
+          .tr4de-acct-iconbtn { opacity: 1 !important; width: 44px !important; height: 44px !important; }
+        }
+      `}</style>
       {/* Trigger — identique au mode mono ; en multi, affiche le 1er compte + badge "+N" */}
       {(() => {
         const primaryName = multi
@@ -266,9 +283,9 @@ export default function QuickAccountSelector({
             onClick={() => setOpen(v => !v)}
             style={{
               width: "100%", display: "flex", alignItems: "center", gap: 8,
-              padding: "8px 12px", border: `1px solid ${open ? "#D4D4D4" : borderColor}`,
-              borderRadius: 8, background: "#FFFFFF",
-              color: hasValue ? "#0D0D0D" : "#8E8E8E",
+              padding: "8px 12px", border: `1px solid ${open ? "var(--color-border-strong)" : borderColor}`,
+              borderRadius: "var(--radius-card)", background: "var(--color-card-bg, #FFFFFF)",
+              color: hasValue ? "var(--color-text)" : "var(--color-text-muted)",
               fontSize: 13, fontWeight: 500, cursor: "pointer",
               fontFamily: "inherit", textAlign: "left",
               transition: "border-color 120ms ease",
@@ -290,13 +307,13 @@ export default function QuickAccountSelector({
               <span style={{
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
                 minWidth: 20, height: 20, padding: "0 6px", borderRadius: 999,
-                background: "#0D0D0D", color: "#FFFFFF", fontSize: 11, fontWeight: 600,
+                background: "var(--color-text)", color: "var(--color-bg)", fontSize: 11, fontWeight: 600,
                 flexShrink: 0,
               }}>
                 +{extraCount}
               </span>
             )}
-            {open ? <ChevronUp size={14} color="#8E8E8E"/> : <ChevronDown size={14} color="#8E8E8E"/>}
+            {open ? <ChevronUp size={14} color="var(--color-text-muted)"/> : <ChevronDown size={14} color="var(--color-text-muted)"/>}
           </button>
         );
       })()}
@@ -307,27 +324,27 @@ export default function QuickAccountSelector({
           role="listbox"
           style={{
             position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-            background: "#FFFFFF", border: "1px solid #E5E5E5", borderRadius: 10,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.10)", zIndex: 100,
+            background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)", borderRadius: 10,
+            boxShadow: "var(--elev-overlay)", zIndex: 100,
             display: "flex", flexDirection: "column", overflow: "hidden",
           }}
         >
           {/* Search / Create input */}
-          <div style={{ padding: 8, borderBottom: "1px solid #F0F0F0", background: "#FAFAFA" }}>
+          <div style={{ padding: 8, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px" }}>
-              <Search size={13} color="#8E8E8E" />
+              <Search size={13} color="var(--color-text-muted)" />
               <input
                 type="text" autoFocus value={query}
                 onChange={(e)=>setQuery(e.target.value)}
                 onKeyDown={(e)=>{ if (e.key === "Enter" && showCreate) { e.preventDefault(); commitCreate(e); } }}
-                placeholder={t("accounts.searchPlaceholder")}
+                placeholder={selectionOnly ? t("accounts.searchOnlyPlaceholder") : t("accounts.searchPlaceholder")}
                 spellCheck={false}
                 autoComplete="off"
                 style={{
                   flex: 1, border: "none", background: "transparent",
                   outline: "none", boxShadow: "none",
                   fontSize: 13, padding: "6px 0",
-                  color: "#0D0D0D", fontFamily: "inherit",
+                  color: "var(--color-text)", fontFamily: "inherit",
                   WebkitAppearance: "none", appearance: "none",
                   WebkitTapHighlightColor: "transparent",
                 }}
@@ -346,10 +363,10 @@ export default function QuickAccountSelector({
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8,
                   padding: "8px 10px", border: "none", background: "transparent",
-                  color: "#0D0D0D", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                  color: "var(--color-text)", fontSize: 13, fontWeight: 500, cursor: "pointer",
                   fontFamily: "inherit", textAlign: "left", borderRadius: 6,
                 }}
-                onMouseEnter={(e)=>{e.currentTarget.style.background = "#F5F5F5"}}
+                onMouseEnter={(e)=>{e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"}}
                 onMouseLeave={(e)=>{e.currentTarget.style.background = "transparent"}}
               >
                 <Plus size={14} strokeWidth={2}/>
@@ -357,8 +374,26 @@ export default function QuickAccountSelector({
               </button>
             )}
 
-            {filtered.length === 0 && !showCreate && (
-              <div style={{ padding: "12px 14px", fontSize: 12, color: "#8E8E8E", textAlign: "center" }}>
+            {showGoToCreate && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); setQuery(""); onRequestCreate(); }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 10px", border: "none", background: "transparent",
+                  color: "var(--color-text)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                  fontFamily: "inherit", textAlign: "left", borderRadius: 6,
+                }}
+                onMouseEnter={(e)=>{e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"}}
+                onMouseLeave={(e)=>{e.currentTarget.style.background = "transparent"}}
+              >
+                <Plus size={14} strokeWidth={2}/>
+                <span>{t("accounts.goToCreate")}</span>
+              </button>
+            )}
+
+            {filtered.length === 0 && !showCreate && !showGoToCreate && (
+              <div style={{ padding: "12px 14px", fontSize: 12, color: "var(--color-text-muted)", textAlign: "center" }}>
                 {t("accounts.noAccount")}
               </div>
             )}
@@ -373,10 +408,10 @@ export default function QuickAccountSelector({
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "6px 10px", borderRadius: 6,
-                    background: isSelected ? "#F0F0F0" : "transparent",
+                    background: isSelected ? "var(--color-active-bg)" : "transparent",
                     transition: "background 100ms ease",
                   }}
-                  onMouseEnter={(e)=>{ if (!isSelected) e.currentTarget.style.background = "#F5F5F5"; e.currentTarget.querySelectorAll('[data-hover]').forEach(b => { b.style.opacity = 1; }); }}
+                  onMouseEnter={(e)=>{ if (!isSelected) e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"; e.currentTarget.querySelectorAll('[data-hover]').forEach(b => { b.style.opacity = 1; }); }}
                   onMouseLeave={(e)=>{ if (!isSelected) e.currentTarget.style.background = "transparent"; e.currentTarget.querySelectorAll('[data-hover]').forEach(b => { b.style.opacity = 0; }); }}
                 >
                   <button
@@ -403,7 +438,7 @@ export default function QuickAccountSelector({
                       flex: 1, display: "flex", alignItems: "center", gap: 8,
                       padding: 0, border: "none", background: "transparent",
                       cursor: isEditing ? "text" : "pointer",
-                      color: "#0D0D0D", fontSize: 13, fontWeight: isSelected ? 600 : 500,
+                      color: "var(--color-text)", fontSize: 13, fontWeight: isSelected ? 600 : 500,
                       fontFamily: "inherit", textAlign: "left", minWidth: 0,
                     }}
                   >
@@ -415,7 +450,7 @@ export default function QuickAccountSelector({
                         onClick={(e)=>e.stopPropagation()}
                         onBlur={()=>commitEdit(acc)}
                         onKeyDown={(e)=>{ if (e.key === "Enter") commitEdit(acc); if (e.key === "Escape") setEditingId(null); }}
-                        style={{ flex: 1, padding: "2px 6px", fontSize: 13, border: "1px solid #0D0D0D", borderRadius: 4, outline: "none", fontFamily: "inherit", color: "#0D0D0D", background: "#FFFFFF", minWidth: 0 }}
+                        style={{ flex: 1, padding: "2px 6px", fontSize: 13, border: "1px solid var(--color-text)", borderRadius: "var(--radius-field)", outline: "none", fontFamily: "inherit", color: "var(--color-text)", background: "var(--color-card-bg, #FFFFFF)", minWidth: 0 }}
                       />
                     ) : (
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -423,7 +458,7 @@ export default function QuickAccountSelector({
                       </span>
                     )}
                     {acc.broker && !isEditing && (
-                      <span style={{ color: "#8E8E8E", fontSize: 12, fontWeight: 400 }}>
+                      <span style={{ color: "var(--color-text-muted)", fontSize: 12, fontWeight: 400 }}>
                         ({String(acc.broker).charAt(0).toUpperCase() + String(acc.broker).slice(1)})
                       </span>
                     )}
@@ -432,72 +467,78 @@ export default function QuickAccountSelector({
                       icônes habituelles pour la ligne concernée. */}
                   {confirmingId === acc.id && !isEditing ? (
                     <>
-                      <span style={{ fontSize: 11, color: "#DC2626", fontWeight: 600, whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 11, color: "var(--color-red, #DC2626)", fontWeight: 600, whiteSpace: "nowrap" }}>
                         {t("accounts.deleteTip")} ?
                       </span>
                       <span
                         role="button"
                         title={t("accounts.confirmDelete")}
+                        aria-label={t("accounts.confirmDelete")}
                         onClick={(e)=>{ e.stopPropagation(); if (deletingId !== acc.id) deleteAccount(acc); }}
                         style={{
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          width: 22, height: 22, borderRadius: 4, cursor: "pointer",
-                          background: "#FEE2E2", color: "#DC2626",
+                          width: 28, height: 28, borderRadius: "var(--radius-field)", cursor: "pointer",
+                          background: "var(--color-red-bg, #FEE2E2)", color: "var(--color-red, #DC2626)",
                           opacity: deletingId === acc.id ? 0.5 : 1,
                         }}
                       >
-                        <Check size={13} strokeWidth={2.25}/>
+                        <Check size={14} strokeWidth={2.25}/>
                       </span>
                       <span
                         role="button"
                         title={t("accounts.cancelDelete")}
+                        aria-label={t("accounts.cancelDelete")}
                         onClick={(e)=>{ e.stopPropagation(); setConfirmingId(null); }}
                         style={{
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          width: 22, height: 22, borderRadius: 4, cursor: "pointer",
-                          background: "#F0F0F0", color: "#5C5C5C",
+                          width: 28, height: 28, borderRadius: "var(--radius-field)", cursor: "pointer",
+                          background: "var(--color-hover-bg, #F0F0F0)", color: "var(--color-text-sub)",
                         }}
                       >
-                        <X size={13} strokeWidth={2.25}/>
+                        <X size={14} strokeWidth={2.25}/>
                       </span>
                     </>
                   ) : (
                     <>
-                      {!isEditing && (
+                      {!isEditing && !selectionOnly && (
                         <span
                           data-hover
+                          className="tr4de-acct-iconbtn"
                           role="button"
                           title={t("accounts.rename")}
+                          aria-label={t("accounts.rename")}
                           onClick={(e)=>{ e.stopPropagation(); setEditingId(acc.id); setEditDraft(acc.name); }}
                           style={{
                             display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            width: 22, height: 22, borderRadius: 4, cursor: "pointer",
-                            color: "#8E8E8E", opacity: 0, transition: "opacity .15s ease, background .12s ease, color .12s ease",
+                            width: 28, height: 28, borderRadius: "var(--radius-field)", cursor: "pointer",
+                            color: "var(--color-text-muted)", opacity: 0, transition: "opacity .15s ease, background .12s ease, color .12s ease",
                           }}
-                          onMouseEnter={(e)=>{e.currentTarget.style.background = "#E5E5E5"; e.currentTarget.style.color = "#0D0D0D"}}
-                          onMouseLeave={(e)=>{e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8E8E8E"}}
+                          onMouseEnter={(e)=>{e.currentTarget.style.background = "var(--color-border)"; e.currentTarget.style.color = "var(--color-text)"}}
+                          onMouseLeave={(e)=>{e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--color-text-muted)"}}
                         >
-                          <Pencil size={12} strokeWidth={1.75}/>
+                          <Pencil size={14} strokeWidth={1.75}/>
                         </span>
                       )}
-                      {allowDelete && !isEditing && (
+                      {allowDelete && !isEditing && !selectionOnly && (
                         <span
                           data-hover
+                          className="tr4de-acct-iconbtn"
                           role="button"
                           title={t("accounts.deleteTip")}
+                          aria-label={t("accounts.deleteTip")}
                           onClick={(e)=>{ e.stopPropagation(); setConfirmingId(acc.id); }}
                           style={{
                             display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            width: 22, height: 22, borderRadius: 4, cursor: "pointer",
-                            color: "#8E8E8E", opacity: 0, transition: "opacity .15s ease, background .12s ease, color .12s ease",
+                            width: 28, height: 28, borderRadius: "var(--radius-field)", cursor: "pointer",
+                            color: "var(--color-text-muted)", opacity: 0, transition: "opacity .15s ease, background .12s ease, color .12s ease",
                           }}
-                          onMouseEnter={(e)=>{e.currentTarget.style.background = "#FEE2E2"; e.currentTarget.style.color = "#DC2626"}}
-                          onMouseLeave={(e)=>{e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8E8E8E"}}
+                          onMouseEnter={(e)=>{e.currentTarget.style.background = "var(--color-red-bg, #FEE2E2)"; e.currentTarget.style.color = "var(--color-red, #DC2626)"}}
+                          onMouseLeave={(e)=>{e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--color-text-muted)"}}
                         >
-                          <Trash2 size={12} strokeWidth={1.75}/>
+                          <Trash2 size={14} strokeWidth={1.75}/>
                         </span>
                       )}
-                      {isSelected && !isEditing && <Check size={14} color="#0D0D0D"/>}
+                      {isSelected && !isEditing && <Check size={14} color="var(--color-text)"/>}
                     </>
                   )}
                 </div>

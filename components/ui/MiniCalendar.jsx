@@ -15,7 +15,7 @@ const sameYMD = (a, b) =>
   a.getDate() === b.getDate();
 
 const navBtn = {
-  width: 24, height: 24, borderRadius: 7, border: "none", background: "transparent",
+  width: 24, height: 24, borderRadius: "var(--radius-field)", border: "none", background: "transparent",
   cursor: "pointer", color: T.textSub, fontSize: 16, fontWeight: 600, lineHeight: 1,
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   transition: "background .12s ease",
@@ -69,8 +69,8 @@ export default function MiniCalendar({ value, onSelect, onClose, align = "left" 
       ref={ref}
       style={{
         position: "absolute", top: "calc(100% + 6px)", [align]: 0, zIndex: 11000,
-        background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
-        padding: 12, width: 244, boxShadow: "0 8px 28px rgba(0,0,0,.18)",
+        background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
+        padding: 12, width: 244, boxShadow: "var(--elev-overlay)",
         fontFamily: "var(--font-sans)",
       }}
     >
@@ -101,7 +101,7 @@ export default function MiniCalendar({ value, onSelect, onClose, align = "left" 
               key={i}
               onClick={() => pick(d)}
               style={{
-                height: 28, borderRadius: 7, border: "none", cursor: "pointer",
+                height: 28, borderRadius: "var(--radius-field)", border: "none", cursor: "pointer",
                 fontSize: 12, fontWeight: isSel || isToday ? 600 : 500,
                 fontVariantNumeric: "tabular-nums",
                 background: isSel ? T.text : "transparent",

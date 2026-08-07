@@ -17,24 +17,21 @@ import {
   Loader2,
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-// Tokens charte OpenAI (alignes sur lib/design/tokens.ts)
+// Tokens partagés (dark-aware). Les clés locales absentes de BaseT sont mappées.
 const T = {
-  bg: "#FFFFFF",
-  panel: "#FAFAFA",
-  panelHover: "#F0F0F0",
-  border: "#E5E5E5",
-  borderHover: "#D4D4D4",
-  text: "#0D0D0D",
-  textSub: "#5C5C5C",
-  textMut: "#8E8E8E",
-  accent: "#0D0D0D",      // primaire = noir
-  accentSoft: "#F0F0F0",
-  green: "#16A34A",
-  red: "#EF4444",
-  warn: "#F97316",
-  info: "#A855F7",
+  ...BaseT,
+  panel: BaseT.accentBg,
+  panelHover: BaseT.border,
+  borderHover: BaseT.border2,
+  accentSoft: BaseT.accentBg,
+  warn: BaseT.amber,
+  info: BaseT.purple,
 };
+
+// Message générique affiché à l'utilisateur : on ne fuit pas les détails techniques.
+const GENERIC_ERROR = "Une erreur est survenue, réessaie.";
 
 interface AgentPanelProps {
   userId: string;
@@ -129,10 +126,10 @@ function TabsBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
 function primaryBtnStyle(disabled?: boolean): React.CSSProperties {
   return {
     padding: "8px 14px",
-    borderRadius: 8,
-    border: "1px solid #0D0D0D",
-    background: "#0D0D0D",
-    color: "#FFFFFF",
+    borderRadius: "var(--radius-card)",
+    border: `1px solid ${T.text}`,
+    background: T.text,
+    color: T.white,
     fontSize: 13,
     fontWeight: 600,
     cursor: disabled ? "not-allowed" : "pointer",
@@ -148,10 +145,10 @@ function primaryBtnStyle(disabled?: boolean): React.CSSProperties {
 function secondaryBtnStyle(disabled?: boolean): React.CSSProperties {
   return {
     padding: "8px 14px",
-    borderRadius: 8,
-    border: "1px solid #E5E5E5",
-    background: "#FFFFFF",
-    color: "#0D0D0D",
+    borderRadius: "var(--radius-card)",
+    border: `1px solid ${T.border}`,
+    background: T.white,
+    color: T.text,
     fontSize: 13,
     fontWeight: 500,
     cursor: disabled ? "not-allowed" : "pointer",
@@ -210,20 +207,20 @@ function ReportsPanel({ trades }: { trades: any[] }) {
         alignItems: "center",
         gap: 8,
         background:
-          status.kind === "error" ? "#FEF2F2" :
-          status.kind === "no_trades" ? "#FEF9C3" :
-          status.kind === "success" ? "#DCFCE7" :
-          "#E3ECFB",
+          status.kind === "error" ? T.redBg :
+          status.kind === "no_trades" ? T.amberBg :
+          status.kind === "success" ? T.greenBg :
+          T.blueBg,
         color:
-          status.kind === "error" ? "#991B1B" :
-          status.kind === "no_trades" ? "#854D0E" :
-          status.kind === "success" ? "#166534" :
-          T.accent,
+          status.kind === "error" ? T.red :
+          status.kind === "no_trades" ? T.amber :
+          status.kind === "success" ? T.green :
+          T.blue,
         border: `1px solid ${
-          status.kind === "error" ? "#FECACA" :
-          status.kind === "no_trades" ? "#FDE68A" :
-          status.kind === "success" ? "#BBF7D0" :
-          "#B8CCEB"
+          status.kind === "error" ? T.redBd :
+          status.kind === "no_trades" ? `color-mix(in srgb, ${T.amber} 45%, transparent)` :
+          status.kind === "success" ? T.greenBd :
+          `color-mix(in srgb, ${T.blue} 40%, transparent)`
         }`,
       }}
     >
@@ -251,7 +248,7 @@ function ReportsPanel({ trades }: { trades: any[] }) {
         {statusBanner}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>
-            {t("agent.reports.title")} {unreadCount > 0 && <span style={{ marginLeft: 6, padding: "2px 8px", borderRadius: 999, background: T.accent, color: "#fff", fontSize: 11 }}>{unreadCount}</span>}
+            {t("agent.reports.title")} {unreadCount > 0 && <span style={{ marginLeft: 6, padding: "2px 8px", borderRadius: 999, background: T.accent, color: T.white, fontSize: 11 }}>{unreadCount}</span>}
           </div>
         </div>
 
@@ -265,7 +262,7 @@ function ReportsPanel({ trades }: { trades: any[] }) {
                 borderRadius: 999,
                 border: `1px solid ${filter === f ? T.accent : T.border}`,
                 background: filter === f ? T.accent : "transparent",
-                color: filter === f ? "#fff" : T.textSub,
+                color: filter === f ? T.white : T.textSub,
                 fontSize: 11,
                 fontWeight: 500,
                 cursor: "pointer",
@@ -283,7 +280,7 @@ function ReportsPanel({ trades }: { trades: any[] }) {
             disabled={generating}
             style={{ ...secondaryBtnStyle(generating), justifyContent: "flex-start", width: "100%" }}
             onMouseEnter={e => { if (!generating) e.currentTarget.style.background = T.panelHover; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "#FFFFFF"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = T.white; }}
           >
             <Plus size={14} strokeWidth={2} />
             {generating ? t("agent.reports.generating") : t("agent.reports.dailyReport")}
@@ -293,7 +290,7 @@ function ReportsPanel({ trades }: { trades: any[] }) {
             disabled={generating}
             style={{ ...secondaryBtnStyle(generating), justifyContent: "flex-start", width: "100%" }}
             onMouseEnter={e => { if (!generating) e.currentTarget.style.background = T.panelHover; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "#FFFFFF"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = T.white; }}
           >
             <Plus size={14} strokeWidth={2} />
             {generating ? t("agent.reports.generating") : t("agent.reports.weeklyReport")}
@@ -339,7 +336,7 @@ function ReportCard({ report, selected, onClick }: { report: AIReport; selected:
         padding: 12,
         borderRadius: 10,
         border: `1px solid ${selected ? T.accent : T.border}`,
-        background: selected ? "#EEF4FF" : T.bg,
+        background: selected ? T.blueBg : T.bg,
         cursor: "pointer",
         fontFamily: "inherit",
         position: "relative",
@@ -348,7 +345,7 @@ function ReportCard({ report, selected, onClick }: { report: AIReport; selected:
       onMouseLeave={(e) => { if (!selected) e.currentTarget.style.borderColor = T.border; }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <span style={{ padding: "2px 8px", borderRadius: 999, background: report.report_type === "daily" ? "#E3ECFB" : "#F5EAE0", color: report.report_type === "daily" ? T.accent : "#9D8555", fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>
+        <span style={{ padding: "2px 8px", borderRadius: 999, background: report.report_type === "daily" ? T.blueBg : T.amberBg, color: report.report_type === "daily" ? T.blue : T.amber, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>
           {report.report_type === "daily" ? t("agent.reports.daily") : t("agent.reports.weekly")}
         </span>
         {!report.is_read && <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.accent }} />}
@@ -385,7 +382,7 @@ function ReportDetail({ report }: { report: AIReport }) {
         </div>
       )}
 
-      <div style={{ padding: 20, borderRadius: 12, border: `1px solid ${T.border}`, background: T.panel, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.6, color: T.text }}>
+      <div style={{ padding: 20, borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.panel, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.6, color: T.text }}>
         {report.content}
       </div>
     </div>
@@ -422,8 +419,9 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
       const res = await fetch("/api/ai/patterns", { credentials: "include" });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
+        console.error("[patterns] load failed:", res.status, text);
         setPatterns([]);
-        return { list: [], ok: false, errMsg: `Erreur ${res.status}: ${text.slice(0, 200) || "impossible de charger (migrations appliquees ?)"}` };
+        return { list: [], ok: false, errMsg: GENERIC_ERROR };
       }
       const data = await res.json();
       const list = data.patterns || [];
@@ -431,7 +429,7 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
       return { list, ok: true };
     } catch (e: any) {
       console.error(e);
-      return { list: [], ok: false, errMsg: e?.message || "Erreur reseau" };
+      return { list: [], ok: false, errMsg: GENERIC_ERROR };
     } finally {
       setLoading(false);
     }
@@ -452,8 +450,8 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
       try { data = raw ? JSON.parse(raw) : {}; } catch { data = {}; }
 
       if (!res.ok) {
-        const hint = res.status === 500 ? " (verifie que les migrations 007-009 sont appliquees)" : "";
-        setStatus({ kind: "error", message: `Erreur ${res.status}: ${data?.error || "serveur"}${hint}` });
+        console.error("[patterns] analyze failed:", res.status, data);
+        setStatus({ kind: "error", message: GENERIC_ERROR });
         return;
       }
 
@@ -465,7 +463,7 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
       }
     } catch (e: any) {
       console.error(e);
-      setStatus({ kind: "error", message: `Erreur reseau: ${e?.message || "inconnue"}` });
+      setStatus({ kind: "error", message: GENERIC_ERROR });
     } finally {
       setAnalyzing(false);
     }
@@ -493,7 +491,7 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
     }
   }, [status]);
 
-  const typeMeta = (t: string): { label: string; Icon: any } => {
+  const typeMeta = (type: string): { label: string; Icon: any } => {
     const map: Record<string, { label: string; Icon: any }> = {
       revenge_trading: { label: t("agent.pattern.revenge_trading"), Icon: AlertTriangle },
       overtrading: { label: t("agent.pattern.overtrading"), Icon: AlertTriangle },
@@ -504,7 +502,7 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
       worst_hour: { label: t("agent.pattern.worst_hour"), Icon: AlertTriangle },
       emotion_impact: { label: t("agent.pattern.emotion_impact"), Icon: Brain },
     };
-    return map[t] || { label: t, Icon: Info };
+    return map[type] || { label: type, Icon: Info };
   };
 
   return (
@@ -524,14 +522,14 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
             onClick={runAnalyze}
             disabled={analyzing}
             style={{
-              padding: "8px 14px", borderRadius: 8, border: "1px solid #E5E5E5",
-              background: "#FFFFFF", color: T.text, fontSize: 13, fontWeight: 500,
+              padding: "8px 14px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`,
+              background: T.white, color: T.text, fontSize: 13, fontWeight: 500,
               cursor: analyzing ? "not-allowed" : "pointer", fontFamily: "inherit",
               opacity: analyzing ? 0.6 : 1, transition: "background 120ms ease",
               display: "inline-flex", alignItems: "center", gap: 6,
             }}
-            onMouseEnter={e => { if (!analyzing) e.currentTarget.style.background = "#FAFAFA"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "#FFFFFF"; }}
+            onMouseEnter={e => { if (!analyzing) e.currentTarget.style.background = T.panel; }}
+            onMouseLeave={e => { e.currentTarget.style.background = T.white; }}
           >
             {analyzing && <Loader2 size={13} strokeWidth={2} style={{ animation: "spin 1s linear infinite" }} />}
             {analyzing ? t("agent.insights.analyzing") : t("agent.insights.analyze")}
@@ -542,12 +540,12 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
         {status.kind !== "idle" && (
           <div
             style={{
-              padding: "8px 12px", marginBottom: 16, borderRadius: 8,
+              padding: "8px 12px", marginBottom: 16, borderRadius: "var(--radius-card)",
               fontSize: 12, fontWeight: 500,
               display: "flex", alignItems: "center", gap: 8,
-              background: status.kind === "error" ? "#FEF2F2" : status.kind === "no_trades" ? "#FFF8E6" : "#F0FAF6",
-              color: status.kind === "error" ? "#991B1B" : status.kind === "no_trades" ? "#854D0E" : "#166534",
-              border: `1px solid ${status.kind === "error" ? "#FECACA" : status.kind === "no_trades" ? "#FCD79B" : "#86EFAC"}`,
+              background: status.kind === "error" ? T.redBg : status.kind === "no_trades" ? T.amberBg : T.greenBg,
+              color: status.kind === "error" ? T.red : status.kind === "no_trades" ? T.amber : T.green,
+              border: `1px solid ${status.kind === "error" ? T.redBd : status.kind === "no_trades" ? `color-mix(in srgb, ${T.amber} 45%, transparent)` : T.greenBd}`,
             }}
           >
             <span style={{ display: "inline-flex", alignItems: "center" }}>
@@ -568,10 +566,10 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
           <div style={{ padding: "48px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 14 }}>
             <div style={{
               width: 44, height: 44, borderRadius: "50%",
-              background: "#F5F5F5",
+              background: T.accentBg,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <Brain size={20} strokeWidth={1.5} color="#5C5C5C" />
+              <Brain size={20} strokeWidth={1.5} color={T.textSub} />
             </div>
             <div style={{ fontSize: 13, color: T.textSub, maxWidth: 320, lineHeight: 1.4 }}>
               {t("agent.insights.empty")}
@@ -586,17 +584,17 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
               const isPositive = p.avg_pnl_impact != null && p.avg_pnl_impact > 0;
               const isNegative = p.avg_pnl_impact != null && p.avg_pnl_impact < 0;
               const iconColor = isNegative ? T.red : isPositive ? T.green : T.textSub;
-              const iconBg = isNegative ? "#FEF2F2" : isPositive ? "#F0FDF4" : "#F5F5F5";
+              const iconBg = isNegative ? T.redBg : isPositive ? T.greenBg : T.accentBg;
               return (
                 <div
                   key={p.id}
                   style={{
                     padding: 14, borderRadius: 10,
-                    border: `1px solid ${T.border}`, background: "#FFFFFF",
+                    border: `1px solid ${T.border}`, background: T.white,
                     display: "flex", gap: 12, alignItems: "flex-start",
                     transition: "border-color 120ms ease, box-shadow 120ms ease",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#D4D4D4"; }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHover; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; }}
                 >
                   {/* Icone ronde */}
@@ -614,7 +612,7 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
                     <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginBottom: 3 }}>
                       {meta.label}
                     </div>
-                    <div style={{ fontSize: 13, color: T.text, fontWeight: 500, marginBottom: 6, lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 13, color: T.text, fontWeight: 400, marginBottom: 6, lineHeight: 1.4 }}>
                       {p.pattern_data?.detail || p.pattern_data?.description || "—"}
                     </div>
                     <div style={{ display: "flex", gap: 10, fontSize: 11, color: T.textMut, alignItems: "center" }}>
@@ -664,7 +662,8 @@ function ProfilePanel() {
       const res = await fetch("/api/ai/memory", { credentials: "include" });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        setStatus({ kind: "error", message: `Erreur ${res.status}: ${text.slice(0, 200) || "migrations 010 appliquee ?"}` });
+        console.error("[memory] load failed:", res.status, text);
+        setStatus({ kind: "error", message: GENERIC_ERROR });
         return;
       }
       const data = await res.json();
@@ -672,7 +671,8 @@ function ProfilePanel() {
       setMemory(m);
       setDraft(m);
     } catch (e: any) {
-      setStatus({ kind: "error", message: e?.message || "Erreur reseau" });
+      console.error(e);
+      setStatus({ kind: "error", message: GENERIC_ERROR });
     } finally {
       setLoading(false);
     }
@@ -699,7 +699,8 @@ function ProfilePanel() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setStatus({ kind: "error", message: `Erreur ${res.status}: ${data?.error || "serveur"}` });
+        console.error("[memory] update failed:", res.status, data);
+        setStatus({ kind: "error", message: GENERIC_ERROR });
         return;
       }
       if (data.error === "no_conversations" || data.error === "no_messages") {
@@ -711,7 +712,8 @@ function ProfilePanel() {
       setDraft(m);
       setStatus({ kind: "success", message: `Profil mis a jour (${data.processed_messages || 0} messages analyses)` });
     } catch (e: any) {
-      setStatus({ kind: "error", message: e?.message || "Erreur reseau" });
+      console.error(e);
+      setStatus({ kind: "error", message: GENERIC_ERROR });
     } finally {
       setUpdating(false);
     }
@@ -736,7 +738,8 @@ function ProfilePanel() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setStatus({ kind: "error", message: `Erreur ${res.status}: ${data?.error || "serveur"}` });
+        console.error("[memory] save failed:", res.status, data);
+        setStatus({ kind: "error", message: GENERIC_ERROR });
         return;
       }
       const m = normalizeMemory(data.memory);
@@ -745,7 +748,8 @@ function ProfilePanel() {
       setEditing(false);
       setStatus({ kind: "success", message: "Profil enregistre" });
     } catch (e: any) {
-      setStatus({ kind: "error", message: e?.message || "Erreur reseau" });
+      console.error(e);
+      setStatus({ kind: "error", message: GENERIC_ERROR });
     } finally {
       setSaving(false);
     }
@@ -790,8 +794,8 @@ function ProfilePanel() {
                   onClick={runUpdate}
                   disabled={updating}
                   style={primaryBtnStyle(updating)}
-                  onMouseEnter={e => { if (!updating) e.currentTarget.style.background = "#262626"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "#0D0D0D"; }}
+                  onMouseEnter={e => { if (!updating) e.currentTarget.style.background = T.textSub; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = T.text; }}
                 >
                   {updating ? t("agent.profile.updating") : t("agent.profile.update")}
                 </button>
@@ -799,7 +803,7 @@ function ProfilePanel() {
                   onClick={() => setEditing(true)}
                   style={secondaryBtnStyle()}
                   onMouseEnter={e => { e.currentTarget.style.background = T.panelHover; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "#FFFFFF"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = T.white; }}
                 >
                   {t("agent.profile.edit")}
                 </button>
@@ -810,8 +814,8 @@ function ProfilePanel() {
                   onClick={save}
                   disabled={saving}
                   style={primaryBtnStyle(saving)}
-                  onMouseEnter={e => { if (!saving) e.currentTarget.style.background = "#262626"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "#0D0D0D"; }}
+                  onMouseEnter={e => { if (!saving) e.currentTarget.style.background = T.textSub; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = T.text; }}
                 >
                   {saving ? t("agent.profile.saving") : t("agent.profile.save")}
                 </button>
@@ -819,7 +823,7 @@ function ProfilePanel() {
                   onClick={() => { setDraft(memory); setEditing(false); }}
                   style={secondaryBtnStyle()}
                   onMouseEnter={e => { e.currentTarget.style.background = T.panelHover; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "#FFFFFF"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = T.white; }}
                 >
                   {t("agent.profile.cancel")}
                 </button>
@@ -836,9 +840,9 @@ function ProfilePanel() {
 
         {status.kind !== "idle" && (
           <div style={{ padding: "10px 14px", marginBottom: 16, borderRadius: 10, fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 8,
-            background: status.kind === "error" ? "#FEF2F2" : status.kind === "info" ? "#E3ECFB" : "#DCFCE7",
-            color: status.kind === "error" ? "#991B1B" : status.kind === "info" ? T.accent : "#166534",
-            border: `1px solid ${status.kind === "error" ? "#FECACA" : status.kind === "info" ? "#B8CCEB" : "#BBF7D0"}` }}>
+            background: status.kind === "error" ? T.redBg : status.kind === "info" ? T.blueBg : T.greenBg,
+            color: status.kind === "error" ? T.red : status.kind === "info" ? T.blue : T.green,
+            border: `1px solid ${status.kind === "error" ? T.redBd : status.kind === "info" ? `color-mix(in srgb, ${T.blue} 40%, transparent)` : T.greenBd}` }}>
             <span style={{ display: "inline-flex", alignItems: "center" }}>
               {status.kind === "error" ? <AlertTriangle size={14} strokeWidth={2} /> :
                status.kind === "info" ? <Loader2 size={14} strokeWidth={2} style={{ animation: "spin 1s linear infinite" }} /> :
@@ -906,7 +910,7 @@ function ProfilePanel() {
           <button
             onClick={reset}
             disabled={saving}
-            style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${T.red}`, background: "transparent", color: T.red, fontSize: 11, fontWeight: 500, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}
+            style={{ padding: "6px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.red}`, background: "transparent", color: T.red, fontSize: 11, fontWeight: 500, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}
           >
             {t("agent.profile.reset")}
           </button>
@@ -928,7 +932,7 @@ function Field({
   helper?: string;
 }) {
   return (
-    <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16 }}>
+    <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 16 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: T.text, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
         {helper && <div style={{ fontSize: 10, color: T.textMut }}>{helper}</div>}
@@ -941,7 +945,7 @@ function Field({
             value={value as string}
             onChange={e => onChange(e.target.value)}
             placeholder={placeholder}
-            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, fontSize: 14, color: T.text, fontFamily: "inherit", outline: "none" }}
+            style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.bg, fontSize: 14, color: T.text, fontFamily: "inherit", outline: "none" }}
           />
         ) : (
           <div style={{ fontSize: 14, color: value ? T.text : T.textMut, lineHeight: 1.5 }}>
@@ -957,7 +961,7 @@ function Field({
             onChange={e => onChange(e.target.value)}
             placeholder={placeholder}
             rows={4}
-            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, fontSize: 14, color: T.text, fontFamily: "inherit", outline: "none", resize: "vertical" }}
+            style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.bg, fontSize: 14, color: T.text, fontFamily: "inherit", outline: "none", resize: "vertical" }}
           />
         ) : (
           <div style={{ fontSize: 14, color: value ? T.text : T.textMut, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
@@ -1035,7 +1039,7 @@ function ListEditor({ items, editing, onChange, placeholder }: { items: string[]
         />
         <button
           onClick={add}
-          style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${T.accent}`, background: T.accent, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${T.accent}`, background: T.accent, color: T.white, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
         >
           {t("agent.profile.addBtn")}
         </button>

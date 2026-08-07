@@ -26,7 +26,6 @@ const DEFAULT_COMMANDS: Command[] = [
   { id: "nav.strategies",    group: "Navigation", label: "Voir les stratégies",        shortcut: "Alt+5", run: c => c.setPage("strategies") },
   { id: "nav.journal",       group: "Navigation", label: "Ouvrir le journal",          shortcut: "Alt+6", keywords: ["notes"], run: c => c.setPage("journal") },
   { id: "nav.discipline",    group: "Navigation", label: "Discipline",                                        run: c => c.setPage("discipline") },
-  { id: "nav.agent",         group: "Navigation", label: "Agent IA",                   keywords: ["coach"], run: c => c.setPage("agent") },
   { id: "nav.daily-planner", group: "Navigation", label: "Planning du jour",           keywords: ["habitudes", "tâches"], run: c => c.setPage("daily-planner") },
   { id: "nav.goals",         group: "Navigation", label: "Objectifs",                  keywords: ["goals"], run: c => c.setPage("goals") },
   { id: "nav.focus",         group: "Navigation", label: "Minuteur Focus",             keywords: ["pomodoro", "focus", "timer"], run: c => c.setPage("focus") },
@@ -69,6 +68,18 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // Élément déclencheur : on lui rend le focus à la fermeture.
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  // Détection plateforme : ⌘/⌥ sur Mac, Ctrl/Alt ailleurs.
+  const isMac = useMemo(
+    () => typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent),
+    []
+  );
+  const fmtShortcut = (s: string) =>
+    isMac ? s.replace(/Alt\+/g, "⌥").replace(/Ctrl\+/g, "⌘") : s;
+  const openHint = isMac ? "⌘K" : "Ctrl+K";
 
   // Open on Cmd/Ctrl+K
   useKeyboardShortcuts([
@@ -81,10 +92,16 @@ export default function CommandPalette() {
   // Reset state on open/close
   useEffect(() => {
     if (open) {
+      // Mémorise le déclencheur pour restaurer son focus à la fermeture.
+      triggerRef.current = (document.activeElement as HTMLElement) ?? null;
       setQuery("");
       setActive(0);
       // focus input on next paint
       setTimeout(() => inputRef.current?.focus(), 0);
+    } else {
+      // Restaure le focus sur l'élément déclencheur.
+      triggerRef.current?.focus?.();
+      triggerRef.current = null;
     }
   }, [open]);
 
@@ -93,7 +110,34 @@ export default function CommandPalette() {
     if (active >= filtered.length) setActive(0);
   }, [filtered.length, active]);
 
+  // Défile l'option active dans la vue à chaque changement (↑/↓).
+  useEffect(() => {
+    if (!open) return;
+    const el = document.getElementById(`cmdpalette-opt-${active}`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [active, open]);
+
   if (!open) return null;
+
+  const activeOptionId = filtered.length > 0 ? `cmdpalette-opt-${active}` : undefined;
+
+  // Piège le focus (Tab) à l'intérieur du dialog.
+  const onPanelKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const focusables = panelRef.current?.querySelectorAll<HTMLElement>(
+      'button, input, [href], [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusables || focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
@@ -136,20 +180,23 @@ export default function CommandPalette() {
       }}
     >
       <div
+        ref={panelRef}
+        className="anim-modal"
         onClick={e => e.stopPropagation()}
+        onKeyDown={onPanelKeyDown}
         style={{
           width: "min(640px, 92vw)",
           background: "var(--color-bg, #FFFFFF)",
           color: "var(--color-text, #0D0D0D)",
-          borderRadius: 12,
-          boxShadow: "0 24px 60px rgba(0,0,0,0.30)",
+          borderRadius: "var(--radius-card)",
+          boxShadow: "var(--elev-overlay)",
           overflow: "hidden",
           fontFamily: "var(--font-sans)",
         }}
       >
         {/* Search input */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--color-border, #E5E5E5)" }}>
-          <Search size={16} strokeWidth={1.75} color="#8E8E8E" />
+          <Search size={16} strokeWidth={1.75} color="var(--color-text-muted, #8E8E8E)" />
           <input
             ref={inputRef}
             value={query}
@@ -157,6 +204,10 @@ export default function CommandPalette() {
             onKeyDown={onKeyDown}
             placeholder="Tape pour chercher une page ou une action…"
             aria-label="Recherche"
+            role="combobox"
+            aria-expanded={true}
+            aria-controls="cmdpalette-listbox"
+            aria-activedescendant={activeOptionId}
             style={{
               flex: 1, border: "none", outline: "none",
               fontSize: 15, fontFamily: "inherit", color: "inherit",
@@ -167,15 +218,15 @@ export default function CommandPalette() {
         </div>
 
         {/* Results */}
-        <div role="listbox" style={{ maxHeight: "60vh", overflowY: "auto", padding: 4 }}>
+        <div id="cmdpalette-listbox" role="listbox" style={{ maxHeight: "60vh", overflowY: "auto", padding: 4 }}>
           {filtered.length === 0 && (
-            <div style={{ padding: "24px 16px", textAlign: "center", color: "#8E8E8E", fontSize: 13 }}>
+            <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--color-text-muted, #8E8E8E)", fontSize: 13 }}>
               Aucune commande trouvée
             </div>
           )}
           {Object.entries(groups).map(([group, cmds]) => (
             <div key={group} style={{ marginBottom: 4 }}>
-              <div style={{ padding: "10px 12px 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "#8E8E8E" }}>
+              <div style={{ padding: "10px 12px 4px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--color-text-muted, #8E8E8E)" }}>
                 {group}
               </div>
               {cmds.map(cmd => {
@@ -184,6 +235,7 @@ export default function CommandPalette() {
                 return (
                   <button
                     key={cmd.id}
+                    id={`cmdpalette-opt-${idx}`}
                     role="option"
                     aria-selected={isActive}
                     onMouseEnter={() => setActive(idx)}
@@ -191,15 +243,15 @@ export default function CommandPalette() {
                     style={{
                       display: "flex", alignItems: "center", gap: 10,
                       width: "100%", padding: "10px 12px",
-                      borderRadius: 8, border: "none",
+                      borderRadius: "var(--radius-card)", border: "none",
                       background: isActive ? "var(--color-hover-bg, #F0F0F0)" : "transparent",
                       cursor: "pointer", textAlign: "left",
                       color: "inherit", fontFamily: "inherit", fontSize: 13, fontWeight: 500,
                     }}
                   >
-                    <ArrowRight size={14} strokeWidth={1.75} color={isActive ? undefined : "#8E8E8E"} />
+                    <ArrowRight size={14} strokeWidth={1.75} color={isActive ? undefined : "var(--color-text-muted, #8E8E8E)"} />
                     <span style={{ flex: 1 }}>{cmd.label}</span>
-                    {cmd.shortcut && <kbd style={kbdStyle()}>{cmd.shortcut}</kbd>}
+                    {cmd.shortcut && <kbd style={kbdStyle()}>{fmtShortcut(cmd.shortcut)}</kbd>}
                   </button>
                 );
               })}
@@ -211,7 +263,7 @@ export default function CommandPalette() {
         <div style={{
           display: "flex", gap: 14, alignItems: "center",
           padding: "8px 14px", borderTop: "1px solid var(--color-border, #E5E5E5)",
-          fontSize: 11, color: "#8E8E8E",
+          fontSize: 11, color: "var(--color-text-muted, #8E8E8E)",
         }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <ChevronUp size={12} /><ChevronDown size={12} /> naviguer
@@ -219,7 +271,7 @@ export default function CommandPalette() {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <CornerDownLeft size={12} /> sélectionner
           </span>
-          <span style={{ marginLeft: "auto" }}>⌘K pour rouvrir</span>
+          <span style={{ marginLeft: "auto" }}>{openHint} pour rouvrir</span>
         </div>
       </div>
     </div>
@@ -229,7 +281,7 @@ export default function CommandPalette() {
 function kbdStyle(): React.CSSProperties {
   return {
     fontSize: 10, fontWeight: 600,
-    padding: "2px 6px", borderRadius: 4,
+    padding: "2px 6px", borderRadius: "var(--radius-field)",
     background: "var(--color-bg-subtle, #F5F5F5)",
     border: "1px solid var(--color-border, #E5E5E5)",
     color: "var(--color-text-sub, #5C5C5C)",

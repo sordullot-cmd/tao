@@ -13,13 +13,25 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { useUndo } from "@/lib/contexts/UndoContext";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5", border2: "#D4D4D4",
-  text: "#0D0D0D", textSub: "#5C5C5C", textMut: "#8E8E8E",
-  accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", red: "#EF4444", blue: "#3B82F6", amber: "#F59E0B",
-};
+// Palette centralisée (valeurs = var(--color-*), dark-aware). Toutes les clés
+// utilisées ici (white, border, border2, text, textSub, textMut, accent,
+// accentBg, green/red/blue/amber + variantes Bg/Bd) existent déjà dans BaseT :
+// aucun token local à ajouter.
+const T = { ...BaseT };
+
+// Notification non bloquante via le toast global (AlertToast écoute
+// l'événement "tr4de:alert"). Remplace les alert() natifs, indisponibles dans
+// la webview Tauri (où ils sont neutralisés → les fonctions restaient muettes).
+function notify(title, body, severity = "danger") {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new CustomEvent("tr4de:alert", {
+      detail: { title, body: String(body ?? ""), severity },
+    }));
+  } catch {}
+}
 
 // Extrait un message lisible depuis un PostgrestError / objet Supabase.
 // PostgrestError (postgrest-js v2 ESM) expose ses champs via des getters sur le
@@ -460,15 +472,12 @@ export default function DrivePage() {
               style={{ padding: "7px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <ArrowLeft size={14} strokeWidth={1.75} /> Projets
             </button>
-            <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>
+            <h1 className="t-h2" style={{ color: T.text, margin: 0 }}>
               {selectedProject.name}
             </h1>
           </>
         ) : (
           <>
-            <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>
-              Drive
-            </h1>
             <span style={{ fontSize: 12, color: T.textMut }}>
               {projects.length} projet{projects.length !== 1 ? "s" : ""}
             </span>
@@ -491,8 +500,9 @@ export default function DrivePage() {
                 <button
                   onClick={() => deleteProject(selectedProject.id)}
                   title="Supprimer le projet"
+                  aria-label="Supprimer le projet"
                   style={{ width: 34, height: 34, background: T.white, border: `1px solid ${T.border}`, color: T.textMut, cursor: "pointer", borderRadius: 999, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = "#FECACA"; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.redBd; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = T.white; e.currentTarget.style.color = T.textMut; e.currentTarget.style.borderColor = T.border; }}
                 >
                   <Trash2 size={14} strokeWidth={1.75} />
@@ -511,13 +521,13 @@ export default function DrivePage() {
       </div>
 
       {error && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, background: "#FEF2F2", color: T.red, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: T.redBg, color: T.red, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <span>{error}</span>
-          <button onClick={() => setError(null)} style={{ background: "transparent", border: "none", color: T.red, cursor: "pointer" }}><X size={14} /></button>
+          <button onClick={() => setError(null)} aria-label="Fermer l'erreur" title="Fermer" style={{ background: "transparent", border: "none", color: T.red, cursor: "pointer" }}><X size={14} /></button>
         </div>
       )}
 
-      <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, display: "flex", flexDirection: "column", minHeight: 0, flex: 1, overflow: "hidden" }}>
+      <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", display: "flex", flexDirection: "column", minHeight: 0, flex: 1, overflow: "hidden" }}>
         {selectedProject ? (
           <ProjectDetail
             key={selectedProject.id}
@@ -598,11 +608,14 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirmer", cancelLabel
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 380, background: T.white,
           border: `1px solid ${T.border}`, borderRadius: 14,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.25)", padding: 20,
+          boxShadow: "var(--elev-overlay)", padding: 20,
           fontFamily: "inherit",
         }}
       >
@@ -621,6 +634,100 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirmer", cancelLabel
             autoFocus
             onClick={onConfirm}
             style={{ padding: "8px 16px", height: 36, borderRadius: 999, background: danger ? T.red : T.text, border: `1px solid ${danger ? T.red : T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* â”€â”€â”€ Dialogue de saisie in-app (remplace window.prompt, KO sous Tauri) â”€â”€â”€â”€ */
+function PromptDialog({
+  title, label, defaultValue = "", placeholder = "",
+  confirmLabel = "OK", cancelLabel = "Annuler", onSubmit, onCancel,
+}) {
+  const [value, setValue] = useState(defaultValue);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    // Sélectionne le contenu par défaut pour une saisie rapide.
+    const el = inputRef.current;
+    if (el) { el.focus(); el.select?.(); }
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      onCancel?.();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onCancel]);
+
+  const submit = () => onSubmit?.(value);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, zIndex: 3000,
+        background: "rgba(13,13,13,0.32)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 16,
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 400, background: T.white,
+          border: `1px solid ${T.border}`, borderRadius: 14,
+          boxShadow: "var(--elev-overlay)", padding: 20,
+          fontFamily: "inherit",
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>{title}</div>
+        {label && (
+          <label style={{ display: "block", fontSize: 11, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
+            {label}
+          </label>
+        )}
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") { e.preventDefault(); submit(); }
+          }}
+          placeholder={placeholder}
+          style={{
+            width: "100%", boxSizing: "border-box", padding: "9px 11px",
+            border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 13,
+            outline: "none", fontFamily: "inherit", color: T.text, background: T.white,
+            marginBottom: 18,
+          }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{ padding: "8px 16px", height: 36, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            style={{ padding: "8px 16px", height: 36, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
           >
             {confirmLabel}
           </button>
@@ -933,9 +1040,9 @@ function ProjectsCanvas({
         onPointerDown={onCanvasPointerDown}
         style={{
           flex: 1, position: "relative", overflow: "auto",
-          background: `radial-gradient(circle, ${T.border2}55 1px, transparent 1px)`,
+          background: `radial-gradient(circle, color-mix(in srgb, ${T.border2} 33%, transparent) 1px, transparent 1px)`,
           backgroundSize: "20px 20px",
-          backgroundColor: "#FAFAFA",
+          backgroundColor: "var(--color-hover-bg, #F0F0F0)",
           cursor: "grab",
         }}
       >
@@ -949,7 +1056,11 @@ function ProjectsCanvas({
           transform: `scale(${zoom})`, transformOrigin: "0 0",
         }}>
           {loading && (
-            <div style={{ position: "absolute", top: ORIGIN_Y - 60, left: ORIGIN_X - 100, fontSize: 12, color: T.textSub }}>Chargementâ€¦</div>
+            <div role="status" aria-label="Chargement des projets" style={{ position: "absolute", top: ORIGIN_Y - 80, left: ORIGIN_X - 130, display: "flex", gap: 16 }}>
+              {[0, 1].map((i) => (
+                <div key={i} className="anim-shimmer" style={{ width: 240, height: 140, borderRadius: "var(--radius-card)" }} />
+              ))}
+            </div>
           )}
           {!loading && projects.length === 0 && !creating && (
             <div style={{ position: "absolute", top: ORIGIN_Y - 40, left: ORIGIN_X - 200, width: 400, textAlign: "center", color: T.textSub, fontSize: 13, pointerEvents: "none" }}>
@@ -1002,7 +1113,7 @@ function ProjectsCanvas({
                 background: T.white, border: `2px dashed ${T.text}`,
                 borderRadius: 10, padding: 12,
                 display: "flex", flexDirection: "column", gap: 8,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                boxShadow: "var(--elev-hover)",
               }}
               onPointerDown={(e) => e.stopPropagation()}
             >
@@ -1095,7 +1206,7 @@ function ProjectContextMenu({ cardRect, project, isOwner, onClose, onOpen, onRen
         textAlign: "left",
         opacity: disabled ? 0.5 : 1,
       }}
-      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = danger ? "#FEF2F2" : T.accentBg; }}
+      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = danger ? T.redBg : T.accentBg; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
       <span style={{ display: "inline-flex", width: 14, justifyContent: "center", color: "inherit" }}>{icon}</span>
@@ -1112,7 +1223,7 @@ function ProjectContextMenu({ cardRect, project, isOwner, onClose, onOpen, onRen
       style={{
         position: "fixed", left, top, width: W,
         background: T.white, border: `1px solid ${T.border}`,
-        borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.15)",
+        borderRadius: 10, boxShadow: "var(--elev-overlay)",
         padding: 4, zIndex: 2000,
         fontFamily: "inherit",
       }}
@@ -1236,8 +1347,8 @@ function ProjectCard({
         left: px, top: py, width: pw, height: ph,
         background: project.color || T.white,
         border: `${isSelected ? 2 : 1}px solid ${isSelected ? T.text : (locked ? T.amber : T.border)}`,
-        boxShadow: isSelected ? "0 8px 24px rgba(0,0,0,0.18)" : "0 2px 8px rgba(0,0,0,0.06)",
-        borderRadius: 12,
+        boxShadow: isSelected ? "var(--elev-hover)" : "var(--elev-rest)",
+        borderRadius: "var(--radius-card)",
         cursor: locked ? "pointer" : "grab",
         display: "flex", flexDirection: "column",
         overflow: "hidden",
@@ -1265,7 +1376,7 @@ function ProjectCard({
               onBlur={() => onSubmitRename?.(draftName)}
               style={{
                 flex: 1, padding: "3px 6px", border: `1px solid ${T.text}`,
-                borderRadius: 4, fontSize: 13, fontWeight: 600,
+                borderRadius: "var(--radius-field)", fontSize: 13, fontWeight: 600,
                 outline: "none", fontFamily: "inherit", color: T.text, background: T.white, minWidth: 0,
               }}
             />
@@ -1275,13 +1386,13 @@ function ProjectCard({
             </div>
           )}
           {locked && (
-            <span title="VerrouillÃ©" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: 4, background: T.amber + "22", color: T.amber, fontSize: 11 }}>
+            <span title="VerrouillÃ©" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: "var(--radius-field)", background: `color-mix(in srgb, ${T.amber} 13%, transparent)`, color: T.amber, fontSize: 11 }}>
               ðŸ”’
             </span>
           )}
         </div>
         {!isOwner && (
-          <span style={{ fontSize: 9, color: T.blue, background: T.blue + "15", padding: "2px 8px", borderRadius: 999, fontWeight: 600, alignSelf: "flex-start" }}>
+          <span style={{ fontSize: 9, color: T.blue, background: `color-mix(in srgb, ${T.blue} 8%, transparent)`, padding: "2px 8px", borderRadius: 999, fontWeight: 600, alignSelf: "flex-start" }}>
             PartagÃ© avec vous
           </span>
         )}
@@ -1319,6 +1430,8 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
   // son contour pour un rendu "carte qu'on vient de saisir".
   const [topId, setTopId] = useState(null);
   const [lightboxFileId, setLightboxFileId] = useState(null); // image en plein Ã©cran
+  // Dialogue de saisie in-app (remplace prompt() natif, KO sous Tauri).
+  const [promptState, setPromptState] = useState(null);
 
   // â”€â”€â”€ Enregistrement audio (bouton Audio de la toolbar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [recordingAudio, setRecordingAudio] = useState(false);
@@ -1360,6 +1473,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
   // â”€â”€â”€ Input cachÃ© pour "remplacer l'image" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const replaceInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  const genericInputRef = useRef(null);
   const replaceTargetRef = useRef(null);
 
   const loadFiles = useCallback(async () => {
@@ -1595,11 +1709,23 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         .single();
       if (error) throw error;
       setFiles((prev) => [...prev, data]);
-    } catch (e) { alert("Ã‰chec : " + describeError(e)); }
+    } catch (e) { notify("Échec", describeError(e)); }
   };
 
-  const createLink = async (at) => {
-    const url = prompt("URL du lien :", "https://");
+  // Lien / Vidéo : la saisie d'URL passe par un PromptDialog in-app (le prompt()
+  // natif est indisponible sous Tauri). createLink/createVideo ouvrent le
+  // dialogue ; insertLink/insertVideo font l'insertion une fois validé.
+  const createLink = (at) => {
+    setPromptState({
+      kind: "link", at,
+      title: "Ajouter un lien",
+      label: "URL du lien",
+      defaultValue: "https://",
+      placeholder: "https://exemple.com",
+      confirmLabel: "Ajouter",
+    });
+  };
+  const insertLink = async (url, at) => {
     if (!url || !url.trim()) return;
     try {
       const { pos_x, pos_y } = posFromAt(at, nextPosition());
@@ -1616,25 +1742,34 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         .select().single();
       if (error) throw error;
       setFiles((prev) => [...prev, data]);
-    } catch (e) { alert("Ã‰chec : " + describeError(e)); }
+    } catch (e) { notify("Échec", describeError(e)); }
   };
 
-  const createVideo = async (at) => {
-    const url = prompt("URL de la vidÃ©o (YouTube, Vimeo, .mp4â€¦) :", "https://");
+  const createVideo = (at) => {
+    setPromptState({
+      kind: "video", at,
+      title: "Ajouter une vidéo",
+      label: "URL de la vidéo (YouTube, Vimeo, .mp4…)",
+      defaultValue: "https://",
+      placeholder: "https://youtube.com/watch?v=…",
+      confirmLabel: "Ajouter",
+    });
+  };
+  const insertVideo = async (url, at) => {
     if (!url || !url.trim()) return;
     try {
       const { pos_x, pos_y } = posFromAt(at, nextPosition());
       const { data, error } = await supabase
         .from("drive_files")
         .insert({
-          project_id: project.id, name: "VidÃ©o", type: "video",
+          project_id: project.id, name: "Vidéo", type: "video",
           content: url.trim(), created_by: currentUserId,
           pos_x, pos_y, width: 320, height: 200,
         })
         .select().single();
       if (error) throw error;
       setFiles((prev) => [...prev, data]);
-    } catch (e) { alert("Ã‰chec : " + describeError(e)); }
+    } catch (e) { notify("Échec", describeError(e)); }
   };
 
   const createTask = async (at) => {
@@ -1650,7 +1785,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         .select().single();
       if (error) throw error;
       setFiles((prev) => [...prev, data]);
-    } catch (e) { alert("Ã‰chec : " + describeError(e)); }
+    } catch (e) { notify("Échec", describeError(e)); }
   };
 
   // CrÃ©e une carte dessin vide. content = JSON {strokes:[{color,width,points:[[x,y],â€¦]}]}
@@ -1668,7 +1803,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         .select().single();
       if (error) throw error;
       setFiles((prev) => [...prev, data]);
-    } catch (e) { alert("Ã‰chec : " + describeError(e)); }
+    } catch (e) { notify("Échec", describeError(e)); }
   };
 
   // Persiste les strokes d'une carte dessin (debounce 400 ms).
@@ -1719,14 +1854,14 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
       setFiles((prev) => [...prev, updated]);
     } catch (e) {
       console.error("[Drive] audio create failed:", describeError(e), dumpError(e));
-      alert("Ã‰chec audio : " + describeError(e));
+      notify("Échec audio", describeError(e));
     }
   };
 
   const startAudioRecord = async () => {
     if (recordingAudio) return;
     if (!navigator.mediaDevices?.getUserMedia) {
-      alert("L'enregistrement audio n'est pas supportÃ© sur ce navigateur.");
+      notify("Audio indisponible", "L'enregistrement audio n'est pas supporté sur ce navigateur.", "warn");
       return;
     }
     try {
@@ -1753,7 +1888,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
       setRecordingAudio(true);
     } catch (e) {
       console.error("[Drive] mic permission denied:", e);
-      alert("Impossible d'accÃ©der au micro : " + (e?.message || e));
+      notify("Micro inaccessible", e?.message || e);
     }
   };
 
@@ -1852,7 +1987,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         offset += 24;
       } catch (e) {
         console.error("[Drive] upload failed:", describeError(e), dumpError(e));
-        if (!silent) alert(`Ã‰chec upload "${f.name}" : ${describeError(e)}`);
+        if (!silent) notify("Échec de l'import", `« ${f.name} » : ${describeError(e)}`);
       }
     }
   };
@@ -1865,7 +2000,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         .createSignedUrl(file.storage_path, 60);
       if (error) throw error;
       window.open(data.signedUrl, "_blank");
-    } catch (e) { alert("Ã‰chec : " + describeError(e)); }
+    } catch (e) { notify("Échec", describeError(e)); }
   };
 
   // Duplique un fichier (re-tÃ©lÃ©charge le blob et l'uploade dans une nouvelle row).
@@ -1920,7 +2055,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
       return updated;
     } catch (e) {
       console.error("[Drive] duplicate failed:", describeError(e), dumpError(e));
-      alert("Ã‰chec duplication : " + describeError(e));
+      notify("Échec duplication", describeError(e));
       return null;
     }
   };
@@ -1956,7 +2091,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
       setFiles((prev) => prev.map((x) => x.id === file.id ? updated : x));
     } catch (e) {
       console.error("[Drive] replace failed:", describeError(e), dumpError(e));
-      alert("Ã‰chec remplacement : " + describeError(e));
+      notify("Échec remplacement", describeError(e));
     }
   };
 
@@ -1969,7 +2104,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
       if (error) throw error;
       setFiles((prev) => prev.filter((x) => x.id !== file.id));
       if (selectedId === file.id) setSelectedId(null);
-    } catch (e) { alert("Ã‰chec : " + describeError(e)); }
+    } catch (e) { notify("Échec", describeError(e)); }
   };
 
   // Persistance de la position (debounce par carte)
@@ -1992,7 +2127,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         console.error("[Drive] position update failed:", describeError(error), dumpError(error));
         const msg = describeError(error);
         if (/pos_x|pos_y/i.test(msg)) {
-          alert("Migration 024_drive_canvas.sql manquante â€” les colonnes pos_x/pos_y n'existent pas en DB.");
+          notify("Migration manquante", "Migration 024_drive_canvas.sql manquante — les colonnes pos_x/pos_y n'existent pas en DB.", "warn");
         }
       }
     }, 300);
@@ -2101,6 +2236,19 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         }}
       />
 
+      {/* Input cachÃ© : "Importer" (tout type de fichier, multi) â€” empty state. */}
+      <input
+        ref={genericInputRef}
+        type="file"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const picked = Array.from(e.target.files || []);
+          if (picked.length > 0) uploadFiles(picked);
+          e.target.value = "";
+        }}
+      />
+
       {/* Toolbar flottante : reprend toutes les actions du clic droit + dessin/audio */}
       <DriveToolbar
         recordingAudio={recordingAudio}
@@ -2129,10 +2277,10 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         style={{
           flex: 1, position: "relative", overflow: "auto",
           background: `
-            radial-gradient(circle, ${T.border2}55 1px, transparent 1px)
+            radial-gradient(circle, color-mix(in srgb, ${T.border2} 33%, transparent) 1px, transparent 1px)
           `,
           backgroundSize: "20px 20px",
-          backgroundColor: "#FAFAFA",
+          backgroundColor: "var(--color-hover-bg, #F0F0F0)",
           cursor: "grab",
         }}
       >
@@ -2141,11 +2289,23 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         <div style={{ position: "relative", width: WORLD_W * zoom, height: WORLD_H * zoom }}>
         <div style={{ position: "absolute", top: 0, left: 0, width: WORLD_W, height: WORLD_H, transform: `scale(${zoom})`, transformOrigin: "0 0" }}>
           {loading && (
-            <div style={{ position: "absolute", top: ORIGIN_Y - 60, left: ORIGIN_X - 100, fontSize: 12, color: T.textSub }}>Chargementâ€¦</div>
+            <div role="status" aria-label="Chargement du canvas" style={{ position: "absolute", top: ORIGIN_Y - 100, left: ORIGIN_X - 140, display: "flex", gap: 16 }}>
+              {[0, 1].map((i) => (
+                <div key={i} className="anim-shimmer" style={{ width: 240, height: 180, borderRadius: 10 }} />
+              ))}
+            </div>
           )}
           {!loading && files.length === 0 && (
-            <div style={{ position: "absolute", top: ORIGIN_Y - 40, left: ORIGIN_X - 240, width: 480, textAlign: "center", color: T.textSub, fontSize: 13, pointerEvents: "none" }}>
-              Canvas vide â€” glisse des fichiers ici, ou utilise <strong>Upload</strong> / <strong>Note</strong>.
+            <div style={{ position: "absolute", top: ORIGIN_Y - 60, left: ORIGIN_X - 240, width: 480, textAlign: "center", color: T.textSub, fontSize: 13, pointerEvents: "none" }}>
+              <div>Canvas vide â€” glisse des fichiers ici, ou utilise <strong>Image</strong> / <strong>Note</strong> dans la barre d'outils.</div>
+              <div style={{ marginTop: 14, pointerEvents: "auto", display: "inline-flex" }}>
+                <button
+                  onClick={() => genericInputRef.current?.click()}
+                  style={{ minHeight: 44, padding: "0 18px", borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 8 }}
+                >
+                  <Upload size={15} strokeWidth={1.75} /> Importer un fichier
+                </button>
+              </div>
             </div>
           )}
           {/* Wrapper offset : (0,0) = centre logique du monde, pan dans toutes les directions */}
@@ -2297,6 +2457,23 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
           </ContextMenuPortal>
         );
       })()}
+
+      {promptState && (
+        <PromptDialog
+          title={promptState.title}
+          label={promptState.label}
+          defaultValue={promptState.defaultValue}
+          placeholder={promptState.placeholder}
+          confirmLabel={promptState.confirmLabel}
+          onCancel={() => setPromptState(null)}
+          onSubmit={(value) => {
+            const { kind, at } = promptState;
+            setPromptState(null);
+            if (kind === "link") insertLink(value, at);
+            else if (kind === "video") insertVideo(value, at);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -2308,7 +2485,7 @@ function DriveToolbar({ recordingAudio, onAddImage, onAddNote, onAddLink, onAddV
       onClick={onClick}
       title={label}
       style={{
-        height: 36, padding: "0 10px", borderRadius: 8,
+        height: 36, padding: "0 10px", borderRadius: "var(--radius-card)",
         background: active ? (danger ? T.red : T.text) : "transparent",
         border: "none",
         color: active ? "#fff" : T.text,
@@ -2393,7 +2570,7 @@ function DriveToolbar({ recordingAudio, onAddImage, onAddNote, onAddLink, onAddV
         position: "absolute", ...posStyle,
         zIndex: 10,
         background: T.white, border: `1px solid ${T.border}`,
-        borderRadius: 12, boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+        borderRadius: "var(--radius-card)", boxShadow: "var(--elev-hover)",
         padding: 4, display: "inline-flex", alignItems: "center", gap: 2,
       }}
     >
@@ -2402,7 +2579,7 @@ function DriveToolbar({ recordingAudio, onAddImage, onAddNote, onAddLink, onAddV
         title="DÃ©placer la barre d'outils"
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
-          height: 36, width: 20, cursor: "grab", color: T.muted || "#999",
+          height: 36, width: 20, cursor: "grab", color: T.textMut,
           borderRadius: 6,
         }}
       >
@@ -2481,7 +2658,7 @@ function ContextMenuPortal({ x, y, cardRect, onClose, children }) {
       style={{
         position: "fixed", left, top, zIndex: 2000,
         background: T.white, border: `1px solid ${T.border}`,
-        borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.16)",
+        borderRadius: 10, boxShadow: "var(--elev-overlay)",
         padding: 4, minWidth: 220,
         fontFamily: "var(--font-sans)",
       }}
@@ -2590,8 +2767,8 @@ function CanvasCard({ file, zoom = 1, selected, isTop, locked, previewUrl, audio
           ? "1px solid transparent"
           : `1px solid ${locked ? T.amber : (selected ? T.text : T.border)}`,
         boxShadow: isTop
-          ? "0 14px 36px rgba(0,0,0,0.18)"
-          : (selected ? "0 8px 24px rgba(0,0,0,0.12)" : "0 2px 6px rgba(0,0,0,0.05)"),
+          ? "var(--elev-hover)"
+          : (selected ? "var(--elev-hover)" : "var(--elev-rest)"),
         borderRadius: 10,
         cursor: locked ? "default" : "grab",
         zIndex: isTop ? 5 : 1,
@@ -2662,7 +2839,7 @@ function CanvasCard({ file, zoom = 1, selected, isTop, locked, previewUrl, audio
             style={{
               width: 18, height: 18, background: "transparent", border: "none",
               color: T.textMut, cursor: "pointer", padding: 0,
-              display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: 4,
+              display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-field)",
             }}
           >
             <X size={11} strokeWidth={2} />
@@ -2698,7 +2875,7 @@ function CanvasCard({ file, zoom = 1, selected, isTop, locked, previewUrl, audio
               <div style={{
                 width: isYt ? "42%" : 64,
                 minWidth: isYt ? "42%" : 64,
-                background: "#F3F4F6",
+                background: "var(--color-hover-bg, #F0F0F0)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 overflow: "hidden",
                 borderRight: `1px solid ${T.border}`,
@@ -2812,7 +2989,7 @@ function ToolbarBtn({ icon: Icon, label, onClick, primary }) {
     <button
       onClick={onClick}
       style={{
-        padding: "7px 12px", height: 30, borderRadius: 8,
+        padding: "7px 12px", height: 30, borderRadius: "var(--radius-card)",
         background: primary ? T.text : T.white,
         border: `1px solid ${primary ? T.text : T.border}`,
         color: primary ? "#fff" : T.text,
@@ -2894,7 +3071,7 @@ function ImageLightbox({ url, alt, onClose, onDownload }) {
           style={{
             maxWidth: "100%", maxHeight: "100%",
             objectFit: "contain", borderRadius: 6,
-            boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+            boxShadow: "var(--elev-overlay)",
             userSelect: "none",
           }}
         />
@@ -2953,7 +3130,7 @@ function DocEditor({ doc, onClose, onSaved, onRenamed }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: T.white, borderRadius: 12, width: "100%", maxWidth: 900, height: "90vh",
+          background: T.white, borderRadius: "var(--radius-card)", width: "100%", maxWidth: 900, height: "90vh",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}
       >
@@ -2967,7 +3144,7 @@ function DocEditor({ doc, onClose, onSaved, onRenamed }) {
             style={{ flex: 1, fontSize: 14, fontWeight: 600, color: T.text, border: "none", outline: "none", background: "transparent", fontFamily: "inherit" }}
           />
           <span style={{ fontSize: 11, color: T.textMut }}>{saving ? "Enregistrementâ€¦" : "EnregistrÃ©"}</span>
-          <button onClick={onClose} style={{ width: 30, height: 30, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 6 }}>
+          <button onClick={onClose} aria-label="Fermer l'éditeur" title="Fermer" style={{ width: 30, height: 30, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 6 }}>
             <X size={16} strokeWidth={1.75} />
           </button>
         </div>
@@ -2995,6 +3172,8 @@ function ShareModal({ project, onClose }) {
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [existingInvites, setExistingInvites] = useState([]);
+  // Token en attente de confirmation de révocation (modale in-app vs confirm() natif).
+  const [confirmRevoke, setConfirmRevoke] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -3023,7 +3202,7 @@ function ShareModal({ project, onClose }) {
       setExistingInvites((prev) => [data, ...prev]);
     } catch (e) {
       console.error("[Drive] generate invite failed:", describeError(e), dumpError(e));
-      alert("Ã‰chec gÃ©nÃ©ration lien : " + describeError(e));
+      notify("Échec génération lien", describeError(e));
     }
     finally { setCreating(false); }
   };
@@ -3035,14 +3214,15 @@ function ShareModal({ project, onClose }) {
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
   };
 
-  const revokeInvite = async (tok) => {
-    if (!confirm("RÃ©voquer ce lien ?")) return;
+  const revokeInvite = (tok) => setConfirmRevoke(tok);
+  const doRevokeInvite = async (tok) => {
     await supabase.from("drive_invites").delete().eq("token", tok);
     setExistingInvites((prev) => prev.filter((i) => i.token !== tok));
     if (token === tok) setToken(null);
   };
 
   return (
+    <>
     <ModalShell title="Partager le projet" onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, fontSize: 13 }}>
         <div>
@@ -3051,7 +3231,7 @@ function ShareModal({ project, onClose }) {
             {["editor", "viewer"].map((r) => (
               <button key={r} onClick={() => setRole(r)}
                 style={{
-                  flex: 1, padding: "8px 12px", borderRadius: 8,
+                  flex: 1, padding: "8px 12px", borderRadius: "var(--radius-card)",
                   border: `1px solid ${role === r ? T.text : T.border}`,
                   background: role === r ? T.text : T.white,
                   color: role === r ? "#fff" : T.text,
@@ -3064,12 +3244,12 @@ function ShareModal({ project, onClose }) {
         </div>
 
         <button onClick={generateLink} disabled={creating}
-          style={{ padding: "10px 14px", borderRadius: 8, background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          style={{ padding: "10px 14px", borderRadius: "var(--radius-card)", background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
           <Share2 size={14} strokeWidth={1.75} /> {creating ? "GÃ©nÃ©rationâ€¦" : "GÃ©nÃ©rer un lien"}
         </button>
 
         {link && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8, background: "#FAFAFA" }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: "var(--color-hover-bg, #F0F0F0)" }}>
             <input readOnly value={link} style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 11, fontFamily: "monospace", color: T.text }} />
             <button onClick={copy}
               style={{ padding: "6px 10px", borderRadius: 6, background: copied ? T.green : T.text, color: "#fff", border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -3091,7 +3271,8 @@ function ShareModal({ project, onClose }) {
                   </span>
                   <span style={{ fontSize: 10, color: T.textMut }}>{inv.role}</span>
                   <button onClick={() => revokeInvite(inv.token)}
-                    style={{ width: 22, height: 22, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 4 }}
+                    aria-label="Révoquer le lien" title="Révoquer le lien"
+                    style={{ width: 22, height: 22, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: "var(--radius-field)" }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = T.red; }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; }}>
                     <X size={11} />
@@ -3107,6 +3288,17 @@ function ShareModal({ project, onClose }) {
         </p>
       </div>
     </ModalShell>
+    {confirmRevoke && (
+      <ConfirmDialog
+        title="Révoquer ce lien ?"
+        message="Le lien d'invitation ne fonctionnera plus. Cette action est définitive."
+        confirmLabel="Révoquer"
+        danger
+        onCancel={() => setConfirmRevoke(null)}
+        onConfirm={() => { const t = confirmRevoke; setConfirmRevoke(null); doRevokeInvite(t); }}
+      />
+    )}
+    </>
   );
 }
 
@@ -3116,6 +3308,8 @@ function MembersModal({ project, currentUserId, onClose }) {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const isOwner = project.owner_id === currentUserId;
+  // Action en attente de confirmation (modale in-app vs confirm() natif KO sous Tauri).
+  const [confirmAction, setConfirmAction] = useState(null); // { title, message, confirmLabel, run }
 
   useEffect(() => {
     (async () => {
@@ -3128,28 +3322,37 @@ function MembersModal({ project, currentUserId, onClose }) {
     })();
   }, [project.id, supabase]);
 
-  const remove = async (userId) => {
-    if (!confirm("Retirer ce membre ?")) return;
-    const { error } = await supabase
-      .from("drive_project_members")
-      .delete()
-      .eq("project_id", project.id)
-      .eq("user_id", userId);
-    if (!error) setMembers((prev) => prev.filter((m) => m.user_id !== userId));
-  };
+  const remove = (userId) => setConfirmAction({
+    title: "Retirer ce membre ?",
+    message: "Ce membre perdra l'accès au projet.",
+    confirmLabel: "Retirer",
+    run: async () => {
+      const { error } = await supabase
+        .from("drive_project_members")
+        .delete()
+        .eq("project_id", project.id)
+        .eq("user_id", userId);
+      if (!error) setMembers((prev) => prev.filter((m) => m.user_id !== userId));
+    },
+  });
 
-  const leave = async () => {
-    if (!confirm("Quitter ce projet ? Tu perdras l'accÃ¨s.")) return;
-    await supabase
-      .from("drive_project_members")
-      .delete()
-      .eq("project_id", project.id)
-      .eq("user_id", currentUserId);
-    onClose();
-    window.location.reload();
-  };
+  const leave = () => setConfirmAction({
+    title: "Quitter ce projet ?",
+    message: "Tu perdras l'accès à ce projet.",
+    confirmLabel: "Quitter",
+    run: async () => {
+      await supabase
+        .from("drive_project_members")
+        .delete()
+        .eq("project_id", project.id)
+        .eq("user_id", currentUserId);
+      onClose();
+      window.location.reload();
+    },
+  });
 
   return (
+    <>
     <ModalShell title="Membres" onClose={onClose}>
       {loading ? (
         <div style={{ padding: 20, textAlign: "center", color: T.textSub, fontSize: 12 }}>Chargementâ€¦</div>
@@ -3159,7 +3362,7 @@ function MembersModal({ project, currentUserId, onClose }) {
             const isMe = m.user_id === currentUserId;
             const isProjectOwner = m.role === "owner";
             return (
-              <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8 }}>
+              <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)" }}>
                 <div style={{ width: 28, height: 28, borderRadius: "50%", background: T.accentBg, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: T.text }}>
                   {m.user_id.slice(0, 2).toUpperCase()}
                 </div>
@@ -3171,7 +3374,8 @@ function MembersModal({ project, currentUserId, onClose }) {
                 </div>
                 {!isProjectOwner && isOwner && !isMe && (
                   <button onClick={() => remove(m.user_id)}
-                    style={{ width: 24, height: 24, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 4 }}
+                    aria-label="Retirer ce membre" title="Retirer ce membre"
+                    style={{ width: 24, height: 24, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: "var(--radius-field)" }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = T.red; }}
                     onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; }}
                   >
@@ -3190,6 +3394,17 @@ function MembersModal({ project, currentUserId, onClose }) {
         </div>
       )}
     </ModalShell>
+    {confirmAction && (
+      <ConfirmDialog
+        title={confirmAction.title}
+        message={confirmAction.message}
+        confirmLabel={confirmAction.confirmLabel}
+        danger
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => { const a = confirmAction; setConfirmAction(null); a.run?.(); }}
+      />
+    )}
+    </>
   );
 }
 
@@ -3206,11 +3421,11 @@ function ModalShell({ title, onClose, children }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: T.white, borderRadius: 12, width: "100%", maxWidth: 460, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+        style={{ background: T.white, borderRadius: "var(--radius-card)", width: "100%", maxWidth: 460, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
       >
         <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{title}</div>
-          <button onClick={onClose} style={{ width: 28, height: 28, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 6 }}>
+          <button onClick={onClose} aria-label="Fermer" title="Fermer" style={{ width: 28, height: 28, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 6 }}>
             <X size={14} strokeWidth={1.75} />
           </button>
         </div>

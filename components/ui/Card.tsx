@@ -12,22 +12,22 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 export function Card({ padded = true, hoverable = false, accent = "default", style, children, onMouseEnter, onMouseLeave, ...rest }: CardProps) {
   const accentBorders: Record<string, string> = {
     default: "transparent",
-    primary: "#0D0D0D",
-    success: "#16A34A",
-    warning: "#F97316",
-    danger: "#EF4444",
-    info: "#A855F7",
+    primary: "var(--color-text, #0D0D0D)",
+    success: "var(--color-green, #16A34A)",
+    warning: "var(--color-amber, #F97316)",
+    danger: "var(--color-red, #EF4444)",
+    info: "var(--color-info, #A855F7)",
   };
   const accentColor = accentBorders[accent];
 
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E5E5",
-        borderRadius: 12,
+        background: "var(--color-card-bg, #FFFFFF)",
+        border: "1px solid var(--color-border, #E5E5E5)",
+        borderRadius: "var(--radius-card, 10px)",
         padding: padded ? 20 : 0,
-        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
+        boxShadow: "var(--elev-rest, 0 1px 2px rgba(0, 0, 0, 0.04))",
         transition:
           "border-color 200ms cubic-bezier(0.23,1,0.32,1), box-shadow 200ms cubic-bezier(0.23,1,0.32,1), transform 200ms cubic-bezier(0.23,1,0.32,1)",
         position: "relative",
@@ -36,16 +36,16 @@ export function Card({ padded = true, hoverable = false, accent = "default", sty
       }}
       onMouseEnter={(e) => {
         if (hoverable) {
-          e.currentTarget.style.borderColor = "#D4D4D4";
-          e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.06)";
+          e.currentTarget.style.borderColor = "var(--color-border-strong, #D4D4D4)";
+          e.currentTarget.style.boxShadow = "var(--elev-hover, 0 4px 12px rgba(0, 0, 0, 0.06))";
           e.currentTarget.style.transform = "translateY(-1px)";
         }
         onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
         if (hoverable) {
-          e.currentTarget.style.borderColor = "#E5E5E5";
-          e.currentTarget.style.boxShadow = "0 1px 2px rgba(0, 0, 0, 0.04)";
+          e.currentTarget.style.borderColor = "var(--color-border, #E5E5E5)";
+          e.currentTarget.style.boxShadow = "var(--elev-rest, 0 1px 2px rgba(0, 0, 0, 0.04))";
           e.currentTarget.style.transform = "translateY(0)";
         }
         onMouseLeave?.(e);
@@ -68,8 +68,8 @@ interface CardHeaderProps {
 export function CardHeader({ title, subtitle, action, onClick, showChevron = false }: CardHeaderProps) {
   const titleNode = (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#0D0D0D" }}>{title}</span>
-      {showChevron && <ChevronRight size={14} strokeWidth={2} color="#8E8E8E" />}
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text, #0D0D0D)" }}>{title}</span>
+      {showChevron && <ChevronRight size={14} strokeWidth={2} color="var(--color-text-muted, #6B6B6B)" />}
     </span>
   );
 
@@ -94,7 +94,7 @@ export function CardHeader({ title, subtitle, action, onClick, showChevron = fal
         ) : (
           titleNode
         )}
-        {subtitle && <div style={{ fontSize: 11, color: "#8E8E8E", marginTop: 2 }}>{subtitle}</div>}
+        {subtitle && <div style={{ fontSize: 11, color: "var(--color-text-muted, #6B6B6B)", marginTop: 2 }}>{subtitle}</div>}
       </div>
       {action}
     </div>

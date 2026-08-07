@@ -108,10 +108,16 @@ export const tokens = {
     focus: "0 0 0 2px #FFFFFF, 0 0 0 4px #0D0D0D",
   },
 
+  // Aligné sur les courbes custom de globals.css (--ease-out / --ease-in-out).
+  // La courbe Material (0.4,0,0.2,1) est trop molle → on utilise la même
+  // ease-out punchy que le reste du site pour une cohérence totale.
   motion: {
-    fast: "120ms cubic-bezier(0.4, 0, 0.2, 1)",
-    base: "180ms cubic-bezier(0.4, 0, 0.2, 1)",
-    slow: "260ms cubic-bezier(0.4, 0, 0.2, 1)",
+    fast: "150ms cubic-bezier(0.23, 1, 0.32, 1)",
+    base: "200ms cubic-bezier(0.23, 1, 0.32, 1)",
+    slow: "280ms cubic-bezier(0.23, 1, 0.32, 1)",
+    easeOut: "cubic-bezier(0.23, 1, 0.32, 1)",
+    easeInOut: "cubic-bezier(0.77, 0, 0.175, 1)",
+    spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
   },
 
   layout: {

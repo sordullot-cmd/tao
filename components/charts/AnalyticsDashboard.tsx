@@ -47,16 +47,9 @@ export function AnalyticsDashboard({ trades, stats }: AnalyticsDashboardProps) {
         <PnLTrendChart trades={trades} />
       </div>
 
-      {/* Row 2: Emotion Distribution + Heatmap */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
-          gap: 20,
-        }}
-      >
-        <EmotionDistribution topEmotions={stats.topEmotions} />
-      </div>
+      {/* Row 2: Emotion Distribution — pleine largeur assumée (un seul enfant,
+          pas de grid auto-fit qui étirerait une carte solitaire). */}
+      <EmotionDistribution topEmotions={stats.topEmotions} />
 
       {/* Row 3: Full-width Heatmap */}
       <HourlyHeatmap trades={trades} />

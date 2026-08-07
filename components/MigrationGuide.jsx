@@ -3,20 +3,10 @@
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { useState, useEffect } from "react";
 import { migrateLocalStorageToSupabase, getMigrationStatus } from "@/lib/migration/localStorageToSupabase";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  white: "#FFFFFF",
-  bg: "#F8FAFB",
-  surface: "#FFFFFF",
-  border: "#E3E6EB",
-  text: "#1A1F2E",
-  textMut: "#8B95AA",
-  green: "#16A34A",
-  greenBg: "#DCFCE7",
-  red: "#AD6B6B",
-  blue: "#5F7FB4",
-  accent: "#5F7FB4",
-};
+// Palette migrée vers les tokens partagés (dark-aware) au lieu du bleu hors charte.
+const T = { ...BaseT };
 
 export default function MigrationGuide() {
   const { user } = useAuth();
@@ -104,7 +94,7 @@ export default function MigrationGuide() {
         style={{
           background: T.surface,
           border: `1px solid ${T.border}`,
-          borderRadius: 12,
+          borderRadius: "var(--radius-card)",
           padding: "24px",
           marginBottom: 24,
         }}
@@ -123,7 +113,7 @@ export default function MigrationGuide() {
             style={{
               background: T.bg,
               padding: "12px 16px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-card)",
               textAlign: "center",
             }}
           >
@@ -138,7 +128,7 @@ export default function MigrationGuide() {
             style={{
               background: T.bg,
               padding: "12px 16px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-card)",
               textAlign: "center",
             }}
           >
@@ -153,7 +143,7 @@ export default function MigrationGuide() {
             style={{
               background: T.bg,
               padding: "12px 16px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-card)",
               textAlign: "center",
             }}
           >
@@ -168,7 +158,7 @@ export default function MigrationGuide() {
             style={{
               background: T.bg,
               padding: "12px 16px",
-              borderRadius: 8,
+              borderRadius: "var(--radius-card)",
               textAlign: "center",
             }}
           >
@@ -193,7 +183,7 @@ export default function MigrationGuide() {
         style={{
           background: T.surface,
           border: `1px solid ${T.border}`,
-          borderRadius: 12,
+          borderRadius: "var(--radius-card)",
           padding: "24px",
           marginBottom: 24,
         }}
@@ -253,9 +243,9 @@ export default function MigrationGuide() {
       {result && (
         <div
           style={{
-            background: result.success ? "#DCFCE7" : "#F5E6E6",
-            border: `1px solid ${result.success ? "#93C5FD" : "#E0BFBF"}`,
-            borderRadius: 12,
+            background: result.success ? T.greenBg : T.redBg,
+            border: `1px solid ${result.success ? T.greenBd : T.redBd}`,
+            borderRadius: "var(--radius-card)",
             padding: "24px",
             marginBottom: 24,
           }}
@@ -286,7 +276,7 @@ export default function MigrationGuide() {
           style={{
             flex: 1,
             padding: "12px 24px",
-            borderRadius: 8,
+            borderRadius: "var(--radius-card)",
             border: "none",
             background: T.blue,
             color: T.white,
@@ -306,7 +296,7 @@ export default function MigrationGuide() {
         style={{
           background: T.surface,
           border: `1px solid ${T.border}`,
-          borderRadius: 12,
+          borderRadius: "var(--radius-card)",
           padding: "24px",
           marginTop: 24,
         }}

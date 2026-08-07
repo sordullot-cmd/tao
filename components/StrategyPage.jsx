@@ -10,37 +10,22 @@ import { t, useLang } from "@/lib/i18n";
 import { useStrategies } from "@/lib/hooks/useUserData";
 import { useTrades } from "@/lib/hooks/useTradeData";
 import { useUndo } from "@/lib/contexts/UndoContext";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-/* ─── TOKENS (OpenAI palette) ──────────────────────────────────────── */
-const T = {
-  white:   "#FFFFFF",
-  bg:      "#FFFFFF",
-  surface: "#FFFFFF",
-  border:  "#E5E5E5",
-  border2: "#D4D4D4",
-  text:    "#0D0D0D",
-  textSub: "#5C5C5C",
-  textMut: "#8E8E8E",
-  green:   "#16A34A",
-  greenBg: "#F0FDF4",
-  greenBd: "#86EFAC",
-  red:     "#EF4444",
-  redBg:   "#FEF2F2",
-  redBd:   "#FECACA",
-  accent:  "#0D0D0D",
-  accentBg: "#F0F0F0",
-  accentBd: "#D4D4D4",
-  amber:   "#F97316",
-  amberBg: "#FFF4E6",
-  blue:    "#3B82F6",
-  blueBg:  "#EFF6FF",
+/* ─── TOKENS (palette monochrome partagée, dark-aware) ─────────────── */
+const T = { ...BaseT };
+
+// Émet un toast d'erreur via le système global (voir components/AlertToast.tsx).
+const fireError = (title, body) => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("tr4de:alert", { detail: { title, body, severity: "danger" } }));
+  }
 };
 
 const css = `
-  body { background: ${T.bg}; color: ${T.text}; font-family: var(--font-sans); min-height: 100vh; font-size: 14px; }
   button { font-family: inherit; cursor: pointer; }
   @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-  .anim-1 { animation: fadeUp .25s ease both; }
+  .anim-1 { animation: fadeUp .25s var(--ease-out) both; }
 `;
 
 const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencySymbol()}${Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
@@ -53,7 +38,7 @@ function Pill({ children, color="gray", small }) {
     gray:  { bg:T.bg,      bd:T.border,   txt:T.textSub },
   };
   const s = map[color] || map.gray;
-  return <span style={{display:"inline-flex", alignItems:"center", padding: small ? "1px 7px" : "3px 10px", borderRadius: 20, fontSize: small ? 11 : 12, fontWeight: 500, background: s.bg, border: `1px solid ${s.bd}`, color: s.txt,}}>{children}</span>;
+  return <span style={{display:"inline-flex", alignItems:"center", padding: small ? "1px 7px" : "3px 10px", borderRadius: "var(--radius-modal)", fontSize: small ? 11 : 12, fontWeight: 500, background: s.bg, border: `1px solid ${s.bd}`, color: s.txt,}}>{children}</span>;
 }
 
 export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId = () => {} }) {
@@ -66,16 +51,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
   const { strategies = [], addStrategy = async () => {}, updateStrategy = async () => {}, deleteStrategy = async () => {} } = strategiesHook || {};
   const { pushUndo } = useUndo();
   const { trades = [] } = tradesHook || {};
-  
-  // ✅ Debug logs
-  React.useEffect(() => {
-    console.log("🔍 StrategyPage Hook Status:");
-    console.log("   strategiesHook:", strategiesHook ? "✅ returned" : "❌ null/undefined");
-    console.log("   strategies array:", Array.isArray(strategies) ? `✅ ${strategies.length} items` : "❌ not array");
-    console.log("   tradesHook:", tradesHook ? "✅ returned" : "❌ null/undefined");
-    console.log("   trades array:", Array.isArray(trades) ? `✅ ${trades.length} items` : "❌ not array");
-  }, [strategies, trades]);
-  
+
   const [loading, setLoading] = useState(false);
   const [showStrategyForm, setShowStrategyForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -86,22 +62,6 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
   // ✅ Rendre tradeStrategiesData réactif
   const [tradeStrategiesData, setTradeStrategiesData] = useState({});
   const [checkedRules, setCheckedRules] = useState({});
-
-  // 🔍 DEBUG: Monitor trades and strategy assignments
-  React.useEffect(() => {
-    const stored = localStorage.getItem("tr4de_trades");
-    const tradesFromStorage = stored ? JSON.parse(stored) : [];
-    
-    const stratAssignments = localStorage.getItem('tr4de_trade_strategies');
-    const assignments = stratAssignments ? JSON.parse(stratAssignments) : {};
-    
-    console.log("🔍 DEBUG StrategyPage:");
-    console.log("   Trades from hook:", trades?.length || 0, "trades");
-    console.log("   Trades from localStorage (tr4de_trades):", tradesFromStorage?.length || 0, "trades");
-    console.log("   Strategy assignments keys:", Object.keys(assignments).length, "keys");
-    console.log("   First few trades from hook:", trades?.slice(0, 2));
-    console.log("   First few assignment keys:", Object.keys(assignments).slice(0, 3));
-  }, [trades, strategies]);
 
   // ✅ Charger et synchroniser les données de localStorage
   React.useEffect(() => {
@@ -144,11 +104,9 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     // Écouter les changements de localStorage
     const handleStorageChange = (e) => {
       if (e.key === 'tr4de_trade_strategies') {
-        console.log("📡 Trade strategies updated in localStorage");
         loadTradeStrategiesData();
       }
       if (e.key === 'tr4de_checked_rules') {
-        console.log("📡 Checked rules updated in localStorage");
         loadCheckedRules();
       }
     };
@@ -164,7 +122,6 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
   // ✅ Synchroniser les stratégies avec localStorage pour que DashboardNew les voit
   React.useEffect(() => {
     if (strategies && strategies.length > 0) {
-      console.log("💾 Sync strategies to localStorage:", strategies.length);
       localStorage.setItem("apex_strategies", JSON.stringify(strategies));
       localStorage.setItem("tr4de_strategies", JSON.stringify(strategies));
     }
@@ -179,22 +136,18 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
           setLoading(true);
           if(editingStrategyId){
             // ✅ Mettre à jour via le hook Supabase
-            console.log("📝 Mise à jour stratégie Supabase");
             await updateStrategy(editingStrategyId, formData);
           } else {
             // ✅ Créer via le hook Supabase
-            console.log("➕ Création stratégie Supabase");
-            const newStrat = await addStrategy(formData);
-            console.log("✅ Stratégie créée:", newStrat);
+            await addStrategy(formData);
           }
           setFormData(getDefaultFormData());
           setShowStrategyForm(false);
           setEditingStrategyId(null);
-          console.log("✅ Stratégie sauvegardée");
         } catch (err) {
           const errMsg = err?.message || JSON.stringify(err) || "Unknown error";
-          console.error("❌ Erreur sauvegarde stratégie:", errMsg);
-          alert(`❌ Erreur lors de la création de la stratégie: ${errMsg}`);
+          console.error("Erreur sauvegarde stratégie:", errMsg);
+          fireError("Erreur", `Impossible d'enregistrer la stratégie : ${errMsg}`);
         } finally {
           setLoading(false);
         }
@@ -220,7 +173,6 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
       setLoading(true);
       const snap = strategies.find(s => s.id === strategyToDelete);
       await deleteStrategy(strategyToDelete);
-      console.log('✅ Stratégie supprimée');
       if (snap) pushUndo({
         label: "Suppression de la stratégie",
         undo: async () => { try { await addStrategy({ name: snap.name, description: snap.description, color: snap.color, groups: snap.groups }); } catch (e) { console.error("undo strategy failed:", e); } },
@@ -229,8 +181,8 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
       setStrategyToDelete(null);
     } catch (err) {
       const errMsg = err?.message || JSON.stringify(err) || 'Unknown error';
-      console.error('❌ Erreur suppression stratégie:', errMsg);
-      alert(`❌ Erreur lors de la suppression: ${errMsg}`);
+      console.error('Erreur suppression stratégie:', errMsg);
+      fireError("Erreur", `Impossible de supprimer la stratégie : ${errMsg}`);
       setShowDeleteConfirm(false);
       setStrategyToDelete(null);
     } finally {
@@ -248,6 +200,18 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     setEditingStrategyId(null);
     setFormData(getDefaultFormData());
   };
+
+  // Fermeture des modales à la touche Échap.
+  React.useEffect(() => {
+    if (!showStrategyForm && !showDeleteConfirm) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (showDeleteConfirm) cancelDelete();
+      else if (showStrategyForm) handleCancelEdit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showStrategyForm, showDeleteConfirm]);
 
   const addGroup = () => {
     setFormData({
@@ -295,8 +259,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
       {/* HEADER */}
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-        <h1 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)"}}>{t("strat.title")}</h1>
-        <button onClick={() => setShowStrategyForm(true)} style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,padding:"7px 16px",height:34,borderRadius:999,background:T.text,border:`1px solid ${T.text}`,color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"var(--font-sans)"}}>
+        <button onClick={() => setShowStrategyForm(true)} style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,padding:"7px 16px",height:34,borderRadius:999,background:T.text,border:`1px solid ${T.text}`,color:T.white,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"var(--font-sans)"}}>
           <Plus size={14} strokeWidth={2}/> {t("strat.createBtn")}
         </button>
         <div id="tr4de-page-header-slot" />
@@ -360,7 +323,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
         );
 
         return (
-          <div className="tr4de-kpi-row" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+          <div className="tr4de-kpi-row" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
               <Cell
                 label="Meilleure performance"
@@ -396,7 +359,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
       {strategies && Array.isArray(strategies) && strategies.length > 0 && (
         <div className="anim-stagger" style={{display:"flex",flexDirection:"column",gap:12}}>
           {trades.length === 0 && (
-            <div style={{padding:"20px",background:"#fff3cd",borderRadius:8,borderLeft:"4px solid #ffc107"}}>
+            <div style={{padding:"20px",background:T.amberBg,borderRadius:"var(--radius-card)",borderLeft:`4px solid ${T.amber}`}}>
               <strong>{t("strat.noTradesLoaded")}</strong><br/>
               {t("strat.noTradesLoadedSub")}
             </div>
@@ -446,22 +409,12 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
             });
 
             return sortedStrategies.map((strategy, sIdx) => {
-              // 🔍 DEBUG LOG
-              console.log(`\n📊 Strategy: "${strategy.name}" (ID: ${strategy.id})`);
-              console.log(`  Total trades available: ${trades.length}`);
-              console.log(`  Strategy assignments data keys: ${Object.keys(tradeStrategiesData).length}`);
-              if (Object.keys(tradeStrategiesData).length > 0) {
-                console.log(`  First mapping keys:`, Object.keys(tradeStrategiesData).slice(0, 3));
-              }
-
             // Compter les trades assignés à cette stratégie
             const strategyTradeCount = trades.filter(t => {
               const strategyIds = getStrategyIdsForTrade(t);
               // Convertir tous les IDs en string pour comparaison fiable
               return strategyIds.map(id => String(id)).includes(String(strategy.id));
             }).length;
-            
-            console.log(`  Matching trades found: ${strategyTradeCount}`);
 
             // Calculer stats rapides (pour l'aperçu)
             const strategyTrades = trades.filter(t => {
@@ -610,6 +563,9 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               <div
                 key={strategy.id}
                 data-card
+                role="button"
+                tabIndex={0}
+                aria-label={strategy.name}
                 style={{
                   position:"relative",
                   display:"grid",
@@ -618,17 +574,25 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   padding:20,
                   background:T.white,
                   border:`1px solid ${T.border}`,
-                  borderRadius: 12,
+                  borderRadius: "var(--radius-card)",
                   cursor:"pointer",
                   minHeight:200,
                   alignItems:"stretch"
                 }}
-                onMouseEnter={(e)=>{ e.currentTarget.style.borderColor = T.border2; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)"; }}
+                onMouseEnter={(e)=>{ e.currentTarget.style.borderColor = T.border2; e.currentTarget.style.boxShadow = "var(--elev-hover)"; }}
                 onMouseLeave={(e)=>{ e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}
                 onClick={() => {
                   setSelectedStrategyId(strategy.id);
                   localStorage.setItem('selectedStrategyId', strategy.id);
                   setPage('strategy-detail');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedStrategyId(strategy.id);
+                    localStorage.setItem('selectedStrategyId', strategy.id);
+                    setPage('strategy-detail');
+                  }
                 }}
               >
                 {/* ========== LEFT SECTION: STATISTICS ========== */}
@@ -674,6 +638,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   <button
                     onClick={(e) => { e.stopPropagation(); handleEditStrategy(strategy); }}
                     title={t("strat.editTip")}
+                    aria-label={t("strat.editTip")}
                     style={{
                       width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",
                       borderRadius:6,border:"none",background:"transparent",
@@ -687,6 +652,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteStrategy(strategy.id); }}
                     title={t("strat.deleteTip")}
+                    aria-label={t("strat.deleteTip")}
                     style={{
                       width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",
                       borderRadius:6,border:"none",background:"transparent",
@@ -738,8 +704,8 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
 
       {/* EMPTY STATE */}
       {(!strategies || !Array.isArray(strategies) || strategies.length === 0) && (
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:12,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-          <div style={{width:48,height:48,borderRadius:12,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+          <div style={{width:48,height:48,borderRadius:"var(--radius-card)",background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <Target size={22} strokeWidth={1.75} color={T.text}/>
           </div>
           <div style={{fontSize:17,fontWeight:600,color:T.text,marginBottom:6,letterSpacing:-0.1}}>{t("strat.empty")}</div>
@@ -753,21 +719,21 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
       {/* ─── MODALE DE CONFIRMATION DE SUPPRESSION ─── */}
       {showDeleteConfirm && ReactDOM.createPortal(
         <div onClick={cancelDelete} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:12,padding:32,maxWidth:400,width:"90%",boxShadow:"0 20px 25px -5px rgba(0,0,0,0.1)"}}>
+          <div role="dialog" aria-modal="true" aria-label={t("strat.deleteTitle")} onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:"var(--radius-card)",padding:32,maxWidth:400,width:"90%",boxShadow:"var(--elev-overlay)"}}>
             <h2 style={{fontSize:18,fontWeight:700,color:T.text,textAlign:"left",marginBottom:12}}>{t("strat.deleteTitle")}</h2>
             <p style={{fontSize:14,color:T.textSub,textAlign:"left",marginBottom:24,lineHeight:1.5}}>{t("strat.deleteWarn")}</p>
             
             <div style={{display:"flex",gap:12,justifyContent:"flex-end"}}>
               <button
                 onClick={cancelDelete}
-                style={{padding:"10px 20px",borderRadius:8,border:`1px solid ${T.border}`,background:T.white,fontSize:13,fontWeight:600,cursor:"pointer",color:T.text,transition:"all .2s"}}
+                style={{padding:"10px 20px",borderRadius:"var(--radius-card)",border:`1px solid ${T.border}`,background:T.white,fontSize:13,fontWeight:600,cursor:"pointer",color:T.text,transition:"all .2s"}}
               >
                 {t("common.cancel")}
               </button>
               <button
                 onClick={confirmDelete}
                 disabled={loading}
-                style={{padding:"10px 20px",borderRadius:8,border:"none",background:T.red,fontSize:13,fontWeight:600,cursor:loading?"not-allowed":"pointer",color:"#fff",transition:"all .2s",opacity:loading?0.6:1}}
+                style={{padding:"10px 20px",borderRadius:"var(--radius-card)",border:"none",background:T.red,fontSize:13,fontWeight:600,cursor:loading?"not-allowed":"pointer",color:"#fff",transition:"all .2s",opacity:loading?0.6:1}}
               >
                 {loading ? (t("common.loading")) : t("common.delete")}
               </button>
@@ -780,7 +746,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
       {/* ─── MODALE DE CRÉATION/ÉDITION ─── */}
       {showStrategyForm && ReactDOM.createPortal(
         <div {...backdropDismiss(handleCancelEdit)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font-sans)"}}>
-          <div onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:14,maxWidth:560,width:"92%",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,0.18)",border:`1px solid ${T.border}`,overflow:"hidden"}}>
+          <div role="dialog" aria-modal="true" aria-label={editingStrategyId ? t("strat.edit") : t("strat.new")} onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:14,maxWidth:560,width:"92%",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"var(--elev-overlay)",border:`1px solid ${T.border}`,overflow:"hidden"}}>
 
             {/* Header */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:`1px solid ${T.border}`}}>
@@ -790,7 +756,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   {editingStrategyId ? t("strat.edit") : t("strat.new")}
                 </h2>
               </div>
-              <button onClick={handleCancelEdit} style={{display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,background:"transparent",border:"none",cursor:"pointer",color:T.textMut,borderRadius:6}}
+              <button onClick={handleCancelEdit} aria-label={t("common.cancel")} style={{display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,background:"transparent",border:"none",cursor:"pointer",color:T.textMut,borderRadius:6}}
                 onMouseEnter={(e)=>{e.currentTarget.style.background=T.accentBg}} onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}>
                 <X size={16} strokeWidth={1.75}/>
               </button>
@@ -803,7 +769,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               <div>
                 <label style={{display:"block",fontSize:12,fontWeight:500,marginBottom:6,color:T.textSub}}>{t("strat.name")}</label>
                 <input type="text" value={formData.name} onChange={(e)=>setFormData({...formData,name:e.target.value})} placeholder={t("strat.namePh")}
-                  style={{width:"100%",padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,outline:"none",fontFamily:"inherit",color:T.text,background:T.white}}
+                  style={{width:"100%",padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",fontSize:13,outline:"none",fontFamily:"inherit",color:T.text,background:T.white}}
                   />
               </div>
 
@@ -811,7 +777,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               <div>
                 <label style={{display:"block",fontSize:12,fontWeight:500,marginBottom:6,color:T.textSub}}>{t("strat.description")}</label>
                 <textarea value={formData.description} onChange={(e)=>setFormData({...formData,description:e.target.value})} placeholder={t("strat.descPh")}
-                  style={{width:"100%",padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,outline:"none",resize:"vertical",minHeight:64,fontFamily:"inherit",color:T.text,background:T.white,lineHeight:1.5}}
+                  style={{width:"100%",padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",fontSize:13,outline:"none",resize:"vertical",minHeight:64,fontFamily:"inherit",color:T.text,background:T.white,lineHeight:1.5}}
                   />
               </div>
 
@@ -822,7 +788,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   {colors.map(color=>{
                     const selected = formData.color === color;
                     return (
-                      <button key={color} type="button" onClick={()=>setFormData({...formData,color})}
+                      <button key={color} type="button" onClick={()=>setFormData({...formData,color})} aria-label={`Couleur ${color}`} aria-pressed={selected}
                         style={{width:24,height:24,borderRadius:"50%",background:color,border:"none",cursor:"pointer",padding:0,boxShadow:selected?`0 0 0 2px ${T.white}, 0 0 0 4px ${T.text}`:"none",transition:"box-shadow .15s ease",flexShrink:0}}/>
                     );
                   })}
@@ -846,7 +812,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                         <input type="text" placeholder={t("strat.groupNamePh")} value={group.name} onChange={(e)=>updateGroup(group.id,"name",e.target.value)}
                           style={{flex:1,padding:"6px 8px",border:"none",fontSize:12,fontWeight:600,outline:"none",color:T.text,background:"transparent",fontFamily:"inherit",letterSpacing:0.2}}/>
                         {formData.groups.length > 1 && (
-                          <button onClick={()=>removeGroup(group.id)} title={t("strat.removeGroupTip")}
+                          <button onClick={()=>removeGroup(group.id)} title={t("strat.removeGroupTip")} aria-label={t("strat.removeGroupTip")}
                             style={{display:"flex",alignItems:"center",justifyContent:"center",width:24,height:24,background:"transparent",border:"none",cursor:"pointer",color:T.textMut,borderRadius:6}}
                             onMouseEnter={(e)=>{e.currentTarget.style.background=T.redBg;e.currentTarget.style.color=T.red}}
                             onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMut}}>
@@ -865,8 +831,8 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                             <input type="text" placeholder={t("strat.rulePh")} value={rule.text} onChange={(e)=>updateRule(group.id,rule.id,e.target.value)}
                               style={{flex:1,padding:"4px 0",border:"none",fontSize:12,outline:"none",color:T.text,background:"transparent",fontFamily:"inherit"}}/>
                             {group.rules.length > 1 && (
-                              <button onClick={()=>removeRule(group.id,rule.id)}
-                                style={{display:"flex",alignItems:"center",justifyContent:"center",width:20,height:20,background:"transparent",border:"none",cursor:"pointer",color:T.textMut,borderRadius:4}}
+                              <button onClick={()=>removeRule(group.id,rule.id)} aria-label={t("strat.removeGroupTip")}
+                                style={{display:"flex",alignItems:"center",justifyContent:"center",width:20,height:20,background:"transparent",border:"none",cursor:"pointer",color:T.textMut,borderRadius:"var(--radius-field)"}}
                                 onMouseEnter={(e)=>{e.currentTarget.style.color=T.red}} onMouseLeave={(e)=>{e.currentTarget.style.color=T.textMut}}>
                                 <X size={11} strokeWidth={2}/>
                               </button>
@@ -889,7 +855,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
             <div style={{display:"flex",gap:8,justifyContent:"flex-end",padding:"14px 24px",borderTop:`1px solid ${T.border}`,background:T.bg}}>
               <button onClick={handleCancelEdit} style={{padding:"8px 18px",height:34,borderRadius:999,border:`1px solid ${T.border}`,background:T.white,fontSize:13,fontWeight:600,cursor:"pointer",color:T.text,fontFamily:"var(--font-sans)"}}>{t("common.cancel")}</button>
               <button onClick={handleCreateStrategy} disabled={!formData.name.trim()}
-                style={{padding:"8px 18px",height:34,borderRadius:999,border:`1px solid ${T.text}`,background:T.text,color:"#fff",fontSize:13,fontWeight:600,cursor:formData.name.trim()?"pointer":"not-allowed",opacity:formData.name.trim()?1:0.5,fontFamily:"var(--font-sans)"}}>
+                style={{padding:"8px 18px",height:34,borderRadius:999,border:`1px solid ${T.text}`,background:T.text,color:T.white,fontSize:13,fontWeight:600,cursor:formData.name.trim()?"pointer":"not-allowed",opacity:formData.name.trim()?1:0.5,fontFamily:"var(--font-sans)"}}>
                 {editingStrategyId ? t("common.save") : t("strat.createBtn2")}
               </button>
             </div>

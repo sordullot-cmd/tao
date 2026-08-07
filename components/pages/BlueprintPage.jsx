@@ -35,16 +35,14 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { t, useLang } from "@/lib/i18n";
+import { T as BaseT } from "@/lib/ui/tokens";
 
 export const BLUEPRINT_STORAGE_KEY = "tr4de_blueprints";
 export const BLUEPRINT_CLOUD_KEY = "blueprints";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5", bg: "#F5F5F5",
-  text: "#0D0D0D", textSub: "#5C5C5C", textMut: "#8E8E8E",
-  accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", red: "#EF4444", blue: "#3B82F6", amber: "#F59E0B", violet: "#8B5CF6",
-};
+// `bg` local (#F5F5F5) = fond subtil, mappé sur la var de survol (thème sombre).
+// `violet` absent du T partagé → réutilise la var `purple` existante.
+const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)", violet: "var(--color-purple, #8B5CF6)" };
 
 // Les cinq clés de la motivation, dans l'ordre du wizard. Chaque entrée porte
 // son texte pédagogique (résumé fidèle de la vidéo) affiché en tête d'étape.
@@ -182,7 +180,6 @@ export default function BlueprintPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
       {/* En-tête */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1 }}>{t("nav.blueprint")}</h1>
         <span style={{ fontSize: 12, color: T.textMut }}>Transformez un objectif en plan motivant, fondé sur les 5 clés de la réussite.</span>
         <button onClick={() => setWizard(emptyDraft())} style={{ ...btnPrimary(), marginLeft: "auto" }}>
           <Plus size={14} strokeWidth={2} /> Nouveau plan
@@ -217,8 +214,8 @@ export default function BlueprintPage() {
 /* ---------- État vide ---------- */
 function EmptyState({ onCreate }) {
   return (
-    <div style={{ border: `1px dashed ${T.border}`, borderRadius: 16, padding: "48px 24px", textAlign: "center", background: T.white }}>
-      <div style={{ width: 56, height: 56, borderRadius: 16, background: T.accentBg, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+    <div style={{ border: `1px dashed ${T.border}`, borderRadius: "var(--radius-modal)", padding: "48px 24px", textAlign: "center", background: T.white }}>
+      <div style={{ width: 56, height: 56, borderRadius: "var(--radius-modal)", background: T.accentBg, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
         <Route size={26} strokeWidth={1.75} color={T.text} />
       </div>
       <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 6 }}>{"Aucun plan pour l'instant"}</div>
@@ -227,7 +224,7 @@ function EmptyState({ onCreate }) {
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginBottom: 24 }}>
         {PILLARS.map(p => (
-          <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: p.color, background: `${p.color}12`, border: `1px solid ${p.color}30`, borderRadius: 999, padding: "5px 11px" }}>
+          <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: p.color, background: `color-mix(in srgb, ${p.color} 7%, transparent)`, border: `1px solid color-mix(in srgb, ${p.color} 20%, transparent)`, borderRadius: 999, padding: "5px 11px" }}>
             <p.icon size={13} strokeWidth={2} /> {p.title}
           </span>
         ))}
@@ -245,7 +242,7 @@ function PlanCard({ bp, onOpen, onDelete }) {
   const dl = daysLeft(bp.deadline);
   return (
     <div onClick={onOpen} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ border: `1px solid ${T.border}`, borderRadius: 12, padding: 16, background: T.white, cursor: "pointer", display: "flex", flexDirection: "column", gap: 12, transition: "box-shadow .15s ease", boxShadow: hover ? "0 6px 20px rgba(0,0,0,0.08)" : "none" }}>
+      style={{ border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 16, background: T.white, cursor: "pointer", display: "flex", flexDirection: "column", gap: 12, transition: "box-shadow .15s ease", boxShadow: hover ? "var(--elev-hover)" : "none" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
@@ -254,8 +251,8 @@ function PlanCard({ bp, onOpen, onDelete }) {
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: T.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{bp.title || "Objectif sans titre"}</div>
         </div>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Supprimer"
-          style={{ ...iconBtnSm(), opacity: hover ? 1 : 0, pointerEvents: hover ? "auto" : "none", transition: "opacity .15s ease" }}>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Supprimer" aria-label="Supprimer le plan"
+          style={{ ...iconBtnSm(), opacity: hover ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
           <Trash2 size={13} strokeWidth={1.75} />
         </button>
       </div>
@@ -281,7 +278,8 @@ function ProgressTrack({ pct, milestones, compact = false, onMilestoneClick }) {
   const h = compact ? 8 : 12;
   return (
     <div style={{ position: "relative", padding: compact ? "6px 0" : "22px 2px 26px" }}>
-      <div style={{ position: "relative", height: h, borderRadius: 999, background: T.accentBg }}>
+      <div role="progressbar" aria-valuenow={Math.max(0, Math.min(100, Math.round(pct)))} aria-valuemin={0} aria-valuemax={100} aria-label="Progression du plan"
+        style={{ position: "relative", height: h, borderRadius: 999, background: T.accentBg }}>
         <div style={{ position: "absolute", inset: 0, width: `${pct}%`, height: "100%", borderRadius: 999, background: pct >= 100 ? T.green : T.text, transition: "width .5s ease" }} />
         {sorted.map(m => {
           const reached = pct >= m.atPct;
@@ -330,7 +328,7 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Barre d'actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button onClick={onBack} style={iconBtnSm()}><ChevronLeft size={16} strokeWidth={2} /></button>
+        <button onClick={onBack} aria-label="Retour aux plans" style={iconBtnSm()}><ChevronLeft size={16} strokeWidth={2} /></button>
         <span style={{ fontSize: 12.5, color: T.textSub }}>Retour aux plans</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button onClick={onEdit} style={btnGhost()}><Pencil size={13} strokeWidth={1.75} /> Modifier</button>
@@ -361,7 +359,7 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
         </div>
 
         {plan.why && (
-          <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: 12, background: `${cat.color}0A`, border: `1px solid ${cat.color}1F` }}>
+          <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-card)", background: `color-mix(in srgb, ${cat.color} 4%, transparent)`, border: `1px solid color-mix(in srgb, ${cat.color} 12%, transparent)` }}>
             <Quote size={16} strokeWidth={2} color={cat.color} style={{ flexShrink: 0, marginTop: 1 }} />
             <div style={{ fontSize: 13.5, color: T.textSub, fontStyle: "italic", lineHeight: 1.5 }}>{plan.why}</div>
           </div>
@@ -372,9 +370,9 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
 
         {/* Prochain marqueur / arrivée */}
         {reachedFinal ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-card)", background: T.greenBg, border: `1px solid ${T.greenBd}` }}>
             <Trophy size={18} strokeWidth={2} color={T.green} />
-            <div style={{ fontSize: 13.5, color: "#15803D", fontWeight: 600 }}>
+            <div style={{ fontSize: 13.5, color: T.green, fontWeight: 600 }}>
               Objectif atteint — vous êtes un vrai gagnant !{plan.finalReward ? ` Récompense : ${plan.finalReward}.` : ""}
             </div>
           </div>
@@ -416,8 +414,8 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
           {milestones.map(m => {
             const reached = pct >= m.atPct;
             return (
-              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, background: reached ? "#F0FDF4" : T.bg, border: `1px solid ${reached ? "#BBF7D0" : T.border}` }}>
-                <div style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: reached ? T.green : T.white, border: `1px solid ${reached ? T.green : T.border}`, color: reached ? "#fff" : T.textMut, fontSize: 11, fontWeight: 700 }}>
+              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, background: reached ? T.greenBg : T.bg, border: `1px solid ${reached ? T.greenBd : T.border}` }}>
+                <div style={{ width: 30, height: 30, borderRadius: "var(--radius-card)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: reached ? T.green : T.white, border: `1px solid ${reached ? T.green : T.border}`, color: reached ? "#fff" : T.textMut, fontSize: 11, fontWeight: 700 }}>
                   {reached ? <Check size={14} strokeWidth={3} /> : `${m.atPct}%`}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -432,7 +430,7 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
             );
           })}
           {plan.finalReward && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, background: "#FFFBEB", border: "1px solid #FDE68A" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, background: T.amberBg, border: `1px solid color-mix(in srgb, ${T.amber} 35%, transparent)` }}>
               <Trophy size={18} strokeWidth={2} color={T.amber} style={{ flexShrink: 0 }} />
               <div>
                 <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: T.amber }}>Récompense finale</div>
@@ -459,7 +457,7 @@ function MilestoneGroup({ milestone, items, reached, onToggle }) {
         {items.map((tk, i) => (
           <button key={tk.id} onClick={() => onToggle(tk.id)}
             style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", borderBottom: i < items.length - 1 ? `1px solid ${T.border}` : "none" }}>
-            <span style={{ width: 16, height: 16, borderRadius: 5, flexShrink: 0, border: `1.5px solid ${tk.done ? T.green : T.border}`, background: tk.done ? T.green : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${tk.done ? T.green : T.border}`, background: tk.done ? T.green : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               {tk.done && <Check size={11} strokeWidth={3} />}
             </span>
             <span style={{ flex: 1, fontSize: 13.5, color: tk.done ? T.textMut : T.text, textDecoration: tk.done ? "line-through" : "none" }}>{tk.label}</span>
@@ -473,7 +471,7 @@ function MilestoneGroup({ milestone, items, reached, onToggle }) {
 function SectionHeader({ icon: Icon, color, title, subtitle }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ width: 30, height: 30, borderRadius: 8, background: `${color}14`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <div style={{ width: 30, height: 30, borderRadius: "var(--radius-card)", background: `color-mix(in srgb, ${color} 8%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Icon size={16} strokeWidth={2} color={color} />
       </div>
       <div>
@@ -509,10 +507,10 @@ function Wizard({ initial, onSave, onClose }) {
           <React.Fragment key={p.id}>
             <button onClick={() => i < step && setStep(i)} disabled={i > step}
               title={p.title}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "50%", flexShrink: 0, border: `2px solid ${i <= step ? p.color : T.border}`, background: i < step ? p.color : i === step ? `${p.color}18` : T.white, color: i < step ? "#fff" : i === step ? p.color : T.textMut, cursor: i < step ? "pointer" : "default", padding: 0 }}>
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: "50%", flexShrink: 0, border: `2px solid ${i <= step ? p.color : T.border}`, background: i < step ? p.color : i === step ? `color-mix(in srgb, ${p.color} 9%, transparent)` : T.white, color: i < step ? "#fff" : i === step ? p.color : T.textMut, cursor: i < step ? "pointer" : "default", padding: 0 }}>
               {i < step ? <Check size={14} strokeWidth={3} /> : <p.icon size={14} strokeWidth={2} />}
             </button>
-            {i < PILLARS.length - 1 && <div style={{ flex: 1, height: 2, borderRadius: 2, background: i < step ? p.color : T.border }} />}
+            {i < PILLARS.length - 1 && <div style={{ flex: 1, height: 2, borderRadius: "var(--radius-field)", background: i < step ? p.color : T.border }} />}
           </React.Fragment>
         ))}
       </div>
@@ -577,7 +575,7 @@ function StepGoal({ draft, set }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {CATEGORIES.map(c => (
               <button key={c.id} onClick={() => set({ category: c.id })}
-                style={{ fontSize: 12, fontWeight: 600, padding: "5px 11px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${draft.category === c.id ? c.color : T.border}`, background: draft.category === c.id ? `${c.color}14` : T.white, color: draft.category === c.id ? c.color : T.textSub }}>
+                style={{ fontSize: 12, fontWeight: 600, padding: "5px 11px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${draft.category === c.id ? c.color : T.border}`, background: draft.category === c.id ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: draft.category === c.id ? c.color : T.textSub }}>
                 {c.label}
               </button>
             ))}
@@ -606,10 +604,10 @@ function StepMarkers({ draft, setMilestones }) {
           <Flag size={14} strokeWidth={2} color={T.amber} style={{ flexShrink: 0 }} />
           <input value={m.label} onChange={e => patch(m.id, { label: e.target.value })} placeholder="Nom du marqueur" style={{ ...inputStyle(), flex: 1, padding: "6px 9px" }} />
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <input type="number" min={1} max={100} value={m.atPct} onChange={e => patch(m.id, { atPct: e.target.value })} style={{ ...inputStyle(), width: 64, padding: "6px 8px", textAlign: "right" }} />
+            <input type="number" min={1} max={100} value={m.atPct} onChange={e => patch(m.id, { atPct: e.target.value === "" ? "" : Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)) })} style={{ ...inputStyle(), width: 64, padding: "6px 8px", textAlign: "right" }} />
             <span style={{ fontSize: 12, color: T.textMut }}>%</span>
           </div>
-          <button onClick={() => remove(m.id)} style={iconBtnSm()}><X size={13} strokeWidth={2} /></button>
+          <button onClick={() => remove(m.id)} aria-label="Retirer le marqueur" style={iconBtnSm()}><X size={13} strokeWidth={2} /></button>
         </div>
       ))}
       {milestones.length === 0 && <div style={{ fontSize: 12.5, color: T.textMut, padding: "8px 0" }}>Ajoutez au moins un marqueur pour suivre votre progression.</div>}
@@ -652,7 +650,7 @@ function StepTasks({ draft, setTasks }) {
                   {milestones.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
                 </select>
               )}
-              <button onClick={() => remove(tk.id)} style={iconBtnSm()}><X size={13} strokeWidth={2} /></button>
+              <button onClick={() => remove(tk.id)} aria-label="Retirer l'étape" style={iconBtnSm()}><X size={13} strokeWidth={2} /></button>
             </div>
           ))}
         </div>
@@ -699,7 +697,7 @@ function StepRewards({ draft, setMilestones, set }) {
             placeholder={`Récompense pour « ${m.label} »`} style={{ ...inputStyle(), flex: 1, padding: "7px 9px" }} />
         </div>
       ))}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px", borderRadius: 10, background: "#FFFBEB", border: "1px solid #FDE68A", marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px", borderRadius: 10, background: T.amberBg, border: `1px solid color-mix(in srgb, ${T.amber} 35%, transparent)`, marginTop: 4 }}>
         <Trophy size={16} strokeWidth={2} color={T.amber} style={{ flexShrink: 0 }} />
         <input value={draft.finalReward} onChange={e => set({ finalReward: e.target.value })}
           placeholder="Grande récompense à l'arrivée (ex. un week-end, un achat que je m'offre)" style={{ ...inputStyle(), flex: 1, padding: "7px 9px", background: T.white }} />
@@ -730,7 +728,8 @@ function Modal({ children, onClose, maxWidth = 600 }) {
   return ReactDOM.createPortal(
     <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,13,0.42)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px 16px", overflowY: "auto", fontFamily: "var(--font-sans)" }}>
-      <div style={{ width: "100%", maxWidth, background: T.white, borderRadius: 16, padding: 22, boxShadow: "0 24px 60px rgba(0,0,0,0.22)" }}>
+      <div role="dialog" aria-modal="true" aria-label="Assistant de création de plan"
+        style={{ width: "100%", maxWidth, background: T.white, borderRadius: "var(--radius-modal)", padding: 22, boxShadow: "var(--elev-overlay)" }}>
         {children}
       </div>
     </div>,
@@ -739,17 +738,17 @@ function Modal({ children, onClose, maxWidth = 600 }) {
 }
 
 function inputStyle() {
-  return { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 13, color: T.text, padding: "9px 11px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.white, outline: "none" };
+  return { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 13, color: T.text, padding: "9px 11px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, outline: "none" };
 }
 function btnPrimary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "none", background: T.text, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-card)", border: "none", background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnGhost() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnSoft() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.accentBg, color: T.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.accentBg, color: T.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function iconBtnSm() {
-  return { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 7, border: `1px solid ${T.border}`, background: T.white, color: T.textMut, cursor: "pointer", flexShrink: 0, padding: 0 };
+  return { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textMut, cursor: "pointer", flexShrink: 0, padding: 0 };
 }

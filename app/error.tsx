@@ -20,9 +20,9 @@ export default function Error({
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        height: "100vh",
+        height: "100dvh",
         width: "100vw",
-        background: "#FFFFFF",
+        background: "var(--color-bg, #FFFFFF)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -35,8 +35,8 @@ export default function Error({
           width: 64,
           height: 64,
           borderRadius: "50%",
-          background: "#FFFFFF",
-          border: "1px solid #E5E5E5",
+          background: "var(--color-card-bg, #FFFFFF)",
+          border: "1px solid var(--color-border, #E5E5E5)",
           boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
           display: "flex",
           alignItems: "center",
@@ -54,39 +54,68 @@ export default function Error({
         />
       </div>
 
-      <div style={{ fontSize: 13, color: "#0D0D0D" }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text, #0D0D0D)" }}>
         Une erreur est survenue
       </div>
+      <div style={{ fontSize: 12.5, color: "var(--color-text-sub, #5C5C5C)", maxWidth: 340, textAlign: "center", lineHeight: 1.5 }}>
+        Quelque chose n'a pas fonctionné. Réessaie, ou recharge la page si le problème persiste.
+      </div>
 
-      <div style={{ display: "inline-flex", gap: 14, fontSize: 12 }}>
+      <div style={{ display: "inline-flex", gap: 10, fontSize: 13, flexWrap: "wrap", justifyContent: "center" }}>
         <button
           type="button"
           onClick={reset}
           style={{
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            color: "#0D0D0D",
+            background: "var(--color-btn-primary-bg, #0D0D0D)",
+            color: "var(--color-btn-primary-text, #FFFFFF)",
+            border: "1px solid var(--color-btn-primary-bg, #0D0D0D)",
+            padding: "9px 18px",
+            minHeight: 40,
+            borderRadius: 999,
             cursor: "pointer",
             fontFamily: "inherit",
-            fontSize: 12,
-            textDecoration: "underline",
-            textUnderlineOffset: 3,
+            fontWeight: 600,
           }}
         >
           Réessayer
         </button>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          style={{
+            background: "var(--color-card-bg, #FFFFFF)",
+            color: "var(--color-text, #0D0D0D)",
+            border: "1px solid var(--color-border, #E5E5E5)",
+            padding: "9px 18px",
+            minHeight: 40,
+            borderRadius: 999,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontWeight: 500,
+          }}
+        >
+          Recharger la page
+        </button>
         <Link
           href="/"
           style={{
-            color: "#8E8E8E",
-            textDecoration: "underline",
-            textUnderlineOffset: 3,
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "9px 18px",
+            minHeight: 40,
+            borderRadius: 999,
+            color: "var(--color-text-sub, #5C5C5C)",
           }}
         >
-          Accueil
+          Tableau de bord
         </Link>
       </div>
+
+      {error?.digest && (
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-muted, #6B6B6B)", marginTop: 4 }}>
+          ref&nbsp;: {error.digest}
+        </div>
+      )}
     </div>
   );
 }

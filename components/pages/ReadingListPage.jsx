@@ -8,13 +8,9 @@ import { useUndo } from "@/lib/contexts/UndoContext";
 import { Stat } from "@/components/ui/Stat";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5",
-  text: "#0D0D0D", textSub: "#5C5C5C", textMut: "#8E8E8E",
-  accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", red: "#EF4444", blue: "#3B82F6", amber: "#F59E0B", purple: "#A855F7",
-};
+const T = { ...BaseT };
 
 const STORAGE_KEY = "tr4de_books";
 
@@ -101,7 +97,6 @@ export default function ReadingListPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>{t("nav.reading")}</h1>
         <button onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyForm); }}
           style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <Plus size={14} strokeWidth={2} /> Ajouter un livre
@@ -111,7 +106,7 @@ export default function ReadingListPage() {
 
       {/* Importance de la lecture */}
       {showIntro ? (
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16, display: "flex", gap: 14, alignItems: "flex-start", position: "relative" }}>
+        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 16, display: "flex", gap: 14, alignItems: "flex-start", position: "relative" }}>
           <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, background: T.accentBg, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
             <BookOpen size={18} strokeWidth={1.75} color={T.text} />
           </div>
@@ -121,7 +116,7 @@ export default function ReadingListPage() {
               La lecture est le raccourci le plus court entre l’expérience des autres et la tienne. Les meilleurs traders consacrent du temps chaque jour à lire — sur les marchés, la psychologie, le risque et la prise de décision. Un livre bien choisi peut t’éviter des années d’erreurs coûteuses, affiner ton edge et solidifier ta discipline mentale. Construis ta bibliothèque, prends des notes, retiens les idées clés : c’est un investissement à rendement composé.
             </div>
           </div>
-          <button onClick={() => setShowIntro(false)} title="Masquer"
+          <button onClick={() => setShowIntro(false)} aria-label="Masquer l'encart" title="Masquer"
             style={{ position: "absolute", top: 10, right: 10, width: 24, height: 24, borderRadius: 6, border: `1px solid ${T.border}`, background: T.white, color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
             <X size={12} strokeWidth={2} />
           </button>
@@ -134,7 +129,7 @@ export default function ReadingListPage() {
       )}
 
       {/* Header stats — strip collé style page Objectifs */}
-      <div style={{ display: "flex", background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", fontFamily: "var(--font-sans)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
         <ReadingStatCell icon={BookMarked} label="En cours"   value={counts.reading} subLabel={counts.reading > 1 ? "livres en lecture" : "livre en lecture"} />
         <ReadingStatCell icon={Check}      label="Terminés"   value={counts.done}    subLabel={counts.done > 1 ? "livres lus" : "livre lu"} />
         <ReadingStatCell icon={FileText}   label="Pages lues" value={pagesRead}      subLabel="pages cumulées" />
@@ -145,10 +140,10 @@ export default function ReadingListPage() {
         <div {...backdropDismiss(cancel)}
           style={{ position: "fixed", inset: 0, background: "rgba(13,13,13,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 480, background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: "0 12px 40px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", maxHeight: "85vh" }}>
+            style={{ width: "100%", maxWidth: 480, background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", maxHeight: "85vh" }}>
             <div style={{ padding: "16px 20px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{editingId ? "Modifier le livre" : "Nouveau livre"}</div>
-              <button onClick={cancel} style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <button onClick={cancel} aria-label="Fermer" style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                 <X size={14} strokeWidth={2} />
               </button>
             </div>
@@ -214,11 +209,11 @@ export default function ReadingListPage() {
 
             <div style={{ padding: "12px 20px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={cancel}
-                style={{ padding: "7px 14px", height: 34, borderRadius: 8, background: "transparent", border: "none", color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ padding: "7px 14px", height: 34, borderRadius: "var(--radius-card)", background: "transparent", border: "none", color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                 Annuler
               </button>
               <button onClick={save} disabled={!form.title.trim()}
-                style={{ padding: "7px 16px", height: 34, borderRadius: 8, background: form.title.trim() ? T.text : T.accentBg, border: "none", color: form.title.trim() ? "#fff" : T.textMut, fontSize: 13, fontWeight: 600, cursor: form.title.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+                style={{ padding: "7px 16px", height: 34, borderRadius: "var(--radius-card)", background: form.title.trim() ? T.text : T.accentBg, border: "none", color: form.title.trim() ? "#fff" : T.textMut, fontSize: 13, fontWeight: 600, cursor: form.title.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
                 {editingId ? "Enregistrer" : "Ajouter"}
               </button>
             </div>
@@ -228,7 +223,7 @@ export default function ReadingListPage() {
       )}
 
       {/* Filter tabs */}
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
         {[{ id: "all", label: "Tous" }, ...STATUSES].map(f => (
           <button key={f.id} onClick={() => setFilter(f.id)}
             style={{
@@ -238,6 +233,7 @@ export default function ReadingListPage() {
               color: filter === f.id ? T.white : T.text,
               fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: 6,
+              flexShrink: 0, whiteSpace: "nowrap",
             }}>
             {f.label}
             <span style={{ padding: "0 6px", borderRadius: 999, fontSize: 10, background: filter === f.id ? "rgba(255,255,255,0.18)" : T.accentBg, color: filter === f.id ? T.white : T.textSub }}>{counts[f.id]}</span>
@@ -246,8 +242,8 @@ export default function ReadingListPage() {
       </div>
 
       {shown.length === 0 ? (
-        <div style={{ background: T.white, border: `1px dashed ${T.border}`, borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: 12, background: T.accentBg, marginBottom: 12 }}>
+        <div style={{ background: T.white, border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)", padding: "48px 24px", textAlign: "center" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: "var(--radius-card)", background: T.accentBg, marginBottom: 12 }}>
             <BookOpen size={20} strokeWidth={1.75} color={T.textSub} />
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 4 }}>Aucun livre pour le moment</div>
@@ -264,7 +260,7 @@ export default function ReadingListPage() {
             const pri = PRIORITIES.find(p => p.id === (b.priority || "normal"));
             const isOpen = expandedId === b.id;
             return (
-              <div key={b.id} data-card style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div key={b.id} data-card style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title}</div>
@@ -281,8 +277,8 @@ export default function ReadingListPage() {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                    <button onClick={() => openEdit(b)} style={miniBtn()} title="Modifier"><Pencil size={11} strokeWidth={1.75} /></button>
-                    <button onClick={() => remove(b.id)} style={{ ...miniBtn(), color: T.red }} title="Supprimer"><Trash2 size={11} strokeWidth={1.75} /></button>
+                    <button onClick={() => openEdit(b)} style={miniBtn()} aria-label="Modifier le livre" title="Modifier"><Pencil size={11} strokeWidth={1.75} /></button>
+                    <button onClick={() => remove(b.id)} style={{ ...miniBtn(), color: T.red }} aria-label="Supprimer le livre" title="Supprimer"><Trash2 size={11} strokeWidth={1.75} /></button>
                   </div>
                 </div>
 
@@ -291,8 +287,8 @@ export default function ReadingListPage() {
                     <span>{total > 0 ? `${current}/${total} pages` : (b.status === "done" ? "Terminé" : "—")}</span>
                     <span>{Math.round(pct)}%</span>
                   </div>
-                  <div style={{ height: 5, background: T.accentBg, borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: st.color, borderRadius: 3, transition: "width .4s ease" }} />
+                  <div style={{ height: 5, background: T.accentBg, borderRadius: "var(--radius-field)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: st.color, borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
                   </div>
                 </div>
 
@@ -305,7 +301,7 @@ export default function ReadingListPage() {
                     value={noteDraft}
                     onChange={(e) => { setNoteDraft(e.target.value); updateNote(b.id, e.target.value); }}
                     placeholder="Citations clés, idées à retenir..."
-                    style={{ width: "100%", minHeight: 90, padding: 10, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: T.white, resize: "vertical", lineHeight: 1.5 }}
+                    style={{ width: "100%", minHeight: 90, padding: 10, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: T.white, resize: "vertical", lineHeight: 1.5 }}
                   />
                 )}
               </div>
@@ -337,7 +333,7 @@ function PrettySelect({ value, onChange, options }) {
         onClick={() => setOpen(o => !o)}
         style={{
           width: "100%", padding: "8px 12px", border: `1px solid ${open ? T.text : T.border}`,
-          borderRadius: 8, fontSize: 13, outline: "none", fontFamily: "inherit",
+          borderRadius: "var(--radius-card)", fontSize: 13, outline: "none", fontFamily: "inherit",
           color: T.text, background: T.white, cursor: "pointer",
           display: "inline-flex", alignItems: "center", justifyContent: "space-between", gap: 8,
           transition: "border-color .15s ease",
@@ -353,7 +349,7 @@ function PrettySelect({ value, onChange, options }) {
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
           background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)",
+          boxShadow: "var(--elev-overlay)",
           padding: 4, maxHeight: 260, overflowY: "auto",
         }}>
           {options.map(o => {
@@ -389,10 +385,10 @@ function PrettySelect({ value, onChange, options }) {
 // label, gros chiffre, sous-texte. Séparées par bordures verticales.
 function ReadingStatCell({ icon: Icon, label, subLabel, value, isLast }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, padding: 16, borderRight: isLast ? "none" : `1px solid ${T.border}` }}>
+    <div style={{ flex: "1 1 140px", minWidth: 140, padding: 16, borderRight: isLast ? "none" : `1px solid ${T.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         {Icon && (
-          <div style={{ width: 26, height: 26, borderRadius: 8, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 26, height: 26, borderRadius: "var(--radius-card)", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Icon size={14} strokeWidth={1.75} color={T.text} />
           </div>
         )}

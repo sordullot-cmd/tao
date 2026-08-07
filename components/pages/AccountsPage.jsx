@@ -2,6 +2,10 @@
 
 import React from "react";
 import { T } from "@/lib/ui/tokens";
+import { CARD, SectionTitle, KpiCard, accountColor } from "@/components/ui/da";
+import {
+  AccountRowsHeader, TableRow, SubRow, AddAccountRow, RoundLogo, PassFundedButton,
+} from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
@@ -14,12 +18,15 @@ const fmtNoCents = (n) => {
   const prefix = v < 0 ? "-" : "";
   return `${prefix}${sym}${Math.abs(v).toLocaleString("en-US")}`;
 };
-import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, X, Calendar, ChevronDown } from "lucide-react";
+import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, X, Calendar, ChevronDown, Building2 } from "lucide-react";
 import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { isArchivedAccount, ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import ReactDOM from "react-dom";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
+import { PropFirmModal, AccountModal } from "@/components/modals/AccountModals";
+import { resolveRules, readFundedMeta } from "@/lib/propFirms";
+import { resolvePlatformIcon } from "@/lib/brokers/platforms";
 
 const BROKER_LOGOS = {
   "tradovate":           "/trado.png",
@@ -57,28 +64,29 @@ const getBrokerLogo = (broker) => {
   return BROKER_LOGOS[String(broker).trim().toLowerCase()] || null;
 };
 
+/* ─── Couleurs encore absentes de lib/ui/tokens.ts ───────────────────────────
+   Définies ici en CSS vars (avec repli clair) pour ne pas casser le thème
+   sombre. À remonter dans lib/ui/tokens.ts quand la DA les tranchera. */
+// TODO token DA : `textInverted` — texte posé sur un aplat T.text.
+//   clair #FFFFFF / sombre #0D0D0D (la var existe déjà dans globals.css).
+const TEXT_INVERTED = "var(--color-text-inverted, #FFFFFF)";
+// TODO token DA : `onSolid` — texte posé sur un aplat de couleur pleine
+//   (vert/rouge d'action). clair #FFFFFF / sombre #FFFFFF.
+const ON_SOLID = "var(--color-on-solid, #FFFFFF)";
+// TODO token DA : `scrim` — voile derrière les modales.
+//   clair rgba(0,0,0,.45) / sombre rgba(0,0,0,.62).
+const SCRIM = "var(--color-scrim, rgba(0,0,0,0.45))";
+
 /* ─── Métadonnées funded (localStorage uniquement, pas de migration DB) ──
    Stocke par account.id : date de passage funded + paramètres (target, DD, payout).
    Permet de "remettre le PnL à 0" en n'agrégeant que les trades datés après
-   funded_at, et d'afficher DD restant + payout dispo sur la carte. */
-const FUNDED_META_KEY = "tr4de_accounts_funded_meta";
-const readFundedMeta = () => {
-  try { return JSON.parse(localStorage.getItem(FUNDED_META_KEY) || "{}"); } catch { return {}; }
-};
-const writeFundedMeta = (m) => {
-  try { localStorage.setItem(FUNDED_META_KEY, JSON.stringify(m)); } catch {}
-};
+   funded_at, et d'afficher DD restant + payout dispo sur la carte.
+   Le lecteur vit dans lib/propFirms (readFundedMeta), partagé avec la page
+   détail d'une firme pour que « Payout dispo » y soit calculé pareil. */
 
-// Cible/DD inférés depuis la taille du compte. Fallback : 6% target / 5% DD.
-const inferEvalParams = (capital) => {
-  const c = Number(capital) || 0;
-  if (!c) return { profitTarget: 0, maxDD: 0, payoutMin: 0 };
-  return {
-    profitTarget: Math.round(c * 0.06),
-    maxDD: Math.round(c * 0.05),
-    payoutMin: 0,
-  };
-};
+// Cible/DD inférés depuis la taille du compte (6 % target / 5 % DD) —
+// seuils uniformes, voir lib/propFirms.
+const inferEvalParams = (capital) => resolveRules(capital);
 
 const parseEvalSize = (size) => {
   if (size == null) return null;
@@ -91,9 +99,16 @@ const parseEvalSize = (size) => {
   return num;
 };
 
-export default function AccountsPage({ accounts = [], trades = [], setPage, selectedAccountIds = [], setSelectedAccountIds, setSelectedAccountDetailId, setAccounts, archivedMeta = {}, setArchivedMeta }) {
+export default function AccountsPage({ accounts = [], trades = [], setPage, selectedAccountIds = [], setSelectedAccountIds, setSelectedAccountDetailId, setSelectedFirmId, setAccounts, firms = [], setFirms, userId, archivedMeta = {}, setArchivedMeta }) {
   useLang();
   const notPlaceholder = (accounts || []).filter((a) => !isPlaceholderAccount(a.id));
+  const firmById = React.useMemo(() => new Map((firms || []).map((f) => [f.id, f])), [firms]);
+  // Modales de création : la firme (objet parent) et le compte isolé sont deux
+  // parcours distincts, séparés de l'import de trades.
+  const [creatingFirm, setCreatingFirm] = React.useState(false);
+  // `null` = modale fermée ; sinon { firmId } — "" pour un compte isolé, l'id de
+  // la firme quand la création part du bouton d'une ligne de firme.
+  const [creatingAccount, setCreatingAccount] = React.useState(null);
   // Comptes actifs (grille principale + KPI) vs comptes eval archivés (section
   // dédiée en bas). Un compte archivé garde ses trades mais son P&L ne compte
   // plus dans les totaux du site.
@@ -121,6 +136,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
   // dans la carte agrégée « Comptes eval passés » via leurs trade_ids ; ils
   // restent aussi dans la page Stratégies (mapping par trade, pas par compte).
   const [passing, setPassing] = React.useState(null); // id du compte en cours de passage
+  const [confirmFunded, setConfirmFunded] = React.useState(null); // compte en attente de confirmation
   const passToFunded = async (acc) => {
     if (!acc || passing) return;
     setPassing(acc.id);
@@ -145,6 +161,8 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
           broker: acc.broker || null,
           account_type: "funded",
           eval_account_size: acc.eval_account_size || null,
+          // Le compte funded reste dans la même firme que l'eval qu'il remplace.
+          firm_id: acc.firm_id || null,
         }])
         .select();
       if (insErr) { console.error("⚠️ Création compte funded échouée:", insErr); setPassing(null); return; }
@@ -157,6 +175,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
           archived_at: new Date().toISOString(),
           name: acc.name || "Compte",
           broker: acc.broker || null,
+          firm_id: acc.firm_id || null,
           eval_account_size: acc.eval_account_size || null,
           trade_ids: evalTradeIds,
           funded_child_id: newAcc?.id || null,
@@ -271,6 +290,50 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
     setPage?.("account-detail");
   };
 
+  const onOpenFirm = (id) => {
+    setSelectedFirmId?.(id);
+    setPage?.("firm-detail");
+  };
+
+  // Comptes affichés dans la grille principale : uniquement ceux SANS firme.
+  // Les comptes rattachés à une firme sont représentés par la carte de leur
+  // firme (cliquable → page détail = paramètres de la firme).
+  const standaloneAccounts = React.useMemo(
+    () => visibleAccounts.filter((a) => !a.firm_id || !firmById.has(a.firm_id)),
+    [visibleAccounts, firmById]
+  );
+
+  // Agrégats par firme, calculés depuis les comptes actifs de la firme.
+  const firmSummaries = React.useMemo(() => {
+    return (firms || []).map((firm) => {
+      const accs = visibleAccounts.filter((a) => a.firm_id === firm.id);
+      let tradeCount = 0, wins = 0, pnl = 0, capital = 0;
+      const byType = { eval: 0, funded: 0, live: 0, demo: 0 };
+      accs.forEach((a) => {
+        const type = a.account_type || "live";
+        if (byType[type] != null) byType[type] += 1;
+        capital += parseEvalSize(a.eval_account_size) || 0;
+        const s = stats.get(a.id);
+        if (s) {
+          const isFunded = type === "funded";
+          tradeCount += isFunded ? s.fundedTrades : s.trades;
+          wins += isFunded ? s.fundedWins : s.wins;
+          pnl += isFunded ? s.fundedPnl : s.pnl;
+        }
+      });
+      return {
+        firm,
+        accounts: accs,
+        count: accs.length,
+        byType,
+        trades: tradeCount,
+        pnl,
+        capital,
+        winRate: tradeCount > 0 ? (wins / tradeCount) * 100 : 0,
+      };
+    });
+  }, [firms, visibleAccounts, stats]);
+
   // Stats des comptes eval passés : leurs trades ont perdu account_id (compte
   // supprimé), on les retrouve par trade_ids stockés dans l'archivage.
   const archivedStats = React.useMemo(() => {
@@ -291,413 +354,530 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
   }, [archivedAccounts, trades]);
 
   const winRateGlobal = totals.trades > 0 ? (totals.wins / totals.trades) * 100 : 0;
-  const pnlColorGlobal = totals.pnl > 0 ? T.green : totals.pnl < 0 ? T.red : T.text;
+
+  /* Séries d'équity par compte — alimentent les sparklines des cartes « Live ».
+     Ce sont les VRAIS trades : P&L cumulé, dans l'ordre chronologique. Pour un
+     compte funded on repart de funded_at (même règle que `stats`). */
+  const seriesByAccount = React.useMemo(() => {
+    const accById = new Map(notPlaceholder.map((a) => [a.id, a]));
+    const sorted = [...(trades || [])]
+      .filter((tr) => tr.account_id && accById.has(tr.account_id))
+      .sort((a, b) => {
+        const da = new Date(a.date || a.entry_time || 0).getTime();
+        const db = new Date(b.date || b.entry_time || 0).getTime();
+        return da - db;
+      });
+    const map = new Map();
+    for (const tr of sorted) {
+      const acc = accById.get(tr.account_id);
+      if ((acc.account_type || "live") === "funded") {
+        const meta = fundedMeta[acc.id];
+        const fundedAt = meta?.funded_at ? new Date(meta.funded_at).getTime() : 0;
+        const td = new Date(tr.date || 0).getTime();
+        if (!isNaN(td) && td < fundedAt) continue;
+      }
+      const arr = map.get(tr.account_id) || [0];
+      arr.push(arr[arr.length - 1] + (Number(tr.pnl) || 0));
+      map.set(tr.account_id, arr);
+    }
+    return map;
+  }, [notPlaceholder, trades, fundedMeta]);
+
+  /* Payout disponible d'un compte : uniquement sur les comptes funded, au-delà
+     du minimum de retrait paramétré. Sert la colonne « payout dispo ». */
+  const payoutFor = React.useCallback((acc) => {
+    if (!acc || (acc.account_type || "live") !== "funded") return 0;
+    const s = stats.get(acc.id);
+    if (!s) return 0;
+    return Math.max(0, s.fundedPnl - (fundedMeta[acc.id]?.funded_payout_min || 0));
+  }, [stats, fundedMeta]);
+
+  /* Vue « compte » unifiée : les chiffres affichés dépendent du type (un funded
+     repart de zéro à son passage funded). */
+  const viewOf = React.useCallback((acc) => {
+    const s = stats.get(acc.id) || { trades: 0, wins: 0, pnl: 0, fundedTrades: 0, fundedWins: 0, fundedPnl: 0 };
+    const isFunded = (acc.account_type || "live") === "funded";
+    const count = isFunded ? s.fundedTrades : s.trades;
+    const wins = isFunded ? s.fundedWins : s.wins;
+    const pnl = isFunded ? s.fundedPnl : s.pnl;
+    const capital = parseEvalSize(acc.eval_account_size);
+    return {
+      stats: s,
+      trades: count,
+      pnl,
+      capital,
+      value: capital != null ? capital + pnl : pnl,
+      winRate: count > 0 ? (wins / count) * 100 : null,
+      payout: payoutFor(acc),
+      pnlPct: capital ? (pnl / capital) * 100 : null,
+    };
+  }, [stats, payoutFor]);
+
+  /* Les 3 comptes les plus actifs, toutes origines confondues (rattachés à une
+     prop firm ou non). « Actif » = nombre de trades sur les 30 derniers jours ;
+     à défaut d'activité récente on retombe sur le volume total, puis sur la
+     date du dernier trade. Un compte funded ne compte que depuis funded_at,
+     comme partout ailleurs sur la page. */
+  const topActiveAccounts = React.useMemo(() => {
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const activity = new Map(visibleAccounts.map((a) => [a.id, { recent: 0, last: 0 }]));
+    for (const tr of trades || []) {
+      const entry = activity.get(tr.account_id);
+      if (!entry) continue;
+      const ts = new Date(tr.date || tr.entry_time || 0).getTime();
+      if (isNaN(ts)) continue;
+      if (ts >= since) entry.recent += 1;
+      if (ts > entry.last) entry.last = ts;
+    }
+    return [...visibleAccounts]
+      .sort((a, b) => {
+        const aa = activity.get(a.id) || { recent: 0, last: 0 };
+        const ab = activity.get(b.id) || { recent: 0, last: 0 };
+        if (ab.recent !== aa.recent) return ab.recent - aa.recent;
+        const ta = viewOf(a).trades, tb = viewOf(b).trades;
+        if (tb !== ta) return tb - ta;
+        return ab.last - aa.last;
+      })
+      .slice(0, 3);
+  }, [visibleAccounts, trades, viewOf]);
+
+  /* Un compte eval qui a atteint sa cible de profit peut passer funded. */
+  const canPassFunded = React.useCallback((acc) => {
+    if ((acc.account_type || "live") !== "eval") return false;
+    const capital = parseEvalSize(acc.eval_account_size);
+    if (!capital) return false;
+    const params = inferEvalParams(capital);
+    const s = stats.get(acc.id);
+    return !!params && params.profitTarget > 0 && (s?.pnl || 0) >= params.profitTarget;
+  }, [stats]);
+
+  // Lignes du tableau « Prop Firms » : une par firme (dépliable sur ses
+  // comptes), puis une par compte hors firme, puis l'agrégat des eval archivés.
+  const [expanded, setExpanded] = React.useState(() => new Set());
+  const toggleRow = (id) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }} className="anim-1">
-      {/* Header — titre + bouton */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1 }}>
-          {t("accountsPage.title")}
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+      {/* Confirmation du passage eval → funded (action destructive : supprime
+          le compte eval en base). Remplace l'exécution directe pour éviter
+          toute perte de compte accidentelle. */}
+      {confirmFunded && ReactDOM.createPortal(
+        <div {...backdropDismiss(() => setConfirmFunded(null))} style={{ position: "fixed", inset: 0, background: SCRIM, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Confirmer le passage en Funded" style={{ background: T.white, borderRadius: 14, padding: 24, maxWidth: 420, width: "100%", boxShadow: "var(--elev-overlay)" }} className="anim-modal">
+            <div style={{ fontSize: 16, fontWeight: 500, color: T.text, marginBottom: 8 }}>Passer « {confirmFunded.name || "Compte"} » en Funded ?</div>
+            <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.55, marginBottom: 20 }}>
+              Un nouveau compte funded vierge est créé. Le compte eval est <b>archivé et retiré des totaux</b> ; ses trades restent consultables dans la page Stratégies et la ligne « Comptes eval passés ». Cette action est difficile à annuler.
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setConfirmFunded(null)} style={{ padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+              <button type="button" onClick={() => { const acc = confirmFunded; setConfirmFunded(null); passToFunded(acc); }} style={{ padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.pnlPos, color: ON_SOLID, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Passer en Funded</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Titre de page + actions (création firme / compte). La maquette ne
+          montre pas ces boutons, mais ce sont les deux parcours de création. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <h1 style={{ fontSize: 20, fontWeight: 500, lineHeight: "26.35px", color: T.text, margin: 0 }}>
+          {t("nav.accounts")}
         </h1>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
         <button
-          onClick={() => setPage?.("add-trade")}
+          type="button"
+          onClick={() => setCreatingAccount({ firmId: "" })}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "7px 14px", borderRadius: 999,
-            border: `1px solid ${T.text}`, background: T.text, color: "#fff",
-            fontSize: 12, fontWeight: 600, cursor: "pointer",
-            fontFamily: "inherit",
+            padding: "7px 14px", borderRadius: 999, border: "none",
+            background: T.white, boxShadow: T.elevPill, color: T.text,
+            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}
         >
           <Plus size={13} strokeWidth={1.75} /> {t("accountsPage.newAccount")}
         </button>
+        <button
+          type="button"
+          onClick={() => setCreatingFirm(true)}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "7px 14px", borderRadius: 999, border: "none",
+            background: T.text, color: TEXT_INVERTED,
+            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          <Building2 size={13} strokeWidth={1.75} /> {t("firms.newFirm")}
+        </button>
       </div>
 
-      {/* Totaux */}
-      <div style={{
-        background: "var(--color-card-bg, #FFFFFF)",
-        border: `1px solid ${T.border}`,
-        borderRadius: 12,
-        overflow: "hidden",
-      }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)" }}>
-          <KpiCell label={t("accountsPage.kpiAccounts")} value={String(totals.accounts)} />
-          <KpiCell label={t("accountsPage.kpiCapital")} value={totals.capital > 0 ? fmtNoCents(totals.capital) : "—"} />
-          <KpiCell label={t("accountsPage.kpiTrades")} value={String(totals.trades)} />
-          <KpiCell
+      {/* Corps de page : blocs séparés de 36 px (maquette « Frame 94 »). */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+
+        {/* ─── Bandeau de KPI (5 tuiles égales, gap 12) ─── */}
+        <div className="tr4de-accounts-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
+          <KpiCard label={t("accountsPage.kpiAccounts")} value={String(totals.accounts)} />
+          <KpiCard label={t("accountsPage.kpiCapital")} value={totals.capital > 0 ? fmtNoCents(totals.capital) : "—"} />
+          <KpiCard label={t("accountsPage.kpiTrades")} value={String(totals.trades)} />
+          <KpiCard
             label={t("accountsPage.kpiPnL")}
             value={fmt(totals.pnl, true)}
-            valueColor={totals.pnl > 0 ? T.green : totals.pnl < 0 ? T.red : T.text}
+            tone={totals.pnl > 0 ? "pos" : totals.pnl < 0 ? "neg" : undefined}
           />
-          <KpiCell
-            label={t("accountsPage.kpiWR")}
-            value={totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—"}
-            last
-          />
+          <KpiCard label={t("accountsPage.kpiWR")} value={totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—"} />
         </div>
+
+        {/* ─── Les plus actifs : 3 cartes, comptes de prop firm ou non ─── */}
+        {topActiveAccounts.length > 0 && (
+          <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <SectionTitle>{t("accountsPage.mostActive")}</SectionTitle>
+            <div className="tr4de-accounts-live" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 24 }}>
+              {topActiveAccounts.map((acc) => (
+                <LiveAccountCard
+                  key={acc.id}
+                  account={acc}
+                  firmName={acc.firm_id ? firmById.get(acc.firm_id)?.name : null}
+                  view={viewOf(acc)}
+                  series={seriesByAccount.get(acc.id)}
+                  canPass={canPassFunded(acc)}
+                  passing={passing === acc.id}
+                  onPass={() => setConfirmFunded(acc)}
+                  onOpen={() => onOpenDetail(acc.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ─── Prop Firms : tableau de lignes-cartes dépliables ─── */}
+        {(firmSummaries.length > 0 || standaloneAccounts.length > 0 || archivedAccounts.length > 0) ? (
+          <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* La liste est l'index exhaustif : les 3 comptes mis en avant plus
+                haut y figurent aussi, sinon les agrégats par firme seraient
+                faux (« 3 comptes » avec 2 lignes au dépliage). */}
+            <SectionTitle>{t("accounts.allAccounts")}</SectionTitle>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <AccountRowsHeader />
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {/* Une ligne par firme, dépliable sur ses comptes */}
+                {firmSummaries.map((summary) => {
+                  const id = `firm:${summary.firm.id}`;
+                  const open = expanded.has(id);
+                  const payout = summary.accounts.reduce((sum, a) => sum + payoutFor(a), 0);
+                  return (
+                    <TableRow
+                      key={id}
+                      icon={resolvePlatformIcon(summary.firm.platform || summary.firm.name)}
+                      fallbackIcon={<Building2 size={12} strokeWidth={1.75} color={T.textSub} />}
+                      label={summary.firm.name}
+                      cells={[
+                        String(summary.count),
+                        summary.capital > 0 ? fmtNoCents(summary.capital + summary.pnl) : fmt(summary.pnl, false),
+                        summary.trades > 0 ? `${Math.round(summary.winRate)}%` : "—",
+                        fmtNoCents(payout),
+                      ]}
+                      /* Une firme est toujours dépliable : si elle n'a aucun
+                         compte rattaché, on le dit explicitement au lieu de
+                         masquer le chevron — sinon la ligne paraît cassée. */
+                      expandable
+                      open={open}
+                      onToggle={() => toggleRow(id)}
+                      onOpen={() => onOpenFirm(summary.firm.id)}
+                    >
+                      {summary.accounts.length === 0 && (
+                        <div style={{ fontSize: 14, color: T.textMut, padding: "4px 0 4px 30px" }}>
+                          Aucun compte rattaché à cette firme.
+                        </div>
+                      )}
+                      {summary.accounts.map((acc) => {
+                        const v = viewOf(acc);
+                        return (
+                          <SubRow
+                            key={acc.id}
+                            label={acc.name || acc.eval_account_size || "Compte"}
+                            badge={canPassFunded(acc) ? (
+                              <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
+                            ) : null}
+                            cells={[
+                              /* Le type prend la place de la pastille supprimée :
+                                 sans lui, rien ne distinguerait un eval d'un funded. */
+                              accountTypeLabel(acc),
+                              v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
+                              v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
+                              fmtNoCents(v.payout),
+                            ]}
+                            onOpen={() => onOpenDetail(acc.id)}
+                          />
+                        );
+                      })}
+                      {/* Ajout d'un compte directement rattaché à cette firme,
+                          sans passer par la page paramètres de la firme. */}
+                      <AddAccountRow onClick={() => setCreatingAccount({ firmId: summary.firm.id })} />
+                    </TableRow>
+                  );
+                })}
+
+                {/* Puis les comptes qui ne dépendent d'aucune firme */}
+                {standaloneAccounts.map((acc) => {
+                  const v = viewOf(acc);
+                  return (
+                    <TableRow
+                      key={`acc:${acc.id}`}
+                      icon={getBrokerLogo(acc.broker) || resolvePlatformIcon(acc.broker)}
+                      fallbackIcon={<Wallet size={12} strokeWidth={1.75} color={T.textSub} />}
+                      label={acc.name || "Compte"}
+                      badge={canPassFunded(acc) ? (
+                        <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
+                      ) : null}
+                      cells={[
+                        "1",
+                        v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
+                        v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
+                        fmtNoCents(v.payout),
+                      ]}
+                      expandable={false}
+                      onOpen={() => onOpenDetail(acc.id)}
+                    />
+                  );
+                })}
+
+                {/* Enfin l'agrégat des comptes eval archivés (hors totaux du site) */}
+                {archivedAccounts.length > 0 && (() => {
+                  const id = "archived";
+                  const open = expanded.has(id);
+                  let aTrades = 0, aWins = 0, aPnl = 0, aCapital = 0;
+                  archivedAccounts.forEach((a) => {
+                    const s = archivedStats.get(a.id);
+                    if (s) { aTrades += s.trades; aWins += s.wins; aPnl += s.pnl; }
+                    aCapital += parseEvalSize(a.eval_account_size) || 0;
+                  });
+                  return (
+                    <TableRow
+                      key={id}
+                      icon={null}
+                      fallbackIcon={<Trophy size={12} strokeWidth={1.75} color={T.textSub} />}
+                      label="Comptes eval passés"
+                      cells={[
+                        String(archivedAccounts.length),
+                        aCapital > 0 ? fmtNoCents(aCapital + aPnl) : fmt(aPnl, false),
+                        aTrades > 0 ? `${Math.round((aWins / aTrades) * 100)}%` : "—",
+                        fmtNoCents(0),
+                      ]}
+                      expandable
+                      open={open}
+                      onToggle={() => toggleRow(id)}
+                      onOpen={() => onOpenDetail(ARCHIVED_VIEW_ID)}
+                    >
+                      {archivedAccounts.map((a) => {
+                        const s = archivedStats.get(a.id) || { trades: 0, wins: 0, pnl: 0 };
+                        const cap = parseEvalSize(a.eval_account_size);
+                        return (
+                          <SubRow
+                            key={a.id}
+                            label={a.name || a.eval_account_size || "Compte"}
+                            cells={[
+                              accountTypeLabel(a),
+                              cap != null ? fmtNoCents(cap + s.pnl) : fmt(s.pnl, false),
+                              s.trades > 0 ? `${Math.round((s.wins / s.trades) * 100)}%` : "—",
+                              fmtNoCents(0),
+                            ]}
+                            onOpen={() => onOpenDetail(ARCHIVED_VIEW_ID)}
+                          />
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })()}
+              </div>
+            </div>
+          </section>
+        ) : (
+          /* État vide : aucun compte, aucune firme */
+          <div style={{ ...CARD, padding: "64px 40px", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+              <Wallet size={22} strokeWidth={1.75} color={T.text} />
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 500, color: T.text, marginBottom: 6 }}>{t("accountsPage.empty")}</div>
+            <div style={{ fontSize: 14, color: T.textSub, marginBottom: 20, maxWidth: 380, lineHeight: 1.5 }}>{t("firms.emptySub")}</div>
+            <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+              <button type="button" onClick={() => setCreatingFirm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 999, background: T.text, color: TEXT_INVERTED, fontSize: 14, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit" }}>
+                <Building2 size={14} strokeWidth={1.75} /> {t("firms.newFirm")}
+              </button>
+              <button type="button" onClick={() => setCreatingAccount({ firmId: "" })} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 999, background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 14, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit" }}>
+                <Plus size={14} strokeWidth={1.75} /> {t("accountsPage.newAccount")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Simulateur de scaling — hors maquette, conservé (fonctionnalité). */}
+        <ScalingSimulator accounts={visibleAccounts} />
       </div>
 
-      {/* Liste des comptes */}
-      {visibleAccounts.length === 0 && archivedAccounts.length === 0 ? (
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: "40px 40px", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Wallet size={22} strokeWidth={1.75} color={T.text} />
-          </div>
-          <div style={{ fontSize: 17, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>{t("accountsPage.empty")}</div>
-          <div style={{ fontSize: 13, color: T.textSub, marginBottom: 20, maxWidth: 380, lineHeight: 1.5 }}>{t("accountsPage.emptySub")}</div>
-          <button onClick={() => setPage?.("add-trade")} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 999, background: T.white, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${T.text}`, fontFamily: "var(--font-sans)" }}>
-            <Plus size={14} strokeWidth={2} /> {t("accountsPage.newAccount")}
-          </button>
-        </div>
-      ) : (
-        <div className="anim-stagger tr4de-accounts-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
-          {(() => {
-            const cards = [...visibleAccounts].sort((a, b) => {
-            const sa = stats.get(a.id) || { trades: 0, pnl: 0 };
-            const sb = stats.get(b.id) || { trades: 0, pnl: 0 };
-            if (sb.trades !== sa.trades) return sb.trades - sa.trades;
-            return sb.pnl - sa.pnl;
-          }).map((acc) => {
-            const s = stats.get(acc.id) || { trades: 0, wins: 0, losses: 0, pnl: 0, fundedTrades: 0, fundedWins: 0, fundedLosses: 0, fundedPnl: 0 };
-            const winRate = s.trades > 0 ? (s.wins / s.trades) * 100 : 0;
-            const fundedWinRate = s.fundedTrades > 0 ? (s.fundedWins / s.fundedTrades) * 100 : 0;
-            const isActive = selectedAccountIds.length === 1 && selectedAccountIds[0] === acc.id;
-            const type = acc.account_type || "live";
-            const dotColor = type === "eval" ? T.amber
-              : type === "funded" ? "#2563EB"
-              : type === "demo" ? "#8B5CF6"
-              : T.green;
-            const typeLabel = type === "eval"
-              ? `Eval${acc.eval_account_size ? ` · ${acc.eval_account_size}` : ""}`
-              : type === "funded"
-                ? `Funded${acc.eval_account_size ? ` · ${acc.eval_account_size}` : ""}`
-                : type === "demo"
-                  ? t("accountsPage.demo")
-                  : t("accountsPage.live");
-            const capital = parseEvalSize(acc.eval_account_size);
-            const hasBalance = capital !== null;
-            const meta = fundedMeta[acc.id];
-            // Vue funded dès que account_type === "funded", avec ou sans meta.
-            // Si pas de funded_at → on considère tous les trades comme funded.
-            const isFundedView = type === "funded";
-            // En vue funded, le PnL/balance affichés repartent de funded_at.
-            const displayPnl = isFundedView ? s.fundedPnl : s.pnl;
-            const displayTrades = isFundedView ? s.fundedTrades : s.trades;
-            const balance = hasBalance ? capital + displayPnl : null;
-            const pnlColor = displayPnl > 0 ? T.green : displayPnl < 0 ? T.red : T.textSub;
-            const pnlPct = capital ? (displayPnl / capital) * 100 : null;
-            // Pour eval : seuils inférés (target, DD)
-            const evalParams = capital ? inferEvalParams(capital) : null;
-            const canPassFunded = type === "eval" && evalParams && s.pnl >= evalParams.profitTarget && evalParams.profitTarget > 0;
-            // Pour funded : DD restant / payout dispo
-            const fundedMaxDD = meta?.funded_max_dd || (capital ? Math.round(capital * 0.05) : 0);
-            const ddRemaining = Math.max(0, fundedMaxDD - (s.fundedDD || 0));
-            const ddPct = fundedMaxDD > 0 ? Math.min(100, ((s.fundedDD || 0) / fundedMaxDD) * 100) : 0;
-            const payoutAvail = isFundedView ? Math.max(0, s.fundedPnl - (meta?.funded_payout_min || 0)) : 0;
-
-            const tradesCount = isFundedView ? s.fundedTrades : s.trades;
-            const wrValue = isFundedView ? fundedWinRate : winRate;
-            const winsValue = isFundedView ? s.fundedWins : s.wins;
-            const lossesValue = isFundedView ? s.fundedLosses : s.losses;
-
-            // Donut win rate (style strategy card)
-            const DonutChart = ({ winRate: wr, size = 48 }) => {
-              const radius = size / 2 - 6;
-              const circumference = 2 * Math.PI * radius;
-              const offset = circumference - (wr / 100) * circumference;
-              const color = wr >= 50 ? T.green : T.red;
-              return (
-                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.05))" }}>
-                  <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={T.border} strokeWidth="5" />
-                  <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth="5"
-                    strokeDasharray={circumference} strokeDashoffset={offset}
-                    strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`} />
-                </svg>
-              );
-            };
-
-            return (
-              <div
-                key={acc.id}
-                data-card
-                onClick={() => onOpenDetail(acc.id)}
-                style={{
-                  position: "relative",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                  padding: 20,
-                  background: T.surface,
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  transition: "border-color .15s, box-shadow .15s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.border2; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}
-              >
-                {/* Nom du compte */}
-                <div style={{ paddingRight: 200, marginBottom: 6 /* respiration avant la ligne type · broker */ }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: dotColor, flexShrink: 0 }} title={typeLabel} />
-                    <span style={{ fontSize: 15, fontWeight: 600, color: T.text, lineHeight: 1.3, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {acc.name || "Compte"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Pills type + broker — top-right absolu */}
-                <div style={{ position: "absolute", top: 16, right: 16, display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "60%" }}>
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 5,
-                    padding: "2px 8px", borderRadius: 999,
-                    border: `1px solid ${T.border}`, background: T.white,
-                    fontSize: 11, color: T.textSub, fontWeight: 500,
-                    whiteSpace: "nowrap",
-                  }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-                    {typeLabel}
-                  </span>
-                  {acc.broker && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "2px 8px", borderRadius: 999,
-                      border: `1px solid ${T.border}`, background: T.white,
-                      fontSize: 11, color: T.textSub, fontWeight: 500,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200,
-                    }}>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{acc.broker}</span>
-                      {getBrokerLogo(acc.broker) && (
-                        <img
-                          src={getBrokerLogo(acc.broker)}
-                          alt=""
-                          style={{ height: 14, maxWidth: 48, objectFit: "contain", flexShrink: 0, opacity: 0.85 }}
-                        />
-                      )}
-                    </span>
-                  )}
-                </div>
-
-                {/* Ligne P&L (gauche) | Win rate (centre) | Payout (droite, funded uniquement) */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16 }}>
-                  {/* P&L — gauche */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                    <div style={{ fontSize: 20, fontWeight: 600, color: hasBalance ? T.text : pnlColor, letterSpacing: -0.2, fontVariantNumeric: "tabular-nums" }}>
-                      {hasBalance ? fmtNoCents(balance) : (displayTrades > 0 ? fmt(displayPnl, true) : "—")}
-                    </div>
-                    {hasBalance && (
-                      <div style={{ fontSize: 12, fontWeight: 500, color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
-                        {displayPnl >= 0 ? "+" : ""}{fmtNoCents(displayPnl)}
-                        {pnlPct !== null && ` (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%)`}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Win rate — centre */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, justifySelf: "center" }}>
-                    <DonutChart winRate={tradesCount > 0 ? Math.round(wrValue) : 0} size={48} />
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Win rate</div>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                        {tradesCount > 0 ? `${wrValue.toFixed(1)}%` : "—"}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bloc droite — varie selon le type de compte */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, justifySelf: "end", textAlign: "right", minWidth: 0 }}>
-                    {isFundedView ? (
-                      <>
-                        <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Payout dispo</div>
-                        <div style={{ fontSize: 16, fontWeight: 600, color: payoutAvail > 0 ? T.green : T.textSub, letterSpacing: -0.1, fontVariantNumeric: "tabular-nums" }}>
-                          {fmtNoCents(payoutAvail)}
-                        </div>
-                      </>
-                    ) : type === "eval" && evalParams ? (
-                      <>
-                        <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Cible</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.1, fontVariantNumeric: "tabular-nums" }}>
-                          <span style={{ color: T.text }}>
-                            {fmtNoCents(s.pnl)}
-                          </span>
-                          <span style={{ color: T.textMut, fontWeight: 400 }}> / </span>
-                          <span style={{ color: T.text }}>{fmtNoCents(evalParams.profitTarget)}</span>
-                        </div>
-                      </>
-                    ) : (type === "live" || type === "demo") ? (
-                      <>
-                        <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Trades</div>
-                        <div style={{ fontSize: 16, fontWeight: 600, color: T.text, letterSpacing: -0.1, fontVariantNumeric: "tabular-nums" }}>
-                          {s.trades}
-                        </div>
-                        {hasBalance && (
-                          <div style={{ fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
-                            ROI {pnlPct !== null ? `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%` : "—"}
-                          </div>
-                        )}
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* "Objectif atteint" : passe en funded — bandeau bas, pleine largeur */}
-                {canPassFunded && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 12px", borderRadius: 10,
-                      background: T.greenBg, border: `1px solid ${T.greenBd || "#A7F3D0"}`,
-                      marginTop: 4,
-                    }}>
-                    <Trophy size={14} strokeWidth={1.75} color={T.green} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: T.green }}>
-                        Objectif atteint ({fmtNoCents(evalParams.profitTarget)})
-                      </div>
-                      <div style={{ fontSize: 11, color: T.textSub }}>
-                        Crée un nouveau compte funded vierge. L&apos;eval est archivé (ses trades restent dans Stratégies).
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={passing === acc.id}
-                      onClick={(e) => { e.stopPropagation(); passToFunded(acc); }}
-                      style={{
-                        padding: "6px 12px", borderRadius: 999,
-                        border: `1px solid ${T.green}`, background: T.white, color: T.green,
-                        fontSize: 11, fontWeight: 600, cursor: passing === acc.id ? "wait" : "pointer", fontFamily: "inherit",
-                        whiteSpace: "nowrap", opacity: passing === acc.id ? 0.6 : 1,
-                      }}>
-                      {passing === acc.id ? "Création…" : "Passer en Funded"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          });
-            // Carte agrégée « Comptes eval passés » insérée en 2e position
-            // (haut-droite en layout 2 colonnes) pour qu'elle soit bien visible.
-            if (archivedAccounts.length > 0) {
-              cards.splice(1, 0, (
-                <ArchivedAccountsCard
-                  key="__archived_card__"
-                  accounts={archivedAccounts}
-                  stats={archivedStats}
-                  onOpen={() => onOpenDetail(ARCHIVED_VIEW_ID)}
-                />
-              ));
+      {/* Création — firme (parent) et compte isolé, deux parcours distincts */}
+      {creatingFirm && (
+        <PropFirmModal
+          userId={userId}
+          onClose={() => setCreatingFirm(false)}
+          onSaved={(firm) => {
+            setFirms?.((prev) => [...(prev || []), firm]);
+            // On enchaîne directement sur ses paramètres : c'est là qu'on règle
+            // le nombre et le type de comptes.
+            onOpenFirm(firm.id);
+          }}
+        />
+      )}
+      {creatingAccount && (
+        <AccountModal
+          firms={firms}
+          defaultFirmId={creatingAccount.firmId || ""}
+          userId={userId}
+          onClose={() => setCreatingAccount(null)}
+          onSaved={(acc) => {
+            setAccounts?.((prev) => [acc, ...(prev || [])]);
+            setSelectedAccountIds?.((prev) => {
+              const next = [...(prev || [])];
+              if (!next.includes(acc.id)) next.push(acc.id);
+              try { localStorage.setItem("selectedAccountIds", JSON.stringify(next)); } catch {}
+              return next;
+            });
+            // Le compte créé depuis une firme apparaît dans sa ligne dépliée :
+            // on ouvre le dépliage pour qu'il soit visible immédiatement.
+            if (creatingAccount.firmId) {
+              setExpanded((prev) => new Set(prev).add(`firm:${creatingAccount.firmId}`));
             }
-            return cards;
-          })()}
-        </div>
+          }}
+        />
       )}
 
-      {/* Simulateur de scaling — bloc déplacé depuis la page Scaling */}
-      <ScalingSimulator accounts={visibleAccounts} />
+      {/* Repli mobile / tablette de la grille de KPI et des cartes Live. */}
+      <style>{`
+        @media (max-width: 1100px) {
+          .tr4de-accounts-live { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .tr4de-accounts-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        }
+        @media (max-width: 720px) {
+          .tr4de-accounts-live { grid-template-columns: minmax(0, 1fr) !important; }
+          .tr4de-accounts-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+      `}</style>
     </div>
   );
 }
 
-/* ============== CARTE UNIQUE « COMPTES EVAL PASSÉS » (ARCHIVÉS) ==============
-   Une seule carte qui agrège toutes les données de tous les comptes eval passés.
-   Le clic ouvre la vue détail agrégée (AccountDetailPage en mode ARCHIVED_VIEW_ID),
-   où l'on peut filtrer/trier par compte individuel. */
-function ArchivedDonut({ winRate: wr, size = 48 }) {
-  const radius = size / 2 - 6;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (wr / 100) * circumference;
-  const color = wr >= 50 ? T.green : T.red;
+/* ============================================================================
+   BRIQUES DE LA PAGE (maquette Figma « My accounts », node 283:10382)
+   ========================================================================== */
+
+/* Courbe d'équity miniature d'une carte « Live » — tracée sur les vrais
+   trades du compte (P&L cumulé). Sans trade, on affiche une ligne médiane
+   atténuée plutôt qu'une fausse courbe. */
+function Sparkline({ values, color, height = 131 }) {
+  const W = 100;
+  if (!values || values.length < 2) {
+    return (
+      <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none"
+        style={{ display: "block" }} aria-hidden>
+        <line x1="0" y1={height / 2} x2={W} y2={height / 2}
+          stroke={T.numMuted} strokeWidth="2" strokeDasharray="4 5" vectorEffect="non-scaling-stroke" />
+      </svg>
+    );
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = (max - min) || 1;
+  const pad = 3;
+  const pts = values.map((v, i) => [
+    (i / (values.length - 1)) * W,
+    height - pad - ((v - min) / span) * (height - pad * 2),
+  ]);
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0]} ${p[1]}`).join(" ");
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.05))" }}>
-      <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={T.border} strokeWidth="5" />
-      <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke={color} strokeWidth="5"
-        strokeDasharray={circumference} strokeDashoffset={offset}
-        strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`} />
+    <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none"
+      style={{ display: "block", overflow: "visible" }} aria-hidden>
+      <path d={d} fill="none" stroke={color} strokeWidth="2.5"
+        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
 
-function ArchivedAccountsCard({ accounts = [], stats, onOpen }) {
-  // Agrégat de tous les comptes archivés
-  const agg = React.useMemo(() => {
-    let trades = 0, wins = 0, losses = 0, pnl = 0, capital = 0;
-    for (const acc of accounts) {
-      const s = stats.get(acc.id);
-      if (s) { trades += s.trades; wins += s.wins; losses += s.losses; pnl += s.pnl; }
-      capital += parseEvalSize(acc.eval_account_size) || 0;
-    }
-    const winRate = trades > 0 ? (wins / trades) * 100 : 0;
-    return { trades, wins, losses, pnl, capital, winRate };
-  }, [accounts, stats]);
-
-  const pnlColor = agg.pnl > 0 ? T.green : agg.pnl < 0 ? T.red : T.textSub;
-
+/* ============== CARTE « LIVE » (compte hors firme) ==============
+   Maquette : logo rond 44, nom 16 / broker 14 à 40 %, courbe d'équity,
+   puis P&L (+%) au-dessus de la valeur du compte. */
+function LiveAccountCard({ account, firmName, view, series, canPass, passing, onPass, onOpen }) {
+  // Le logo suit le broker du compte ; à défaut, celui de sa firme.
+  const logo = getBrokerLogo(account.broker)
+    || resolvePlatformIcon(account.broker)
+    || (firmName ? resolvePlatformIcon(firmName) : null);
+  // Sous-titre : la firme d'abord — c'est ce qui distingue deux comptes
+  // homonymes chez deux prop firms —, sinon le broker, sinon le type.
+  const subtitle = firmName || account.broker || accountTypeLabel(account);
+  // La courbe porte la couleur d'identité du compte (maquette : trois comptes
+  // au même P&L, trois couleurs) ; le chiffre du P&L garde, lui, le code
+  // gain/perte, sinon un compte perdant en vert serait trompeur.
+  const curveColor = accountColor(account.id);
+  const pnlColor = view.pnl > 0 ? T.pnlPos : view.pnl < 0 ? T.pnlNeg : T.textSub;
+  const amount = fmtNoCents(view.value);
   return (
     <div
       data-card
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      style={{
-        position: "relative", display: "flex", flexDirection: "column", gap: 8,
-        padding: 20, background: T.surface, border: `1px solid ${T.border}`,
-        borderRadius: 12, cursor: "pointer",
-        transition: "border-color .15s, box-shadow .15s",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.border2; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.04)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
+      style={{ ...CARD, padding: 20, display: "flex", flexDirection: "column", gap: 16, cursor: "pointer" }}
     >
-      {/* Titre + pill */}
-      <div style={{ paddingRight: 160, marginBottom: 6 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: T.text, lineHeight: 1.3, letterSpacing: -0.1 }}>
-          Comptes eval passés
-        </div>
-        <div style={{ fontSize: 11, color: T.textMut, marginTop: 3 }}>
-          Données unifiées · exclues des totaux du site, conservées dans Stratégies
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        <RoundLogo src={logo} size={44} name={firmName || account.broker || account.name} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+          <span style={{ fontSize: 16, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {account.name || "Compte"}
+          </span>
+          <span style={{ fontSize: 14, color: T.text, opacity: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {subtitle}
+          </span>
         </div>
       </div>
-      <div style={{ position: "absolute", top: 16, right: 16, display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <span style={{
-          display: "inline-flex", alignItems: "center", gap: 5,
-          padding: "2px 8px", borderRadius: 999,
-          border: `1px solid ${T.border}`, background: T.white,
-          fontSize: 11, color: T.textSub, fontWeight: 500, whiteSpace: "nowrap",
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.amber, flexShrink: 0 }} />
-          {accounts.length} compte{accounts.length > 1 ? "s" : ""} archivé{accounts.length > 1 ? "s" : ""}
+
+      <Sparkline values={series} color={curveColor} />
+
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <span style={{ fontSize: 12, lineHeight: "18.6px", color: pnlColor, whiteSpace: "nowrap" }}>
+          {view.pnl > 0 ? "+" : ""}{fmtNoCents(view.pnl)}
+          {view.pnlPct != null && ` (${view.pnlPct > 0 ? "+" : ""}${view.pnlPct.toFixed(1)}%)`}
+        </span>
+        <span style={{ fontSize: 20, fontWeight: 500, lineHeight: "31px", letterSpacing: -0.65, color: T.text, whiteSpace: "nowrap" }}>
+          {amount}
         </span>
       </div>
 
-      {/* Ligne P&L | Win rate | Trades */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 600, color: pnlColor, letterSpacing: -0.2, fontVariantNumeric: "tabular-nums" }}>
-            {agg.trades > 0 ? fmt(agg.pnl, true) : "—"}
-          </div>
-          <div style={{ fontSize: 12, fontWeight: 500, color: T.textSub }}>P&L cumulé</div>
+      {canPass && (
+        <div onClick={(e) => e.stopPropagation()} style={{ display: "flex" }}>
+          <PassFundedButton busy={passing} onClick={onPass} />
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12, justifySelf: "center" }}>
-          <ArchivedDonut winRate={agg.trades > 0 ? Math.round(agg.winRate) : 0} size={48} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Win rate</div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-              {agg.trades > 0 ? `${agg.winRate.toFixed(1)}%` : "—"}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, justifySelf: "end", textAlign: "right" }}>
-          <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Trades</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: T.text, letterSpacing: -0.1, fontVariantNumeric: "tabular-nums" }}>
-            {agg.trades}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
+
+/* Libellé de repli quand le compte n'a pas de broker renseigné. */
+function accountTypeLabel(account) {
+  const type = account.account_type || "live";
+  const size = account.eval_account_size ? ` · ${account.eval_account_size}` : "";
+  if (type === "eval") return `Eval${size}`;
+  if (type === "funded") return `Funded${size}`;
+  if (type === "demo") return t("accountsPage.demo");
+  return t("accountsPage.live");
+}
+
+/* Les lignes de tableau (TableRow / SubRow), le logo rond et le bouton
+   « Passer en Funded » vivent dans components/ui/accountRows — partagés avec
+   la page détail d'une firme, qui liste ses comptes à l'identique. */
 
 /* ============== SCALING SIMULATOR ============== */
 function ScalingSimulator({ accounts = [] }) {
@@ -726,32 +906,30 @@ function ScalingSimulator({ accounts = [] }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       {/* Carte sliders (en haut) — titre + sous-titre cliquables pour replier */}
       <div style={{
-        background: "var(--color-card-bg, #FFFFFF)",
-        border: `1px solid ${T.border}`,
+        ...CARD,
+        padding: 0,
         borderRadius: open ? "12px 12px 0 0" : 12,
-        borderBottom: open ? "none" : `1px solid ${T.border}`,
-        overflow: "hidden",
       }}>
         <div
           onClick={() => setOpen(v => !v)}
           aria-expanded={open}
           role="button"
           style={{
-            padding: "14px 20px",
+            padding: "16px 20px",
             borderBottom: open ? `1px solid ${T.border}` : "none",
             display: "flex", alignItems: "center", gap: 12,
             cursor: "pointer",
             transition: "background .12s ease",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = T.bg || "#FAFAFA"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 style={{ fontSize: 13, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1 }}>{t("accountsPage.simTitle")}</h2>
-            <div style={{ fontSize: 11, color: T.textMut, marginTop: 2 }}>{t("accountsPage.simSub")}</div>
+            <h2 style={{ fontSize: 16, fontWeight: 500, color: T.text, margin: 0 }}>{t("accountsPage.simTitle")}</h2>
+            <div style={{ fontSize: 14, color: T.textSub, marginTop: 2 }}>{t("accountsPage.simSub")}</div>
           </div>
           <span style={{ display: "inline-flex", alignItems: "center", color: T.textSub }}>
-            <ChevronDown size={14} strokeWidth={2}
+            <ChevronDown size={16} strokeWidth={1.75}
               style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .15s ease" }} />
           </span>
         </div>
@@ -767,7 +945,7 @@ function ScalingSimulator({ accounts = [] }) {
 
       {/* Carte KPIs + progression (rattachée en dessous, visible quand ouvert) */}
       {open && (
-      <div style={{ background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: "0 0 12px 12px", overflow: "hidden" }}>
+      <div style={{ ...CARD, padding: 0, borderRadius: "0 0 12px 12px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
           <SimKpi label={t("accountsPage.kpiCapital")} value={fmtMoney(totalCapital)} />
           <SimKpi label={t("accountsPage.simMonthlyRevenue")} value={fmtMoney(monthlyRevenue)} valueColor={T.green} />
@@ -802,9 +980,9 @@ function ScalingSimulator({ accounts = [] }) {
                 <div style={{
                   fontSize: 11, fontWeight: 600,
                   padding: "3px 10px", borderRadius: 999,
-                  background: allDone ? "#F0FDF4" : "#F5F5F5",
-                  color: allDone ? T.green : T.text,
-                  border: `1px solid ${allDone ? "#A7F3D0" : T.border}`,
+                  background: allDone ? T.greenBg : T.accentBg,
+                  color: allDone ? T.pnlPos : T.text,
+                  border: `1px solid ${allDone ? T.greenBd : T.border}`,
                   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
                 }}>
                   {pct}%
@@ -822,11 +1000,11 @@ function ScalingSimulator({ accounts = [] }) {
                         width: 22, height: 22, borderRadius: "50%",
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
                         flexShrink: 0,
-                        background: done ? T.green : isNext ? "#FFFFFF" : "#FAFAFA",
-                        color: done ? "#FFFFFF" : isNext ? T.text : T.textMut,
-                        border: `1px solid ${done ? T.green : isNext ? T.text : T.border}`,
+                        background: done ? T.pnlPos : isNext ? T.white : T.calEmptyBg,
+                        color: done ? ON_SOLID : isNext ? T.text : T.textMut,
+                        border: `1px solid ${done ? T.pnlPos : isNext ? T.text : T.border}`,
                         fontSize: 10, fontWeight: 700,
-                        boxShadow: isNext ? `0 0 0 3px #F0F0F0` : "none",
+                        boxShadow: isNext ? `0 0 0 3px ${T.accentBg}` : "none",
                         transition: "all .15s ease",
                       }}>
                         {done ? <Check size={10} strokeWidth={3} /> : idx + 1}
@@ -837,7 +1015,7 @@ function ScalingSimulator({ accounts = [] }) {
                           background: idx < fundedCount - 1
                             ? T.green
                             : (idx === fundedCount - 1 ? `linear-gradient(90deg, ${T.green} 0%, ${T.border} 100%)` : T.border),
-                          borderRadius: 1,
+                          borderRadius: "var(--radius-field)",
                           transition: "background .3s ease",
                         }} />
                       )}
@@ -892,7 +1070,7 @@ function SimSlider({ label, value, min, max, step, fmt, onChange }) {
         input[type="range"].tr4de-slim::-webkit-slider-thumb {
           -webkit-appearance: none; appearance: none;
           width: 14px; height: 14px; border-radius: 50%;
-          background: ${T.blue}; border: 2px solid #FFFFFF;
+          background: ${T.blue}; border: 2px solid ${T.white};
           margin-top: -5px; cursor: pointer;
           box-shadow: 0 0 0 1px ${T.blue}, 0 1px 3px rgba(0,0,0,0.12);
           transition: transform .12s ease;
@@ -900,7 +1078,7 @@ function SimSlider({ label, value, min, max, step, fmt, onChange }) {
         input[type="range"].tr4de-slim::-webkit-slider-thumb:hover { transform: scale(1.15); }
         input[type="range"].tr4de-slim::-moz-range-thumb {
           width: 14px; height: 14px; border-radius: 50%;
-          background: ${T.blue}; border: 2px solid #FFFFFF;
+          background: ${T.blue}; border: 2px solid ${T.white};
           box-shadow: 0 0 0 1px ${T.blue}; cursor: pointer;
         }
       `}</style>
@@ -959,29 +1137,6 @@ function Stat({ label, value, tone, sub }) {
           {value}
         </span>
         {sub && <span style={{ fontSize: 10, color: T.textSub, whiteSpace: "nowrap" }}>{sub}</span>}
-      </div>
-    </div>
-  );
-}
-
-function KpiCell({ label, value, valueColor, last }) {
-  return (
-    <div style={{
-      padding: "14px 18px",
-      borderRight: last ? "none" : `1px solid ${T.border}`,
-      position: "relative",
-    }}>
-      <div style={{
-        fontSize: 12, color: "#5C5C5C", marginBottom: 8, fontWeight: 500,
-        display: "inline-flex", alignItems: "center", gap: 4,
-      }}>
-        {label} <span style={{ color: "#8E8E8E" }}>›</span>
-      </div>
-      <div style={{
-        fontSize: 20, fontWeight: 600,
-        color: valueColor || T.text, letterSpacing: -0.2,
-      }}>
-        {value}
       </div>
     </div>
   );
@@ -1259,7 +1414,7 @@ function AccountPlans({ accounts, trades }) {
       </div>
 
       {(plans || []).length === 0 ? (
-        <div style={{ border: `1px dashed ${T.border}`, borderRadius: 12, padding: 24, textAlign: "center", background: "var(--color-card-bg, #FFFFFF)", color: "#8E8E8E", fontSize: 12 }}>
+        <div style={{ border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)", padding: 24, textAlign: "center", background: "var(--color-card-bg, #FFFFFF)", color: "#8E8E8E", fontSize: 12 }}>
           Aucun plan. Crée ton premier plan pour suivre tes objectifs de progression sur tes comptes.
         </div>
       ) : (
@@ -1283,7 +1438,7 @@ function AccountPlans({ accounts, trades }) {
             return (
               <div key={p.id}
                 style={{
-                  background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: 12,
+                  background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
                   padding: 14, display: "flex", flexDirection: "column", gap: 10,
                 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -1323,9 +1478,9 @@ function AccountPlans({ accounts, trades }) {
                       {Math.round(pct)}%
                     </span>
                   </div>
-                  <div style={{ height: 4, borderRadius: 2, background: "#F0F0F0", overflow: "hidden" }}>
+                  <div style={{ height: 4, borderRadius: "var(--radius-field)", background: "#F0F0F0", overflow: "hidden" }}>
                     <div style={{
-                      height: "100%", width: `${pct}%`, borderRadius: 2,
+                      height: "100%", width: `${pct}%`, borderRadius: "var(--radius-field)",
                       background: achieved ? "#16A34A" : def.color,
                       transition: "width .4s ease",
                     }} />
@@ -1360,7 +1515,7 @@ function AccountPlans({ accounts, trades }) {
         <div {...backdropDismiss(close)}
           style={{ position: "fixed", inset: 0, background: "transparent", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
-            style={{ width: "min(560px, 100%)", maxHeight: "min(85vh, 760px)", display: "flex", flexDirection: "column", background: "var(--color-card-bg, #FFFFFF)", borderRadius: 14, boxShadow: "0 24px 64px rgba(0,0,0,0.28)", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
+            style={{ width: "min(560px, 100%)", maxHeight: "min(85vh, 760px)", display: "flex", flexDirection: "column", background: "var(--color-card-bg, #FFFFFF)", borderRadius: 14, boxShadow: "var(--elev-overlay)", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>
                 {editingId ? "Modifier le plan" : "Nouveau plan"}
@@ -1410,7 +1565,7 @@ function AccountPlans({ accounts, trades }) {
                             onClick={() => setForm({ ...form, templateId: tpl.id, title: form.title || tpl.name })}
                             style={{
                               display: "flex", alignItems: "center", gap: 8,
-                              padding: "10px 12px", borderRadius: 8,
+                              padding: "10px 12px", borderRadius: "var(--radius-card)",
                               border: `1px solid ${active ? tpl.color : T.border}`,
                               background: active ? `${tpl.color}10` : "#FFFFFF",
                               color: T.text, cursor: "pointer", fontFamily: "inherit",
@@ -1440,7 +1595,7 @@ function AccountPlans({ accounts, trades }) {
                     const tpl = PLAN_TEMPLATES.find(t => t.id === form.templateId);
                     if (!tpl) return null;
                     return (
-                      <div style={{ background: "var(--color-bg, #FAFAFA)", border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ background: "var(--color-bg, #FAFAFA)", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "10px 12px" }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Règles des phases</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {tpl.phases.map((ph, i) => (
@@ -1499,13 +1654,13 @@ function AccountPlans({ accounts, trades }) {
                     <input type="text" value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
                       placeholder="ex. Topstep 50k — passe Q1 2026"
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
                   </label>
                   <label style={{ display: "block" }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Échéance (optionnel)</div>
                     <input type="date" value={form.deadline}
                       onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
                   </label>
                 </>
               ) : (
@@ -1522,7 +1677,7 @@ function AccountPlans({ accounts, trades }) {
                             onClick={() => setForm({ ...form, type: t.id })}
                             style={{
                               display: "flex", alignItems: "center", gap: 8,
-                              padding: "9px 11px", borderRadius: 8,
+                              padding: "9px 11px", borderRadius: "var(--radius-card)",
                               border: `1px solid ${active ? t.color : T.border}`,
                               background: active ? `${t.color}10` : "#FFFFFF",
                               color: T.text, cursor: "pointer", fontFamily: "inherit",
@@ -1545,7 +1700,7 @@ function AccountPlans({ accounts, trades }) {
                     <input type="text" value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
                       placeholder="ex. Passer 3 évals 50k cette année"
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
                   </label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <label>
@@ -1553,13 +1708,13 @@ function AccountPlans({ accounts, trades }) {
                       <input type="number" value={form.target}
                         onChange={(e) => setForm({ ...form, target: e.target.value })}
                         placeholder="3"
-                        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
                     </label>
                     <label>
                       <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Échéance</div>
                       <input type="date" value={form.deadline}
                         onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-                        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
                     </label>
                   </div>
                 </>
@@ -1567,7 +1722,7 @@ function AccountPlans({ accounts, trades }) {
             </div>
             <div style={{ padding: "12px 18px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={close}
-                style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "transparent", color: "#5C5C5C", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ padding: "8px 14px", borderRadius: "var(--radius-card)", border: "none", background: "transparent", color: "#5C5C5C", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                 Annuler
               </button>
               {(() => {
@@ -1575,7 +1730,7 @@ function AccountPlans({ accounts, trades }) {
                 return (
                   <button onClick={save} disabled={!ok}
                     style={{
-                      padding: "8px 16px", borderRadius: 8, border: "none",
+                      padding: "8px 16px", borderRadius: "var(--radius-card)", border: "none",
                       background: ok ? T.text : "#F0F0F0",
                       color: ok ? "#FFFFFF" : "#8E8E8E",
                       fontSize: 13, fontWeight: 600,
@@ -1627,7 +1782,7 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
 
   return (
     <div style={{
-      background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: 12,
+      background: "var(--color-card-bg, #FFFFFF)", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
       padding: 14, display: "flex", flexDirection: "column", gap: 12,
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -1777,9 +1932,9 @@ function PhaseMetricBar({ label, currentText, targetText, pct, color, done, warn
           {currentText} <span style={{ color: "#8E8E8E", fontWeight: 500 }}>{targetText}</span>
         </span>
       </div>
-      <div style={{ height: 4, borderRadius: 2, background: "#F0F0F0", overflow: "hidden" }}>
+      <div style={{ height: 4, borderRadius: "var(--radius-field)", background: "#F0F0F0", overflow: "hidden" }}>
         <div style={{
-          height: "100%", width: `${pct}%`, borderRadius: 2,
+          height: "100%", width: `${pct}%`, borderRadius: "var(--radius-field)",
           background: color, transition: "width .4s ease",
         }} />
       </div>

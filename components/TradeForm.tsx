@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { TrendingUp, TrendingDown, Camera, Star, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import QuickAccountSelector from "@/components/QuickAccountSelector";
+import { T as BaseT } from "@/lib/ui/tokens";
 
 interface TradeFormProps {
   userId: string;
@@ -263,22 +264,8 @@ export default function TradeForm({
     return "Trade parfait";
   };
 
-  const T = {
-    white: "#FFFFFF",
-    bg: "#FFFFFF",
-    border: "#E5E5E5",
-    text: "#0D0D0D",
-    textSub: "#5C5C5C",
-    textMut: "#8E8E8E",
-    accent: "#0D0D0D",
-    accentBg: "#F0F0F0",
-    green: "#16A34A",
-    greenBg: "#F0FDF4",
-    red: "#EF4444",
-    redBg: "#FEF2F2",
-    amber: "#F97316",
-    amberBg: "#FFF4E6",
-  };
+  // Toutes les clés locales existent dans BaseT → simple spread (dark-aware).
+  const T = { ...BaseT };
 
   const sectionTitle = (label: string) => (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -292,7 +279,7 @@ export default function TradeForm({
     boxSizing: "border-box",
     padding: "8px 12px",
     border: `1px solid ${T.border}`,
-    borderRadius: 8,
+    borderRadius: "var(--radius-card)",
     fontSize: 13,
     fontFamily: "inherit",
     color: T.text,
@@ -304,9 +291,9 @@ export default function TradeForm({
     display: "block", fontSize: 11, fontWeight: 600, color: T.textSub, marginBottom: 6,
   };
 
-  const Field = ({ label, children }: { label?: string; children: React.ReactNode }) => (
+  const Field = ({ label, htmlFor, children }: { label?: string; htmlFor?: string; children: React.ReactNode }) => (
     <div>
-      {label && <label style={labelStyle}>{label}</label>}
+      {label && <label htmlFor={htmlFor} style={labelStyle}>{label}</label>}
       {children}
     </div>
   );
@@ -314,12 +301,12 @@ export default function TradeForm({
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {error && (
-        <div role="alert" style={{ padding: "10px 14px", background: T.redBg, color: T.red, border: `1px solid ${T.redBg}`, borderRadius: 8, fontSize: 12, fontWeight: 500 }}>
+        <div role="alert" style={{ padding: "10px 14px", background: T.redBg, color: T.red, border: `1px solid ${T.redBg}`, borderRadius: "var(--radius-card)", fontSize: 12, fontWeight: 500 }}>
           {error}
         </div>
       )}
       {success && (
-        <div role="status" style={{ padding: "10px 14px", background: T.greenBg, color: T.green, border: `1px solid ${T.greenBg}`, borderRadius: 8, fontSize: 12, fontWeight: 500 }}>
+        <div role="status" style={{ padding: "10px 14px", background: T.greenBg, color: T.green, border: `1px solid ${T.greenBg}`, borderRadius: "var(--radius-card)", fontSize: 12, fontWeight: 500 }}>
           {success}
         </div>
       )}
@@ -329,8 +316,9 @@ export default function TradeForm({
         {sectionTitle("Trade")}
 
         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 12 }}>
-          <Field label="Symbole">
+          <Field label="Symbole" htmlFor="tf-symbol">
             <input
+              id="tf-symbol"
               type="text"
               placeholder="NQ, ES, BTC…"
               value={symbol}
@@ -373,8 +361,8 @@ export default function TradeForm({
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <Field label="Quantité">
-            <input type="number" step="0.01" placeholder="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} style={inputStyle} />
+          <Field label="Quantité" htmlFor="tf-quantity">
+            <input id="tf-quantity" type="number" step="0.01" placeholder="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} style={inputStyle} />
           </Field>
         </div>
       </section>
@@ -394,8 +382,9 @@ export default function TradeForm({
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Setup">
+          <Field label="Setup" htmlFor="tf-setup">
             <input
+              id="tf-setup"
               type="text"
               placeholder="ICT killzone, ORB…"
               value={setupName}
@@ -404,8 +393,8 @@ export default function TradeForm({
               style={inputStyle}
             />
           </Field>
-          <Field label="Stratégie">
-            <select value={selectedStrategy} onChange={(e) => setSelectedStrategy(e.target.value)} style={inputStyle}>
+          <Field label="Stratégie" htmlFor="tf-strategy">
+            <select id="tf-strategy" value={selectedStrategy} onChange={(e) => setSelectedStrategy(e.target.value)} style={inputStyle}>
               <option value="">— Aucune —</option>
               {loadedStrategies.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
             </select>
@@ -420,8 +409,9 @@ export default function TradeForm({
       <section>
         {sectionTitle("Analyse")}
 
-        <Field label="Notes">
+        <Field label="Notes" htmlFor="tf-notes">
           <textarea
+            id="tf-notes"
             ref={textareaRef}
             value={notes}
             onChange={handleTextareaChange}
@@ -446,7 +436,7 @@ export default function TradeForm({
                     style={{
                       flex: 1,
                       height: 8,
-                      borderRadius: 4,
+                      borderRadius: "var(--radius-field)",
                       border: "none",
                       background: active ? dotColor : T.accentBg,
                       cursor: "pointer",
@@ -476,7 +466,7 @@ export default function TradeForm({
                       display: "inline-flex", alignItems: "center", gap: 6,
                       padding: "5px 10px", borderRadius: 999,
                       border: `1px solid ${active ? color : T.border}`,
-                      background: active ? color + "18" : T.white,
+                      background: active ? `color-mix(in srgb, ${color} 15%, transparent)` : T.white,
                       color: active ? color : T.textSub,
                       fontSize: 11, fontWeight: 600, cursor: "pointer",
                       fontFamily: "inherit",
@@ -495,12 +485,12 @@ export default function TradeForm({
         <div style={{ marginTop: 12 }}>
           <Field label="Screenshot">
             {screenshot ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: `1px solid ${T.border}`, borderRadius: 8, background: T.bg }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.bg }}>
                 <Camera size={14} strokeWidth={1.75} color={T.green} />
                 <span style={{ flex: 1, fontSize: 12, color: T.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{screenshot.name}</span>
                 <button type="button" onClick={() => setScreenshot(null)} aria-label="Retirer le screenshot"
-                  style={{ width: 22, height: 22, borderRadius: 5, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = T.red; e.currentTarget.style.background = "#FEF2F2"; }}
+                  style={{ width: 22, height: 22, borderRadius: "var(--radius-field)", border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = T.red; e.currentTarget.style.background = T.redBg; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; e.currentTarget.style.background = "transparent"; }}>
                   <X size={12} strokeWidth={2} />
                 </button>
@@ -529,12 +519,12 @@ export default function TradeForm({
                 style={{
                   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
                   padding: "20px 12px",
-                  border: `1px dashed ${T.border}`, borderRadius: 8,
+                  border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)",
                   background: T.bg, color: T.textSub, fontSize: 12, fontWeight: 500,
                   cursor: "pointer",
                   transition: "background .12s ease, border-color .12s ease",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#F0F0F0"; e.currentTarget.style.borderColor = T.text; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.borderColor = T.text; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = T.bg; e.currentTarget.style.borderColor = T.border; }}
               >
                 <Camera size={16} strokeWidth={1.5} />
@@ -554,9 +544,9 @@ export default function TradeForm({
           padding: "10px 16px",
           height: 38,
           background: loading ? T.textMut : T.accent,
-          color: "#FFFFFF",
+          color: T.white,
           border: `1px solid ${loading ? T.textMut : T.accent}`,
-          borderRadius: 8,
+          borderRadius: "var(--radius-card)",
           fontSize: 13,
           fontWeight: 600,
           cursor: loading ? "wait" : "pointer",

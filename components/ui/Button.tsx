@@ -43,16 +43,16 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   const iconSize = size === "sm" ? 13 : size === "md" ? 14 : 16;
 
   const variantStyles: Record<Variant, React.CSSProperties> = {
-    primary: { background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text, #0D0D0D)", border: "1px solid var(--color-text, #0D0D0D)" },
-    secondary: { background: "#FFFFFF", color: "#0D0D0D", border: "1px solid #E5E5E5" },
-    ghost: { background: "transparent", color: "#0D0D0D", border: "1px solid transparent" },
-    danger: { background: "#EF4444", color: "#FFFFFF", border: "1px solid #EF4444" },
+    primary: { background: "var(--color-btn-primary-bg, #0D0D0D)", color: "var(--color-btn-primary-text, #FFFFFF)", border: "1px solid var(--color-btn-primary-bg, #0D0D0D)" },
+    secondary: { background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text, #0D0D0D)", border: "1px solid var(--color-border, #E5E5E5)" },
+    ghost: { background: "transparent", color: "var(--color-text, #0D0D0D)", border: "1px solid transparent" },
+    danger: { background: "var(--color-danger, #EF4444)", color: "#FFFFFF", border: "1px solid var(--color-danger, #EF4444)" },
   };
 
   const hoverBg: Record<Variant, string> = {
-    primary: "#262626",
-    secondary: "#F5F5F5",
-    ghost: "#F0F0F0",
+    primary: "var(--color-btn-primary-hover, #262626)",
+    secondary: "var(--color-hover-bg, #F5F5F5)",
+    ghost: "var(--color-hover-bg, #F0F0F0)",
     danger: "#DC2626",
   };
 

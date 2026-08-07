@@ -1,19 +1,12 @@
 import React, { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import TradingAccountsManager from "@/components/TradingAccountsManager";
+import { T as BaseT } from "@/lib/ui/tokens";
+
+const T = { ...BaseT };
 
 export default function TradingAccountsPage({ userId }) {
   const [selectedAccountId, setSelectedAccountId] = useState(null);
-
-  const T = {
-    white: "#FFFFFF",
-    bg: "#F8FAFB",
-    border: "#E3E6EB",
-    text: "#1A1F2E",
-    textSub: "#5F6B7E",
-    accent: "#5F7FB4",
-    accentBg: "#E3ECFB",
-  };
 
   return (
     <div
@@ -31,17 +24,6 @@ export default function TradingAccountsPage({ userId }) {
           background: T.white,
         }}
       >
-        <h1
-          style={{
-            fontSize: 24,
-            fontWeight: 700,
-            color: T.text,
-            margin: 0,
-            marginBottom: 4,
-          }}
-        >
-          💼 Comptes de Trading
-        </h1>
         <p
           style={{
             fontSize: 13,

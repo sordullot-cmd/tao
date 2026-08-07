@@ -7,6 +7,7 @@ import {
   buildWeeklyAnalysisPrompt,
   buildFreeAnalysisPrompt,
 } from "@/lib/ai/prompts";
+import { T as BaseT } from "@/lib/ui/tokens";
 
 interface ApexChatProps {
   userId: string;
@@ -41,16 +42,14 @@ interface Conversation {
 }
 
 const T = {
-  bg: "#FFFFFF",
-  panel: "#F5F5F5",
-  panelHover: "#EEEEEE",
-  border: "rgba(0,0,0,0.1)",
-  borderHover: "rgba(0,0,0,0.2)",
-  text: "#000000",
-  textSub: "#666666",
-  textMut: "#999999",
-  accent: "#22C55E",
-  accentDark: "#16A34A",
+  ...BaseT,
+  // Clés locales absentes de BaseT, mappées sur des tokens dark-aware.
+  panel: BaseT.accentBg,
+  panelHover: BaseT.border,
+  borderHover: BaseT.border2,
+  // `accent` du chat = vert de marque (pas le noir primaire de BaseT).
+  accent: BaseT.green,
+  accentDark: BaseT.green,
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -105,6 +104,8 @@ export default function ApexChatNew({
   const unsavedRef = useRef<number>(0);
   // Timestamp ms du dernier update declenche (cooldown)
   const lastUpdateAtRef = useRef<number>(0);
+  // Contrôleur d'annulation de la requête de chat en cours (bouton Stop).
+  const abortRef = useRef<AbortController | null>(null);
 
   // Seuil min de messages non distilles pour declencher (1 echange = 2 messages)
   const MIN_UNSAVED = 2;
@@ -438,6 +439,9 @@ export default function ApexChatNew({
     setInput("");
     setIsLoading(true);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       // Créer un payload avec le prompt complet pour l'API
       const payloadMessages: Message[] = [...messages, { role: "user" as const, content: finalText }];
@@ -446,6 +450,7 @@ export default function ApexChatNew({
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
       if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`);
@@ -457,6 +462,7 @@ export default function ApexChatNew({
 
       const contentType = response.headers.get("content-type") || "";
       let assistantText = "";
+      let streamed = false;
 
       if (contentType.includes("application/json")) {
         const data = await response.json();
@@ -465,26 +471,41 @@ export default function ApexChatNew({
         const reader = response.body?.getReader();
         if (!reader) throw new Error("Pas de response body");
         const decoder = new TextDecoder();
+        streamed = true;
+        // Streaming incrémental : on ajoute un message assistant vide puis on met
+        // à jour SON contenu à chaque chunk reçu (au lieu d'attendre la fin).
+        setMessages((prev) => [...prev, { role: "assistant" as const, content: "" }]);
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          assistantText += decoder.decode(value);
+          assistantText += decoder.decode(value, { stream: true });
+          setMessages((prev) => {
+            const next = prev.slice();
+            next[next.length - 1] = { role: "assistant" as const, content: assistantText };
+            return next;
+          });
         }
       } else {
         assistantText = await response.text();
       }
 
-      setMessages((prev) => {
-        const next = [...prev, { role: "assistant" as const, content: assistantText }];
-        unsavedRef.current += 2; // user + assistant
-        return next;
-      });
+      if (!streamed) {
+        setMessages((prev) => [...prev, { role: "assistant" as const, content: assistantText }]);
+      }
+      unsavedRef.current += 2; // user + assistant
     } catch (err) {
+      // Annulation volontaire (bouton Stop) : on ne montre pas d'erreur.
+      if (err instanceof DOMException && err.name === "AbortError") return;
       const msg = err instanceof Error ? err.message : "Erreur inconnue";
       setMessages((prev) => [...prev, { role: "assistant", content: `❌ ${msg}` }]);
     } finally {
+      abortRef.current = null;
       setIsLoading(false);
     }
+  };
+
+  const handleStop = () => {
+    abortRef.current?.abort();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -520,6 +541,33 @@ export default function ApexChatNew({
               borderBottom: `1px solid ${T.border}`,
             }}
           >
+            {isLoading && (
+              <button
+                onClick={handleStop}
+                aria-label="Arrêter la génération"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 12px",
+                  borderRadius: "var(--radius-card)",
+                  border: `1px solid ${T.border}`,
+                  background: T.panel,
+                  color: T.text,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  fontFamily: "inherit",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = T.panelHover; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = T.panel; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+                Stop
+              </button>
+            )}
             <button
               onClick={handleNewChat}
               disabled={isLoading}
@@ -528,7 +576,7 @@ export default function ApexChatNew({
                 alignItems: "center",
                 gap: 6,
                 padding: "6px 12px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 border: `1px solid ${T.border}`,
                 background: T.panel,
                 color: T.text,
@@ -562,7 +610,11 @@ export default function ApexChatNew({
               alignItems: "center",
             }}
           >
-            <div style={{ width: "100%", maxWidth: 760, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div
+              style={{ width: "100%", maxWidth: 760, display: "flex", flexDirection: "column", gap: 16 }}
+              aria-live="polite"
+              aria-atomic="false"
+            >
               {messages.map((m, i) => (
                 <div
                   key={i}
@@ -576,8 +628,8 @@ export default function ApexChatNew({
                       maxWidth: "80%",
                       padding: "12px 16px",
                       borderRadius: m.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
-                      background: m.role === "user" ? "#EFEFEF" : "#FAFAFA",
-                      color: m.role === "user" ? T.text : T.text,
+                      background: m.role === "user" ? T.accentBg : `color-mix(in srgb, ${T.text} 4%, transparent)`,
+                      color: T.text,
                       fontSize: 14,
                       lineHeight: 1.5,
                       whiteSpace: "pre-wrap",
@@ -633,8 +685,8 @@ export default function ApexChatNew({
           <div style={{
             width: 56,
             height: 56,
-            borderRadius: 12,
-            background: "#FFFFFF",
+            borderRadius: "var(--radius-card)",
+            background: T.white,
             border: `1px solid ${T.border}`,
             display: "flex",
             alignItems: "center",
@@ -715,7 +767,7 @@ export default function ApexChatNew({
                 onClick={() => handleSendMessage(p.text)}
                 disabled={isLoading}
                 style={{
-                  background: "#F0F0F0",
+                  background: T.accentBg,
                   border: "none",
                   borderRadius: 999,
                   padding: "8px 14px",
@@ -727,8 +779,8 @@ export default function ApexChatNew({
                   fontFamily: "inherit",
                   whiteSpace: "nowrap",
                 }}
-                onMouseEnter={(e) => { if (!isLoading) e.currentTarget.style.background = "#E5E5E5"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}
+                onMouseEnter={(e) => { if (!isLoading) e.currentTarget.style.background = T.border; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = T.accentBg; }}
               >
                 {p.text}
               </button>
@@ -796,7 +848,7 @@ function InputBar({
       <div
         style={{
           position: "relative",
-          background: "#FFFFFF",
+          background: T.white,
           border: `1px solid ${T.border}`,
           borderRadius: 999,
           padding: "6px 52px 6px 18px",
@@ -837,8 +889,8 @@ function InputBar({
               right: 10,
               background: T.panel,
               border: `1px solid ${T.border}`,
-              borderRadius: 12,
-              boxShadow: "0 10px 32px rgba(0,0,0,0.1)",
+              borderRadius: "var(--radius-card)",
+              boxShadow: "var(--elev-overlay)",
               maxHeight: 320,
               overflowY: "auto",
               zIndex: 1000,
@@ -856,17 +908,17 @@ function InputBar({
                     padding: "12px 14px",
                     textAlign: "left",
                     border: "none",
-                    background: i === 0 ? "rgba(34,197,94,0.08)" : "transparent",
+                    background: i === 0 ? `color-mix(in srgb, ${T.accent} 8%, transparent)` : "transparent",
                     borderBottom: i < prompts.length - 1 ? `1px solid ${T.border}` : "none",
                     cursor: "pointer",
                     transition: "background 0.1s",
                     fontFamily: "inherit",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(34,197,94,0.08)";
+                    e.currentTarget.style.background = `color-mix(in srgb, ${T.accent} 8%, transparent)`;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = i === 0 ? "rgba(34,197,94,0.08)" : "transparent";
+                    e.currentTarget.style.background = i === 0 ? `color-mix(in srgb, ${T.accent} 8%, transparent)` : "transparent";
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -906,8 +958,8 @@ function InputBar({
               height: 28,
               borderRadius: "50%",
               border: "none",
-              background: showPrompts ? T.accent : "rgba(0,0,0,0.06)",
-              color: showPrompts ? "#fff" : T.textSub,
+              background: showPrompts ? T.accent : `color-mix(in srgb, ${T.text} 6%, transparent)`,
+              color: showPrompts ? T.white : T.textSub,
               cursor: disabled ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
@@ -916,11 +968,11 @@ function InputBar({
             }}
             onMouseEnter={(e) => {
               if (!disabled) {
-                e.currentTarget.style.background = showPrompts ? T.accentDark : "rgba(0,0,0,0.12)";
+                e.currentTarget.style.background = showPrompts ? T.accentDark : `color-mix(in srgb, ${T.text} 12%, transparent)`;
               }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = showPrompts ? T.accent : "rgba(0,0,0,0.08)";
+              e.currentTarget.style.background = showPrompts ? T.accent : `color-mix(in srgb, ${T.text} 8%, transparent)`;
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -944,8 +996,8 @@ function InputBar({
             height: 28,
             borderRadius: "50%",
             border: "none",
-            background: input.trim() && !disabled ? "#525252" : "#E5E5E5",
-            color: "#FFFFFF",
+            background: input.trim() && !disabled ? T.text : T.border,
+            color: T.white,
             cursor: input.trim() && !disabled ? "pointer" : "not-allowed",
             display: "flex",
             alignItems: "center",

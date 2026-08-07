@@ -29,21 +29,34 @@ export function HourlyHeatmap({ trades }: HourlyHeatmapProps) {
   const dayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
-  const getColor = (pnl: number, count: number) => {
-    if (count === 0) return "#f0f0f0";
-    const avgPnL = pnl / count;
-    if (avgPnL > 50) return "#065f46"; // Dark green
-    if (avgPnL > 20) return "#10b981"; // Green
-    if (avgPnL > 0) return "#a7f3d0"; // Light green
-    if (avgPnL > -20) return "#fee2e2"; // Light red
-    if (avgPnL > -50) return "#fca5a5"; // Red
-    return "#dc2626"; // Dark red
+  // Intensité normalisée par le MAX ABSOLU du P&L moyen observé (comme HoursHeatmap),
+  // pour rester lisible quelle que soit la taille de compte. Les anciens seuils $
+  // figés (-50/-20/0/20/50) étaient inadaptés aux gros/petits comptes.
+  let maxAbs = 0;
+  for (const dKey of Object.keys(heatmapData)) {
+    const d = Number(dKey);
+    for (const hKey of Object.keys(heatmapData[d])) {
+      const cell = heatmapData[d][Number(hKey)];
+      const avg = cell.count > 0 ? cell.pnl / cell.count : 0;
+      maxAbs = Math.max(maxAbs, Math.abs(avg));
+    }
+  }
+  maxAbs = maxAbs || 1;
+
+  const EMPTY = "var(--color-hover-bg, #F1F5F9)";
+
+  const getColor = (avgPnL: number, count: number) => {
+    if (count === 0) return EMPTY;
+    const intensity = Math.min(1, Math.abs(avgPnL) / maxAbs);
+    if (avgPnL > 0) return `rgba(16, 163, 127, ${0.15 + intensity * 0.65})`; // Vert (gain)
+    if (avgPnL < 0) return `rgba(239, 68, 68, ${0.15 + intensity * 0.65})`; // Rouge (perte)
+    return EMPTY;
   };
 
   return (
-    <div style={{ background: "#FFFFFF", padding: 20, borderRadius: 12 }}>
-      <h3 style={{ margin: "0 0 16px 0", fontSize: 16, fontWeight: 600 }}>
-        🔥 Heatmap Jour × Heure (P&L Moyen)
+    <div style={{ background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border, #E5E5E5)", padding: 20, borderRadius: 12 }}>
+      <h3 style={{ margin: "0 0 16px 0", fontSize: 16, fontWeight: 600, color: "var(--color-text, #0D0D0D)" }}>
+        Heatmap Jour × Heure (P&amp;L moyen)
       </h3>
 
       <div
@@ -64,7 +77,7 @@ export function HourlyHeatmap({ trades }: HourlyHeatmapProps) {
                 textAlign: "center",
                 fontSize: 10,
                 fontWeight: 500,
-                color: "#5C5C5C",
+                color: "var(--color-text-muted, #6B6B6B)",
               }}
             >
               {h}h
@@ -80,7 +93,7 @@ export function HourlyHeatmap({ trades }: HourlyHeatmapProps) {
                 width: 80,
                 fontSize: 12,
                 fontWeight: 500,
-                color: "#0D0D0D",
+                color: "var(--color-text, #0D0D0D)",
               }}
             >
               {day}
@@ -90,25 +103,33 @@ export function HourlyHeatmap({ trades }: HourlyHeatmapProps) {
               const count = data?.count || 0;
               const pnl = data?.pnl || 0;
               const avgPnL = count > 0 ? pnl / count : 0;
+              const intensity = count > 0 ? Math.min(1, Math.abs(avgPnL) / maxAbs) : 0;
+              // Seuil de contraste texte dépendant de l'intensité (pas d'un seuil $ fixe).
+              const textColor = intensity > 0.55 ? "#fff" : "#1A1A1A";
+              const label =
+                count > 0
+                  ? `${day} ${hour}h : ${count} trade${count > 1 ? "s" : ""}, P&L moyen ${avgPnL > 0 ? "+" : ""}${avgPnL.toFixed(0)}$`
+                  : `${day} ${hour}h : aucun trade`;
 
               return (
                 <div
                   key={`${dayIndex}-${hour}`}
+                  role="img"
+                  aria-label={label}
                   style={{
                     width: 30,
                     height: 30,
-                    background: getColor(pnl, count),
+                    background: getColor(avgPnL, count),
                     borderRadius: 4,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 8,
+                    fontSize: 10,
                     fontWeight: 600,
-                    color: avgPnL > 15 || avgPnL < -15 ? "#fff" : "#000",
-                    cursor: "pointer",
+                    color: textColor,
                     transition: "all 0.2s ease",
                   }}
-                  title={`${day} ${hour}h: ${count} trades, ${avgPnL > 0 ? "+" : ""}${avgPnL.toFixed(0)}$`}
+                  title={label}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = "scale(1.1)";
                     e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.15)";
@@ -126,32 +147,18 @@ export function HourlyHeatmap({ trades }: HourlyHeatmapProps) {
         ))}
       </div>
 
-      {/* Légende */}
-      <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap", fontSize: 11 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 20, height: 20, background: "#dc2626", borderRadius: 4 }} />
-          <span>&lt; -50$</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 20, height: 20, background: "#fca5a5", borderRadius: 4 }} />
-          <span>-50$ à -20$</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 20, height: 20, background: "#fee2e2", borderRadius: 4 }} />
-          <span>-20$ à 0$</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 20, height: 20, background: "#a7f3d0", borderRadius: 4 }} />
-          <span>0$ à 20$</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 20, height: 20, background: "#10b981", borderRadius: 4 }} />
-          <span>20$ à 50$</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 20, height: 20, background: "#065f46", borderRadius: 4 }} />
-          <span>&gt; 50$</span>
-        </div>
+      {/* Légende : intensité relative (perte ↔ gain), échelle normalisée */}
+      <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, alignItems: "center", color: "var(--color-text-muted, #6B6B6B)" }}>
+        <span>Perte</span>
+        {[0.8, 0.45, 0.15].map((op) => (
+          <div key={`r${op}`} style={{ width: 18, height: 18, background: `rgba(239, 68, 68, ${op})`, borderRadius: 4 }} />
+        ))}
+        <div style={{ width: 18, height: 18, background: EMPTY, borderRadius: 4 }} title="Aucun trade" />
+        {[0.15, 0.45, 0.8].map((op) => (
+          <div key={`g${op}`} style={{ width: 18, height: 18, background: `rgba(16, 163, 127, ${op})`, borderRadius: 4 }} />
+        ))}
+        <span>Gain</span>
+        <span style={{ marginLeft: 8, opacity: 0.85 }}>Le chiffre = nombre de trades · la couleur = P&amp;L moyen (relatif au max)</span>
       </div>
     </div>
   );

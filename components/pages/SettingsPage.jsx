@@ -28,19 +28,10 @@ import { getLang, setLang as setLangPref, t, useLang } from "@/lib/i18n";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { DEFAULT_ALERT_SETTINGS } from "@/lib/hooks/useTradeAlerts";
 import { notify, ensureNotifyPermission, isNotifyGranted, isTauri } from "@/lib/notify";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  white: "#FFFFFF",
-  bg: "#FFFFFF",
-  panel: "#FAFAFA",
-  border: "#E5E5E5",
-  borderHover: "#D4D4D4",
-  text: "#0D0D0D",
-  textSub: "#5C5C5C",
-  textMut: "#8E8E8E",
-  green: "#16A34A",
-  red: "#EF4444",
-};
+// Clés locales absentes de BaseT mappées sur des tokens dark-aware.
+const T = { ...BaseT, panel: BaseT.accentBg, borderHover: BaseT.border2 };
 
 const buildSections = () => [
   {
@@ -63,7 +54,7 @@ const buildSections = () => [
   },
 ];
 
-export default function SettingsPage({ user, onBack }) {
+export default function SettingsPage({ user, onBack, setPage }) {
   useLang();
   const [active, setActive] = useState("profile");
 
@@ -71,7 +62,6 @@ export default function SettingsPage({ user, onBack }) {
     <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto", fontFamily: "var(--font-sans)" }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1 }}>{t("settings.title")}</h1>
         <p style={{ fontSize: 13, color: T.textSub, margin: "4px 0 0" }}>{t("settings.subtitle")}</p>
       </div>
 
@@ -84,7 +74,7 @@ export default function SettingsPage({ user, onBack }) {
           {active === "profile"      && <ProfileSection user={user} />}
           {active === "security"     && <SecuritySection />}
           {active === "subscription" && <SubscriptionSection user={user} />}
-          {active === "accounts"     && <AccountsSection />}
+          {active === "accounts"     && <AccountsSection setPage={setPage} />}
           {active === "globals"      && <GlobalsSection />}
           {active === "alerts"       && <AlertsSection />}
           {active === "import"       && <ImportHistorySection />}
@@ -119,14 +109,14 @@ function SettingsNav({ active, setActive }) {
                 onClick={() => setActive(item.id)}
                 style={{
                   width: "100%", display: "inline-flex", alignItems: "center", gap: 10,
-                  padding: "8px 10px", borderRadius: 8, border: "none",
-                  background: isActive ? "#0D0D0D" : "transparent",
-                  color: isActive ? "#FFFFFF" : T.text,
+                  padding: "8px 10px", borderRadius: "var(--radius-card)", border: "none",
+                  background: isActive ? T.text : "transparent",
+                  color: isActive ? T.white : T.text,
                   fontSize: 13, fontWeight: isActive ? 600 : 500,
                   cursor: "pointer", fontFamily: "inherit", textAlign: "left",
                   transition: "background 120ms ease",
                 }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "#F5F5F5"; }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.panel; }}
                 onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
               >
                 <Icon size={14} strokeWidth={1.75} />
@@ -145,9 +135,9 @@ function Card({ children, padded = true }) {
     <div style={{
       background: T.bg,
       border: `1px solid ${T.border}`,
-      borderRadius: 12,
+      borderRadius: "var(--radius-card)",
       padding: padded ? 20 : 0,
-      boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+      boxShadow: "var(--elev-rest)",
     }}>
       {children}
     </div>
@@ -171,9 +161,9 @@ function PrimaryButton({ children, onClick, disabled, icon: Icon }) {
       style={{
         padding: "8px 16px",
         borderRadius: 999,
-        border: "1px solid #0D0D0D",
-        background: "#0D0D0D",
-        color: "#FFFFFF",
+        border: `1px solid ${T.text}`,
+        background: T.text,
+        color: T.white,
         fontSize: 13,
         fontWeight: 600,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -184,8 +174,8 @@ function PrimaryButton({ children, onClick, disabled, icon: Icon }) {
         gap: 6,
         transition: "background 120ms ease",
       }}
-      onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = "#262626"; }}
-      onMouseLeave={e => { e.currentTarget.style.background = "#0D0D0D"; }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = T.textSub; }}
+      onMouseLeave={e => { e.currentTarget.style.background = T.text; }}
     >
       {Icon && <Icon size={14} strokeWidth={2} />}
       {children}
@@ -199,9 +189,9 @@ function SecondaryButton({ children, onClick, icon: Icon }) {
       onClick={onClick}
       style={{
         padding: "8px 14px",
-        borderRadius: 8,
+        borderRadius: "var(--radius-card)",
         border: `1px solid ${T.border}`,
-        background: T.bg,
+        background: T.white,
         color: T.text,
         fontSize: 13,
         fontWeight: 500,
@@ -212,8 +202,8 @@ function SecondaryButton({ children, onClick, icon: Icon }) {
         gap: 6,
         transition: "background 120ms ease",
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = "#FAFAFA"; }}
-      onMouseLeave={e => { e.currentTarget.style.background = T.bg; }}
+      onMouseEnter={e => { e.currentTarget.style.background = T.panel; }}
+      onMouseLeave={e => { e.currentTarget.style.background = T.white; }}
     >
       {Icon && <Icon size={14} strokeWidth={1.75} />}
       {children}
@@ -224,7 +214,7 @@ function SecondaryButton({ children, onClick, icon: Icon }) {
 function ComingSoonBadge() {
   return (
     <span style={{
-      padding: "2px 8px", borderRadius: 999, background: "#F0F0F0",
+      padding: "2px 8px", borderRadius: 999, background: T.panel,
       color: T.textSub, fontSize: 10, fontWeight: 500, marginLeft: 8,
     }}>
       {t("settings.comingSoon")}
@@ -303,7 +293,7 @@ function ProfileSection({ user }) {
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{
-            width: 64, height: 64, borderRadius: "50%", background: "#F0F0F0",
+            width: 64, height: 64, borderRadius: "50%", background: T.panel,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 22, fontWeight: 600, color: T.text, flexShrink: 0,
           }}>
@@ -334,7 +324,7 @@ function ProfileSection({ user }) {
           </Field>
           <div style={{ gridColumn: "1 / -1" }}>
             <Field label={t("settings.profile.email")}>
-              <input value={user?.email || ""} disabled placeholder="email@exemple.com" style={{ ...inputStyle(), background: "#FAFAFA", color: T.textSub, cursor: "not-allowed" }} />
+              <input value={user?.email || ""} disabled placeholder="email@exemple.com" style={{ ...inputStyle(), background: T.panel, color: T.textSub, cursor: "not-allowed" }} />
               <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{t("settings.profile.emailLocked")}</div>
             </Field>
           </div>
@@ -390,7 +380,7 @@ function SecurityRow({ Icon, title, description, badge, action, last }) {
       borderBottom: last ? "none" : `1px solid ${T.border}`,
     }}>
       <div style={{
-        width: 36, height: 36, borderRadius: 10, background: "#F5F5F5",
+        width: 36, height: 36, borderRadius: 10, background: T.panel,
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       }}>
         <Icon size={16} strokeWidth={1.75} color={T.text} />
@@ -423,11 +413,11 @@ function SubscriptionSection({ user }) {
           <PrimaryButton icon={Sparkles}>{t("settings.sub.goPro")}</PrimaryButton>
         </div>
         <div style={{
-          padding: 16, borderRadius: 10, background: "#FAFAFA",
+          padding: 16, borderRadius: 10, background: T.panel,
           display: "flex", alignItems: "center", gap: 14,
         }}>
           <div style={{
-            width: 36, height: 36, borderRadius: 8, background: T.bg,
+            width: 36, height: 36, borderRadius: "var(--radius-card)", background: T.bg,
             border: `1px solid ${T.border}`,
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
@@ -436,8 +426,8 @@ function SubscriptionSection({ user }) {
           <div style={{ flex: 1 }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{t("settings.sub.freePlan")}</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 999, background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", fontSize: 10, fontWeight: 500 }}>
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#EF4444" }} />
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 999, background: T.redBg, border: `1px solid ${T.redBd}`, color: T.red, fontSize: 10, fontWeight: 500 }}>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: T.red }} />
                 {t("settings.sub.inactive")}
               </span>
             </div>
@@ -451,7 +441,7 @@ function SubscriptionSection({ user }) {
         <div style={{ height: 1, background: T.border, margin: "0 -20px 4px" }} />
         <Row label={t("settings.sub.memberSince")} value={memberSince} />
         <Row label={t("settings.sub.accountId")} value={
-          <span style={{ padding: "3px 8px", borderRadius: 6, background: "#F5F5F5", border: `1px solid ${T.border}`, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>{accountId}</span>
+          <span style={{ padding: "3px 8px", borderRadius: 6, background: T.panel, border: `1px solid ${T.border}`, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>{accountId}</span>
         } last />
       </Card>
     </>
@@ -471,9 +461,10 @@ function Row({ label, value, last }) {
 }
 
 /* =================== ACCOUNTS =================== */
-function AccountsSection() {
+function AccountsSection({ setPage }) {
   useLang();
   const [accounts, setAccounts] = useState([]);
+  const [firms, setFirms] = useState([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
@@ -484,6 +475,10 @@ function AccountsSection() {
         if (!user) { setLoading(false); return; }
         const { data } = await supabase.from("trading_accounts").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
         setAccounts(data || []);
+        // Firmes parentes — affichées à côté du compte. Absentes si la
+        // migration 031 n'est pas encore appliquée : on dégrade sans casser.
+        const { data: firmRows } = await supabase.from("prop_firms").select("id, name").eq("user_id", user.id);
+        setFirms(firmRows || []);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
@@ -520,7 +515,7 @@ function AccountsSection() {
           <h2 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0 }}>{t("settings.accounts.cardTitle")}</h2>
           <p style={{ fontSize: 12, color: T.textMut, margin: "2px 0 0" }}>{t("settings.accounts.cardSub")}</p>
         </div>
-        <PrimaryButton>{t("settings.accounts.add")}</PrimaryButton>
+        <PrimaryButton onClick={() => setPage?.("accounts")}>{t("settings.accounts.manage")}</PrimaryButton>
       </div>
       <div style={{ height: 1, background: T.border, margin: "0 -20px 0" }} />
 
@@ -532,20 +527,31 @@ function AccountsSection() {
         accounts.map((acc, i) => {
           const logo = brokerLogo(acc.broker);
           const count = tradeCounts[acc.id] || 0;
+          const firmName = acc.firm_id ? firms.find(f => f.id === acc.firm_id)?.name : null;
           return (
             <div key={acc.id} style={{
               display: "flex", alignItems: "center", gap: 14, padding: "14px 0",
               borderBottom: i < accounts.length - 1 ? `1px solid ${T.border}` : "none",
             }}>
               <div style={{
-                width: 36, height: 36, borderRadius: 8, background: "#F5F5F5",
+                width: 36, height: 36, borderRadius: "var(--radius-card)", background: T.panel,
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 overflow: "hidden",
               }}>
                 {logo ? <img src={logo} alt="" style={{ width: 22, height: 22, objectFit: "contain" }} /> : <IconBriefcase size={16} strokeWidth={1.75} color={T.text} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{acc.name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.name}</span>
+                  {firmName && (
+                    <span style={{
+                      padding: "1px 7px", borderRadius: 999, border: `1px solid ${T.border}`,
+                      fontSize: 11, color: T.textMut, whiteSpace: "nowrap", flexShrink: 0,
+                    }}>
+                      {firmName}
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 12, color: T.textMut, marginTop: 2 }}>
                   {acc.broker ? acc.broker.charAt(0).toUpperCase() + acc.broker.slice(1) : "—"} · {count} trade{count !== 1 ? "s" : ""}
                 </div>
@@ -574,8 +580,26 @@ function GlobalsSection() {
     return localStorage.getItem("tr4de_base_currency") || "USD";
   });
   const [lang, setLangState] = useState(() => (typeof window === "undefined" ? "en" : getLang()));
+  const [theme, setThemeState] = useState(() => {
+    if (typeof window === "undefined") return "system";
+    try { return localStorage.getItem("tr4de_theme") || "system"; } catch { return "system"; }
+  });
+  const [risk, setRisk] = useState(() => {
+    if (typeof window === "undefined") return 100;
+    try { return parseFloat(localStorage.getItem("tr4de_risk_per_trade") || "100") || 100; } catch { return 100; }
+  });
   const [savedMsg, setSavedMsg] = useState("");
   const [loadedFromCloud, setLoadedFromCloud] = useState(false);
+
+  // Applique le thème choisi : "system" retire l'attribut (fallback CSS
+  // prefers-color-scheme), sinon force data-theme="light|dark".
+  const applyTheme = (v) => {
+    try {
+      if (v === "system") delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = v;
+      localStorage.setItem("tr4de_theme", v);
+    } catch {}
+  };
 
   // Charger depuis Supabase au montage (et sur focus)
   useEffect(() => {
@@ -591,7 +615,7 @@ function GlobalsSection() {
         if (error) {
           // Table ou colonnes manquantes → on log et on autorise quand même la sauvegarde
           // (l'upsert ultérieur aura aussi son propre log d'erreur si rien n'existe).
-          console.warn("⚠️ load preferences error:", error.code, error.message);
+          console.warn("load preferences error:", error.code, error.message);
         } else if (!cancelled) {
           if (data?.timezone) {
             setTimezone(data.timezone);
@@ -603,7 +627,7 @@ function GlobalsSection() {
           }
         }
       } catch (e) {
-        console.error("⚠️ load preferences failed:", e?.message || e);
+        console.error("load preferences failed:", e?.message || e);
       } finally {
         if (!cancelled) setLoadedFromCloud(true);
       }
@@ -616,18 +640,16 @@ function GlobalsSection() {
 
   // Auto-save dans Supabase + localStorage à chaque changement (debounced 400ms).
   useEffect(() => {
-    console.log("🔁 prefs effect:", { userId: user?.id, loadedFromCloud, timezone, currency });
-    if (!user?.id) { console.warn("⏭ skip save: pas de user.id"); return; }
-    if (!loadedFromCloud) { console.warn("⏭ skip save: pas encore loadedFromCloud"); return; }
+    if (!user?.id) return;
+    if (!loadedFromCloud) return;
     try {
       localStorage.setItem("tr4de_timezone", timezone);
       localStorage.setItem("tr4de_base_currency", currency);
       window.dispatchEvent(new Event("tr4de:prefs-changed"));
     } catch {}
     const handle = setTimeout(async () => {
-      console.log("📤 upsert prefs:", { user_id: user.id, timezone, base_currency: currency });
       try {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from("user_preferences")
           .upsert([{
             user_id: user.id,
@@ -637,13 +659,12 @@ function GlobalsSection() {
           }], { onConflict: "user_id" })
           .select();
         if (error) {
-          console.error("❌ save preferences failed:", error.message, error.code, error.details);
+          console.error("save preferences failed:", error.message, error.code, error.details);
           return;
         }
-        console.log("✅ prefs sauvegardées en ligne:", data);
         setSavedMsg(t("settings.savedShort"));
         setTimeout(() => setSavedMsg(""), 1500);
-      } catch (e) { console.error("❌ save preferences error:", e); }
+      } catch (e) { console.error("save preferences error:", e); }
     }, 400);
     return () => clearTimeout(handle);
   }, [timezone, currency, user?.id, loadedFromCloud]);
@@ -699,17 +720,21 @@ function GlobalsSection() {
       />
       <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{t("settings.globals.currencyHint")}</div>
 
-      <SectionLabel mt={20}>{t("settings.globals.risk")}</SectionLabel>
+      <SectionLabel mt={20}><label htmlFor="tr4de-risk">{t("settings.globals.risk")}</label></SectionLabel>
       <input
+        id="tr4de-risk"
         type="number"
         min={1}
         step={10}
-        defaultValue={typeof window !== "undefined" ? (parseFloat(localStorage.getItem("tr4de_risk_per_trade") || "100") || 100) : 100}
+        value={risk}
         onChange={(e) => {
-          const n = Math.max(1, parseFloat(e.target.value) || 0);
+          const raw = e.target.value;
+          if (raw === "") { setRisk(""); return; }
+          const n = Math.max(1, parseFloat(raw) || 0);
+          setRisk(n);
           try { localStorage.setItem("tr4de_risk_per_trade", String(n)); } catch {}
         }}
-        style={{ width: "100%", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, fontFamily: "inherit", color: T.text, outline: "none", background: T.white }}
+        style={{ width: "100%", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 13, fontFamily: "inherit", color: T.text, outline: "none", background: T.white }}
       />
       <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{t("settings.globals.riskHint")}</div>
 
@@ -724,6 +749,19 @@ function GlobalsSection() {
         searchable={false}
       />
       <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{t("settings.globals.languageHint")}</div>
+
+      <SectionLabel mt={20}>Thème</SectionLabel>
+      <SearchableSelect
+        value={theme}
+        onChange={(v) => { setThemeState(v); applyTheme(v); }}
+        options={[
+          { id: "system", label: "Système" },
+          { id: "light", label: "Clair" },
+          { id: "dark", label: "Sombre" },
+        ]}
+        searchable={false}
+      />
+      <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>Choisis l'apparence de l'interface (Système suit ton OS).</div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 24, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
         {savedMsg && <span style={{ fontSize: 12, color: T.green }}>{savedMsg}</span>}
@@ -861,7 +899,7 @@ function ImportHistorySection() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{h.name}</span>
-                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, background: "#F0FDF4", border: "1px solid #86EFAC", color: "#0F8B6C", fontSize: 10, fontWeight: 500 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, background: T.greenBg, border: `1px solid ${T.greenBd}`, color: T.green, fontSize: 10, fontWeight: 500 }}>
                   {t("settings.import.success")}
                 </span>
               </div>
@@ -886,7 +924,7 @@ function ImportHistorySection() {
                 borderRadius: 6, transition: "background 120ms ease",
                 opacity: deletingId === h.id ? 0.5 : 1,
               }}
-              onMouseEnter={e => { if (deletingId !== h.id) e.currentTarget.style.background = "#FEF2F2"; }}
+              onMouseEnter={e => { if (deletingId !== h.id) e.currentTarget.style.background = T.redBg; }}
               onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
             >
               <Trash2 size={14} strokeWidth={1.75} />
@@ -1025,7 +1063,7 @@ function DataExportSection() {
         borderBottom: `1px solid ${T.border}`,
       }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 10, background: "#F5F5F5",
+          width: 36, height: 36, borderRadius: 10, background: T.panel,
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
           <Download size={16} strokeWidth={1.75} color={T.text} />
@@ -1044,7 +1082,7 @@ function DataExportSection() {
         display: "flex", alignItems: "center", gap: 14, padding: "16px 0",
       }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 10, background: "#F5F5F5",
+          width: 36, height: 36, borderRadius: 10, background: T.panel,
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
           <Upload size={16} strokeWidth={1.75} color={T.text} />
@@ -1070,10 +1108,10 @@ function DataExportSection() {
 
       {msg.text && (
         <div style={{
-          marginTop: 4, padding: "10px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500,
-          background: msg.kind === "error" ? "#FEF2F2" : "#F0FDF4",
-          color: msg.kind === "error" ? "#991B1B" : "#166534",
-          border: `1px solid ${msg.kind === "error" ? "#FECACA" : "#BBF7D0"}`,
+          marginTop: 4, padding: "10px 12px", borderRadius: "var(--radius-card)", fontSize: 12, fontWeight: 500,
+          background: msg.kind === "error" ? T.redBg : T.greenBg,
+          color: msg.kind === "error" ? T.red : T.green,
+          border: `1px solid ${msg.kind === "error" ? T.redBd : T.greenBd}`,
         }}>
           {msg.text}
         </div>
@@ -1107,7 +1145,7 @@ function inputStyle() {
     width: "100%",
     padding: "8px 12px",
     border: `1px solid ${T.border}`,
-    borderRadius: 8,
+    borderRadius: "var(--radius-card)",
     background: T.bg,
     color: T.text,
     fontSize: 13,
@@ -1169,7 +1207,7 @@ function AlertsSection() {
 
       {/* Permission */}
       <div style={{
-        background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12,
+        background: T.bg, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
         padding: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
       }}>
         <div style={{ flex: 1, minWidth: 200 }}>
@@ -1248,7 +1286,7 @@ function AlertSwitch({ checked, onChange, label }) {
         <span style={{
           position: "absolute", top: 2, left: checked ? 18 : 2,
           width: 16, height: 16, borderRadius: "50%",
-          background: "#FFFFFF",
+          background: T.white,
           boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
           transition: "left 150ms",
         }} />
@@ -1274,13 +1312,15 @@ function NumberInput({ value, onChange, suffix, placeholder }) {
   );
 }
 
+// Harmonisé avec PrimaryButton : primaire = fond T.text / texte blanc.
 function primaryBtn() {
   return {
     padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.text}`,
-    background: T.white, color: T.text,
+    background: T.text, color: T.white,
     fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
   };
 }
+// Secondaire = fond T.white, bordure T.border (comme SecondaryButton).
 function secondaryBtn(disabled) {
   return {
     padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.border}`,

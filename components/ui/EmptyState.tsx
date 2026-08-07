@@ -31,19 +31,19 @@ export function EmptyState({ icon: Icon = FileQuestion, title, description, acti
         width: iconBox,
         height: iconBox,
         borderRadius: 10,
-        background: "#F0F0F0",
+        background: "var(--color-hover-bg, #F0F0F0)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         marginBottom: 12,
       }}>
-        <Icon size={iconSize} strokeWidth={1.75} color="#5C5C5C" />
+        <Icon size={iconSize} strokeWidth={1.75} color="var(--color-text-sub, #5C5C5C)" />
       </div>
-      <div style={{ fontSize: titleSize, fontWeight: 600, color: "#0D0D0D", marginBottom: 4 }}>
+      <div style={{ fontSize: titleSize, fontWeight: 600, color: "var(--color-text, #0D0D0D)", marginBottom: 4 }}>
         {title}
       </div>
       {description && (
-        <div style={{ fontSize: 13, color: "#5C5C5C", maxWidth: 320, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: "var(--color-text-sub, #5C5C5C)", maxWidth: 320, lineHeight: 1.5 }}>
           {description}
         </div>
       )}

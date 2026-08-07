@@ -72,6 +72,7 @@ export default function Sidebar(props: SidebarProps) {
   useLang(); // re-render sidebar on language change
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userRef = useRef<HTMLDivElement>(null);
+  const userBtnRef = useRef<HTMLButtonElement>(null);
 
   // Sections de la navbar repliables — état mémorisé en localStorage par label.
   const NAV_COLLAPSE_KEY = "tr4de_nav_collapsed_sections";
@@ -98,6 +99,20 @@ export default function Sidebar(props: SidebarProps) {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // Menu utilisateur : fermeture au clavier (Échap) + retour du focus au trigger.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setUserMenuOpen(false);
+        userBtnRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [userMenuOpen]);
+
   return (
     <>
     {mobileOpen && (
@@ -106,38 +121,41 @@ export default function Sidebar(props: SidebarProps) {
     <aside
       className={`tr4de-sidebar ${mobileOpen ? "is-open" : ""}`}
       style={{
+        // DA Figma : carte blanche flottante (220 px) posée sur le fond de page,
+        // avec une gouttière de 12 px à gauche / en haut / en bas.
         width: collapsed ? 56 : 220,
         flexShrink: 0,
-        background: "#F5F5F5",
+        background: "var(--color-card-bg, #FFFFFF)",
+        borderRadius: 12,
+        boxShadow: "var(--elev-card)",
+        margin: "12px 0 12px 12px",
         display: "flex",
         flexDirection: "column",
         position: "sticky",
-        top: 0,
-        height: "100vh",
-        transition: "width 180ms cubic-bezier(0.4, 0, 0.2, 1), transform .22s cubic-bezier(.2,.8,.2,1)",
+        top: 12,
+        height: "calc(100dvh - 24px)",
+        transition: "width 180ms var(--ease-out), transform .22s var(--ease-drawer)",
         fontFamily: "var(--font-sans)",
       }}
     >
       {/* HEADER : brand */}
-      <div style={{ padding: "12px 8px" }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          justifyContent: collapsed ? "center" : "flex-start",
-          padding: collapsed ? "6px 0" : "6px 8px",
-        }}>
-          <img
-            src="/favicon.svg"
-            alt="tao"
-            width={32}
-            height={32}
-            style={{ flexShrink: 0, display: "block", borderRadius: "50%", objectFit: "cover" }}
-          />
-          {!collapsed && (
-            <div style={{ flex: 1, overflow: "hidden", fontSize: 14, fontWeight: 600, color: "var(--color-text)", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-              tao trade
-            </div>
-          )}
-        </div>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        justifyContent: collapsed ? "center" : "flex-start",
+        padding: collapsed ? "18px 0" : "18px 16px",
+      }}>
+        <img
+          src="/favicon.svg"
+          alt="tao"
+          width={32}
+          height={32}
+          style={{ flexShrink: 0, display: "block", borderRadius: "50%", objectFit: "cover" }}
+        />
+        {!collapsed && (
+          <div style={{ flex: 1, overflow: "hidden", fontSize: 14, fontWeight: 500, lineHeight: "21.7px", color: "var(--color-text)", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+            tao trade
+          </div>
+        )}
       </div>
 
       {/* NAV */}
@@ -161,7 +179,8 @@ export default function Sidebar(props: SidebarProps) {
                 aria-expanded={!sectionCollapsed}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 12px 6px 15px", fontSize: 12, fontWeight: 600,
+                  padding: "8px 12px 6px 15px", fontSize: 12, fontWeight: 400,
+                  lineHeight: "18.6px",
                   color: "var(--color-text-muted)", letterSpacing: 0,
                   background: "transparent", border: "none", cursor: "pointer",
                   fontFamily: "inherit", textAlign: "left",
@@ -196,10 +215,13 @@ export default function Sidebar(props: SidebarProps) {
                     width: "100%", display: "flex", alignItems: "center",
                     gap: collapsed ? 0 : 10, justifyContent: collapsed ? "center" : "flex-start",
                     padding: collapsed ? "8px 0" : "8px 10px 8px 15px",
-                    borderRadius: 8, border: "none",
-                    background: active ? "var(--color-active-bg)" : "transparent",
-                    color: "var(--color-text)", fontSize: 13,
-                    fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                    borderRadius: "var(--radius-field)", border: "none",
+                    // DA Figma : l'item actif est une pastille violet pâle,
+                    // texte + icône en violet. Pas de passage en gras.
+                    background: active ? "var(--color-nav-active-bg)" : "transparent",
+                    color: active ? "var(--color-nav-active-text)" : "var(--color-text)",
+                    fontSize: 13, lineHeight: "20.15px",
+                    fontWeight: 400, cursor: "pointer", fontFamily: "inherit",
                     transition: "background 150ms cubic-bezier(0.23,1,0.32,1), color 150ms cubic-bezier(0.23,1,0.32,1), padding 200ms cubic-bezier(0.23,1,0.32,1)",
                     position: "relative",
                   }}
@@ -212,8 +234,9 @@ export default function Sidebar(props: SidebarProps) {
                       <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
                       {item.badge != null && item.badge > 0 && (
                         <span style={{
-                          padding: "1px 7px", borderRadius: 999, background: "#0D0D0D",
-                          color: "#FFFFFF", fontSize: 10, fontWeight: 600,
+                          padding: "1px 7px", borderRadius: 999, background: "var(--color-text)",
+                          color: "var(--color-text-inverted)", fontSize: 10, fontWeight: 500,
+                          lineHeight: "15.5px",
                         }}>
                           {item.badge}
                         </span>
@@ -232,6 +255,7 @@ export default function Sidebar(props: SidebarProps) {
       <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 4, position: "relative" }} ref={userRef}>
         {user && (
           <button
+            ref={userBtnRef}
             onClick={() => { setUserMenuOpen(v => !v); onUserMenu?.(); }}
             title={collapsed ? user.name : undefined}
             aria-haspopup="menu"
@@ -240,7 +264,7 @@ export default function Sidebar(props: SidebarProps) {
               width: "100%", display: "flex", alignItems: "center", gap: 8,
               justifyContent: collapsed ? "center" : "flex-start",
               padding: collapsed ? "6px 0" : "6px 8px",
-              borderRadius: 8, border: "none",
+              borderRadius: "var(--radius-field)", border: "none",
               background: userMenuOpen ? "var(--color-hover-bg)" : "transparent",
               cursor: "pointer", fontFamily: "inherit", color: "var(--color-text)",
             }}
@@ -258,20 +282,20 @@ export default function Sidebar(props: SidebarProps) {
               />
             ) : (
               <div style={{
-                width: 26, height: 26, borderRadius: "50%", background: "#FFE0B2",
+                width: 26, height: 26, borderRadius: "50%", background: "var(--color-amber-bg, #FFE0B2)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 700, color: "#9D5800", flexShrink: 0,
+                fontSize: 11, fontWeight: 700, color: "var(--color-amber, #9D5800)", flexShrink: 0,
               }}>
                 {user.initials}
               </div>
             )}
             {!collapsed && (
               <div style={{ flex: 1, overflow: "hidden", textAlign: "left" }}>
-                <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: 12, fontWeight: 500, lineHeight: "18.6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {user.name}
                 </div>
                 {user.email && (
-                  <div style={{ fontSize: 10, color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 10, fontWeight: 500, lineHeight: "15.5px", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {user.email}
                   </div>
                 )}
@@ -288,8 +312,8 @@ export default function Sidebar(props: SidebarProps) {
               position: "absolute",
               bottom: "calc(100% + 4px)",
               left: 8, right: 8,
-              background: "#FFFFFF", border: "1px solid var(--color-border)",
-              borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
+              background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)",
+              borderRadius: 10, boxShadow: "var(--elev-overlay)",
               overflow: "hidden", padding: 4, zIndex: 100,
             }}
           >
@@ -336,8 +360,8 @@ export default function Sidebar(props: SidebarProps) {
               <button
                 onClick={() => { setUserMenuOpen(false); onLogout(); }}
                 role="menuitem"
-                style={{ ...dropdownItemStyle(), color: "#EF4444" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#FEF2F2"; }}
+                style={{ ...dropdownItemStyle(), color: "var(--color-red, #EF4444)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--color-red-bg, #FEF2F2)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >
                 <LogOut size={14} strokeWidth={1.75} />
@@ -354,7 +378,7 @@ export default function Sidebar(props: SidebarProps) {
               width: "100%", display: "flex", alignItems: "center",
               justifyContent: "center",
               padding: "6px 0",
-              borderRadius: 8, border: "none", background: "transparent",
+              borderRadius: "var(--radius-field)", border: "none", background: "transparent",
               cursor: "pointer", fontFamily: "inherit",
               color: "var(--color-text-sub)",
             }}

@@ -141,6 +141,10 @@ export default function HoursHeatmap({ trades }: HoursHeatmapProps) {
                       return (
                         <td key={h} style={{ padding: 1 }}>
                           <div
+                            role="img"
+                            aria-label={c.trades > 0
+                              ? `${d} ${h}h — ${c.trades} trade${c.trades > 1 ? "s" : ""} — ${fmt(c.pnl, true)}`
+                              : `${d} ${h}h — aucun trade`}
                             title={c.trades > 0
                               ? `${d} ${h}h — ${c.trades} trade${c.trades > 1 ? "s" : ""} — ${fmt(c.pnl, true)}`
                               : `${d} ${h}h — aucun trade`}
@@ -149,7 +153,6 @@ export default function HoursHeatmap({ trades }: HoursHeatmapProps) {
                               background: cellColor(c.pnl, c.trades),
                               borderRadius: 3,
                               border: `1px solid ${c.trades > 0 ? "transparent" : T.border}`,
-                              cursor: c.trades > 0 ? "default" : "default",
                             }}
                           />
                         </td>
@@ -206,7 +209,9 @@ function RankBox({ title, icon: Icon, color, items, empty }: {
           {items.map((it, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
               <span style={{ color: T.textMut, minWidth: 60 }}>{DAYS[it.day]} {it.hour}h-{it.hour + 1}h</span>
-              <span style={{ color, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginLeft: "auto" }}>
+              <span style={{ color, fontWeight: 700, fontVariantNumeric: "tabular-nums", marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                {/* Double encodage : flèche en plus de la couleur (daltonisme) */}
+                <span aria-hidden="true">{it.cell.pnl >= 0 ? "▲" : "▼"}</span>
                 {fmt(it.cell.pnl, true)}
               </span>
               <span style={{ color: T.textMut, fontSize: 10 }}>{it.cell.trades}t</span>

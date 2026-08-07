@@ -6,16 +6,9 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
+import { T as BaseT } from "@/lib/ui/tokens";
 
-const T = {
-  white: "#FFFFFF", border: "#E5E5E5", text: "#0D0D0D",
-  textSub: "#5C5C5C", textMut: "#8E8E8E",
-  bg: "#FAFAFA", accent: "#0D0D0D", accentBg: "#F0F0F0",
-  green: "#16A34A", greenBg: "#F0FDF4", greenBd: "#A7F3D0",
-  red: "#EF4444", redBg: "#FEF2F2",
-  blue: "#3B82F6", blueBg: "#EFF6FF",
-  amber: "#F97316", amberBg: "#FFF4E6",
-};
+const T = { ...BaseT };
 
 const STORAGE_KEY = "tr4de_prop_firm_accounts";
 const STORAGE_SIM_KEY = "tr4de_scaling_sim";
@@ -52,11 +45,8 @@ export default function ScalingPage({ onGeneratePlan }) {
 
   return (
     <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* TITLE */}
-      <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>Accounts & Scaling</h1>
-
       {/* SECTION 1 — Header metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+      <div className="tr4de-kpi-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
         <MetricCard label="Capital total géré" value={fmtMoney(totalCapital)} />
         <MetricCard label="Profit cumulé" value={`${totalPnL >= 0 ? "+" : ""}${fmtMoney(Math.abs(totalPnL))}`} valueColor={totalPnL > 0 ? T.green : totalPnL < 0 ? T.red : T.text} />
         <MetricCard label="Comptes actifs" value={`${activeCount} / ${accounts.length || 0}`} />
@@ -66,7 +56,7 @@ export default function ScalingPage({ onGeneratePlan }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 4 }}>Mes comptes</div>
         {accounts.length === 0 && (
-          <div style={{ padding: 24, textAlign: "center", color: T.textSub, fontSize: 12, background: T.white, border: `1px dashed ${T.border}`, borderRadius: 12 }}>
+          <div style={{ padding: 24, textAlign: "center", color: T.textSub, fontSize: 12, background: T.white, border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)" }}>
             Aucun compte pour l'instant
           </div>
         )}
@@ -83,7 +73,7 @@ export default function ScalingPage({ onGeneratePlan }) {
           onClick={() => setShowForm(true)}
           style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            padding: "12px 16px", border: `1px dashed ${T.border}`, borderRadius: 12,
+            padding: "12px 16px", border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)",
             background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
             cursor: "pointer", fontFamily: "inherit",
           }}
@@ -107,7 +97,7 @@ export default function ScalingPage({ onGeneratePlan }) {
 
 function MetricCard({ label, value, valueColor = T.text }) {
   return (
-    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px" }}>
+    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "14px 16px" }}>
       <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700, color: valueColor, letterSpacing: -0.4, fontVariantNumeric: "tabular-nums" }}>{value}</div>
     </div>
@@ -123,12 +113,16 @@ function AccountCard({ account, expanded, onToggle, onDelete }) {
 
   return (
     <div style={{
-      background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden",
+      background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden",
       opacity: failed ? 0.55 : 1,
     }}>
       {/* HEADER */}
       <div
         onClick={failed ? undefined : onToggle}
+        role={failed ? undefined : "button"}
+        tabIndex={failed ? undefined : 0}
+        aria-expanded={failed ? undefined : expanded}
+        onKeyDown={failed ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         style={{
           display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
           cursor: failed ? "default" : "pointer",
@@ -224,7 +218,7 @@ function AccountCard({ account, expanded, onToggle, onDelete }) {
           {/* Stats détaillées en grille 3 colonnes — séparées par lignes verticales fines */}
           <div style={{
             display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
-            background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8,
+            background: T.bg, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
             overflow: "hidden",
           }}>
             <MiniMetric label="P&L total"    value={`${pnl >= 0 ? "+" : ""}${fmtMoney(Math.abs(pnl))}`} color={pnl > 0 ? T.green : pnl < 0 ? T.red : T.text} />
@@ -259,6 +253,12 @@ function AccountForm({ onClose, onSave }) {
   const [maxDD, setMaxDD] = useState("");
   const [ref, setRef] = useState("");
 
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const submit = () => {
     onSave({
       id: Date.now(),
@@ -273,8 +273,8 @@ function AccountForm({ onClose, onSave }) {
   };
 
   return (
-    <div {...backdropDismiss(onClose)} style={{ position: "fixed", inset: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 16, maxWidth: 440, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
+    <div {...backdropDismiss(onClose)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 }}>
+      <div role="dialog" aria-modal="true" aria-label="Nouveau compte" onClick={e => e.stopPropagation()} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-modal)", maxWidth: 440, width: "100%", boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.border}` }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>Nouveau compte</div>
         </div>
@@ -330,7 +330,7 @@ function Field({ label, children }) {
 }
 function inputStyle() {
   return {
-    padding: "8px 12px", borderRadius: 8, border: `1px solid ${T.border}`,
+    padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`,
     background: T.white, color: T.text, fontSize: 13, fontFamily: "inherit", outline: "none",
   };
 }
@@ -340,13 +340,13 @@ function Toggle({ label, checked, onChange }) {
       <span
         onClick={() => onChange(!checked)}
         style={{
-          width: 32, height: 18, borderRadius: 999, background: checked ? T.text : "#D4D4D4",
+          width: 32, height: 18, borderRadius: 999, background: checked ? T.text : T.border2,
           position: "relative", transition: "background .15s ease", flexShrink: 0,
         }}
       >
         <span style={{
           position: "absolute", top: 2, left: checked ? 16 : 2,
-          width: 14, height: 14, borderRadius: "50%", background: "#fff",
+          width: 14, height: 14, borderRadius: "50%", background: T.white,
           transition: "left .15s ease",
         }} />
       </span>
@@ -437,7 +437,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
     <div style={{
       background: T.white,
       border: `1px solid ${T.border}`,
-      borderRadius: glued ? "0 0 12px 12px" : 12,
+      borderRadius: glued ? "0 0 var(--radius-card) var(--radius-card)" : "var(--radius-card)",
       // En mode glued on garde le borderTop : il sert de séparateur entre
       // les 5 KPIs et la roadmap.
       overflow: "hidden",
@@ -454,7 +454,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
           cursor: "pointer", fontFamily: "inherit", textAlign: "left",
           transition: "background .12s ease",
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "#FAFAFA"; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F0F0F0)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -476,8 +476,8 @@ export function RoadmapSection({ accounts, sim, glued }) {
                 style={{
                   padding: "3px 9px", borderRadius: 999,
                   border: `1px solid ${active ? T.text : T.border}`,
-                  background: active ? T.text : "#FFFFFF",
-                  color: active ? "#FFFFFF" : T.textSub,
+                  background: active ? T.text : T.white,
+                  color: active ? T.white : T.textSub,
                   fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                   fontVariantNumeric: "tabular-nums",
                 }}>
@@ -506,7 +506,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
         {steps.map((s, i) => {
           const state = i < currentStep ? "done" : i === currentStep ? "current" : "todo";
           const ringBg = state === "done" ? T.green : state === "current" ? T.blue : T.bg;
-          const ringColor = state === "todo" ? T.textMut : "#fff";
+          const ringColor = state === "todo" ? T.textMut : T.white;
           const ringBorder = state === "todo" ? T.border : "transparent";
           const isLast = i === steps.length - 1;
           return (
@@ -514,7 +514,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
               display: "flex", alignItems: "flex-start", gap: 14,
               padding: "16px 14px",
               borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
-              background: state === "current" ? "#FAFAFA" : "transparent",
+              background: state === "current" ? "var(--color-hover-bg, #F0F0F0)" : "transparent",
               transition: "background .12s ease",
             }}>
               <button
@@ -553,7 +553,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
                           padding: "5px 12px", borderRadius: 999,
-                          border: `1px solid ${T.border}`, background: "#FFFFFF",
+                          border: `1px solid ${T.border}`, background: T.white,
                           color: T.textSub, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         }}>
                         <ArrowRight size={11} strokeWidth={2} style={{ transform: "rotate(180deg)" }} />
@@ -611,7 +611,7 @@ export function SimulatorSection({ sim, setSim, accounts, onGeneratePlan }) {
   const weeks = challengesLeft * weeksPerEval;
 
   return (
-    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
       <div style={{ padding: "14px 18px", borderBottom: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>Simulateur de scaling</div>
         <div style={{ fontSize: 11, color: T.textMut, marginTop: 2 }}>Ajuste les paramètres pour estimer ton revenu cible</div>
@@ -694,7 +694,7 @@ export function SimulatorSection({ sim, setSim, accounts, onGeneratePlan }) {
                         <div style={{
                           flex: 1, height: 2, margin: "0 3px",
                           background: idx < fundedCount - 1 ? T.green : (idx === fundedCount - 1 ? `linear-gradient(90deg, ${T.green} 0%, ${T.border} 100%)` : T.border),
-                          borderRadius: 1,
+                          borderRadius: "var(--radius-field)",
                           transition: "background .3s ease",
                         }} />
                       )}

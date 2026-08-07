@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LucideIcon, TrendingUp, TrendingDown } from "lucide-react";
+import { CountUp } from "./CountUp";
 
 interface StatProps {
   label: string;
@@ -15,32 +16,44 @@ interface StatProps {
   onClick?: () => void;
   /** Sans bordure ni arrondi propre — pour coller plusieurs Stat dans un conteneur commun. */
   flat?: boolean;
+  /**
+   * Anime la valeur en count-up. Passe la valeur numérique cible ici (au lieu
+   * de `value`) ; `format`/`prefix`/`suffix`/`decimals` contrôlent l'affichage.
+   * Si absent, `value` (ReactNode) est rendu tel quel.
+   */
+  countUp?: number;
+  countUpFormat?: (n: number) => string;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
 }
 
-export function Stat({ label, value, subtext, trend, icon: Icon, size = "md", positive, negative, onClick, flat }: StatProps) {
+export function Stat({ label, value, subtext, trend, icon: Icon, size = "md", positive, negative, onClick, flat, countUp, countUpFormat, prefix, suffix, decimals }: StatProps) {
   const valueSize = size === "sm" ? 18 : size === "md" ? 24 : 32;
   const labelSize = 11;
 
-  const valueColor = positive ? "#16A34A" : negative ? "#EF4444" : "#0D0D0D";
+  const valueColor = positive ? "var(--color-green, #16A34A)" : negative ? "var(--color-red, #EF4444)" : "var(--color-text, #0D0D0D)";
 
   const content = (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        {Icon && <Icon size={13} strokeWidth={1.75} color="#8E8E8E" />}
-        <span style={{ fontSize: labelSize, fontWeight: 500, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4 }}>
+        {Icon && <Icon size={13} strokeWidth={1.75} color="var(--color-text-muted, #6B6B6B)" />}
+        <span style={{ fontSize: labelSize, fontWeight: 500, color: "var(--color-text-muted, #6B6B6B)", textTransform: "uppercase", letterSpacing: 0.4 }}>
           {label}
         </span>
       </div>
-      <div style={{ fontSize: valueSize, fontWeight: 600, color: valueColor, lineHeight: 1.1, fontFamily: "var(--font-sans)" }}>
-        {value}
+      <div style={{ fontSize: valueSize, fontWeight: 600, color: valueColor, lineHeight: 1.1, fontFamily: "var(--font-sans)", fontVariantNumeric: "tabular-nums" }}>
+        {typeof countUp === "number"
+          ? <CountUp value={countUp} format={countUpFormat} prefix={prefix} suffix={suffix} decimals={decimals ?? 0} />
+          : value}
       </div>
       {(subtext || trend) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: "#5C5C5C" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: "var(--color-text-sub, #5C5C5C)" }}>
           {trend && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: trend.value >= 0 ? "#16A34A" : "#EF4444", fontWeight: 600 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: trend.value >= 0 ? "var(--color-green, #16A34A)" : "var(--color-red, #EF4444)", fontWeight: 600 }}>
               {trend.value >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
               {trend.value >= 0 ? "+" : ""}{trend.value.toFixed(1)}%
-              {trend.period && <span style={{ color: "#8E8E8E", fontWeight: 400 }}>{trend.period}</span>}
+              {trend.period && <span style={{ color: "var(--color-text-muted, #6B6B6B)", fontWeight: 400 }}>{trend.period}</span>}
             </span>
           )}
           {subtext && <span>{subtext}</span>}
@@ -54,9 +67,9 @@ export function Stat({ label, value, subtext, trend, icon: Icon, size = "md", po
       <button
         onClick={onClick}
         style={{
-          background: "#FFFFFF",
-          border: flat ? "none" : "1px solid #E5E5E5",
-          borderRadius: flat ? 0 : 12,
+          background: "var(--color-card-bg, #FFFFFF)",
+          border: flat ? "none" : "1px solid var(--color-border, #E5E5E5)",
+          borderRadius: flat ? 0 : "var(--radius-card, 10px)",
           padding: 20,
           textAlign: "left",
           cursor: "pointer",
@@ -64,11 +77,11 @@ export function Stat({ label, value, subtext, trend, icon: Icon, size = "md", po
           transition: "border-color 120ms ease, box-shadow 120ms ease",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = "#D4D4D4";
+          e.currentTarget.style.borderColor = "var(--color-border-strong, #D4D4D4)";
           e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.06)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = "#E5E5E5";
+          e.currentTarget.style.borderColor = "var(--color-border, #E5E5E5)";
           e.currentTarget.style.boxShadow = "none";
         }}
       >
@@ -79,8 +92,8 @@ export function Stat({ label, value, subtext, trend, icon: Icon, size = "md", po
 
   return (
     <div style={{
-      background: "#FFFFFF",
-      border: flat ? "none" : "1px solid #E5E5E5",
+      background: "var(--color-card-bg, #FFFFFF)",
+      border: flat ? "none" : "1px solid var(--color-border, #E5E5E5)",
       borderRadius: flat ? 0 : 12,
       padding: 20,
     }}>

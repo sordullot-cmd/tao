@@ -1,5 +1,19 @@
 ﻿"use client";
 
+/**
+ * ⚠️ COMPOSANT HORS CHARTE / PROBABLEMENT MORT.
+ *
+ * "TAO TRADE AI" — thème cyberpunk (slate/cyan, dégradés Tailwind) qui ne suit
+ * PAS le design system de l'app (tokens `T` / var(--color-*), dark-aware).
+ * Recherche d'imports : `Agentia` n'est référencé nulle part ailleurs dans le
+ * codebase → très probablement orphelin. Candidat à la suppression.
+ *
+ * Tokenisation « a minima » impossible ici sans réécriture complète : tout le
+ * style repose sur des classes utilitaires Tailwind (from-slate-900, text-cyan-400,
+ * bg-gradient-to-*, …), pas sur des styles inline mappables aux tokens.
+ * → Laissé tel quel volontairement. À retirer plutôt qu'à re-thémer.
+ */
+
 import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { withNetPnl } from "@/lib/tradeFees";

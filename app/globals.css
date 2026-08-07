@@ -4,16 +4,67 @@
 :root {
   /* Surfaces */
   --color-bg: #FFFFFF;
-  --color-bg-subtle: #F5F5F5;
+  /* Fond de page de la nouvelle DA (relevé au pixel sur la maquette Figma) */
+  --color-bg-subtle: #F9FAFA;
   --color-card-bg: #FFFFFF;
   --color-hover-bg: #F0F0F0;
   --color-active-bg: #EBEBEB;
 
+  /* === NOUVELLE DA (maquette Figma « Tableau de bord ») ===
+     Valeurs extraites des nodes Figma. Toujours passer par ces variables
+     plutôt que par les hex : c'est ce qui fait suivre le thème sombre. */
+  /* Navigation : item actif violet pâle */
+  --color-nav-active-bg: rgba(156, 123, 255, 0.10);
+  --color-nav-active-text: #9C7BFF;
+  /* Chiffres P&L — nuances plus sourdes que les couleurs status génériques */
+  --color-pnl-pos: #008932;
+  --color-pnl-neg: #B90707;
+  /* Décimales grisées du chiffre héros (« -€98 » foncé + « .16 » gris) */
+  --color-num-muted: #C0C0C0;
+  /* Tags de direction */
+  --color-tag-short-bg: #FFE7CA;
+  --color-tag-short-text: #AD4E00;
+  --color-tag-long-bg: #CAFFF3;
+  --color-tag-long-text: #007E6B;
+  /* Calendrier P&L */
+  --color-cal-empty-bg: #FAFBFB;
+  --color-cal-empty-text: rgba(13, 13, 13, 0.30);
+  --color-cal-pos-bg: rgba(0, 255, 106, 0.20);
+  --color-cal-pos-text: #06700D;
+  --color-cal-neg-bg: rgba(255, 0, 4, 0.20);
+  --color-cal-neg-text: #D30004;
+  /* Ligne de tableau mise en avant */
+  --color-row-highlight: rgba(13, 13, 13, 0.04);
+  /* Ombre des cartes de la nouvelle DA (très douce, pas de bordure) */
+  --elev-card: 0 0 2.2px 0 rgba(0, 0, 0, 0.07);
+  --elev-pill: 0 0 1.1px rgba(0, 0, 0, 0.07);
+  /* Texte posé sur un aplat de couleur pleine (badge vert/rouge) : reste blanc
+     dans les deux thèmes, l'aplat étant saturé de part et d'autre. */
+  --color-on-solid: #FFFFFF;
+  /* Voile derrière les modales. */
+  --color-scrim: rgba(0, 0, 0, 0.45);
+  /* Opacité des séries secondaires d'un graphique multi-comptes. */
+  --opacity-series-bg: 0.35;
+
   /* Texte */
   --color-text: #0D0D0D;
   --color-text-sub: #5C5C5C;
-  --color-text-muted: #8E8E8E;
+  /* Muted foncé pour passer le contraste WCAG AA (~5.7:1 sur blanc)
+     au lieu de l'ancien #8E8E8E (~2.9:1). */
+  --color-text-muted: #6B6B6B;
   --color-text-inverted: #FFFFFF;
+
+  /* Couleurs sémantiques (texte/lignes/traits) — thème-aware.
+     Référencées par lib/ui/tokens.ts (T.green, T.red, T.amber, …). */
+  --color-green:  #16A34A;
+  --color-red:    #EF4444;
+  --color-amber:  #F97316;
+  --color-blue:   #3B82F6;
+  --color-purple: #8B5CF6;
+  --color-cyan:   #06B6D4;
+  /* Accent signature style Kraken (violet/indigo) — courbe portefeuille & pastilles */
+  --color-kraken:     #7C4DFF;
+  --color-kraken-bg:  #F4F0FF;
 
   /* Bordures */
   --color-border: #E5E5E5;
@@ -36,11 +87,54 @@
   --color-red-bg:   #FEF2F2;
   --color-red-bd:   #FECACA;
   --color-amber-bg: #FFF4E6;
+  --color-amber-bd: #FED7AA;
   --color-blue-bg:  #EFF6FF;
+  --color-blue-bd:  #BFDBFE;
 
-  /* Typo */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  /* Typo — Outfit est la police de la nouvelle DA ; OpenAI Sans reste en
+     repli le temps que la Google Font se charge. */
+  --font-sans: var(--font-outfit), var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* === SYSTÈME VISUEL (échelles décidées — audit visuel) ===
+     Objectif : du contraste, pas de la variété. Échelles courtes. */
+
+  /* Échelle typographique — 6 crans nets */
+  --text-display: 32px;  /* chiffres héros (P&L total, niveau RPG) */
+  --text-h1:      24px;  /* titre d'écran */
+  --text-h2:      17px;  /* titre de section / carte */
+  --text-body:    14px;  /* contenu courant */
+  --text-label:   12px;  /* labels, méta, légendes */
+  --text-caption: 12px;
+  --lh-display: 1.1;
+  --lh-h1: 1.15;
+  --lh-h2: 1.3;
+  --lh-body: 1.55;
+
+  /* Graisses — 4 rôles (le corps repasse en 400) */
+  --fw-body: 400;
+  --fw-medium: 500;   /* labels & actions */
+  --fw-semibold: 600; /* titres & valeurs */
+  --fw-bold: 700;     /* chiffres héros */
+
+  /* Espacement — une seule progression */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Rayons — un par rôle */
+  --radius-field: 6px;   /* inputs, petits chips */
+  --radius-card:  10px;  /* cartes, panneaux */
+  --radius-modal: 14px;  /* modales, grands panneaux */
+  --radius-pill:  999px;
+
+  /* Élévation — 3 niveaux */
+  --elev-rest:    0 1px 2px rgba(20,30,35,.06);
+  --elev-hover:   0 4px 12px rgba(20,30,35,.10);
+  --elev-overlay: 0 16px 40px rgba(20,30,35,.18);
 
   /* Layout */
   --sidebar-width: 220px;
@@ -59,10 +153,28 @@
 
   --color-text: #C8C8C8;        /* texte principal en gris doux */
   --color-text-sub: #909090;
-  --color-text-muted: #6B6B6B;
+  --color-text-muted: #8A8A8A;  /* remonté pour contraste sur fond sombre */
+  /* Texte posé sur une pastille --color-text (badge du menu) : en sombre la
+     pastille devient claire, il faut donc de l'encre foncée. */
+  --color-text-inverted: #0D0D0D;
 
   --color-border: #3A3A3A;
   --color-border-strong: #4A4A4A;
+
+  /* Couleurs sémantiques éclaircies pour rester lisibles sur fond sombre. */
+  --color-green:  #34D399;
+  --color-red:    #F87171;
+  --color-amber:  #FB923C;
+  --color-blue:   #60A5FA;
+  --color-purple: #A78BFA;
+  --color-cyan:   #22D3EE;
+  --color-kraken:     #9A7BFF;
+  --color-kraken-bg:  #241E3A;
+
+  /* Élévation plus marquée sur fond sombre */
+  --elev-rest:    0 1px 2px rgba(0,0,0,.4);
+  --elev-hover:   0 4px 14px rgba(0,0,0,.5);
+  --elev-overlay: 0 16px 44px rgba(0,0,0,.6);
 
   /* Pastel pills en dark mode : versions sombres tintées des couleurs status */
   --color-green-bg: #1A3A2D;
@@ -71,6 +183,32 @@
   --color-red-bd:   #7A2D2D;
   --color-amber-bg: #332818;
   --color-blue-bg:  #1E2A3D;
+
+  /* === NOUVELLE DA — déclinaison sombre ===
+     Mêmes rôles qu'en clair, teintes remontées pour rester lisibles sur fond
+     sombre. La maquette Figma ne couvre que le mode clair : ces valeurs sont
+     dérivées, pas relevées. */
+  --color-nav-active-bg: rgba(154, 123, 255, 0.16);
+  --color-nav-active-text: #B9A3FF;
+  --color-pnl-pos: #34D399;
+  --color-pnl-neg: #F87171;
+  --color-num-muted: #5A5A5C;
+  --color-tag-short-bg: #3A2A17;
+  --color-tag-short-text: #F0B27A;
+  --color-tag-long-bg: #123330;
+  --color-tag-long-text: #5EEAD4;
+  --color-cal-empty-bg: #202022;
+  --color-cal-empty-text: rgba(200, 200, 200, 0.35);
+  --color-cal-pos-bg: rgba(0, 255, 106, 0.14);
+  --color-cal-pos-text: #4ADE80;
+  --color-cal-neg-bg: rgba(255, 0, 4, 0.16);
+  --color-cal-neg-text: #FF7B7E;
+  --color-row-highlight: rgba(255, 255, 255, 0.05);
+  --elev-card: 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --elev-pill: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --color-scrim: rgba(0, 0, 0, 0.62);
+  /* Les traits fins passent moins bien sur fond sombre. */
+  --opacity-series-bg: 0.45;
 }
 
 :root[data-theme="dark"] body {
@@ -387,6 +525,18 @@ input, button, select, textarea, optgroup {
   font-family: inherit;
 }
 
+/* === Classes utilitaires du système visuel ===
+   Le corps est en 400 : la graisse redevient un signal de hiérarchie. */
+body { font-weight: var(--fw-body); }
+
+.t-display { font-size: var(--text-display); font-weight: var(--fw-bold); line-height: var(--lh-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.t-h1      { font-size: var(--text-h1); font-weight: var(--fw-bold); line-height: var(--lh-h1); letter-spacing: -0.02em; }
+.t-h2      { font-size: var(--text-h2); font-weight: var(--fw-semibold); line-height: var(--lh-h2); letter-spacing: -0.01em; }
+.t-body    { font-size: var(--text-body); font-weight: var(--fw-body); line-height: var(--lh-body); }
+.t-label   { font-size: var(--text-label); font-weight: var(--fw-medium); color: var(--color-text-muted); }
+.t-caption { font-size: var(--text-caption); font-weight: var(--fw-body); color: var(--color-text-muted); }
+.num       { font-variant-numeric: tabular-nums; }
+
 /* === Scrollbar fine OpenAI-style === */
 html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transparent; }
 ::-webkit-scrollbar {
@@ -486,11 +636,14 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
   background-clip: padding-box !important;
 }
 
-/* === Focus visible === */
-/* Contours rectangulaires de focus retirés sur l'ensemble du site (demande
-   utilisateur). Note : supprime l'indicateur de focus clavier par défaut. */
+/* === Focus visible ===
+   Anneau de focus au CLAVIER uniquement (:focus-visible ne se déclenche pas
+   au clic souris), donc aucune gêne esthétique à la souris tout en restant
+   conforme WCAG 2.4.7. */
 :focus-visible {
-  outline: none;
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* === Selection === */
@@ -523,6 +676,13 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
   to { opacity: 1; transform: translateY(0); }
 }
 .anim-fade-up { animation: fadeUp 280ms var(--ease-out) both; }
+
+/* Fondu d'entrée de page — `anim-1` / `anim-2` sont utilisés par ~25 pages
+   mais n'étaient définis que dans les <style> locaux de Dashboard/Strategy
+   (donc no-op sur les autres pages). Définition globale ici, sur le token
+   partagé, pour que l'entrée joue partout et de façon cohérente. */
+.anim-1 { animation: fadeUp 250ms var(--ease-out) both; }
+.anim-2 { animation: fadeUp 250ms 50ms var(--ease-out) both; }
 
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -631,6 +791,48 @@ button:not([data-no-press]):not(:disabled):active {
   animation: shimmer 1.6s linear infinite;
 }
 
+/* === RPG : feedback de gain d'XP & montée de niveau ===
+   Le seul endroit du site où l'on s'autorise du « delight » : ces moments
+   sont rares et gratifiants. Utilise enfin --ease-spring. */
+
+/* +XP flottant : monte et s'estompe au-dessus de la barre. */
+@keyframes xpFloat {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.9); }
+  15%  { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-22px) scale(1); }
+}
+.anim-xp-float {
+  animation: xpFloat 900ms var(--ease-out) both;
+  pointer-events: none;
+}
+
+/* Badge de niveau qui « pop » en spring lors d'un level-up. */
+@keyframes levelPop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.anim-level-pop { animation: levelPop 620ms var(--ease-spring) both; }
+
+/* Flash de luminosité de la barre au passage de palier. */
+@keyframes barFlash {
+  0%, 100% { filter: brightness(1); box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+  40%      { filter: brightness(1.6); box-shadow: 0 0 12px 2px rgba(255,255,255,0.5); }
+}
+.anim-bar-flash { animation: barFlash 700ms var(--ease-out) both; }
+
+/* Particules discrètes qui jaillissent du badge (level-up). */
+@keyframes xpBurst {
+  0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--bx, 0), var(--by, -18px)) scale(0.4); }
+}
+.anim-xp-burst { animation: xpBurst 700ms var(--ease-out) both; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-xp-float { animation: fadeIn 200ms ease both !important; }
+  .anim-level-pop, .anim-bar-flash, .anim-xp-burst { animation: none !important; }
+}
+
 /* === Pulse subtil pour indicateurs live === */
 @keyframes pulseSoft {
   0%, 100% { opacity: 1; }
@@ -681,8 +883,10 @@ input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  /* Pas d'anneau ni d'assombrissement de bordure au focus : la bordure
-     conserve la couleur définie par le champ (demande utilisateur). */
+  /* Anneau discret au clavier uniquement (accessibilité), sans déplacer la
+     mise en page grâce au box-shadow. */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info) 32%, transparent);
+  border-color: var(--color-info);
 }
 
 /* === Liens (<a>) : transition couleur fluide === */
@@ -717,6 +921,19 @@ a, [role="button"] {
 /* === Tabs / pills actifs (data-active) : transition de fond === */
 [data-tab], [data-pill] {
   transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+/* === Reduced motion : filet de sécurité GLOBAL ===
+   Neutralise animations et transitions pour les utilisateurs qui demandent
+   moins de mouvement — y compris les animations/transitions posées en style
+   inline (que les règles ciblant `.anim-*` ne peuvent pas atteindre). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* === Smooth content height transitions (accordion contents) ===
@@ -756,7 +973,8 @@ img, canvas {
 /* Reduced motion : on garde la fade (compréhension) mais on retire les
    mouvements et scales — évite les motion sickness. */
 @media (prefers-reduced-motion: reduce) {
-  .anim-fade-up, .anim-fade-in, .anim-stagger > * {
+  .anim-fade-up, .anim-fade-in, .anim-stagger > *,
+  .anim-1, .anim-2 {
     animation: fadeIn 180ms ease both !important;
   }
   button:not([data-no-press]):not(:disabled):active { transform: none !important; }
@@ -979,7 +1197,7 @@ img, canvas {
   /* Toolbars de page : header avec h1 + boutons → wrap propre */
   .anim-1 > div:first-child { flex-wrap: wrap !important; gap: 8px !important; }
 
-  /* Contrôles d'en-tête (DateRangePicker + sélecteur de comptes) injectés dans
+  /* Contrôles d'en-tête (sélecteur de comptes) injectés dans
      le slot : pleine largeur sous le titre, passage à la ligne, jamais de
      débordement horizontal (sinon les boutons sont coupés par overflow-x). */
   #tr4de-page-header-slot {
@@ -1046,8 +1264,10 @@ img, canvas {
   /* Cible (progression) : ligne 2 droite ou pleine largeur */
   .tr4de-goals-row > *:nth-child(4) { grid-column: 1 / 3 !important; grid-row: 3 !important; }
 
-  /* Lignes de KPIs (4 blocs flex côte-à-côte) : 2x2 sur mobile */
-  .tr4de-kpi-row { flex-wrap: wrap !important; }
+  /* Lignes de KPIs (4 blocs côte-à-côte) : 2x2 sur mobile.
+     display:flex forcé pour que les conteneurs en `display:grid` (grilles à
+     colonnes figées repeat(4/6,…)) re-flow aussi, pas seulement les flex. */
+  .tr4de-kpi-row { display: flex !important; flex-wrap: wrap !important; }
   .tr4de-kpi-row > * {
     flex: 1 1 50% !important;
     min-width: 50% !important;

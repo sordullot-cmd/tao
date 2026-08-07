@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { T as BaseT } from "@/lib/ui/tokens";
 
 interface Notification {
   id: string;
@@ -98,18 +99,34 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
     }
   };
 
+  // Libellé accessible décrivant le type (l'emoji seul n'est pas annoncé).
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "info":
+        return "Information";
+      case "warning":
+        return "Avertissement";
+      case "stop":
+        return "Alerte critique";
+      case "report":
+        return "Rapport";
+      default:
+        return "Notification";
+    }
+  };
+
   const getColor = (type: string) => {
     switch (type) {
       case "info":
-        return "#5F7FB4";
+        return T.blue;
       case "warning":
-        return "#9D8555";
+        return T.amber;
       case "stop":
-        return "#AD6B6B";
+        return T.red;
       case "report":
-        return "#8B6BAD";
+        return T.purple;
       default:
-        return "#8B95AA";
+        return T.textMut;
     }
   };
 
@@ -127,22 +144,15 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
     return `il y a ${diffDays}j`;
   };
 
-  const T = {
-    white: "#FFFFFF",
-    bg: "#F8FAFB",
-    border: "#E3E6EB",
-    text: "#1A1F2E",
-    textSub: "#5F6B7E",
-    textMut: "#8B95AA",
-    accent: "#5F7FB4",
-    accentBg: "#E3ECFB",
-  };
+  const T = { ...BaseT };
 
   return (
     <div style={{ position: "relative" }}>
       {/* Bell icon */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : "Notifications"}
+        aria-expanded={isOpen}
         style={{
           position: "relative",
           background: "none",
@@ -150,16 +160,21 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
           fontSize: 18,
           cursor: "pointer",
           padding: 0,
+          minWidth: 44,
+          minHeight: 44,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        🔔
+        <span aria-hidden="true">🔔</span>
         {unreadCount > 0 && (
           <div
             style={{
               position: "absolute",
-              top: -2,
-              right: -4,
-              background: "#AD6B6B",
+              top: 4,
+              right: 4,
+              background: T.red,
               color: T.white,
               width: 18,
               height: 18,
@@ -186,8 +201,8 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
             width: 320,
             background: T.white,
             border: `1px solid ${T.border}`,
-            borderRadius: 8,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+            borderRadius: "var(--radius-card)",
+            boxShadow: "var(--elev-overlay)",
             zIndex: 1000,
             maxHeight: 400,
             overflowY: "auto",
@@ -246,7 +261,7 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
                   transition: "background 0.2s",
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.background = "#f0f0f5";
+                  (e.currentTarget as HTMLDivElement).style.background = T.accentBg;
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLDivElement).style.background = notif.is_read
@@ -262,7 +277,11 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
                     alignItems: "flex-start",
                   }}
                 >
-                  <span style={{ fontSize: 14 }}>
+                  <span
+                    style={{ fontSize: 14 }}
+                    role="img"
+                    aria-label={getTypeLabel(notif.notification_type)}
+                  >
                     {getIcon(notif.notification_type)}
                   </span>
                   <div

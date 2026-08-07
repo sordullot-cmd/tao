@@ -14,7 +14,7 @@ export function NavArrow({ direction = "left", onClick, title }) {
       aria-label={title}
       title={title}
       style={{
-        padding: 6, borderRadius: 8, background: "transparent", border: "none",
+        padding: 6, borderRadius: "var(--radius-field)", background: "transparent", border: "none",
         cursor: "pointer", color: T.textSub, display: "inline-flex",
         alignItems: "center", transition: "background .12s ease",
       }}
@@ -44,7 +44,7 @@ export function NavLabel({ children, onClick, title, minWidth = 48 }) {
         title={title}
         style={{
           ...base, background: "transparent", border: "none", cursor: "pointer",
-          padding: "4px 8px", borderRadius: 8, transition: "background .12s ease",
+          padding: "4px 8px", borderRadius: "var(--radius-field)", transition: "background .12s ease",
         }}
         onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}

@@ -218,9 +218,6 @@ export default function TradeChartPage({ trades = [] }) {
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
       <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, color: T.text, margin: 0 }}>
-          Visualisation du trade
-        </h1>
         <p style={{ fontSize: 13, color: T.textMut, margin: "4px 0 0 0" }}>
           Bougies Yahoo Finance · markers d’entrée et de sortie
         </p>
@@ -241,7 +238,7 @@ export default function TradeChartPage({ trades = [] }) {
           style={{
             padding: "8px 12px",
             border: `1px solid ${T.border2}`,
-            borderRadius: 8,
+            borderRadius: "var(--radius-card)",
             background: T.surface,
             color: T.text,
             fontSize: 13,
@@ -282,7 +279,7 @@ export default function TradeChartPage({ trades = [] }) {
       <div
         style={{
           border: `1px solid ${T.border}`,
-          borderRadius: 12,
+          borderRadius: "var(--radius-card)",
           background: T.surface,
           padding: 12,
           position: "relative",
@@ -297,10 +294,10 @@ export default function TradeChartPage({ trades = [] }) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "rgba(255,255,255,0.6)",
+              background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 78%, transparent)",
               color: T.textSub,
               fontSize: 13,
-              borderRadius: 12,
+              borderRadius: "var(--radius-card)",
             }}
           >
             Chargement des bougies…
@@ -316,8 +313,8 @@ export default function TradeChartPage({ trades = [] }) {
               justifyContent: "center",
               color: T.red,
               fontSize: 13,
-              background: "rgba(255,255,255,0.7)",
-              borderRadius: 12,
+              background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 85%, transparent)",
+              borderRadius: "var(--radius-card)",
               padding: 16,
               textAlign: "center",
             }}

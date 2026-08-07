@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { T as BaseT } from "@/lib/ui/tokens";
 
 export default function BrokerLoginModal({ onConnected, onClose }) {
   const [broker, setBroker] = useState("tradovate");
@@ -11,6 +13,12 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const handleConnect = async (e) => {
     e.preventDefault();
@@ -52,34 +60,28 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
     }
   };
 
-  const T = {
-    white: "#FFFFFF",
-    bg: "#F8FAFB",
-    border: "#E3E6EB",
-    text: "#1A1F2E",
-    textMut: "#8B95AA",
-    accent: "#5F7FB4",
-    accentBg: "#E3ECFB",
-    accentBd: "#B8CCEB",
-    red: "#AD6B6B",
-  };
+  const T = { ...BaseT };
 
   return (
-    <div style={{
+    <div {...backdropDismiss(onClose)} style={{
       position: "fixed",
       inset: 0,
-      background: "transparent",
+      background: "rgba(0,0,0,.45)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       zIndex: 1000,
+      padding: 24,
     }}>
-      <div style={{
+      <div role="dialog" aria-modal="true" aria-label="Connect Broker" onClick={(e) => e.stopPropagation()} style={{
         background: T.white,
-        borderRadius: 16,
+        border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-modal)",
         padding: 32,
         maxWidth: 420,
-        boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+        width: "100%",
+        color: T.text,
+        boxShadow: "var(--elev-overlay)",
       }}>
         <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
           Connect Broker
@@ -99,8 +101,10 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
               style={{
                 width: "100%",
                 padding: "10px 12px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 border: `1px solid ${T.border}`,
+                background: T.white,
+                color: T.text,
                 fontSize: 13,
                 marginTop: 6,
               }}
@@ -110,7 +114,7 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
             </select>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16, display: broker === "tradovate" ? "block" : "none" }}>
             <label style={{ fontSize: 12, color: T.textMut, fontWeight: 500 }}>
               API Key
             </label>
@@ -124,17 +128,18 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
               style={{
                 width: "100%",
                 padding: "10px 12px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 border: `1px solid ${T.border}`,
+                background: T.white,
+                color: T.text,
                 fontSize: 13,
                 marginTop: 6,
                 boxSizing: "border-box",
-                display: broker === "tradovate" ? "block" : "none",
               }}
             />
           </div>
 
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16, display: broker === "tradovate" ? "block" : "none" }}>
             <label style={{ fontSize: 12, color: T.textMut, fontWeight: 500 }}>
               API Secret
             </label>
@@ -148,17 +153,18 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
               style={{
                 width: "100%",
                 padding: "10px 12px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 border: `1px solid ${T.border}`,
+                background: T.white,
+                color: T.text,
                 fontSize: 13,
                 marginTop: 6,
                 boxSizing: "border-box",
-                display: broker === "tradovate" ? "block" : "none",
               }}
             />
           </div>
 
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 20, display: broker === "tradovate" ? "block" : "none" }}>
             <label style={{ fontSize: 12, color: T.textMut, fontWeight: 500 }}>
               Account ID
             </label>
@@ -172,12 +178,13 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
               style={{
                 width: "100%",
                 padding: "10px 12px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 border: `1px solid ${T.border}`,
+                background: T.white,
+                color: T.text,
                 fontSize: 13,
                 marginTop: 6,
                 boxSizing: "border-box",
-                display: broker === "tradovate" ? "block" : "none",
               }}
             />
           </div>
@@ -185,9 +192,9 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
           {error && (
             <div style={{
               padding: 12,
-              borderRadius: 8,
-              background: "#FEE2E2",
-              border: `1px solid #FECDD3`,
+              borderRadius: "var(--radius-card)",
+              background: T.redBg,
+              border: `1px solid ${T.redBd}`,
               color: T.red,
               fontSize: 13,
               marginBottom: 16,
@@ -203,7 +210,7 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
               style={{
                 flex: 1,
                 padding: "10px 16px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 border: `1px solid ${T.border}`,
                 background: T.white,
                 fontSize: 13,
@@ -220,10 +227,10 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
               style={{
                 flex: 1,
                 padding: "10px 16px",
-                borderRadius: 8,
+                borderRadius: "var(--radius-card)",
                 border: "none",
                 background: T.accent,
-                color: "white",
+                color: T.white,
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: loading ? "not-allowed" : "pointer",
