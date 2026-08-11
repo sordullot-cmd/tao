@@ -41,6 +41,36 @@ function SectionTitle({ children, action }) {
 /** En-tête de tableau : 12px Medium en capitales, atténué. */
 const TH = { fontSize:12, fontWeight:500, lineHeight:"17.05px", color:T.text, textTransform:"uppercase" };
 
+/* Grille de « Performance par jour ». Une vraie grille plutôt que sept colonnes
+   flexibles espacées de 60 px : les chiffres tombent au pixel sous leur en-tête,
+   et le nom du jour absorbe la place que les colonnes de valeurs n'utilisent pas
+   au lieu de la laisser en gouttière. */
+const DAY_GRID = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0,1.4fr) repeat(6, minmax(0,1fr))",
+  alignItems: "center",
+  gap: 12,
+};
+
+/* Les quatre familles de tags, choisies par un sélecteur au lieu d'être empilées
+   dans quatre blocs identiques. */
+const BREAKDOWNS = [
+  { id: "emotion",   label: () => t("dash.emotionalImpact") },
+  { id: "entry",     label: () => t("dash.entryType") },
+  { id: "liquidity", label: () => t("dash.liquidity") },
+  { id: "timeframe", label: () => t("dash.timeframe") },
+];
+
+/* Grille d'une ligne de catégorie du Tao Score : libellé, occurrences, winrate,
+   P&L. Les largeurs étaient figées (100/117/117 px) dans une carte de demi-page,
+   où elles ne laissaient plus rien au libellé. */
+const CAT_GRID = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0,1fr) 64px 72px 132px",
+  alignItems: "center",
+  gap: 12,
+};
+
 /* La vignette du symbole, son libellé et la table des instruments vivaient ici
    ET dans components/ui/da.jsx — deux copies qui divergeaient. Source unique :
    da.jsx (SYMBOL_LOGOS / symbolLabel / SymbolBadge / SymbolCell). */
@@ -128,6 +158,8 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
     { id: "Tout", days: null },
   ];
   const [period, setPeriod] = React.useState("Tout");
+  // Famille de tags affichée dans « Répartition ».
+  const [breakdown, setBreakdown] = React.useState("emotion");
   // Largeur réelle de la zone de graphique. La trame de points qui remplit
   // l'aire sous la courbe est un <pattern> SVG : il faut dessiner à l'échelle
   // 1:1, sinon preserveAspectRatio="none" écraserait les points en ellipses.
@@ -375,7 +407,15 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // PENTAGON RADAR COMPONENT
   const PentagonRadar = ({ metrics, size = 280 }) => {
     const center = size / 2;
-    const radius = (size / 2) - 40;
+    /* La couronne réservée aux libellés d'axes suit la taille au lieu d'être
+       figée à 40 px : sur un grand radar elle laissait une marge inutile, et le
+       tracé restait petit au milieu du vide. */
+    const ring = Math.max(34, size * 0.155);
+    const radius = (size / 2) - ring;
+    // Idem pour les textes : figés à 10/12 px, ils rapetissaient à vue d'œil
+    // dès que le radar grandissait.
+    const labelSize = Math.max(10, Math.round(size * 0.036));
+    const valueSize = Math.max(12, Math.round(size * 0.044));
     const values = [
       parseFloat(metrics.winPercent),
       parseFloat(metrics.profitFactor),
@@ -459,10 +499,10 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
             <g key={`label-${i}`}>
               <text
                 x={labelX}
-                y={labelY - 6}
+                y={labelY - valueSize * 0.55}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize="10"
+                fontSize={labelSize}
                 fontWeight="600"
                 fill={T.textMut}
                 style={{pointerEvents:"none"}}
@@ -471,10 +511,10 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
               </text>
               <text
                 x={labelX}
-                y={labelY + 8}
+                y={labelY + valueSize * 0.7}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize="12"
+                fontSize={valueSize}
                 fontWeight="700"
                 fill={T.text}
                 style={{pointerEvents:"none"}}
@@ -634,38 +674,6 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   });
   const emotionStats = categoryStats(allEmotionTags, tr => emotionTags[tr.id] || []);
 
-  // Carte « Winrate + P&L par catégorie » — une des 4 cases du bloc Tao Score.
-  const renderCategoryCard = (title, subtitle, rows) => (
-    <div style={{...CARD,display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-        <div style={{fontSize:20,fontWeight:500,lineHeight:"21.7px",color:T.text}}>{title}</div>
-        <div style={{fontSize:14,lineHeight:"18.6px",color:T.textSub}}>{subtitle}</div>
-      </div>
-      {rows.length === 0 ? (
-        <div style={{fontSize:14,color:T.textMut,padding:"12px 8px"}}>Aucune donnée renseignée</div>
-      ) : (
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {rows.map(r => (
-            <div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 8px"}}>
-              <div style={{display:"flex",flex:"1 0 0",minWidth:0,alignItems:"center",gap:8}}>
-                <span style={{width:9,height:9,borderRadius:96,background:r.color,flexShrink:0}}/>
-                <span style={{fontSize:16,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
-              </div>
-              <div style={{width:100,textAlign:"right",fontSize:16,fontWeight:500,lineHeight:"17.05px",color:T.text,flexShrink:0}}>{r.count}X</div>
-              <div style={{width:117,display:"flex",flexDirection:"column",alignItems:"flex-end",justifyContent:"center",flexShrink:0}}>
-                <span style={{fontSize:16,fontWeight:500,lineHeight:"18.6px",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
-              </div>
-              <div style={{width:117,flexShrink:0}}>
-                {/* % = part de cette catégorie dans le P&L total de l'historique */}
-                <StackedAmount value={r.pnl} percent={statsPnL !== 0 ? Math.abs((r.pnl / statsPnL) * 100) : 0} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
   // Delta affiché sous le chiffre héros : variation du cumulé sur toute la
   // fenêtre visible (et non entre les deux derniers points, qui affichait
   // presque toujours un delta insignifiant).
@@ -676,13 +684,25 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   const deltaColor = deltaAbs > 0 ? T.pnlPos : deltaAbs < 0 ? T.pnlNeg : T.textSub;
   const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
 
+  /* ── Marge du haut, alignée sur le reste du site ───────────────────────────
+     Toutes les autres pages posent leur premier élément à la même hauteur :
+     barre du haut (20 px) + retrait de page (14 px) + l'écart de section (48 px)
+     que leur barre d'en-tête vide laisse au-dessus du contenu.
+
+     Le tableau de bord n'a NI l'une NI l'autre — sa barre du haut est mise à
+     hauteur nulle et sa racine n'a pas de retrait, pour que la courbe monte
+     jusqu'au bord de la fenêtre. Il doit donc réintégrer les deux ici, dans la
+     bande haute : le graphique continue de coller au bord, mais le chiffre héros
+     tombe exactement à la hauteur du premier titre des autres pages. */
+  const TOPBAR_H = 20;      // hauteur de la barre du haut ailleurs sur le site
+  const PAGE_INSET = 14;    // retrait haut de la racine des autres pages
+  const SECTION_GAP = 48;   // écart de section, comme sur Calendrier ou Comptes
+  const HEAD_PAD_TOP = TOPBAR_H + PAGE_INSET + SECTION_GAP;
+
   /* Bande haute du bloc de tête : le chiffre héros l'occupe, la courbe passe
      dessous (elle ne commence à tracer qu'à `topY = HEAD_BAND`). Les deux
      valeurs sont partagées, c'est ce qui garantit qu'ils se rejoignent. */
-  const HEAD_BAND = 160;
-  // 48 px au-dessus du libellé : la même respiration que la page Calendrier,
-  // qui laisse 48 entre sa barre d'en-tête et son P&L.
-  const HEAD_PAD_TOP = 48;
+  const HEAD_BAND = HEAD_PAD_TOP + 112;
   /* Les traits verticaux du fond ne montent pas jusqu'en haut : ils s'arrêtent
      sous le chiffre héros, qui doit se lire sur un fond nu. */
   const GRID_TOP = HEAD_BAND - 24;
@@ -1080,9 +1100,12 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
               pas. Le reste (stratégie, session, frais…) est dans le dépliage. */}
           {(() => {
             const source = selectedDay !== null ? (pnlByDay[selectedDay] || []) : filteredTrades;
+            /* Douze lignes : au-delà de dix, c'est la liste qui donne sa hauteur
+               à la rangée (grille en `stretch`) et le calendrier qui s'étire —
+               assumé, le vide était du mauvais côté. */
             const list = [...source]
               .sort((a, b) => new Date(b.date) - new Date(a.date))
-              .slice(0, 5);
+              .slice(0, 12);
             return (
               <TradesList
                 trades={list}
@@ -1097,95 +1120,175 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
         </div>
       </div>
 
-      {/* TAO SCORE — 4 cartes de catégories */}
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <SectionTitle>{t("dash.tr4deScore")}</SectionTitle>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"stretch"}}>
-          {renderCategoryCard(t("dash.emotionalImpact"), t("dash.emotionalImpactSub"), emotionStats)}
-          {renderCategoryCard("Type d'entrée", "Winrate & P&L par point d'entrée", entryStats)}
-          {renderCategoryCard("Liquidité ciblée", "Winrate & P&L par liquidité visée", liquidityStats)}
-          {renderCategoryCard("Unité de temps", "Winrate & P&L par timeframe d'analyse", timeframeStats)}
-        </div>
-      </div>
-
-      {/* PERFORMANCE PAR JOUR */}
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <SectionTitle>{t("dash.perfByDay")}</SectionTitle>
-        <div style={{...CARD,display:"flex",flexDirection:"column",gap:12}}>
-          {/* En-tête de colonnes */}
-          <div style={{display:"flex",alignItems:"center",gap:60,padding:"0 12px",opacity:0.4}}>
-            <div style={{flex:"1 0 0",minWidth:0}}><span style={TH}>{t("dash.day")}</span></div>
-            <div style={{flex:"1 0 0",minWidth:0}}><span style={TH}>{t("common.trades")}</span></div>
-            <div style={{flex:"1 0 0",minWidth:0}}><span style={TH}>%{t("common.total")}</span></div>
-            <div style={{flex:"1 0 0",minWidth:0}}><span style={TH}>{t("common.winRate")}</span></div>
-            <div style={{flex:"1 0 0",minWidth:0}}><span style={TH}>{t("dash.avgGain")}</span></div>
-            <div style={{flex:"1 0 0",minWidth:0}}><span style={TH}>{t("dash.avgLossHdr")}</span></div>
-            <div style={{flex:"1 0 0",minWidth:0,textAlign:"right"}}><span style={TH}>{t("dash.expectancy")}</span></div>
-          </div>
-
-          {/* Lignes — un clic restreint tout le dashboard à ce jour */}
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            {(() => {
-              const dayNames = [t("wd.monday"),t("wd.tuesday"),t("wd.wednesday"),t("wd.thursday"),t("wd.friday"),t("wd.saturday"),t("wd.sunday")]
-                .map(s => s.charAt(0).toUpperCase() + s.slice(1));
-              const days = [0,1,2,3,4];
-              if (selectedDay !== null) days.sort((a, b) => (a === selectedDay ? -1 : b === selectedDay ? 1 : 0));
-              return days.map(idx => {
-                const dayTrades = pnlByDay[idx] || [];
-                const dayPnL = dayTrades.reduce((s, tr) => s + tr.pnl, 0);
-                const dayWins = dayTrades.filter(tr => tr.pnl > 0).length;
-                const dayWinRate = dayTrades.length ? ((dayWins / dayTrades.length) * 100).toFixed(0) : "0";
-                const dayAvgWin = dayWins ? dayTrades.filter(tr => tr.pnl > 0).reduce((s, tr) => s + tr.pnl, 0) / dayWins : 0;
-                const dayLosses = dayTrades.length - dayWins;
-                const dayAvgLoss = dayLosses ? dayTrades.filter(tr => tr.pnl < 0).reduce((s, tr) => s + tr.pnl, 0) / dayLosses : 0;
-                const expectancy = dayPnL / Math.max(dayTrades.length, 1);
-                const isSelected = selectedDay === idx;
-                const isHidden = selectedDay !== null && !isSelected;
-                if (isHidden) return null;
-                const CELL = { flex:"1 0 0", minWidth:0, fontSize:16, fontWeight:500, lineHeight:"17.05px", color:T.text };
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => setSelectedDay(isSelected ? null : idx)}
-                    style={{
-                      display:"flex", alignItems:"center", gap:60, padding:12, borderRadius:12,
-                      background: isSelected ? T.rowHighlight : "transparent",
-                      cursor:"pointer", transition:"background 140ms ease",
-                    }}
-                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = T.rowHighlight; }}
-                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <div style={CELL}>{dayNames[idx]}</div>
-                    <div style={CELL}>{dayTrades.length}</div>
-                    <div style={CELL}>{((dayTrades.length / Math.max(trades.length, 1)) * 100).toFixed(1)}%</div>
-                    <div style={CELL}>{dayWinRate}%</div>
-                    <div style={CELL}>{fmt(dayAvgWin, true)}</div>
-                    <div style={CELL}>{fmt(dayAvgLoss, true)}</div>
-                    <div style={{...CELL,textAlign:"right",lineHeight:"18.6px",color: expectancy > 0 ? T.pnlPos : expectancy < 0 ? T.pnlNeg : T.textSub}}>
-                      {fmt(expectancy, true)}
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </div>
-      </div>
-
-      {/* TAO SCORE — radar */}
+      {/* ═══ TAO SCORE ════════════════════════════════════════════════════════
+          La note d'ensemble et sa forme à gauche, ce qui la fabrique à droite :
+          la répartition par tags, qui occupait une section entière plus bas. */}
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
         <SectionTitle
           action={
             <span style={{display:"inline-flex",alignItems:"baseline",gap:5}}>
-              <span style={{fontSize:20,fontWeight:500,color:T.text,lineHeight:1}}>{pentagonMetrics.overallScore}</span>
+              <span style={{fontSize:28,fontWeight:500,color:T.text,lineHeight:1,letterSpacing:-0.2}}>{pentagonMetrics.overallScore}</span>
               <span style={{fontSize:14,color:T.textMut}}>/ 100</span>
             </span>
           }
         >
           {t("dash.tr4deScore")}
         </SectionTitle>
-        <div style={{...CARD,display:"flex",alignItems:"center",justifyContent:"center",height:429}}>
-          <PentagonRadar metrics={pentagonMetrics} size={320} />
+
+        <div className="tr4de-dash-score" style={{
+          display:"grid", gridTemplateColumns:"minmax(330px,400px) minmax(0,1fr)",
+          gap:12, alignItems:"stretch",
+        }}>
+          {/* Le radar seul dans sa carte, largement margé : il touchait les
+              bords, et les cinq notes qu'on avait posées dessous encombraient
+              plus qu'elles n'aidaient — le radar montre déjà la forme. */}
+          <div style={{...CARD,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 48px"}}>
+            <PentagonRadar metrics={pentagonMetrics} size={240} />
+          </div>
+
+          {/* À droite du radar : la répartition par tags, qui occupait une
+              section à elle seule plus bas. Les deux se lisent ensemble — la note
+              d'un côté, ce qui la fabrique de l'autre. */}
+          <div style={{...CARD,display:"flex",flexDirection:"column",gap:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+              {BREAKDOWNS.map(b => {
+                const active = breakdown === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setBreakdown(b.id)}
+                    aria-pressed={active}
+                    style={{
+                      padding:"6px 14px", borderRadius:999, border:"none",
+                      background: active ? T.accentBg : "transparent",
+                      color: T.text, opacity: active ? 1 : 0.5,
+                      fontSize:13, fontWeight: active ? 600 : 500,
+                      cursor:"pointer", fontFamily:"inherit",
+                      transition:"background 140ms ease, opacity 140ms ease",
+                    }}
+                  >
+                    {b.label()}
+                  </button>
+                );
+              })}
+            </div>
+
+            {(() => {
+              const rows = { emotion: emotionStats, entry: entryStats, liquidity: liquidityStats, timeframe: timeframeStats }[breakdown] || [];
+              if (rows.length === 0) {
+                return (
+                  <div style={{fontSize:13,color:T.textMut,padding:"18px 2px"}}>
+                    {t("dash.noCategoryData")}
+                  </div>
+                );
+              }
+              // Part de chaque ligne dans le volume de la catégorie : c'est ce que
+              // mesure la barre, pas le P&L (qui a déjà sa colonne signée).
+              const maxCount = Math.max(...rows.map(r => r.count), 1);
+              return (
+                <div style={{display:"flex",flexDirection:"column"}}>
+                  <div style={{...CAT_GRID,padding:"0 2px 8px",opacity:0.4}}>
+                    <span style={TH} />
+                    <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
+                    <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
+                    <span style={{...TH,textAlign:"right"}}>P&L</span>
+                  </div>
+                  {rows.map(r => (
+                    <div key={r.id} style={{...CAT_GRID,padding:"11px 2px",borderTop:`1px solid ${T.border}`}}>
+                      <span style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+                        <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                          <span style={{width:9,height:9,borderRadius:96,background:r.color,flexShrink:0}}/>
+                          <span style={{fontSize:15,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
+                        </span>
+                        <span style={{height:4,borderRadius:999,background:T.accentBg,overflow:"hidden",maxWidth:260}}>
+                          <span style={{
+                            display:"block", height:"100%", borderRadius:999,
+                            width:`${(r.count / maxCount) * 100}%`, background:r.color, opacity:0.55,
+                          }} />
+                        </span>
+                      </span>
+                      <span style={{textAlign:"right",fontSize:15,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
+                      <span style={{textAlign:"right",fontSize:15,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
+                      {/* % = part de cette catégorie dans le P&L total de l'historique */}
+                      <StackedAmount value={r.pnl} percent={statsPnL !== 0 ? Math.abs((r.pnl / statsPnL) * 100) : 0} />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+        </div>
+      </div>
+
+      {/* ═══ PERFORMANCE PAR JOUR ═════════════════════════════════════════════
+          Un tableau, rien de plus : les barres signées ajoutées sous chaque ligne
+          se lisaient comme des traits parasites — sur un jour sans trade il ne
+          restait que le trait d'axe, sans rien à mesurer. */}
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <SectionTitle>{t("dash.perfByDay")}</SectionTitle>
+        <div style={{...CARD,display:"flex",flexDirection:"column",gap:2}}>
+          <div style={{...DAY_GRID,padding:"0 12px 8px",opacity:0.4}}>
+            <span style={TH}>{t("dash.day")}</span>
+            <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
+            <span style={{...TH,textAlign:"right"}}>%{t("common.total")}</span>
+            <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
+            <span style={{...TH,textAlign:"right"}}>{t("dash.avgGain")}</span>
+            <span style={{...TH,textAlign:"right"}}>{t("dash.avgLossHdr")}</span>
+            <span style={{...TH,textAlign:"right"}}>{t("dash.expectancy")}</span>
+          </div>
+
+          {(() => {
+            const dayNames = [t("wd.monday"),t("wd.tuesday"),t("wd.wednesday"),t("wd.thursday"),t("wd.friday"),t("wd.saturday"),t("wd.sunday")]
+              .map(s => s.charAt(0).toUpperCase() + s.slice(1));
+            /* Semaine ouvrée par défaut ; samedi et dimanche n'apparaissent que
+               s'ils portent des trades. */
+            const days = [0,1,2,3,4].concat([5,6].filter(d => (pnlByDay[d] || []).length > 0));
+            if (selectedDay !== null) days.sort((a, b) => (a === selectedDay ? -1 : b === selectedDay ? 1 : 0));
+            return days.map(idx => {
+              const dayTrades = pnlByDay[idx] || [];
+              const dayPnL = dayTrades.reduce((s, tr) => s + tr.pnl, 0);
+              const dayWins = dayTrades.filter(tr => tr.pnl > 0).length;
+              const dayWinRate = dayTrades.length ? ((dayWins / dayTrades.length) * 100).toFixed(0) : "0";
+              const dayAvgWin = dayWins ? dayTrades.filter(tr => tr.pnl > 0).reduce((s, tr) => s + tr.pnl, 0) / dayWins : 0;
+              const dayLosses = dayTrades.length - dayWins;
+              const dayAvgLoss = dayLosses ? dayTrades.filter(tr => tr.pnl < 0).reduce((s, tr) => s + tr.pnl, 0) / dayLosses : 0;
+              const expectancy = dayPnL / Math.max(dayTrades.length, 1);
+              const isSelected = selectedDay === idx;
+              if (selectedDay !== null && !isSelected) return null;
+              const CELL = { fontSize:15, fontWeight:500, lineHeight:"17.05px", color:T.text, textAlign:"right", fontVariantNumeric:"tabular-nums" };
+              return (
+                  <div
+                    key={idx}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedDay(isSelected ? null : idx)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedDay(isSelected ? null : idx); }
+                    }}
+                    style={{
+                      ...DAY_GRID, padding:"10px 12px", borderRadius:10,
+                      background: isSelected ? T.rowHighlight : "transparent",
+                      cursor:"pointer", transition:"background 140ms ease",
+                    }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = T.rowHighlight; }}
+                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span style={{...CELL,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dayNames[idx]}</span>
+                    <span style={CELL}>{dayTrades.length}</span>
+                    <span style={{...CELL,color:T.textSub}}>{((dayTrades.length / Math.max(trades.length, 1)) * 100).toFixed(1)}%</span>
+                    <span style={{...CELL,color: Number(dayWinRate) >= 50 ? T.pnlPos : T.pnlNeg}}>{dayWinRate}%</span>
+                    <span style={CELL}>{fmt(dayAvgWin, true)}</span>
+                    <span style={CELL}>{fmt(dayAvgLoss, true)}</span>
+                    <span style={{...CELL,color: expectancy > 0 ? T.pnlPos : expectancy < 0 ? T.pnlNeg : T.textSub}}>
+                      {fmt(expectancy, true)}
+                    </span>
+                  </div>
+              );
+            });
+          })()}
         </div>
       </div>
     </div>

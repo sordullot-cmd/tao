@@ -41,7 +41,7 @@ export const BRAND_COLORS: Record<string, BrandPalette> = {
     propFirm: true,
   },
   tradeify: {
-    primary: "#00FF51",                      // charte officielle (brand.tradeify.co)
+    primary: "#10D38D",                      // teinte retenue pour les courbes
     secondary: ["#00DFFF", "#FF4F40"],       // verticales FX et 24/7
     propFirm: true,
   },

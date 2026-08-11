@@ -25,11 +25,12 @@ import { getLocalDateString } from "@/lib/dateUtils";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import RiskCalculator from "@/components/RiskCalculator";
-import ComplianceModule, { ComplianceKpiRow, ComplianceInsights } from "@/components/discipline/ComplianceModule";
+import ComplianceModule, { ComplianceInsights } from "@/components/discipline/ComplianceModule";
 import { useComplianceRules } from "@/lib/hooks/useComplianceData";
 import { useDailySessionNotes } from "@/lib/hooks/useDailySessionNotes";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
 import { describeRule, isRuleLive, computeStats, computeJournaledDates } from "@/lib/compliance";
+import { CARD } from "@/components/ui/da";
 
 function reorder(arr, from, to) {
   const next = [...arr];
@@ -954,7 +955,9 @@ export default function DisciplinePage({ trades = [] }) {
 
   return (
     <>
-      <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
+      {/* Même ossature que les autres pages de la DA : fond gris hérité de la
+          coquille, sections espacées de 24, léger retrait haut. */}
+      <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:8,fontFamily:"var(--font-sans)"}} className="anim-1">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{marginLeft:"auto", display:"flex", alignItems:"center", gap:8}}>
             <div ref={routineBtnRef} style={{position:"relative", fontFamily:"var(--font-sans)"}}>
@@ -1165,17 +1168,67 @@ export default function DisciplinePage({ trades = [] }) {
           </div>
         </div>
 
-        {/* UNIFIED CARD — KPIs (4 cells) + Discipline quotidienne (heatmap, gauche) + Insights (droite) */}
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
-          {/* Row 1 : 4 KPIs */}
-          <ComplianceKpiRow trades={trades} flat />
+        {/* ═══ BILAN — même bloc de tête que les autres pages de la DA :
+            chiffre héros puis mini-KPI, posés à même le fond gris. ═══ */}
+        {(() => {
+          const s = complianceStats;
+          const todayStr = getLocalDateString(new Date());
+          const sessionViolations = s.violations.filter(v => v.date === todayStr);
+          const liveRules = (complianceRules || []).filter(r => isRuleLive(r)).length;
+          const totalRules = (complianceRules || []).length;
+          const kpis = [
+            {
+              label: "Statut du jour",
+              value: sessionViolations.length === 0 ? "Clean" : `${sessionViolations.length} violation${sessionViolations.length > 1 ? "s" : ""}`,
+              color: sessionViolations.length === 0 ? T.green : T.red,
+            },
+            { label: "Série en cours", value: s.streak > 0 ? `${s.streak} j` : "—" },
+            { label: "Meilleure série", value: s.bestStreak > 0 ? `${s.bestStreak} j` : "—" },
+            { label: "Règles actives", value: totalRules > 0 ? `${liveRules}/${totalRules}` : "—" },
+            {
+              label: "Trades conformes",
+              value: s.totalTrades > 0 ? `${s.compliantTrades}/${s.totalTrades}` : "—",
+            },
+          ];
+          return (
+            <div style={{display:"flex",flexDirection:"column",gap:12,minWidth:0}}>
+              {/* Le héros est le taux de journées propres : c'est LA mesure de
+                  la discipline, là où un P&L mesurerait autre chose. */}
+              <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+                <span style={{
+                  fontSize:28, fontWeight:500, lineHeight:"31px", letterSpacing:-0.2,
+                  color:T.text, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap",
+                }}>
+                  {s.byDay.size > 0 ? `${Math.round(s.complianceRatePct)}%` : "—"}
+                </span>
+                <span style={{fontSize:13,fontWeight:500,lineHeight:1,color:T.textSub,whiteSpace:"nowrap"}}>
+                  de journées sans écart · {s.byDay.size} {s.byDay.size > 1 ? "jours tradés" : "jour tradé"}
+                </span>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:28,flexWrap:"wrap"}}>
+                {kpis.map(k => (
+                  <div key={k.label} style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2}}>
+                    <span style={{fontSize:11,lineHeight:1,color:T.textSub,whiteSpace:"nowrap"}}>{k.label}</span>
+                    <span style={{
+                      fontSize:14, fontWeight:600, lineHeight:1, whiteSpace:"nowrap",
+                      color:k.color || T.text, fontVariantNumeric:"tabular-nums",
+                    }}>
+                      {k.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
-          {/* Row 2 : Heatmap (gauche) + Insights (droite), avec border-top et separateur vertical */}
-          {/* 2fr 1fr : collapse en 1 colonne sous 1024px via le sélecteur responsive
-              de globals.css ([style*="grid-template-columns: 2fr 1fr"]). */}
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",borderTop:`1px solid ${T.border}`,alignItems:"stretch"}}>
+        {/* ═══ DISCIPLINE QUOTIDIENNE + INSIGHTS ═══
+            Deux cartes de la DA côte à côte, au lieu d'une seule carte bordée
+            découpée par des filets. `2fr 1fr` retombe en une colonne sous
+            1024 px (sélecteur responsive de globals.css). */}
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12,alignItems:"stretch"}}>
           {/* HEATMAP CALENDAR - DISCIPLINE TRACKER */}
-          <div key={heatmapVersion} style={{minWidth:0,overflow:"hidden",borderRight:`1px solid ${T.border}`}}>
+          <div key={heatmapVersion} style={{...CARD,padding:0,minWidth:0,overflow:"hidden"}}>
             {(() => {
               // Streak compliance = nombre de jours consécutifs sans aucune violation (depuis le jour le plus récent ayant tradé)
               const streak = complianceStats.streak;
@@ -1496,8 +1549,9 @@ export default function DisciplinePage({ trades = [] }) {
           </div>
           </div>
 
-          {/* INSIGHTS — colonne droite */}
-          <ComplianceInsights trades={trades} flat />
+          {/* INSIGHTS — carte voisine, plus une colonne soudée à la heatmap. */}
+          <div style={{...CARD,padding:0,minWidth:0,overflow:"hidden"}}>
+            <ComplianceInsights trades={trades} flat />
           </div>
         </div>
 

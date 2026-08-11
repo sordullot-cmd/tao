@@ -28,10 +28,12 @@ const openAISans = localFont({
 
 // Outfit — police de la nouvelle direction artistique (maquette Figma).
 // Exposée en --font-outfit ; app/globals.css la câble sur --font-sans.
+// `variable` (sans liste de poids) charge l'axe complet : les valeurs
+// intermédiaires comme 550 sont alors rendues telles quelles, là où une liste
+// de poids discrets les arrondit au cran le plus proche.
 const outfit = Outfit({
   variable: "--font-outfit",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 

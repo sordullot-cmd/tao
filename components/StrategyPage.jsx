@@ -10,7 +10,7 @@ import { t, useLang } from "@/lib/i18n";
 import { useStrategies } from "@/lib/hooks/useUserData";
 import { useTrades } from "@/lib/hooks/useTradeData";
 import { useUndo } from "@/lib/contexts/UndoContext";
-import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
+import { CARD } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 
 /* ─── TOKENS (palette monochrome partagée, dark-aware) ─────────────── */
@@ -256,32 +256,51 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     });
   };
 
+  /* Stratégies d'un trade. Les assignations sont indexées tantôt par id de
+     trade, tantôt par une clé composite (date+symbole+entrée) selon l'âge de
+     la donnée — d'où les trois tentatives. */
+  const getStrategyIdsForTrade = React.useCallback((trade) => {
+    let ids = tradeStrategiesData[trade.id] || [];
+    if (ids.length === 0 && trade.date && trade.symbol && trade.entry) {
+      const composite = `${trade.date}${trade.symbol}${trade.entry}`;
+      ids = tradeStrategiesData[composite] || [];
+      if (ids.length === 0) {
+        const norm = `${trade.date}${trade.symbol}${parseFloat(trade.entry).toFixed(2)}`;
+        ids = tradeStrategiesData[norm] || [];
+      }
+    }
+    return ids.map(String);
+  }, [tradeStrategiesData]);
+
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
-      {/* HEADER */}
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-        <button onClick={() => setShowStrategyForm(true)} style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,padding:"7px 16px",height:34,borderRadius:999,background:T.text,border:`1px solid ${T.text}`,color:T.white,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"var(--font-sans)"}}>
-          <Plus size={14} strokeWidth={2}/> {t("strat.createBtn")}
-        </button>
-        <div id="tr4de-page-header-slot" />
+    /* Même ossature que les autres pages de la DA : fond gris hérité de la
+       coquille, sections espacées de 24, léger retrait haut. */
+    <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:8,fontFamily:"var(--font-sans)"}} className="anim-1">
+      {/* Emplacement des contrôles injectés par la barre du haut. */}
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
       </div>
+
+      {/* Le bouton de création vit DANS la barre de records, calé sur la ligne
+          de ses intitulés (cf. plus bas) : sur sa propre rangée, il laissait une
+          bande vide en travers du haut de page. Il ne subsiste ici que pour
+          l'état « aucune stratégie », où la barre n'est pas rendue. */}
+      {(!strategies || strategies.length === 0) && (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:16,flexWrap:"wrap"}}>
+          <button
+            onClick={() => setShowStrategyForm(true)}
+            style={{display:"inline-flex",alignItems:"center",gap:6,padding:"9px 18px",borderRadius:999,background:T.text,border:"none",color:T.textInverted,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
+          >
+            <Plus size={14} strokeWidth={1.75}/> {t("strat.createBtn")}
+          </button>
+        </div>
+      )}
 
       {/* TOP-STRATEGY LEADERBOARD — 4 blocs : meilleure performance, meilleure
           espérance, meilleur win rate, meilleur profit factor (par stratégie) */}
       {strategies && Array.isArray(strategies) && strategies.length > 0 && (() => {
-        const getStrategyIdsForTrade = (trade) => {
-          let ids = tradeStrategiesData[trade.id] || [];
-          if (ids.length === 0 && trade.date && trade.symbol && trade.entry) {
-            const composite = `${trade.date}${trade.symbol}${trade.entry}`;
-            ids = tradeStrategiesData[composite] || [];
-            if (ids.length === 0) {
-              const norm = `${trade.date}${trade.symbol}${parseFloat(trade.entry).toFixed(2)}`;
-              ids = tradeStrategiesData[norm] || [];
-            }
-          }
-          return ids.map(String);
-        };
-
+        /* `getStrategyIdsForTrade` vit maintenant au niveau du composant : il
+           servait ici ET aux totaux d'en-tête, deux copies auraient dérivé. */
         const perStrat = strategies.map(s => {
           const sId = String(s.id);
           const sTrades = trades.filter(tr => getStrategyIdsForTrade(tr).includes(sId));
@@ -307,51 +326,132 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
         const bestWR  = pickBest("winRate");
         const bestPF  = pickBest("profitFactor");
 
-        const Cell = ({ label, strat, value, valueColor, last }) => (
-          <div style={{
-            padding: "16px 20px",
-            borderRight: last ? "none" : `1px solid ${T.border}`,
-            display: "flex", flexDirection: "column", gap: 6, minWidth: 0,
-          }}>
-            <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>{label}</div>
-            <div style={{ fontSize: 17, fontWeight: 600, color: T.text, letterSpacing: -0.2, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 8 }}>
-              {strat ? (
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{strat.strategy.name}</span>
-              ) : "—"}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: valueColor || T.textSub, fontVariantNumeric: "tabular-nums" }}>{value}</div>
-          </div>
-        );
+        /* Segment d'une barre de records : intitulé en capitales 11 px, la
+           MÉTRIQUE en 16 px semi-gras coloré — c'est elle qu'on compare — puis
+           le nom de la stratégie en 11 px atténué. Les segments se lisent comme
+           les colonnes d'un même tableau, pas comme quatre cartes empilées. */
+        /* Trois lignes de hauteurs FIXES (17 / 25 / 16) : sans elles, un suffixe
+           « par trade » ou un nom absent décalait la ligne suivante et les
+           quatre colonnes ne s'alignaient plus entre elles. C'est ce
+           désalignement qui donnait l'impression de bâclé. */
+        const Cell = ({ label, strat, value, suffix, valueColor }) => {
+          const open = () => {
+            if (!strat) return;
+            setSelectedStrategyId(strat.strategy.id);
+            localStorage.setItem("selectedStrategyId", strat.strategy.id);
+            setPage("strategy-detail");
+          };
+          return (
+            <button
+              type="button"
+              disabled={!strat}
+              onClick={open}
+              /* Chaque record MÈNE à sa stratégie : le nom était affiché sans
+                 pouvoir y aller, il fallait le retrouver dans la liste. Le
+                 survol dessine la même pilule grise que la navigation. */
+              title={strat ? strat.strategy.name : undefined}
+              style={{
+                flex: "1 1 0", minWidth: 140,
+                display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5,
+                margin: "-8px -12px", padding: "8px 12px", borderRadius: 12,
+                background: "transparent", border: "none", font: "inherit", textAlign: "left",
+                cursor: strat ? "pointer" : "default",
+                transition: "background var(--dur-fast) var(--ease-out)",
+              }}
+              onMouseEnter={(e) => { if (strat) e.currentTarget.style.background = T.accentBg; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{
+                fontSize: 13, lineHeight: "16px", height: 16, color: T.textSub,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+              }}>
+                {label}
+              </span>
+              <span style={{ display: "flex", alignItems: "baseline", gap: 5, height: 28, maxWidth: "100%", minWidth: 0 }}>
+                <span style={{
+                  fontSize: 24, fontWeight: 600, lineHeight: "28px", letterSpacing: -0.5,
+                  color: strat ? (valueColor || T.text) : T.textMut,
+                  fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", flexShrink: 0,
+                }}>
+                  {strat ? value : "—"}
+                </span>
+                {strat && suffix && (
+                  <span style={{
+                    fontSize: 12, lineHeight: "17px", color: T.text, opacity: 0.4,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0,
+                  }}>
+                    {suffix}
+                  </span>
+                )}
+              </span>
+              {/* Pastille de la stratégie devant son nom : le même repère de
+                  couleur que sa carte plus bas, qui relie les deux d'un coup
+                  d'œil. */}
+              <span style={{ display: "flex", alignItems: "center", gap: 6, height: 16, maxWidth: "100%", minWidth: 0 }}>
+                {strat && (
+                  <span aria-hidden style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                    background: strat.strategy.color || T.textMut,
+                  }} />
+                )}
+                <span style={{
+                  fontSize: 12, lineHeight: "16px", color: T.textSub,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {strat ? strat.strategy.name : "—"}
+                </span>
+              </span>
+            </button>
+          );
+        };
 
         return (
-          <div className="tr4de-kpi-row" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
-              <Cell
-                label="Meilleure performance"
-                strat={bestPnl}
-                value={bestPnl ? fmt(bestPnl.pnl, true) : "—"}
-                valueColor={bestPnl && bestPnl.pnl > 0 ? T.green : bestPnl && bestPnl.pnl < 0 ? T.red : T.textSub}
-              />
-              <Cell
-                label="Meilleure espérance"
-                strat={bestExp}
-                value={bestExp ? `${fmt(bestExp.expectancy, true)} / trade` : "—"}
-                valueColor={bestExp && bestExp.expectancy > 0 ? T.green : bestExp && bestExp.expectancy < 0 ? T.red : T.textSub}
-              />
-              <Cell
-                label="Plus haut win rate"
-                strat={bestWR}
-                value={bestWR ? `${bestWR.winRate.toFixed(1)}%` : "—"}
-                valueColor={T.text}
-              />
-              <Cell
-                label="Plus haut profit factor"
-                strat={bestPF}
-                value={bestPF ? (bestPF.profitFactor === Infinity ? "∞" : bestPF.profitFactor.toFixed(2)) : "—"}
-                valueColor={T.text}
-                last
-              />
-            </div>
+          /* Plus de filets : ce sont les colonnes elles-mêmes, régulièrement
+             espacées, qui structurent la barre. */
+          <div className="tr4de-kpi-cards" style={{ display: "flex", alignItems: "flex-start", gap: 40, flexWrap: "wrap", minWidth: 0 }}>
+            {/* Ces quatre valeurs sont les MEILLEURES de chaque catégorie : les
+                peindre en vert n'apporte rien, elles sont bonnes par
+                définition. Elles restent donc en encre pleine — seule une perte
+                reste signalée en rouge, puisque là l'information compte. */}
+            <Cell
+              label="Meilleure perf"
+              strat={bestPnl}
+              value={bestPnl ? fmt(bestPnl.pnl, true) : "—"}
+              valueColor={bestPnl && bestPnl.pnl < 0 ? T.red : T.text}
+            />
+            <Cell
+              label="Espérance"
+              strat={bestExp}
+              value={bestExp ? fmt(bestExp.expectancy, true) : "—"}
+              suffix={bestExp ? "par trade" : null}
+              valueColor={bestExp && bestExp.expectancy < 0 ? T.red : T.text}
+            />
+            <Cell
+              label="Win rate"
+              strat={bestWR}
+              value={bestWR ? `${bestWR.winRate.toFixed(1)}%` : "—"}
+            />
+            <Cell
+              label="Profit factor"
+              strat={bestPF}
+              value={bestPF ? (bestPF.profitFactor === Infinity ? "∞" : bestPF.profitFactor.toFixed(2)) : "—"}
+            />
+
+            {/* Le bouton se cale sur la LIGNE DES INTITULÉS, pas sur le haut du
+                bloc : le retrait négatif compense la différence entre sa hauteur
+                (34) et celle d'un intitulé (16), pour que leurs milieux
+                coïncident. */}
+            <button
+              onClick={() => setShowStrategyForm(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                marginLeft: "auto", marginTop: -9, alignSelf: "flex-start", flexShrink: 0,
+                padding: "9px 18px", borderRadius: 999, background: T.text, border: "none",
+                color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Plus size={14} strokeWidth={1.75}/> {t("strat.createBtn")}
+            </button>
           </div>
         );
       })()}
@@ -360,7 +460,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
       {strategies && Array.isArray(strategies) && strategies.length > 0 && (
         <div className="anim-stagger" style={{display:"flex",flexDirection:"column",gap:12}}>
           {trades.length === 0 && (
-            <div style={{padding:"20px",background:T.amberBg,borderRadius:"var(--radius-card)",borderLeft:`4px solid ${T.amber}`}}>
+            <div style={{padding:"16px 20px",background:T.amberBg,borderRadius:12,borderLeft:`4px solid ${T.amber}`,fontSize:14,lineHeight:1.5}}>
               <strong>{t("strat.noTradesLoaded")}</strong><br/>
               {t("strat.noTradesLoadedSub")}
             </div>
@@ -492,74 +592,52 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               );
             };
             
-            // ✅ Fonction helper pour créer un Area Chart
-            const AreaChart = ({ trades, width = 280, height = 110 }) => {
+            /* Courbe d'équity de la maquette (447:4183) : un TRAIT SEUL sur
+               131 px de haut, pleine largeur, sans aire ni trame — la carte
+               reste légère et la courbe se lit d'un coup. */
+            const EquityLine = ({ trades }) => {
               if (trades.length === 0) {
-                return <div style={{width:"100%", height: 110, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: T.textMut}}>{t("strat.noData")}</div>;
+                return (
+                  <div style={{ height: 131, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.textMut }}>
+                    {t("strat.noData")}
+                  </div>
+                );
               }
-
-              // Cumulative P&L par trade (ordre chronologique)
-              const sorted = [...trades].sort((a, b) =>
-                new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime()
-              );
+              const sorted = [...trades].sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
               let cum = 0;
-              const data = sorted.map(tr => {
-                cum += typeof tr.pnl === "number" ? tr.pnl : 0;
-                return { date: tr.date, value: cum };
-              });
-
-              const values = data.map(d => d.value);
+              const values = sorted.map(tr => (cum += typeof tr.pnl === "number" ? tr.pnl : 0));
               const minVal = Math.min(...values, 0);
               const maxVal = Math.max(...values, 0);
               const range = (maxVal - minVal) || 1;
-              const isPositive = values[values.length - 1] >= 0;
-              const lineColor = isPositive ? T.green : T.red;
+              const last = values[values.length - 1] || 0;
+              const lineColor = last >= 0 ? T.green : T.red;
 
-              // Layout — chart prend toute la place, pas d'ordonnée à droite
-              const W = 800;
-              const H = 220;
-              const padL = 0;
-              const padR = 0;
-              const padT = 6;
-              const padB = 16;
-              const plotW = W - padL - padR;
-              const plotH = H - padT - padB;
-
-              const xFor = (i) => padL + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
-              const yFor = (v) => padT + plotH - ((v - minVal) / range) * plotH;
-
-              const linePath = data.map((d, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(1)} ${yFor(d.value).toFixed(1)}`).join(" ");
-              // Surface fermée pour le dégradé : on referme la courbe vers le bas du chart.
-              const baselineY = padT + plotH;
-              const areaPath = data.length === 0
-                ? ""
-                : `${linePath} L ${xFor(data.length - 1).toFixed(1)} ${baselineY} L ${xFor(0).toFixed(1)} ${baselineY} Z`;
-              // Id des <defs> de l'aire tramée : un par stratégie, sinon toutes
-              // les cartes partageraient la trame de la première.
-              const gradientId = `strat-area-${strategy.id}`;
-
-              const fmtD = (d) => {
-                if (!d) return "";
-                const parts = String(d).split("T")[0].split("-");
-                if (parts.length !== 3) return d;
-                const months = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
-                return `${parseInt(parts[2])} ${months[parseInt(parts[1]) - 1]}`;
-              };
+              const W = 512, H = 131, pad = 4;
+              const xFor = (i) => (values.length === 1 ? W / 2 : (i / (values.length - 1)) * W);
+              const yFor = (v) => pad + (H - pad * 2) - ((v - minVal) / range) * (H - pad * 2);
+              const d = values.map((v, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(1)} ${yFor(v).toFixed(1)}`).join(" ");
 
               return (
-                <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",overflow:"visible",aspectRatio:`${W} / ${H}`}}>
-                  <defs>
-                    <AreaDotsDefs id={gradientId} color={lineColor} top={padT} bottom={baselineY} width={W} height={H} />
-                  </defs>
-                  {/* Surface tramée sous la courbe — trame commune à tous les
-                      graphiques du site, aux couleurs de la courbe. */}
-                  <path d={areaPath} {...areaDotsFill(gradientId)} stroke="none" />
-                  {/* Courbe par-dessus */}
-                  <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg
+                  viewBox={`0 0 ${W} ${H}`}
+                  width="100%"
+                  height={131}
+                  preserveAspectRatio="none"
+                  style={{ display: "block", overflow: "visible" }}
+                >
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={lineColor}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
                 </svg>
               );
             };
-            
+
             return (
               <div
                 key={strategy.id}
@@ -568,20 +646,17 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                 tabIndex={0}
                 aria-label={strategy.name}
                 style={{
-                  position:"relative",
-                  display:"grid",
-                  gridTemplateColumns:"30% 40% 30%",
-                  gap:24,
-                  padding:20,
-                  background:T.white,
-                  border:`1px solid ${T.border}`,
-                  borderRadius: "var(--radius-card)",
-                  cursor:"pointer",
-                  minHeight:200,
-                  alignItems:"stretch"
+                  ...CARD,
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "stretch",
+                  gap: 48,
+                  padding: 20,
+                  cursor: "pointer",
+                  transition: "box-shadow var(--dur-fast) var(--ease-out)",
                 }}
-                onMouseEnter={(e)=>{ e.currentTarget.style.borderColor = T.border2; e.currentTarget.style.boxShadow = "var(--elev-hover)"; }}
-                onMouseLeave={(e)=>{ e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}
+                onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow = "var(--elev-hover)"; }}
+                onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow = T.elevCard; }}
                 onClick={() => {
                   setSelectedStrategyId(strategy.id);
                   localStorage.setItem('selectedStrategyId', strategy.id);
@@ -596,43 +671,47 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   }
                 }}
               >
-                {/* ========== LEFT SECTION: STATISTICS ========== */}
-                <div style={{display:"flex",flexDirection:"column",gap:8,paddingRight:20,borderRight:`1px solid ${T.border}`}}>
-                  {/* Strategy Name & Color Dot */}
-                  <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:strategy.color,flexShrink:0}}/>
-                    <div style={{fontSize:15,fontWeight:600,color:T.text,lineHeight:1.3,letterSpacing:-0.1}}>{strategy.name}</div>
+                {/* ══ COLONNE GAUCHE : identité, courbe, P&L + winrate ══ */}
+                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+                  {/* Pastille de couleur 10 px + nom 16 px, description dessous
+                      à 40 % d'opacité (maquette 447:4177). */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span aria-hidden style={{ width: 10, height: 10, borderRadius: 36, background: strategy.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 16, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {strategy.name}
+                      </span>
+                    </div>
+                    {strategy.description && (
+                      <div style={{ fontSize: 14, color: T.text, opacity: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {strategy.description}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Description */}
-                  {strategy.description && (
-                    <div style={{fontSize:12,color:T.textSub,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
-                      {strategy.description}
-                    </div>
-                  )}
+                  <EquityLine trades={strategyTrades} />
 
-                  {/* PnL */}
-                  <div style={{fontSize:20,fontWeight:600,color:totalPnL >= 0 ? T.green : T.red,letterSpacing:-0.2}}>{fmt(totalPnL,true)}</div>
-
-                  <div style={{flex:1}} />
-
-                  {/* Win Rate (donut) */}
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <DonutChart winRate={parseInt(winRate)} size={48}/>
-                    <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                      <div style={{fontSize:12,color:T.textSub,fontWeight:500}}>{t("common.winRate")}</div>
-                      <div style={{fontSize:13,fontWeight:500,color:T.text}}>{winRate}% · {winCount}W / {lossCount}L</div>
+                  {/* Pied : P&L à gauche, winrate + anneau à droite. */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <span style={{
+                      fontSize: 20, fontWeight: 500, lineHeight: "31px", letterSpacing: -0.65,
+                      color: totalPnL > 0 ? T.green : totalPnL < 0 ? T.red : T.textSub,
+                      fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+                    }}>
+                      {fmt(totalPnL, true)}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center" }}>
+                        <span style={{ fontSize: 12, color: T.text, opacity: 0.4, whiteSpace: "nowrap" }}>{t("common.winRate")}</span>
+                        <span style={{ fontSize: 14, fontWeight: 500, color: T.text, whiteSpace: "nowrap" }}>{winRate}%</span>
+                      </div>
+                      <DonutChart winRate={parseInt(winRate)} size={33} />
                     </div>
                   </div>
                 </div>
 
-                {/* ========== CENTER SECTION: AREA CHART ========== */}
-                {/* paddingLeft 13 + paddingRight 12 + borderRight 1px = 13px visible de chaque côté */}
-                <div style={{display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 12px 0 13px",borderRight:`1px solid ${T.border}`}}>
-                  <div style={{width:"100%"}}>
-                    <AreaChart trades={strategyTrades} width={280} height={110}/>
-                  </div>
-                </div>
+                {/* Filet vertical de séparation (maquette 447:4198). */}
+                <div aria-hidden style={{ width: 1, alignSelf: "stretch", background: T.border, flexShrink: 0 }} />
 
                 {/* ========== ACTIONS (top-right, absolu) ========== */}
                 <div style={{position:"absolute",top:12,right:12,display:"flex",gap:2,zIndex:2}}>
@@ -666,35 +745,42 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   </button>
                 </div>
 
-                {/* ========== RIGHT SECTION: RULES ========== */}
-                <div style={{display:"flex",flexDirection:"column",gap:10,paddingLeft:20}}>
-                  <div style={{display:"flex",alignItems:"center"}}>
-                    <div style={{fontSize:12,color:T.textSub,fontWeight:500}}>{t("strat.rules")}</div>
-                  </div>
+                {/* ══ COLONNE DROITE : les règles, par groupe ══ */}
+                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+                  <span style={{ fontSize: 16, fontWeight: 500, color: T.text }}>{t("strat.rules")}</span>
 
-                  <div style={{display:"flex",flexDirection:"column",gap:10,flex:1,overflowY:"auto",maxHeight:170,paddingRight:4}} className="scroll-thin">
-                    {strategy.groups && strategy.groups.length > 0 ? (
-                      strategy.groups.map(group => (
-                        <div key={group.id} style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {strategy.groups && strategy.groups.length > 0 ? (
+                    /* Les groupes s'écoulent en colonnes de 150 px minimum : la
+                       maquette en pose trois de front, la grille en met plus ou
+                       moins selon la place réellement disponible. */
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                      gap: "24px 12px",
+                    }}>
+                      {strategy.groups.map(group => (
+                        <div key={group.id} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                           {group.name && (
-                            <div style={{fontSize:11,fontWeight:500,color:T.textMut}}>
+                            <span style={{ fontSize: 14, color: T.text, opacity: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {group.name}
-                            </div>
+                            </span>
                           )}
-                          {group.rules && group.rules.map((rule, idx) => (
-                            <div key={rule.id} style={{display:"flex",alignItems:"center",gap:8}}>
-                              <div style={{width:3,height:3,borderRadius:"50%",background:T.textMut,flexShrink:0}}/>
-                              <div style={{fontSize:12,color:T.text,flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                                {rule.text || t("strat.ruleFallback").replace("{n}", String(idx+1))}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 16, minWidth: 0 }}>
+                            {(group.rules || []).map((rule, idx) => (
+                              <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                <span aria-hidden style={{ width: 4, height: 4, borderRadius: "50%", background: T.text, flexShrink: 0 }} />
+                                <span style={{ fontSize: 16, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {rule.text || t("strat.ruleFallback").replace("{n}", String(idx + 1))}
+                                </span>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      ))
-                    ) : (
-                      <div style={{fontSize:12,color:T.textMut}}>{t("strat.noRules")}</div>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 14, color: T.textMut }}>{t("strat.noRules")}</div>
+                  )}
                 </div>
               </div>
             );
@@ -705,7 +791,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
 
       {/* EMPTY STATE */}
       {(!strategies || !Array.isArray(strategies) || strategies.length === 0) && (
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+        <div style={{...CARD,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
           <div style={{width:48,height:48,borderRadius:"var(--radius-card)",background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <Target size={22} strokeWidth={1.75} color={T.text}/>
           </div>

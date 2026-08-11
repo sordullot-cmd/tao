@@ -16,26 +16,31 @@ import { T } from "@/lib/ui/tokens";
 import { CARD, TH } from "@/components/ui/da";
 import { t } from "@/lib/i18n";
 
-/* Géométrie des colonnes : la colonne de nom ABSORBE toute la largeur restante,
-   les 4 cellules de 88 px et la colonne d'actions sont fixes et calées à droite.
+/* Géométrie des colonnes — reprise de la maquette (nom 170 px avec sa gouttière,
+   4 cellules de 88 px), mais en bases FLEXIBLES plutôt qu'en largeurs figées :
+   nom et cellules grandissent ensemble pour occuper toute la ligne, donc les
+   colonnes restent étalées comme dans la maquette.
 
-   C'est ce qui garantit l'alignement. Avant, la colonne de nom prenait la
-   largeur de son contenu (entre 170 et 360 px) et les lignes étaient réparties
-   en `space-between` : un nom long — ou un badge « Passer en Funded » — mangeait
-   l'espace libre, et TOUTES les cellules de cette ligne glissaient par rapport
-   aux autres et à l'en-tête. Ici la largeur du nom n'influe plus sur rien : il
-   est simplement tronqué en points de suspension. */
-export const NAME_COL = { flex: "1 1 auto", minWidth: 0, minHeight: 0, overflow: "hidden", paddingRight: 12 };
-export const CELL = { width: 88, flexShrink: 0 };
+   Le point important est que ces largeurs ne dépendent QUE des bases ci-dessous,
+   jamais du contenu. Avant, la colonne de nom prenait la largeur de son texte
+   (entre 170 et 360 px) et la ligne était répartie en `space-between` : un nom
+   long — ou un badge « Passer en Funded » — mangeait l'espace libre et TOUTES
+   les cellules de cette ligne glissaient par rapport aux autres et à l'en-tête.
+   Ici un nom trop long est simplement tronqué (`minWidth: 0` + ellipsis) et rien
+   ne bouge : toutes les lignes et l'en-tête tombent sur les mêmes verticales. */
+export const NAME_COL = { flex: "1 1 134px", minWidth: 0, minHeight: 0, overflow: "hidden", paddingRight: 12 };
+export const CELL = { flex: "1 1 88px", minWidth: 0 };
 export const CELL_VALUE = {
   ...CELL, fontSize: 12, fontWeight: 500, lineHeight: 1, color: T.text, opacity: 0.6,
   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
 };
-/* Emplacement des actions de fin de ligne (modifier / supprimer). Largeur fixe
-   pour que les colonnes restent alignées avec l'en-tête. */
-/* `alignItems: stretch` + boutons élastiques : les actions occupent toute la
-   colonne. Un bouton posé à droite laissait le reste de la colonne inerte —
-   ni navigation (la propagation y est arrêtée), ni action. */
+/* Dernière colonne (payout) : alignée à droite, son chiffre venait buter contre
+   les boutons d'action. Le retrait la décolle sans déplacer les autres
+   colonnes — `border-box` le prend sur la largeur de la cellule, pas en plus.
+   Appliqué à l'en-tête ET aux lignes, sinon les verticales ne coïncident plus. */
+export const LAST_CELL = { paddingRight: 16, boxSizing: "border-box" };
+/* Emplacement des actions de fin de ligne (modifier / supprimer). Seule colonne
+   à largeur figée : deux boutons de 28 px n'ont aucune raison de s'étirer. */
 export const ACTIONS_COL = { width: 68, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2 };
 
 /* Gouttière de tête d'une ligne : le carré du chevron (32) et son écart (4).
@@ -166,7 +171,7 @@ export function AccountRowsHeader({ firstLabel, withActions = false, flush = fal
       <span style={{ ...TH, ...CELL }}>{firstLabel || t("accountsPage.colAccount")}</span>
       <span style={{ ...TH, ...CELL }}>{t("accountsPage.colValue")}</span>
       <span style={{ ...TH, ...CELL }}>{t("accountsPage.colWinrate")}</span>
-      <span style={{ ...TH, ...CELL, textAlign: "right" }}>{t("accountsPage.colPayout")}</span>
+      <span style={{ ...TH, ...CELL, ...LAST_CELL, textAlign: "right" }}>{t("accountsPage.colPayout")}</span>
       {withActions && <span style={ACTIONS_COL} aria-hidden />}
     </div>
   );
@@ -288,7 +293,7 @@ export function TableRow({
             {badge && <span style={{ flexShrink: 0, display: "inline-flex" }}>{badge}</span>}
           </div>
           {cells.map((c, i) => (
-            <span key={i} style={{ ...CELL_VALUE, textAlign: i === cells.length - 1 ? "right" : "left" }}>{c}</span>
+            <span key={i} style={{ ...CELL_VALUE, ...(i === cells.length - 1 ? LAST_CELL : null), textAlign: i === cells.length - 1 ? "right" : "left" }}>{c}</span>
           ))}
           {(actions || reserveActions) && (
             <div style={ACTIONS_COL} onClick={(e) => e.stopPropagation()}>{actions}</div>
@@ -385,7 +390,7 @@ export function SubRow({ label, dot, badge, cells, onOpen, actions, reserveActio
         {badge && <span style={{ flexShrink: 0, display: "inline-flex" }}>{badge}</span>}
       </div>
       {cells.map((c, i) => (
-        <span key={i} style={{ ...CELL_VALUE, textAlign: i === cells.length - 1 ? "right" : "left" }}>{c}</span>
+        <span key={i} style={{ ...CELL_VALUE, ...(i === cells.length - 1 ? LAST_CELL : null), textAlign: i === cells.length - 1 ? "right" : "left" }}>{c}</span>
       ))}
       {(actions || reserveActions) && (
         <div style={ACTIONS_COL} onClick={(e) => e.stopPropagation()}>{actions}</div>

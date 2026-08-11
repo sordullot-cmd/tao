@@ -420,7 +420,16 @@ function Donut({ pct, color, size = 56, stroke = 5 }) {
 }
 
 /* ---------- Page ---------- */
-export default function GoalsPage() {
+/**
+ * @param {object}    props
+ * @param {boolean=}  props.embedded  Rendu à l'intérieur d'une autre page
+ *   (« Quête de soi », qui l'a absorbée) : la bande de KPI et la barre d'action
+ *   propres à la page disparaissent — la page hôte porte déjà son en-tête — et
+ *   le bouton « Nouvel objectif » est remonté chez elle via `onRequestCreate`.
+ * @param {Function=} props.registerCreate  Reçoit l'ouverture du formulaire de
+ *   création, pour que l'hôte puisse la déclencher depuis son propre bouton.
+ */
+export default function GoalsPage({ embedded = false, registerCreate }) {
   useLang();
   const tradesHook = useTrades();
   const trades = tradesHook?.trades || [];
@@ -471,6 +480,15 @@ export default function GoalsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const openCreate = () => { setForm(emptyForm); setEditingId(null); setShowForm(true); };
+  /* En mode intégré, l'hôte porte le bouton « Nouvel objectif » : on lui confie
+     l'ouverture du formulaire. La référence est stable (pas de re-souscription
+     à chaque rendu) car `registerCreate` n'est appelée qu'au montage. */
+  const openCreateRef = useRef(openCreate);
+  openCreateRef.current = openCreate;
+  useEffect(() => {
+    registerCreate?.(() => openCreateRef.current());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const openEdit = (g) => { setForm({ label: g.label, level: g.level || "normal", category: g.category || "trading", autoType: g.autoType || "manual", target: String(g.target), deadline: g.deadline || "", unit: g.unit || "count", customUnit: g.customUnit || "", accountTypeFilter: g.accountTypeFilter || "live", accountIdFilter: g.accountIdFilter || "all", rpgCategory: g.rpgCategory || "", rpgXp: g.rpgXp != null ? String(g.rpgXp) : "" }); setEditingId(g.id); setShowForm(true); };
   const close = () => { setForm(emptyForm); setEditingId(null); setShowForm(false); };
 
@@ -629,23 +647,28 @@ export default function GoalsPage() {
   const filtered = catFilter === "all" ? goals : goals.filter(g => (g.category || "trading") === catFilter);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
-      {/* Header : pleine largeur au-dessus du drawer */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button onClick={openCreate}
-          style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Plus size={14} strokeWidth={2} /> Nouvel objectif
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className={embedded ? undefined : "anim-1"}>
+      {/* Header : pleine largeur au-dessus du drawer. Intégré, l'hôte porte
+          l'action — la rendre deux fois donnerait deux boutons identiques. */}
+      {!embedded && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button onClick={openCreate}
+            style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Plus size={14} strokeWidth={2} /> Nouvel objectif
+          </button>
+        </div>
+      )}
 
       {/* À partir d'ici : le drawer occupe la colonne de droite */}
       <div className="tr4de-goals-layout" style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Stats strip (style timeline) */}
-      <StatStrip kpis={kpis} goals={goals} compute={compute} />
-
-      {/* Séparateur entre les KPIs et la liste des objectifs */}
-      <div style={{ height: 1, background: T.border, margin: "0 16px" }} />
+      {/* Bande de KPI + son séparateur : masqués en mode intégré. */}
+      {!embedded && (
+        <>
+          <StatStrip kpis={kpis} goals={goals} compute={compute} />
+          <div style={{ height: 1, background: T.border, margin: "0 16px" }} />
+        </>
+      )}
 
       {/* Column headers */}
       <div className="tr4de-goals-headers" style={{ display: "grid", gridTemplateColumns: "minmax(70px, 110px) minmax(0, 1fr) minmax(90px, 160px) minmax(110px, 160px) 124px", gap: 12, padding: "0 16px", fontSize: 11, color: T.textMut, fontWeight: 500 }}>
@@ -1194,8 +1217,11 @@ function StatCell({ icon: Icon, label, subLabel, value, isLast }) {
 
 function TimelineSection({ title, rows, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, drawerOpen }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1, padding: "0 16px 8px" }}>{title}</div>
+    /* 8 px entre les lignes : ce sont désormais des cartes, elles ont besoin
+       d'un intervalle pour se lire comme des blocs distincts (2 px les
+       recollait en un pavé continu). */
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1, padding: "0 16px 4px" }}>{title}</div>
       {rows.map(g => (
         <TimelineRow key={g.id} goal={g}
           compute={compute} unitOf={unitOf} fmtVal={fmtVal}
@@ -1380,9 +1406,17 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           gap: nested ? 10 : 12,
           alignItems: "center",
           padding: nested ? "8px 10px" : "12px 16px",
-          background: overMode === "into" ? T.blueBg : (hover || open ? T.accentBg : (nested ? T.white : "transparent")),
+          /* Chaque objectif est sa PROPRE carte blanche posée sur le fond gris
+             de la page : au repos il est blanc, le survol et l'ouverture le
+             teintent comme n'importe quelle ligne cliquable de l'app. Les
+             sous-objectifs gardent leur contour fin — imbriqués dans la carte
+             du parent, une seconde ombre les ferait flotter. */
+          background: overMode === "into" ? T.blueBg : (hover || open ? T.accentBg : T.white),
           border: nested ? `1px solid ${T.border}` : "none",
-          borderRadius: "var(--radius-card)",
+          boxShadow: nested ? "none" : T.elevCard,
+          /* Ouvert, la carte perd ses coins bas : le panneau de détail se colle
+             dessous et les deux ne forment plus qu'un bloc. */
+          borderRadius: nested ? "var(--radius-card)" : (open ? "12px 12px 0 0" : 12),
           cursor: armed ? "grabbing" : "pointer",
           transition: "background .12s ease",
           opacity: isDragging ? 0.45 : 1,
@@ -1599,10 +1633,14 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
 
       {open && (
         <div style={{
-          margin: nested ? "0 0 4px" : "0 16px 8px",
+          /* Le panneau prolonge la carte de l'objectif : même largeur qu'elle
+             (plus de retrait de 16 px, qui l'aurait fait paraître plus étroit
+             et détaché) et coins arrondis en bas seulement. */
+          margin: nested ? "0 0 4px" : "0 0 8px",
           padding: nested ? "8px 10px" : "4px 14px 12px",
           background: T.accentBg,
-          borderRadius: "var(--radius-card)",
+          borderRadius: nested ? "var(--radius-card)" : "0 0 12px 12px",
+          boxShadow: nested ? "none" : T.elevCard,
           borderTop: `1px solid ${T.border}`,
           marginTop: -2,
         }}>

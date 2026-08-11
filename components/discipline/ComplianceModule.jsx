@@ -7,6 +7,7 @@ import {
   CheckCircle2, XCircle, Pencil, NotebookPen,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { CARD } from "@/components/ui/da";
 import {
   computeStats, describeRule, isRuleLive, RULE_LOCK_MS, computeJournaledDates,
 } from "@/lib/compliance";
@@ -161,10 +162,11 @@ function RuleTypeDropdown({ value, onChange }) {
   );
 }
 
+/* Carte de la DA : surface blanche, coins 12, ombre très douce et AUCUNE
+   bordure — sur le fond gris de la page, un filet ferait double emploi avec
+   l'ombre. Les cartes de ce module suivaient encore le style bordé d'avant. */
 const card = (extra = {}) => ({
-  background: T.white,
-  border: `1px solid ${T.border}`,
-  borderRadius: "var(--radius-card)",
+  ...CARD,
   padding: 20,
   ...extra,
 });

@@ -5,188 +5,365 @@ import { Download, BookOpen } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
-import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
+import { CARD, PeriodPills, PERIODS } from "@/components/ui/da";
+import TradesList from "@/components/ui/tradesList";
 import { rMultiple, fmtR, getCurrencySymbol } from "@/lib/userPrefs";
 import { computeTradeNote } from "@/lib/tradeNote";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
 import { useDailySessionNotes } from "@/lib/hooks/useDailySessionNotes";
 import { exportJournalPdf } from "@/lib/export/journalPdf";
 import DictatableTextarea from "@/components/MicDictateButton";
-import TradesPage from "@/components/pages/TradesPage";
+
+/* ---------------------------------------------------------------------------
+   Page « Journal » — portée dans la direction artistique des pages récentes
+   (détail d'un compte, détail d'une firme).
+
+   Ordre des sections, identique à ces pages :
+     barre d'actions → bilan de la période (chiffre héros + mini-KPI +
+     pastilles) → calendrier du mois → une carte par journée tradée.
+
+   Ce qui change par rapport à la version précédente :
+     • plus de mise en page en deux colonnes (carte de 220 px figée à gauche,
+       notes et tableau à droite) : chaque journée est UNE carte, comme partout
+       ailleurs dans le produit ;
+     • les trades du jour passent par la brique partagée `TradesList` au lieu
+       d'embarquer la page Trades entière une fois par journée — même liste que
+       le détail d'un compte, et un rendu qui ne dépend plus d'une page de
+       2 000 lignes ;
+     • les journées sont paginées : le journal d'une année n'a plus à monter
+       tout son historique dans le DOM d'un coup.
+
+   Règle du projet : aucune couleur en dur, tout passe par les tokens `T`.
+   ------------------------------------------------------------------------- */
+
+/** Clé « YYYY-MM-DD » d'un trade, ou null si la date est inexploitable. */
+const dayKeyOf = (tr) => {
+  const key = String(tr?.date || "").trim().split("T")[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
+};
+
+/** Journées affichées avant de devoir cliquer « Voir plus ». */
+const DAYS_PER_PAGE = 10;
+
+/** Trades montrés par journée avant de devoir déplier. Une journée chargée ne
+ *  doit pas dérouler quinze lignes et repousser la journée suivante hors écran ;
+ *  le reste se déplie à la demande, rien n'est perdu. */
+const TRADES_PER_DAY = 4;
+
+/** Colonnes de la liste : une carte de journée est moins large qu'une page. */
+/* Pas de colonne « date » : la carte EST une journée, la répéter à chaque ligne
+   ne dit rien et prend la place dont la colonne de droite manque désormais. */
+const JOURNAL_COLUMNS = ["symbol", "direction", "strategy", "duration", "r", "pnl"];
 
 export default function JournalPage({ trades = [], strategies = [], onImportClick, onDeleteTrade, onClearTrades }) {
   useLang();
   const { notes: tradeNotes } = useTradeNotes();
   const { notes: dailyNotes, setNote: updateDailyNote } = useDailySessionNotes();
 
-  const noteColor = (s) => (s >= 7 ? T.green : s >= 4 ? T.amber : T.red);
-  const fmtTime = (v) => {
-    if (!v) return "—";
-    if (/^\d{1,2}:\d{2}/.test(String(v))) return String(v).slice(0, 5);
-    const d = new Date(v);
-    if (isNaN(d.getTime())) return "—";
-    return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  };
+  const [period, setPeriod] = React.useState("1M");
+  const [shownDays, setShownDays] = React.useState(DAYS_PER_PAGE);
 
-  // Regrouper les trades par jour
-  const tradesByDate = {};
-  trades.forEach((tr) => {
+  /* Assignations trade ↔ stratégie : même source que la page Trades, sinon la
+     colonne « stratégie » de la liste serait vide alors que la donnée existe. */
+  const [tradeStrategies, setTradeStrategies] = React.useState({});
+  React.useEffect(() => {
     try {
-      const d = new Date(tr.date);
-      if (isNaN(d.getTime())) return;
-      const dateStr = d.toISOString().split("T")[0];
-      if (!tradesByDate[dateStr]) tradesByDate[dateStr] = [];
-      tradesByDate[dateStr].push(tr);
-    } catch (e) {}
-  });
-  const sortedDates = Object.keys(tradesByDate).sort().reverse();
+      const raw = localStorage.getItem("tr4de_trade_strategies");
+      if (raw) setTradeStrategies(JSON.parse(raw) || {});
+    } catch {}
+  }, []);
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <button
-          type="button"
-          aria-label={t("journal.exportAria")}
-          disabled={trades.length === 0}
-          onClick={() => exportJournalPdf({ trades, dailyNotes, tradeNotes, currencySymbol: getCurrencySymbol(), title: t("journal.title") })}
-          style={{
-            marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999,
-            background: trades.length === 0 ? T.bg : T.text,
-            border: `1px solid ${trades.length === 0 ? T.border : T.text}`,
-            color: trades.length === 0 ? T.textMut : "#fff",
-            fontSize: 13, fontWeight: 600, cursor: trades.length === 0 ? "not-allowed" : "pointer",
-            display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "inherit",
-          }}
-        >
-          <Download size={14} strokeWidth={1.75} /> {t("journal.exportPdf")}
-        </button>
-        <div id="tr4de-page-header-slot" />
-      </div>
+  const noteColor = (s) => (s >= 7 ? T.pnlPos : s >= 4 ? T.amber : T.pnlNeg);
 
-      {sortedDates.length > 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {sortedDates.map((dateStr) => {
-            const dayTrades = tradesByDate[dateStr].slice().sort((a, b) => {
-              const ta = fmtTime(a.entryTime || a.entry_time);
-              const tb = fmtTime(b.entryTime || b.entry_time);
-              return ta.localeCompare(tb);
-            });
-            const dateObj = new Date(dateStr + "T00:00:00");
-            const dateLabel = dateObj.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  /* ── Regroupement par journée ─────────────────────────────────────────── */
+  const allDays = React.useMemo(() => {
+    const byDate = {};
+    for (const tr of trades || []) {
+      const key = dayKeyOf(tr);
+      if (!key) continue;
+      (byDate[key] ||= []).push(tr);
+    }
+    return Object.keys(byDate)
+      .sort()
+      .reverse()
+      .map((date) => {
+        const list = [...byDate[date]].sort((a, b) =>
+          String(a.entryTime || a.entry_time || "").localeCompare(String(b.entryTime || b.entry_time || ""))
+        );
+        const pnl = list.reduce((s, tr) => s + (Number(tr.pnl) || 0), 0);
+        const wins = list.filter((tr) => (Number(tr.pnl) || 0) > 0).length;
+        const scores = list.map(computeTradeNote).filter(Boolean).map((n) => n.score);
+        return {
+          date,
+          trades: list,
+          pnl,
+          wins,
+          winRate: list.length > 0 ? (wins / list.length) * 100 : null,
+          r: list.reduce((s, tr) => { const v = rMultiple(tr); return s + (Number.isFinite(v) ? v : 0); }, 0),
+          note: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+        };
+      });
+  }, [trades]);
 
-            const dayVolume = dayTrades.length;
-            const dayWins = dayTrades.filter((tr) => tr.pnl > 0).length;
-            const dayWinRate = dayVolume > 0 ? ((dayWins / dayVolume) * 100).toFixed(0) : 0;
-            const dayPnL = dayTrades.reduce((sum, tr) => sum + (tr.pnl || 0), 0);
+  /* ── Fenêtre de lecture ───────────────────────────────────────────────────
+     Les pastilles bornent le journal à une période : un journal se relit par
+     tranches, pas d'un bloc depuis le premier trade. */
+  const days = React.useMemo(() => {
+    const conf = PERIODS.find((p) => p.id === period);
+    if (!conf?.days || allDays.length === 0) return allDays;
+    const from = new Date(`${allDays[0].date}T00:00:00`);
+    from.setDate(from.getDate() - conf.days);
+    return allDays.filter((d) => new Date(`${d.date}T00:00:00`) >= from);
+  }, [allDays, period]);
 
-            const dayNoteScores = dayTrades.map(computeTradeNote).filter(Boolean).map((n) => n.score);
-            const avgNote = dayNoteScores.length ? Math.round(dayNoteScores.reduce((a, b) => a + b, 0) / dayNoteScores.length) : null;
-            const dayR = dayTrades.reduce((s, tr) => { const r = rMultiple(tr); return s + (Number.isFinite(r) ? r : 0); }, 0);
+  // Revenir en tête de pagination dès que la fenêtre change.
+  React.useEffect(() => { setShownDays(DAYS_PER_PAGE); }, [period]);
 
+  const periodTrades = React.useMemo(() => days.flatMap((d) => d.trades), [days]);
 
-            // Sparkline P&L cumulé
-            let cumulative = 0;
-            const sparklineData = dayTrades.map((tr) => (cumulative += tr.pnl || 0));
-            const w = 110, h = 36;
-            const maxVal = Math.max(...sparklineData, 0);
-            const minVal = Math.min(...sparklineData, 0);
-            const range = Math.max(Math.abs(maxVal), Math.abs(minVal)) || 1;
-            const lastVal = sparklineData[sparklineData.length - 1] || 0;
-            const zeroY = lastVal >= 0 ? h / 2 : 0;
-            const points = sparklineData.map((val, i) => {
-              const x = (i / (sparklineData.length - 1 || 1)) * w;
-              const y = zeroY - (val / range) * (h / 2);
-              return `${x},${y}`;
-            }).join(" ");
-            const sparkColor = lastVal >= 0 ? T.green : T.red;
-            const fillBaseY = lastVal >= 0 ? zeroY : h;
+  const visibleDays = days.slice(0, shownDays);
 
-            return (
-              <div key={dateStr} className="tr4de-journal-row" style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-                {/* CARTE DU JOUR (gauche) */}
-                <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16, width: 220, flexShrink: 0, display: "flex", flexDirection: "column" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.text, textTransform: "capitalize" }}>{dateLabel}</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.5, color: dayPnL >= 0 ? T.green : T.red, fontFamily: "var(--font-sans)", marginTop: 4 }}>
-                    {dayPnL >= 0 ? "+" : ""}{fmt(dayPnL)}
-                  </div>
-                  <div style={{ flex: 1, minHeight: 84, margin: "12px -4px 14px" }}>
-                    {sparklineData.length > 0 && (
-                      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height: "100%" }}>
-                        {/* Aire tramée — même trame que les grands graphiques du
-                            site, resserrée : le viewBox du sparkline ne compte
-                            que 110 × 36 unités, où le pas commun ferait des
-                            points énormes. */}
-                        <defs>
-                          <AreaDotsDefs
-                            id={`jarea-${dateStr}`} color={sparkColor}
-                            bottom={h} width={w} height={h} step={3} r={0.4}
-                          />
-                        </defs>
-                        <path
-                          d={`M ${points.split(" ")[0]} L ${points} L ${w},${fillBaseY} L 0,${fillBaseY} Z`}
-                          {...areaDotsFill(`jarea-${dateStr}`)}
-                        />
-                        <polyline points={points} fill="none" stroke={sparkColor} strokeWidth="1.75" vectorEffect="non-scaling-stroke" />
-                      </svg>
-                    )}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 8px", paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
-                    <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Trades</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{dayVolume}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Win</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{dayWinRate}%</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>R total</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: dayR >= 0 ? T.green : T.red, fontFamily: "var(--font-sans)" }}>{fmtR(dayR)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 2 }}>Note</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: avgNote != null ? noteColor(avgNote) : T.textMut }}>{avgNote != null ? `${avgNote}/10` : "—"}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* COLONNE DROITE : notes + tableau */}
-                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-                  <DictatableTextarea
-                    placeholder={t("journal.dailyNotes")}
-                    value={dailyNotes[dateStr] || ""}
-                    onChange={(next) => updateDailyNote(dateStr, next)}
-                    height={220}
-                    micSize={32}
-                    textareaStyle={{ border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 14, fontSize: 13, color: T.text, background: T.white }}
-                  />
-
-                  {/* Tableau identique à la page Trades, borné à 2 lignes par
-                      jour (clic = panneau "Trade info"), colonnes verrouillées. */}
-                  <TradesPage
-                    embedded
-                    lockColumns
-                    maxRows={3}
-                    trades={dayTrades}
-                    strategies={strategies}
-                    onImportClick={onImportClick}
-                    onDeleteTrade={onDeleteTrade}
-                    onClearTrades={onClearTrades}
-                  />
-                </div>
-              </div>
-            );
-          })}
+  /* ── État vide ────────────────────────────────────────────────────────── */
+  if (allDays.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
+          <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
         </div>
-      ) : (
-        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "40px 40px", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
-          <div style={{ width: 48, height: 48, borderRadius: "var(--radius-card)", background: T.accentBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+        <div style={{ ...CARD, padding: "64px 40px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12, background: T.accentBg,
+            display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16,
+          }}>
             <BookOpen size={22} strokeWidth={1.75} color={T.text} />
           </div>
-          <div style={{ fontSize: 17, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>{t("journal.empty")}</div>
-          <div style={{ fontSize: 13, color: T.textSub, maxWidth: 380, lineHeight: 1.5 }}>{t("journal.emptySub")}</div>
+          <div style={{ fontSize: 20, fontWeight: 500, color: T.text, marginBottom: 6 }}>{t("journal.empty")}</div>
+          <div style={{ fontSize: 14, color: T.textSub, maxWidth: 380, lineHeight: 1.5 }}>{t("journal.emptySub")}</div>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
+
+      {/* ═══ UNE SEULE LIGNE DE TÊTE ═══
+          Le bilan de période (chiffre héros + cinq mini-KPI) et le calendrier du
+          mois ont disparu : ils répétaient ce que le tableau de bord et la page
+          Calendrier montrent déjà, et repoussaient le journal — le contenu de la
+          page — sous deux écrans de synthèse. Ne restent que les deux commandes
+          qui n'existent nulle part ailleurs : la fenêtre de lecture et l'export. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div id="tr4de-page-header-slot" />
+          <PeriodPills value={period} onChange={setPeriod} />
+          <button
+            type="button"
+            aria-label={t("journal.exportAria")}
+            onClick={() => exportJournalPdf({
+              trades: periodTrades,
+              dailyNotes,
+              tradeNotes,
+              currencySymbol: getCurrencySymbol(),
+              title: t("journal.title"),
+            })}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px",
+              minHeight: 32, borderRadius: 999, border: "none", background: T.text,
+              color: T.textInverted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Download size={13} strokeWidth={1.75} /> {t("journal.exportPdf")}
+          </button>
+        </div>
+      </div>
+
+      {/* ═══ 4. LE JOURNAL, UNE CARTE PAR JOURNÉE ═══ */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {visibleDays.length === 0 ? (
+          <div style={{ ...CARD, fontSize: 14, color: T.textMut, padding: "24px 16px", textAlign: "center" }}>
+            Aucun trade sur cette période.
+          </div>
+        ) : visibleDays.map((day) => (
+          <DayCard
+            key={day.date}
+            day={day}
+            note={dailyNotes[day.date] || ""}
+            onNoteChange={(next) => updateDailyNote(day.date, next)}
+            noteColor={noteColor}
+            strategies={strategies}
+            tradeStrategies={tradeStrategies}
+          />
+        ))}
+
+        {/* « Voir plus » sous la liste : c'est là qu'on arrive en la parcourant,
+            et non en haut de page comme quand il accompagnait le titre. */}
+        {days.length > shownDays && (
+          <button
+            type="button"
+            onClick={() => setShownDays((n) => n + DAYS_PER_PAGE)}
+            style={{
+              alignSelf: "center", padding: "9px 18px", borderRadius: 999,
+              border: `1px solid ${T.border}`, background: T.white, color: T.text,
+              fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            {t("journal.showMore").replace("{n}", String(days.length - shownDays))}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Une journée = une carte : son en-tête porte la date et les chiffres du jour,
+   puis les notes de session, puis les trades. L'ancienne mise en page posait
+   ces trois blocs côte à côte dans une grille figée de 220 px, qui se cassait
+   dès que la fenêtre rétrécissait.
+   ------------------------------------------------------------------------- */
+function DayCard({ day, note, onNoteChange, noteColor, strategies, tradeStrategies }) {
+  const [open, setOpen] = React.useState(true);
+  const [allTrades, setAllTrades] = React.useState(false);
+  const shownTrades = allTrades ? day.trades : day.trades.slice(0, TRADES_PER_DAY);
+  const hiddenCount = day.trades.length - shownTrades.length;
+  const d = new Date(`${day.date}T00:00:00`);
+  const label = isNaN(d.getTime())
+    ? day.date
+    : d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+
+  const stats = [
+    { label: t("common.trades"), value: String(day.trades.length) },
+    { label: t("common.winRate"), value: day.winRate != null ? `${day.winRate.toFixed(0)}%` : "—" },
+    { label: "R", value: fmtR(day.r), color: day.r > 0 ? T.pnlPos : day.r < 0 ? T.pnlNeg : T.textSub },
+    {
+      label: "Note",
+      value: day.note != null ? `${day.note}/10` : "—",
+      color: day.note != null ? noteColor(day.note) : T.textSub,
+    },
+  ];
+
+  return (
+    <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* En-tête : date à gauche, chiffres du jour à droite. Le P&L y est le
+          seul élément coloré — c'est ce qu'on cherche en parcourant. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          style={{
+            display: "inline-flex", alignItems: "baseline", gap: 10, minWidth: 0,
+            background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer",
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{label}</span>
+          <span style={{
+            fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+            color: day.pnl > 0 ? T.pnlPos : day.pnl < 0 ? T.pnlNeg : T.textSub,
+          }}>
+            {day.pnl > 0 ? "+" : ""}{fmt(day.pnl, false)}
+          </span>
+        </button>
+
+      </div>
+
+      {/* Corps repliable : 0fr → 1fr anime la hauteur sans la mesurer. */}
+      <div style={{
+        display: "grid", gridTemplateRows: open ? "1fr" : "0fr",
+        transition: "grid-template-rows var(--dur-base) var(--ease-out)",
+      }}>
+        <div style={{ overflow: "hidden" }}>
+          {/* Notes à GAUCHE, trades à DROITE : ce qu'on a écrit et ce qu'on a
+              fait se lisent en vis-à-vis, au lieu de s'empiler — il fallait
+              faire défiler toute la liste pour retrouver la note du jour.
+              La colonne de notes est bornée : au-delà, une zone de saisie large
+              devient pénible à relire. */}
+          {/* Répartition : les notes prennent la moitié large, la liste se
+              resserre. Le plafond de 340 px qui bornait la colonne de gauche a
+              sauté — c'est la zone d'écriture qui mérite la place, la liste n'a
+              que six colonnes courtes à tenir. */}
+          <div className="tr4de-journal-day" style={{
+            display: "grid", gridTemplateColumns: "minmax(320px, 1.15fr) minmax(0, 1fr)",
+            gap: 20, alignItems: "start",
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+              <DictatableTextarea
+              placeholder={t("journal.dailyNotes")}
+              value={note}
+              onChange={onNoteChange}
+              height={180}
+              micSize={30}
+              /* Aplat à peine perceptible : une encre noire posée à 1,2 % sur la
+                 carte. Un gris opaque, même très clair, restait trop marqué —
+                 et il aurait fallu lui trouver un équivalent en thème sombre.
+                 Exprimé en transparence, il s'assombrit ou s'éclaircit tout seul
+                 avec la surface qui le porte.
+                 L'aplat suit les bords de la colonne et le texte se pose à
+                 16 px à l'intérieur. Il débordait auparavant en marges
+                 négatives pour aligner le texte sur les chiffres du dessous :
+                 le texte se retrouvait alors collé au bord de la carte. */
+              textareaStyle={{
+                border: "none", borderRadius: 10,
+                padding: "14px 16px", fontSize: 13, color: T.text,
+                lineHeight: 1.55, resize: "none",
+                background: "color-mix(in srgb, var(--color-text) 1.2%, transparent)",
+              }}
+              />
+
+              {/* Les chiffres du jour ferment la colonne, sous les notes : on
+                  écrit d'abord, on vérifie ensuite. Ni cadre ni aplat — la carte
+                  est déjà une surface, tout contour y ajoutait un bloc dans le
+                  bloc. Les colonnes s'alignent sur le cadre des notes. */}
+              <div style={{
+                display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                gap: 8, padding: "4px 1px 0",
+              }}>
+                {stats.map((st) => (
+                  <div key={st.label} style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                    <span style={{ fontSize: 10, lineHeight: 1, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {st.label}
+                    </span>
+                    <span style={{
+                      fontSize: 13, fontWeight: 600, lineHeight: 1, whiteSpace: "nowrap",
+                      fontVariantNumeric: "tabular-nums", color: st.color || T.text,
+                    }}>
+                      {st.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* La carte est déjà une surface : la liste s'y pose à plat, sans
+                sa propre ombre ni son propre padding horizontal. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <TradesList
+                trades={shownTrades}
+                strategies={strategies}
+                tradeStrategies={tradeStrategies}
+                columns={JOURNAL_COLUMNS}
+                style={{ background: "transparent", boxShadow: "none", padding: 0 }}
+              />
+              {(hiddenCount > 0 || allTrades) && (
+                <button
+                  type="button"
+                  onClick={() => setAllTrades((v) => !v)}
+                  style={{
+                    alignSelf: "flex-start", padding: 0, border: "none", background: "transparent",
+                    color: T.text, opacity: 0.5, fontSize: 12, fontWeight: 500,
+                    cursor: "pointer", fontFamily: "inherit", textDecoration: "underline",
+                  }}
+                >
+                  {allTrades
+                    ? t("journal.showFewerTrades")
+                    : t("journal.showMoreTrades").replace("{n}", String(hiddenCount))}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -17,7 +17,6 @@ import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/place
 import { readArchivedMeta, writeArchivedMeta, isArchivedAccount } from "@/lib/utils/archivedAccounts";
 import StrategyPage from "@/components/StrategyPage";
 import StrategyDetailPage from "@/components/StrategyDetailPage";
-import GoalsPage from "@/components/pages/GoalsPage";
 import DailyPlannerPage from "@/components/pages/DailyPlannerPage";
 import SportPage from "@/components/pages/SportPage";
 import ReadingListPage from "@/components/pages/ReadingListPage";
@@ -71,7 +70,6 @@ import {
   Plus,
   GripVertical,
   ListTodo as LucideListTodo,
-  Zap as LucideZap,
   CalendarDays as LucideCalendarDays,
   CalendarClock as LucideCalendarClock,
   Flame as LucideFlame,
@@ -107,7 +105,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    fond gris, gèrent leur gouttière et peuvent la reprendre (cf. --page-gutter).
    En desktop, la barre du haut n'y garde aucune hauteur : elle est vide, et le
    contenu doit pouvoir monter jusqu'au bord. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail"];
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -614,7 +612,7 @@ export default function App() {
         { id: "add-trade",  icon: LucideUpload,       label: t("nav.addTrade") },
         { id: "dashboard",  icon: LayoutDashboard,    label: t("nav.dashboard") },
         { id: "calendar",   icon: LucideCalendar,     label: t("nav.calendar") },
-        { id: "trades",     icon: ListChecks,         label: t("nav.trades"), badge: filteredTrades.length > 0 ? filteredTrades.length : 0 },
+        { id: "trades",     icon: ListChecks,         label: t("nav.trades") },
         { id: "accounts",   icon: LucideWallet,       label: t("nav.accounts") },
         { id: "strategies", icon: LucideTarget,       label: t("nav.strategies") },
       ],
@@ -622,7 +620,7 @@ export default function App() {
     {
       label: t("nav.analyse"),
       items: [
-        { id: "journal",    icon: NotebookPen,        label: t("nav.journal"), badge: filteredTrades.filter(tr => {try { const d = new Date(tr.date); return getLocalDateString(d) === getLocalDateString(); } catch (e) { return false; }}).length },
+        { id: "journal",    icon: NotebookPen,        label: t("nav.journal") },
         { id: "discipline", icon: ShieldCheck,        label: t("nav.discipline") },
       ],
     },
@@ -631,8 +629,9 @@ export default function App() {
       items: [
         { id: "daily-planner", icon: LucideCalendarDays, label: t("nav.dailyPlanner") },
         { id: "agenda",        icon: LucideCalendarClock, label: t("nav.agenda") },
+        /* « Objectifs » a fusionné dans « Quête de soi » : une seule entrée,
+           la page porte les catégories PUIS la liste des objectifs. */
         { id: "life-rpg",      icon: Mountain,           label: t("nav.lifeRpg") },
-        { id: "goals",         icon: LucideZap,          label: t("nav.goals") },
         { id: "sport",         icon: LucideDumbbell,     label: "Sport" },
         { id: "notes",         icon: LucideFileText,     label: t("nav.notes") },
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
@@ -689,7 +688,10 @@ export default function App() {
     // `strategies` alimente la colonne « Stratégie » du tableau de trades :
     // sans elle, la page retombe sur le cache localStorage de TradesPage.
     "firm-detail": <PropFirmDetailPage firmId={selectedFirmId} firms={firms} accounts={accounts} trades={trades} strategies={strategies} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} />,
-    goals: <GoalsPage />,
+    /* Ancienne route « Objectifs » : elle mène désormais à la page fusionnée,
+       pour que les liens existants (palette de commandes, renvois d'autres
+       pages) tombent au bon endroit plutôt que sur un doublon. */
+    goals: <LifeRpgPage />,
     "daily-planner": <DailyPlannerPage />,
     agenda: <AgendaPage />,
     sport: <SportPage />,
@@ -814,29 +816,19 @@ export default function App() {
                  `--page-gutter-left` en marge négative et file jusqu'au bord,
                  en passant derrière la barre. */
               "--content-left": "calc(var(--shell-left, 0px) + var(--page-gutter-left))",
-              padding: (page === "add-trade")
-                ? "0"
-                : daPage
-                  ? "0 var(--page-gutter) 24px var(--content-left)"
-                  // Hors DA, la réserve de la barre est déjà prise par le cadre
-                  // au-dessus : seule la gouttière reste à poser.
-                  : "20px var(--page-gutter) 20px var(--page-gutter-left)",
-              display: (page === "add-trade") ? "flex" : "block",
+              padding: daPage
+                ? "0 var(--page-gutter) 24px var(--content-left)"
+                // Hors DA, la réserve de la barre est déjà prise par le cadre
+                // au-dessus : seule la gouttière reste à poser.
+                : "20px var(--page-gutter) 20px var(--page-gutter-left)",
+              display: "block",
               width: "100%",
               flex: 1,
               overflowY: "auto",
               overflowX: "hidden",
               position: "relative",
             }}>
-              <div
-                key={page}
-                style={{
-                  width: "100%",
-                  flex: (page === "add-trade") ? 1 : undefined,
-                  minWidth: 0,
-                  display: (page === "add-trade") ? "flex" : undefined,
-                }}
-              >
+              <div key={page} style={{ width: "100%", minWidth: 0 }}>
                 {pages[page] || pages.dashboard}
               </div>
             </div>

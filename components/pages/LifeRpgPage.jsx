@@ -30,7 +30,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import {
-  Plus, X, Trash2, Pencil, Sparkles, Target, UserRound, ListChecks, TrendingUp, Check, Flame,
+  Plus, X, Trash2, Pencil, Target, UserRound, Check,
   CalendarPlus, CalendarClock,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -49,7 +49,7 @@ import {
   STORAGE_HABITS, STORAGE_HABITS_HISTORY, CLOUD_HABITS, CLOUD_HABITS_HISTORY,
   defaultHabits, autoDescription,
 } from "@/components/pages/DailyPlannerPage";
-import {
+import GoalsPage, {
   GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, computeGoalProgress, goalUnitOf, fmtGoalVal,
 } from "@/components/pages/GoalsPage";
 import {
@@ -63,6 +63,7 @@ import {
 } from "@/lib/lifeRpgCategories";
 import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
+import { CARD, SectionTitle } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
@@ -105,10 +106,6 @@ function bestStreakOf(sortedKeys) {
   }
   return best;
 }
-// Une habitude est-elle déjà cochée aujourd'hui ?
-function isDoneToday(history, id) {
-  return !!(history[id] && history[id][getLocalDateString()]);
-}
 // Jour suivant (clé "YYYY-MM-DD").
 function dayAfter(key) {
   const [y, m, d] = key.split("-").map(Number);
@@ -132,11 +129,6 @@ const STREAK_PENALTY_CAP = 5;
 function streakBreakPenalty(streak, baseXp) {
   return streak > 0 ? baseXp * Math.min(streak, STREAK_PENALTY_CAP) : 0;
 }
-// Affichage compact d'un multiplicateur : ×2 et non ×2.0, mais ×1,4 conservé.
-function fmtMult(m) {
-  return (m % 1 === 0 ? String(m) : m.toFixed(1)).replace(".", ",");
-}
-
 /* ---------- Courbe de niveau ---------- */
 // XP nécessaire pour passer du niveau L au niveau L+1 : 100 + (L-1)*50.
 function xpForLevel(level) { return 100 + (level - 1) * 50; }
@@ -158,59 +150,6 @@ function categoryLevel(xp) {
   return { level: info.level, intoLevel: info.intoLevel, neededForNext: info.neededForNext, levelPct: info.pct };
 }
 
-// « Niveau continu » : niveau entier + fraction de progression vers le suivant.
-// Donne une courbe lisse et croissante pour le graphique de progression.
-function levelValue(xp) {
-  const li = levelInfo(Math.max(0, xp || 0));
-  return li.level + (li.neededForNext > 0 ? li.intoLevel / li.neededForNext : 0);
-}
-
-// Série temporelle d'XP CUMULÉE (global + par catégorie), à partir des seules
-// complétions d'habitudes (les seules datées). Renvoie les jours triés et, pour
-// chacun, le cumul d'XP global et par catégorie.
-function computeXpSeries(habits, history, categories) {
-  const dayGlobal = {};   // "YYYY-MM-DD" -> xp NET ce jour (gains × multiplicateur − pénalités)
-  const dayCat = {};      // catId -> { "YYYY-MM-DD" -> xp net }
-  const today = getLocalDateString();
-  for (const h of habits) {
-    const diff = DIFF_BY_ID[h.difficulty] || DEFAULT_DIFF;
-    const ids = habitCategoryIds(h);
-    const done = new Set(Object.keys(history[h.id] || {}).filter(k => (history[h.id] || {})[k]));
-    const keys = [...done].sort();
-    if (!keys.length) continue;
-    let streak = 0, day = keys[0], guard = 0;
-    while (guard++ < 100000) {
-      let delta = 0;
-      if (done.has(day)) { streak += 1; delta = Math.round(diff.xp * streakMultiplier(streak)); }
-      else if (day !== today) { delta = -streakBreakPenalty(streak, diff.xp); streak = 0; }
-      if (delta !== 0) {
-        dayGlobal[day] = (dayGlobal[day] || 0) + delta;
-        for (const cid of ids) (dayCat[cid] = dayCat[cid] || {})[day] = (dayCat[cid][day] || 0) + delta;
-      }
-      if (day === today) break;
-      day = dayAfter(day);
-    }
-  }
-  const days = Object.keys(dayGlobal).sort();
-  let acc = 0;
-  const globalCum = days.map(k => (acc += dayGlobal[k]));
-  const catCum = {};
-  for (const c of categories) {
-    let a = 0;
-    catCum[c.id] = days.map(k => (a += (dayCat[c.id]?.[k] || 0)));
-  }
-  return { days, globalCum, catCum };
-}
-
-/* ---------- Dérivation de la progression ---------- */
-// Recalcule toute la progression à partir de deux sources INDÉPENDANTES (donc
-// jamais de double comptage) :
-//  - les complétions d'habitudes (dérivées de `history`) → XP/pièces du quotidien ;
-//  - les OBJECTIFS de la page « Objectifs » rattachés à une catégorie
-//    (`rpgCategory` + `rpgXp`) → XP AU PRORATA de leur avancement (50 % = 50 %).
-//  - les RÈGLES DE DISCIPLINE respectées (page Discipline) → XP fixe par règle
-//    cochée (par jour), créditée à la catégorie « Trading ».
-// Pure et déterministe.
 function computeProgress(habits, history, goals = [], trades = [], accounts = [], taskRpg = {}, disciplineData = {}, categories = []) {
   const attributes = {};
   // Catégorie « Trading » réelle (par libellé/id) — l'XP de discipline y est
@@ -474,24 +413,9 @@ export default function LifeRpgPage() {
   }, []);
 
   const categories = Array.isArray(state.categories) ? state.categories : DEFAULT_CATEGORIES;
-  const catById = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c])), [categories]);
-  const fallbackCat = { id: "_none", label: "Sans catégorie", color: T.textMut, icon: "star", identity: "", roleModel: "", roleModelWhy: "" };
-  const getCat = (id) => catById[id] || fallbackCat;
-
   const habitsList = useMemo(() => (Array.isArray(habits) ? habits : []), [habits]);
   const goalsList = useMemo(() => (Array.isArray(goals) ? goals : []), [goals]);
 
-  // Coche / décoche une habitude pour aujourd'hui (réversible via l'historique).
-  const toggleHabit = (id) => {
-    const day = getLocalDateString();
-    const apply = () => setHabitHistory(prev => {
-      const h = { ...(prev[id] || {}) };
-      if (h[day]) delete h[day]; else h[day] = true;
-      return { ...prev, [id]: h };
-    });
-    apply();
-    pushUndo({ label: "Habitude", undo: async () => apply(), redo: async () => apply() });
-  };
   const progress = useMemo(() => computeProgress(habitsList, habitHistory, goalsList, trades, accounts, taskRpg, disciplineData, categories), [habitsList, habitHistory, goalsList, trades, accounts, taskRpg, disciplineData, categories]);
   // Objectifs liés, regroupés par catégorie, avec leur avancement (pour les cartes).
   const goalsByCat = useMemo(() => {
@@ -604,12 +528,6 @@ export default function LifeRpgPage() {
     }
   };
 
-  // Journal d'activité = complétions dérivées + échanges de récompenses.
-  const log = useMemo(() => {
-    const reds = (state.redemptions || []).map(r => ({ ts: r.ts, label: `🎁 ${r.label}`, xp: 0, attribute: null, spent: r.cost }));
-    return [...progress.activityLog, ...reds].sort((a, b) => (a.ts < b.ts ? 1 : -1));
-  }, [progress.activityLog, state.redemptions]);
-
   /* --- Actions : catégories --- */
   // Sauvegarde automatique d'une catégorie (création ou édition), sans fermer le
   // formulaire : appelée à chaque modification de champ. Upsert par id ; on ne
@@ -696,12 +614,35 @@ export default function LifeRpgPage() {
   // Détache un objectif (utilisé par le « × » sur la barre de progression).
   const detachObjective = (goalId) => setGoals(prev => patchGoal(prev, goalId, { rpgCategory: null, rpgXp: 0 }));
 
+  /* Création d'un objectif : la liste des objectifs vit désormais DANS cette
+     page (GoalsPage en mode intégré), qui nous confie l'ouverture de son
+     formulaire. Les boutons « Nouvel objectif » de l'en-tête et des cartes
+     passent donc par là, au lieu de renvoyer vers une autre page. */
+  const createGoalRef = useRef(null);
+  const openGoalForm = () => createGoalRef.current?.();
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
-      {/* En-tête */}
+    /* 14 px de retrait haut ; blocs à 28 px (les autres pages sont à 36, mais
+       celle-ci en empile davantage et respirait trop). */
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+
+      {/* ─── Barre d'en-tête : seulement le slot de la barre du haut ─── */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {/* Niveau global — barre avec feedback de gain d'XP + level-up */}
+        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
+      </div>
+
+      {/* ─── Bloc héros : le niveau, comme le P&L du dashboard ───
+          Libellé atténué, chiffre en gros, puis la barre d'XP (qui porte le
+          feedback « +N XP » et le pop de montée de niveau) et l'action de la
+          page, posée juste à côté d'elle. */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+          <span style={{ fontSize: 13, lineHeight: "17.05px", color: T.textSub }}>Niveau global</span>
+          <span style={{ fontSize: 26, fontWeight: 500, lineHeight: 1, letterSpacing: -0.2, color: T.text }}>
+            Niveau {lvl.level}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <XpBar
             level={lvl.level}
             pct={lvl.pct}
@@ -712,14 +653,22 @@ export default function LifeRpgPage() {
             trackColor={T.accentBg}
             textColor={T.text}
             mutedColor={T.textMut}
+            width={180}
           />
-          <button onClick={openNewCategory} style={btnPrimary()}><Plus size={14} strokeWidth={2} /> Nouvelle catégorie</button>
+          <button type="button" onClick={() => createGoalRef.current?.()} style={btnGhost()}>
+            <Plus size={13} strokeWidth={1.75} /> Nouvel objectif
+          </button>
+          <button type="button" onClick={openNewCategory} style={btnPrimary()}>
+            <Plus size={13} strokeWidth={1.75} /> Nouvelle catégorie
+          </button>
         </div>
       </div>
 
-          {/* Cartes « Personnage » (catégories détaillées) — grille pleine largeur :
-              les cartes s'étirent pour occuper toute la largeur (auto-fit + 1fr). */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+      {/* ─── Catégories ─── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <SectionTitle size="sm">Catégories</SectionTitle>
+        {/* Grille pleine largeur : les cartes s'étirent (auto-fit + 1fr). */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
             {[...categories].sort((a, b) => (progress.attributes[b.id] || 0) - (progress.attributes[a.id] || 0)).map(cat => (
               <PortraitCard key={cat.id} cat={cat}
                 xp={progress.attributes[cat.id] || 0}
@@ -727,7 +676,7 @@ export default function LifeRpgPage() {
                 linkedGoals={goalsByCat[cat.id] || []}
                 allObjectives={flattenGoals(goalsList)}
                 onToggleObjective={(goalId) => toggleObjectiveLink(cat.id, goalId)}
-                onCreateObjective={() => setPage("goals")}
+                onCreateObjective={openGoalForm}
                 onDetachObjective={detachObjective}
                 tasks={tasksByCat[cat.id] || []}
                 onCreateTask={(title) => createTaskInline(cat, title)}
@@ -737,55 +686,16 @@ export default function LifeRpgPage() {
                 onEdit={() => editCategory(cat)}
                 onDelete={categories.length > 1 ? () => removeCategory(cat.id) : null} />
             ))}
-          </div>
+        </div>
+      </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr)", gap: 16, alignItems: "stretch" }} className="tr4de-rpg-grid">
-            <Section title="Habitudes" icon={ListChecks}>
-              {habitsList.length === 0 ? (
-                <Empty label="Aucune habitude. Ajoutez-en depuis la page « Habitudes »." />
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {habitsList.map((h, i) => {
-                    const cs = habitCategoryIds(h).map(getCat);
-                    const done = isDoneToday(habitHistory, h.id);
-                    const st = progress.perHabit[h.id]?.streak || 0;
-                    const mult = streakMultiplier(st);
-                    return (
-                      <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < habitsList.length - 1 ? `1px solid ${T.border}` : "none" }}>
-                        <button onClick={() => toggleHabit(h.id)} title={done ? "Décocher pour aujourd'hui" : "Compléter aujourd'hui"}
-                          role="checkbox" aria-checked={done} aria-label={`${h.name} — ${done ? "complétée" : "à faire"} aujourd'hui`}
-                          style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${done ? T.green : T.border}`, background: done ? T.green : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
-                          {done && <Check size={10} strokeWidth={3} />}
-                        </button>
-                        <span style={{ fontSize: 13, color: T.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</span>
-                        {st >= 2 && (
-                          <span title={`Série de ${st} jours · XP ×${fmtMult(mult)}`}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 11, fontWeight: 700, color: T.amber, background: T.amberBg, border: `1px solid color-mix(in srgb, ${T.amber} 35%, transparent)`, borderRadius: 999, padding: "2px 8px", fontVariantNumeric: "tabular-nums" }}>
-                            <Flame size={11} strokeWidth={2.25} /> {st} · ×{fmtMult(mult)}
-                          </span>
-                        )}
-                        <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                          {cs.map(c => (
-                            <span key={c.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: c.color, fontWeight: 600 }}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.color }} />
-                              {c.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Section>
-            <Section title="Activité récente" icon={Sparkles} fill>
-              <ActivityLog log={log} getCat={getCat} />
-            </Section>
-          </div>
+      {/* ─── Objectifs (la page Objectifs, absorbée ici) ─── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <SectionTitle size="sm">Objectifs</SectionTitle>
+        <GoalsPage embedded registerCreate={(fn) => { createGoalRef.current = fn; }} />
+      </div>
 
-          <LevelChart habits={habitsList} history={habitHistory} categories={categories} />
-
-      {categoryModal && <CategoryModal initial={categoryModal} onSave={upsertCategory} onClose={closeCategory} onGoToObjectives={() => { closeCategory(); setPage("goals"); }} />}
+      {categoryModal && <CategoryModal initial={categoryModal} onSave={upsertCategory} onClose={closeCategory} onGoToObjectives={() => { closeCategory(); openGoalForm(); }} />}
 
       {taskModal && (
         <CreateTaskModal cat={taskModal.cat} task={taskModal.task} gcal={gcal}
@@ -794,7 +704,11 @@ export default function LifeRpgPage() {
           onGoToAgenda={() => { setTaskModal(null); setPage("agenda"); }} />
       )}
 
-      <style>{`@media (max-width: 760px) { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } } .tr4de-portrait > * + * { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--color-border, #F0F0F0); } .tr4de-portrait > *:nth-child(3) { margin-top: 20px; padding-top: 0; border-top: none; }`}</style>
+      {/* Repli mobile / tablette. */}
+      <style>{`
+        @media (max-width: 760px) { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } }
+        .tr4de-portrait > * + * { margin-top: 14px; }
+      `}</style>
     </div>
   );
 }
@@ -829,25 +743,29 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
   };
   return (
     <div className="tr4de-portrait" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 20, background: T.white, display: "flex", flexDirection: "column", gap: 0 }}>
+      /* `overflow: visible` contre le réglage par défaut de CARD : le menu
+         « Ajouter un objectif » s'ouvre en position absolue sous son
+         déclencheur et serait sinon coupé par le bord de la carte. */
+      style={{ ...CARD, overflow: "visible", padding: 16, display: "flex", flexDirection: "column", gap: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${cat.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <CatIcon name={cat.icon} size={18} strokeWidth={1.75} color={cat.color} />
+        {/* Vignette ronde, comme le logo d'un compte sur les pages Comptes. */}
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: `color-mix(in srgb, ${cat.color} 12%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <CatIcon name={cat.icon} size={17} strokeWidth={1.75} color={cat.color} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.label}</div>
-          <div style={{ fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>Niveau {cl.level} · {xp} XP</div>
+          <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.25, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.label}</div>
+          <div style={{ fontSize: 12, lineHeight: 1.25, color: T.text, opacity: 0.45, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>Niveau {cl.level} · {xp} XP</div>
         </div>
         {/* Boutons modifier / supprimer : masqués, visibles au survol de la carte */}
-        <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hover ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
-          <button onClick={onEdit} title="Modifier" aria-label={`Modifier ${cat.label}`} style={iconBtnSm()}><Pencil size={12} strokeWidth={1.75} /></button>
-          {onDelete && <button onClick={onDelete} title="Supprimer" aria-label={`Supprimer ${cat.label}`} style={iconBtnSm()}><Trash2 size={12} strokeWidth={1.75} /></button>}
+        <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hover ? 1 : 0.55, pointerEvents: "auto", transition: "opacity 120ms var(--ease-out)" }}>
+          <button onClick={onEdit} title="Modifier" aria-label={`Modifier ${cat.label}`} style={iconBtnSm()}><Pencil size={14} strokeWidth={1.75} /></button>
+          {onDelete && <button onClick={onDelete} title="Supprimer" aria-label={`Supprimer ${cat.label}`} style={iconBtnSm()}><Trash2 size={14} strokeWidth={1.75} /></button>}
         </div>
       </div>
 
       {/* Progression de niveau (illimitée, courbe progressive) */}
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.textMut, marginBottom: 5 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.text, opacity: 0.5, marginBottom: 6 }}>
           <span>Vers le niveau {cl.level + 1}</span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{cl.intoLevel} / {cl.neededForNext} XP</span>
         </div>
@@ -951,8 +869,8 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
             <>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, marginBottom: 8 }}>Tâches</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: 10 }}>
-                {tasks.map((tk, i) => (
-                  <TaskRow key={tk.id} tk={tk} cat={cat} isLast={i === tasks.length - 1 && !adding}
+                {tasks.map((tk) => (
+                  <TaskRow key={tk.id} tk={tk} cat={cat}
                     onToggle={() => onToggleTask && onToggleTask(tk.id)}
                     onEdit={onEditTask ? () => onEditTask(tk) : null}
                     onDelete={onDeleteTask ? () => onDeleteTask(tk.id) : null} />
@@ -1030,11 +948,11 @@ function fmtDayLong(day) {
 
 // Ligne d'une tâche de carte : case à cocher (complétion → XP), titre, date, et
 // actions modifier / supprimer révélées au survol de la ligne.
-function TaskRow({ tk, cat, isLast, onToggle, onEdit, onDelete }) {
+function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
   const [hov, setHov] = useState(false);
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: isLast ? "none" : `1px solid ${T.border}` }}>
+      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
       <button onClick={onToggle} title={tk.done ? "Marquer à faire" : "Marquer terminée"}
         role="checkbox" aria-checked={tk.done} aria-label={`${tk.title} — ${tk.done ? "terminée" : "à faire"}`}
         style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${tk.done ? cat.color : T.border}`, background: tk.done ? cat.color : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
@@ -1125,122 +1043,6 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
 
 
 /* ---------- Graphique de progression du niveau ---------- */
-function LevelChart({ habits, history, categories }) {
-  const [tab, setTab] = useState("global"); // global | category
-  const { days, globalCum, catCum } = useMemo(
-    () => computeXpSeries(habits, history, categories),
-    [habits, history, categories],
-  );
-
-  const lines = useMemo(() => {
-    if (tab === "global") {
-      return [{ id: "global", label: "Global", color: T.text, values: globalCum.map(levelValue) }];
-    }
-    return categories
-      .map(c => {
-        const cum = catCum[c.id] || [];
-        return { id: c.id, label: c.label, color: c.color, values: cum.map(levelValue), total: cum[cum.length - 1] || 0 };
-      })
-      .filter(l => l.total > 0);
-  }, [tab, globalCum, catCum, categories]);
-
-  const tabBtn = (id, label) => (
-    <button key={id} onClick={() => setTab(id)}
-      style={{ padding: "4px 12px", borderRadius: 999, border: "none", background: tab === id ? T.white : "transparent", color: tab === id ? T.text : T.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: tab === id ? "0 1px 2px rgba(0,0,0,.08)" : "none" }}>
-      {label}
-    </button>
-  );
-  const action = (
-    <div style={{ display: "inline-flex", gap: 4, padding: 3, background: T.accentBg, borderRadius: 999 }}>
-      {tabBtn("global", "Global")}
-      {tabBtn("category", "Par catégorie")}
-    </div>
-  );
-
-  return (
-    <Section title="Progression du niveau" icon={TrendingUp} action={action}>
-      {days.length === 0 || lines.length === 0 ? (
-        <Empty label="Complétez des habitudes pour voir votre progression." />
-      ) : (
-        <>
-          <LineChartSvg days={days} lines={lines} />
-          {tab === "category" && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 12 }}>
-              {lines.map(l => (
-                <span key={l.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textSub }}>
-                  <span style={{ width: 9, height: 9, borderRadius: "var(--radius-field)", background: l.color }} /> {l.label}
-                </span>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </Section>
-  );
-}
-
-// Petit graphique en lignes (1 à N séries), valeurs = niveau continu.
-function LineChartSvg({ days, lines }) {
-  const VB_W = 1000, VB_H = 200, padL = 8, padR = 34, padT = 12, padB = 22;
-  const chartW = VB_W - padL - padR, chartH = VB_H - padT - padB;
-  const n = days.length;
-  const maxY = Math.max(2, ...lines.flatMap(l => l.values));
-  const xOf = (i) => padL + (n <= 1 ? chartW / 2 : (i / (n - 1)) * chartW);
-  const yOf = (v) => padT + chartH - (v / maxY) * chartH;
-  const pathFor = (vals) => vals.map((v, i) => `${i === 0 ? "M" : "L"} ${xOf(i)} ${yOf(v)}`).join(" ");
-
-  const tickStep = Math.max(1, Math.ceil(maxY / 4));
-  const yticks = []; for (let l = 0; l <= maxY; l += tickStep) yticks.push(l);
-  const step = Math.max(1, Math.ceil(n / 6));
-  const xset = new Set([0, n - 1]); for (let i = 0; i < n; i += step) xset.add(i);
-  const xidx = [...xset].sort((a, b) => a - b);
-
-  return (
-    <div style={{ position: "relative", width: "100%" }}>
-      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none" style={{ width: "100%", height: 220, display: "block", fontFamily: "var(--font-sans)" }}>
-        {yticks.map(l => { const y = yOf(l); return <line key={l} x1={padL} y1={y} x2={padL + chartW} y2={y} stroke={T.border} strokeWidth="0.5" vectorEffect="non-scaling-stroke" />; })}
-        {lines.map(l => (
-          <path key={l.id} d={pathFor(l.values)} fill="none" stroke={l.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        ))}
-        {n === 1 && lines.map(l => <circle key={l.id} cx={xOf(0)} cy={yOf(l.values[0])} r="3" fill={l.color} />)}
-      </svg>
-      <div style={{ position: "absolute", top: 0, right: 0, width: padR, height: "100%", pointerEvents: "none" }}>
-        {yticks.map(l => { const topPct = (yOf(l) / VB_H) * 100; return <div key={l} style={{ position: "absolute", top: `${topPct}%`, right: 4, transform: "translateY(-50%)", fontSize: 10, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>N{l}</div>; })}
-      </div>
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: padB, pointerEvents: "none" }}>
-        {xidx.map(i => {
-          const leftPct = (xOf(i) / VB_W) * 100;
-          const [, m, dd] = days[i].split("-");
-          const tf = i === 0 ? "translateX(0)" : i === n - 1 ? "translateX(-100%)" : "translateX(-50%)";
-          return <div key={days[i]} style={{ position: "absolute", left: `${leftPct}%`, bottom: 2, transform: tf, fontSize: 10, color: T.textMut, whiteSpace: "nowrap" }}>{dd}/{m}</div>;
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ActivityLog({ log, getCat }) {
-  if (!log || log.length === 0) return <Empty label="Aucune activité pour le moment." />;
-  const shown = log.slice(0, 30);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {shown.map((e, i) => {
-        const cat = e.attribute ? getCat(e.attribute) : null;
-        const when = new Date(e.ts);
-        return (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "6px 0", borderBottom: i < shown.length - 1 ? `1px solid ${T.border}` : "none" }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: cat ? cat.color : T.amber, flexShrink: 0 }} />
-            <span style={{ flex: 1, minWidth: 0, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.label}</span>
-            {e.xp > 0 && <span style={{ color: T.textSub, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>+{e.xp} XP</span>}
-            {e.spent > 0 && <span style={{ color: T.red, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>−{e.spent} 🪙</span>}
-            <span style={{ color: T.textMut, fontSize: 10, flexShrink: 0 }}>{when.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /* ---------- Modales ---------- */
 function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
   const [form, setForm] = useState(initial);
@@ -1513,36 +1315,6 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
 }
 
 /* ---------- Primitifs UI ---------- */
-function Section({ title, icon: Icon, action, children, bare, fill }) {
-  const wrap = bare
-    ? { padding: 0 }
-    : { background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 18 };
-  // `fill` : la carte occupe toute la hauteur de la cellule (grille) et son
-  // contenu défile à l'intérieur — utile pour qu'elle épouse la colonne voisine.
-  if (fill) Object.assign(wrap, { height: "100%", display: "flex", flexDirection: "column", minHeight: 0, boxSizing: "border-box" });
-  return (
-    <div style={wrap}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, flexShrink: 0 }}>
-        {Icon && <Icon size={15} strokeWidth={1.75} color={T.text} />}
-        <h2 style={{ fontSize: 14, fontWeight: 600, color: T.text, margin: 0 }}>{title}</h2>
-        {action && <div style={{ marginLeft: "auto" }}>{action}</div>}
-      </div>
-      {fill ? (
-        // Contenu en position absolue : il ne contribue PAS à la hauteur de la
-        // ligne (c'est donc la colonne voisine qui la pilote) tout en remplissant
-        // la carte, avec défilement interne.
-        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <div style={{ position: "absolute", inset: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>{children}</div>
-        </div>
-      ) : children}
-    </div>
-  );
-}
-
-function Empty({ label }) {
-  return <div style={{ padding: "24px 12px", textAlign: "center", fontSize: 12, color: T.textMut }}>{label}</div>;
-}
-
 function Overlay({ title, children, onClose }) {
   // Rendu via un portail sur document.body : la div racine de la page est
   // animée (transform), ce qui ferait d'elle le bloc conteneur d'un élément
@@ -1623,24 +1395,28 @@ function AutoTextarea({ value, onChange, placeholder, minRows = 3, style }) {
 }
 
 
-/* ---------- Styles partagés ---------- */
+/* ---------- Styles partagés ----------
+   Les pilules reprennent celles des barres d'en-tête de la nouvelle DA (pages
+   Comptes et Calendrier) : 12 px, pas de bordure, l'action principale en aplat
+   d'encre, les secondaires en blanc posé sur l'ombre de pilule. */
 function btnPrimary() {
-  return { marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
-// Bouton d'action principal d'une modale (fond sombre).
+// Bouton d'action principal d'une modale (fond sombre, cible plus généreuse).
 function btnDark() {
-  return { padding: "9px 18px", borderRadius: 999, border: `1px solid ${T.text}`, background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
 }
-// Bouton secondaire d'une modale (contour discret).
+// Bouton secondaire d'une modale.
 function btnGhost() {
-  return { padding: "9px 18px", borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
+  return { padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 function iconBtn() {
-  return { width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
+  return { width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
 }
-// Variante compacte (cartes de catégorie) — apparaît au survol.
+/* Variante des cartes de catégorie. 28 px comme les actions de ligne de la page
+   Comptes (RowIconButton) : l'icône reste petite, la cible reste atteignable. */
 function iconBtnSm() {
-  return { width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
+  return { width: 28, height: 28, borderRadius: 8, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
 }
 // Petit libellé au-dessus des champs de la modale de catégorie.
 const objLbl = { fontSize: 11, color: T.textSub, fontWeight: 500, marginBottom: 4 };

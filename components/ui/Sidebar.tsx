@@ -177,7 +177,7 @@ export default function Sidebar(props: SidebarProps) {
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
         justifyContent: collapsed ? "center" : "flex-start",
-        padding: collapsed ? "18px 0" : "18px 16px",
+        padding: collapsed ? "18px 0" : "18px 12px",
       }}>
         <img
           src="/favicon.svg"
@@ -194,7 +194,7 @@ export default function Sidebar(props: SidebarProps) {
       </div>
 
       {/* NAV */}
-      <nav aria-label="Navigation principale" style={{ padding: "10px 8px", flex: 1, overflowY: "auto", scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+      <nav aria-label="Navigation principale" style={{ padding: "10px 6px", flex: 1, overflowY: "auto", scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
         {sections.map((sec, i) => {
           const containsActive = sec.items.some(it => it.id === activeId);
           const sectionCollapsed = !!(sec.label && collapsedSections[sec.label]);
@@ -214,7 +214,7 @@ export default function Sidebar(props: SidebarProps) {
                 aria-expanded={!sectionCollapsed}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 12px 6px 15px", fontSize: 12, fontWeight: 400,
+                  padding: "8px 12px 6px 10px", fontSize: 12, fontWeight: 400,
                   lineHeight: "18.6px",
                   color: "var(--color-text-muted)", letterSpacing: 0,
                   background: "transparent", border: "none", cursor: "pointer",
@@ -249,7 +249,7 @@ export default function Sidebar(props: SidebarProps) {
                   style={{
                     width: "100%", display: "flex", alignItems: "center",
                     gap: collapsed ? 0 : 10, justifyContent: collapsed ? "center" : "flex-start",
-                    padding: collapsed ? "8px 0" : "8px 14px",
+                    padding: collapsed ? "8px 0" : "8px 12px 8px 10px",
                     // Ovale : le survol dessine une pilule, pas un rectangle aux
                     // coins arrondis.
                     borderRadius: 999, border: "none",
@@ -258,17 +258,17 @@ export default function Sidebar(props: SidebarProps) {
                        donc libre pour le seul survol, et un seul signal —  la
                        couleur — désigne la page courante. */
                     background: "transparent",
-                    color: active ? "var(--color-nav-active-text)" : "var(--color-text-sub)",
+                    color: active ? "var(--color-nav-active-text)" : "var(--color-nav-text)",
                     fontSize: 13, lineHeight: "20.15px",
                     // Gras : libellé ET icône (via strokeWidth) ont le même poids.
-                    fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    fontWeight: 550, cursor: "pointer", fontFamily: "inherit",
                     transition: "background 150ms cubic-bezier(0.23,1,0.32,1), color 150ms cubic-bezier(0.23,1,0.32,1), padding 200ms cubic-bezier(0.23,1,0.32,1)",
                     position: "relative",
                   }}
                   onMouseEnter={e => { e.currentTarget.style.background = "var(--color-hover-bg)"; }}
                   onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                 >
-                  <Icon size={18} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                  <Icon size={18} strokeWidth={2} style={{ flexShrink: 0 }} />
                   {!collapsed && (
                     <>
                       {/* `nowrap` : c'est le libellé le plus long qui fixe la

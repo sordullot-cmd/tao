@@ -63,11 +63,17 @@ export function BackLink({ label, icon, onClick }) {
   );
 }
 
-/** Titre de section (24px Medium), posé hors carte, action optionnelle à droite. */
-export function SectionTitle({ children, action }) {
+/**
+ * Titre de section (24 px Medium), posé hors carte, action optionnelle à droite.
+ *
+ * `size="sm"` (18 px) : variante pour les pages qui empilent beaucoup de
+ * sections courtes — le 24 px y prend le dessus sur le contenu qu'il annonce.
+ */
+export function SectionTitle({ children, action, size = "md" }) {
+  const sm = size === "sm";
   return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%"}}>
-      <h2 style={{fontSize:24,fontWeight:500,lineHeight:"26.35px",color:T.text,margin:0}}>{children}</h2>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,width:"100%"}}>
+      <h2 style={{fontSize: sm ? 18 : 24,fontWeight:500,lineHeight: sm ? "22px" : "26.35px",color:T.text,margin:0}}>{children}</h2>
       {action}
     </div>
   );
@@ -103,21 +109,82 @@ export function DirectionTag({ direction }) {
 }
 
 /**
- * Instruments reconnus : nom lisible + marqueur court de la vignette.
+ * Instruments reconnus : nom lisible, marqueur court de la vignette et couleur
+ * d'identité.
  *
  * `badge` est ce qui s'affiche DANS le cercle (maquette « Trades » : « 100 »
  * pour le Nasdaq-100). C'est volontairement l'indice de l'indice et non des
  * initiales : c'est ce qui identifie l'instrument d'un coup d'œil.
+ *
+ * `color` est la couleur du disque. Ce sont des couleurs d'IDENTITÉ, pas des
+ * couleurs de thème : elles ne passent donc pas par les tokens `T` et ne
+ * changent pas en mode sombre — un logo garde sa couleur, comme les pastilles
+ * de type de compte dans lib/ui/accountTypes.
+ *
+ * `icon` : chemin d'une vraie image dans /public/symbols/, si vous en déposez
+ * une. Elle prime alors sur le disque coloré. Rien n'est téléchargé depuis un
+ * tiers : les pastilles rondes des plateformes de cotation sont leurs propres
+ * marques, on ne peut pas les redistribuer dans l'app.
  */
 export const SYMBOL_LOGOS = [
-  { match: /^(mnq|nq|nasdaq|ndx|us100)/i, name: "Nasdaq",       badge: "100" },
-  { match: /^(mes|es|spx|us500)/i,        name: "S&P 500",      badge: "500" },
-  { match: /^(mym|ym|dow|us30)/i,         name: "Dow Jones",    badge: "30"  },
-  { match: /^(m2k|rty|russell)/i,         name: "Russell 2000", badge: "2K"  },
-  { match: /^(ftse|uk100)/i,             name: "FTSE 100",     badge: "100" },
-  { match: /^(dax|ger40|de40)/i,         name: "DAX",          badge: "40"  },
-  { match: /^(nik|jp225)/i,              name: "Nikkei 225",   badge: "225" },
+  { match: /^(mnq|nq|nasdaq|ndx|us100)/i, name: "Nasdaq",       badge: "100", color: "#0BA1E2" },
+  { match: /^(mes|es|spx|us500)/i,        name: "S&P 500",      badge: "500", color: "#E03C31" },
+  { match: /^(mym|ym|dow|us30)/i,         name: "Dow Jones",    badge: "30",  color: "#1B3A6B" },
+  { match: /^(m2k|rty|russell)/i,         name: "Russell 2000", badge: "2K",  color: "#7A4FBF" },
+  { match: /^(ftse|uk100)/i,             name: "FTSE 100",     badge: "100", color: "#00205B" },
+  { match: /^(dax|ger40|de40)/i,         name: "DAX",          badge: "40",  color: "#E8A33D" },
+  { match: /^(nik|jp225)/i,              name: "Nikkei 225",   badge: "225", color: "#BC002D" },
+  { match: /^(cl|mcl|wti|usoil)/i,       name: "Pétrole WTI",  badge: "WTI", color: "#3F4A3C", icon: "/symbols/oil.png" },
+  { match: /^(gc|mgc|xau|gold)/i,        name: "Or",           badge: "AU",  color: "#C9A227", icon: "/symbols/gold.png" },
+  { match: /^(si|xag|silver)/i,          name: "Argent",       badge: "AG",  color: "#8E9196" },
+  { match: /^(btc|xbt)/i,                name: "Bitcoin",      badge: "₿",   color: "#F7931A" },
+  { match: /^(eth)/i,                    name: "Ethereum",     badge: "Ξ",   color: "#627EEA" },
 ];
+
+/* ── Paires de devises ──────────────────────────────────────────────────────
+   Une paire ne se représente pas par un seul disque : elle met en rapport DEUX
+   monnaies. On reprend donc la convention des plateformes de cotation — le
+   drapeau de la devise de base en grand, celui de la devise de cotation en
+   petit derrière, en haut à droite.
+   ------------------------------------------------------------------------ */
+
+/** Drapeau rond de chaque devise reconnue (fichiers de /public/symbols/). */
+export const CURRENCY_ICONS = {
+  EUR: "/symbols/eur.png",
+  USD: "/symbols/usd.jpg",
+  GBP: "/symbols/gbp.png",
+  JPY: "/symbols/jpy.png",
+};
+
+/** Contrats futures sur devise : leur code ne dit pas la paire, cette table si. */
+const FUTURES_FX = {
+  "6E": ["EUR", "USD"],
+  "6B": ["GBP", "USD"],
+  "6J": ["JPY", "USD"],
+  M6E: ["EUR", "USD"],
+  M6B: ["GBP", "USD"],
+};
+
+const CURRENCY_CODES = ["EUR", "USD", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"];
+
+/**
+ * Décompose un symbole en paire de devises, ou null si ce n'en est pas une.
+ * Accepte « EURUSD », « EUR/USD », « eur-usd », « EURUSD=X » et les codes de
+ * contrats futures (« 6E », « M6B »).
+ */
+export function forexPair(symbol) {
+  const raw = String(symbol || "").trim().toUpperCase();
+  if (!raw) return null;
+
+  const futures = FUTURES_FX[raw.replace(/[^A-Z0-9]/g, "")];
+  if (futures) return { base: futures[0], quote: futures[1] };
+
+  const m = raw.replace(/=X$/, "").match(/^([A-Z]{3})[\/\-. ]?([A-Z]{3})$/);
+  if (!m) return null;
+  const [, base, quote] = m;
+  if (!CURRENCY_CODES.includes(base) || !CURRENCY_CODES.includes(quote)) return null;
+  return { base, quote };
+}
 
 /**
  * Décompose un symbole en nom lisible + code, comme dans la maquette
@@ -127,7 +194,11 @@ export const SYMBOL_LOGOS = [
 export function symbolLabel(symbol) {
   const code = String(symbol || "").trim();
   const known = SYMBOL_LOGOS.find(l => l.match.test(code));
-  return known ? { name: known.name, code } : { name: code, code: null };
+  if (known) return { name: known.name, code };
+  // Paire de devises : « EURUSD » se lit « EUR/USD ».
+  const pair = forexPair(code);
+  if (pair) return { name: `${pair.base}/${pair.quote}`, code };
+  return { name: code, code: null };
 }
 
 /**
@@ -140,14 +211,69 @@ export function SymbolBadge({ symbol, size = 32 }) {
   const known = SYMBOL_LOGOS.find(l => l.match.test(String(symbol || "")));
   const label = known?.badge
     || String(symbol || "?").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase();
+
+  /* Paire de devises : deux disques. Le grand (devise de base) est posé en bas
+     à gauche, le petit (devise de cotation) en haut à droite et DERRIÈRE —
+     l'ordre du DOM suffit à l'empilement, le grand étant opaque. L'ensemble
+     tient dans la même boîte carrée que n'importe quelle autre vignette : la
+     ligne ne bouge pas selon l'instrument. */
+  const pair = forexPair(symbol);
+  if (pair && (CURRENCY_ICONS[pair.base] || CURRENCY_ICONS[pair.quote])) {
+    const big = Math.round(size * 0.8);
+    const small = Math.round(size * 0.56);
+    const disc = (code, d, pos) => (
+      <span style={{
+        position: "absolute", ...pos, width: d, height: d, borderRadius: "50%",
+        overflow: "hidden", background: T.accentBg,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontSize: Math.round(d * 0.34), fontWeight: 600, color: T.textSub, letterSpacing: -0.4,
+      }}>
+        {CURRENCY_ICONS[code] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={CURRENCY_ICONS[code]} alt="" width={d} height={d}
+               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        ) : code.slice(0, 2)}
+      </span>
+    );
+    return (
+      <span aria-hidden style={{ position: "relative", width: size, height: size, flexShrink: 0, display: "inline-block" }}>
+        {disc(pair.quote, small, { top: 0, right: 0 })}
+        {disc(pair.base, big, { bottom: 0, left: 0 })}
+      </span>
+    );
+  }
+
+  // Une vraie image déposée dans /public/symbols/ prime sur le disque coloré.
+  if (known?.icon) {
+    return (
+      <span
+        aria-hidden
+        style={{
+          width: size, height: size, borderRadius: "50%", flexShrink: 0,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", background: T.accentBg,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={known.icon} alt="" width={size} height={size}
+             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      </span>
+    );
+  }
+
+  /* Un marqueur long ne tient pas à la taille d'un chiffre, mais le palier à
+     trois caractères était trop sévère : « 100 » et « 500 » — les deux
+     marqueurs les plus fréquents — s'en trouvaient rapetissés sans nécessité.
+     Trois caractères tiennent à 0.32 ; on ne resserre vraiment qu'au-delà. */
+  const scale = label.length >= 4 ? 0.26 : label.length === 3 ? 0.32 : 0.375;
   return (
     <div
       aria-hidden
       style={{
         width: size, height: size, borderRadius: "50%", flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: T.symbolBadge, color: T.symbolBadgeText,
-        fontSize: Math.round(size * 0.375), fontWeight: 600,
+        background: known?.color || T.symbolBadge, color: T.symbolBadgeText,
+        fontSize: Math.round(size * scale), fontWeight: 600,
         letterSpacing: -0.65, lineHeight: 1, whiteSpace: "nowrap",
       }}
     >
@@ -335,7 +461,14 @@ export function windowSeries(points, periodId, getDate = p => p.date) {
  *
  * `options` : [{ id, label }]. `multi` autorise plusieurs valeurs (value = tableau).
  */
-export function TableFilter({ label, value, options, onChange, multi = false }) {
+/**
+ * @param {boolean=} neutral  Le contrôle porte une valeur par DÉFAUT, pas un
+ *   filtre choisi (le tri « plus récents d'abord », par exemple). Il garde son
+ *   libellé nu et son gris : la pleine opacité est réservée à ce que
+ *   l'utilisateur a lui-même restreint, sinon « filtré » et « non filtré » se
+ *   ressemblent.
+ */
+export function TableFilter({ label, value, options, onChange, multi = false, neutral = false }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -348,7 +481,9 @@ export function TableFilter({ label, value, options, onChange, multi = false }) 
   }, [open]);
 
   const selected = multi ? (Array.isArray(value) ? value : []) : value;
-  const active = multi ? selected.length > 0 : (value != null && value !== "");
+  const active = neutral
+    ? false
+    : (multi ? selected.length > 0 : (value != null && value !== ""));
   // Le libellé porte l'état : « Types » seul, « Types · Long » filtré.
   const current = multi
     ? (selected.length === 1
@@ -373,7 +508,11 @@ export function TableFilter({ label, value, options, onChange, multi = false }) 
         <span style={{whiteSpace:"nowrap"}}>{active && current ? `${label} · ${current}` : label}</span>
         <ChevronDown
           size={16} strokeWidth={1.75}
-          style={{transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition:"transform 140ms var(--ease-out, ease)"}}
+          /* Fermé, le chevron pointe vers le BAS — « ceci ouvre une liste en
+             dessous ». Il ne bascule vers le haut qu'une fois ouvert. Il était
+             couché vers la droite au repos, ce qui annonçait un sous-menu
+             latéral. */
+          style={{transform: open ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 140ms var(--ease-out, ease)"}}
         />
       </button>
       {open && (

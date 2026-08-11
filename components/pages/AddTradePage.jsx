@@ -15,6 +15,7 @@ import { parseCSV } from "@/lib/csvParsers";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import TradeTargetSelector from "@/components/TradeTargetSelector";
 import { PLATFORMS } from "@/lib/brokers/platforms";
+import { CARD, SectionTitle, TH } from "@/components/ui/da";
 /* Couleur par type de compte — convention de l'app (eval ambre, funded bleu,
    live vert, démo violet), désormais partagée par toute l'app depuis
    lib/ui/accountTypes.ts. Ici elle sert de repère de groupe : pastille du
@@ -42,6 +43,66 @@ function CheckBox({ on, partial = false, color, size = 15 }) {
         <span style={{ width: size - 7, height: 1.5, borderRadius: 1, background: "#FFFFFF" }} />
       )}
     </span>
+  );
+}
+
+/**
+ * En-tête d'une carte d'étape : pastille numérotée + titre, action à droite.
+ *
+ * L'import se fait en trois temps (où, quel format, quel fichier) et l'ordre
+ * compte : le numéro dit où l'on en est. La pastille passe au vert dès que
+ * l'étape est remplie — ce qui manque encore se voit sans avoir à relire la
+ * page. Le vert n'est pas le seul signal : le chiffre laisse la place à une
+ * coche, lisible même sans distinguer les couleurs.
+ */
+function StepHeader({ n, title, done, action }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+      <span
+        aria-hidden="true"
+        style={{
+          width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          background: done ? T.pnlPos : T.accentBg,
+          color: done ? T.onSolid : T.textSub,
+          fontSize: 12, fontWeight: 500, lineHeight: 1,
+          transition: "background 140ms var(--ease-out, ease)",
+        }}
+      >
+        {done ? <LucideCheck size={13} strokeWidth={2.5} /> : n}
+      </span>
+      <span style={{ fontSize: 16, fontWeight: 500, lineHeight: "18.6px", color: T.text, minWidth: 0 }}>
+        {title}
+      </span>
+      {action && <span style={{ marginLeft: "auto", flexShrink: 0 }}>{action}</span>}
+    </div>
+  );
+}
+
+/** Une étape de l'import : son en-tête, puis ses champs. */
+const STEP = { display: "flex", flexDirection: "column", gap: 14 };
+
+/* Filet entre deux étapes. Il file d'un bord à l'autre de la carte (les marges
+   négatives reprennent son padding) : arrêté avant les bords, il se lirait
+   comme le souligné du bloc du dessus au lieu d'une coupure entre les deux. */
+const STEP_SEP = { height: 1, background: T.border, margin: "20px -24px" };
+
+/** Lien texte discret posé à droite d'un en-tête d'étape. */
+function InlineLink({ children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: 0, border: "none", background: "transparent", color: T.textSub,
+        fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+        textDecoration: "underline", textUnderlineOffset: 2,
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = T.text; }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = T.textSub; }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -880,477 +941,528 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
   const brokerInfo = getBrokerInstructions();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "20px 24px", width: "100%", flex: 1, alignSelf: "flex-start", fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
-      <div style={{ display: "flex", flexDirection: "row", width: "100%", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
-      {/* LEFT: QUESTIONNAIRE FORM */}
-      <div style={{ display: "flex", flexDirection: "column", padding: 0, background: "#fff", flex: 1, minWidth: 0 }}>
-          <div style={{ padding: 24 }}>
-          
-          {/* ACCOUNT SELECTOR — sélection seule : cette page n'ajoute pas de
-              compte, elle rattache les trades importés à des comptes existants. */}
-          <div style={{ paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: "#5C5C5C" }}>
-                {t("addTrade.account")}
-              </label>
-              <button
-                type="button"
-                onClick={() => setPage?.("accounts")}
-                style={{
-                  marginLeft: "auto", padding: 0, border: "none", background: "transparent",
-                  color: T.text, fontSize: 11, fontWeight: 500, cursor: "pointer",
-                  fontFamily: "inherit", textDecoration: "underline",
-                }}
-              >
-                {t("addTrade.manageAccounts")}
-              </button>
-            </div>
-            <TradeTargetSelector
-              accounts={accounts}
-              firms={firms}
-              value={target}
-              onChange={setTarget}
-              onRequestManage={() => setPage?.("accounts")}
-            />
-            {accounts.length === 0 && (
-              <div style={{ fontSize: 11, color: T.textMut, marginTop: 8, lineHeight: 1.5 }}>
-                {t("addTrade.noAccountHint")}
+
+      {/* Corps de page : mêmes blocs de 36 px que les autres pages de la DA. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <SectionTitle>{t("addTrade.title")}</SectionTitle>
+          <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>
+            {t("addTrade.subtitle")}
+          </div>
+        </div>
+
+        {/* Le formulaire à gauche, la marche à suivre du broker à droite. Les
+            deux panneaux ne sont plus soudés dans un même cadre bordé : ce sont
+            deux cartes posées sur le fond gris, comme partout ailleurs. */}
+        <div className="tr4de-import-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 24, alignItems: "start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 24, minWidth: 0 }}>
+            {/* UNE SEULE carte pour tout le formulaire : l'import est un
+                parcours continu, pas trois sujets indépendants. Les étapes s'y
+                suivent, séparées par un filet — une carte par étape hachait la
+                colonne en petits blocs sans rien apporter de plus.
+                `overflow: visible` : les listes déroulantes débordent
+                volontairement du cadre, que le `overflow: hidden` de CARD
+                rognerait. */}
+            <section style={{ ...CARD, padding: 24, overflow: "visible" }}>
+              {/* ── 1. DESTINATION — sélection seule : cette page n'ajoute pas
+                  de compte, elle rattache les trades importés à des comptes
+                  existants. */}
+              <div style={STEP}>
+                <StepHeader
+                  n={1}
+                  title={t("addTrade.account")}
+                  done={targetIds.length > 0}
+                  action={<InlineLink onClick={() => setPage?.("accounts")}>{t("addTrade.manageAccounts")}</InlineLink>}
+                />
+                <TradeTargetSelector
+                  accounts={accounts}
+                  firms={firms}
+                  value={target}
+                  onChange={setTarget}
+                  onRequestManage={() => setPage?.("accounts")}
+                />
+                {accounts.length === 0 && (
+                  <div style={{ fontSize: 13, color: T.textMut, lineHeight: 1.5 }}>
+                    {t("addTrade.noAccountHint")}
+                  </div>
+                )}
+                {/* COMPTES VISÉS — deuxième temps de la MÊME question (où vont ces
+                    trades ?), donc dans la même étape : simplement décalé, sans
+                    filet, celui-ci étant réservé au passage d'une étape à l'autre.
+                    Firme sélectionnée : tous ses comptes sont listés d'un coup,
+                    seulement regroupés par type ; le titre d'un groupe fait office
+                    de case « tout ce type ».
+                    Compte hors firme : son type est simplement rappelé (il se
+                    modifie depuis la page Comptes ou les paramètres de la firme). */}
+                {target?.kind === "firm" && (
+                  <div style={{ marginTop: 2 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+                      <label style={{ fontSize: 13, fontWeight: 500, color: T.textSub }}>
+                        {t("addTrade.target.whichAccounts")}
+                      </label>
+                      {firmAccounts.length > 1 && (
+                        <span style={{ marginLeft: "auto" }}>
+                          <InlineLink onClick={() => setTargetIds(allFirmChecked ? [] : firmAccounts.map((a) => a.id))}>
+                            {allFirmChecked ? t("addTrade.target.clearAll") : t("addTrade.target.selectAll")}
+                          </InlineLink>
+                        </span>
+                      )}
+                    </div>
+
+                    {firmAccountsByType.length === 0 ? (
+                      <div style={{ fontSize: 13, color: T.textMut, lineHeight: 1.5 }}>
+                        {t("addTrade.target.firmEmpty")}
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                          {firmAccountsByType.map((g) => {
+                            const c = accountTypeStyle(g.type);
+                            const checked = g.accounts.filter((a) => targetIds.includes(a.id)).length;
+                            const groupOn = checked === g.accounts.length;
+                            return (
+                              <div key={g.type}>
+                                <button
+                                  type="button"
+                                  aria-pressed={groupOn}
+                                  onClick={() => toggleGroup(g)}
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    padding: "3px 2px", marginBottom: 7, border: "none",
+                                    background: "transparent", cursor: "pointer",
+                                    fontFamily: "inherit", textAlign: "left",
+                                  }}
+                                >
+                                  <CheckBox on={groupOn} partial={checked > 0 && !groupOn} color={c.fg} size={14} />
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{c.label()}</span>
+                                  <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500 }}>
+                                    {checked}/{g.accounts.length}
+                                  </span>
+                                </button>
+
+                                {/* Une ligne par compte, cases alignées en colonnes :
+                                    se balaie du regard, contrairement aux pilules. */}
+                                <div style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+                                  gap: 6,
+                                }}>
+                                  {g.accounts.map((acc) => {
+                                    const on = targetIds.includes(acc.id);
+                                    return (
+                                      <button
+                                        key={acc.id}
+                                        type="button"
+                                        aria-pressed={on}
+                                        onClick={() => toggleTargetId(acc.id)}
+                                        style={{
+                                          display: "flex", alignItems: "center", gap: 9, minWidth: 0,
+                                          padding: "9px 11px", borderRadius: "var(--radius-field)",
+                                          border: `1px solid ${on ? c.bd : T.border}`,
+                                          background: on ? c.bg : T.white,
+                                          color: T.text, fontSize: 12.5, fontWeight: on ? 600 : 500,
+                                          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                                          transition: "background .12s ease, border-color .12s ease",
+                                        }}
+                                      >
+                                        <CheckBox on={on} color={c.fg} />
+                                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                          {acc.name || "Compte"}
+                                        </span>
+                                        {acc.eval_account_size && (
+                                          <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>
+                                            {acc.eval_account_size}
+                                          </span>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ fontSize: 13, color: T.textMut, marginTop: 14, lineHeight: 1.5 }}>
+                          {targetIds.length === 0
+                            ? t("addTrade.target.pickAtLeastOne")
+                            : targetIds.length === 1
+                              ? t("addTrade.target.oneHint")
+                              : t("addTrade.target.multiHint").replace("{n}", String(targetIds.length))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {target?.kind === "account" && selectedAccountObjects.length === 1 && (() => {
+                  const acc = selectedAccountObjects[0];
+                  const c = accountTypeStyle(acc);
+                  return (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 2,
+                    }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 7,
+                        padding: "6px 12px", borderRadius: 999,
+                        border: `1px solid ${c.bd}`, background: c.bg,
+                        fontSize: 12, color: T.text, fontWeight: 600,
+                      }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.fg, flexShrink: 0 }} />
+                        {c.label()}{acc.eval_account_size ? ` · ${acc.eval_account_size}` : ""}
+                      </span>
+                      <span style={{ fontSize: 13, color: T.textMut, lineHeight: 1.5 }}>
+                        {t("addTrade.typeReadOnly")}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
-            )}
-          </div>
-          {/* BROKER — sert uniquement à choisir le parseur du fichier */}
-          <div style={{ marginTop: "14px", paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
-              {t("addTrade.broker")}
-            </label>
-            <SearchableSelect
-              value={selectedBroker}
-              onChange={(id) => {
-                setSelectedBroker(id);
-                setError("");
-              }}
-              options={(() => {
-                const isFav = (id) => favoriteBrokers.includes(id);
-                const sorted = [...brokers].sort((a, b) => {
-                  const fa = isFav(a.id), fb = isFav(b.id);
-                  if (fa !== fb) return fa ? -1 : 1;          // favoris en haut
-                  return a.name.localeCompare(b.name);        // puis alphabétique
-                });
-                return sorted.map(b => ({
-                  id: b.id,
-                  label: b.name,
-                  iconUrl: b.iconPath,
-                  accessory: (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label={isFav(b.id) ? t("addTrade.removeFav") : t("addTrade.addFav")}
-                      title={isFav(b.id) ? t("addTrade.removeFav") : t("addTrade.addFav")}
-                      onClick={() => toggleFavoriteBroker(b.id)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFavoriteBroker(b.id); } }}
-                      style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: 22, height: 22, borderRadius: 4,
-                        background: "transparent", cursor: "pointer", padding: 0,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "#F0F0F0"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      <Star
-                        size={13}
-                        strokeWidth={1.75}
-                        color={isFav(b.id) ? "#F59E0B" : "#8E8E8E"}
-                        fill={isFav(b.id) ? "#F59E0B" : "none"}
-                      />
-                    </span>
-                  ),
-                }));
-              })()}
-              searchPlaceholder={t("addTrade.searchBroker")}
-              emptyLabel={t("addTrade.noBroker")}
-            />
-          </div>
-          {/* COMPTES VISÉS — deuxième temps du choix de destination.
-              Firme sélectionnée : tous ses comptes sont listés d'un coup,
-              seulement regroupés par type ; le titre d'un groupe fait office de
-              case « tout ce type ».
-              Compte hors firme : son type est simplement rappelé (il se modifie
-              depuis la page Comptes ou les paramètres de la firme). */}
-          {target?.kind === "firm" && (
-            <div style={{ paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: T.textSub }}>
-                  {t("addTrade.target.whichAccounts")}
-                </label>
-                {firmAccounts.length > 1 && (
+
+              <div style={STEP_SEP} />
+
+              {/* ── 2. FORMAT — le courtier ne sert QU'À choisir le parseur du
+                  fichier ; il ne rattache rien. D'où une étape à part, et non un
+                  champ de plus dans la destination. */}
+              <div style={STEP}>
+                <StepHeader n={2} title={t("addTrade.broker")} done={!!selectedBroker} />
+                <SearchableSelect
+                  value={selectedBroker}
+                  onChange={(id) => {
+                    setSelectedBroker(id);
+                    setError("");
+                  }}
+                  options={(() => {
+                    const isFav = (id) => favoriteBrokers.includes(id);
+                    const sorted = [...brokers].sort((a, b) => {
+                      const fa = isFav(a.id), fb = isFav(b.id);
+                      if (fa !== fb) return fa ? -1 : 1;          // favoris en haut
+                      return a.name.localeCompare(b.name);        // puis alphabétique
+                    });
+                    return sorted.map(b => ({
+                      id: b.id,
+                      label: b.name,
+                      iconUrl: b.iconPath,
+                      accessory: (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label={isFav(b.id) ? t("addTrade.removeFav") : t("addTrade.addFav")}
+                          title={isFav(b.id) ? t("addTrade.removeFav") : t("addTrade.addFav")}
+                          onClick={() => toggleFavoriteBroker(b.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFavoriteBroker(b.id); } }}
+                          style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: 22, height: 22, borderRadius: 4,
+                            background: "transparent", cursor: "pointer", padding: 0,
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <Star
+                            size={13}
+                            strokeWidth={1.75}
+                            color={isFav(b.id) ? T.amber : T.textMut}
+                            fill={isFav(b.id) ? T.amber : "none"}
+                          />
+                        </span>
+                      ),
+                    }));
+                  })()}
+                  searchPlaceholder={t("addTrade.searchBroker")}
+                  emptyLabel={t("addTrade.noBroker")}
+                />
+              </div>
+
+              <div style={STEP_SEP} />
+
+              {/* ── 3. FICHIER ── */}
+              <div style={STEP}>
+                <StepHeader n={3} title={t("addTrade.file")} done={files.length > 0} />
+                <div
+                  style={{
+                    padding: "36px 20px",
+                    border: `1px dashed ${files.length > 0 ? T.pnlPos : T.border2}`,
+                    borderRadius: 12,
+                    textAlign: "center",
+                    cursor: "pointer",
+                    background: files.length > 0 ? T.greenBg : T.bg,
+                    transition: "border-color 160ms var(--ease-out, ease), background 160ms var(--ease-out, ease)",
+                  }}
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = T.text; e.currentTarget.style.background = T.accentBg; }}
+                  onDragLeave={(e) => { e.currentTarget.style.borderColor = files.length > 0 ? T.pnlPos : T.border2; e.currentTarget.style.background = files.length > 0 ? T.greenBg : T.bg; }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor = files.length > 0 ? T.pnlPos : T.border2;
+                    e.currentTarget.style.background = files.length > 0 ? T.greenBg : T.bg;
+                    const dropped = Array.from(e.dataTransfer.files || []);
+                    if (dropped.length > 0) {
+                      handleFileSelect({ target: { files: dropped } });
+                    }
+                  }}
+                >
+                  <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} style={{ display: "none" }} accept=".csv,.html,.txt" />
                   <button
-                    type="button"
-                    onClick={() => setTargetIds(allFirmChecked ? [] : firmAccounts.map((a) => a.id))}
-                    style={{
-                      marginLeft: "auto", padding: 0, border: "none", background: "transparent",
-                      color: T.text, fontSize: 11, fontWeight: 500, cursor: "pointer",
-                      fontFamily: "inherit", textDecoration: "underline",
-                    }}
+                    aria-label={t("addTrade.importFileAria")}
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, width: "100%", fontFamily: "var(--font-sans)" }}
                   >
-                    {allFirmChecked ? t("addTrade.target.clearAll") : t("addTrade.target.selectAll")}
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: 44, height: 44, borderRadius: "50%",
+                      background: files.length > 0 ? T.greenBd : T.accentBg,
+                      color: files.length > 0 ? T.pnlPos : T.textSub,
+                      transition: "background 160ms var(--ease-out, ease), color 160ms var(--ease-out, ease)",
+                    }}>
+                      {files.length > 0
+                        ? <LucideCheck size={20} strokeWidth={2} />
+                        : <LucideUpload size={20} strokeWidth={1.75} />}
+                    </span>
+                    <div>
+                      <div style={{ fontSize: 14, color: T.text, fontWeight: 500, marginBottom: 4 }}>
+                        {files.length === 1
+                          ? files[0].name
+                          : files.length > 1
+                            ? t("addTrade.filesReady").replace("{n}", String(files.length))
+                            : t("addTrade.dropFiles")}
+                      </div>
+                      <div style={{ fontSize: 13, color: T.textMut }}>
+                        {files.length > 0 ? t("addTrade.fileReady") : <>{t("addTrade.orBrowse2")} <span style={{ color: T.text, fontWeight: 500, textDecoration: "underline", textUnderlineOffset: 2 }}>{t("addTrade.browse")}</span> · {t("addTrade.fileTypes")}</>}
+                      </div>
+                    </div>
                   </button>
+                </div>
+                {/* Liste des fichiers sélectionnés (retrait individuel) */}
+                {files.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {files.map((f) => (
+                      <div
+                        key={f.name}
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                          padding: "8px 12px", background: T.bg, borderRadius: 8,
+                        }}
+                      >
+                        <span style={{ fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {f.name}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={t("addTrade.removeFile")}
+                          title={t("addTrade.removeFile")}
+                          onClick={() => removeFile(f.name)}
+                          style={{
+                            flexShrink: 0, width: 28, height: 28, margin: -4, borderRadius: 8,
+                            background: "none", border: "none", cursor: "pointer", color: T.textMut,
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            fontFamily: "var(--font-sans)", transition: "background 120ms ease, color 120ms ease",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = T.textMut; }}
+                        >
+                          <LucideX size={16} strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
-              {firmAccountsByType.length === 0 ? (
-                <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.5 }}>
-                  {t("addTrade.target.firmEmpty")}
-                </div>
-              ) : (
+              {/* APERÇU — trois premiers trades lus dans le fichier : c'est ce
+                  qui permet de vérifier qu'on a pris le bon parseur AVANT
+                  d'écrire en base. Pas de numéro : rien n'y est à remplir, c'est
+                  le résultat de l'étape précédente. */}
+              {preview.length > 0 && (
                 <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {firmAccountsByType.map((g) => {
-                      const c = accountTypeStyle(g.type);
-                      const checked = g.accounts.filter((a) => targetIds.includes(a.id)).length;
-                      const groupOn = checked === g.accounts.length;
-                      return (
-                        <div key={g.type}>
-                          <button
-                            type="button"
-                            aria-pressed={groupOn}
-                            onClick={() => toggleGroup(g)}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 8,
-                              padding: "3px 2px", marginBottom: 7, border: "none",
-                              background: "transparent", cursor: "pointer",
-                              fontFamily: "inherit", textAlign: "left",
-                            }}
-                          >
-                            <CheckBox on={groupOn} partial={checked > 0 && !groupOn} color={c.fg} size={14} />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{c.label()}</span>
-                            <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500 }}>
-                              {checked}/{g.accounts.length}
-                            </span>
-                          </button>
-
-                          {/* Une ligne par compte, cases alignées en colonnes :
-                              se balaie du regard, contrairement aux pilules. */}
-                          <div style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-                            gap: 6,
-                          }}>
-                            {g.accounts.map((acc) => {
-                              const on = targetIds.includes(acc.id);
-                              return (
-                                <button
-                                  key={acc.id}
-                                  type="button"
-                                  aria-pressed={on}
-                                  onClick={() => toggleTargetId(acc.id)}
-                                  style={{
-                                    display: "flex", alignItems: "center", gap: 9, minWidth: 0,
-                                    padding: "9px 11px", borderRadius: "var(--radius-field)",
-                                    border: `1px solid ${on ? c.bd : T.border}`,
-                                    background: on ? c.bg : T.white,
-                                    color: T.text, fontSize: 12.5, fontWeight: on ? 600 : 500,
-                                    cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                                    transition: "background .12s ease, border-color .12s ease",
-                                  }}
-                                >
-                                  <CheckBox on={on} color={c.fg} />
-                                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {acc.name || "Compte"}
-                                  </span>
-                                  {acc.eval_account_size && (
-                                    <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>
-                                      {acc.eval_account_size}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div style={{ fontSize: 11, color: T.textMut, marginTop: 12, lineHeight: 1.5 }}>
-                    {targetIds.length === 0
-                      ? t("addTrade.target.pickAtLeastOne")
-                      : targetIds.length === 1
-                        ? t("addTrade.target.oneHint")
-                        : t("addTrade.target.multiHint").replace("{n}", String(targetIds.length))}
+                  <div style={STEP_SEP} />
+                  <div style={STEP}>
+                    <div style={{ fontSize: 16, fontWeight: 500, lineHeight: "18.6px", color: T.text }}>
+                      {t("addTrade.preview")}
+                      <span style={{ color: T.textMut, fontWeight: 400 }}> · {preview.length} {t("addTrade.previewTrades")}</span>
+                    </div>
+                    <div style={{ overflowX: "auto" }} className="scroll-thin">
+                      <table style={{ width: "100%", fontSize: 14, borderCollapse: "collapse", minWidth: 420 }}>
+                        <thead>
+                          <tr style={{ opacity: 0.4 }}>
+                            <th style={{ ...TH, padding: "0 8px 10px 0", textAlign: "left" }}>Date</th>
+                            <th style={{ ...TH, padding: "0 8px 10px", textAlign: "left" }}>Symbole</th>
+                            <th style={{ ...TH, padding: "0 8px 10px", textAlign: "right" }}>Entrée</th>
+                            <th style={{ ...TH, padding: "0 8px 10px", textAlign: "right" }}>Sortie</th>
+                            <th style={{ ...TH, padding: "0 0 10px 8px", textAlign: "right" }}>P&L</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.map((trade, idx) => (
+                            <tr key={idx}>
+                              <td style={{ padding: "8px 8px 8px 0", color: T.textSub, whiteSpace: "nowrap" }}>{trade.date}</td>
+                              <td style={{ padding: "8px", color: T.text, fontWeight: 500 }}>{trade.symbol}</td>
+                              <td style={{ padding: "8px", textAlign: "right", color: T.textSub }}>{trade.entry?.toFixed(2)}</td>
+                              <td style={{ padding: "8px", textAlign: "right", color: T.textSub }}>{trade.exit?.toFixed(2)}</td>
+                              <td style={{ padding: "8px 0 8px 8px", textAlign: "right", fontWeight: 500, color: trade.pnl >= 0 ? T.pnlPos : T.pnlNeg }}>
+                                {trade.pnl >= 0 ? "+" : ""}{trade.pnl?.toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </>
               )}
-            </div>
-          )}
+            </section>
 
-          {target?.kind === "account" && selectedAccountObjects.length === 1 && (() => {
-            const acc = selectedAccountObjects[0];
-            const c = accountTypeStyle(acc);
-            return (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-                paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}`,
-              }}>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 7,
-                  padding: "6px 12px", borderRadius: 999,
-                  border: `1px solid ${c.bd}`, background: c.bg,
-                  fontSize: 12, color: T.text, fontWeight: 600,
-                }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.fg, flexShrink: 0 }} />
-                  {c.label()}{acc.eval_account_size ? ` · ${acc.eval_account_size}` : ""}
-                </span>
-                <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.5 }}>
-                  {t("addTrade.typeReadOnly")}
-                </span>
-              </div>
-            );
-          })()}
-
-          {/* FILE */}
-          <div style={{ paddingBottom: 20, marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
-              {t("addTrade.file")}
-            </label>
-            <div
-              style={{
-                padding: "36px 20px",
-                border: `1px dashed ${files.length > 0 ? "#16A34A" : T.border}`,
-                borderRadius: 12,
-                textAlign: "center",
-                cursor: "pointer",
-                background: files.length > 0 ? "rgba(16, 163, 127, 0.04)" : "#FAFAFA",
-                transition: "border-color 160ms ease, background 160ms ease",
-              }}
-              onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = "#0D0D0D"; e.currentTarget.style.background = "#F5F5F5"; }}
-              onDragLeave={(e) => { e.currentTarget.style.borderColor = files.length > 0 ? "#16A34A" : T.border; e.currentTarget.style.background = files.length > 0 ? "rgba(16, 163, 127, 0.04)" : "#FAFAFA"; }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.currentTarget.style.borderColor = files.length > 0 ? "#16A34A" : T.border;
-                e.currentTarget.style.background = files.length > 0 ? "rgba(16, 163, 127, 0.04)" : "#FAFAFA";
-                const dropped = Array.from(e.dataTransfer.files || []);
-                if (dropped.length > 0) {
-                  handleFileSelect({ target: { files: dropped } });
-                }
-              }}
-            >
-              <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} style={{ display: "none" }} accept=".csv,.html,.txt" />
-              <button
-                aria-label={t("addTrade.importFileAria")}
-                onClick={() => fileInputRef.current?.click()}
-                style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, width: "100%", fontFamily: "var(--font-sans)" }}
-              >
-                <span style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  width: 44, height: 44, borderRadius: "50%",
-                  background: files.length > 0 ? "rgba(16, 163, 127, 0.12)" : "#F0F0F0",
-                  color: files.length > 0 ? "#16A34A" : "#5C5C5C",
-                  transition: "background 160ms ease, color 160ms ease",
-                }}>
-                  {files.length > 0
-                    ? <LucideCheck size={20} strokeWidth={2} />
-                    : <LucideUpload size={20} strokeWidth={1.75} />}
-                </span>
-                <div>
-                  <div style={{ fontSize: 13, color: "#0D0D0D", fontWeight: 600, marginBottom: 4 }}>
-                    {files.length === 1
-                      ? files[0].name
-                      : files.length > 1
-                        ? t("addTrade.filesReady").replace("{n}", String(files.length))
-                        : t("addTrade.dropFiles")}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#8E8E8E", fontWeight: 400 }}>
-                    {files.length > 0 ? t("addTrade.fileReady") : <>{t("addTrade.orBrowse2")} <span style={{ color: "#0D0D0D", fontWeight: 500, textDecoration: "underline", textUnderlineOffset: 2 }}>{t("addTrade.browse")}</span> · {t("addTrade.fileTypes")}</>}
-                  </div>
-                </div>
-              </button>
-            </div>
-            {/* Liste des fichiers sélectionnés (retrait individuel) */}
-            {files.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
-                {files.map((f) => (
-                  <div
-                    key={f.name}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-                      padding: "8px 12px", background: "#FAFAFA", border: `1px solid ${T.border}`, borderRadius: 8,
-                    }}
-                  >
-                    <span style={{ fontSize: 12, color: "#0D0D0D", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {f.name}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={t("addTrade.removeFile")}
-                      title={t("addTrade.removeFile")}
-                      onClick={() => removeFile(f.name)}
-                      style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "#8E8E8E", display: "inline-flex", alignItems: "center", fontFamily: "var(--font-sans)" }}
-                    >
-                      <LucideX size={16} strokeWidth={2} />
-                    </button>
-                  </div>
-                ))}
+            {error && (
+              <div role="alert" style={{ padding: "12px 16px", background: T.redBg, borderRadius: 12, fontSize: 14, lineHeight: 1.5, color: T.red }}>
+                {error}
               </div>
             )}
-          </div>
-          {/* PREVIEW */}
-          {preview.length > 0 && (
-            <div style={{ paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
-              <label style={{ display: "block", fontSize: "10px", fontWeight: "700", color: T.textMut, marginBottom: "12px", textTransform: "uppercase" }}>
-                {t("addTrade.preview")} ({preview.length} {t("addTrade.previewTrades")})
-              </label>
-              <div style={{ overflowX: "auto", background: T.bg, borderRadius: "6px", padding: "12px" }}>
-                <table style={{ width: "100%", fontSize: "10px" }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <th style={{ padding: "8px", textAlign: "left", fontWeight: "600", color: T.textSub }}>Date</th>
-                      <th style={{ padding: "8px", textAlign: "left", fontWeight: "600", color: T.textSub }}>Symbol</th>
-                      <th style={{ padding: "8px", textAlign: "right", fontWeight: "600", color: T.textSub }}>Entry</th>
-                      <th style={{ padding: "8px", textAlign: "right", fontWeight: "600", color: T.textSub }}>Exit</th>
-                      <th style={{ padding: "8px", textAlign: "right", fontWeight: "600", color: T.textSub }}>P&L</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.map((trade, idx) => (
-                      <tr key={idx} style={{ borderBottom: `1px solid ${T.border}` }}>
-                        <td style={{ padding: "8px", color: T.textSub, fontSize: "10px" }}>{trade.date}</td>
-                        <td style={{ padding: "8px", color: T.textSub, fontWeight: "600" }}>{trade.symbol}</td>
-                        <td style={{ padding: "8px", textAlign: "right", color: T.textSub }}>{trade.entry?.toFixed(2)}</td>
-                        <td style={{ padding: "8px", textAlign: "right", color: T.textSub }}>{trade.exit?.toFixed(2)}</td>
-                        <td style={{ padding: "8px", textAlign: "right", color: trade.pnl >= 0 ? T.green : T.red, fontWeight: "600" }}>
-                          {trade.pnl >= 0 ? "+" : ""}{trade.pnl?.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {successMsg && (
+              <div role="status" style={{ padding: "12px 16px", background: T.greenBg, borderRadius: 12, fontSize: 14, lineHeight: 1.5, color: T.green }}>
+                {successMsg}
               </div>
+            )}
+
+            {/* Action principale en fin de parcours, à droite comme dans les
+                autres pages de la DA : pastille sombre quand elle est armée,
+                pastille blanche atténuée tant qu'il manque une étape. */}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              {(() => {
+                const ready = files.length > 0 && targetIds.length > 0 && !loading;
+                return (
+                  <button
+                    onClick={handleImport}
+                    disabled={!ready}
+                    style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      minHeight: 40, padding: "10px 20px", borderRadius: 999, border: "none",
+                      background: ready ? T.text : T.white,
+                      boxShadow: ready ? "none" : T.elevPill,
+                      color: ready ? T.textInverted : T.textMut,
+                      cursor: ready ? "pointer" : "not-allowed",
+                      fontSize: 14, fontWeight: 500, fontFamily: "var(--font-sans)",
+                      transition: "background 140ms var(--ease-out, ease), color 140ms var(--ease-out, ease)",
+                    }}
+                  >
+                    {loading ? t("addTrade.processing") : t("addTrade.importTrades")}
+                  </button>
+                );
+              })()}
             </div>
-          )}
-          {error && <div role="alert" style={{ padding: "12px", background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: "6px", fontSize: "12px", color: T.red, marginBottom: "16px" }}>{error}</div>}
-          {successMsg && <div role="status" style={{ padding: "12px", background: T.greenBg, border: `1px solid ${T.greenBd}`, borderRadius: "6px", fontSize: "12px", color: T.green, marginBottom: "16px" }}>{successMsg}</div>}
 
-          <button
-            onClick={handleImport}
-            disabled={files.length === 0 || targetIds.length === 0 || loading}
-            style={{
-              width: "100%",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              padding: "10px 18px",
-              borderRadius: 999,
-              background: files.length > 0 && targetIds.length > 0 && !loading ? T.text : "#FFFFFF",
-              color: files.length > 0 && targetIds.length > 0 && !loading ? "#FFFFFF" : T.textMut,
-              border: `1px solid ${files.length > 0 && targetIds.length > 0 && !loading ? T.text : T.border}`,
-              cursor: files.length > 0 && targetIds.length > 0 && !loading ? "pointer" : "not-allowed",
-              fontSize: 13,
-              fontWeight: 500,
-              opacity: files.length > 0 && targetIds.length > 0 && !loading ? 1 : 0.6,
-              transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
-              fontFamily: "var(--font-sans)",
-            }}
-          >
-            {loading ? t("addTrade.processing") : t("addTrade.importTrades")}
-          </button>
+            {/* STRATEGY FORM MODAL */}
+            {showStrategyForm && ReactDOM.createPortal(
+              <div onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <div onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:12,padding:40,maxWidth:600,width:"90%",maxHeight:"90vh",overflowY:"auto"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                    <h2 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)"}}>{t("addTrade.createStrategy")}</h2>
+                    <button aria-label={t("addTrade.closeAria")} onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{background:"transparent",border:"none",fontSize:24,cursor:"pointer",color:T.textMut}}>✕</button>
+                  </div>
 
-          {/* STRATEGY FORM MODAL */}
-          {showStrategyForm && ReactDOM.createPortal(
-            <div onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <div onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:12,padding:40,maxWidth:600,width:"90%",maxHeight:"90vh",overflowY:"auto"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-                  <h2 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)"}}>{t("addTrade.createStrategy")}</h2>
-                  <button aria-label={t("addTrade.closeAria")} onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{background:"transparent",border:"none",fontSize:24,cursor:"pointer",color:T.textMut}}>✕</button>
-                </div>
+                  <div style={{marginBottom:16}}>
+                    <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:6,color:T.textMut}}>{t("addTrade.strategyName")}</label>
+                    <input type="text" value={strategyFormData.name} onChange={(e)=>setStrategyFormData({...strategyFormData,name:e.target.value})} placeholder={t("addTrade.strategyNamePh")} style={{width:"100%",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,outline:"none"}}/>
+                  </div>
 
-                <div style={{marginBottom:16}}>
-                  <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:6,color:T.textMut}}>{t("addTrade.strategyName")}</label>
-                  <input type="text" value={strategyFormData.name} onChange={(e)=>setStrategyFormData({...strategyFormData,name:e.target.value})} placeholder={t("addTrade.strategyNamePh")} style={{width:"100%",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,outline:"none"}}/>
-                </div>
+                  <div style={{marginBottom:16}}>
+                    <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:6,color:T.textMut}}>{t("addTrade.strategyDesc")}</label>
+                    <textarea value={strategyFormData.description} onChange={(e)=>setStrategyFormData({...strategyFormData,description:e.target.value})} placeholder={t("addTrade.strategyDescPh")} style={{width:"100%",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,outline:"none",resize:"vertical",minHeight:60}}/>
+                  </div>
 
-                <div style={{marginBottom:16}}>
-                  <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:6,color:T.textMut}}>{t("addTrade.strategyDesc")}</label>
-                  <textarea value={strategyFormData.description} onChange={(e)=>setStrategyFormData({...strategyFormData,description:e.target.value})} placeholder={t("addTrade.strategyDescPh")} style={{width:"100%",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,outline:"none",resize:"vertical",minHeight:60}}/>
-                </div>
+                  <div style={{marginBottom:20}}>
+                    <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:8,color:T.textMut}}>{t("addTrade.strategyColor")}</label>
+                    <div style={{display:"flex",gap:8}}>
+                      {colors.map(color=>(
+                        <button key={color} aria-label={t("addTrade.colorAria").replace("{c}", color)} aria-pressed={strategyFormData.color===color} onClick={()=>setStrategyFormData({...strategyFormData,color})} style={{width:32,height:32,borderRadius:8,background:color,border:strategyFormData.color===color?`3px solid ${T.text}`:"2px solid #ddd",cursor:"pointer"}}/>
+                      ))}
+                    </div>
+                  </div>
 
-                <div style={{marginBottom:20}}>
-                  <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:8,color:T.textMut}}>{t("addTrade.strategyColor")}</label>
-                  <div style={{display:"flex",gap:8}}>
-                    {colors.map(color=>(
-                      <button key={color} aria-label={t("addTrade.colorAria").replace("{c}", color)} aria-pressed={strategyFormData.color===color} onClick={()=>setStrategyFormData({...strategyFormData,color})} style={{width:32,height:32,borderRadius:8,background:color,border:strategyFormData.color===color?`3px solid ${T.text}`:"2px solid #ddd",cursor:"pointer"}}/>
+                  <div style={{marginBottom:20}}>
+                    <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:8,color:T.textMut}}>{t("addTrade.ruleGroups")}</label>
+                    {strategyFormData.groups && strategyFormData.groups.map((group,gIdx)=>(
+                      <div key={group.id} style={{marginBottom:16,padding:12,border:`1px solid ${T.border}`,borderRadius:8,background:T.bg}}>
+                        <div style={{display:"flex",gap:8,marginBottom:12}}>
+                          <input type="text" placeholder={t("addTrade.groupName")} value={group.name} onChange={(e)=>updateGroup(group.id,"name",e.target.value)} style={{flex:1,padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:"none"}}/>
+                          {strategyFormData.groups.length > 1 && <button aria-label={t("addTrade.removeGroup")} onClick={()=>removeGroup(group.id)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:T.red}}>✕</button>}
+                        </div>
+
+                        <div style={{display:"flex",flexDirection:"column",gap:6,paddingLeft:20}}>
+                          {group.rules && group.rules.map((rule,rIdx)=>(
+                            <div key={rule.id} style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:10,color:T.textMut}}>•</span>
+                              <input type="text" placeholder={t("addTrade.rulePh")} value={rule.text} onChange={(e)=>updateRule(group.id,rule.id,e.target.value)} style={{flex:1,padding:"6px 10px",borderRadius:4,border:`1px solid ${T.border}`,fontSize:11,outline:"none"}}/>
+                              {group.rules.length > 1 && <button aria-label={t("addTrade.removeRule")} onClick={()=>removeRule(group.id,rule.id)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:12,color:T.red}}>✕</button>}
+                            </div>
+                          ))}
+                          <button onClick={()=>addRule(group.id)} style={{marginTop:4,fontSize:11,color:T.accent,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:0}}>{t("addTrade.addRule")}</button>
+                        </div>
+                      </div>
                     ))}
+                    <button onClick={addGroup} style={{marginTop:12,fontSize:12,color:T.accent,background:"transparent",border:`1px dashed ${T.accent}`,cursor:"pointer",padding:"8px 12px",borderRadius:6,width:"100%"}}>{t("addTrade.addGroup")}</button>
+                  </div>
+
+                  <div style={{display:"flex",gap:12,justifyContent:"flex-end",paddingTop:12,borderTop:`1px solid ${T.border}`}}>
+                    <button onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{padding:"10px 20px",borderRadius:6,border:`1px solid ${T.border}`,background:T.white,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("common.cancel")}</button>
+                    <button onClick={handleCreateStrategyFromForm} style={{padding:"10px 20px",borderRadius:6,border:`1px solid ${T.text}`,background:T.white,color:T.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("addTrade.createStrategyBtn")}</button>
                   </div>
                 </div>
+              </div>,
+              document.body
+            )}
+          </div>
 
-                <div style={{marginBottom:20}}>
-                  <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:8,color:T.textMut}}>{t("addTrade.ruleGroups")}</label>
-                  {strategyFormData.groups && strategyFormData.groups.map((group,gIdx)=>(
-                    <div key={group.id} style={{marginBottom:16,padding:12,border:`1px solid ${T.border}`,borderRadius:8,background:T.bg}}>
-                      <div style={{display:"flex",gap:8,marginBottom:12}}>
-                        <input type="text" placeholder={t("addTrade.groupName")} value={group.name} onChange={(e)=>updateGroup(group.id,"name",e.target.value)} style={{flex:1,padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:"none"}}/>
-                        {strategyFormData.groups.length > 1 && <button aria-label={t("addTrade.removeGroup")} onClick={()=>removeGroup(group.id)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:T.red}}>✕</button>}
-                      </div>
+          {/* ─── Marche à suivre du broker ───────────────────────────────────
+              Collante : le formulaire est plus long qu'elle, et la consigne doit
+              rester sous les yeux pendant qu'on l'exécute dans l'autre onglet. */}
+          <aside style={{ ...CARD, padding: 20, position: "sticky", top: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={brokerInfo.iconPath} alt="" style={{ width: 32, height: 32, objectFit: "contain", flexShrink: 0 }} />
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 500, lineHeight: "18.6px", color: T.text }}>{brokerInfo.name}</h3>
+            </div>
 
-                      <div style={{display:"flex",flexDirection:"column",gap:6,paddingLeft:20}}>
-                        {group.rules && group.rules.map((rule,rIdx)=>(
-                          <div key={rule.id} style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontSize:10,color:T.textMut}}>•</span>
-                            <input type="text" placeholder={t("addTrade.rulePh")} value={rule.text} onChange={(e)=>updateRule(group.id,rule.id,e.target.value)} style={{flex:1,padding:"6px 10px",borderRadius:4,border:`1px solid ${T.border}`,fontSize:11,outline:"none"}}/>
-                            {group.rules.length > 1 && <button aria-label={t("addTrade.removeRule")} onClick={()=>removeRule(group.id,rule.id)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:12,color:T.red}}>✕</button>}
-                          </div>
-                        ))}
-                        <button onClick={()=>addRule(group.id)} style={{marginTop:4,fontSize:11,color:T.accent,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:0}}>{t("addTrade.addRule")}</button>
-                      </div>
-                    </div>
-                  ))}
-                  <button onClick={addGroup} style={{marginTop:12,fontSize:12,color:T.accent,background:"transparent",border:`1px dashed ${T.accent}`,cursor:"pointer",padding:"8px 12px",borderRadius:6,width:"100%"}}>{t("addTrade.addGroup")}</button>
-                </div>
-
-                <div style={{display:"flex",gap:12,justifyContent:"flex-end",paddingTop:12,borderTop:`1px solid ${T.border}`}}>
-                  <button onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{padding:"10px 20px",borderRadius:6,border:`1px solid ${T.border}`,background:T.white,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("common.cancel")}</button>
-                  <button onClick={handleCreateStrategyFromForm} style={{padding:"10px 20px",borderRadius:6,border:`1px solid ${T.text}`,background:T.white,color:T.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("addTrade.createStrategyBtn")}</button>
-                </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 13, color: T.textSub }}>{t("addTrade.supportedAssets")}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {brokerInfo.subtext.replace("Types d'actifs supportés: ", "").split(", ").map((asset, idx) => (
+                  <span key={idx} style={{
+                    display: "inline-flex", alignItems: "center", padding: "4px 10px",
+                    borderRadius: 999, background: T.accentBg, fontSize: 12, color: T.textSub,
+                  }}>
+                    {asset}
+                  </span>
+                ))}
               </div>
-            </div>,
-            document.body
-          )}
-          </div>
-        </div>
+            </div>
 
-        {/* RIGHT: INSTRUCTIONS */}
-        <div style={{ display: "flex", flexDirection: "column", padding: "24px 28px 28px 32px", background: T.bg, borderLeft: `1px solid ${T.border}`, flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-            <img src={brokerInfo.iconPath} alt={brokerInfo.name} style={{ width: "32px", height: "32px", objectFit: "contain" }} />
-            <h3 style={{ fontSize: "14px", fontWeight: "700", color: T.text }}>{brokerInfo.name}</h3>
-          </div>
-          <div style={{ marginBottom: "16px" }}>
-            <p style={{ fontSize: "11px", color: T.textMut, marginBottom: "8px", fontWeight: "600" }}>{t("addTrade.supportedAssets")}</p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {brokerInfo.subtext.replace("Types d'actifs supportés: ", "").split(", ").map((asset, idx) => (
-                <div key={idx} style={{ display: "inline-block", padding: "4px 10px", background: T.white, borderRadius: "6px", fontSize: "10px", color: T.textSub, fontWeight: "600", border: `1px solid ${T.border}` }}>
-                  {asset}
+            {/* Étapes numérotées à la main plutôt qu'un <ol> : les libellés
+                portaient déjà « 1. », « 2. » dans les traductions, et la pastille
+                aligne les retours à la ligne sur le texte, pas sur le chiffre. */}
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 13, color: T.textSub }}>{t("addTrade.howToExport")}</div>
+              {brokerInfo.steps.map((step, idx) => (
+                <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <span aria-hidden="true" style={{
+                    width: 20, height: 20, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    background: T.accentBg, color: T.textSub, fontSize: 11, fontWeight: 500, lineHeight: 1,
+                  }}>
+                    {idx + 1}
+                  </span>
+                  <span style={{ fontSize: 13, color: T.textSub, lineHeight: 1.5, minWidth: 0 }}>
+                    {step.replace(/^\d+\. /, "")}
+                  </span>
                 </div>
               ))}
             </div>
-          </div>
-          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: "16px" }}>
-            <p style={{ fontSize: "10px", fontWeight: "700", color: T.textMut, marginBottom: "12px", textTransform: "uppercase" }}>{t("addTrade.howToExport")}</p>
-            <ol style={{ padding: "0 0 0 16px", margin: 0, listStyleType: "decimal" }}>
-              {brokerInfo.steps.map((step, idx) => (
-                <li key={idx} style={{ fontSize: "11px", color: T.textSub, marginBottom: "8px", lineHeight: "1.3" }}>
-                  {step.replace(/^\d+\. /, "")}
-                </li>
-              ))}
-            </ol>
-          </div>
-
+          </aside>
         </div>
       </div>
-      </div>
+    </div>
   );
 }
 

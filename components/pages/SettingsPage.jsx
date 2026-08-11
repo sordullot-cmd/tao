@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { refreshTradesCache } from "@/lib/tradesCache";
+import { deleteTradingAccount, notifyAccountsChanged } from "@/lib/propFirms";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { getLang, setLang as setLangPref, t, useLang } from "@/lib/i18n";
@@ -208,6 +209,28 @@ function SecondaryButton({ children, onClick, icon: Icon }) {
     >
       {Icon && <Icon size={14} strokeWidth={1.75} />}
       {children}
+    </button>
+  );
+}
+
+/** Bouton poubelle des listes de réglages (comptes, imports). */
+function DeleteIconButton({ ariaLabel, onClick, busy }) {
+  return (
+    <button
+      aria-label={ariaLabel}
+      onClick={onClick}
+      disabled={busy}
+      style={{
+        background: "transparent", border: "none",
+        cursor: busy ? "wait" : "pointer",
+        padding: 6, color: T.red, display: "inline-flex", alignItems: "center",
+        borderRadius: 6, transition: "background 120ms ease",
+        opacity: busy ? 0.5 : 1, flexShrink: 0,
+      }}
+      onMouseEnter={e => { if (!busy) e.currentTarget.style.background = T.redBg; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+    >
+      <Trash2 size={14} strokeWidth={1.75} />
     </button>
   );
 }
@@ -467,6 +490,7 @@ function AccountsSection({ setPage }) {
   const [accounts, setAccounts] = useState([]);
   const [firms, setFirms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -507,6 +531,35 @@ function AccountsSection({ setPage }) {
     if (k.includes("mt5") || k.includes("meta")) return "/MetaTrader_5.png";
     if (k.includes("wealth")) return "/weal.webp";
     return null;
+  };
+
+  // Suppression définitive : le compte ET ses trades. Pour ne retirer que les
+  // trades en gardant le compte, voir la section « Historique d'import ».
+  const handleDelete = async (acc) => {
+    if (!acc?.id) return;
+    const count = tradeCounts[acc.id] || 0;
+    const ok = window.confirm(
+      t("settings.accounts.confirmDelete").replace("{acc}", acc.name || "").replace("{n}", String(count))
+    );
+    if (!ok) return;
+    setDeletingId(acc.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error(t("settings.import.notAuth"));
+
+      await deleteTradingAccount(acc.id, user.id);
+
+      setAccounts((prev) => prev.filter((a) => a.id !== acc.id));
+      setTradeCounts((prev) => { const next = { ...prev }; delete next[acc.id]; return next; });
+
+      // Sans ça useTrades() rechargerait les trades supprimés depuis le cache.
+      await refreshTradesCache(user.id);
+    } catch (e) {
+      console.error("[SettingsAccounts] delete failed", e);
+      alert(t("settings.accounts.deleteFailed") + (e?.message || t("settings.import.errUnknown")));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -557,6 +610,11 @@ function AccountsSection({ setPage }) {
                   {acc.broker ? acc.broker.charAt(0).toUpperCase() + acc.broker.slice(1) : "—"} · {count} trade{count !== 1 ? "s" : ""}
                 </div>
               </div>
+              <DeleteIconButton
+                ariaLabel={t("settings.accounts.deleteAria")}
+                onClick={() => handleDelete(acc)}
+                busy={deletingId === acc.id}
+              />
             </div>
           );
         })
@@ -804,7 +862,9 @@ function ImportHistorySection() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error(t("settings.import.notAuth"));
 
-      // 1) Supprimer les trades rattachés à ce compte (= cet import)
+      // Supprimer uniquement les trades rattachés à ce compte (= cet import).
+      // Le compte est conservé : il reste utilisable pour un nouvel import.
+      // Pour supprimer le compte lui-même → Paramètres › Comptes de trading.
       const { error: tradesError } = await supabase
         .from("apex_trades")
         .delete()
@@ -812,21 +872,14 @@ function ImportHistorySection() {
         .eq("account_id", item.id);
       if (tradesError) throw tradesError;
 
-      // 2) Supprimer la ligne du compte pour que l'entrée disparaisse
-      //    définitivement de l'historique (sinon elle réapparaît à 0 trade)
-      const { error: accountError } = await supabase
-        .from("trading_accounts")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("id", item.id);
-      if (accountError) throw accountError;
-
+      // L'entrée disparaît de l'historique car un compte sans trade n'a plus
+      // d'import à montrer (voir le filtre au chargement).
       setHistory((prev) => prev.filter((h) => h.id !== item.id));
 
-      // 3) Re-synchroniser le cache localStorage + notifier toute l'app.
-      //    SANS ça, useTrades() recharge les trades supprimés depuis le cache.
+      // Re-synchroniser le cache localStorage + notifier toute l'app.
+      // SANS ça, useTrades() recharge les trades supprimés depuis le cache.
       await refreshTradesCache(user.id);
-      try { window.dispatchEvent(new CustomEvent("tr4de:accounts-changed")); } catch {}
+      notifyAccountsChanged();
     } catch (e) {
       console.error("[ImportHistory] delete failed", e);
       alert(t("settings.import.deleteFailed") + (e?.message || t("settings.import.errUnknown")));
@@ -845,9 +898,12 @@ function ImportHistorySection() {
         const items = [];
         for (const acc of accounts || []) {
           const { count } = await supabase.from("apex_trades").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("account_id", acc.id);
+          // Un compte sans trade n'a rien à montrer ici : c'est un compte, pas
+          // un import. Il reste visible/supprimable dans la section Comptes.
+          if (!count) continue;
           items.push({
             id: acc.id, name: "Orders.csv", account: acc.name, broker: acc.broker,
-            count: count || 0, date: acc.created_at,
+            count, date: acc.created_at,
           });
         }
         setHistory(items);
@@ -888,22 +944,11 @@ function ImportHistorySection() {
                 <span>{new Date(h.date).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })}</span>
               </div>
             </div>
-            <button
-              aria-label={t("settings.import.deleteAria")}
+            <DeleteIconButton
+              ariaLabel={t("settings.import.deleteAria")}
               onClick={() => handleDelete(h)}
-              disabled={deletingId === h.id}
-              style={{
-                background: "transparent", border: "none",
-                cursor: deletingId === h.id ? "wait" : "pointer",
-                padding: 6, color: T.red, display: "inline-flex", alignItems: "center",
-                borderRadius: 6, transition: "background 120ms ease",
-                opacity: deletingId === h.id ? 0.5 : 1,
-              }}
-              onMouseEnter={e => { if (deletingId !== h.id) e.currentTarget.style.background = T.redBg; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-            >
-              <Trash2 size={14} strokeWidth={1.75} />
-            </button>
+              busy={deletingId === h.id}
+            />
           </div>
         ))
       )}

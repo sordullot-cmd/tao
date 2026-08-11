@@ -13,9 +13,12 @@
   /* === NOUVELLE DA (maquette Figma « Tableau de bord ») ===
      Valeurs extraites des nodes Figma. Toujours passer par ces variables
      plutôt que par les hex : c'est ce qui fait suivre le thème sombre. */
-  /* Navigation : item actif violet pâle */
+  /* Navigation : item actif violet, items au repos gris soutenu.
+     `--color-nav-text` est le gris des items au repos : un cran à peine plus
+     soutenu que `--color-text-sub`, sans peser face à l'entrée active. */
   --color-nav-active-bg: rgba(156, 123, 255, 0.10);
   --color-nav-active-text: #9C7BFF;
+  --color-nav-text: #555555;
   /* Chiffres P&L — nuances plus sourdes que les couleurs status génériques */
   --color-pnl-pos: #008932;
   --color-pnl-neg: #B90707;
@@ -207,6 +210,9 @@
      dérivées, pas relevées. */
   --color-nav-active-bg: rgba(154, 123, 255, 0.16);
   --color-nav-active-text: #B9A3FF;
+  /* Sur fond sombre, « soutenu » veut dire plus CLAIR : c'est le contraste qui
+     compte, pas la valeur absolue. */
+  --color-nav-text: #999999;
   --color-pnl-pos: #34D399;
   --color-pnl-neg: #F87171;
   --color-num-muted: #5A5A5C;
@@ -1167,6 +1173,34 @@ img, canvas {
   .hide-narrow { display: none !important; }
 }
 
+/* === Poignée de réordonnancement des colonnes (page Trades) ===
+   Invisible au repos, révélée au survol de son en-tête. Elle vit dans la
+   gouttière entre deux colonnes : la montrer en permanence encombrait la ligne
+   de titres, et la loger dans le padding la faisait chevaucher le libellé. */
+.tr4de-col-grip {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+}
+th:hover > .tr4de-col-grip { opacity: 0.55; }
+
+/* Barre de records de haut de page (Stratégies) : quatre colonnes espacées.
+   Sous 720 px elles passent en 2×2, avec un écart resserré ; sous 420 px, une
+   par ligne. */
+@media (max-width: 720px) {
+  .tr4de-kpi-cards { gap: 20px 32px !important; }
+  .tr4de-kpi-cards > * { flex: 1 1 calc(50% - 32px) !important; }
+  /* Le bouton de création partage la rangée : en 2x2 il reprend sa taille
+     naturelle et son décalage de calage disparaît. */
+  .tr4de-kpi-cards > button:last-child {
+    flex: 0 0 auto !important;
+    margin-top: 0 !important;
+  }
+}
+@media (max-width: 420px) {
+  .tr4de-kpi-cards > * { flex: 1 1 100% !important; }
+}
+
 /* === Icônes non cliquables DANS un bouton ===
    Un clic au centre d'un bouton tombe sur son icône, pas sur le bouton. Quand
    un gestionnaire teste la cible — ou quand l'icône est un SVG posé au milieu
@@ -1390,6 +1424,28 @@ button img,
 }
 @media (max-width: 700px) {
   .tr4de-cal-year { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* Tao Score : radar + catégories côte à côte en desktop, empilés dès que la
+   colonne des catégories ne peut plus tenir ses quatre colonnes de chiffres. */
+@media (max-width: 1023px) {
+  .tr4de-dash-score { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* Journal : notes à gauche / trades à droite, empilés quand la liste de trades
+   n'a plus la place de tenir ses colonnes à côté de la zone de notes. */
+@media (max-width: 1023px) {
+  .tr4de-journal-day { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* Import de trades : formulaire à gauche, marche à suivre du broker à droite.
+   La colonne d'instructions passe SOUS le formulaire dès qu'elle ne peut plus
+   tenir ses 340 px sans écraser les cases de comptes (deux par rangée au
+   minimum). Elle perd alors son ancrage collant — elle n'a plus rien à côté de
+   quoi rester visible. */
+@media (max-width: 1023px) {
+  .tr4de-import-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .tr4de-import-grid > aside { position: static !important; }
 }
 
 /* ============================================================

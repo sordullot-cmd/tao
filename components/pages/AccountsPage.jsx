@@ -2,7 +2,7 @@
 
 import React from "react";
 import { T } from "@/lib/ui/tokens";
-import { CARD, SectionTitle, downsampleLTTB, sparklineBudget } from "@/components/ui/da";
+import { CARD, SectionTitle, HeroAmount, downsampleLTTB, sparklineBudget } from "@/components/ui/da";
 import { accountBrandColor } from "@/lib/ui/brandColors";
 import {
   AccountRowsHeader, TableRow, SubRow, RoundLogo, PassFundedButton,
@@ -611,70 +611,86 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
         document.body
       )}
 
-      {/* Barre d'en-tête : actions de création (firme / compte). La maquette ne
-          montre pas ces boutons, mais ce sont les deux parcours de création. */}
+      {/* Emplacement des contrôles injectés par la barre du haut (sélecteur de
+          comptes). Les actions de création, elles, vivent désormais sur la
+          ligne du chiffre héros. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-        <button
-          type="button"
-          onClick={() => setCreatingAccount({ firmId: "" })}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "7px 14px", borderRadius: 999, border: "none",
-            background: T.white, boxShadow: T.elevPill, color: T.text,
-            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >
-          <Plus size={13} strokeWidth={1.75} /> {t("accountsPage.newAccount")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setCreatingFirm(true)}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "7px 14px", borderRadius: 999, border: "none",
-            background: T.text, color: TEXT_INVERTED,
-            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >
-          <Building2 size={13} strokeWidth={1.75} /> {t("firms.newFirm")}
-        </button>
       </div>
 
       {/* Corps de page : blocs séparés de 36 px (maquette « Frame 94 »). */}
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
 
         {/* ─── Bandeau de KPI (5 tuiles égales, gap 12) ─── */}
-        {/* Une seule barre plutôt que cinq cartes : les totaux sont un
-            en-tête de lecture, pas le sujet de la page. Condensés sur une
-            ligne, ils rendent près de 90 px de hauteur à la liste des comptes,
-            qui est ce qu'on vient consulter. */}
-        <div className="tr4de-accounts-kpis" style={{
-          ...CARD, padding: "12px 20px",
-          display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 8,
-        }}>
-          {[
-            { key: "accounts", value: String(totals.accounts), label: t("accountsPage.barAccounts") },
-            { key: "capital", value: totals.capital > 0 ? fmtNoCents(totals.capital) : "—", label: t("accountsPage.barCapital") },
-            { key: "trades", value: String(totals.trades), label: t("accountsPage.barTrades") },
-            { key: "pnl", value: fmt(totals.pnl, true), label: "P&L", color: totals.pnl > 0 ? T.pnlPos : totals.pnl < 0 ? T.pnlNeg : undefined },
-            { key: "wr", value: totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—", label: t("accountsPage.barWinrate") },
-          ].map((item, i) => (
-            <React.Fragment key={item.key}>
-              {i > 0 && (
-                <span aria-hidden className="tr4de-kpi-sep" style={{
-                  width: 1, alignSelf: "stretch", minHeight: 18,
-                  background: T.border, margin: "0 20px", flexShrink: 0,
-                }} />
-              )}
-              <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
-                <span style={{ fontSize: 16, fontWeight: 500, color: item.color || T.text, whiteSpace: "nowrap" }}>
-                  {item.value}
+        {/* Totaux posés à même le fond, sans carte : même construction que
+            l'en-tête d'une fiche de compte — le montant en tête, puis une
+            ligne de repères. Les cinq cartes d'avant donnaient à des totaux le
+            même poids visuel qu'aux comptes eux-mêmes, qui sont le sujet. */}
+        <div className="tr4de-accounts-kpis" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Même construction que le chiffre héros du dashboard : libellé
+              au-dessus, montant en 40 px, variation en montant PUIS en
+              pourcentage — les deux pages doivent se lire de la même façon. */}
+          {/* Les actions de création partagent la ligne du chiffre héros —
+              comme les pastilles de période sur le dashboard. Elles s'alignent
+              sur le libellé, pas sur le montant : c'est la première ligne du
+              bloc qui donne le repère horizontal. */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>
+                {t("accountsPage.totalValue")}
+              </div>
+              {/* Pas de ligne de variation sous le montant : le P&L ouvre la
+                  rangée de repères juste en dessous, l'afficher deux fois de
+                  suite n'apporterait rien. */}
+              <HeroAmount value={totals.capital > 0 ? totals.capital + totals.pnl : totals.pnl} />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setCreatingAccount({ firmId: "" })}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 999, border: "none",
+                  background: T.white, boxShadow: T.elevPill, color: T.text,
+                  fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                <Plus size={13} strokeWidth={1.75} /> {t("accountsPage.newAccount")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreatingFirm(true)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 999, border: "none",
+                  background: T.text, color: TEXT_INVERTED,
+                  fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                <Building2 size={13} strokeWidth={1.75} /> {t("firms.newFirm")}
+              </button>
+            </div>
+          </div>
+
+          {/* Ordre de lecture : la performance d'abord (P&L, winrate), les
+              volumes ensuite (capital, comptes, trades). */}
+          <div style={{ display: "flex", alignItems: "center", gap: 56, flexWrap: "wrap", rowGap: 20 }}>
+            {[
+              { label: "P&L", value: fmt(totals.pnl, true), color: totals.pnl > 0 ? T.pnlPos : totals.pnl < 0 ? T.pnlNeg : undefined },
+              { label: t("accountsPage.colWinrate"), value: totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—" },
+              { label: t("accountsPage.capitalShort"), value: totals.capital > 0 ? fmtNoCents(totals.capital) : "—" },
+              { label: t("accountsPage.kpiAccounts"), value: String(totals.accounts) },
+              { label: t("common.trades"), value: String(totals.trades) },
+            ].map((k) => (
+              <div key={k.label} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                <span style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, whiteSpace: "nowrap" }}>{k.label}</span>
+                <span style={{ fontSize: 20, fontWeight: 500, lineHeight: 1, color: k.color || T.text, whiteSpace: "nowrap" }}>
+                  {k.value}
                 </span>
-                <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap" }}>{item.label}</span>
-              </span>
-            </React.Fragment>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ─── Les plus actifs : 3 cartes, comptes de prop firm ou non ─── */}
@@ -1132,18 +1148,16 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
         );
       })()}
 
-      {/* Repli mobile / tablette des cartes Live et de la barre de totaux :
-          celle-ci passe à la ligne d'elle-même (flex-wrap), on resserre juste
-          ses séparateurs pour qu'elle tienne sur deux lignes au lieu de cinq. */}
+      {/* Repli mobile / tablette des cartes Live. Les repères de l'en-tête
+          passent à la ligne d'eux-mêmes (flex-wrap) ; on resserre seulement
+          leur espacement pour qu'ils tiennent sur deux lignes. */}
       <style>{`
         @media (max-width: 1100px) {
           .tr4de-accounts-live { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-          .tr4de-accounts-kpis .tr4de-kpi-sep { margin: 0 12px !important; }
         }
         @media (max-width: 720px) {
           .tr4de-accounts-live { grid-template-columns: minmax(0, 1fr) !important; }
-          .tr4de-accounts-kpis { padding: 12px 16px !important; }
-          .tr4de-accounts-kpis .tr4de-kpi-sep { margin: 0 10px !important; }
+          .tr4de-accounts-kpis > div:last-child { gap: 18px !important; row-gap: 12px !important; }
         }
       `}</style>
     </div>
