@@ -57,6 +57,11 @@ export interface SidebarProps {
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
 
+  /** Largeur réelle mesurée, remontée à chaque changement : la barre s'adapte
+   *  désormais à son libellé le plus long, la coquille ne peut donc plus la
+   *  déduire d'une constante. */
+  onWidthChange?: (width: number) => void;
+
   /** Mobile overlay: quand true, la sidebar est visible en overlay (≤1024px) */
   mobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -67,9 +72,25 @@ export default function Sidebar(props: SidebarProps) {
     sections, activeId, onSelect, user, onUserMenu, onProfile, onSettings, onDarkMode, onLogout,
     collapsed = false, onToggleCollapsed,
     mobileOpen = false, onMobileClose,
+    onWidthChange,
   } = props;
 
   useLang(); // re-render sidebar on language change
+
+  /* La barre se dimensionne sur son libellé le plus long : sa largeur n'est
+     plus une constante que la coquille pourrait recopier. On la mesure et on la
+     remonte, pour que le contenu de page décale d'exactement ce qu'elle occupe. */
+  const asideRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = asideRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const emit = () => onWidthChange?.(Math.round(el.getBoundingClientRect().width));
+    emit();
+    const ro = new ResizeObserver(emit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onWidthChange, collapsed]);
+
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userRef = useRef<HTMLDivElement>(null);
   const userBtnRef = useRef<HTMLButtonElement>(null);
@@ -119,11 +140,16 @@ export default function Sidebar(props: SidebarProps) {
       <div className="tr4de-sidebar-backdrop" onClick={onMobileClose} />
     )}
     <aside
+      ref={asideRef}
       className={`tr4de-sidebar ${mobileOpen ? "is-open" : ""}`}
       style={{
-        // DA Figma : carte blanche flottante (220 px) posée sur le fond de page,
-        // avec une gouttière de 12 px à gauche / en haut / en bas.
-        width: collapsed ? 56 : 220,
+        // Carte blanche flottante posée sur le fond de page, gouttière de 12 px
+        // à gauche / en haut / en bas. Sa largeur suit son contenu : elle
+        // s'arrête juste après le libellé le plus long, entre deux bornes qui
+        // évitent une barre ridicule ou envahissante.
+        width: collapsed ? 56 : "fit-content",
+        minWidth: collapsed ? undefined : 168,
+        maxWidth: collapsed ? undefined : 260,
         flexShrink: 0,
         background: "var(--color-card-bg, #FFFFFF)",
         borderRadius: 12,
@@ -131,8 +157,17 @@ export default function Sidebar(props: SidebarProps) {
         margin: "12px 0 12px 12px",
         display: "flex",
         flexDirection: "column",
-        position: "sticky",
-        top: 12,
+        /* Surcouche fixe plutôt qu'élément du flux : la zone de contenu occupe
+           alors TOUTE la largeur de la fenêtre, ce qui permet à un bloc pleine
+           largeur (la courbe des graphiques) de filer jusqu'au premier pixel et
+           de passer DERRIÈRE cette barre. La place qu'elle occupait est rendue
+           par le padding gauche du conteneur de contenu (cf. --shell-left).
+           `left/top: 0` + les marges de 12 px reproduisent exactement la
+           position d'avant, et rejoignent les règles mobiles de globals.css. */
+        position: "fixed",
+        left: 0,
+        top: 0,
+        zIndex: 30,
         height: "calc(100dvh - 24px)",
         transition: "width 180ms var(--ease-out), transform .22s var(--ease-drawer)",
         fontFamily: "var(--font-sans)",
@@ -214,24 +249,31 @@ export default function Sidebar(props: SidebarProps) {
                   style={{
                     width: "100%", display: "flex", alignItems: "center",
                     gap: collapsed ? 0 : 10, justifyContent: collapsed ? "center" : "flex-start",
-                    padding: collapsed ? "8px 0" : "8px 10px 8px 15px",
-                    borderRadius: "var(--radius-field)", border: "none",
-                    // DA Figma : l'item actif est une pastille violet pâle,
-                    // texte + icône en violet. Pas de passage en gras.
-                    background: active ? "var(--color-nav-active-bg)" : "transparent",
-                    color: active ? "var(--color-nav-active-text)" : "var(--color-text)",
+                    padding: collapsed ? "8px 0" : "8px 14px",
+                    // Ovale : le survol dessine une pilule, pas un rectangle aux
+                    // coins arrondis.
+                    borderRadius: 999, border: "none",
+                    /* La page active ne porte plus de pastille de fond : elle est
+                       simplement écrite dans la couleur du site. Le fond reste
+                       donc libre pour le seul survol, et un seul signal —  la
+                       couleur — désigne la page courante. */
+                    background: "transparent",
+                    color: active ? "var(--color-nav-active-text)" : "var(--color-text-sub)",
                     fontSize: 13, lineHeight: "20.15px",
-                    fontWeight: 400, cursor: "pointer", fontFamily: "inherit",
+                    // Gras : libellé ET icône (via strokeWidth) ont le même poids.
+                    fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                     transition: "background 150ms cubic-bezier(0.23,1,0.32,1), color 150ms cubic-bezier(0.23,1,0.32,1), padding 200ms cubic-bezier(0.23,1,0.32,1)",
                     position: "relative",
                   }}
-                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = "var(--color-hover-bg)"; }}
-                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "var(--color-hover-bg)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                 >
-                  <Icon size={18} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                  <Icon size={18} strokeWidth={2.5} style={{ flexShrink: 0 }} />
                   {!collapsed && (
                     <>
-                      <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
+                      {/* `nowrap` : c'est le libellé le plus long qui fixe la
+                          largeur de la barre — il ne doit jamais se replier. */}
+                      <span style={{ flex: 1, textAlign: "left", whiteSpace: "nowrap" }}>{item.label}</span>
                       {item.badge != null && item.badge > 0 && (
                         <span style={{
                           padding: "1px 7px", borderRadius: 999, background: "var(--color-text)",

@@ -10,6 +10,7 @@ import { t, useLang } from "@/lib/i18n";
 import { useStrategies } from "@/lib/hooks/useUserData";
 import { useTrades } from "@/lib/hooks/useTradeData";
 import { useUndo } from "@/lib/contexts/UndoContext";
+import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 
 /* ─── TOKENS (palette monochrome partagée, dark-aware) ─────────────── */
@@ -533,7 +534,9 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               const areaPath = data.length === 0
                 ? ""
                 : `${linePath} L ${xFor(data.length - 1).toFixed(1)} ${baselineY} L ${xFor(0).toFixed(1)} ${baselineY} Z`;
-              const gradientId = `strat-grad-${strategy.id}`;
+              // Id des <defs> de l'aire tramée : un par stratégie, sinon toutes
+              // les cartes partageraient la trame de la première.
+              const gradientId = `strat-area-${strategy.id}`;
 
               const fmtD = (d) => {
                 if (!d) return "";
@@ -546,13 +549,11 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               return (
                 <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",overflow:"visible",aspectRatio:`${W} / ${H}`}}>
                   <defs>
-                    <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={lineColor} stopOpacity="0.28" />
-                      <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-                    </linearGradient>
+                    <AreaDotsDefs id={gradientId} color={lineColor} top={padT} bottom={baselineY} width={W} height={H} />
                   </defs>
-                  {/* Surface dégradée sous la courbe */}
-                  <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
+                  {/* Surface tramée sous la courbe — trame commune à tous les
+                      graphiques du site, aux couleurs de la courbe. */}
+                  <path d={areaPath} {...areaDotsFill(gradientId)} stroke="none" />
                   {/* Courbe par-dessus */}
                   <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>

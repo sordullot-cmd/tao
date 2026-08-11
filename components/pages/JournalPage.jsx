@@ -5,6 +5,7 @@ import { Download, BookOpen } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
+import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { rMultiple, fmtR, getCurrencySymbol } from "@/lib/userPrefs";
 import { computeTradeNote } from "@/lib/tradeNote";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
@@ -111,13 +112,20 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
                   <div style={{ flex: 1, minHeight: 84, margin: "12px -4px 14px" }}>
                     {sparklineData.length > 0 && (
                       <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", height: "100%" }}>
+                        {/* Aire tramée — même trame que les grands graphiques du
+                            site, resserrée : le viewBox du sparkline ne compte
+                            que 110 × 36 unités, où le pas commun ferait des
+                            points énormes. */}
                         <defs>
-                          <linearGradient id={`jgrad-${dateStr}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor={sparkColor} stopOpacity="0.45" />
-                            <stop offset="100%" stopColor={sparkColor} stopOpacity="0.04" />
-                          </linearGradient>
+                          <AreaDotsDefs
+                            id={`jarea-${dateStr}`} color={sparkColor}
+                            bottom={h} width={w} height={h} step={3} r={0.4}
+                          />
                         </defs>
-                        <path d={`M ${points.split(" ")[0]} L ${points} L ${w},${fillBaseY} L 0,${fillBaseY} Z`} fill={`url(#jgrad-${dateStr})`} />
+                        <path
+                          d={`M ${points.split(" ")[0]} L ${points} L ${w},${fillBaseY} L 0,${fillBaseY} Z`}
+                          {...areaDotsFill(`jarea-${dateStr}`)}
+                        />
                         <polyline points={points} fill="none" stroke={sparkColor} strokeWidth="1.75" vectorEffect="non-scaling-stroke" />
                       </svg>
                     )}

@@ -22,6 +22,7 @@ import {
   Database,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { refreshTradesCache } from "@/lib/tradesCache";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { getLang, setLang as setLangPref, t, useLang } from "@/lib/i18n";
@@ -784,32 +785,6 @@ function SectionLabel({ children, mt }) {
 
 /* =================== IMPORT HISTORY =================== */
 
-/**
- * Re-synchronise le cache local des trades après une mutation (suppression, import…).
- * C'est `localStorage.tr4de_trades` qui alimente le hook useTrades() dans toute l'app :
- * sans cette mise à jour + l'événement `trades-refreshed`, l'UI continue d'afficher
- * les trades supprimés jusqu'à un rechargement complet de la page.
- */
-async function refreshTradesCache(supabase, userId) {
-  try {
-    const { data, error } = await supabase
-      .from("apex_trades")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    const fresh = data || [];
-    try { localStorage.setItem("tr4de_trades", JSON.stringify(fresh)); } catch {}
-    try {
-      window.dispatchEvent(new CustomEvent("trades-refreshed", { detail: { trades: fresh } }));
-    } catch {}
-    return fresh;
-  } catch (e) {
-    console.error("[refreshTradesCache] failed", e);
-    return null;
-  }
-}
-
 function ImportHistorySection() {
   useLang();
   const [history, setHistory] = useState([]);
@@ -850,7 +825,7 @@ function ImportHistorySection() {
 
       // 3) Re-synchroniser le cache localStorage + notifier toute l'app.
       //    SANS ça, useTrades() recharge les trades supprimés depuis le cache.
-      await refreshTradesCache(supabase, user.id);
+      await refreshTradesCache(user.id);
       try { window.dispatchEvent(new CustomEvent("tr4de:accounts-changed")); } catch {}
     } catch (e) {
       console.error("[ImportHistory] delete failed", e);
@@ -1038,7 +1013,7 @@ function DataExportSection() {
         }
       }
 
-      await refreshTradesCache(supabase, user.id);
+      await refreshTradesCache(user.id);
       try { window.dispatchEvent(new CustomEvent("tr4de:accounts-changed")); } catch {}
 
       setMsg({ kind: "success", text: t("settings.data.importDone").replace("{n}", String(inserted)) });

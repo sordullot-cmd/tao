@@ -7,6 +7,7 @@ import { withNetPnl } from "@/lib/tradeFees";
 import TradesPage from "@/components/pages/TradesPage";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import { t, useLang } from "@/lib/i18n";
+import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 
 /* ─── TOKENS (palette monochrome partagée, dark-aware) ─────────────── */
@@ -778,13 +779,6 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
           yTicks.push({ y: padT + plotH * ratio, value: v });
         }
 
-        // X-axis labels — toutes les dates
-        const xLabels = allDates.map((d, i) => ({
-          i,
-          date: d,
-          anchor: i === 0 ? "start" : i === allDates.length - 1 ? "end" : "middle",
-        }));
-
         return (
           <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"0 0 var(--radius-card) var(--radius-card)",overflow:"visible",marginTop:-24,position:"relative",zIndex:1}}>
             <div style={{padding:"16px 20px"}}>
@@ -809,8 +803,9 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                   })}
               </div>
 
-              {/* Chart — padding constant 12px de chaque côté */}
-              <div style={{padding:12, position:"relative"}}>
+              {/* Chart — la courbe touche le bord gauche de la carte (le padding
+                  n'est repris qu'à droite, où les libellés de valeur respirent). */}
+              <div style={{padding:"12px 12px 12px 0", position:"relative"}}>
                 <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",overflow:"visible",aspectRatio:`${W} / ${H}`}}>
                   {/* Y labels (colonne à droite, alignés verticalement sur chaque tick) */}
                   {yTicks.map((tk, i) => (
@@ -831,25 +826,19 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                     const lastX = xFor(s.filled.length - 1).toFixed(1);
                     const firstX = xFor(0).toFixed(1);
                     const areaPath = `${path} L ${lastX} ${baselineY.toFixed(1)} L ${firstX} ${baselineY.toFixed(1)} Z`;
-                    const gradId = `strat-grad-${s.strategy.id}`;
+                    const areaId = `strat-area-${s.strategy.id}`;
                     return (
                       <g key={s.strategy.id}>
+                        {/* Aire tramée — trame commune à tous les graphiques du
+                            site, à la couleur de la stratégie. */}
                         <defs>
-                          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={s.strategy.color} stopOpacity="0.22"/>
-                            <stop offset="100%" stopColor={s.strategy.color} stopOpacity="0"/>
-                          </linearGradient>
+                          <AreaDotsDefs id={areaId} color={s.strategy.color} bottom={baselineY} width={W} height={H} />
                         </defs>
-                        <path d={areaPath} fill={`url(#${gradId})`} stroke="none"/>
+                        <path d={areaPath} {...areaDotsFill(areaId)} stroke="none"/>
                         <path d={path} fill="none" stroke={s.strategy.color} strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
                       </g>
                     );
                   })}
-
-                  {/* X-axis labels — premier collé à gauche, dernier collé à droite */}
-                  {xLabels.map((x, i) => (
-                    <text key={i} x={xFor(x.i)} y={H - 5} fill={T.textMut} fontSize="6" textAnchor={x.anchor}>{fmtD(x.date)}</text>
-                  ))}
 
                   {/* Vertical hover indicator */}
                   {hoveredDayIdx !== null && allDates[hoveredDayIdx] && (

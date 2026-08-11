@@ -33,6 +33,16 @@
   --color-cal-pos-text: #06700D;
   --color-cal-neg-bg: rgba(255, 0, 4, 0.20);
   --color-cal-neg-text: #D30004;
+  /* Grandes cellules de la page Calendrier : l'aplat y couvre 20 fois plus de
+     surface que la pastille du tableau de bord, d'où une teinte bien plus
+     diluée. S'y ajoutent l'encre du numéro de jour et celle du sous-titre. */
+  --color-cal-pos-surface: rgba(0, 255, 106, 0.05);
+  --color-cal-neg-surface: rgba(255, 0, 4, 0.05);
+  --color-cal-pos-day: rgba(10, 54, 13, 0.51);
+  --color-cal-neg-day: rgba(95, 8, 9, 0.51);
+  --color-cal-pos-sub: #06590C;
+  /* Piste grise d'un sélecteur segmenté (Mois / Année) */
+  --color-segment-track: rgba(28, 31, 33, 0.05);
   /* Ligne de tableau mise en avant */
   --color-row-highlight: rgba(13, 13, 13, 0.04);
   /* Ombre des cartes de la nouvelle DA (très douce, pas de bordure) */
@@ -90,6 +100,9 @@
   --color-amber-bd: #FED7AA;
   --color-blue-bg:  #EFF6FF;
   --color-blue-bd:  #BFDBFE;
+  /* Violet : le seul type de compte (démo) qui n'avait pas son tint. */
+  --color-purple-bg: #F5F3FF;
+  --color-purple-bd: #DDD6FE;
 
   /* Typo — Outfit est la police de la nouvelle DA ; OpenAI Sans reste en
      repli le temps que la Google Font se charge. */
@@ -182,7 +195,11 @@
   --color-red-bg:   #3A1E1E;
   --color-red-bd:   #7A2D2D;
   --color-amber-bg: #332818;
+  --color-amber-bd: #7A5A20;
   --color-blue-bg:  #1E2A3D;
+  --color-blue-bd:  #2D4A7A;
+  --color-purple-bg: #292040;
+  --color-purple-bd: #4C3A7A;
 
   /* === NOUVELLE DA — déclinaison sombre ===
      Mêmes rôles qu'en clair, teintes remontées pour rester lisibles sur fond
@@ -203,6 +220,12 @@
   --color-cal-pos-text: #4ADE80;
   --color-cal-neg-bg: rgba(255, 0, 4, 0.16);
   --color-cal-neg-text: #FF7B7E;
+  --color-cal-pos-surface: rgba(0, 255, 106, 0.07);
+  --color-cal-neg-surface: rgba(255, 0, 4, 0.09);
+  --color-cal-pos-day: rgba(167, 243, 190, 0.55);
+  --color-cal-neg-day: rgba(255, 183, 185, 0.55);
+  --color-cal-pos-sub: #4ADE80;
+  --color-segment-track: rgba(255, 255, 255, 0.06);
   --color-row-highlight: rgba(255, 255, 255, 0.05);
   --elev-card: 0 0 0 1px rgba(255, 255, 255, 0.05);
   --elev-pill: 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -690,6 +713,21 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
 }
 .anim-fade-in { animation: fadeIn 200ms var(--ease-out) both; }
 
+/* Popover / menu déroulant : l'entrée part du déclencheur (coin haut-gauche)
+   plutôt que du centre de l'écran — c'est ce qui donne la continuité spatiale
+   « ce panneau sort de ce bouton ». transform + opacity uniquement. */
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.anim-pop {
+  animation: popIn 160ms var(--ease-out) both;
+  transform-origin: top left;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-pop { animation: fadeIn 140ms ease both; }
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -999,6 +1037,9 @@ img, canvas {
 
 /* Tablet (<1024px) */
 @media (max-width: 1023px) {
+  /* La barre latérale devient un tiroir : elle ne réserve plus de place, donc
+     le contenu ne compense plus rien à gauche. */
+  .tr4de-root { --shell-left: 0px; }
   /* Sidebar passe en overlay sur mobile */
   .tr4de-sidebar {
     position: fixed !important;
@@ -1024,7 +1065,12 @@ img, canvas {
   }
   /* Contenu principal : pleine largeur */
   .tr4de-main { margin-left: 0 !important; padding-left: 16px !important; padding-right: 16px !important; }
-  .tr4de-topbar { padding-left: 12px !important; padding-right: 12px !important; }
+  /* Le hamburger réapparaît ici : la topbar reprend sa hauteur, que les pages
+     de la DA annulent en desktop (padding vertical inline à 0). */
+  .tr4de-topbar {
+    padding-left: 12px !important; padding-right: 12px !important;
+    padding-top: 10px !important; padding-bottom: 10px !important;
+  }
 
   /* Grilles 2 colonnes (1.2fr/1fr, 2fr/1fr, etc.) → 1 colonne */
   [style*="grid-template-columns: 1.2fr 1fr"],
@@ -1115,6 +1161,35 @@ img, canvas {
 @media (max-width: 767px) {
   .hide-mobile { display: none !important; }
 }
+/* Hide helper (fenêtres étroites) : pour les listes à colonnes dont les
+   dernières colonnes deviennent trop serrées avant même le seuil mobile. */
+@media (max-width: 1279px) {
+  .hide-narrow { display: none !important; }
+}
+
+/* === Icônes non cliquables DANS un bouton ===
+   Un clic au centre d'un bouton tombe sur son icône, pas sur le bouton. Quand
+   un gestionnaire teste la cible — ou quand l'icône est un SVG posé au milieu
+   exact de la zone —, seule la couronne autour de l'icône réagissait : le
+   bouton « marchait aux extrémités » seulement. On rend donc les icônes
+   transparentes au pointeur : l'événement atteint toujours le bouton. */
+button svg,
+button img,
+[role="button"] svg,
+[role="button"] img {
+  pointer-events: none;
+}
+
+/* Gouttières de page : la gauche est plus large que la droite en desktop pour
+   décoller le contenu de la barre latérale. Sur mobile la barre passe en
+   overlay et l'écran est étroit — les deux côtés reviennent à 16 px.
+   `!important` parce que les variables sont posées en style inline. */
+@media (max-width: 767px) {
+  .tr4de-main .scroll-thin {
+    --page-gutter: 16px !important;
+    --page-gutter-left: 16px !important;
+  }
+}
 @media (min-width: 1024px) {
   /* Sur desktop, le bouton de collapse interne du Sidebar prend le relais */
   .tr4de-hamburger { display: none !important; }
@@ -1159,8 +1234,8 @@ img, canvas {
   /* Settings : sidebar + contenu → stack */
   .tr4de-settings-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
 
-  /* Calendar : 3 mois par ligne → 1 mois par ligne sur mobile */
-  .tr4de-cal-year-grid { grid-template-columns: 1fr !important; }
+  /* Calendrier : l'en-tête (période + navigation) s'empile */
+  .tr4de-cal-head { align-items: flex-start !important; }
 
   /* Agenda Google : grille mois + panneau latéral → empilés sur mobile */
   .tr4de-agenda-grid { grid-template-columns: 1fr !important; }
@@ -1300,9 +1375,21 @@ img, canvas {
   }
 }
 
-/* Tablet (>=480 et <768) : 2 mois par ligne */
-@media (min-width: 480px) and (max-width: 767px) {
-  .tr4de-cal-year-grid { grid-template-columns: 1fr 1fr !important; }
+/* Calendrier : sous 900 px, la grille du mois défile horizontalement plutôt
+   que d'écraser sept colonnes jusqu'à l'illisible. La largeur plancher garde
+   des cellules capables d'afficher « +$1,158 » sans le tronquer. */
+@media (max-width: 900px) {
+  .tr4de-cal-inner { min-width: 700px; }
+}
+
+/* Calendrier, vue « Mois » : trois mini-calendriers par rangée en desktop, deux
+   en tablette, un en mobile — sous 320 px de large, les cases de jour tombent
+   à 30 px et les chiffres se chevauchent. */
+@media (max-width: 1100px) {
+  .tr4de-cal-year { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 700px) {
+  .tr4de-cal-year { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* ============================================================

@@ -6,6 +6,7 @@ import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { useApp } from "@/lib/contexts/AppContext";
 import { backtest, compareBacktests } from "@/lib/backtest/engine";
+import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { Skeleton } from "@/components/ui/Skeleton";
 import HoursHeatmap from "@/components/HoursHeatmap";
 import EquityByAccount from "@/components/EquityByAccount";
@@ -22,7 +23,9 @@ import EquityByAccount from "@/components/EquityByAccount";
  * avec Supabase trade_strategies via DashboardNew).
  */
 
-export default function BacktestPage() {
+/** `firms` ne sert qu'aux couleurs du graphique d'équité : un compte doit y
+ *  porter la teinte de sa prop firm, pas celle de sa plateforme d'exécution. */
+export default function BacktestPage({ firms = [] }) {
   // tradesByAccount = trades filtrés par les comptes sélectionnés.
   // Si rien de sélectionné, on retombe sur les trades bruts (l'utilisateur
   // veut peut-être analyser tout l'historique sans contrainte de compte).
@@ -86,9 +89,6 @@ export default function BacktestPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>
-          Backtest
-        </h1>
         <span style={{ fontSize: 12, color: T.textMut }}>
           Analyse what-if sur trades historiques
         </span>
@@ -227,7 +227,7 @@ export default function BacktestPage() {
 
           {/* Equity par compte (utilise les trades bruts, indépendant des filtres) */}
           {accounts.length > 1 && (
-            <EquityByAccount trades={rawTrades} accounts={accounts} />
+            <EquityByAccount trades={rawTrades} accounts={accounts} firms={firms} />
           )}
         </>
       )}
@@ -332,19 +332,24 @@ function EquityCurve({ result }) {
           {fmt(last.cumPnL, true)}
         </div>
       </div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+      {/* La courbe reprend le padding gauche de la carte pour toucher son bord,
+          comme les graphiques posés sur le fond de page. À droite, la marge
+          reste : les libellés de valeur y respirent. */}
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ display: "block", marginLeft: -16, width: "calc(100% + 16px)" }}>
         {/* zero line */}
         <line x1={pad.l} y1={y(0)} x2={W - pad.r} y2={y(0)} stroke={T.border} strokeWidth="1" />
-        {/* gradient fill */}
+        {/* Aire tramée — trame commune à tous les graphiques du site, aux
+            couleurs de la courbe. */}
         <defs>
-          <linearGradient id="eq-grad" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={positive ? T.green : T.red} stopOpacity="0.18" />
-            <stop offset="100%" stopColor={positive ? T.green : T.red} stopOpacity="0.01" />
-          </linearGradient>
+          <AreaDotsDefs
+            id="eq" color={positive ? T.green : T.red}
+            top={pad.t} bottom={H - pad.b} width={W} height={H}
+          />
         </defs>
         <polyline
           points={`${pad.l},${y(0)} ${points} ${x(curve.length - 1)},${y(0)}`}
-          fill="url(#eq-grad)" stroke="none"
+          {...areaDotsFill("eq")} stroke="none"
         />
         <polyline points={points} fill="none" stroke={positive ? T.green : T.red} strokeWidth="2" />
         {/* y-axis labels */}

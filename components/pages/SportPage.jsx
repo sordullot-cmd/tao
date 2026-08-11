@@ -11,6 +11,7 @@ import {
   Star, EyeOff, Save, BookOpen, GripVertical, Camera, ImagePlus,
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
+import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 
 // Tokens partagés (câblés sur les CSS vars, dark-mode aware). `bg` est redéfini
@@ -1114,16 +1115,17 @@ function ProgressChart({ allExerciseNames, selected, onChangeSelected, data, uni
             : "Pas encore assez de points pour cet exercice."}
         </div>
       ) : (
-        <div style={{ padding: 12, position: "relative" }}>
+        <div style={{ padding: "12px 12px 12px 0", position: "relative" }}>
+          {/* Pas de padding à gauche : la courbe touche le bord de la carte. À
+              droite la marge reste, les libellés de valeur y respirent. */}
           <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
             style={{ width: "100%", height: 180, display: "block", fontFamily: "var(--font-sans)" }}>
+            {/* Aire tramée — trame commune à tous les graphiques du site, aux
+                couleurs de la courbe. */}
             <defs>
-              <linearGradient id="sport-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={T.green} stopOpacity="0.22" />
-                <stop offset="100%" stopColor={T.green} stopOpacity="0" />
-              </linearGradient>
+              <AreaDotsDefs id="sport" color={T.green} top={padT} bottom={padT + chartH} width={VB_W} height={VB_H} />
             </defs>
-            <path d={areaD} fill="url(#sport-grad)" stroke="none" />
+            <path d={areaD} {...areaDotsFill("sport")} stroke="none" />
             <path d={pathD} fill="none" stroke={T.green} strokeWidth="1.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>

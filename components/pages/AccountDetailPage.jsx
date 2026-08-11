@@ -4,17 +4,30 @@ import React from "react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
-import { ArrowLeft, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ArrowDownRight, Pencil } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import { ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import {
-  CARD, TH, SectionTitle, SectionAction, KpiCard, HeroAmount, StackedAmount,
-  DirectionTag, SymbolBadge, symbolLabel, PeriodPills, windowSeries, accountColor,
+  CARD, SectionTitle, SectionAction, HeroAmount, BackLink,
+  PeriodPills, windowSeries, AGGREGATE_CURVE_COLOR,
+  PnlChart, msOf,
 } from "@/components/ui/da";
+import { accountBrandColor, assignSeriesColors } from "@/lib/ui/brandColors";
+import TradesList from "@/components/ui/tradesList";
+import MonthCalendar from "@/components/ui/monthCalendar";
+import { RoundLogo } from "@/components/ui/accountRows";
+import { accountBrand } from "@/lib/accountBrand";
+import { AccountModal } from "@/components/modals/AccountModals";
+import { useAuth } from "@/lib/auth/supabaseAuthProvider";
+import { createClient } from "@/lib/supabase/client";
 
 /* ---------------------------------------------------------------------------
    Page « détail d'un compte » — portée depuis la maquette Figma
-   (fichier mqFgieIhnaljGeybhJRY0V, node 323:1410).
+   (fichier mqFgieIhnaljGeybhJRY0V, node 369:3984).
+
+   Ordre des sections relevé sur la maquette (24 px entre chaque) :
+     en-tête → chiffre héros (valeur du compte) + 4 mini-KPI + graphique
+             → Statistiques → tableau détaillé des trades.
 
    Règle du projet : aucune couleur en dur, tout passe par les tokens `T`
    (ce sont des var(--color-*), c'est ce qui fait suivre le thème sombre).
@@ -22,12 +35,10 @@ import {
 
 // Palette des courbes secondaires (comparaison entre comptes). Uniquement des
 // tokens existants : pas de nouvelle couleur introduite.
-const SERIES_COLORS = [T.blue, T.pnlPos, T.amber, T.purple, T.cyan, T.pnlNeg, T.kraken];
 // Opacité des courbes des autres comptes, en arrière-plan de la courbe du
 // compte affiché (la maquette montre plusieurs séries pâles derrière la série
 // principale). // TODO token DA — pas d'équivalent dans tokens.ts
 // Opacité des séries secondaires — token DA (dark-aware).
-const SERIES_BG_OPACITY = "var(--opacity-series-bg, 0.35)";
 
 const fmtNoCents = (n) => {
   const sym = getCurrencySymbol();
@@ -73,7 +84,10 @@ const BROKER_LOGOS = {
 const getBrokerLogo = (b) => b ? (BROKER_LOGOS[String(b).trim().toLowerCase()] || null) : null;
 
 const dayKey = (d) => String(d || "").slice(0, 10);
-const msOf = (d) => new Date(d).getTime();
+
+/* Les dérivations des colonnes de trades (durée, session, jour, frais, lots,
+   clés de stratégie) vivent avec la liste elle-même, dans
+   components/ui/tradesList.jsx — une seule source pour toutes les pages. */
 
 /** Cumul du P&L par jour (dernier cumul connu de la journée). */
 function cumulativeByDay(list) {
@@ -94,8 +108,46 @@ function cumulativeByDay(list) {
     .filter(p => !isNaN(msOf(p.date)));
 }
 
-export default function AccountDetailPage({ accountId, accounts = [], trades = [], strategies = [], setPage, setSelectedAccountIds, archivedMeta = {} }) {
+export default function AccountDetailPage({ accountId, accounts = [], firms = [], trades = [], strategies = [], setPage, setSelectedFirmId, setAccounts, archivedMeta = {} }) {
   useLang();
+  const { user } = useAuth();
+  /* Les couleurs de courbe suivent la prop firm du compte avant son broker :
+     il faut donc pouvoir remonter de `firm_id` à la firme. */
+  const firmById = React.useMemo(() => new Map((firms || []).map((f) => [f.id, f])), [firms]);
+
+  /* Assignations trade ↔ stratégie : même source que la page Trades (table
+     Supabase `trade_strategies`, miroir local `tr4de_trade_strategies`). Sans
+     ça la colonne « stratégie » du tableau serait vide alors que la donnée
+     existe. */
+  const [tradeStrategies, setTradeStrategies] = React.useState({});
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("tr4de_trade_strategies");
+      if (raw) setTradeStrategies(JSON.parse(raw) || {});
+    } catch {}
+  }, []);
+  React.useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("trade_strategies")
+          .select("trade_id, strategy_id")
+          .eq("user_id", user.id);
+        if (error || cancelled) return;
+        const map = {};
+        (data || []).forEach((row) => {
+          if (!map[row.trade_id]) map[row.trade_id] = [];
+          map[row.trade_id].push(row.strategy_id);
+        });
+        setTradeStrategies(map);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   // Vue agrégée « Comptes eval passés » : accountId === ARCHIVED_VIEW_ID.
   // On unit les données de tous les comptes archivés, avec un filtre pour trier
   // par compte individuel.
@@ -123,6 +175,8 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
     return (trades || []).filter(t => idToAcc[t.id]).map(t => ({ ...t, account_id: idToAcc[t.id] }));
   }, [archivedAccts, trades]);
 
+  // Modale de modification du compte affiché.
+  const [editing, setEditing] = React.useState(false);
   const [filterId, setFilterId] = React.useState("all"); // "all" | id d'un compte passé
   const [period, setPeriod] = React.useState("1A");
   const [statsExpanded, setStatsExpanded] = React.useState(false);
@@ -308,16 +362,23 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
     const srcTrades = isArchivedView ? archivedTrades : (trades || []);
     const srcAccounts = isArchivedView ? archivedAccts : (accounts || []);
     const currentId = isArchivedView ? (filterId !== "all" ? filterId : null) : accountId;
-    return srcAccounts
-      .filter(a => a.id !== currentId)
-      .map((a, i) => ({
+    const kept = srcAccounts.filter(a => a.id !== currentId);
+    /* Couleur de la MAISON du compte (prop firm d'abord, broker ensuite), la
+       même que dans la liste des comptes. Attribuées en un passage : deux
+       comptes de la même firme prennent ses teintes secondaires plutôt que la
+       même couleur. */
+    const colorById = assignSeriesColors(
+      kept.map(a => ({ id: a.id, account: a, firm: firmById.get(a.firm_id) }))
+    );
+    return kept
+      .map(a => ({
         id: a.id,
         name: a.name || "Compte",
-        color: SERIES_COLORS[i % SERIES_COLORS.length],
+        color: colorById.get(a.id),
         points: cumulativeByDay(srcTrades.filter(tr => tr.account_id === a.id)),
       }))
       .filter(s => s.points.length > 1);
-  }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId]);
+  }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId, firmById]);
 
   // Vue normale sans compte, ou vue archivée sans aucun compte archivé.
   if ((!isArchivedView && !account) || (isArchivedView && archivedAccts.length === 0)) {
@@ -362,58 +423,80 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
   const firstCum = curve.length ? curve[0].cum : 0;
   const lastCum = curve.length ? curve[curve.length - 1].cum : 0;
   const deltaAbs = lastCum - firstCum;
+  // Magnitude seule : c'est la flèche qui porte le sens de la variation (un
+  // capital de départ négatif inverserait le signe du ratio sans que la
+  // variation ait changé de sens).
   const deltaPct = capital
     ? Math.abs((deltaAbs / capital) * 100)
     : (firstCum !== 0 ? Math.abs((deltaAbs / firstCum) * 100) : 0);
   const deltaColor = deltaAbs > 0 ? T.pnlPos : deltaAbs < 0 ? T.pnlNeg : T.textSub;
   const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
 
-  const brokerLine = [account?.broker || null, typeLabel].filter(Boolean).join(" · ");
-  const brokerLogo = account ? getBrokerLogo(account.broker) : null;
+  /* Identité affichée : celle de la prop firm du compte (logo + nom). La
+     plateforme d'exécution ne sert qu'à l'import, elle n'apparaît pas ici.
+     Sans firme (live ou démo personnel), on retombe sur le broker. */
+  const brand = accountBrand(account, firms);
+  const brokerLine = [brand.label || null, typeLabel].filter(Boolean).join(" · ");
+  const brokerLogo = brand.logo || (account ? getBrokerLogo(account.broker) : null);
 
+  // La maquette (node 370:4650) montre 6 lignes dans le tableau détaillé.
   const recentTrades = [...accountTrades]
     .sort((a, b) => msOf(b.date || b.entry_time || 0) - msOf(a.date || a.entry_time || 0))
-    .slice(0, 5);
+    .slice(0, 6);
+
+  // Chiffre héros de la maquette : « Valeur du compte » = capital + P&L. Sans
+  // capital connu (compte live sans taille saisie), on retombe sur le P&L seul
+  // plutôt que d'afficher un montant faux.
+  const heroValue = balance !== null ? balance : stats.pnl;
+
+  // 4 mini-KPI en ligne (node 369:4349) — ils remplacent la grille de 6 tuiles.
+  const miniKpis = [
+    {
+      label: "P&L",
+      value: `${stats.pnl > 0 ? "+" : ""}${fmt(stats.pnl, false)}`,
+      color: stats.pnl > 0 ? T.pnlPos : stats.pnl < 0 ? T.pnlNeg : T.text,
+    },
+    {
+      // Coloré au seuil de 50 %, comme la page d'une prop firm : la maquette
+      // montre « 33.3% » en rouge, mais ne dit pas où bascule la couleur.
+      label: t("accountsPage.winRateL"),
+      value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—",
+      color: stats.total === 0 ? T.text : stats.winRate >= 50 ? T.pnlPos : T.pnlNeg,
+    },
+    {
+      label: t("accountsPage.profitFactor"),
+      value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? stats.profitFactor.toFixed(2) : "—"),
+      color: T.text,
+    },
+    { label: "Trade", value: String(stats.total), color: T.text },
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
 
-      {/* ================= EN-TÊTE : retour + logo + nom / broker ================= */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          onClick={() => setPage?.("accounts")}
-          aria-label="Retour"
-          style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 18, height: 18, padding: 0, border: "none", background: "none",
-            color: T.text, cursor: "pointer", flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={18} strokeWidth={1.75} />
-        </button>
+      {/* Retour vers le parent DIRECT du compte, et lui seul : sa prop firm
+          quand il en a une, la liste des comptes sinon. La liste reste joignable
+          en un clic depuis la page de la firme, qui porte déjà son propre
+          retour — inutile de la doubler ici. */}
+      <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
+        {brand.firm ? (
+          <BackLink
+            icon={<RoundLogo src={brand.logo} size={16} name={brand.firm.name} />}
+            label={brand.firm.name}
+            onClick={() => { setSelectedFirmId?.(brand.firm.id); setPage?.("firm-detail"); }}
+          />
+        ) : (
+          <BackLink label={t("nav.accounts")} onClick={() => setPage?.("accounts")} />
+        )}
+      </div>
 
+      {/* ================= EN-TÊTE : logo + nom / broker ================= */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          {/* Vignette du broker — 44×44, logo 36×36 à l'intérieur (maquette) */}
-          <div style={{
-            width: 44, height: 44, borderRadius: 36, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: T.accentBg, overflow: "hidden",
-          }}>
-            {brokerLogo ? (
-              <img
-                src={brokerLogo}
-                alt={account?.broker || ""}
-                width={36}
-                height={36}
-                style={{ width: 36, height: 36, objectFit: "contain", display: "block" }}
-              />
-            ) : (
-              <span style={{ fontSize: 14, fontWeight: 500, color: T.textSub }}>
-                {String(displayName).replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "—"}
-              </span>
-            )}
-          </div>
+          {/* Vignette du broker — 44 px. Passe par la brique partagée : cette page
+              en avait sa propre copie, qui reposait le logo carré en `contain` au
+              milieu du rond (d'où le cercle qui paraissait incomplet). */}
+          <RoundLogo src={brokerLogo} size={44} name={displayName} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minWidth: 0 }}>
             <h1 style={{
@@ -429,6 +512,24 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
             )}
           </div>
         </div>
+
+        {/* Modification du compte — même modale que la page Comptes et la page
+            d'une firme. Absente en vue archivée : un eval passé n'existe plus
+            en base, il n'y a rien à modifier. */}
+        {!isArchivedView && account && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            style={{
+              marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "7px 12px", borderRadius: 999,
+              border: `1px solid ${T.border}`, background: T.white,
+              color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Pencil size={13} strokeWidth={1.75} /> {t("accountModal.editTitle")}
+          </button>
+        )}
 
         {/* Vue archivée : filtre par compte passé (fonctionnalité conservée) */}
         {isArchivedView && (
@@ -451,66 +552,85 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
         )}
       </div>
 
-      {/* ================= P&L + GRAPHIQUE ================= */}
+      {/* ============ VALEUR DU COMPTE + 4 MINI-KPI + GRAPHIQUE ============ */}
+      {/* node 369:3998 — bloc 369:3999 (h 112) puis graphique 369:4020 à 24 px */}
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>P&amp;L</div>
+          {/* node 369:4000 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            {/* node 369:4002 */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <HeroAmount value={stats.pnl} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 500, lineHeight: "18.6px", color: deltaColor }}>
-                <span>{deltaAbs > 0 ? "+" : ""}{fmt(deltaAbs, false)}</span>
-                <span style={{ display: "inline-flex", alignItems: "center" }}>
-                  <span>(</span>
-                  <DeltaIcon size={20} strokeWidth={1.75} style={{ margin: "0 1px" }} />
-                  <span>{deltaPct.toFixed(2)}%</span>
-                  <span>&nbsp;)</span>
-                </span>
+              {/* Chiffre héros + variation. La maquette posait 40 px : à
+                  l'usage le bloc écrasait tout le haut de page, il descend à
+                  28 px et les mini-KPI suivent. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <HeroAmount value={heroValue} size={28} />
+                {curve.length > 1 && (
+                  <span
+                    title="Variation sur la période affichée"
+                    style={{ display: "inline-flex", alignItems: "center", fontSize: 13, fontWeight: 500, lineHeight: 1, color: deltaColor, whiteSpace: "nowrap" }}
+                  >
+                    <DeltaIcon size={15} strokeWidth={1.75} style={{ marginRight: 1 }} />
+                    {deltaPct.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+
+              {/* 4 mini-KPI en ligne */}
+              <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+                {miniKpis.map(k => (
+                  <div key={k.label} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                    <span style={{ fontSize: 11, lineHeight: 1, color: T.textSub, whiteSpace: "nowrap" }}>{k.label}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1, color: k.color, whiteSpace: "nowrap" }}>{k.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
+
+          {/* node 369:4014 */}
           <PeriodPills value={period} onChange={setPeriod} />
         </div>
 
-        <PnlChart points={curve} others={otherSeries} color={accountColor(account?.id)} />
-      </div>
-
-      {/* ================= 6 TUILES DE KPI (3 × 2) ================= */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-        <KpiCard label="Trade" value={String(stats.total)} />
-        <KpiCard
-          label={t("accountsPage.winRateL")}
-          value={stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
-        />
-        <KpiCard
-          label={t("accountsPage.profitFactor")}
-          value={stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? stats.profitFactor.toFixed(2) : "—")}
-        />
-        <KpiCard
-          label={t("accountsPage.expectancyTrade")}
-          value={stats.total > 0 ? fmt(stats.expectancy, true) : "—"}
-          tone={stats.expectancy > 0 ? "pos" : stats.expectancy < 0 ? "neg" : undefined}
-        />
-        <KpiCard
-          label={t("accountsPage.maxDrawdown")}
-          value={stats.maxDD > 0 ? `-${fmtNoCents(stats.maxDD)}` : "—"}
-          tone={stats.maxDD > 0 ? "neg" : undefined}
-        />
-        <KpiCard
-          label={t("accountsPage.avgWinLoss")}
-          value={stats.total > 0 ? `${fmtNoCents(stats.avgWin)} / -${fmtNoCents(stats.avgLoss)}` : "—"}
+        {/* node 369:4020 — inchangé */}
+        <PnlChart
+          points={curve}
+          others={otherSeries}
+          /* Vue « eval passés » agrégée : plusieurs comptes, donc pas de type
+             unique — on prend l'accent des agrégats. */
+          color={aggregatedAll ? AGGREGATE_CURVE_COLOR : accountBrandColor(account, firmById.get(account?.firm_id))}
         />
       </div>
 
-      {/* ================= TRADES ================= */}
+      {/* Calendrier du mois, juste après la courbe : il prolonge la lecture du
+          graphique (« quand ») avant que les statistiques ne donnent le
+          « combien ». Il porte les trades du compte affiché (ou du filtre, en
+          vue archivée) et s'ouvre sur le dernier mois tradé. */}
+      <MonthCalendar
+        trades={accountTrades}
+        title="Calendrier du mois"
+        onDayClick={!isArchivedView ? () => setPage?.("trades") : undefined}
+      />
+
+      {/* ================= STATISTIQUES (node 369:4167) ================= */}
+      <StatsSection
+        stats={stats}
+        capital={capital}
+        balance={balance}
+        expanded={statsExpanded}
+        onToggle={() => setStatsExpanded(v => !v)}
+      />
+
+      {/* ============ LISTE DES TRADES (node 370:4630, épurée) ============ */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* La maquette ne pose pas de titre au-dessus du tableau, mais le lien
+            « Voir plus » (navigation vers la page Trades filtrée sur ce compte)
+            est une fonctionnalité existante : on la conserve ici. */}
         <SectionTitle
           action={
             !isArchivedView && account ? (
               <SectionAction
                 onClick={() => {
-                  setSelectedAccountIds?.([account.id]);
-                  try { localStorage.setItem("selectedAccountIds", JSON.stringify([account.id])); } catch {}
                   setPage?.("trades");
                 }}
               >
@@ -525,299 +645,38 @@ export default function AccountDetailPage({ accountId, accounts = [], trades = [
           </span>
         </SectionTitle>
 
-        <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-          {/* En-tête de colonnes */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", opacity: 0.4 }}>
-            <div style={{ flex: "1 0 0", minWidth: 0 }}><span style={TH}>Actif</span></div>
-            <div style={{ width: 133, flexShrink: 0 }}><span style={TH}>type</span></div>
-            <div style={{ width: 100, flexShrink: 0 }}><span style={TH}>Date</span></div>
-            <div style={{ width: 117, flexShrink: 0, textAlign: "right" }}><span style={TH}>P&amp;L</span></div>
-          </div>
-
-          {/* Lignes */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {recentTrades.length === 0 ? (
-              <div style={{ fontSize: 14, color: T.textMut, padding: "12px 8px" }}>Aucun trade sur ce compte.</div>
-            ) : recentTrades.map((tr, i) => {
-              const d = new Date(tr.date);
-              const dateLabel = isNaN(d.getTime())
-                ? String(tr.date || "")
-                : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
-              // % = part de ce trade dans le P&L total du compte.
-              const pct = stats.pnl !== 0 ? Math.abs(((tr.pnl || 0) / stats.pnl) * 100) : 0;
-              const { name, code } = symbolLabel(tr.symbol);
-              return (
-                <div
-                  key={tr.id || i}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: 12, borderRadius: 12, background: "transparent",
-                    transition: "background 140ms ease",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = T.rowHighlight; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  <div style={{ flex: "1 0 0", minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                    <SymbolBadge symbol={tr.symbol} />
-                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                      <span style={{ fontSize: 16, fontWeight: 500, lineHeight: "17.05px", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {name}
-                      </span>
-                      {code && (
-                        <span style={{ fontSize: 12, lineHeight: "13.95px", color: T.textMut, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {code}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ width: 133, flexShrink: 0, display: "flex", alignItems: "center" }}>
-                    <DirectionTag direction={tr.direction} />
-                  </div>
-                  <div style={{ width: 100, flexShrink: 0, fontSize: 16, fontWeight: 500, lineHeight: "17.05px", color: T.text }}>
-                    {dateLabel}
-                  </div>
-                  <div style={{ width: 117, flexShrink: 0 }}>
-                    <StackedAmount value={tr.pnl || 0} percent={pct} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <TradesList
+          trades={recentTrades}
+          strategies={strategies}
+          tradeStrategies={tradeStrategies}
+          empty="Aucun trade sur ce compte."
+        />
       </div>
 
-      {/* ================= STATISTIQUES ================= */}
-      <StatsSection
-        stats={stats}
-        capital={capital}
-        balance={balance}
-        expanded={statsExpanded}
-        onToggle={() => setStatsExpanded(v => !v)}
-      />
+      {editing && account && (
+        <AccountModal
+          account={account}
+          firms={firms}
+          userId={user?.id}
+          onClose={() => setEditing(false)}
+          onSaved={(next) =>
+            setAccounts?.((prev) => (prev || []).map((a) => (a.id === next.id ? { ...a, ...next } : a)))
+          }
+        />
+      )}
     </div>
   );
 }
-
 /* ---------------------------------------------------------------------------
    Graphique multi-séries (maquette : courbe du compte en avant-plan avec une
    trame de points sous la courbe, autres comptes en lignes fines derrière).
    On dessine à l'échelle 1:1 : le viewBox reprend la largeur réellement
    mesurée, sinon la trame de points serait écrasée en ellipses.
    ------------------------------------------------------------------------- */
-function PnlChart({ points, others, color }) {
-  const ref = React.useRef(null);
-  const [width, setWidth] = React.useState(1160);
-  const [hover, setHover] = React.useState(null);
-
-  React.useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(entries => {
-      const w = Math.round(entries[0].contentRect.width);
-      if (w > 0) setWidth(w);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Géométrie relevée sur la maquette.
-  const H = 358, W = width;
-  const topY = 30, plotBottom = 340;
-  const plotH = plotBottom - topY;
-
-  if (!points || points.length < 2) {
-    return (
-      <div ref={ref} style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: T.text, opacity: 0.4 }}>
-        Pas assez de données pour tracer la courbe.
-      </div>
-    );
-  }
-
-  const t0 = msOf(points[0].date);
-  const t1 = msOf(points[points.length - 1].date);
-  const tSpan = (t1 - t0) || 1;
-  const xFor = (date) => ((msOf(date) - t0) / tSpan) * W;
-
-  // Les autres comptes sont recadrés sur la même fenêtre temporelle.
-  const otherClipped = (others || [])
-    .map(s => ({ ...s, points: s.points.filter(p => msOf(p.date) >= t0 && msOf(p.date) <= t1) }))
-    .filter(s => s.points.length > 1);
-
-  const values = points.map(p => p.cum);
-  otherClipped.forEach(s => s.points.forEach(p => values.push(p.cum)));
-  const yMax = Math.max(...values);
-  const yMin = Math.min(...values);
-  const ySpan = (yMax - yMin) || 1;
-  const yFor = (v) => plotBottom - ((v - yMin) / ySpan) * plotH;
-
-  // Couleur d'identité du compte : la maquette montre le compte XTB en rouge
-  // ici ET sur sa carte de la liste. La couleur suit le compte, pas le P&L.
-  const lineColor = color || T.kraken;
-  const coords = points.map(p => [xFor(p.date), yFor(p.cum)]);
-  const pathD = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c[0].toFixed(2)} ${c[1].toFixed(2)}`).join(" ");
-  // Aire fermée sous la courbe : c'est elle qui porte la trame de points.
-  const areaD = `${pathD} L ${coords[coords.length - 1][0].toFixed(2)} ${H} L ${coords[0][0].toFixed(2)} ${H} Z`;
-
-  const fmtTick = (v) => {
-    const sign = v < 0 ? "-" : "";
-    const abs = Math.abs(v);
-    if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
-    return `${sign}${Math.round(abs)}`;
-  };
-  const ticks = [0, 1, 2, 3].map(i => {
-    const ratio = i / 3;
-    return { value: yMax - ratio * ySpan, top: 16 + ratio * (348 - 16) };
-  });
-
-  // 5 repères de date répartis sur la fenêtre affichée.
-  const xLabels = [0, 1, 2, 3, 4].map(i => {
-    const idx = Math.round((i / 4) * (points.length - 1));
-    const d = new Date(points[idx]?.date || "");
-    return isNaN(d.getTime())
-      ? ""
-      : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).toUpperCase();
-  });
-
-  const cellW = W / Math.max(points.length - 1, 1);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
-      <div
-        ref={ref}
-        style={{ position: "relative", width: "100%", height: H }}
-        onMouseLeave={() => setHover(null)}
-      >
-        {/* 4 séparateurs verticaux à 10 % */}
-        <div style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "space-between", opacity: 0.10, pointerEvents: "none" }}>
-          {[0, 1, 2, 3].map(i => (
-            <span key={i} style={{ width: 1, height: "100%", background: T.text, display: "block" }} />
-          ))}
-        </div>
-
-        {/* Repères de valeur — libellés seuls, alignés à droite, sans trait */}
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-          {ticks.map((tk, i) => (
-            <div key={i} style={{ position: "absolute", left: 0, right: 0, top: tk.top }}>
-              <span style={{ display: "block", fontSize: 14, color: T.text, opacity: 0.4, textAlign: "right", lineHeight: 1 }}>
-                {fmtTick(tk.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <svg
-          width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}
-          preserveAspectRatio="none"
-          style={{ display: "block", position: "absolute", inset: 0, overflow: "visible" }}
-        >
-          <defs>
-            {/* Trame de la maquette : pas 11 px, cercle r=1 à 15 % */}
-            <pattern id="acct-area-dots" width="11" height="11" patternUnits="userSpaceOnUse">
-              <circle cx="1" cy="1" r="1" fill={lineColor} fillOpacity="0.15" />
-            </pattern>
-          </defs>
-
-          {/* Autres comptes — lignes fines en arrière-plan */}
-          {otherClipped.map(s => {
-            const d = s.points
-              .map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(p.date).toFixed(2)} ${yFor(p.cum).toFixed(2)}`)
-              .join(" ");
-            return (
-              <path
-                key={s.id}
-                d={d}
-                fill="none"
-                stroke={s.color}
-                strokeOpacity={SERIES_BG_OPACITY}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              />
-            );
-          })}
-
-          {/* Compte affiché — aire tramée + trait épais */}
-          <path d={areaD} fill="url(#acct-area-dots)" stroke="none" />
-          <path
-            d={pathD}
-            stroke={lineColor}
-            strokeWidth="4"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-
-          {hover !== null && coords[hover] && (
-            <line
-              x1={coords[hover][0]} y1={topY}
-              x2={coords[hover][0]} y2={plotBottom}
-              stroke={lineColor} strokeWidth="1" strokeDasharray="3 3"
-              vectorEffect="non-scaling-stroke" pointerEvents="none"
-            />
-          )}
-
-          {coords.map((c, i) => (
-            <rect
-              key={`hover-${i}`}
-              x={c[0] - cellW / 2}
-              y="0"
-              width={cellW}
-              height={H}
-              fill="transparent"
-              style={{ cursor: "pointer" }}
-              onMouseEnter={() => setHover(i)}
-            />
-          ))}
-        </svg>
-
-        {/* Tooltip */}
-        {hover !== null && points[hover] && (() => {
-          const p = points[hover];
-          const leftPct = (coords[hover][0] / W) * 100;
-          const topPct = (coords[hover][1] / H) * 100;
-          const flip = leftPct > 60;
-          const d = new Date(p.date);
-          const label = isNaN(d.getTime())
-            ? p.date
-            : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-          return (
-            <div style={{
-              position: "absolute",
-              left: `${leftPct}%`,
-              top: `${topPct}%`,
-              transform: `translateY(-100%) translateY(-12px) ${flip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
-              background: T.white,
-              borderRadius: 8,
-              boxShadow: T.elevCard,
-              padding: "8px 10px",
-              pointerEvents: "none",
-              zIndex: 20,
-              whiteSpace: "nowrap",
-              fontFamily: "var(--font-sans)",
-            }}>
-              <div style={{ fontSize: 12, color: T.textSub, marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: p.cum > 0 ? T.pnlPos : p.cum < 0 ? T.pnlNeg : T.text }}>
-                {p.cum > 0 ? "+" : ""}{fmt(p.cum, false)}
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* Axe des dates */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", fontSize: 14, color: T.text }}>
-        {xLabels.map((l, i) => (
-          <span key={i} style={{ opacity: 0.4, whiteSpace: "nowrap" }}>{l}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ---------------------------------------------------------------------------
-   Statistiques : 3 cartes de listes « libellé → valeur ». La maquette n'en
+   Statistiques : 4 cartes de listes « libellé → valeur » (volume d'activité,
+   argent, avantage statistique, régularité quotidienne). La maquette n'en
    montre que 4 lignes par carte ; « Voir plus » déplie la totalité des mesures
    déjà calculées par la page (aucune statistique n'est perdue).
    ------------------------------------------------------------------------- */
@@ -844,11 +703,12 @@ function StatsSection({ stats, capital, balance, expanded, onToggle }) {
         { label: t("accountsPage.scratch"), value: String(stats.scratch) },
         { label: t("accountsPage.longTrades"), value: String(stats.longCount) },
         { label: t("accountsPage.shortTrades"), value: String(stats.shortCount) },
-        { label: t("accountsPage.winRateL"), value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—" },
         { label: t("accountsPage.maxWinStreakL"), value: String(stats.maxWinStreak) },
         { label: t("accountsPage.maxLossStreakL"), value: String(stats.maxLossStreak) },
         { label: t("accountsPage.totalExecsL"), value: String(stats.totalExecutions) },
         { label: t("accountsPage.avgTradeVolume"), value: stats.avgTradeVolume ? num(stats.avgTradeVolume, 1) : "—" },
+        { label: t("accountsPage.avgHoldWin"), value: mins(stats.avgHoldWinMin) },
+        { label: t("accountsPage.avgHoldLoss"), value: mins(stats.avgHoldLossMin) },
         { label: t("accountsPage.openPositions"), value: String(stats.openPositions) },
       ],
     },
@@ -859,31 +719,35 @@ function StatsSection({ stats, capital, balance, expanded, onToggle }) {
         { label: t("accountsPage.accountBalance"), value: balance !== null ? fmtNoCents(balance) : "—" },
         { label: t("accountsPage.bestTrade"), value: stats.bestTrade ? money(stats.bestTrade.pnl) : "—" },
         { label: t("accountsPage.worstTrade"), value: stats.worstTrade ? money(stats.worstTrade.pnl) : "—" },
-        { label: t("accountsPage.avgTradePnl"), value: stats.total > 0 ? money(stats.avgTradePnL) : "—" },
-        { label: t("accountsPage.avgWinner"), value: stats.wins ? money(stats.avgWin) : "—" },
-        { label: t("accountsPage.avgLoser"), value: stats.losses ? `-${fmt(stats.avgLoss)}` : "—" },
-        { label: t("accountsPage.profitFactor"), value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? num(stats.profitFactor) : "—") },
-        { label: t("accountsPage.expectancyL"), value: stats.total > 0 ? money(stats.expectancy) : "—" },
-        { label: t("accountsPage.expectancyRatioL"), value: stats.expectancyRatio > 0 ? num(stats.expectancyRatio) : "—" },
+        { label: t("accountsPage.maxDrawdown"), value: stats.maxDD > 0 ? `-${fmtNoCents(stats.maxDD)}` : "—" },
         { label: t("accountsPage.totalFees"), value: money(stats.totalFees) },
         { label: t("accountsPage.pnlStdDevL"), value: stats.pnlStdDev > 0 ? money(stats.pnlStdDev) : "—" },
+        { label: t("accountsPage.sqn"), value: stats.pnlStdDev > 0 ? num(stats.sqn) : "—" },
+        { label: t("accountsPage.kRatio"), value: stats.curve.length > 2 ? num(stats.kRatio) : "—" },
       ],
     },
     {
-      title: "Sessions",
+      // Espérance et « P&L moy. / trade » sont la même mesure (pnl / nb trades) :
+      // une seule ligne, sinon la carte affiche deux fois le même chiffre.
+      title: t("accountsPage.catEdge"),
       rows: [
-        { label: t("accountsPage.totalDaysL"), value: String(stats.tradingDays) },
-        { label: t("accountsPage.winDays"), value: String(stats.winDays) },
-        { label: t("accountsPage.loseDays"), value: String(stats.loseDays) },
-        { label: t("accountsPage.maxDrawdown"), value: stats.maxDD > 0 ? `-${fmtNoCents(stats.maxDD)}` : "—" },
-        { label: t("accountsPage.avgDailyPnL"), value: stats.tradingDays ? money(stats.avgDailyPnL) : "—" },
+        { label: t("accountsPage.profitFactor"), value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? num(stats.profitFactor) : "—") },
+        { label: t("accountsPage.winRateL"), value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—" },
+        { label: t("accountsPage.expectancyL"), value: stats.total > 0 ? money(stats.expectancy) : "—" },
+        { label: t("accountsPage.avgWinner"), value: stats.wins ? money(stats.avgWin) : "—" },
+        { label: t("accountsPage.avgLoser"), value: stats.losses ? `-${fmt(stats.avgLoss)}` : "—" },
+        { label: t("accountsPage.expectancyRatioL"), value: stats.expectancyRatio > 0 ? num(stats.expectancyRatio) : "—" },
+      ],
+    },
+    {
+      title: t("accountsPage.catDaily"),
+      rows: [
+        { label: t("accountsPage.winLoseDays"), value: `${stats.winDays} / ${stats.loseDays}` },
         { label: t("accountsPage.avgWinDayPnL"), value: stats.winDays ? money(stats.avgWinDayPnL) : "—" },
         { label: t("accountsPage.avgLoseDayPnL"), value: stats.loseDays ? money(stats.avgLoseDayPnL) : "—" },
+        { label: t("accountsPage.avgDailyPnL"), value: stats.tradingDays ? money(stats.avgDailyPnL) : "—" },
+        { label: t("accountsPage.totalDaysL"), value: String(stats.tradingDays) },
         { label: t("accountsPage.avgDailyVolume"), value: stats.tradingDays ? num(stats.avgDailyVolume, 1) : "—" },
-        { label: t("accountsPage.avgHoldWin"), value: mins(stats.avgHoldWinMin) },
-        { label: t("accountsPage.avgHoldLoss"), value: mins(stats.avgHoldLossMin) },
-        { label: t("accountsPage.sqn"), value: stats.pnlStdDev > 0 ? num(stats.sqn) : "—" },
-        { label: t("accountsPage.kRatio"), value: stats.curve.length > 2 ? num(stats.kRatio) : "—" },
       ],
     },
   ];
@@ -902,22 +766,28 @@ function StatsSection({ stats, capital, balance, expanded, onToggle }) {
       >
         Statistiques
       </SectionTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, alignItems: "stretch" }}>
         {groups.map(g => (
-          <div key={g.title} style={{ ...CARD, display: "flex", flexDirection: "column", gap: 24 }}>
-            <span style={{ fontSize: 20, fontWeight: 500, lineHeight: "26.35px", color: T.text }}>{g.title}</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {(expanded ? g.rows : g.rows.slice(0, VISIBLE)).map((r, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ fontSize: 14, color: T.text, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.label}
-                  </span>
-                  <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.15, color: T.text, whiteSpace: "nowrap" }}>
-                    {r.value}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <StatsCard key={g.title} title={g.title} rows={expanded ? g.rows : g.rows.slice(0, VISIBLE)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatsCard({ title, rows }) {
+  return (
+    <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
+      <span style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.2, color: T.text }}>{title}</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rows.map((r, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span style={{ fontSize: 12, color: T.text, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {r.label}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.15, color: T.text, whiteSpace: "nowrap" }}>
+              {r.value}
+            </span>
           </div>
         ))}
       </div>

@@ -13,19 +13,104 @@ import { t, useLang, getLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { parseCSV } from "@/lib/csvParsers";
 import SearchableSelect from "@/components/ui/SearchableSelect";
-import QuickAccountSelector from "@/components/QuickAccountSelector";
+import TradeTargetSelector from "@/components/TradeTargetSelector";
 import { PLATFORMS } from "@/lib/brokers/platforms";
+/* Couleur par type de compte — convention de l'app (eval ambre, funded bleu,
+   live vert, démo violet), désormais partagée par toute l'app depuis
+   lib/ui/accountTypes.ts. Ici elle sert de repère de groupe : pastille du
+   titre, case à cocher et aplat léger d'une ligne cochée. */
+import { accountTypeStyle } from "@/lib/ui/accountTypes";
 
-export default function AddTradePage({ trades, setPage, setAccounts, setSelectedAccountIds, accounts = [], selectedAccountIds = [], addTrade, addStrategy, strategies = [], user }) {
-  useLang();
-  const [accountNames, setAccountNames] = useState([]);
-  const accountName = accountNames.length === 1 ? accountNames[0] : "";
-  // Comptes réellement sélectionnés (résolus par nom) — sert au récapitulatif
-  // en lecture seule du type / de la taille.
-  const selectedAccountObjects = React.useMemo(
-    () => accountNames.map((n) => (accounts || []).find((a) => a.name === n)).filter(Boolean),
-    [accountNames, accounts]
+/* Case à cocher de la liste des comptes. Même dessin que les cases en ligne du
+   reste de l'app (TradesPage) ; `partial` sert au titre de groupe quand seule
+   une partie de ses comptes est cochée. */
+function CheckBox({ on, partial = false, color, size = 15 }) {
+  const filled = on || partial;
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: size, height: size, borderRadius: "var(--radius-field)", flexShrink: 0,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        border: `1.5px solid ${filled ? color : T.border2}`,
+        background: filled ? color : T.white,
+        transition: "border-color .12s ease, background .12s ease",
+      }}
+    >
+      {on && <LucideCheck size={size - 4} strokeWidth={3} color="#FFFFFF" />}
+      {!on && partial && (
+        <span style={{ width: size - 7, height: 1.5, borderRadius: 1, background: "#FFFFFF" }} />
+      )}
+    </span>
   );
+}
+
+export default function AddTradePage({ trades, setPage, setAccounts, accounts = [], firms = [], selectedAccountIds = [], addTrade, addStrategy, strategies = [], user }) {
+  useLang();
+  /* Destination de l'import, en deux temps :
+     1. `target` = la firme (compte mère) OU un compte hors firme ;
+     2. `targetIds` = les comptes précis visés. Pour une firme, tous ses comptes
+        sont listés d'un coup, seulement regroupés par type — il n'y a plus
+        d'étape « choisir un type » avant de cocher.
+     L'insertion reste faite compte par compte. */
+  const [target, setTarget] = useState(null);      // { kind: "firm"|"account", id }
+  const [targetIds, setTargetIds] = useState([]);
+
+  /** Comptes de la firme sélectionnée, groupés par type et dans un ordre stable. */
+  const firmAccountsByType = React.useMemo(() => {
+    if (target?.kind !== "firm") return [];
+    const inFirm = (accounts || []).filter((a) => a.firm_id === target.id);
+    const groups = new Map();
+    for (const acc of inFirm) {
+      const ty = acc.account_type || "live";
+      if (!groups.has(ty)) groups.set(ty, []);
+      groups.get(ty).push(acc);
+    }
+    return ["eval", "funded", "live", "demo"]
+      .filter((ty) => groups.has(ty))
+      .map((ty) => ({ type: ty, accounts: groups.get(ty) }));
+  }, [target, accounts]);
+
+  /** Tous les comptes de la firme visée, à plat et dans l'ordre des groupes. */
+  const firmAccounts = React.useMemo(
+    () => firmAccountsByType.flatMap((g) => g.accounts),
+    [firmAccountsByType]
+  );
+  const allFirmChecked =
+    firmAccounts.length > 0 && firmAccounts.every((a) => targetIds.includes(a.id));
+
+  /* Choix de la destination → on repart d'une sélection cohérente : un compte
+     isolé se vise seul ; une firme présélectionne les comptes de son premier
+     groupe (éval avant funded, etc.) plutôt que tous — mélanger éval et funded
+     dans un même import est rarement voulu. Les autres restent visibles et se
+     cochent d'un clic. */
+  React.useEffect(() => {
+    if (!target) { setTargetIds([]); return; }
+    if (target.kind === "account") { setTargetIds([target.id]); return; }
+    const first = firmAccountsByType[0];
+    setTargetIds(first ? first.accounts.map((a) => a.id) : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  const toggleTargetId = (id) => {
+    setTargetIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  /** Titre de groupe : coche tout le groupe, ou le décoche s'il l'est déjà entièrement. */
+  const toggleGroup = (group) => {
+    const ids = group.accounts.map((a) => a.id);
+    const allOn = ids.every((id) => targetIds.includes(id));
+    setTargetIds((prev) =>
+      allOn ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]
+    );
+  };
+
+  const selectedAccountObjects = React.useMemo(
+    () => (accounts || []).filter((a) => targetIds.includes(a.id)),
+    [targetIds, accounts]
+  );
+  // Nom du compte quand un seul est visé : sert à présélectionner le parseur.
+  const accountName = selectedAccountObjects.length === 1 ? selectedAccountObjects[0].name : "";
   const [selectedBroker, setSelectedBroker] = useState("tradovate");
 
   // Favoris brokers : localStorage = cache rapide, Supabase = source de vérité.
@@ -531,7 +616,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
   };
 
   const handleImport = async () => {
-    if (accountNames.length === 0) {
+    if (targetIds.length === 0) {
       setError(t("addTrade.err.noAccountName"));
       return;
     }
@@ -554,24 +639,24 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
         return;
       }
 
-      // Résoudre chaque compte sélectionné. L'import ne CRÉE plus de compte :
-      // un nom inconnu est une erreur explicite qui renvoie vers la page Comptes.
-      const targetAccountIds = [];
-      const missing = [];
-      for (const rawName of accountNames) {
-        const name = String(rawName).trim();
-        if (!name) continue;
-
-        const { data: existingAccount } = await supabase
-          .from("trading_accounts")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("name", name)
-          .maybeSingle();
-
-        if (existingAccount?.id) targetAccountIds.push(existingAccount.id);
-        else missing.push(name);
+      // Les comptes visés sont déjà des IDs (le sélecteur ne propose que des
+      // comptes existants). On revalide côté base : un compte supprimé dans un
+      // autre onglet ne doit pas passer silencieusement.
+      const { data: liveAccounts, error: checkErr } = await supabase
+        .from("trading_accounts")
+        .select("id, name")
+        .eq("user_id", userId)
+        .in("id", targetIds);
+      if (checkErr) {
+        setError(t("addTrade.err.generic").replace("{msg}", checkErr.message));
+        setLoading(false);
+        return;
       }
+      const liveIds = new Set((liveAccounts || []).map((a) => a.id));
+      const targetAccountIds = targetIds.filter((id) => liveIds.has(id));
+      const missing = targetIds
+        .filter((id) => !liveIds.has(id))
+        .map((id) => (accounts || []).find((a) => a.id === id)?.name || id);
 
       if (missing.length > 0) {
         setError(t("addTrade.err.unknownAccount").replace("{names}", missing.join(", ")));
@@ -754,15 +839,12 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
         .order("created_at", { ascending: false });
       
       if (setAccounts) {
+        // Il n'y a plus de sélection de comptes : recharger la liste suffit,
+        // tous les comptes actifs sont pris en compte partout.
         setAccounts(updatedAccounts || []);
-
-        // Ajoute tous les comptes cibles aux comptes sélectionnés
-        const newSelectedIds = Array.from(new Set([...selectedAccountIds, ...targetAccountIds]));
-        setSelectedAccountIds(newSelectedIds);
-        localStorage.setItem('selectedAccountIds', JSON.stringify(newSelectedIds));
       }
 
-      setAccountNames([]);
+      setTargetIds([]);
       setFiles([]);
       setPreview([]);
       setSelectedBroker("tradovate");
@@ -800,7 +882,6 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "20px 24px", width: "100%", flex: 1, alignSelf: "flex-start", fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, color: "#0D0D0D", margin: 0, letterSpacing: -0.1, fontFamily: "var(--font-sans)" }}>{t("addTrade.title")}</h1>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
       <div style={{ display: "flex", flexDirection: "row", width: "100%", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
@@ -827,14 +908,12 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
                 {t("addTrade.manageAccounts")}
               </button>
             </div>
-            <QuickAccountSelector
-              multi
-              selectedAccountNames={accountNames}
-              onAccountNamesChange={setAccountNames}
+            <TradeTargetSelector
               accounts={accounts}
-              selectionOnly
-              onRequestCreate={() => setPage?.("accounts")}
-              T={T}
+              firms={firms}
+              value={target}
+              onChange={setTarget}
+              onRequestManage={() => setPage?.("accounts")}
             />
             {accounts.length === 0 && (
               <div style={{ fontSize: 11, color: T.textMut, marginTop: 8, lineHeight: 1.5 }}>
@@ -894,47 +973,143 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
               emptyLabel={t("addTrade.noBroker")}
             />
           </div>
-          {/* RÉCAPITULATIF — type et taille des comptes visés, en lecture seule.
-              Ces réglages se modifient depuis la page Comptes / la firme. */}
-          {selectedAccountObjects.length > 0 && (
+          {/* COMPTES VISÉS — deuxième temps du choix de destination.
+              Firme sélectionnée : tous ses comptes sont listés d'un coup,
+              seulement regroupés par type ; le titre d'un groupe fait office de
+              case « tout ce type ».
+              Compte hors firme : son type est simplement rappelé (il se modifie
+              depuis la page Comptes ou les paramètres de la firme). */}
+          {target?.kind === "firm" && (
             <div style={{ paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
-                {t("addTrade.accountType")}
-              </label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {selectedAccountObjects.map((acc) => {
-                  const type = acc.account_type || "live";
-                  const label = type === "eval" ? t("addTrade.eval")
-                    : type === "funded" ? t("addTrade.funded")
-                    : type === "demo" ? t("addTrade.demo")
-                    : t("addTrade.live");
-                  const dot = type === "eval" ? T.amber
-                    : type === "funded" ? T.blue
-                    : type === "demo" ? T.purple
-                    : T.green;
-                  return (
-                    <span key={acc.id} style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "5px 10px", borderRadius: 999,
-                      border: `1px solid ${T.border}`, background: T.white,
-                      fontSize: 12, color: T.textSub, fontWeight: 500, maxWidth: "100%",
-                    }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {acc.name}
-                      </span>
-                      <span style={{ color: T.textMut }}>
-                        · {label}{acc.eval_account_size ? ` ${acc.eval_account_size}` : ""}
-                      </span>
-                    </span>
-                  );
-                })}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                <label style={{ fontSize: 12, fontWeight: 500, color: T.textSub }}>
+                  {t("addTrade.target.whichAccounts")}
+                </label>
+                {firmAccounts.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setTargetIds(allFirmChecked ? [] : firmAccounts.map((a) => a.id))}
+                    style={{
+                      marginLeft: "auto", padding: 0, border: "none", background: "transparent",
+                      color: T.text, fontSize: 11, fontWeight: 500, cursor: "pointer",
+                      fontFamily: "inherit", textDecoration: "underline",
+                    }}
+                  >
+                    {allFirmChecked ? t("addTrade.target.clearAll") : t("addTrade.target.selectAll")}
+                  </button>
+                )}
               </div>
-              <div style={{ fontSize: 11, color: T.textMut, marginTop: 8, lineHeight: 1.5 }}>
-                {t("addTrade.typeReadOnly")}
-              </div>
+
+              {firmAccountsByType.length === 0 ? (
+                <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.5 }}>
+                  {t("addTrade.target.firmEmpty")}
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {firmAccountsByType.map((g) => {
+                      const c = accountTypeStyle(g.type);
+                      const checked = g.accounts.filter((a) => targetIds.includes(a.id)).length;
+                      const groupOn = checked === g.accounts.length;
+                      return (
+                        <div key={g.type}>
+                          <button
+                            type="button"
+                            aria-pressed={groupOn}
+                            onClick={() => toggleGroup(g)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              padding: "3px 2px", marginBottom: 7, border: "none",
+                              background: "transparent", cursor: "pointer",
+                              fontFamily: "inherit", textAlign: "left",
+                            }}
+                          >
+                            <CheckBox on={groupOn} partial={checked > 0 && !groupOn} color={c.fg} size={14} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{c.label()}</span>
+                            <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500 }}>
+                              {checked}/{g.accounts.length}
+                            </span>
+                          </button>
+
+                          {/* Une ligne par compte, cases alignées en colonnes :
+                              se balaie du regard, contrairement aux pilules. */}
+                          <div style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+                            gap: 6,
+                          }}>
+                            {g.accounts.map((acc) => {
+                              const on = targetIds.includes(acc.id);
+                              return (
+                                <button
+                                  key={acc.id}
+                                  type="button"
+                                  aria-pressed={on}
+                                  onClick={() => toggleTargetId(acc.id)}
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 9, minWidth: 0,
+                                    padding: "9px 11px", borderRadius: "var(--radius-field)",
+                                    border: `1px solid ${on ? c.bd : T.border}`,
+                                    background: on ? c.bg : T.white,
+                                    color: T.text, fontSize: 12.5, fontWeight: on ? 600 : 500,
+                                    cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                                    transition: "background .12s ease, border-color .12s ease",
+                                  }}
+                                >
+                                  <CheckBox on={on} color={c.fg} />
+                                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {acc.name || "Compte"}
+                                  </span>
+                                  {acc.eval_account_size && (
+                                    <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>
+                                      {acc.eval_account_size}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ fontSize: 11, color: T.textMut, marginTop: 12, lineHeight: 1.5 }}>
+                    {targetIds.length === 0
+                      ? t("addTrade.target.pickAtLeastOne")
+                      : targetIds.length === 1
+                        ? t("addTrade.target.oneHint")
+                        : t("addTrade.target.multiHint").replace("{n}", String(targetIds.length))}
+                  </div>
+                </>
+              )}
             </div>
           )}
+
+          {target?.kind === "account" && selectedAccountObjects.length === 1 && (() => {
+            const acc = selectedAccountObjects[0];
+            const c = accountTypeStyle(acc);
+            return (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                paddingBottom: 20, marginBottom: 20, borderBottom: `1px solid ${T.border}`,
+              }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 7,
+                  padding: "6px 12px", borderRadius: 999,
+                  border: `1px solid ${c.bd}`, background: c.bg,
+                  fontSize: 12, color: T.text, fontWeight: 600,
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.fg, flexShrink: 0 }} />
+                  {c.label()}{acc.eval_account_size ? ` · ${acc.eval_account_size}` : ""}
+                </span>
+                <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.5 }}>
+                  {t("addTrade.typeReadOnly")}
+                </span>
+              </div>
+            );
+          })()}
+
           {/* FILE */}
           <div style={{ paddingBottom: 20, marginBottom: 20 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 8, color: "#5C5C5C" }}>
@@ -1060,7 +1235,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
 
           <button
             onClick={handleImport}
-            disabled={files.length === 0 || accountNames.length === 0 || loading}
+            disabled={files.length === 0 || targetIds.length === 0 || loading}
             style={{
               width: "100%",
               display: "inline-flex",
@@ -1069,13 +1244,13 @@ export default function AddTradePage({ trades, setPage, setAccounts, setSelected
               gap: 6,
               padding: "10px 18px",
               borderRadius: 999,
-              background: files.length > 0 && accountNames.length > 0 && !loading ? T.text : "#FFFFFF",
-              color: files.length > 0 && accountNames.length > 0 && !loading ? "#FFFFFF" : T.textMut,
-              border: `1px solid ${files.length > 0 && accountNames.length > 0 && !loading ? T.text : T.border}`,
-              cursor: files.length > 0 && accountNames.length > 0 && !loading ? "pointer" : "not-allowed",
+              background: files.length > 0 && targetIds.length > 0 && !loading ? T.text : "#FFFFFF",
+              color: files.length > 0 && targetIds.length > 0 && !loading ? "#FFFFFF" : T.textMut,
+              border: `1px solid ${files.length > 0 && targetIds.length > 0 && !loading ? T.text : T.border}`,
+              cursor: files.length > 0 && targetIds.length > 0 && !loading ? "pointer" : "not-allowed",
               fontSize: 13,
               fontWeight: 500,
-              opacity: files.length > 0 && accountNames.length > 0 && !loading ? 1 : 0.6,
+              opacity: files.length > 0 && targetIds.length > 0 && !loading ? 1 : 0.6,
               transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
               fontFamily: "var(--font-sans)",
             }}

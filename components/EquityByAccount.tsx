@@ -4,14 +4,17 @@ import React, { useMemo } from "react";
 import { LineChart } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
+import { assignSeriesColors } from "@/lib/ui/brandColors";
 
 /**
  * EquityByAccount — superpose les courbes d'équité de chaque compte
  * sur le même SVG. Permet de voir d'un coup d'œil quel compte est en
  * tête, quel compte est en drawdown, et leurs trajectoires comparées.
  *
- * Utilise une palette de 8 couleurs distinctes ; au-delà, les couleurs
- * se répètent.
+ * Chaque courbe porte la couleur de la MAISON de son compte — sa prop firm ou
+ * son broker (lib/ui/brandColors). Deux comptes de la même maison se
+ * distinguent par les teintes secondaires de celle-ci ; la couleur de type
+ * reste le repli quand la maison n'est pas au catalogue.
  */
 
 interface MinimalTrade {
@@ -23,14 +26,26 @@ interface MinimalTrade {
 interface AccountInfo {
   id: string;
   name: string;
+  account_type?: string;
+  /** Plateforme d'exécution — repli quand aucune maison n'est identifiable. */
+  broker?: string;
+  firm_id?: string | null;
+}
+
+interface FirmInfo {
+  id: string;
+  name?: string;
+  platform?: string;
 }
 
 interface EquityByAccountProps {
   trades: MinimalTrade[];
   accounts: AccountInfo[];
+  /** Prop firms, pour que chaque compte prenne la couleur de SA maison plutôt
+   *  que celle de sa plateforme. Sans elles, tous les comptes d'un même broker
+   *  sortent de la même couleur. */
+  firms?: FirmInfo[];
 }
-
-const PALETTE = ["#16A34A", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#EC4899", "#84CC16"];
 
 interface Series {
   accountId: string;
@@ -41,9 +56,10 @@ interface Series {
   trades: number;
 }
 
-export default function EquityByAccount({ trades, accounts }: EquityByAccountProps) {
+export default function EquityByAccount({ trades, accounts, firms = [] }: EquityByAccountProps) {
   const series = useMemo<Series[]>(() => {
     const accountById = new Map(accounts.map(a => [a.id, a]));
+    const firmById = new Map(firms.map(f => [f.id, f]));
     const byAccount = new Map<string, MinimalTrade[]>();
 
     for (const tr of trades) {
@@ -52,8 +68,17 @@ export default function EquityByAccount({ trades, accounts }: EquityByAccountPro
       byAccount.get(accId)!.push(tr);
     }
 
+    /* Couleurs attribuées en un seul passage : deux comptes de la même maison
+       doivent recevoir des teintes différentes, ce qu'un appel indépendant par
+       compte ne saurait pas faire. */
+    const colorById = assignSeriesColors(
+      [...byAccount.keys()].map((accId) => {
+        const account = accountById.get(accId);
+        return { id: accId, account, firm: account?.firm_id ? firmById.get(account.firm_id) : undefined };
+      })
+    );
+
     const result: Series[] = [];
-    let i = 0;
     for (const [accId, accTrades] of byAccount) {
       // Group by day
       const byDay = new Map<string, number>();
@@ -73,17 +98,16 @@ export default function EquityByAccount({ trades, accounts }: EquityByAccountPro
       result.push({
         accountId: accId,
         name: accountById.get(accId)?.name || "Compte inconnu",
-        color: PALETTE[i % PALETTE.length],
+        color: colorById.get(accId) || T.textSub,
         points,
         totalPnL: Math.round(total * 100) / 100,
         trades: accTrades.length,
       });
-      i++;
     }
     // Sort by total P&L desc
     result.sort((a, b) => b.totalPnL - a.totalPnL);
     return result;
-  }, [trades, accounts]);
+  }, [trades, accounts, firms]);
 
   // Build a unified date range
   const allDates = useMemo(() => {
@@ -166,12 +190,6 @@ export default function EquityByAccount({ trades, accounts }: EquityByAccountPro
               );
             })}
           </svg>
-
-          {/* X-axis labels */}
-          <div style={{ display: "flex", justifyContent: "space-between", color: T.textMut, fontSize: 10, paddingLeft: pad.l, paddingRight: pad.r, marginTop: 4 }}>
-            <span>{allDates[0]}</span>
-            <span>{allDates[allDates.length - 1]}</span>
-          </div>
 
           {/* Legend */}
           <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 12 }}>

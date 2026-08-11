@@ -4,9 +4,11 @@
  * Modales de création / modification — firmes et comptes.
  *
  * Séparation volontaire des responsabilités :
- *  - PropFirmModal : crée ou modifie UNE firme (l'objet parent). Elle ne crée
- *    aucun compte : le nombre et le type de comptes se règlent ensuite dans la
- *    page détail de la firme.
+ *  - PropFirmModal : crée ou modifie UNE firme (l'objet parent). À la création
+ *    elle ne touche pas aux comptes ; en MODIFICATION elle gère aussi les
+ *    comptes de la firme : retirer ceux qu'on ne veut plus (marqués, puis
+ *    appliqués à l'enregistrement) et régler ce que montre son montant
+ *    principal. L'ajout de comptes reste dans la page de la firme.
  *  - AccountModal  : crée ou modifie UN compte isolé (live/démo perso, ou
  *    compte rattaché à une firme).
  *
@@ -16,19 +18,36 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Lock } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { PLATFORMS, PROP_FIRM_PRESETS, resolvePlatformIcon } from "@/lib/brokers/platforms";
+import { accountColor } from "@/lib/ui/accountTypes";
+import { firmLogo, firmBrandId } from "@/lib/accountBrand";
+import { refreshTradesCache } from "@/lib/tradesCache";
 import {
   ACCOUNT_SIZES,
   createFirm,
   createTradingAccount,
+  deleteTradingAccount,
+  readFirmHeroMode,
   updateFirm,
   updateTradingAccount,
+  writeFirmHeroMode,
 } from "@/lib/propFirms";
+
+/** « Eval · 50k » — type du compte, suivi de sa taille quand elle existe. */
+function accountTypeSizeLabel(acc) {
+  const type = acc?.account_type || "live";
+  const base =
+    type === "eval" ? t("addTrade.eval")
+      : type === "funded" ? t("addTrade.funded")
+        : type === "demo" ? t("accountsPage.demo")
+          : t("accountsPage.live");
+  return acc?.eval_account_size ? `${base} · ${acc.eval_account_size}` : base;
+}
 
 /* ─────────────────────────── Primitives ─────────────────────────── */
 
@@ -241,17 +260,55 @@ const platformOptions = PLATFORMS.map((p) => ({ id: p.id, label: p.name, iconUrl
  * @param {Function} props.onClose
  * @param {Function} props.onSaved  Reçoit la firme créée/modifiée.
  */
-export function PropFirmModal({ firm = null, userId, onClose, onSaved }) {
+export function PropFirmModal({ firm = null, accounts = [], userId, onClose, onSaved, onAccountsChanged, onHeroModeChanged }) {
   useLang();
   const isEdit = !!firm;
   const [name, setName] = React.useState(firm?.name || "");
+  /* La marque est indépendante du nom : c'est elle qui rattache la firme à une
+     maison connue (et lui donne son logo). Une firme d'avant la migration 032
+     n'a pas de `brand` : on la déduit une fois de son nom, puis elle survit à
+     tous les renommages. */
+  const [brand, setBrand] = React.useState(() => firmBrandId(firm) || "");
   const [platform, setPlatform] = React.useState(firm?.platform || "");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
 
+  // Ce que montre le chiffre héros de la page firme (préférence d'affichage).
+  const [heroMode, setHeroMode] = React.useState(() => (firm ? readFirmHeroMode(firm.id) : "value"));
+
+  /* Gestion des comptes de la firme, en édition seulement.
+
+     Les retraits sont MARQUÉS, pas exécutés au clic : supprimer un compte
+     supprime aussi ses trades, on ne le fait donc qu'à l'enregistrement, et la
+     marque reste annulable jusque-là. */
+  const [removeIds, setRemoveIds] = React.useState(() => new Set());
+
+  const toggleRemove = (id) => {
+    setRemoveIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  /* Un preset renseigne la plateforme et, seulement si l'utilisateur n'a rien
+     écrit de personnel, le nom. Un nom déjà saisi n'est jamais écrasé : on ne
+     remplace que le champ vide ou le nom laissé par un preset précédent. */
+  const isUntouchedName = () => {
+    const current = name.trim().toLowerCase();
+    if (!current) return true;
+    return PROP_FIRM_PRESETS.some((p) => p.name.toLowerCase() === current);
+  };
+
+  /* Choisir une maison la rattache (`brand`) et, à la création seulement,
+     propose son nom. Recliquer la maison active la détache. */
   const applyPreset = (preset) => {
-    setName(preset.name);
-    setPlatform(preset.id === "ftmo" ? "" : "tradovate");
+    if (brand === preset.id) { setBrand(""); return; }
+    setBrand(preset.id);
+    if (!isEdit) {
+      if (isUntouchedName()) setName(preset.name);
+      setPlatform(preset.id === "ftmo" ? "" : "tradovate");
+    }
   };
 
   const submit = async () => {
@@ -262,11 +319,27 @@ export function PropFirmModal({ firm = null, userId, onClose, onSaved }) {
     try {
       const patch = {
         name: trimmed,
+        brand: brand || null,
         platform: platform || null,
       };
       if (isEdit) {
         await updateFirm(firm.id, patch);
-        onSaved?.({ ...firm, ...patch });
+        const nextFirm = { ...firm, ...patch };
+        writeFirmHeroMode(firm.id, heroMode);
+        onHeroModeChanged?.(heroMode);
+
+        // Les retraits marqués ne sont appliqués qu'ici. L'AJOUT de comptes
+        // reste dans la page de la firme (bouton « Ajouter des comptes ») :
+        // cette modale ne fait que retirer.
+        for (const id of removeIds) {
+          await deleteTradingAccount(id, userId);
+        }
+        onSaved?.(nextFirm);
+        if (removeIds.size > 0) {
+          // Un compte retiré emporte ses trades : le cache local doit suivre.
+          await refreshTradesCache(userId);
+          onAccountsChanged?.({ removedIds: Array.from(removeIds), created: [] });
+        }
       } else {
         onSaved?.(await createFirm(userId, patch));
       }
@@ -294,35 +367,43 @@ export function PropFirmModal({ firm = null, userId, onClose, onSaved }) {
     >
       <ErrorLine>{error}</ErrorLine>
 
-      {!isEdit && (
-        <Field label={t("firms.presets")} hint={t("firms.presetsHint")}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {PROP_FIRM_PRESETS.map((preset) => {
-              const active = name.trim().toLowerCase() === preset.name.toLowerCase();
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => applyPreset(preset)}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    padding: "6px 10px", borderRadius: 999,
-                    border: `1px solid ${active ? T.text : T.border}`,
-                    background: active ? T.accentBg : T.white,
-                    color: T.text, fontSize: 12, fontWeight: 500,
-                    cursor: "pointer", fontFamily: "inherit",
-                  }}
-                >
-                  {preset.iconPath && (
-                    <img src={preset.iconPath} alt="" style={{ height: 14, maxWidth: 40, objectFit: "contain" }} />
-                  )}
-                  {preset.name}
-                </button>
-              );
-            })}
-          </div>
-        </Field>
-      )}
+      {/* Le choix de la maison reste disponible en MODIFICATION : c'est là que
+          le nom change, et c'est le seul endroit où rattacher (ou détacher)
+          une firme dont le nom ne dit plus la maison. */}
+      <Field
+        label={t("firms.presets")}
+        hint={isEdit ? t("firms.brandHintEdit") : t("firms.presetsHint")}
+      >
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {PROP_FIRM_PRESETS.map((preset) => {
+            /* Actif = la MARQUE retenue, plus le nom saisi : c'est tout
+               l'objet du changement, le rattachement survit au renommage. */
+            const active = brand === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => applyPreset(preset)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "6px 10px", borderRadius: 999,
+                  border: `1px solid ${active ? T.text : T.border}`,
+                  background: active ? T.accentBg : T.white,
+                  color: T.text, fontSize: 12, fontWeight: 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                {preset.iconPath && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={preset.iconPath} alt="" style={{ height: 14, maxWidth: 40, objectFit: "contain" }} />
+                )}
+                {preset.name}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
 
       <Field label={t("firms.name")}>
         <TextInput value={name} onChange={setName} placeholder={t("firms.namePh")} autoFocus />
@@ -337,6 +418,125 @@ export function PropFirmModal({ firm = null, userId, onClose, onSaved }) {
           placeholder={t("firms.noPlatform")}
         />
       </Field>
+
+      {/* ── Affichage & comptes de la firme (édition seulement) ──────────── */}
+      {isEdit && (
+        <>
+          <div style={{ height: 1, background: T.border }} />
+
+          {/* Chiffre héros de la page : la valeur des comptes n'a de sens que si
+              leur capital est connu ; sinon le P&L seul est plus honnête. */}
+          <Field label={t("firms.heroLabel")} hint={t("firms.heroHint")}>
+            <PillGroup
+              ariaLabel={t("firms.heroLabel")}
+              value={heroMode}
+              onChange={setHeroMode}
+              options={[
+                { id: "value", label: t("firms.heroValue") },
+                { id: "pnl", label: t("firms.heroPnl") },
+              ]}
+            />
+          </Field>
+
+          <div style={{ height: 1, background: T.border }} />
+
+          <Field
+            label={`${t("firms.accountsTitle")} (${accounts.length - removeIds.size})`}
+            hint={t("firms.manageAccountsHint")}
+          >
+            {accounts.length === 0 ? (
+              <div style={{ fontSize: 12, color: T.textMut }}>{t("firms.noAccountYet")}</div>
+            ) : (
+              /* Une seule surface encadrée, des lignes séparées par un filet :
+                 une liste se lit comme un bloc. Des cartes individuelles à
+                 bordure faisaient bégayer huit fois le même contour. */
+              <div style={{
+                border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)",
+                overflow: "hidden", background: T.white,
+              }}>
+                {accounts.map((acc, i) => {
+                  const marked = removeIds.has(acc.id);
+                  return (
+                    <div
+                      key={acc.id}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "8px 10px", minHeight: 44,
+                        borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
+                        background: marked ? T.redBg : "transparent",
+                        transition: "background var(--dur-fast) var(--ease-out)",
+                      }}
+                    >
+                      {/* Pastille de couleur du TYPE de compte : le même repère
+                          que la liste des comptes et les courbes. */}
+                      <span aria-hidden style={{
+                        width: 8, height: 8, borderRadius: 999, flexShrink: 0,
+                        background: accountColor(acc),
+                        opacity: marked ? 0.4 : 1,
+                      }} />
+                      <span style={{
+                        flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: 2,
+                      }}>
+                        <span style={{
+                          fontSize: 13, fontWeight: 500, color: marked ? T.textMut : T.text,
+                          textDecoration: marked ? "line-through" : "none",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {acc.name || acc.eval_account_size || "Compte"}
+                        </span>
+                        <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap" }}>
+                          {accountTypeSizeLabel(acc)}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleRemove(acc.id)}
+                        aria-label={marked ? t("common.cancel") : t("common.delete")}
+                        style={{
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          gap: 6, height: 30, padding: marked ? "0 10px" : "0 8px",
+                          borderRadius: 999, flexShrink: 0,
+                          border: `1px solid ${marked ? T.border : "transparent"}`,
+                          background: "transparent",
+                          color: marked ? T.text : T.textMut, cursor: "pointer",
+                          fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+                          transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = marked ? T.accentBg : T.redBg;
+                          if (!marked) e.currentTarget.style.color = T.red;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          if (!marked) e.currentTarget.style.color = T.textMut;
+                        }}
+                      >
+                        {marked ? t("common.cancel") : <Trash2 size={14} strokeWidth={1.75} />}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Field>
+
+          {/* L'avertissement n'apparaît qu'en cas de retrait marqué : supprimer
+              un compte supprime aussi ses trades, ça doit être dit avant de
+              valider, pas après. */}
+          {removeIds.size > 0 && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+              padding: "10px 12px", borderRadius: "var(--radius-field)",
+              border: `1px solid ${T.redBd}`, background: T.redBg,
+              fontSize: 12, color: T.red, lineHeight: 1.5,
+            }}>
+              <Trash2 size={13} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>{t("firms.removeAccountsWarn").replace("{n}", String(removeIds.size))}</span>
+            </div>
+          )}
+
+        </>
+      )}
     </ModalShell>
   );
 }
@@ -384,13 +584,18 @@ export function AccountModal({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  // Rattacher une firme préremplit la plateforme de la firme (si vide).
+  /* Un compte rattaché à une firme suit OBLIGATOIREMENT la plateforme de sa
+     firme : tous les comptes d'une même prop firm passent par le même broker.
+     Le champ n'est donc plus modifiable tant qu'une firme est choisie, et la
+     valeur est réalignée à chaque changement de firme (pas seulement quand elle
+     est vide, sinon un compte gardait l'ancienne plateforme en changeant de
+     firme). */
+  const linkedFirm = firms.find((f) => f.id === firmId) || null;
   React.useEffect(() => {
-    if (!firmId || platform) return;
-    const firm = firms.find((f) => f.id === firmId);
-    if (firm?.platform) setPlatform(firm.platform);
+    if (!linkedFirm) return;
+    setPlatform(linkedFirm.platform || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId]);
+  }, [firmId, linkedFirm?.platform]);
 
   const isSized = type === "eval" || type === "funded";
 
@@ -400,7 +605,12 @@ export function AccountModal({
     setBusy(true);
     setError("");
     try {
-      const brokerName = platform ? PLATFORMS.find((p) => p.id === platform)?.name || null : null;
+      // Rattaché à une firme → la plateforme de la firme fait foi, quoi qu'il y
+      // ait dans l'état local.
+      const effectivePlatform = linkedFirm ? (linkedFirm.platform || "") : platform;
+      const brokerName = effectivePlatform
+        ? PLATFORMS.find((p) => p.id === effectivePlatform)?.name || null
+        : null;
       const patch = {
         name: trimmed,
         broker: brokerName,
@@ -465,7 +675,8 @@ export function AccountModal({
             ...firms.map((f) => ({
               id: f.id,
               label: f.name,
-              iconUrl: resolvePlatformIcon(f.platform || f.name) || undefined,
+              // Logo de la firme (son nom), pas de sa plateforme d'exécution.
+              iconUrl: firmLogo(f) || undefined,
             })),
           ]}
           searchable={firms.length > 6}
@@ -498,14 +709,50 @@ export function AccountModal({
         </Field>
       )}
 
-      <Field label={t("accountModal.platform")} hint={t("accountModal.platformHint")}>
-        <SearchableSelect
-          value={platform}
-          onChange={setPlatform}
-          options={[{ id: "", label: t("firms.noPlatform") }, ...platformOptions]}
-          searchPlaceholder={t("firms.searchPlatform")}
-          placeholder={t("firms.noPlatform")}
-        />
+      {/* Plateforme : héritée et verrouillée dès qu'une firme est choisie —
+          tous les comptes d'une prop firm partagent le même broker. Elle reste
+          affichée (pas masquée) pour que l'information soit lisible, avec la
+          raison du verrou. */}
+      <Field
+        label={t("accountModal.platform")}
+        hint={linkedFirm ? t("accountModal.platformLockedHint") : t("accountModal.platformHint")}
+      >
+        {linkedFirm ? (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "9px 12px", minHeight: 40, borderRadius: "var(--radius-field)",
+            border: `1px solid ${T.border}`, background: T.accentBg,
+            fontSize: 13, color: T.textSub,
+          }}>
+            {/* Ce champ parle de la plateforme d'EXÉCUTION : son icône est celle
+                de la plateforme, pas celle de la firme — sans plateforme
+                réglée, aucune icône plutôt que le logo de la firme. */}
+            {resolvePlatformIcon(linkedFirm.platform) && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={resolvePlatformIcon(linkedFirm.platform)}
+                alt=""
+                width={16}
+                height={16}
+                style={{ borderRadius: 4, objectFit: "contain", flexShrink: 0 }}
+              />
+            )}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {linkedFirm.platform
+                ? PLATFORMS.find((p) => p.id === linkedFirm.platform)?.name || linkedFirm.platform
+                : t("firms.noPlatform")}
+            </span>
+            <Lock size={13} strokeWidth={1.75} style={{ marginLeft: "auto", flexShrink: 0, color: T.textMut }} />
+          </div>
+        ) : (
+          <SearchableSelect
+            value={platform}
+            onChange={setPlatform}
+            options={[{ id: "", label: t("firms.noPlatform") }, ...platformOptions]}
+            searchPlaceholder={t("firms.searchPlatform")}
+            placeholder={t("firms.noPlatform")}
+          />
+        )}
       </Field>
     </ModalShell>
   );

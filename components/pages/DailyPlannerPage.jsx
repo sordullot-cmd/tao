@@ -10,6 +10,7 @@ import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { TimeField } from "./AgendaDateFields";
 import { NavArrow, NavLabel } from "@/components/ui/DateNav";
 import MiniCalendar from "@/components/ui/MiniCalendar";
+import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon, habitCategoryIds, CATEGORY_PALETTE } from "@/lib/lifeRpgCategories";
 import {
   Plus, Check, Trash2,
@@ -952,13 +953,12 @@ function HabitsChart({ habits, history }) {
         >
           <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
             style={{ width: "100%", height: 240, display: "block", fontFamily: "var(--font-sans)" }}>
+            {/* Aire tramée — trame commune à tous les graphiques du site, aux
+                couleurs de la courbe. */}
             <defs>
-              <linearGradient id="habits-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={T.green} stopOpacity="0.22" />
-                <stop offset="100%" stopColor={T.green} stopOpacity="0" />
-              </linearGradient>
+              <AreaDotsDefs id="habits" color={T.green} top={padT} bottom={padT + chartH} width={VB_W} height={VB_H} />
             </defs>
-            <path d={areaD} fill="url(#habits-grad)" stroke="none" />
+            <path d={areaD} {...areaDotsFill("habits")} stroke="none" />
             <path d={pathD} fill="none" stroke={T.green} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             {hoverIdx !== null && points[hoverIdx] && (
               <line x1={points[hoverIdx].x} y1={padT} x2={points[hoverIdx].x} y2={padT + chartH} stroke={T.textMut} strokeWidth="0.5" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" pointerEvents="none" />

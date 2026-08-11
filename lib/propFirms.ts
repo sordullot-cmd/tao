@@ -18,6 +18,14 @@ export interface PropFirm {
   id: string;
   user_id: string;
   name: string;
+  /**
+   * Maison de prop trading (PLATFORMS.id : topstep, apex, ftmo…). C'est ELLE qui
+   * porte le logo, pas le nom : renommer « Topstep » en « Topstep #2 » ne doit
+   * pas rompre le rattachement. Colonne ajoutée par la migration 032 ; sans
+   * elle, on retombe sur la résolution par nom.
+   */
+  brand?: string | null;
+  /** Plateforme d'exécution héritée par les comptes — sert à l'import. */
   platform?: string | null;
   notes?: string | null;
   created_at?: string;
@@ -90,6 +98,40 @@ export function writeFundedMeta(meta: Record<string, unknown>): void {
   } catch {}
 }
 
+/* ── Réglages d'affichage d'une firme ─────────────────────────────────────
+   Ce que montre le chiffre héros de la page firme : la valeur totale des
+   comptes (capital géré + P&L) ou le P&L seul. Stocké en local comme les
+   métadonnées « funded », donc sans migration de base : c'est une préférence
+   d'affichage, pas une donnée de trading. */
+
+export const FIRM_META_KEY = "tr4de_firms_display_meta";
+
+/** "value" = capital géré + P&L · "pnl" = P&L des comptes seul. */
+export type FirmHeroMode = "value" | "pnl";
+
+export function readFirmMeta(): Record<string, { hero?: FirmHeroMode }> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(FIRM_META_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** Mode du chiffre héros d'une firme. Par défaut la valeur totale. */
+export function readFirmHeroMode(firmId: string): FirmHeroMode {
+  return readFirmMeta()[firmId]?.hero === "pnl" ? "pnl" : "value";
+}
+
+export function writeFirmHeroMode(firmId: string, hero: FirmHeroMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    const meta = readFirmMeta();
+    meta[firmId] = { ...(meta[firmId] || {}), hero };
+    localStorage.setItem(FIRM_META_KEY, JSON.stringify(meta));
+  } catch {}
+}
+
 /** Prévient les autres vues (sélecteurs, sidebar, dashboard) d'un changement. */
 export function notifyAccountsChanged(): void {
   if (typeof window === "undefined") return;
@@ -136,23 +178,35 @@ export async function fetchFirms(userId: string): Promise<PropFirm[]> {
   return (data || []) as PropFirm[];
 }
 
+/**
+ * `brand` vient de la migration 032. Sur une base qui ne l'a pas encore,
+ * PostgREST répond « colonne inconnue » : on rejoue alors la requête sans elle
+ * plutôt que d'échouer. La firme est enregistrée, seule la marque n'est pas
+ * mémorisée — le logo retombe sur la résolution par nom, comme avant.
+ */
+function isUnknownBrandColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "PGRST204" && /brand/i.test(String(error.message || ""));
+}
+
 export async function createFirm(
   userId: string,
   patch: Partial<PropFirm> & { name: string }
 ): Promise<PropFirm> {
   const sb = createClient();
-  const { data, error } = await sb
-    .from("prop_firms")
-    .insert([
-      {
-        user_id: userId,
-        name: patch.name.trim(),
-        platform: patch.platform || null,
-        notes: patch.notes || null,
-      },
-    ])
-    .select()
-    .single();
+  const row: Record<string, unknown> = {
+    user_id: userId,
+    name: patch.name.trim(),
+    platform: patch.platform || null,
+    notes: patch.notes || null,
+  };
+  if (patch.brand !== undefined) row.brand = patch.brand || null;
+
+  let { data, error } = await sb.from("prop_firms").insert([row]).select().single();
+  if (error && isUnknownBrandColumn(error)) {
+    delete row.brand;
+    ({ data, error } = await sb.from("prop_firms").insert([row]).select().single());
+  }
   if (error) {
     // 23505 = violation d'unicité (user_id, lower(name))
     throwDbError(error);
@@ -162,10 +216,13 @@ export async function createFirm(
 
 export async function updateFirm(firmId: string, patch: Partial<PropFirm>): Promise<void> {
   const sb = createClient();
-  const { error } = await sb
-    .from("prop_firms")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", firmId);
+  const row: Record<string, unknown> = { ...patch, updated_at: new Date().toISOString() };
+
+  let { error } = await sb.from("prop_firms").update(row).eq("id", firmId);
+  if (error && isUnknownBrandColumn(error)) {
+    delete row.brand;
+    ({ error } = await sb.from("prop_firms").update(row).eq("id", firmId));
+  }
   if (error) {
     throwDbError(error);
   }

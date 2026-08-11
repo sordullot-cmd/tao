@@ -28,9 +28,13 @@ export const T = {
   accentBd: "var(--color-border-strong, #D4D4D4)",
   amber:    "var(--color-amber, #F97316)",
   amberBg:  "var(--color-amber-bg, #FFF4E6)",
+  amberBd:  "var(--color-amber-bd, #FED7AA)",
   blue:     "var(--color-blue, #3B82F6)",
+  blueBd:   "var(--color-blue-bd, #BFDBFE)",
   blueBg:   "var(--color-blue-bg, #EFF6FF)",
   purple:   "var(--color-purple, #8B5CF6)",
+  purpleBg: "var(--color-purple-bg, #F5F3FF)",
+  purpleBd: "var(--color-purple-bd, #DDD6FE)",
   cyan:     "var(--color-cyan, #06B6D4)",
   // Accent signature style Kraken (violet/indigo) — courbe portefeuille & pastilles
   kraken:   "var(--color-kraken, #7C4DFF)",
@@ -49,6 +53,9 @@ export const T = {
   tagShortText: "var(--color-tag-short-text, #AD4E00)",
   tagLongBg:    "var(--color-tag-long-bg, #CAFFF3)",
   tagLongText:  "var(--color-tag-long-text, #007E6B)",
+  // Vignette ronde d'un instrument (maquette « Trades », node 283:6381)
+  symbolBadge:     "var(--color-symbol-badge, #018FBF)",
+  symbolBadgeText: "var(--color-symbol-badge-text, #FFFFFF)",
   // Calendrier P&L
   calEmptyBg:   "var(--color-cal-empty-bg, #FAFBFB)",
   calEmptyText: "var(--color-cal-empty-text, rgba(13,13,13,0.30))",
@@ -56,6 +63,14 @@ export const T = {
   calPosText:   "var(--color-cal-pos-text, #06700D)",
   calNegBg:     "var(--color-cal-neg-bg, rgba(255,0,4,0.20))",
   calNegText:   "var(--color-cal-neg-text, #D30004)",
+  // Variante « grande cellule » (page Calendrier) : aplat dilué + encres dédiées
+  calPosSurface: "var(--color-cal-pos-surface, rgba(0,255,106,0.05))",
+  calNegSurface: "var(--color-cal-neg-surface, rgba(255,0,4,0.05))",
+  calPosDay:     "var(--color-cal-pos-day, rgba(10,54,13,0.51))",
+  calNegDay:     "var(--color-cal-neg-day, rgba(95,8,9,0.51))",
+  calPosSub:     "var(--color-cal-pos-sub, #06590C)",
+  // Piste d'un sélecteur segmenté
+  segmentTrack: "var(--color-segment-track, rgba(28,31,33,0.05))",
   // Ligne de tableau mise en avant
   rowHighlight: "var(--color-row-highlight, rgba(13,13,13,0.04))",
   // Ombres

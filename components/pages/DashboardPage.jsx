@@ -7,6 +7,11 @@ import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { Skeleton, SkeletonRows } from "@/components/ui/Skeleton";
 import { useApp } from "@/lib/contexts/AppContext";
+import {
+  GRID_COLUMN_STOPS, GRID_TICKS, AreaDotsDefs, areaDotsFill,
+  HoverFadeDefs, hoverFadeMask, hoverFadeStyle, HOVER_FADE,
+} from "@/components/ui/da";
+import TradesList, { COMPACT_TRADE_COLUMNS } from "@/components/ui/tradesList";
 import { LayoutDashboard, Plus, ChevronLeft, ChevronRight, ArrowDownRight, ArrowUpRight } from "lucide-react";
 
 /* ============================================================================
@@ -36,67 +41,9 @@ function SectionTitle({ children, action }) {
 /** En-tête de tableau : 12px Medium en capitales, atténué. */
 const TH = { fontSize:12, fontWeight:500, lineHeight:"17.05px", color:T.text, textTransform:"uppercase" };
 
-/** Pastille Long / Short. */
-function DirectionTag({ direction }) {
-  const isShort = String(direction || "").toLowerCase().startsWith("s");
-  return (
-    <span style={{
-      display:"inline-flex", alignItems:"center", justifyContent:"center",
-      padding:"2px 12px", borderRadius:48, fontSize:14, lineHeight:"17.05px",
-      background: isShort ? T.tagShortBg : T.tagLongBg,
-      color: isShort ? T.tagShortText : T.tagLongText,
-    }}>
-      {isShort ? "Short" : "Long"}
-    </span>
-  );
-}
-
-/**
- * Vignette 32×32 du symbole. La maquette montre le logo Nasdaq ; les autres
- * instruments retombent sur une pastille d'initiales plutôt qu'une image vide.
- */
-const SYMBOL_LOGOS = [
-  { match: /^(mnq|nq|nasdaq|ndx|us100)/i, name: "Nasdaq", src: "/symbols/nasdaq.png" },
-  { match: /^(mes|es|spx|us500)/i,        name: "S&P 500" },
-  { match: /^(mym|ym|dow|us30)/i,         name: "Dow Jones" },
-  { match: /^(m2k|rty|russell)/i,         name: "Russell 2000" },
-];
-
-/**
- * Décompose un symbole en nom lisible + code, comme dans la maquette
- * (« Nasdaq » au-dessus de « MNQU6 »). Sans correspondance connue, le code
- * seul est affiché plutôt qu'un libellé inventé.
- */
-function symbolLabel(symbol) {
-  const code = String(symbol || "").trim();
-  const known = SYMBOL_LOGOS.find(l => l.match.test(code));
-  return known ? { name: known.name, code } : { name: code, code: null };
-}
-
-function SymbolBadge({ symbol }) {
-  const logo = SYMBOL_LOGOS.find(l => l.match.test(String(symbol || "")) && l.src);
-  if (logo) {
-    return (
-      <img
-        src={logo.src}
-        alt=""
-        width={32}
-        height={32}
-        style={{width:32,height:32,borderRadius:4,objectFit:"cover",flexShrink:0,display:"block"}}
-      />
-    );
-  }
-  const initials = String(symbol || "?").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase();
-  return (
-    <div style={{
-      width:32, height:32, borderRadius:4, flexShrink:0,
-      display:"flex", alignItems:"center", justifyContent:"center",
-      background:T.accentBg, color:T.textSub, fontSize:12, fontWeight:500,
-    }}>
-      {initials}
-    </div>
-  );
-}
+/* La vignette du symbole, son libellé et la table des instruments vivaient ici
+   ET dans components/ui/da.jsx — deux copies qui divergeaient. Source unique :
+   da.jsx (SYMBOL_LOGOS / symbolLabel / SymbolBadge / SymbolCell). */
 
 /** Montant sur deux tons : partie entière en encre pleine, décimales grisées. */
 function HeroAmount({ value }) {
@@ -289,7 +236,6 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
     return (
       <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:14,fontFamily:"var(--font-sans)"}} className="anim-1" aria-busy="true" aria-live="polite">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <h1 style={{fontSize:20,fontWeight:500,lineHeight:1,color:T.text,margin:0,fontFamily:"var(--font-sans)"}}>{t("dash.title")}</h1>
           <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
         </div>
         <Skeleton width={90} height={14} />
@@ -304,7 +250,6 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
     return (
       <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:14,fontFamily:"var(--font-sans)"}} className="anim-1">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <h1 style={{fontSize:20,fontWeight:500,lineHeight:1,color:T.text,margin:0,fontFamily:"var(--font-sans)"}}>{t("dash.title")}</h1>
           <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
         </div>
         <div style={{background:T.white,borderRadius:12,boxShadow:T.elevCard,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
@@ -609,14 +554,17 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // P&L curve - grouped by day (sur toute la plage, pas seulement le mois affiché)
   const sortedTrades = [...curveTrades].sort((a,b)=>new Date(a.date)-new Date(b.date));
   const dailyPnL = {};
+  // Nombre de trades par jour, porté par chaque point de la courbe.
+  const dailyCount = {};
   sortedTrades.forEach(t=>{
     try {
       const dateKey = new Date(t.date).toISOString().split('T')[0];
       if (!dailyPnL[dateKey]) dailyPnL[dateKey] = 0;
       dailyPnL[dateKey] += t.pnl;
+      dailyCount[dateKey] = (dailyCount[dateKey] || 0) + 1;
     } catch (e) {}
   });
-  
+
   const pnlCurveFull = [];
   let cum = 0;
   const sortedDates = Object.keys(dailyPnL).sort();
@@ -624,11 +572,11 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   if (sortedDates.length > 0) {
     const first = new Date(sortedDates[0]);
     first.setDate(first.getDate() - 1);
-    pnlCurveFull.push({ cum: 0, pnl: 0, date: first.toISOString().split('T')[0] });
+    pnlCurveFull.push({ cum: 0, pnl: 0, count: 0, date: first.toISOString().split('T')[0] });
   }
   sortedDates.forEach(date=>{
     cum += dailyPnL[date];
-    pnlCurveFull.push({cum, pnl:dailyPnL[date], date});
+    pnlCurveFull.push({cum, pnl:dailyPnL[date], count:dailyCount[date] || 0, date});
   });
 
   // Fenêtre de la courbe : on ne garde que la fin. Le cumulé reste celui du
@@ -728,39 +676,55 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   const deltaColor = deltaAbs > 0 ? T.pnlPos : deltaAbs < 0 ? T.pnlNeg : T.textSub;
   const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
 
-  // gap 48 et 14 px de retrait haut : la barre du haut (vide en desktop)
-  // apporte déjà 20 px, ce qui place le titre aux 34 px de la maquette.
+  /* Bande haute du bloc de tête : le chiffre héros l'occupe, la courbe passe
+     dessous (elle ne commence à tracer qu'à `topY = HEAD_BAND`). Les deux
+     valeurs sont partagées, c'est ce qui garantit qu'ils se rejoignent. */
+  const HEAD_BAND = 160;
+  // 48 px au-dessus du libellé : la même respiration que la page Calendrier,
+  // qui laisse 48 entre sa barre d'en-tête et son P&L.
+  const HEAD_PAD_TOP = 48;
+  /* Les traits verticaux du fond ne montent pas jusqu'en haut : ils s'arrêtent
+     sous le chiffre héros, qui doit se lire sur un fond nu. */
+  const GRID_TOP = HEAD_BAND - 24;
+
+  /* Plus de retrait haut : le bloc de tête (courbe + chiffre héros) doit toucher
+     le bord supérieur de la zone de contenu — la barre du haut est mise à
+     hauteur nulle en desktop pour cette page seule (cf. DashboardNew). */
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:48,paddingTop:14,fontFamily:"var(--font-sans)"}} className="anim-1">
-      {/* PAGE TITLE */}
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <h1 style={{fontSize:20,fontWeight:500,lineHeight:1,color:T.text,margin:0,fontFamily:"var(--font-sans)"}}>{t("dash.title")}</h1>
-        <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
-      </div>
+    <div style={{display:"flex",flexDirection:"column",gap:48,fontFamily:"var(--font-sans)"}} className="anim-1">
 
-      {/* P&L TOTAL + COURBE — posés à même le fond, sans carte (DA Figma) */}
-      <div style={{display:"flex",flexDirection:"column",gap:24}}>
+      {/* ═══ P&L TOTAL + COURBE ═══════════════════════════════════════════════
+          Le chiffre héros reste dans le FLUX de la page : sa marge est donc
+          celle de tous les autres blocs, par construction — aucun calcul, donc
+          aucun décalage possible. C'est la courbe qui vient se glisser dessous,
+          par un retrait vertical, et qui part seule à fond perdu vers la gauche.
+          Aucune carte, aucune bordure. */}
+      <div style={{position:"relative"}}>
 
-        {/* Chiffre héros + fenêtre de la courbe */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* Chiffre héros + pastilles de période — bande haute du bloc. */}
+        <div style={{
+          position:"relative", zIndex:1, height:HEAD_BAND, paddingTop:HEAD_PAD_TOP,
+          display:"flex", alignItems:"flex-start", justifyContent:"space-between",
+          gap:16, flexWrap:"nowrap", pointerEvents:"none",
+        }}>
+          <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
             <div style={{fontSize:14,lineHeight:"18.6px",color:T.textSub}}>{t("dash.kpi.totalPnL")}</div>
-            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <HeroAmount value={totalPnL} />
-              <div style={{display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:500,lineHeight:"18.6px",color:deltaColor}}>
-                <span>{deltaAbs > 0 ? "+" : ""}{fmt(deltaAbs, false)}</span>
-                <span style={{display:"inline-flex",alignItems:"center"}}>
-                  <span>(</span>
-                  <DeltaIcon size={20} strokeWidth={1.75} style={{margin:"0 1px"}} />
-                  <span>{deltaPct.toFixed(2)}%</span>
-                  <span>&nbsp;)</span>
-                </span>
-              </div>
+            <HeroAmount value={totalPnL} />
+            <div style={{display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:500,lineHeight:"18.6px",color:deltaColor}}>
+              <span>{deltaAbs > 0 ? "+" : ""}{fmt(deltaAbs, false)}</span>
+              <span style={{display:"inline-flex",alignItems:"center"}}>
+                <span>(</span>
+                <DeltaIcon size={20} strokeWidth={1.75} style={{margin:"0 1px"}} />
+                <span>{deltaPct.toFixed(2)}%</span>
+                <span>&nbsp;)</span>
+              </span>
             </div>
           </div>
 
-          {/* Fenêtre temporelle (maquette) */}
-          <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+          {/* Fenêtre temporelle (maquette). Jamais de retour à la ligne : les six
+              pastilles passeraient sur une 2ᵉ rangée, dans la zone de tracé. Sur
+              écran étroit elles défilent horizontalement. */}
+          <div className="scroll-thin" style={{display:"flex",alignItems:"center",gap:4,flexWrap:"nowrap",maxWidth:"100%",overflowX:"auto",flexShrink:0,pointerEvents:"auto"}}>
             {PERIODS.map(p => {
               const active = period === p.id;
               return (
@@ -785,88 +749,121 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
           </div>
         </div>
 
-        {/* Zone graphique */}
-        <div style={{position:"relative",display:"flex",flexDirection:"column"}}>
+        {pnlCurve.length > 1 ? (
+          (() => {
+            /* Géométrie. La zone de tracé ne démarre qu'à `topY` : au-dessus,
+               `HEAD_BAND` px passent sous le chiffre héros, que la courbe
+               rejoint par un retrait vertical. On dessine à l'échelle 1:1
+               (W = largeur mesurée) pour que la trame reste circulaire. */
+            const plotH = 310;
+            const topY = HEAD_BAND, plotBottom = HEAD_BAND + plotH, H = plotBottom + 20;
+            const W = chartWidth;
+            const maxCum = Math.max(...pnlCurve.map(x => x.cum));
+            const minCum = Math.min(...pnlCurve.map(x => x.cum));
+            const span = (maxCum - minCum) || 1;
+            const xFor = (i) => (i / (pnlCurve.length - 1 || 1)) * W;
+            const yFor = (v) => plotBottom - ((v - minCum) / span) * plotH;
+            const points = pnlCurve.map((p, i) => [xFor(i), yFor(p.cum)]);
+            const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0]} ${p[1]}`).join(" ");
+            // Aire fermée sous la courbe : c'est elle qui porte la trame.
+            const areaD = `${pathD} L ${points[points.length - 1][0]} ${H} L ${points[0][0]} ${H} Z`;
 
-          {pnlCurve.length > 1 ? (
-            (() => {
-              // Géométrie reprise de la maquette : 358 px de haut, 4 séparateurs
-              // verticaux à 10 % d'opacité. On dessine à l'échelle 1:1 (W = la
-              // largeur réellement mesurée) pour que la trame de points qui
-              // remplit l'aire reste circulaire.
-              const H = 358, W = chartWidth;
-              const topY = 30, plotBottom = 340;
-              const plotH = plotBottom - topY;
-              const maxCum = Math.max(...pnlCurve.map(x => x.cum));
-              const minCum = Math.min(...pnlCurve.map(x => x.cum));
-              const span = (maxCum - minCum) || 1;
-              const xFor = (i) => (i / (pnlCurve.length - 1 || 1)) * W;
-              const yFor = (v) => plotBottom - ((v - minCum) / span) * plotH;
-              const points = pnlCurve.map((p, i) => [xFor(i), yFor(p.cum)]);
-              const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0]} ${p[1]}`).join(" ");
-              // Aire fermée sous la courbe : c'est elle qui porte la trame.
-              const areaD = `${pathD} L ${points[points.length - 1][0]} ${H} L ${points[0][0]} ${H} Z`;
+            /* Seuil d'opacité « après le curseur » : son abscisse, en fraction de
+               la largeur. `null` hors survol = aucun masque. */
+            const fadeRatio = hoveredChart !== null && points[hoveredChart]
+              ? points[hoveredChart][0] / (W || 1)
+              : null;
+            /* Le même seuil en masque CSS, pour les calques posés hors du SVG. La
+               largeur de référence est indispensable : les filets de graduation
+               s'arrêtent avant leur libellé, donc un masque en pourcentages y
+               couperait plusieurs dizaines de pixels avant celui de la courbe, et
+               la démarcation se dédoublerait à l'écran. */
+            const fade = hoverFadeStyle(fadeRatio, W);
+            /* Les libellés hors du SVG ne peuvent pas être masqués comme la
+               courbe : on bascule leur opacité selon qu'ils tombent avant ou après
+               le curseur. */
+            const dimAfter = (pct) =>
+              fadeRatio != null && pct / 100 > fadeRatio ? HOVER_FADE.rest : 1;
 
-              // Graduations : 4 paliers réguliers entre le min et le max.
-              const fmtTick = (v) => {
-                const sign = v < 0 ? "-" : "";
-                const abs = Math.abs(v);
-                if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
-                return `${sign}${Math.round(abs)}`;
-              };
-              const ticks = [0, 1, 2, 3].map(i => {
-                const ratio = i / 3;
-                return { value: maxCum - ratio * span, top: 16 + ratio * (348 - 16) };
-              });
+            // Graduations : 4 paliers réguliers entre le min et le max, chacun
+            // aligné sur la valeur qu'il désigne (donc sur la zone de tracé).
+            const fmtTick = (v) => {
+              const sign = v < 0 ? "-" : "";
+              const abs = Math.abs(v);
+              if (abs >= 1000) return `${sign}${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
+              return `${sign}${Math.round(abs)}`;
+            };
+            const ticks = Array.from({ length: GRID_TICKS }, (_, i) => {
+              const ratio = i / (GRID_TICKS - 1);
+              return { value: maxCum - ratio * span, top: topY - 7 + ratio * plotH };
+            });
 
-              // 5 repères de date répartis sur la fenêtre affichée.
-              const xLabels = [0, 1, 2, 3, 4].map(i => {
-                const idx = Math.round((i / 4) * (pnlCurve.length - 1));
-                const d = new Date(pnlCurve[idx]?.date || "");
-                return isNaN(d.getTime())
-                  ? ""
-                  : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).toUpperCase();
-              });
 
-              return (
-                <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%"}}>
-                  <div
-                    ref={chartRef}
-                    style={{position:"relative",width:"100%",height:H}}
-                    onMouseLeave={() => setHoveredChart(null)}
-                  >
-                    {/* Séparateurs verticaux */}
-                    <div style={{position:"absolute",inset:0,display:"flex",justifyContent:"space-between",opacity:0.10,pointerEvents:"none"}}>
-                      {[0,1,2,3].map(i => (
-                        <span key={i} style={{width:1,height:"100%",background:T.text,display:"block"}} />
-                      ))}
-                    </div>
+            return (
+              /* La courbe remonte de toute la bande haute pour se glisser sous le
+                 chiffre héros, et part seule à fond perdu vers la gauche : le
+                 texte, lui, garde la marge de la page. */
+              <div style={{
+                display:"flex", flexDirection:"column", gap:12,
+                marginTop: -HEAD_BAND,
+                marginLeft: "calc(-1 * var(--content-left, 40px))",
+              }}>
+                <div
+                  ref={chartRef}
+                  style={{position:"relative",width:"100%",height:H}}
+                  onMouseLeave={() => setHoveredChart(null)}
+                >
+                  {/* Quadrillage OUVERT : 3 rectangles en largeur, de tailles
+                      inégales (le premier plus étroit), aucun fermé. Seuls les
+                      traits INTÉRIEURS sont tracés — rien aux bords, donc le
+                      premier rectangle paraît avoir commencé avant le cadre et
+                      le dernier se poursuivre après. Le masque CSS reprend, au
+                      pixel, le seuil d'opacité appliqué à la courbe côté SVG :
+                      ces traits sont en HTML, hors d'atteinte d'un masque SVG. */}
+                  <div style={{position:"absolute",inset:0,pointerEvents:"none",...(fade || {})}}>
+                    {GRID_COLUMN_STOPS.map(pct => (
+                      <span key={pct} style={{position:"absolute",top:GRID_TOP,bottom:0,left:`${pct}%`,width:1,background:T.text,opacity:0.05}} />
+                    ))}
+                  </div>
 
-                    {/* Repères de valeur — libellés seuls, sans trait horizontal */}
-                    <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
-                      {ticks.map((tk, i) => (
-                        <div key={i} style={{position:"absolute",left:0,right:0,top:tk.top}}>
-                          <span style={{display:"block",fontSize:14,color:T.text,opacity:0.4,textAlign:"right",lineHeight:1}}>
+                  {/* Repères de valeur — libellé à droite ; trait uniquement
+                      pour les repères INTERMÉDIAIRES, et arrêté avant le
+                      libellé : les cases du haut, du bas et de droite restent
+                      ouvertes. Seul le trait est masqué au survol : le libellé,
+                      lui, reste lisible même du côté estompé. */}
+                  <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
+                    {ticks.map((tk, i) => {
+                      const inner = i > 0 && i < ticks.length - 1;
+                      return (
+                        <div key={i} style={{position:"absolute",left:0,right:0,top:tk.top,height:14,display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{flex:1,height:1,background:inner?T.text:"transparent",opacity:0.05,...(fade || {})}} />
+                          <span style={{fontSize:14,color:T.text,opacity:0.4,lineHeight:1,whiteSpace:"nowrap"}}>
                             {fmtTick(tk.value)}
                           </span>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
+                  </div>
 
-                    {/* Courbe + trame de l'aire */}
-                    <svg
-                      width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}
-                      preserveAspectRatio="none"
-                      style={{display:"block",position:"absolute",inset:0,overflow:"visible"}}
-                    >
-                      <defs>
-                        {/* Trame de points de la maquette : pas 11 px, points
-                            violets à 15 % — elle remplit l'aire SOUS la courbe. */}
-                        <pattern id="dash-area-dots" width="11" height="11" patternUnits="userSpaceOnUse">
-                          <circle cx="1" cy="1" r="1" fill={T.kraken} fillOpacity="0.15" />
-                        </pattern>
-                      </defs>
-                      <path d={areaD} fill="url(#dash-area-dots)" stroke="none" />
+                  {/* Courbe + trame de l'aire */}
+                  <svg
+                    width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}
+                    preserveAspectRatio="none"
+                    style={{display:"block",position:"absolute",inset:0,overflow:"visible"}}
+                  >
+                    <defs>
+                      {/* Trame de l'aire sous la courbe : points à la couleur
+                          de la courbe, estompés vers le bas — l'aire s'efface
+                          au lieu de s'arrêter net sur le bord inférieur. */}
+                      <AreaDotsDefs id="dash-area" color={T.kraken} top={topY} bottom={plotBottom} width={W} height={H} />
+                      {/* Seuil d'opacité de ce qui suit le curseur. */}
+                      <HoverFadeDefs id="dash-area" ratio={fadeRatio} width={W} height={H} />
+                    </defs>
+                    {/* Aire + courbe masquées ensemble : un seul masque pour les
+                        deux, appliqué au groupe — l'aire porte déjà le sien (la
+                        trame), et un élément ne peut en porter qu'un. */}
+                    <g mask={hoverFadeMask("dash-area", fadeRatio)}>
+                      <path d={areaD} {...areaDotsFill("dash-area")} stroke="none" />
                       <path
                         d={pathD}
                         stroke={T.kraken}
@@ -876,21 +873,34 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                         strokeLinejoin="round"
                         vectorEffect="non-scaling-stroke"
                       />
-                      {hoveredChart !== null && points[hoveredChart] && (
-                        <line
-                          x1={points[hoveredChart][0]} y1={topY}
-                          x2={points[hoveredChart][0]} y2={plotBottom}
-                          stroke={T.kraken} strokeWidth="1" strokeDasharray="3 3"
-                          vectorEffect="non-scaling-stroke" pointerEvents="none"
-                        />
-                      )}
-                      {points.map((point, i) => (
+                    </g>
+                    {/* Hors du groupe : le repère du curseur reste à pleine encre
+                        — c'est lui qui matérialise la démarcation. */}
+                    {hoveredChart !== null && points[hoveredChart] && (
+                      <line
+                        x1={points[hoveredChart][0]} y1={topY}
+                        x2={points[hoveredChart][0]} y2={plotBottom}
+                        stroke={T.kraken} strokeWidth="1" strokeDasharray="3 3"
+                        vectorEffect="non-scaling-stroke" pointerEvents="none"
+                      />
+                    )}
+                    {/* Zones de capture bornées à [0, W] : le <svg> est en
+                        overflow:visible, et sur une courbe à deux points la
+                        demi-cellule de débord atteindrait W/2 au-delà du bord —
+                        invisible en desktop (le conteneur clippe) mais capable
+                        d'ouvrir un scroll horizontal en mobile, où ce clip est
+                        désactivé. */}
+                    {points.map((point, i) => {
+                      const cellW = W / Math.max(pnlCurve.length - 1, 1);
+                      const x0 = Math.max(0, point[0] - cellW / 2);
+                      const x1 = Math.min(W, point[0] + cellW / 2);
+                      return (
                         <rect
                           key={`hover-${i}`}
-                          x={point[0] - (W / Math.max(pnlCurve.length - 1, 1)) / 2}
-                          y="0"
-                          width={W / Math.max(pnlCurve.length - 1, 1)}
-                          height={H}
+                          x={x0}
+                          y={topY}
+                          width={Math.max(0, x1 - x0)}
+                          height={H - topY}
                           fill="transparent"
                           style={{cursor:"pointer"}}
                           onMouseEnter={() => {
@@ -898,60 +908,55 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                             setTooltipPos({ x: point[0], y: point[1] });
                           }}
                         />
-                      ))}
-                    </svg>
-
-                    {/* Tooltip */}
-                    {hoveredChart !== null && pnlCurve[hoveredChart] && (() => {
-                      const p = pnlCurve[hoveredChart];
-                      const leftPct = (xFor(hoveredChart) / W) * 100;
-                      const topPct = (yFor(p.cum) / H) * 100;
-                      const flip = leftPct > 60;
-                      const d = new Date(p.date);
-                      const label = isNaN(d.getTime())
-                        ? p.date
-                        : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-                      return (
-                        <div style={{
-                          position:"absolute",
-                          left:`${leftPct}%`,
-                          top:`${topPct}%`,
-                          transform:`translateY(-100%) translateY(-12px) ${flip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
-                          background:T.white,
-                          borderRadius:8,
-                          boxShadow:T.elevCard,
-                          padding:"8px 10px",
-                          pointerEvents:"none",
-                          zIndex:20,
-                          whiteSpace:"nowrap",
-                          fontFamily:"var(--font-sans)",
-                        }}>
-                          <div style={{fontSize:12,color:T.textSub,marginBottom:4}}>{label}</div>
-                          <div style={{fontSize:14,fontWeight:500,color:p.cum > 0 ? T.pnlPos : p.cum < 0 ? T.pnlNeg : T.text}}>
-                            {p.cum > 0 ? "+" : ""}{fmt(p.cum, false)}
-                          </div>
-                        </div>
                       );
-                    })()}
-                  </div>
+                    })}
+                  </svg>
 
-                  {/* Axe des dates */}
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",fontSize:14,color:T.text}}>
-                    {xLabels.map((l, i) => (
-                      <span key={i} style={{opacity:0.4,whiteSpace:"nowrap"}}>{l}</span>
-                    ))}
-                  </div>
+                  {/* Tooltip */}
+                  {hoveredChart !== null && pnlCurve[hoveredChart] && (() => {
+                    const p = pnlCurve[hoveredChart];
+                    const leftPct = (xFor(hoveredChart) / W) * 100;
+                    const topPct = (yFor(p.cum) / H) * 100;
+                    const flip = leftPct > 60;
+                    const d = new Date(p.date);
+                    const label = isNaN(d.getTime())
+                      ? p.date
+                      : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+                    return (
+                      <div style={{
+                        position:"absolute",
+                        left:`${leftPct}%`,
+                        top:`${topPct}%`,
+                        transform:`translateY(-100%) translateY(-12px) ${flip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
+                        background:T.white,
+                        borderRadius:8,
+                        boxShadow:T.elevCard,
+                        padding:"8px 10px",
+                        pointerEvents:"none",
+                        zIndex:20,
+                        whiteSpace:"nowrap",
+                        fontFamily:"var(--font-sans)",
+                      }}>
+                        <div style={{fontSize:12,color:T.textSub,marginBottom:4}}>{label}</div>
+                        <div style={{fontSize:14,fontWeight:500,color:p.cum > 0 ? T.pnlPos : p.cum < 0 ? T.pnlNeg : T.text}}>
+                          {p.cum > 0 ? "+" : ""}{fmt(p.cum, false)}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-              );
-            })()
-          ) : (
-            <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center",background:"#EFEFEF",borderRadius:8,color:"#8E8E8E"}}>
-              Pas de données
-            </div>
-          )}
-        </div>
 
-      </div>  {/* fin bloc P&L total + courbe */}
+              </div>
+            );
+          })()
+        ) : (
+          /* Plus de compensation à gauche : ce bloc est dans le flux normal,
+             comme le chiffre héros au-dessus. */
+          <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center",background:T.accentBg,borderRadius:8,color:T.textMut}}>
+            {t("dash.noData")}
+          </div>
+        )}
+      </div>
 
       {/* CALENDRIER P&L + TRADES RÉCENTS */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"stretch"}}>
@@ -959,7 +964,10 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
         {/* Calendrier P&L */}
         <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
           <SectionTitle>{t("dash.calendar")}</SectionTitle>
-          <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,height:429}}>
+          {/* Hauteur en plancher, plus en valeur figée : les jours sont des
+              carrés (aspect-ratio 1), donc la hauteur du mois découle de la
+              largeur de la carte et non l'inverse. */}
+          <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,minHeight:429}}>
             {/* Navigation du mois */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%"}}>
               <button
@@ -994,9 +1002,11 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
               <div style={{
                 display:"grid",
                 gridTemplateColumns:"repeat(7,minmax(0,1fr))",
-                gridTemplateRows:`auto repeat(${Math.ceil(calendarDays.length / 7)},minmax(0,1fr))`,
+                /* Rangées dimensionnées par leur contenu : ce sont les cases,
+                   carrées, qui donnent la hauteur. Des rangées en 1fr sur une
+                   hauteur imposée les auraient rendues rectangulaires. */
+                gridAutoRows:"auto",
                 gap:3,
-                height:"100%",
               }}>
                 {["L","M","M","J","V","S","D"].map((d, idx) => (
                   <div key={`h-${idx}`} style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1009,8 +1019,13 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                   const dayIso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                   const clickable = pnl !== 0;
                   const pct = monthPnL !== 0 ? Math.abs((pnl / monthPnL) * 100) : 0;
-                  const bg = pnl > 0 ? T.calPosBg : pnl < 0 ? T.calNegBg : T.calEmptyBg;
+                  /* Même palette que la page Calendrier (DayCell) : aplat très
+                     léger `*Surface` plutôt que le `*Bg` à 20 %, montant en
+                     `*Text`, sous-ligne en `*Sub` atténuée. Les deux
+                     calendriers se lisaient sinon comme deux composants. */
+                  const bg = pnl > 0 ? T.calPosSurface : pnl < 0 ? T.calNegSurface : T.calEmptyBg;
                   const fg = pnl > 0 ? T.calPosText : pnl < 0 ? T.calNegText : T.calEmptyText;
+                  const subFg = pnl > 0 ? T.calPosSub : pnl < 0 ? T.calNegText : T.calEmptyText;
                   return (
                     <div
                       key={`d-${i}`}
@@ -1018,6 +1033,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                       title={clickable ? "Voir les trades du jour" : undefined}
                       style={{
                         background:bg, borderRadius:3,
+                        aspectRatio:"1 / 1",
                         display:"flex", flexDirection:"column",
                         alignItems:"center", justifyContent:"center",
                         color:fg, cursor: clickable ? "pointer" : "default",
@@ -1029,7 +1045,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                       {pnl !== 0 ? (
                         <>
                           <span style={{fontSize:14,lineHeight:"17.05px",whiteSpace:"nowrap"}}>{pnl > 0 ? "+" : ""}{fmt(pnl, false)}</span>
-                          <span style={{fontSize:10,lineHeight:"17.05px",whiteSpace:"nowrap"}}>( {pct.toFixed(2)}% )</span>
+                          <span style={{fontSize:10,lineHeight:"17.05px",whiteSpace:"nowrap",color:subFg,opacity:0.6}}>( {pct.toFixed(2)}% )</span>
                         </>
                       ) : (
                         <span style={{fontSize:14,lineHeight:"17.05px"}}>{day}</span>
@@ -1059,77 +1075,25 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
               ? t("trades.tradesOfDay").replace("{day}", [t("wd.monday"),t("wd.tuesday"),t("wd.wednesday"),t("wd.thursday"),t("wd.friday"),t("wd.saturday"),t("wd.sunday")][selectedDay])
               : t("dash.recentTrades")}
           </SectionTitle>
-          <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,flex:1,minHeight:0}}>
-            {/* En-tête de colonnes */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px",opacity:0.4}}>
-              <div style={{flex:"1 0 0",minWidth:0,display:"flex",alignItems:"center",gap:8}}>
-                <span style={{...TH}}>{t("dash.asset")}</span>
-              </div>
-              <div style={{width:133,flexShrink:0}}><span style={TH}>type</span></div>
-              <div style={{width:100,flexShrink:0}}><span style={TH}>Date</span></div>
-              <div style={{width:117,flexShrink:0,textAlign:"right"}}><span style={TH}>P&L</span></div>
-            </div>
-
-            {/* Lignes */}
-            <div style={{display:"flex",flexDirection:"column",gap:8,overflowY:"auto",minHeight:0}}>
-              {(() => {
-                const source = selectedDay !== null ? (pnlByDay[selectedDay] || []) : filteredTrades;
-                const list = [...source]
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .slice(0, 5);
-                if (list.length === 0) {
-                  return <div style={{fontSize:14,color:T.textMut,padding:"12px 8px"}}>Aucun trade sur la période</div>;
-                }
-                return list.map((tr, i) => {
-                  const d = new Date(tr.date);
-                  const dateLabel = isNaN(d.getTime())
-                    ? String(tr.date || "")
-                    : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
-                  const pct = statsPnL !== 0 ? Math.abs(((tr.pnl || 0) / statsPnL) * 100) : 0;
-                  return (
-                    <div
-                      key={tr.id || i}
-                      style={{
-                        display:"flex", alignItems:"center", justifyContent:"space-between",
-                        padding:12, borderRadius:12, background:"transparent",
-                        transition:"background 140ms ease",
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.background = T.rowHighlight; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      <div style={{flex:"1 0 0",minWidth:0,display:"flex",alignItems:"center",gap:8}}>
-                        <SymbolBadge symbol={tr.symbol} />
-                        {(() => {
-                          const { name, code } = symbolLabel(tr.symbol);
-                          return (
-                            <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
-                              <span style={{fontSize:16,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                {name}
-                              </span>
-                              {code && (
-                                <span style={{fontSize:12,lineHeight:"13.95px",color:T.textMut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                  {code}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      <div style={{width:133,flexShrink:0,display:"flex",alignItems:"center"}}>
-                        <DirectionTag direction={tr.direction} />
-                      </div>
-                      <div style={{width:100,flexShrink:0,fontSize:16,fontWeight:500,lineHeight:"17.05px",color:T.text}}>
-                        {dateLabel}
-                      </div>
-                      <div style={{width:117,flexShrink:0}}>
-                        <StackedAmount value={tr.pnl || 0} percent={pct} />
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          </div>
+          {/* Même brique que le détail d'un compte, en jeu de colonnes court :
+              la carte ne fait qu'une demi-largeur, dix colonnes n'y tiendraient
+              pas. Le reste (stratégie, session, frais…) est dans le dépliage. */}
+          {(() => {
+            const source = selectedDay !== null ? (pnlByDay[selectedDay] || []) : filteredTrades;
+            const list = [...source]
+              .sort((a, b) => new Date(b.date) - new Date(a.date))
+              .slice(0, 5);
+            return (
+              <TradesList
+                trades={list}
+                strategies={strategies}
+                tradeStrategies={tradeStrategiesData}
+                columns={COMPACT_TRADE_COLUMNS}
+                empty="Aucun trade sur la période"
+                style={{ flex: 1, minHeight: 0 }}
+              />
+            );
+          })()}
         </div>
       </div>
 

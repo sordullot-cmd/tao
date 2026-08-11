@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import ReactDOM from "react-dom";
 import { parseCSV, calculateStats } from "@/lib/csvParsers";
 import { createClient } from "@/lib/supabase/client";
 import { getLocalDateString } from "@/lib/dateUtils";
@@ -42,7 +41,6 @@ import PropFirmDetailPage from "@/components/pages/PropFirmDetailPage";
 import { usePropFirms } from "@/lib/hooks/usePropFirms";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import QuickAccountSelector from "@/components/QuickAccountSelector";
-import MultiAccountSelector from "@/components/MultiAccountSelector";
 import AlertToast from "@/components/AlertToast";
 import CommandPalette from "@/components/CommandPalette";
 import SettingsPage from "@/components/pages/SettingsPage";
@@ -105,22 +103,13 @@ const css = `
 
 const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencySymbol()}${Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
-// Bouton compte utilisateur dans la barre du haut (à droite du gris)
+/* Pages déjà passées à la nouvelle DA : elles posent leurs propres cartes sur le
+   fond gris, gèrent leur gouttière et peuvent la reprendre (cf. --page-gutter).
+   En desktop, la barre du haut n'y garde aucune hauteur : elle est vide, et le
+   contenu doit pouvoir monter jusqu'au bord. */
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail"];
 
-// Portal: rend ses enfants dans le slot d'en-tête de page (id="tr4de-page-header-slot")
-// si présent. Permet aux pages d'inclure des éléments contrôlés depuis le layout.
-function HeaderSlotPortal({ children }) {
-  const [target, setTarget] = useState(null);
-  useEffect(() => {
-    const find = () => setTarget(document.getElementById("tr4de-page-header-slot"));
-    find();
-    const observer = new MutationObserver(find);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
-  if (!target) return null;
-  return ReactDOM.createPortal(children, target);
-}
+// Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
 function Pill({ children, color="gray", small }) {
   const map = {
@@ -181,6 +170,14 @@ export default function App() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("sidebarCollapsed") === "1";
   });
+  /* Largeur réelle de la barre latérale, remontée par Sidebar : elle suit son
+     libellé le plus long, on ne peut donc plus la déduire d'une constante.
+     Valeur initiale = l'ancienne largeur fixe, pour que le premier rendu (avant
+     la première mesure) ne décale pas le contenu. */
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === "undefined") return 220;
+    return localStorage.getItem("sidebarCollapsed") === "1" ? 56 : 220;
+  });
   const [selectedStrategyId, setSelectedStrategyId] = useState(null);
   const [selectedAccountDetailId, setSelectedAccountDetailId] = useState(null);
   // Firme dont on affiche les paramètres (page "firm-detail").
@@ -199,15 +196,6 @@ export default function App() {
   // Firmes de prop trading (parents des comptes) — voir lib/propFirms.
   const { firms, setFirms } = usePropFirms(user?.id);
   const [selectedAccountIdHeader, setSelectedAccountIdHeader] = useState(null);
-  const [selectedAccountIds, setSelectedAccountIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('selectedAccountIds');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-  const [previousSelectedAccountIds, setPreviousSelectedAccountIds] = useState([]);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   // Comptes eval « passés funded » et archivés (voir lib/utils/archivedAccounts).
   // Persisté en localStorage, hissé ici pour que la sélection et le sélecteur
@@ -229,27 +217,10 @@ export default function App() {
     avatarUrl: user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
   };
 
-  // Sauvegarder la sélection de comptes dans localStorage
-  useEffect(() => {
-    localStorage.setItem('selectedAccountIds', JSON.stringify(selectedAccountIds));
-  }, [selectedAccountIds]);
-
-  // (On ne ré-injecte plus le placeholder : aucune sélection = 0 trades)
-
-  // ✅ Nettoyer le placeholder quand un vrai compte est sélectionné
-  useEffect(() => {
-    if (user?.id && selectedAccountIds.length > 0) {
-      const placeholderId = getPlaceholderAccountId(user.id);
-      const hasPlaceholder = selectedAccountIds.includes(placeholderId);
-      const hasRealAccounts = selectedAccountIds.some(id => !isPlaceholderAccount(id));
-      
-      // Si on a à la fois le placeholder et des vrais comptes, retirer le placeholder
-      if (hasPlaceholder && hasRealAccounts) {
-        const cleaned = selectedAccountIds.filter(id => !isPlaceholderAccount(id));
-        setSelectedAccountIds(cleaned);
-      }
-    }
-  }, [selectedAccountIds, user?.id]);
+  /* La sélection de comptes a été supprimée : le site travaille en permanence
+     sur TOUS les comptes actifs. Il n'y a donc plus ni état, ni persistance
+     localStorage, ni menu déroulant — `selectedAccountIds` n'est plus qu'une
+     valeur dérivée, conservée comme prop pour les pages qui l'attendent. */
 
   // Sauvegarder le type de compte dans localStorage
   useEffect(() => {
@@ -263,24 +234,9 @@ export default function App() {
 
   // ✅ Les stratégies sont auto-sauvegardées via le hook useStrategies()
 
-  // Mettre à jour accountType et selectedEvalAccount en fonction du compte sélectionné
-  useEffect(() => {
-    if (selectedAccountIds.length === 1 && accounts.length > 0) {
-      const selectedAccountId = selectedAccountIds[0];
-      const selectedAccount = accounts.find(acc => acc.id === selectedAccountId);
-      if (selectedAccount) {
-        // Si le compte a des infos de type, les utiliser
-        if (selectedAccount.account_type) {
-          setAccountType(selectedAccount.account_type);
-        }
-        if (selectedAccount.eval_account_size) {
-          setSelectedEvalAccount(selectedAccount.eval_account_size);
-        } else {
-          setSelectedEvalAccount("");
-        }
-      }
-    }
-  }, [selectedAccountIds, accounts]);
+  /* accountType / selectedEvalAccount se calaient sur le compte sélectionné
+     quand il n'y en avait qu'un. Sans sélection, il n'y a plus de « compte
+     courant » : ces réglages gardent leur valeur propre. */
 
   // Récupérer l'utilisateur Supabase
   useEffect(() => {
@@ -329,22 +285,10 @@ export default function App() {
         const loadedAccounts = data || [];
         setAccounts(loadedAccounts);
 
-        // À chaque chargement de la page : si rien n'est sélectionné (premier visit
-        // OU sélection vide sauvegardée), on coche tous les comptes par défaut.
-        try {
-          const saved = localStorage.getItem("selectedAccountIds");
-          let current = [];
-          try { current = saved ? JSON.parse(saved) : []; } catch {}
-          if ((!Array.isArray(current) || current.length === 0) && loadedAccounts.length > 0) {
-            // Ne pas cocher par défaut les comptes eval archivés.
-            const archived = readArchivedMeta();
-            const allIds = loadedAccounts
-              .filter(a => !isArchivedAccount(a.id, archived))
-              .map(a => a.id);
-            setSelectedAccountIds(allIds);
-            localStorage.setItem("selectedAccountIds", JSON.stringify(allIds));
-          }
-        } catch {}
+        // Plus de sélection à initialiser : tous les comptes actifs comptent.
+        // On purge la clé devenue orpheline pour ne pas laisser traîner un
+        // état qui ne pilote plus rien.
+        try { localStorage.removeItem("selectedAccountIds"); } catch {}
       } catch (err) {
         console.error("Error loading accounts:", err);
         setAccounts([]);
@@ -403,13 +347,20 @@ export default function App() {
   // dans une section « Comptes eval passés »).
   const visibleAccounts = accounts.filter(acc => !isPlaceholderAccount(acc.id) && !isArchivedAccount(acc.id, archivedMeta));
 
-  // Aucun filtre de dates : toutes les pages affichent l'historique complet,
-  // depuis le premier trade déposé. Seule la sélection de comptes filtre.
-  const filteredTrades = (() => {
-    const realSelected = selectedAccountIds.filter(id => !isPlaceholderAccount(id) && !isArchivedAccount(id, archivedMeta));
-    if (realSelected.length === 0) return [];
-    return trades.filter(t => realSelected.includes(t.account_id));
-  })();
+  /* Tous les comptes actifs, en permanence : c'est ce que « selectedAccountIds »
+     vaut désormais partout. Dérivé de `visibleAccounts`, donc les comptes
+     placeholder et les eval archivés en restent exclus, comme avant. */
+  const selectedAccountIds = React.useMemo(
+    () => visibleAccounts.map(a => a.id),
+    [visibleAccounts]
+  );
+
+  // Aucun filtre : toutes les pages affichent l'historique complet de tous les
+  // comptes actifs, depuis le premier trade déposé.
+  const filteredTrades = React.useMemo(() => {
+    const active = new Set(selectedAccountIds);
+    return trades.filter(t => active.has(t.account_id));
+  }, [trades, selectedAccountIds]);
 
   // Ids des trades des comptes eval passés (comptes supprimés → account_id NULL,
   // on les retrouve via les trade_ids mémorisés dans archivedMeta).
@@ -603,8 +554,8 @@ export default function App() {
         return;
       }
 
-      // Retirer le compte de la sélection
-      setSelectedAccountIds(prev => prev.filter(id => id !== accountId));
+      // Plus de sélection à mettre à jour : `selectedAccountIds` se recalcule
+      // depuis la liste des comptes, qui est rechargée juste après.
 
       // Réinitialiser la sélection d'en-tête si c'était celui-ci
       if (selectedAccountIdHeader === accountId) {
@@ -723,19 +674,21 @@ export default function App() {
 
   const pages = {
     dashboard:  <DashboardPage trades={filteredTrades} allTrades={trades} accounts={accounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
-    "add-trade": <AddTradePage trades={filteredTrades} setPage={setPage} setAccounts={setAccounts} setSelectedAccountIds={setSelectedAccountIds} accounts={accounts} selectedAccountIds={selectedAccountIds} addTrade={addTrade} addStrategy={addStrategy} strategies={strategies} user={user} />,
-    trades:     <TradesPage trades={filteredTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
+    "add-trade": <AddTradePage trades={filteredTrades} setPage={setPage} setAccounts={setAccounts} accounts={accounts} firms={firms} selectedAccountIds={selectedAccountIds} addTrade={addTrade} addStrategy={addStrategy} strategies={strategies} user={user} />,
+    trades:     <TradesPage trades={filteredTrades} strategies={strategies} accounts={visibleAccounts} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     "trade-chart": <TradeChartPage trades={filteredTrades} />,
     calendar:   <CalendarPage trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={accounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,
     journal: <JournalPage trades={filteredTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
-    backtest: <BacktestPage />,
+    backtest: <BacktestPage firms={firms} />,
     brokers: <BrokersPage />,
-    accounts: <AccountsPage accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountIds={setSelectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
-    "account-detail": <AccountDetailPage accountId={selectedAccountDetailId} accounts={accounts} trades={trades} strategies={strategies} setPage={setPage} setSelectedAccountIds={setSelectedAccountIds} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
-    "firm-detail": <PropFirmDetailPage firmId={selectedFirmId} firms={firms} accounts={accounts} trades={trades} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedAccountIds={setSelectedAccountIds} />,
+    accounts: <AccountsPage accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
+    "account-detail": <AccountDetailPage accountId={selectedAccountDetailId} accounts={accounts} firms={firms} trades={trades} strategies={strategies} setPage={setPage} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
+    // `strategies` alimente la colonne « Stratégie » du tableau de trades :
+    // sans elle, la page retombe sur le cache localStorage de TradesPage.
+    "firm-detail": <PropFirmDetailPage firmId={selectedFirmId} firms={firms} accounts={accounts} trades={trades} strategies={strategies} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} />,
     goals: <GoalsPage />,
     "daily-planner": <DailyPlannerPage />,
     agenda: <AgendaPage />,
@@ -764,7 +717,13 @@ export default function App() {
       <style>{css}</style>
       <AlertToast />
       <CommandPalette />
-      <div className="tr4de-root" style={{display:"flex",minHeight:"100vh",background:"var(--color-bg-subtle, #F5F5F5)"}}>
+      {/* `--shell-left` : la place tenue par la barre latérale (sa largeur + sa
+          gouttière de 12 px). Elle n'est plus dans le flux — c'est ce padding
+          qui la remplace, appliqué au conteneur SCROLLABLE et non au cadre :
+          le contenu part ainsi du bord de la fenêtre, et un bloc pleine largeur
+          peut reprendre cette réserve pour passer derrière la barre. Remise à 0
+          en mobile, où la barre est un tiroir (cf. globals.css). */}
+      <div className="tr4de-root" style={{display:"flex",minHeight:"100vh",background:"var(--color-bg-subtle, #F5F5F5)","--shell-left":`${sidebarWidth + 12}px`}}>
         {/* SIDEBAR (OpenAI-style) */}
         <Sidebar
           mobileOpen={mobileNavOpen}
@@ -788,29 +747,17 @@ export default function App() {
             try { localStorage.setItem("tr4de_theme", next); } catch {}
           }}
           onLogout={handleLogout}
-          workspace={(() => {
-            if (selectedAccountIds.length === 1) {
-              const acc = accounts.find(a => a.id === selectedAccountIds[0]);
-              if (acc) return { id: acc.id, name: acc.name || "Compte" };
-            }
-            if (selectedAccountIds.length > 1) return { id: "multi", name: t("accounts.multiple").replace("{n}", String(selectedAccountIds.length)) };
-            return null;
-          })()}
+          /* La barre se dimensionne sur son libellé le plus long : on lit sa
+             largeur réelle plutôt que de la deviner. */
+          onWidthChange={setSidebarWidth}
+          workspace={null /* plus de « compte courant » : il n'y a plus de sélection */}
           workspaces={visibleAccounts.map(a => ({ id: a.id, name: a.name || "Compte" }))}
-          onSelectWorkspace={(id) => setSelectedAccountIds([id])}
           onCreateWorkspace={() => setPage("add-trade")}
           sections={SIDEBAR_SECTIONS}
           activeId={page}
           onSelect={(id) => {
-            if (page === "add-trade" && id !== "add-trade") {
-              setSelectedAccountIds(previousSelectedAccountIds);
-              localStorage.setItem('selectedAccountIds', JSON.stringify(previousSelectedAccountIds));
-            }
-            if (id === "add-trade") {
-              setPreviousSelectedAccountIds(selectedAccountIds);
-              setSelectedAccountIdHeader("");
-              setSelectedAccountIds([]);
-            }
+            // Plus de sélection à mettre de côté / restaurer en entrant et en
+            // sortant d'« Ajouter un trade » : tous les comptes restent actifs.
             setPage(id);
             setMobileNavOpen(false);
           }}
@@ -819,7 +766,13 @@ export default function App() {
 
         {/* MAIN */}
         <div className="tr4de-main" style={{flex:1,minWidth:0,height:"100vh",display:"flex",flexDirection:"column",background:"transparent"}}>
-          <div className="tr4de-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #F5F5F5)",padding:"10px 28px",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
+          {/* Barre du haut. En desktop elle est VIDE (le hamburger est masqué) :
+              sur le tableau de bord seul, elle ne prend alors AUCUNE hauteur,
+              pour que la courbe pleine largeur monte jusqu'au bord supérieur.
+              Les autres pages gardent leur respiration de 20 px, et les media
+              queries mobiles rendent à la barre son padding vertical, où le
+              hamburger doit tenir. */}
+          <div className="tr4de-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #F5F5F5)",padding:page === "dashboard" ? "0 28px 0 calc(var(--shell-left, 0px) + 28px)" : "10px 28px 10px calc(var(--shell-left, 0px) + 28px)",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
             <button
               type="button"
               className="tr4de-hamburger"
@@ -829,22 +782,45 @@ export default function App() {
             >
               <LucideMenu size={18} strokeWidth={1.75} />
             </button>
+
           </div>
-          {/* Le dashboard suit la nouvelle DA : ses sections sont déjà des cartes
-              blanches individuelles posées sur le fond de page. Il ne doit donc
-              pas être enveloppé dans la carte blanche commune aux autres pages. */}
           {/* Pages déjà passées à la nouvelle DA : leurs sections sont des cartes
-              blanches individuelles posées sur le fond de page, elles ne doivent
-              donc pas être enveloppées dans la carte blanche commune. */}
-          {(() => { const daPage = ["dashboard", "accounts", "account-detail"].includes(page); return (
-          <div style={{flex:1,minHeight:0,padding: daPage ? "0 0 8px 0" : "0 8px 8px 0",display:"flex"}}>
+              blanches individuelles posées sur le FOND GRIS de la page. Les
+              envelopper dans la carte blanche commune ferait disparaître ce fond
+              et, avec lui, le détachement des cartes. */}
+          {(() => { const daPage = DA_PAGES.includes(page); return (
+          /* Sur les pages de la DA, ce cadre ne réserve RIEN à gauche : c'est le
+             conteneur scrollable qui compense la barre latérale, pour que son
+             bord (et son clip) parte du premier pixel. Les autres pages posent
+             une carte blanche pleine page : elle, doit s'arrêter à la barre,
+             sinon son fond s'étendrait derrière — d'où la réserve rendue ici. */
+          <div style={{flex:1,minHeight:0,padding: daPage ? "0 0 8px 0" : "0 8px 8px 0",paddingLeft: daPage ? 0 : "var(--shell-left, 0px)",display:"flex"}}>
             <div className="scroll-thin" style={{
               background: daPage ? "transparent" : "var(--color-card-bg, #FFFFFF)",
               border: daPage ? "none" : "1px solid rgba(0, 0, 0, 0.06)",
               borderRadius: daPage ? 0 : 10,
               boxShadow: "none",
-              // 24 px de gouttière de chaque côté, comme sur la maquette.
-              padding: (page === "add-trade") ? "0" : daPage ? "0 24px 24px" : "20px 24px",
+              // Gouttière de la maquette : 24 px à droite, un peu plus à gauche
+              // pour décoller le contenu de la barre latérale. Les deux valeurs
+              // sont exposées en variables : une page peut reprendre la gauche
+              // en marge négative pour un bloc pleine largeur (la courbe du
+              // tableau de bord), sans la redéclarer en dur.
+              "--page-gutter": "24px",
+              "--page-gutter-left": "40px",
+              /* La réserve de la barre latérale est portée ICI, par le
+                 conteneur scrollable lui-même, et pas par le cadre au-dessus :
+                 c'est ce qui place son bord (donc son clip) au premier pixel de
+                 la fenêtre. Un bloc pleine largeur reprend `--shell-left` +
+                 `--page-gutter-left` en marge négative et file jusqu'au bord,
+                 en passant derrière la barre. */
+              "--content-left": "calc(var(--shell-left, 0px) + var(--page-gutter-left))",
+              padding: (page === "add-trade")
+                ? "0"
+                : daPage
+                  ? "0 var(--page-gutter) 24px var(--content-left)"
+                  // Hors DA, la réserve de la barre est déjà prise par le cadre
+                  // au-dessus : seule la gouttière reste à poser.
+                  : "20px var(--page-gutter) 20px var(--page-gutter-left)",
               display: (page === "add-trade") ? "flex" : "block",
               width: "100%",
               flex: 1,
@@ -852,29 +828,6 @@ export default function App() {
               overflowX: "hidden",
               position: "relative",
             }}>
-              {(() => {
-                // Pages de productivité : pas de sélecteur de comptes.
-                const PRODUCTIVITY_PAGES = ["daily-planner", "agenda", "goals", "reading", "sport", "notes", "drive", "life-rpg"];
-                const isProductivity = PRODUCTIVITY_PAGES.includes(page);
-                if (page === "add-trade") return null;
-                if (isProductivity) return null; // la page gère son propre header
-                return (
-                  <HeaderSlotPortal>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"100%",minWidth:0}}>
-                      {page !== "accounts" && page !== "account-detail" && page !== "firm-detail" && (
-                        <MultiAccountSelector
-                          accounts={visibleAccounts}
-                          selectedAccountIds={selectedAccountIds}
-                          onSelectionChange={setSelectedAccountIds}
-                          onDeleteAccount={handleDeleteAccount}
-                          onCreateAccount={() => setPage("accounts")}
-                          T={T}
-                        />
-                      )}
-                    </div>
-                  </HeaderSlotPortal>
-                );
-              })()}
               <div
                 key={page}
                 style={{

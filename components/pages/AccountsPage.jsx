@@ -2,9 +2,11 @@
 
 import React from "react";
 import { T } from "@/lib/ui/tokens";
-import { CARD, SectionTitle, KpiCard, accountColor } from "@/components/ui/da";
+import { CARD, SectionTitle, downsampleLTTB, sparklineBudget } from "@/components/ui/da";
+import { accountBrandColor } from "@/lib/ui/brandColors";
 import {
-  AccountRowsHeader, TableRow, SubRow, AddAccountRow, RoundLogo, PassFundedButton,
+  AccountRowsHeader, TableRow, SubRow, RoundLogo, PassFundedButton,
+  RowIconButton,
 } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
@@ -24,9 +26,11 @@ import { isArchivedAccount, ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccount
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import ReactDOM from "react-dom";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
-import { PropFirmModal, AccountModal } from "@/components/modals/AccountModals";
-import { resolveRules, readFundedMeta } from "@/lib/propFirms";
+import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
+import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm } from "@/lib/propFirms";
+import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon } from "@/lib/brokers/platforms";
+import { firmLogo } from "@/lib/accountBrand";
 
 const BROKER_LOGOS = {
   "tradovate":           "/trado.png",
@@ -99,16 +103,32 @@ const parseEvalSize = (size) => {
   return num;
 };
 
-export default function AccountsPage({ accounts = [], trades = [], setPage, selectedAccountIds = [], setSelectedAccountIds, setSelectedAccountDetailId, setSelectedFirmId, setAccounts, firms = [], setFirms, userId, archivedMeta = {}, setArchivedMeta }) {
+export default function AccountsPage({ accounts = [], trades = [], setPage, selectedAccountIds = [], setSelectedAccountDetailId, setSelectedFirmId, setAccounts, firms = [], setFirms, userId, archivedMeta = {}, setArchivedMeta }) {
   useLang();
   const notPlaceholder = (accounts || []).filter((a) => !isPlaceholderAccount(a.id));
   const firmById = React.useMemo(() => new Map((firms || []).map((f) => [f.id, f])), [firms]);
+  /* Préférences d'affichage des firmes (ce que montre leur montant principal).
+     Elles vivent en localStorage : lues après le montage pour ne pas faire
+     diverger le rendu serveur du rendu client, et relues quand les comptes ou
+     les firmes changent — la modale « Paramètres de la firme » les modifie. */
+  const [firmMeta, setFirmMeta] = React.useState({});
+  React.useEffect(() => {
+    const reload = () => setFirmMeta(readFirmMeta());
+    reload();
+    window.addEventListener("tr4de:accounts-changed", reload);
+    return () => window.removeEventListener("tr4de:accounts-changed", reload);
+  }, [firms]);
   // Modales de création : la firme (objet parent) et le compte isolé sont deux
   // parcours distincts, séparés de l'import de trades.
   const [creatingFirm, setCreatingFirm] = React.useState(false);
   // `null` = modale fermée ; sinon { firmId } — "" pour un compte isolé, l'id de
   // la firme quand la création part du bouton d'une ligne de firme.
   const [creatingAccount, setCreatingAccount] = React.useState(null);
+  /* Modification : les mêmes modales que la création, en mode édition. Un
+     compte se modifiait jusqu'ici depuis la page de sa firme uniquement — et
+     un compte hors firme, nulle part. */
+  const [editingAccount, setEditingAccount] = React.useState(null);
+  const [editingFirm, setEditingFirm] = React.useState(null);
   // Comptes actifs (grille principale + KPI) vs comptes eval archivés (section
   // dédiée en bas). Un compte archivé garde ses trades mais son P&L ne compte
   // plus dans les totaux du site.
@@ -190,18 +210,71 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
       if (setAccounts) {
         setAccounts(prev => [newAcc, ...(prev || []).filter(a => a.id !== acc.id)]);
       }
-      if (setSelectedAccountIds) {
-        setSelectedAccountIds(prev => {
-          const next = (prev || []).filter(id => id !== acc.id);
-          if (newAcc && !next.includes(newAcc.id)) next.push(newAcc.id);
-          try { localStorage.setItem("selectedAccountIds", JSON.stringify(next)); } catch {}
-          return next;
-        });
-      }
     } catch (e) {
       console.error("⚠️ passToFunded exception:", e);
     } finally {
       setPassing(null);
+    }
+  };
+
+  /* Suppression d'un compte, depuis la liste « Tous les comptes ».
+     `deleteTradingAccount` supprime le compte ET ses trades (l'un sans l'autre
+     laisserait des trades orphelins qui continueraient de peser dans certains
+     agrégats) : d'où la confirmation, l'action est irréversible. */
+  const [confirmDelete, setConfirmDelete] = React.useState(null); // compte visé
+  const [deleting, setDeleting] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState("");
+  const removeAccount = async () => {
+    if (!confirmDelete) return;
+    /* Sans identifiant de session, la requête Supabase serait refusée : on le
+       dit au lieu de sortir en silence — c'est ce qui donnait un bouton
+       « Supprimer » sans effet ni message. */
+    if (!userId) { setDeleteError(t("accountsPage.err.noSession")); return; }
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteTradingAccount(confirmDelete.id, userId);
+      setAccounts?.((prev) => (prev || []).filter((a) => a.id !== confirmDelete.id));
+      /* Les trades partent avec le compte : sans re-synchro du cache local,
+         useTrades() continuerait de les servir (et les KPI de la page les
+         compteraient) jusqu'à un rechargement complet. */
+      await refreshTradesCache(userId);
+      setConfirmDelete(null);
+    } catch (e) {
+      setDeleteError(firmErrorLabel(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  /* Suppression d'une firme, depuis la même liste. Deux portées possibles :
+     détacher ses comptes (ils redeviennent des comptes personnels) ou les
+     supprimer avec elle — d'où la case à cocher dans la confirmation. Même
+     choix que sur la page de la firme, pour que les deux entrées se comportent
+     pareil. */
+  const [confirmFirmDelete, setConfirmFirmDelete] = React.useState(null); // firme visée
+  const [deleteFirmAccounts, setDeleteFirmAccounts] = React.useState(false);
+  const removeFirm = async () => {
+    if (!confirmFirmDelete) return;
+    if (!userId) { setDeleteError(t("accountsPage.err.noSession")); return; }
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const firmId = confirmFirmDelete.id;
+      await deleteFirm(firmId, userId, { deleteAccounts: deleteFirmAccounts });
+      setFirms?.((prev) => (prev || []).filter((f) => f.id !== firmId));
+      setAccounts?.((prev) => (prev || []).flatMap((a) => {
+        if (a.firm_id !== firmId) return [a];
+        // Comptes conservés : ils perdent leur rattachement, pas leurs données.
+        return deleteFirmAccounts ? [] : [{ ...a, firm_id: null }];
+      }));
+      if (deleteFirmAccounts) await refreshTradesCache(userId);
+      setConfirmFirmDelete(null);
+      setDeleteFirmAccounts(false);
+    } catch (e) {
+      setDeleteError(firmErrorLabel(e));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -280,10 +353,6 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
     return { trades, pnl, wins, capital, accounts: visibleAccounts.length };
   }, [stats, visibleAccounts]);
 
-  const onSelectOnly = (id) => {
-    setSelectedAccountIds?.([id]);
-    try { localStorage.setItem("selectedAccountIds", JSON.stringify([id])); } catch {}
-  };
 
   const onOpenDetail = (id) => {
     setSelectedAccountDetailId?.(id);
@@ -383,6 +452,36 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
     return map;
   }, [notPlaceholder, trades, fundedMeta]);
 
+  /* Série d'équity agrégée par firme : même construction que par compte, mais
+     sur les trades de TOUS ses comptes remis dans l'ordre chronologique. On ne
+     peut pas additionner les séries par compte : elles n'ont pas les mêmes
+     dates ni le même nombre de points. */
+  const seriesByFirm = React.useMemo(() => {
+    const firmOfAccount = new Map();
+    visibleAccounts.forEach((a) => {
+      if (a.firm_id && firmById.has(a.firm_id)) firmOfAccount.set(a.id, a.firm_id);
+    });
+    const accById = new Map(notPlaceholder.map((a) => [a.id, a]));
+    const sorted = [...(trades || [])]
+      .filter((tr) => firmOfAccount.has(tr.account_id))
+      .sort((a, b) => new Date(a.date || a.entry_time || 0) - new Date(b.date || b.entry_time || 0));
+    const map = new Map();
+    for (const tr of sorted) {
+      const acc = accById.get(tr.account_id);
+      // Même règle que par compte : un funded ne compte que depuis funded_at.
+      if (acc && (acc.account_type || "live") === "funded") {
+        const fundedAt = fundedMeta[acc.id]?.funded_at ? new Date(fundedMeta[acc.id].funded_at).getTime() : 0;
+        const td = new Date(tr.date || 0).getTime();
+        if (!isNaN(td) && td < fundedAt) continue;
+      }
+      const fid = firmOfAccount.get(tr.account_id);
+      const arr = map.get(fid) || [0];
+      arr.push(arr[arr.length - 1] + (Number(tr.pnl) || 0));
+      map.set(fid, arr);
+    }
+    return map;
+  }, [visibleAccounts, firmById, notPlaceholder, trades, fundedMeta]);
+
   /* Payout disponible d'un compte : uniquement sur les comptes funded, au-delà
      du minimum de retrait paramétré. Sert la colonne « payout dispo ». */
   const payoutFor = React.useCallback((acc) => {
@@ -418,7 +517,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
      à défaut d'activité récente on retombe sur le volume total, puis sur la
      date du dernier trade. Un compte funded ne compte que depuis funded_at,
      comme partout ailleurs sur la page. */
-  const topActiveAccounts = React.useMemo(() => {
+  const topActiveEntities = React.useMemo(() => {
     const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const activity = new Map(visibleAccounts.map((a) => [a.id, { recent: 0, last: 0 }]));
     for (const tr of trades || []) {
@@ -429,17 +528,38 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
       if (ts >= since) entry.recent += 1;
       if (ts > entry.last) entry.last = ts;
     }
-    return [...visibleAccounts]
+    /* On classe des ENTITÉS, pas des comptes : un compte rattaché à une firme
+       est représenté par sa firme, dont l'activité est la somme de celle de
+       tous ses comptes. Sans ça, une firme à dix comptes actifs occupait les
+       trois cartes avec ses comptes pris un à un. */
+    const entities = new Map();
+    for (const acc of visibleAccounts) {
+      const firm = acc.firm_id ? firmById.get(acc.firm_id) : null;
+      const key = firm ? `firm:${firm.id}` : `acc:${acc.id}`;
+      const a = activity.get(acc.id) || { recent: 0, last: 0 };
+      const v = viewOf(acc);
+      const prev = entities.get(key);
+      if (prev) {
+        prev.recent += a.recent;
+        prev.last = Math.max(prev.last, a.last);
+        prev.trades += v.trades;
+        prev.accounts.push(acc);
+      } else {
+        entities.set(key, {
+          key, firm, account: firm ? null : acc,
+          recent: a.recent, last: a.last, trades: v.trades,
+          accounts: [acc],
+        });
+      }
+    }
+    return [...entities.values()]
       .sort((a, b) => {
-        const aa = activity.get(a.id) || { recent: 0, last: 0 };
-        const ab = activity.get(b.id) || { recent: 0, last: 0 };
-        if (ab.recent !== aa.recent) return ab.recent - aa.recent;
-        const ta = viewOf(a).trades, tb = viewOf(b).trades;
-        if (tb !== ta) return tb - ta;
-        return ab.last - aa.last;
+        if (b.recent !== a.recent) return b.recent - a.recent;
+        if (b.trades !== a.trades) return b.trades - a.trades;
+        return b.last - a.last;
       })
       .slice(0, 3);
-  }, [visibleAccounts, trades, viewOf]);
+  }, [visibleAccounts, trades, viewOf, firmById]);
 
   /* Un compte eval qui a atteint sa cible de profit peut passer funded. */
   const canPassFunded = React.useCallback((acc) => {
@@ -451,13 +571,23 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
     return !!params && params.profitTarget > 0 && (s?.pnl || 0) >= params.profitTarget;
   }, [stats]);
 
-  // Lignes du tableau « Prop Firms » : une par firme (dépliable sur ses
-  // comptes), puis une par compte hors firme, puis l'agrégat des eval archivés.
-  const [expanded, setExpanded] = React.useState(() => new Set());
-  const toggleRow = (id) => setExpanded((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
+  /* Lignes du tableau « Prop Firms » : une par firme (dépliable sur ses
+     comptes), puis une par compte hors firme, puis l'agrégat des eval archivés.
+
+     Les lignes dépliées sont persistées (localStorage + Supabase) : replier
+     toutes ses firmes à chaque rechargement était une corvée pour qui en suit
+     plusieurs. Stocké en TABLEAU d'ids — un Set ne survit pas au JSON — et
+     reconverti en Set pour la lecture. */
+  const [expandedIds, setExpandedIds] = useCloudState(
+    "tr4de_accounts_expanded_rows", "accounts_expanded_rows", []
+  );
+  const expanded = React.useMemo(
+    () => new Set(Array.isArray(expandedIds) ? expandedIds : []),
+    [expandedIds]
+  );
+  const toggleRow = (id) => setExpandedIds((prev) => {
+    const arr = Array.isArray(prev) ? prev : [];
+    return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
   });
 
   return (
@@ -481,12 +611,9 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
         document.body
       )}
 
-      {/* Titre de page + actions (création firme / compte). La maquette ne
+      {/* Barre d'en-tête : actions de création (firme / compte). La maquette ne
           montre pas ces boutons, mais ce sont les deux parcours de création. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 20, fontWeight: 500, lineHeight: "26.35px", color: T.text, margin: 0 }}>
-          {t("nav.accounts")}
-        </h1>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
         <button
           type="button"
@@ -518,36 +645,107 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
 
         {/* ─── Bandeau de KPI (5 tuiles égales, gap 12) ─── */}
-        <div className="tr4de-accounts-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
-          <KpiCard label={t("accountsPage.kpiAccounts")} value={String(totals.accounts)} />
-          <KpiCard label={t("accountsPage.kpiCapital")} value={totals.capital > 0 ? fmtNoCents(totals.capital) : "—"} />
-          <KpiCard label={t("accountsPage.kpiTrades")} value={String(totals.trades)} />
-          <KpiCard
-            label={t("accountsPage.kpiPnL")}
-            value={fmt(totals.pnl, true)}
-            tone={totals.pnl > 0 ? "pos" : totals.pnl < 0 ? "neg" : undefined}
-          />
-          <KpiCard label={t("accountsPage.kpiWR")} value={totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—"} />
+        {/* Une seule barre plutôt que cinq cartes : les totaux sont un
+            en-tête de lecture, pas le sujet de la page. Condensés sur une
+            ligne, ils rendent près de 90 px de hauteur à la liste des comptes,
+            qui est ce qu'on vient consulter. */}
+        <div className="tr4de-accounts-kpis" style={{
+          ...CARD, padding: "12px 20px",
+          display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 8,
+        }}>
+          {[
+            { key: "accounts", value: String(totals.accounts), label: t("accountsPage.barAccounts") },
+            { key: "capital", value: totals.capital > 0 ? fmtNoCents(totals.capital) : "—", label: t("accountsPage.barCapital") },
+            { key: "trades", value: String(totals.trades), label: t("accountsPage.barTrades") },
+            { key: "pnl", value: fmt(totals.pnl, true), label: "P&L", color: totals.pnl > 0 ? T.pnlPos : totals.pnl < 0 ? T.pnlNeg : undefined },
+            { key: "wr", value: totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—", label: t("accountsPage.barWinrate") },
+          ].map((item, i) => (
+            <React.Fragment key={item.key}>
+              {i > 0 && (
+                <span aria-hidden className="tr4de-kpi-sep" style={{
+                  width: 1, alignSelf: "stretch", minHeight: 18,
+                  background: T.border, margin: "0 20px", flexShrink: 0,
+                }} />
+              )}
+              <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+                <span style={{ fontSize: 16, fontWeight: 500, color: item.color || T.text, whiteSpace: "nowrap" }}>
+                  {item.value}
+                </span>
+                <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap" }}>{item.label}</span>
+              </span>
+            </React.Fragment>
+          ))}
         </div>
 
         {/* ─── Les plus actifs : 3 cartes, comptes de prop firm ou non ─── */}
-        {topActiveAccounts.length > 0 && (
+        {topActiveEntities.length > 0 && (
           <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <SectionTitle>{t("accountsPage.mostActive")}</SectionTitle>
             <div className="tr4de-accounts-live" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 24 }}>
-              {topActiveAccounts.map((acc) => (
-                <LiveAccountCard
-                  key={acc.id}
-                  account={acc}
-                  firmName={acc.firm_id ? firmById.get(acc.firm_id)?.name : null}
-                  view={viewOf(acc)}
-                  series={seriesByAccount.get(acc.id)}
-                  canPass={canPassFunded(acc)}
-                  passing={passing === acc.id}
-                  onPass={() => setConfirmFunded(acc)}
-                  onOpen={() => onOpenDetail(acc.id)}
-                />
-              ))}
+              {topActiveEntities.map((entity) => {
+                /* Une entité rattachée à une firme est présentée par sa FIRME :
+                   nom, logo, courbe et chiffres agrégés de tous ses comptes. */
+                if (entity.firm) {
+                  const f = entity.firm;
+                  const agg = entity.accounts.reduce((acc, a) => {
+                    const v = viewOf(a);
+                    acc.pnl += v.pnl;
+                    acc.trades += v.trades;
+                    if (v.capital != null) acc.capital += v.capital;
+                    // Même règle que la ligne du tableau Prop Firms : un compte
+                    // funded ne compte que ses trades depuis son passage funded.
+                    const s = stats.get(a.id);
+                    if (s) acc.wins += (a.account_type === "funded") ? s.fundedWins : s.wins;
+                    return acc;
+                  }, { pnl: 0, trades: 0, capital: 0, wins: 0 });
+                  const view = {
+                    pnl: agg.pnl,
+                    trades: agg.trades,
+                    capital: agg.capital > 0 ? agg.capital : null,
+                    value: agg.capital > 0 ? agg.capital + agg.pnl : agg.pnl,
+                    winRate: agg.trades > 0 ? (agg.wins / agg.trades) * 100 : null,
+                    pnlPct: agg.capital > 0 ? (agg.pnl / agg.capital) * 100 : null,
+                  };
+                  const n = entity.accounts.length;
+                  return (
+                    <LiveAccountCard
+                      key={entity.key}
+                      account={{ id: f.id, name: f.name }}
+                      /* La carte porte l'identité de la firme : son logo vient
+                         de son nom, pas de sa plateforme d'exécution. */
+                      firm={f}
+                      /* Rien ne distinguait une carte de firme d'une carte de
+                         compte : la pastille de type laisse place au badge
+                         « Prop firm ». */
+                      isFirm
+                      firmName={n === 1 ? t("firms.oneAccount") : t("firms.nAccounts").replace("{n}", String(n))}
+                      view={view}
+                      series={seriesByFirm.get(f.id)}
+                      canPass={false}
+                      passing={false}
+                      heroMode={firmMeta[f.id]?.hero === "pnl" ? "pnl" : "value"}
+                      onOpen={() => onOpenFirm(f.id)}
+                    />
+                  );
+                }
+                const acc = entity.account;
+                return (
+                  <LiveAccountCard
+                    key={entity.key}
+                    account={acc}
+                    /* Un compte rattaché à une firme est présenté sous cette
+                       firme (logo + nom) ; sinon c'est un compte personnel. */
+                    firm={firmById.get(acc.firm_id) || null}
+                    firmName={firmById.get(acc.firm_id)?.name || null}
+                    view={viewOf(acc)}
+                    series={seriesByAccount.get(acc.id)}
+                    canPass={canPassFunded(acc)}
+                    passing={passing === acc.id}
+                    onPass={() => setConfirmFunded(acc)}
+                    onOpen={() => onOpenDetail(acc.id)}
+                  />
+                );
+              })}
             </div>
           </section>
         )}
@@ -560,10 +758,14 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                 faux (« 3 comptes » avec 2 lignes au dépliage). */}
             <SectionTitle>{t("accounts.allAccounts")}</SectionTitle>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <AccountRowsHeader />
+            {/* Une SEULE carte blanche englobe l'en-tête de colonnes et toutes les
+                lignes. Avant, chaque ligne était sa propre carte et l'en-tête
+                flottait sur le fond gris, détaché des colonnes qu'il nomme. Les
+                lignes passent donc en `flat` : c'est la carte qui porte la surface. */}
+            <div style={{ ...CARD, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <AccountRowsHeader flush withActions />
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {/* Une ligne par firme, dépliable sur ses comptes */}
                 {firmSummaries.map((summary) => {
                   const id = `firm:${summary.firm.id}`;
@@ -572,7 +774,10 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                   return (
                     <TableRow
                       key={id}
-                      icon={resolvePlatformIcon(summary.firm.platform || summary.firm.name)}
+                      flat
+                      /* Logo de la firme = son nom (Topstep, Apex…). Sa
+                         plateforme d'exécution ne sert qu'à l'import. */
+                      icon={firmLogo(summary.firm)}
                       fallbackIcon={<Building2 size={12} strokeWidth={1.75} color={T.textSub} />}
                       label={summary.firm.name}
                       cells={[
@@ -588,6 +793,24 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                       open={open}
                       onToggle={() => toggleRow(id)}
                       onOpen={() => onOpenFirm(summary.firm.id)}
+                      actions={
+                        <>
+                          <RowIconButton
+                            label={t("firms.editFirm")}
+                            onClick={() => setEditingFirm(summary.firm)}
+                          >
+                            <Pencil size={14} strokeWidth={1.75} />
+                          </RowIconButton>
+                          <RowIconButton
+                            label={t("firms.deleteFirm")}
+                            danger
+                            busy={deleting && confirmFirmDelete?.id === summary.firm.id}
+                            onClick={() => { setDeleteFirmAccounts(false); setConfirmFirmDelete(summary.firm); }}
+                          >
+                            <Trash2 size={14} strokeWidth={1.75} />
+                          </RowIconButton>
+                        </>
+                      }
                     >
                       {summary.accounts.length === 0 && (
                         <div style={{ fontSize: 14, color: T.textMut, padding: "4px 0 4px 30px" }}>
@@ -600,24 +823,41 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                           <SubRow
                             key={acc.id}
                             label={acc.name || acc.eval_account_size || "Compte"}
+                            dot={<AccountDot account={acc} firm={summary.firm} />}
                             badge={canPassFunded(acc) ? (
                               <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
                             ) : null}
                             cells={[
-                              /* Le type prend la place de la pastille supprimée :
-                                 sans lui, rien ne distinguerait un eval d'un funded. */
+                              /* Le type reste écrit en toutes lettres : la pastille
+                                 de gauche le code par la couleur, elle ne le dit
+                                 pas — et la couleur seule ne suffit jamais. */
                               accountTypeLabel(acc),
                               v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
                               v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
                               fmtNoCents(v.payout),
                             ]}
                             onOpen={() => onOpenDetail(acc.id)}
+                            actions={
+                              <>
+                                <RowIconButton
+                                  label={t("common.edit")}
+                                  onClick={() => setEditingAccount(acc)}
+                                >
+                                  <Pencil size={14} strokeWidth={1.75} />
+                                </RowIconButton>
+                                <RowIconButton
+                                  label={t("common.delete")}
+                                  danger
+                                  busy={deleting && confirmDelete?.id === acc.id}
+                                  onClick={() => setConfirmDelete(acc)}
+                                >
+                                  <Trash2 size={14} strokeWidth={1.75} />
+                                </RowIconButton>
+                              </>
+                            }
                           />
                         );
                       })}
-                      {/* Ajout d'un compte directement rattaché à cette firme,
-                          sans passer par la page paramètres de la firme. */}
-                      <AddAccountRow onClick={() => setCreatingAccount({ firmId: summary.firm.id })} />
                     </TableRow>
                   );
                 })}
@@ -628,6 +868,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                   return (
                     <TableRow
                       key={`acc:${acc.id}`}
+                      flat
                       icon={getBrokerLogo(acc.broker) || resolvePlatformIcon(acc.broker)}
                       fallbackIcon={<Wallet size={12} strokeWidth={1.75} color={T.textSub} />}
                       label={acc.name || "Compte"}
@@ -642,6 +883,24 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                       ]}
                       expandable={false}
                       onOpen={() => onOpenDetail(acc.id)}
+                      actions={
+                        <>
+                          <RowIconButton
+                            label={t("common.edit")}
+                            onClick={() => setEditingAccount(acc)}
+                          >
+                            <Pencil size={14} strokeWidth={1.75} />
+                          </RowIconButton>
+                          <RowIconButton
+                            label={t("common.delete")}
+                            danger
+                            busy={deleting && confirmDelete?.id === acc.id}
+                            onClick={() => setConfirmDelete(acc)}
+                          >
+                            <Trash2 size={14} strokeWidth={1.75} />
+                          </RowIconButton>
+                        </>
+                      }
                     />
                   );
                 })}
@@ -659,6 +918,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                   return (
                     <TableRow
                       key={id}
+                      flat
                       icon={null}
                       fallbackIcon={<Trophy size={12} strokeWidth={1.75} color={T.textSub} />}
                       label="Comptes eval passés"
@@ -672,6 +932,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                       open={open}
                       onToggle={() => toggleRow(id)}
                       onOpen={() => onOpenDetail(ARCHIVED_VIEW_ID)}
+                      reserveActions
                     >
                       {archivedAccounts.map((a) => {
                         const s = archivedStats.get(a.id) || { trades: 0, wins: 0, pnl: 0 };
@@ -680,6 +941,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                           <SubRow
                             key={a.id}
                             label={a.name || a.eval_account_size || "Compte"}
+                            dot={<AccountDot account={a} />}
                             cells={[
                               accountTypeLabel(a),
                               cap != null ? fmtNoCents(cap + s.pnl) : fmt(s.pnl, false),
@@ -687,6 +949,10 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                               fmtNoCents(0),
                             ]}
                             onOpen={() => onOpenDetail(ARCHIVED_VIEW_ID)}
+                            /* Un eval passé n'existe plus en base (il a été
+                               supprimé au passage funded) : rien à supprimer
+                               ici, seule la colonne est réservée. */
+                            reserveActions
                           />
                         );
                       })}
@@ -726,8 +992,8 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
           onClose={() => setCreatingFirm(false)}
           onSaved={(firm) => {
             setFirms?.((prev) => [...(prev || []), firm]);
-            // On enchaîne directement sur ses paramètres : c'est là qu'on règle
-            // le nombre et le type de comptes.
+            // On enchaîne directement sur sa page : le menu du sous-titre et le
+            // bouton « Modifier » y règlent le nombre et le type de comptes.
             onOpenFirm(firm.id);
           }}
         />
@@ -740,30 +1006,144 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
           onClose={() => setCreatingAccount(null)}
           onSaved={(acc) => {
             setAccounts?.((prev) => [acc, ...(prev || [])]);
-            setSelectedAccountIds?.((prev) => {
-              const next = [...(prev || [])];
-              if (!next.includes(acc.id)) next.push(acc.id);
-              try { localStorage.setItem("selectedAccountIds", JSON.stringify(next)); } catch {}
-              return next;
-            });
             // Le compte créé depuis une firme apparaît dans sa ligne dépliée :
             // on ouvre le dépliage pour qu'il soit visible immédiatement.
             if (creatingAccount.firmId) {
-              setExpanded((prev) => new Set(prev).add(`firm:${creatingAccount.firmId}`));
+              const rowId = `firm:${creatingAccount.firmId}`;
+              setExpandedIds((prev) => {
+                const arr = Array.isArray(prev) ? prev : [];
+                return arr.includes(rowId) ? arr : [...arr, rowId];
+              });
             }
           }}
         />
       )}
 
-      {/* Repli mobile / tablette de la grille de KPI et des cartes Live. */}
+      {/* Modification — mêmes modales, en mode édition. Le compte modifié est
+          remplacé sur place dans la liste, sans rechargement. */}
+      {editingAccount && (
+        <AccountModal
+          account={editingAccount}
+          firms={firms}
+          userId={userId}
+          onClose={() => setEditingAccount(null)}
+          onSaved={(next) =>
+            setAccounts?.((prev) => (prev || []).map((a) => (a.id === next.id ? { ...a, ...next } : a)))
+          }
+          /* La suppression posée dans la modale rejoue la confirmation de la
+             page : un seul chemin de suppression, un seul message. */
+          onDelete={(acc) => { setEditingAccount(null); setConfirmDelete(acc); }}
+        />
+      )}
+      {editingFirm && (
+        <PropFirmModal
+          firm={editingFirm}
+          accounts={visibleAccounts.filter((a) => a.firm_id === editingFirm.id)}
+          userId={userId}
+          onClose={() => setEditingFirm(null)}
+          onSaved={(next) =>
+            setFirms?.((prev) => (prev || []).map((f) => (f.id === next.id ? { ...f, ...next } : f)))
+          }
+          /* Les comptes retirés dans la modale doivent disparaître de la liste
+             tout de suite : ils viennent d'être supprimés en base. */
+          onAccountsChanged={({ removedIds = [] } = {}) =>
+            setAccounts?.((prev) => (prev || []).filter((a) => !removedIds.includes(a.id)))
+          }
+        />
+      )}
+
+      {/* Suppression d'un compte — le compte ET ses trades, d'où le rappel du
+          nombre de trades perdus dans le message. */}
+      {confirmDelete && (
+        <ConfirmModal
+          title={t("firms.deleteAccountTitle")}
+          message={t("firms.deleteAccountMsg").replace("{name}", confirmDelete.name || t("accountsPage.account"))}
+          confirmLabel={t("common.delete")}
+          busy={deleting}
+          onConfirm={removeAccount}
+          onClose={() => { setConfirmDelete(null); setDeleteError(""); }}
+          extra={(() => {
+            const n = (trades || []).filter((tr) => tr.account_id === confirmDelete.id).length;
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {n > 0 && (
+                  <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.5 }}>
+                    {t("accountsPage.deleteTradesHint").replace("{n}", String(n))}
+                  </div>
+                )}
+                {deleteError && (
+                  <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 }}>
+                    {deleteError}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        />
+      )}
+
+      {/* Suppression d'une firme — par défaut ses comptes sont détachés (ils
+          deviennent des comptes personnels) ; la case les supprime avec elle. */}
+      {confirmFirmDelete && (() => {
+        const firmAccs = visibleAccounts.filter((a) => a.firm_id === confirmFirmDelete.id);
+        const firmTradeCount = (trades || []).filter(
+          (tr) => firmAccs.some((a) => a.id === tr.account_id)
+        ).length;
+        return (
+          <ConfirmModal
+            title={t("firms.deleteFirmTitle").replace("{name}", confirmFirmDelete.name || "")}
+            message={
+              firmAccs.length === 0
+                ? t("firms.deleteFirmMsgEmpty")
+                : t("firms.deleteFirmMsg").replace("{n}", String(firmAccs.length))
+            }
+            confirmLabel={t("firms.deleteFirm")}
+            busy={deleting}
+            onConfirm={removeFirm}
+            onClose={() => { setConfirmFirmDelete(null); setDeleteFirmAccounts(false); setDeleteError(""); }}
+            extra={
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+                {firmAccs.length > 0 && (
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: T.textSub, lineHeight: 1.5, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={deleteFirmAccounts}
+                      onChange={(e) => setDeleteFirmAccounts(e.target.checked)}
+                      style={{ marginTop: 2, flexShrink: 0, accentColor: T.red }}
+                    />
+                    <span>
+                      {t("firms.deleteFirmAlsoAccounts").replace("{n}", String(firmAccs.length))}
+                      {deleteFirmAccounts && firmTradeCount > 0 && (
+                        <span style={{ display: "block", color: T.red, marginTop: 4 }}>
+                          {t("accountsPage.deleteTradesHint").replace("{n}", String(firmTradeCount))}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                )}
+                {deleteError && (
+                  <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 }}>
+                    {deleteError}
+                  </div>
+                )}
+              </div>
+            }
+          />
+        );
+      })()}
+
+      {/* Repli mobile / tablette des cartes Live et de la barre de totaux :
+          celle-ci passe à la ligne d'elle-même (flex-wrap), on resserre juste
+          ses séparateurs pour qu'elle tienne sur deux lignes au lieu de cinq. */}
       <style>{`
         @media (max-width: 1100px) {
           .tr4de-accounts-live { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-          .tr4de-accounts-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          .tr4de-accounts-kpis .tr4de-kpi-sep { margin: 0 12px !important; }
         }
         @media (max-width: 720px) {
           .tr4de-accounts-live { grid-template-columns: minmax(0, 1fr) !important; }
-          .tr4de-accounts-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .tr4de-accounts-kpis { padding: 12px 16px !important; }
+          .tr4de-accounts-kpis .tr4de-kpi-sep { margin: 0 10px !important; }
         }
       `}</style>
     </div>
@@ -777,8 +1157,15 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
 /* Courbe d'équity miniature d'une carte « Live » — tracée sur les vrais
    trades du compte (P&L cumulé). Sans trade, on affiche une ligne médiane
    atténuée plutôt qu'une fausse courbe. */
-function Sparkline({ values, color, height = 131 }) {
+function Sparkline({ values: rawValues, color, height = 131 }) {
   const W = 100;
+  /* Le nombre de points suit le nombre de trades, mais plafonne : au-delà, on
+     sous-échantillonne en gardant la silhouette (pics et creux) plutôt que de
+     tracer un segment par trade, qui rendait la courbe illisible. */
+  const values = React.useMemo(
+    () => downsampleLTTB(rawValues || [], sparklineBudget((rawValues || []).length)),
+    [rawValues]
+  );
   if (!values || values.length < 2) {
     return (
       <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none"
@@ -809,20 +1196,32 @@ function Sparkline({ values, color, height = 131 }) {
 /* ============== CARTE « LIVE » (compte hors firme) ==============
    Maquette : logo rond 44, nom 16 / broker 14 à 40 %, courbe d'équity,
    puis P&L (+%) au-dessus de la valeur du compte. */
-function LiveAccountCard({ account, firmName, view, series, canPass, passing, onPass, onOpen }) {
-  // Le logo suit le broker du compte ; à défaut, celui de sa firme.
-  const logo = getBrokerLogo(account.broker)
-    || resolvePlatformIcon(account.broker)
-    || (firmName ? resolvePlatformIcon(firmName) : null);
-  // Sous-titre : la firme d'abord — c'est ce qui distingue deux comptes
-  // homonymes chez deux prop firms —, sinon le broker, sinon le type.
-  const subtitle = firmName || account.broker || accountTypeLabel(account);
-  // La courbe porte la couleur d'identité du compte (maquette : trois comptes
-  // au même P&L, trois couleurs) ; le chiffre du P&L garde, lui, le code
-  // gain/perte, sinon un compte perdant en vert serait trompeur.
-  const curveColor = accountColor(account.id);
+function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false }) {
+  /* Le logo est celui de la PROP FIRM du compte. La plateforme d'exécution ne
+     sert qu'à l'import : elle n'identifie pas le compte. Sans firme (live ou
+     démo personnel), on retombe sur le broker, seul rattachement du compte. */
+  const logo = firm
+    ? firmLogo(firm)
+    : (getBrokerLogo(account.broker) || resolvePlatformIcon(account.broker));
+  /* Sous-titre : la firme (ou le nombre de comptes, pour une carte de firme).
+     Le broker n'y figure plus — c'est une information d'import, pas d'identité. */
+  const subtitle = firmName || "";
+  /* Badge de tête : le type du compte avec sa taille, ou « Prop firm » pour une
+     carte de firme — dont le type n'a pas de sens, ses comptes pouvant être de
+     types différents. */
+  /* La courbe porte la couleur de la PROP FIRM du compte ; sa plateforme
+     d'exécution ne sert qu'à défaut de maison connue (lib/ui/brandColors). Le
+     chiffre du P&L garde, lui, le code gain/perte, sinon un compte perdant en
+     vert serait trompeur. */
+  const curveColor = accountBrandColor(account, firm);
   const pnlColor = view.pnl > 0 ? T.pnlPos : view.pnl < 0 ? T.pnlNeg : T.textSub;
-  const amount = fmtNoCents(view.value);
+  /* Montant principal : valeur des comptes, ou P&L seul quand la firme est
+     réglée ainsi (« Paramètres de la firme »). Le même réglage pilote le
+     chiffre héros de la page de la firme, pour que les deux vues racontent la
+     même chose. En mode « P&L seul », la ligne du dessus deviendrait un doublon
+     du montant : on y met le pourcentage seul. */
+  const heroIsPnl = heroMode === "pnl";
+  const amount = fmtNoCents(heroIsPnl ? view.pnl : view.value);
   return (
     <div
       data-card
@@ -833,26 +1232,55 @@ function LiveAccountCard({ account, firmName, view, series, canPass, passing, on
       style={{ ...CARD, padding: 20, display: "flex", flexDirection: "column", gap: 16, cursor: "pointer" }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-        <RoundLogo src={logo} size={44} name={firmName || account.broker || account.name} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-          <span style={{ fontSize: 16, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {account.name || "Compte"}
-          </span>
-          <span style={{ fontSize: 14, color: T.text, opacity: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {subtitle}
-          </span>
+        <RoundLogo src={logo} size={44} name={firm?.name || firmName || account.name} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, flex: 1 }}>
+          {/* Le badge partage la ligne du nom : posé dans la colonne de droite
+              de l'en-tête, il flottait entre les deux lignes de texte. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {account.name || "Compte"}
+            </span>
+            {/* Badge neutre pour tous : le type se lit, il ne se code plus par
+                la couleur. Même dessin pour une firme et pour un compte. */}
+            <span style={{
+              marginLeft: "auto", flexShrink: 0,
+              display: "inline-flex", alignItems: "center",
+              padding: "3px 10px", borderRadius: 999,
+              border: `1px solid ${T.border}`, background: T.bg,
+              fontSize: 11, fontWeight: 500, color: T.textSub, whiteSpace: "nowrap",
+            }}>
+              {isFirm ? t("firms.badge") : accountTypeLabel(account)}
+            </span>
+          </div>
+          {subtitle && (
+            <span style={{ fontSize: 14, color: T.text, opacity: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {subtitle}
+            </span>
+          )}
         </div>
       </div>
 
       <Sparkline values={series} color={curveColor} />
 
-      <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <span style={{ fontSize: 12, lineHeight: "18.6px", color: pnlColor, whiteSpace: "nowrap" }}>
-          {view.pnl > 0 ? "+" : ""}{fmtNoCents(view.pnl)}
-          {view.pnlPct != null && ` (${view.pnlPct > 0 ? "+" : ""}${view.pnlPct.toFixed(1)}%)`}
+      {/* Le seul chiffre de la carte, légendé : sans son libellé, rien ne
+          disait s'il s'agissait de la valeur du compte ou de son P&L. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+        <span style={{ fontSize: 12, lineHeight: "17px", color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {heroIsPnl ? t("accountsPage.totalPnL") : t("accountsPage.colValue")}
         </span>
-        <span style={{ fontSize: 20, fontWeight: 500, lineHeight: "31px", letterSpacing: -0.65, color: T.text, whiteSpace: "nowrap" }}>
-          {amount}
+        <span style={{
+          /* 26 px : sous la hauteur de la police, `overflow: hidden` rognerait
+             les chiffres. */
+          fontSize: 20, fontWeight: 500, lineHeight: "26px", letterSpacing: -0.65,
+          color: heroIsPnl ? pnlColor : T.text,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {heroIsPnl && view.pnl > 0 ? "+" : ""}{amount}
+          {/* En mode « P&L seul » le montant EST le P&L : son pourcentage
+              accompagne donc le chiffre. */}
+          {heroIsPnl && view.pnlPct != null && (
+            <span style={{ fontSize: 12, fontWeight: 400 }}> ({view.pnlPct > 0 ? "+" : ""}{view.pnlPct.toFixed(1)}%)</span>
+          )}
         </span>
       </div>
 
@@ -862,6 +1290,22 @@ function LiveAccountCard({ account, firmName, view, series, canPass, passing, on
         </div>
       )}
     </div>
+  );
+}
+
+/* Puce d'identité en tête d'une sous-ligne : la couleur de la MAISON du compte
+   (sa prop firm, sinon son broker), la même que sa courbe. Elle repère la
+   ligne d'un coup d'œil ; le type reste écrit dans sa colonne, la couleur ne
+   portant jamais l'information à elle seule. */
+function AccountDot({ account, firm }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+        background: accountBrandColor(account, firm),
+      }}
+    />
   );
 }
 

@@ -18,10 +18,13 @@ import {
   Check as LucideCheck,
   Repeat as LucideRepeat,
   Pencil as LucidePencil,
+  ChevronLeft as LucideChevronLeft,
+  ChevronRight as LucideChevronRight,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
+import { CARD, TH, DirectionTag, SymbolCell, TableFilter, symbolLabel } from "@/components/ui/da";
 import { rMultiple, fmtR } from "@/lib/userPrefs";
 import { calculateFees } from "@/lib/tradeFees";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
@@ -33,7 +36,16 @@ import { useTradeEmotionTags, useTradeErrorTags } from "@/lib/hooks/useTradeEmot
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 
-export default function TradesPage({ trades = [], strategies = [], onImportClick, onDeleteTrade, onClearTrades, embedded = false, maxRows = null, lockColumns = false }) {
+/* Tailles de page proposées sous le tableau. Le choix est mémorisé en local
+   (clé tr4de_trades_page_size). */
+const PAGE_SIZES = [25, 50, 100, 200];
+
+/* Colonnes retirées des tableaux encastrés (journal, détail de stratégie) :
+   la place y est comptée, et « Compte » n'y aurait rien à afficher — ces vues
+   ne passent pas la liste des comptes. */
+const HIDDEN_WHEN_EMBEDDED = ["entryDate", "exitDate", "pnlPct", "weekday", "account"];
+
+export default function TradesPage({ trades = [], strategies = [], accounts = [], onImportClick, onDeleteTrade, onClearTrades, embedded = false, maxRows = null, lockColumns = false }) {
   useLang();
   const { user } = useAuth();
   const { notes: notesFromHook, setNote: setNoteHook } = useTradeNotes();
@@ -101,32 +113,48 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
   // avec fallback localStorage. L'utilisateur peut les réordonner par drag-and-drop.
   // Colonnes existantes (visibles par défaut) + nouvelles catégories optionnelles
   // (masquées par défaut, activables depuis le bouton de config).
+  /* Ordre de la maquette « Trades » (node 283:6791) :
+     type · entry date · entry time · exit date · exit time · duration ·
+     net p&l · p&l% · r · lots · frais · stratégie · entry · exit · session · day.
+     `asset`, `volume` et le P&L brut restent disponibles mais masqués — la
+     maquette ne les montre pas et le P&L affiché est le net (cf. barème de frais). */
   const TRADE_COLUMN_IDS = [
-    "asset","side","entryDate","entryTime","entry","exitDate","exitTime","exit",
-    "lots","volume","pnl","pnlPct","r","duration",
-    // Nouvelles colonnes
-    "fees","netPnl","strategy","session","weekday",
+    "side","account","entryDate","entryTime","exitDate","exitTime","duration",
+    "netPnl","pnlPct","r","lots","fees","strategy","entry","exit","session","weekday",
+    "asset","volume","pnl",
   ];
   const DEFAULT_VISIBLE_COLUMNS = [
-    "asset","side","entryDate","entryTime","entry","exitDate","exitTime","exit",
-    "lots","volume","pnl","pnlPct","r","duration",
+    "side","account","entryDate","entryTime","exitDate","exitTime","duration",
+    "netPnl","pnlPct","r","lots","fees","strategy","entry","exit","session","weekday",
   ];
-  const [rawColumnOrder, setRawColumnOrder] = useCloudState("tr4de_trades_columns", "trades_column_order", TRADE_COLUMN_IDS);
+  /* Clés en v2 : l'ordre et la visibilité stockés par l'ancienne version
+     l'emporteraient sur les nouveaux défauts, et la page ne ressemblerait pas à
+     la maquette pour les comptes existants. Le renommage repart des défauts. */
+  const [rawColumnOrder, setRawColumnOrder] = useCloudState("tr4de_trades_columns_v2", "trades_column_order_v2", TRADE_COLUMN_IDS);
   // Validation : tout id stocké doit appartenir à TRADE_COLUMN_IDS et toutes
-  // les colonnes du code doivent y être (autoriser la migration en ajoutant
-  // les nouvelles colonnes en fin si elles manquent).
+  // les colonnes du code doivent y être. Une colonne ajoutée après coup reprend
+  // sa place canonique (juste avant le premier voisin déjà présent) plutôt que
+  // d'atterrir en fin de tableau : « Compte » se lit à côté du type, pas
+  // derrière le P&L brut.
   const columnOrder = (() => {
     if (!Array.isArray(rawColumnOrder)) return TRADE_COLUMN_IDS;
-    const cleaned = rawColumnOrder.filter(id => TRADE_COLUMN_IDS.includes(id));
-    const missing = TRADE_COLUMN_IDS.filter(id => !cleaned.includes(id));
-    return [...cleaned, ...missing];
+    const out = rawColumnOrder.filter(id => TRADE_COLUMN_IDS.includes(id));
+    TRADE_COLUMN_IDS.forEach((id, canonicalIdx) => {
+      if (out.includes(id)) return;
+      const nextPresent = TRADE_COLUMN_IDS.slice(canonicalIdx + 1).find(x => out.includes(x));
+      const pos = nextPresent ? out.indexOf(nextPresent) : out.length;
+      out.splice(pos, 0, id);
+    });
+    return out;
   })();
   const setColumnOrder = setRawColumnOrder;
 
-  // Colonnes visibles : persistées séparément. Par défaut on garde les
-  // colonnes historiques visibles ; les nouvelles sont à activer manuellement.
+  // Colonnes visibles : persistées séparément. Clé en v3 pour l'arrivée de la
+  // colonne « Compte » — une liste stockée en v2 ne la contient pas, et rien ne
+  // distingue « jamais proposée » de « décochée par l'utilisateur » : on repart
+  // donc des défauts (l'ordre personnalisé, lui, est conservé en v2).
   const [rawVisibleColumns, setRawVisibleColumns] = useCloudState(
-    "tr4de_trades_visible_columns", "trades_visible_columns", DEFAULT_VISIBLE_COLUMNS
+    "tr4de_trades_visible_columns_v3", "trades_visible_columns_v3", DEFAULT_VISIBLE_COLUMNS
   );
   const visibleColumns = Array.isArray(rawVisibleColumns)
     ? rawVisibleColumns.filter(id => TRADE_COLUMN_IDS.includes(id))
@@ -152,6 +180,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
   const [sortBy, setSortBy] = useCloudState("tr4de_trades_sort_by", "trades_sort_by", "date");
   const [sortDir, setSortDir] = useCloudState("tr4de_trades_sort_dir", "trades_sort_dir", "desc");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  // Filtres de la barre au-dessus du tableau (maquette node 293:12628).
+  const [symbolFilter, setSymbolFilter] = useState([]);
+  const [accountFilter, setAccountFilter] = useState("");
+  const [sideFilter, setSideFilter] = useState("");
   // Mode embarqué (journal) : "voir plus" pour dépasser la limite maxRows.
   const [embeddedShowAll, setEmbeddedShowAll] = useState(false);
   const [dragColId, setDragColId] = useState(null);
@@ -863,18 +895,124 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
     }
   }, [trades]);
 
-  // Le filtrage par date est désormais géré globalement dans le layout.
-  const filteredTrades = trades;
+  /* Filtres de la maquette (node 293:12628) : symboles, compte, type, sens du
+     tri sur la date d'entrée. Volontairement AUCUN filtre de plage de dates —
+     le site montre tout l'historique, et « Date de débuts » ne pilote donc que
+     l'ordre, pas le périmètre. */
+  const symbolOptions = React.useMemo(() => {
+    const seen = new Map();
+    (trades || []).forEach(tr => {
+      const code = String(tr.symbol || "").trim();
+      if (code && !seen.has(code)) seen.set(code, symbolLabel(code));
+    });
+    return Array.from(seen.entries())
+      .map(([code, l]) => ({ id: code, label: l.code ? `${l.name} · ${l.code}` : l.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, "fr"));
+  }, [trades]);
+  const accountOptions = React.useMemo(
+    () => (accounts || []).map(a => ({ id: a.id, label: a.name || "Compte" })),
+    [accounts]
+  );
+  /* Colonne « Compte » : le trade ne porte qu'un account_id. Un id inconnu
+     (compte supprimé au passage funded — la FK repasse à NULL) retombe sur
+     le tiret plutôt que sur un identifiant illisible. */
+  const accountNameById = React.useMemo(
+    () => new Map((accounts || []).map(a => [a.id, a.name || "Compte"])),
+    [accounts]
+  );
+
+  const filteredTrades = React.useMemo(() => {
+    let out = trades || [];
+    if (symbolFilter.length) out = out.filter(tr => symbolFilter.includes(String(tr.symbol || "").trim()));
+    if (accountFilter) out = out.filter(tr => tr.account_id === accountFilter);
+    if (sideFilter) {
+      const wantShort = sideFilter === "short";
+      out = out.filter(tr => String(tr.direction || "").toLowerCase().startsWith("s") === wantShort);
+    }
+    return out;
+  }, [trades, symbolFilter, accountFilter, sideFilter]);
+
+  /* ─── Groupes triés ────────────────────────────────────────────────────
+     Le regroupement des exécutions et le tri vivaient dans le JSX ; ils sont
+     hissés ici pour que la barre de pagination (rendue sous le tableau)
+     connaisse le nombre total de lignes. */
+  const sortedGroups = React.useMemo(() => {
+    const groups = buildGroups(filteredTrades, 60);
+    const sortVal = (g) => {
+      const p = g.parent;
+      switch (sortBy) {
+        case "symbol":   return String(p.symbol || "").toUpperCase();
+        case "strategy": return firstStrategyName(p).toUpperCase();
+        case "pnl":      return g.netSum != null ? g.netSum : netPnlOf(p);
+        case "side":     return String(p.direction || "").toUpperCase();
+        case "lots":     return g.qtySum != null && g.qtySum > 0 ? g.qtySum : (qtyOf(p) || 0);
+        case "date":
+        default: {
+          const d = String(p.date || "").slice(0, 10);
+          const time = p.exitTime || p.exit_time || "00:00:00";
+          return `${d}T${time}`;
+        }
+      }
+    };
+    const sortMul = sortDir === "asc" ? 1 : -1;
+    groups.sort((a, b) => {
+      const va = sortVal(a), vb = sortVal(b);
+      let cmp;
+      if (typeof va === "number" && typeof vb === "number") cmp = va - vb;
+      else cmp = String(va).localeCompare(String(vb), "fr", { numeric: true });
+      if (cmp !== 0) return cmp * sortMul;
+      // Départage stable : date la plus récente d'abord
+      const da = String(a.parent.date || "").slice(0, 10);
+      const db = String(b.parent.date || "").slice(0, 10);
+      return db.localeCompare(da);
+    });
+    return groups;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredTrades, sortBy, sortDir, tradeStrategies]);
+
+  /* ─── Pagination ───────────────────────────────────────────────────────
+     On pagine les GROUPES, pas les lignes aplaties : déplier un lot
+     d'exécutions ne doit pas repousser des trades sur la page suivante ni
+     faire varier le nombre de trades par page.
+     Le mode embarqué (journal) garde son « voir plus » et n'est pas paginé. */
+  const paginated = !embedded;
+  const [pageSize, setPageSize] = React.useState(() => {
+    if (typeof window === "undefined") return 50;
+    const v = parseInt(localStorage.getItem("tr4de_trades_page_size") || "", 10);
+    return PAGE_SIZES.includes(v) ? v : 50;
+  });
+  const [pageIndex, setPageIndex] = React.useState(0);
+  const pageCount = paginated ? Math.max(1, Math.ceil(sortedGroups.length / pageSize)) : 1;
+
+  // Revenir à la première page quand le contenu change (filtres, tri, taille).
+  React.useEffect(() => { setPageIndex(0); }, [symbolFilter, accountFilter, sideFilter, sortBy, sortDir, pageSize]);
+  // Et rester dans les bornes si la liste rétrécit (suppression de trades).
+  React.useEffect(() => {
+    setPageIndex((p) => Math.min(p, pageCount - 1));
+  }, [pageCount]);
+
+  const changePageSize = (n) => {
+    setPageSize(n);
+    try { localStorage.setItem("tr4de_trades_page_size", String(n)); } catch {}
+  };
+
+  const pagedGroups = React.useMemo(() => {
+    if (!paginated) return sortedGroups;
+    const start = pageIndex * pageSize;
+    return sortedGroups.slice(start, start + pageSize);
+  }, [sortedGroups, paginated, pageIndex, pageSize]);
 
   if (!trades || trades.length === 0) {
     if (embedded) return null; // l'empty state est géré par le parent
+    /* La page est posée sur le fond gris : l'état vide est donc une carte de la
+       nouvelle DA (coins 12, ombre douce, sans bordure) comme le tableau. */
     return (
-      <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
+      <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:14,fontFamily:"var(--font-sans)"}} className="anim-1">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:12}}>
+          <div id="tr4de-page-header-slot" />
         </div>
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-          <div style={{width:48,height:48,borderRadius:"var(--radius-card)",background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <div style={{...CARD,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+          <div style={{width:48,height:48,borderRadius:12,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <LucideTrendingUp size={22} strokeWidth={1.75} color={T.text}/>
           </div>
           <div style={{fontSize:17,fontWeight:600,color:T.text,marginBottom:6,letterSpacing:-0.1}}>{t("journal.empty")}</div>
@@ -924,13 +1062,24 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
   const topSymbol = Object.entries(symbolStats).sort((a,b)=>b[1].totalPnL-a[1].totalPnL)[0];
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}} className="anim-1">
+    /* 14 px de retrait haut : la barre du haut apporte déjà 20 px, ce qui place
+       le titre aux 34 px de la maquette (même calcul que le dashboard). */
+    <div style={{display:"flex",flexDirection:"column",gap:embedded?16:48,paddingTop:embedded?0:14,fontFamily:"var(--font-sans)"}} className="anim-1">
+      {/* Barre d'en-tête — slot d'en-tête + actions, alignés à droite. */}
       {!embedded && (
-        <div style={{display:"flex",alignItems:"center",marginBottom:8,gap:12,flexWrap:"wrap"}}>
-                    <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",fontFamily:"var(--font-sans)"}}>
-            <button onClick={onImportClick} style={{padding:"7px 16px",height:34,borderRadius:999,background:"#0D0D0D",border:"1px solid #0D0D0D",color:"#FFFFFF",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"var(--font-sans)"}}>{t("trades.importBtn")}</button>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:12,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div id="tr4de-page-header-slot" />
+            <button
+              type="button"
+              onClick={onImportClick}
+              style={{display:"inline-flex",alignItems:"center",gap:6,padding:"7px 14px",minHeight:34,borderRadius:999,
+                      background:T.text,border:"none",color:T.textInverted,fontSize:12,fontWeight:500,
+                      cursor:"pointer",fontFamily:"inherit"}}
+            >
+              <LucidePlus size={13} strokeWidth={1.75} /> {t("trades.importBtn").replace(/^\+\s*/, "")}
+            </button>
           </div>
-          <div id="tr4de-page-header-slot" />
         </div>
       )}
 
@@ -1002,6 +1151,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                   r: "R", duration: t("trades.colDuration"),
                   fees: "Frais", netPnl: "P&L net", strategy: "Stratégie",
                   session: "Session", weekday: "Jour",
+                  account: t("addTrade.account"),
                 };
                 const checked = visibleColumns.includes(id);
                 return (
@@ -1030,16 +1180,53 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
         document.body
       )}
 
+      {/* BARRE DE FILTRES — libellés à 40 % d'opacité, hors carte, retrait de
+          28 px pour s'aligner sur le contenu de la carte (maquette 293:12628). */}
+      {!embedded && (
+        <div style={{display:"flex",flexDirection:"column",gap:20}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:18,padding:"0 28px",flexWrap:"wrap"}}>
+            <TableFilter
+              multi
+              label={t("trades.filterSymbols")}
+              value={symbolFilter}
+              options={symbolOptions}
+              onChange={setSymbolFilter}
+            />
+            {accountOptions.length > 0 && (
+              <TableFilter
+                label={t("addTrade.account")}
+                value={accountFilter}
+                options={accountOptions}
+                onChange={setAccountFilter}
+              />
+            )}
+            <TableFilter
+              label={t("trades.filterTypes")}
+              value={sideFilter}
+              options={[{ id: "long", label: "Long" }, { id: "short", label: "Short" }]}
+              onChange={setSideFilter}
+            />
+            <TableFilter
+              label={t("trades.filterEntryDate")}
+              value={sortBy === "date" ? sortDir : ""}
+              options={[{ id: "desc", label: t("trades.newestFirst") }, { id: "asc", label: t("trades.oldestFirst") }]}
+              onChange={(dir) => { setSortBy("date"); setSortDir(dir || "desc"); }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* LAYOUT WITH TABLE + SIDE PANEL WITH TABS */}
       <div className="tr4de-trades-layout" style={{display:"flex",gap:16,alignItems:"flex-start"}}>
 
-        {/* LEFT - TRADES TABLE */}
-        <div ref={tradesMainRef} className="tr4de-trades-main" style={{flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden",display:"flex",flexDirection:"column",maxHeight:"calc(100vh - 200px)"}}>
-          
+        {/* LEFT - TRADES TABLE.
+            Carte de la maquette : coins 12, ombre très douce, PAS de bordure —
+            la séparation des lignes se fait par l'espace, pas par des filets. */}
+        <div ref={tradesMainRef} className="tr4de-trades-main" style={{...CARD,flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,display:"flex",flexDirection:"column",maxHeight:"calc(100vh - 200px)",padding:16,gap:12}}>
 
           <div className="tr4de-trades-scroll" style={{overflowX:"auto",overflowY:"auto",overscrollBehavior:"contain",flex:1,minHeight:0}}>
-            <table style={{width:"max-content",minWidth:"100%",borderCollapse:"collapse",fontSize:13,fontFamily:"var(--font-sans)"}}>
-              <thead style={{position:"sticky",top:0,background:T.bg,zIndex:10}}>
+            <table style={{width:"max-content",minWidth:"100%",borderCollapse:"separate",borderSpacing:"0 8px",fontSize:12,fontFamily:"var(--font-sans)"}}>
+              <thead style={{position:"sticky",top:0,background:T.white,zIndex:10}}>
                 <tr
                   style={{borderBottom:`1px solid ${T.border}`}}
                   onDragOver={(e) => {
@@ -1073,8 +1260,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                   }}
                   onDrop={(e) => { e.preventDefault(); persistColumns(columnOrder); setDragColId(null); }}
                 >
-                  {/* Symbol : master checkbox quand >= 1 selectionne */}
-                  <th style={{padding:"12px 22px",textAlign:"left",fontSize:11,fontWeight:500,color:T.textMut,whiteSpace:"nowrap",background:T.bg,height:42,minWidth:130,width:130}}>
+                  {/* Symbol : master checkbox quand >= 1 selectionne.
+                      En-tête de la maquette : 12px Medium capitales, bloc entier
+                      à 40 % d'opacité, colonne de 170 px. */}
+                  <th style={{...TH,padding:"0 6px 0 12px",boxSizing:"border-box",textAlign:"left",opacity:0.4,whiteSpace:"nowrap",background:T.white,minWidth:182,width:182}}>
                     <span style={{display:"inline-flex",alignItems:"center",gap:8,height:22,verticalAlign:"middle"}}>
                       <span style={{width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         {selectedIds.size > 0 && (
@@ -1121,8 +1310,9 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                       strategy:  { label: "Stratégie" },
                       session:   { label: "Session" },
                       weekday:   { label: "Jour" },
+                      account:   { label: t("addTrade.account") },
                     };
-                    return columnOrder.filter(id => visibleColumns.includes(id) && !(embedded && ["entryDate","exitDate","pnlPct","weekday"].includes(id))).map(id => {
+                    return columnOrder.filter(id => visibleColumns.includes(id) && !(embedded && HIDDEN_WHEN_EMBEDDED.includes(id))).map(id => {
                       const h = labels[id]; if (!h) return null;
                       const isDragging = dragColId === id;
                       return (
@@ -1141,20 +1331,22 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                           onDragEnd={lockColumns ? undefined : () => { persistColumns(columnOrder); setDragColId(null); }}
                           title={lockColumns ? undefined : "Glisser pour réordonner"}
                           style={{
+                            ...TH,
                             position: "relative",
-                            padding: "12px 22px",
-                            textAlign: NUMERIC_COLS.has(id) ? "right" : "left", fontSize: 11, fontWeight: 500,
-                            color: T.textMut,
+                            padding: "0 6px",
+                            boxSizing: "border-box",
+                            textAlign: "left",
                             whiteSpace: "nowrap",
-                            background: T.bg,
+                            background: T.white,
+                            minWidth: 100, width: 100,
                             cursor: lockColumns ? "default" : "grab",
-                            opacity: isDragging ? 0.45 : 1,
+                            opacity: isDragging ? 0.2 : 0.4,
                             userSelect: "none",
                           }}
                         >
                           {/* Poignée en position absolue dans le padding gauche : elle ne
                               décale pas le libellé, qui reste aligné sur les données. */}
-                          {!lockColumns && <LucideGripVertical size={11} strokeWidth={1.75} style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", color: T.textMut, opacity: 0.55 }} />}
+                          {!lockColumns && <LucideGripVertical size={11} strokeWidth={1.75} style={{ position: "absolute", left: 1, top: "50%", transform: "translateY(-50%)", color: T.text, opacity: 0.55 }} />}
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                             {h.label}
                             {h.sorted && <LucideArrowDown size={11} strokeWidth={1.75} />}
@@ -1164,7 +1356,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                     });
                   })()}
                   {/* Settings column header */}
-                  <th style={{padding:"12px 8px",textAlign:"right",background:T.bg,width:32}}>
+                  <th style={{padding:"0 4px",textAlign:"right",background:T.white,width:32}}>
                     {!lockColumns && (
                     <button
                       aria-label="Configurer colonnes"
@@ -1180,6 +1372,25 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                 </tr>
               </thead>
               <tbody>
+                {/* Filtres actifs mais aucun résultat : sans ce message, le tableau
+                    vide se lit comme « je n'ai aucun trade » alors qu'il s'agit d'un
+                    filtre. On donne la sortie dans la foulée. */}
+                {filteredTrades.length === 0 && (
+                  <tr>
+                    <td colSpan={visibleColumns.length + 2} style={{padding:"32px 12px",textAlign:"center"}}>
+                      <div style={{fontSize:14,color:T.textSub,marginBottom:12}}>{t("trades.noneForFilters")}</div>
+                      <button
+                        type="button"
+                        onClick={() => { setSymbolFilter([]); setAccountFilter(""); setSideFilter(""); }}
+                        style={{padding:"7px 14px",minHeight:36,borderRadius:999,border:"none",
+                                background:T.white,boxShadow:T.elevPill,color:T.text,
+                                fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}
+                      >
+                        {t("trades.clearFilters")}
+                      </button>
+                    </td>
+                  </tr>
+                )}
                 {(() => {
                   const fmtTime = (v) => {
                     if (!v) return '—';
@@ -1190,40 +1401,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                     if (isNaN(d.getTime())) return '—';
                     return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
                   };
-                  // Construire les groupes d'abord, puis aplatir en rangées (parent + enfants si dépliés)
-                  const groups = buildGroups(filteredTrades, 60);
-                  // Valeur de tri d'un groupe selon le critère choisi.
-                  const sortVal = (g) => {
-                    const p = g.parent;
-                    switch (sortBy) {
-                      case "symbol":   return String(p.symbol || "").toUpperCase();
-                      case "strategy": return firstStrategyName(p).toUpperCase();
-                      case "pnl":      return g.netSum != null ? g.netSum : netPnlOf(p);
-                      case "side":     return String(p.direction || "").toUpperCase();
-                      case "lots":     return g.qtySum != null && g.qtySum > 0 ? g.qtySum : (qtyOf(p) || 0);
-                      case "date":
-                      default: {
-                        const d = String(p.date || "").slice(0, 10);
-                        const time = p.exitTime || p.exit_time || "00:00:00";
-                        return `${d}T${time}`;
-                      }
-                    }
-                  };
-                  const sortMul = sortDir === "asc" ? 1 : -1;
-                  groups.sort((a, b) => {
-                    const va = sortVal(a), vb = sortVal(b);
-                    let cmp;
-                    if (typeof va === "number" && typeof vb === "number") cmp = va - vb;
-                    else cmp = String(va).localeCompare(String(vb), "fr", { numeric: true });
-                    if (cmp !== 0) return cmp * sortMul;
-                    // Départage stable : date la plus récente d'abord
-                    const da = String(a.parent.date || "").slice(0, 10);
-                    const db = String(b.parent.date || "").slice(0, 10);
-                    return db.localeCompare(da);
-                  });
+                  // Groupes triés puis découpés par page (cf. `pagedGroups`).
                   // Aplatir : pour chaque groupe → ligne parent (groupRow=true si N>1) + enfants si déplié
                   const rows = [];
-                  for (const g of groups) {
+                  for (const g of pagedGroups) {
                     const isGroup = g.children.length > 1;
                     const parentTrade = isGroup
                       ? { ...g.parent, _children: g.children, _groupKey: g.key, _groupPnl: g.pnlSum, _groupFees: g.feesSum, _groupNet: g.netSum, _groupQty: g.qtySum, _groupVolume: g.volSum }
@@ -1300,12 +1481,14 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                   return (
                     <tr
                       key={i}
+                      /* Ligne = carte de la maquette : fond blanc, coins 12 (posés
+                         sur les td d'extrémité, un <tr> n'accepte pas le radius),
+                         séparées par le borderSpacing du tableau et non par un filet. */
                       style={{
-                        borderBottom:`1px solid ${T.border}`,
                         background: isOpen ? openBg : (isChecked ? selectedBg : (isHovered ? hoverBg : T.white)),
                         boxShadow: isOpen ? `inset 3px 0 0 0 ${T.text}` : "none",
                         cursor:"pointer",
-                        transition:"box-shadow .12s ease",
+                        transition:"background .12s ease, box-shadow .12s ease",
                       }}
                       onClick={()=>{
                         const isSelectedDetail = selectedTrade && tradeKey(selectedTrade) === tKey;
@@ -1318,14 +1501,17 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                       onMouseEnter={()=>setHoveredRowId(tKey)}
                       onMouseLeave={()=>setHoveredRowId(null)}
                     >
-                      {/* Symbol + checkbox conditionnelle + icone trending + badge groupe */}
-                      <td style={{padding:"12px 22px",fontWeight:600,color:T.text,fontFamily:"var(--font-sans)",height:42,minWidth:130,width:130, paddingLeft: isChild ? 44 : 22}}>
-                        <span style={{display:"inline-flex",alignItems:"center",gap:8,height:22,verticalAlign:"middle"}}>
+                      {/* Symbol : vignette ronde + nom/code (maquette 283:6806).
+                          Le carré de 22 px qui porte le chevron de groupe ou la case
+                          à cocher reste devant, à largeur fixe, pour que la vignette
+                          ne se décale jamais au survol. */}
+                      <td style={{padding:"12px 6px",boxSizing:"border-box",borderTopLeftRadius:12,borderBottomLeftRadius:12,color:T.text,minWidth:182,width:182, paddingLeft: isChild ? 34 : 12}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:8,verticalAlign:"middle"}}>
                           {!isChild && (
                             // Carré unique 22px : contient l'icône du symbole (ou le chevron de
                             // groupe) par défaut, et la case à cocher au survol/sélection. La
                             // largeur étant fixe, le texte ne se décale jamais.
-                            <span style={{width:22,height:22,borderRadius:6,background:T.bg,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            <span style={{width:22,height:22,borderRadius:6,background:"transparent",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                               {isGroupParent && !isChecked ? (
                                 <button
                                   type="button"
@@ -1357,12 +1543,10 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                                   onClick={onCheckboxClick}
                                   style={{cursor:"pointer",width:14,height:14,accentColor:"#0D0D0D",margin:0,display:"block",verticalAlign:"middle",flexShrink:0}}
                                 />
-                              ) : (
-                                <LucideTrendingUp size={13} strokeWidth={1.75} color={T.textMut} />
-                              )}
+                              ) : null}
                             </span>
                           )}
-                          <span>{t.symbol}</span>
+                          <SymbolCell symbol={t.symbol} />
                           {isGroupParent && (
                             <span style={{
                               fontSize: 10, fontWeight: 700, color: T.textSub,
@@ -1375,7 +1559,18 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                         </span>
                       </td>
                       {(() => {
-                        const tdBase = { padding: "12px 22px" };
+                        /* La maquette pose des boîtes de 88 px séparées par un gap
+                           de 12. Un tableau n'a pas de `gap` : on répartit 6 px de
+                           chaque côté (donc 12 entre deux contenus) et la boîte
+                           passe à 100 px. `border-spacing` horizontal aurait laissé
+                           passer le fond de la carte entre les cellules et cassé la
+                           surbrillance de ligne. */
+                        const tdBase = {
+                          padding: "12px 6px", boxSizing: "border-box",
+                          minWidth: 100, width: 100,
+                          fontSize: 12, fontWeight: 500, lineHeight: 1,
+                          color: T.textSub, textAlign: "left",
+                        };
                         const cellStyle = (_id, base) => base;
                         const duration = (() => {
                           const entry = t.entryTime || t.entry_time;
@@ -1425,33 +1620,42 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
                           if (isNaN(d.getTime())) return "—";
                           return d.toLocaleDateString("fr-FR", { weekday: "short" });
                         })();
+                        // Compte du trade (une ligne de groupe agrège des exécutions
+                        // du même ordre : elles partagent leur compte).
+                        const accountLabel = accountNameById.get(t.account_id) || "—";
 
+                        /* Cellules de la maquette : 12px Medium, encre atténuée,
+                           colonnes de 88 px, alignées à gauche comme l'en-tête.
+                           Seuls P&L / % / R portent la couleur du résultat. */
+                        const num = { fontVariantNumeric: "tabular-nums" };
+                        const money = { ...num, fontWeight: 500 };
                         const cells = {
-                          asset:     <td key="asset" style={cellStyle("asset",{...tdBase,color:T.textSub})}>Future</td>,
-                          side:      <td key="side" style={cellStyle("side",{...tdBase,fontWeight:500,color:T.text,fontSize:13})}>{t.direction}</td>,
-                          entryDate: <td key="entryDate" style={cellStyle("entryDate",{...tdBase,color:T.textSub})}>{openDate}</td>,
-                          entryTime: <td key="entryTime" style={cellStyle("entryTime",{...tdBase,color:T.textSub,fontSize:12})}>{openTime}</td>,
-                          entry:     <td key="entry" style={cellStyle("entry",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.text,fontFamily:"var(--font-sans)",fontSize:13})}>${t.entry.toFixed(2)}</td>,
-                          exitDate:  <td key="exitDate" style={cellStyle("exitDate",{...tdBase,color:T.textSub})}>{closeDate}</td>,
-                          exitTime:  <td key="exitTime" style={cellStyle("exitTime",{...tdBase,color:T.textSub,fontSize:12})}>{closeTime}</td>,
-                          exit:      <td key="exit" style={cellStyle("exit",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.text,fontFamily:"var(--font-sans)",fontSize:13})}>${t.exit.toFixed(2)}</td>,
-                          lots:      <td key="lots" style={cellStyle("lots",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.textSub})}>{(() => { const q = t._groupQty != null && t._groupQty > 0 ? t._groupQty : qtyOf(t); return q != null ? q : "—"; })()}</td>,
-                          volume:    <td key="volume" style={cellStyle("volume",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.textSub})}>{(() => { const v = t._groupVolume != null && t._groupVolume > 0 ? t._groupVolume : volOf(t); return v != null ? fmt(v, false) : "—"; })()}</td>,
-                          pnl:       (() => { const p = t._groupPnl != null ? t._groupPnl : t.pnl; return <td key="pnl" style={cellStyle("pnl",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)"})}>{p>=0?"+":""}{fmt(p,false)}{tradeOutcome(rowNet)==="be"?" BE":""}</td>; })(),
-                          pnlPct:    <td key="pnlPct" style={cellStyle("pnlPct",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)"})}>{ret>0?"+":""}{ret}%</td>,
-                          r:         <td key="r" style={cellStyle("r",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(rowNet),fontFamily:"var(--font-sans)",fontSize:12,whiteSpace:"nowrap"})}>{fmtR(rMultiple({...t, pnl: rowNet}))}</td>,
-                          duration:  <td key="duration" style={cellStyle("duration",{...tdBase,color:T.textSub,fontSize:12})}>{duration}</td>,
+                          asset:     <td key="asset" style={cellStyle("asset",{...tdBase})}>Future</td>,
+                          side:      <td key="side" style={cellStyle("side",{...tdBase,color:T.text})}><DirectionTag direction={t.direction} /></td>,
+                          entryDate: <td key="entryDate" style={cellStyle("entryDate",{...tdBase})}>{openDate}</td>,
+                          entryTime: <td key="entryTime" style={cellStyle("entryTime",{...tdBase,...num})}>{openTime}</td>,
+                          entry:     <td key="entry" style={cellStyle("entry",{...tdBase,...money})}>${t.entry.toFixed(2)}</td>,
+                          exitDate:  <td key="exitDate" style={cellStyle("exitDate",{...tdBase})}>{closeDate}</td>,
+                          exitTime:  <td key="exitTime" style={cellStyle("exitTime",{...tdBase,...num})}>{closeTime}</td>,
+                          exit:      <td key="exit" style={cellStyle("exit",{...tdBase,...money})}>${t.exit.toFixed(2)}</td>,
+                          lots:      <td key="lots" style={cellStyle("lots",{...tdBase,...num,color:T.text})}>{(() => { const q = t._groupQty != null && t._groupQty > 0 ? t._groupQty : qtyOf(t); return q != null ? q : "—"; })()}</td>,
+                          volume:    <td key="volume" style={cellStyle("volume",{...tdBase,...num})}>{(() => { const v = t._groupVolume != null && t._groupVolume > 0 ? t._groupVolume : volOf(t); return v != null ? fmt(v, false) : "—"; })()}</td>,
+                          pnl:       (() => { const p = t._groupPnl != null ? t._groupPnl : t.pnl; return <td key="pnl" style={cellStyle("pnl",{...tdBase,...money,color:pnlColorFor(rowNet)})}>{p>=0?"+":""}{fmt(p,false)}{tradeOutcome(rowNet)==="be"?" BE":""}</td>; })(),
+                          pnlPct:    <td key="pnlPct" style={cellStyle("pnlPct",{...tdBase,...money,color:pnlColorFor(rowNet)})}>{ret>0?"+":""}{ret}%</td>,
+                          r:         <td key="r" style={cellStyle("r",{...tdBase,...money,color:pnlColorFor(rowNet),whiteSpace:"nowrap"})}>{fmtR(rMultiple({...t, pnl: rowNet}))}</td>,
+                          duration:  <td key="duration" style={cellStyle("duration",{...tdBase,...num})}>{duration}</td>,
                           // Nouvelles cellules
-                          fees:      <td key="fees" style={cellStyle("fees",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",color:T.textSub,fontFamily:"var(--font-sans)",fontSize:12})}>{fees > 0 ? `$${fees.toFixed(2)}` : "—"}</td>,
-                          netPnl:    <td key="netPnl" style={cellStyle("netPnl",{...tdBase,textAlign:"right",fontVariantNumeric:"tabular-nums",fontWeight:600,color:pnlColorFor(netPnl),fontFamily:"var(--font-sans)"})}>{netPnl>=0?"+":""}{fmt(netPnl,false)}{tradeOutcome(netPnl)==="be"?" BE":""}</td>,
-                          strategy:  <td key="strategy" style={cellStyle("strategy",{...tdBase,color:T.textSub,fontSize:12,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}>{stratNames.length ? stratNames.join(", ") : "—"}</td>,
-                          session:   <td key="session" style={cellStyle("session",{...tdBase,color:T.textSub,fontSize:12})}>{sessionLabel}</td>,
-                          weekday:   <td key="weekday" style={cellStyle("weekday",{...tdBase,color:T.textSub,fontSize:12,textTransform:"capitalize"})}>{weekdayLabel}</td>,
+                          fees:      <td key="fees" style={cellStyle("fees",{...tdBase,...money})}>{fees > 0 ? `$${fees.toFixed(2)}` : "—"}</td>,
+                          netPnl:    <td key="netPnl" style={cellStyle("netPnl",{...tdBase,...money,color:pnlColorFor(netPnl)})}>{netPnl>=0?"+":""}{fmt(netPnl,false)}{tradeOutcome(netPnl)==="be"?" BE":""}</td>,
+                          strategy:  <td key="strategy" style={cellStyle("strategy",{...tdBase,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}>{stratNames.length ? stratNames.join(", ") : "—"}</td>,
+                          session:   <td key="session" style={cellStyle("session",{...tdBase})}>{sessionLabel}</td>,
+                          weekday:   <td key="weekday" style={cellStyle("weekday",{...tdBase,textTransform:"capitalize"})}>{weekdayLabel}</td>,
+                          account:   <td key="account" title={accountLabel !== "—" ? accountLabel : undefined} style={cellStyle("account",{...tdBase,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}>{accountLabel}</td>,
                         };
-                        return columnOrder.filter(id => visibleColumns.includes(id) && !(embedded && ["entryDate","exitDate","pnlPct","weekday"].includes(id))).map(id => cells[id] || null);
+                        return columnOrder.filter(id => visibleColumns.includes(id) && !(embedded && HIDDEN_WHEN_EMBEDDED.includes(id))).map(id => cells[id] || null);
                       })()}
                       {/* Cellule vide pour aligner avec le header settings */}
-                      <td style={{padding:"12px 8px",width:32}} />
+                      <td style={{padding:"12px 12px 12px 6px",width:32,borderTopRightRadius:12,borderBottomRightRadius:12}} />
                     </tr>
                   );
                 });
@@ -1480,6 +1684,19 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
               </tbody>
             </table>
           </div>
+
+          {/* PAGINATION — sous le tableau, dans la même carte. Absente en mode
+              embarqué (le journal utilise son bouton « voir plus »). */}
+          {paginated && sortedGroups.length > 0 && (
+            <TradesPagination
+              pageIndex={pageIndex}
+              pageCount={pageCount}
+              pageSize={pageSize}
+              total={sortedGroups.length}
+              onPage={setPageIndex}
+              onPageSize={changePageSize}
+            />
+          )}
         </div>
 
         {/* RIGHT - DETAIL PANEL WITH TABS.
@@ -1490,7 +1707,7 @@ export default function TradesPage({ trades = [], strategies = [], onImportClick
           // (paddings et marges verticales réduits). Le même panneau, plus dense.
           const compact = embedded;
           const panel = (
-          <div ref={tradeSideRef} className="tr4de-trade-side" style={{width:360,maxHeight:"calc(100vh - 200px)",background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div ref={tradeSideRef} className="tr4de-trade-side" style={{...CARD,padding:0,width:360,maxHeight:"calc(100vh - 200px)",display:"flex",flexDirection:"column"}}>
             
             {/* HEADER WITH TABS */}
             <div style={{padding:compact?"8px 14px":"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -2307,3 +2524,128 @@ function TagMultiSelect({ placeholder, allTags, selected, onToggle }) {
   );
 }
 
+
+/* ============================================================================
+   PAGINATION DU TABLEAU DES TRADES
+   Barre posée sous le tableau, dans la même carte : compteur « X–Y sur N »,
+   sélecteur de taille de page, puis navigation par numéro de page.
+   Les numéros sont fenêtrés autour de la page courante (avec « … ») pour ne
+   jamais déborder, même avec des centaines de pages.
+   ========================================================================== */
+function TradesPagination({ pageIndex, pageCount, pageSize, total, onPage, onPageSize }) {
+  useLang();
+  const from = total === 0 ? 0 : pageIndex * pageSize + 1;
+  const to = Math.min(total, (pageIndex + 1) * pageSize);
+
+  /* Fenêtre de numéros : première, dernière, et les voisines de la page
+     courante. `null` marque une ellipse. */
+  const items = React.useMemo(() => {
+    const span = 1; // voisines de chaque côté
+    const keep = new Set([0, pageCount - 1]);
+    for (let i = pageIndex - span; i <= pageIndex + span; i += 1) {
+      if (i >= 0 && i < pageCount) keep.add(i);
+    }
+    const sorted = [...keep].sort((a, b) => a - b);
+    const out = [];
+    let prev = null;
+    for (const n of sorted) {
+      if (prev !== null && n - prev > 1) out.push(null);
+      out.push(n);
+      prev = n;
+    }
+    return out;
+  }, [pageIndex, pageCount]);
+
+  const navBtn = (disabled) => ({
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    width: 30, height: 30, borderRadius: 8, border: "none",
+    background: "transparent", color: disabled ? T.textMut : T.text,
+    cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.4 : 1,
+    fontFamily: "inherit", flexShrink: 0,
+  });
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+      padding: "12px 20px", borderTop: `1px solid ${T.border}`,
+    }}>
+      {/* Compteur */}
+      <span style={{ fontSize: 12, color: T.text, opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>
+        {t("trades.pagination.range")
+          .replace("{from}", String(from))
+          .replace("{to}", String(to))
+          .replace("{total}", String(total))}
+      </span>
+
+      {/* Taille de page */}
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.text, opacity: 0.6 }}>
+        {t("trades.pagination.perPage")}
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          style={{
+            padding: "4px 8px", borderRadius: 8, border: `1px solid ${T.border}`,
+            background: T.white, color: T.text, fontSize: 12, fontFamily: "inherit",
+            cursor: "pointer", outline: "none",
+          }}
+        >
+          {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </label>
+
+      {/* Navigation */}
+      <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 2 }}>
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(0, pageIndex - 1))}
+          disabled={pageIndex === 0}
+          aria-label={t("trades.pagination.prev")}
+          title={t("trades.pagination.prev")}
+          style={navBtn(pageIndex === 0)}
+          onMouseEnter={(e) => { if (pageIndex > 0) e.currentTarget.style.background = T.rowHighlight; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <LucideChevronLeft size={16} strokeWidth={1.75} />
+        </button>
+
+        {items.map((n, i) => (
+          n === null ? (
+            <span key={`gap${i}`} style={{ width: 20, textAlign: "center", fontSize: 12, color: T.textMut }}>…</span>
+          ) : (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onPage(n)}
+              aria-current={n === pageIndex ? "page" : undefined}
+              style={{
+                minWidth: 30, height: 30, padding: "0 8px", borderRadius: 8, border: "none",
+                background: n === pageIndex ? T.text : "transparent",
+                color: n === pageIndex ? T.textInverted : T.text,
+                opacity: n === pageIndex ? 1 : 0.6,
+                fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+                fontVariantNumeric: "tabular-nums",
+              }}
+              onMouseEnter={(e) => { if (n !== pageIndex) { e.currentTarget.style.background = T.rowHighlight; e.currentTarget.style.opacity = 1; } }}
+              onMouseLeave={(e) => { if (n !== pageIndex) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.opacity = 0.6; } }}
+            >
+              {n + 1}
+            </button>
+          )
+        ))}
+
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(pageCount - 1, pageIndex + 1))}
+          disabled={pageIndex >= pageCount - 1}
+          aria-label={t("trades.pagination.next")}
+          title={t("trades.pagination.next")}
+          style={navBtn(pageIndex >= pageCount - 1)}
+          onMouseEnter={(e) => { if (pageIndex < pageCount - 1) e.currentTarget.style.background = T.rowHighlight; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <LucideChevronRight size={16} strokeWidth={1.75} />
+        </button>
+      </div>
+    </div>
+  );
+}

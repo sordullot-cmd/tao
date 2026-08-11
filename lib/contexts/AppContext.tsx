@@ -32,7 +32,6 @@ export interface AppContextValue {
 
   // Account selection (UI state — persisted in localStorage)
   selectedAccountIds: string[];
-  setSelectedAccountIds: (ids: string[]) => void;
 
   accountType: AccountType;
   setAccountType: (t: AccountType) => void;
@@ -97,9 +96,6 @@ export function AppProvider({ children, initialPage = "dashboard" }: AppProvider
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  const [selectedAccountIds, _setSelectedAccountIds] = useState<string[]>(() =>
-    readLS<string[]>("selectedAccountIds", [])
-  );
   const [accountType, _setAccountType] = useState<AccountType>(() =>
     readLS<AccountType>("accountType", "live")
   );
@@ -107,19 +103,19 @@ export function AppProvider({ children, initialPage = "dashboard" }: AppProvider
     readLS<string>("selectedEvalAccount", "25k")
   );
 
-  const setSelectedAccountIds = (ids: string[]) => {
-    _setSelectedAccountIds(ids);
-    writeLS("selectedAccountIds", ids);
-  };
-
-  // Trades filtrés par sélection de compte (placeholder filtré). Pas de
-  // filtre de date ici — c'est par-page dans App.
+  /* La sélection de comptes a été supprimée du produit : tous les comptes
+     actifs comptent, tout le temps. `selectedAccountIds` reste exposé comme
+     valeur dérivée (tous les comptes réels) pour les consommateurs existants,
+     et `tradesByAccount` ne filtre plus que le compte placeholder. */
   const rawTrades = tradesApi.trades || [];
-  const tradesByAccount = useMemo(() => {
-    const realSelected = selectedAccountIds.filter(id => !isPlaceholderAccount(id));
-    if (realSelected.length === 0) return [];
-    return rawTrades.filter((t: { account_id?: string }) => realSelected.includes(t.account_id || ""));
-  }, [rawTrades, selectedAccountIds]);
+  const selectedAccountIds = useMemo(
+    () => (rawAccounts || []).map(a => a.id).filter(id => !isPlaceholderAccount(id)),
+    [rawAccounts]
+  );
+  const tradesByAccount = useMemo(
+    () => rawTrades.filter((t: { account_id?: string }) => !isPlaceholderAccount(t.account_id || "")),
+    [rawTrades]
+  );
   const setAccountType = (t: AccountType) => {
     _setAccountType(t);
     writeLS("accountType", t);
@@ -147,7 +143,6 @@ export function AppProvider({ children, initialPage = "dashboard" }: AppProvider
 
     accounts: (rawAccounts || []).map(a => ({ id: a.id, name: a.name })),
     selectedAccountIds,
-    setSelectedAccountIds,
     accountType,
     setAccountType,
     selectedEvalAccount,
