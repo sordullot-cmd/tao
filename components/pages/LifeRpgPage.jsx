@@ -1,37 +1,44 @@
 "use client";
 
 /**
- * LifeRpgPage — « Gamification de vie ».
+ * LifeRpgPage — « Quête de soi ».
  *
- * Page de productivité qui transforme les HABITUDES DU QUOTIDIEN en jeu de rôle.
- * Il n'existe plus de « quêtes » propres à cette page : les quêtes SONT les
- * habitudes de la page « Habitudes » (clés cloud `habits` / `habits_history`),
- * partagées entre les deux pages. Cocher une habitude (depuis l'une ou l'autre)
- * fait gagner de l'XP et des pièces, monter de niveau et progresser dans les
- * catégories (Force, Intellect, Social, Discipline… + catégories perso).
+ * TROIS OBJECTIFS DE L'ANNÉE, pas un de plus. La page ne présente plus une
+ * dizaine de catégories de vie mais exactement trois cartes : les trois combats
+ * majeurs de l'année civile en cours. La grille affiche toujours trois
+ * emplacements — définis, ou vides et invitant à les définir.
+ *
+ * Chaque carte porte :
+ *  - le résultat visé (`outcome`) et son échéance (`deadline`, 31 déc. par défaut) ;
+ *  - son avancement, comparé au temps écoulé dans l'année (en avance / en retard) ;
+ *  - l'identité visée (« qui je veux devenir ») et un modèle inspirant ;
+ *  - ses objectifs chiffrés (page Objectifs), ses tâches (Agenda) et ses habitudes.
+ *
+ * Le socle de jeu reste identique : cocher une habitude, terminer une tâche
+ * liée ou respecter une règle de discipline fait gagner de l'XP, monter de
+ * niveau et progresser l'objectif de l'année auquel c'est rattaché.
  *
  * Modèle de données :
- *  - XP, pièces gagnées, niveaux, attributs par catégorie, streaks et nombre de
- *    complétions sont DÉRIVÉS de `habits_history` (chaque jour coché = la
- *    récompense de la difficulté de l'habitude). Aucune valeur de progression
- *    n'est persistée → jamais de double comptage, synchronisation parfaite.
- *  - La méta « RPG » de chaque habitude (catégorie `attribute` + `difficulty`)
- *    vit directement sur l'objet habitude (clé `habits`) : une seule source de
- *    vérité, invisible côté page « Habitudes ».
- *  - Seuls les échanges de récompenses (`redemptions`) et les catégories
- *    (`categories`, avec leurs objectifs chiffrés) sont persistés dans `life_rpg`.
- *
- * Vue unique « Aventure » : héros, cartes de catégorie (identité, objectif
- * chiffré, habitudes rattachées) affichées sur une ligne défilable, habitudes,
- * visualisation, récompenses et badges. Les catégories se créent / éditent
- * directement depuis leurs cartes (carte « Nouvelle catégorie » en bout de ligne).
+ *  - XP, niveaux, streaks et nombre de complétions sont DÉRIVÉS de
+ *    `habits_history` (chaque jour coché = la récompense de la difficulté de
+ *    l'habitude). Aucune valeur de progression n'est persistée → jamais de
+ *    double comptage, synchronisation parfaite.
+ *  - La méta « RPG » de chaque habitude (cartes rattachées + `difficulty`) vit
+ *    sur l'objet habitude (clé `habits`) : une seule source de vérité.
+ *  - Les trois cartes vivent dans `life_rpg.categories` — clé historique
+ *    conservée pour que les rattachements existants (habitudes, tâches d'agenda,
+ *    `rpgCategory` des objectifs) continuent de fonctionner à l'identique.
+ *  - Migration unique `yearGoalsMigrated` : les comptes qui avaient plus de
+ *    trois catégories gardent les trois plus avancées ; les autres sont
+ *    archivées dans `life_rpg.archivedCategories` (rien n'est perdu) et
+ *    détachées des habitudes, tâches et objectifs.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import {
   Plus, X, Trash2, Pencil, Target, UserRound, Check,
-  CalendarPlus, CalendarClock,
+  CalendarPlus, CalendarClock, Flag,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
@@ -59,8 +66,9 @@ import {
   CATEGORY_PALETTE as PALETTE, DEFAULT_CATEGORIES, habitCategoryIds,
   TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY, TASK_XP,
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
-  TRADING_CATEGORY_ID, DISCIPLINE_RULE_XP,
-  resolveTradingCatId, hasTradingCategory,
+  DISCIPLINE_RULE_XP, resolveTradingCatId,
+  MAX_YEAR_GOALS, YEAR_GOAL_TEMPLATES, pickTopYearGoals,
+  currentYear, yearDeadline, yearProgress, daysUntil,
 } from "@/lib/lifeRpgCategories";
 import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
@@ -267,6 +275,18 @@ function collectSubGoals(goal) {
   walk(goal.subtasks);
   return out;
 }
+// Détache (récursivement) les objectifs rattachés à une carte qui n'existe plus.
+// Utilisé par la migration vers les 3 objectifs de l'année : un objectif orphelin
+// redevient un objectif libre, sa progression est intacte côté page Objectifs.
+function detachGoalsNotIn(goals, keptIds) {
+  return (Array.isArray(goals) ? goals : []).map(g => {
+    const sub = Array.isArray(g.subtasks) && g.subtasks.length ? detachGoalsNotIn(g.subtasks, keptIds) : g.subtasks;
+    const orphan = g.rpgCategory && !keptIds.has(g.rpgCategory);
+    if (!orphan && sub === g.subtasks) return g;
+    return { ...g, subtasks: sub, ...(orphan ? { rpgCategory: null, rpgXp: 0 } : {}) };
+  });
+}
+
 // Applique `patch` à l'objectif d'id `id` (récursif sur les sous-objectifs).
 function patchGoal(goals, id, patch) {
   return (Array.isArray(goals) ? goals : []).map(g => {
@@ -279,7 +299,7 @@ function patchGoal(goals, id, patch) {
 /* ---------- État par défaut ---------- */
 function defaultState() {
   return {
-    categories: DEFAULT_CATEGORIES,
+    categories: DEFAULT_CATEGORIES,   // trois objectifs de l'année, à définir
     rewards: [
       { id: 1, label: "Épisode de série",  cost: 30 },
       { id: 2, label: "Sortie restaurant", cost: 150 },
@@ -302,13 +322,13 @@ const LEGACY_DEFAULT_QUESTS = [
 export default function LifeRpgPage() {
   useLang();
   const { setPage } = useApp();
-  const [state, setState] = useCloudState(STORAGE_KEY, CLOUD_KEY, defaultState());
+  const [state, setState, stateReady] = useCloudState(STORAGE_KEY, CLOUD_KEY, defaultState());
   // Habitudes partagées avec la page « Habitudes » (même source de vérité).
-  const [habits, setHabits] = useCloudState(STORAGE_HABITS, CLOUD_HABITS, defaultHabits());
-  const [habitHistory, setHabitHistory] = useCloudState(STORAGE_HABITS_HISTORY, CLOUD_HABITS_HISTORY, {});
-  // Objectifs partagés avec la page « Objectifs » : ceux rattachés à une
-  // catégorie (rpgCategory) alimentent son XP au prorata de leur avancement.
-  const [goals, setGoals] = useCloudState(GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, []);
+  const [habits, setHabits, habitsReady] = useCloudState(STORAGE_HABITS, CLOUD_HABITS, defaultHabits());
+  const [habitHistory, setHabitHistory, historyReady] = useCloudState(STORAGE_HABITS_HISTORY, CLOUD_HABITS_HISTORY, {});
+  // Objectifs partagés avec la page « Objectifs » : ceux rattachés à une carte
+  // (rpgCategory) alimentent son XP au prorata de leur avancement.
+  const [goals, setGoals, goalsReady] = useCloudState(GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, []);
   // Liaison « tâche d'agenda → cartes » partagée avec la page Agenda : les tâches
   // terminées et liées créditent de l'XP. On peut désormais en créer ici (une
   // tâche rattachée à une carte), d'où l'accès en écriture.
@@ -334,25 +354,6 @@ export default function LifeRpgPage() {
     if (!Array.isArray(state.categories)) {
       setState(prev => ({ ...prev, categories: DEFAULT_CATEGORIES }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Seed UNIQUE de la catégorie « Trading » (alimentée par la page Discipline).
-  // Ajoutée une seule fois si absente ; on respecte ensuite une suppression
-  // manuelle par l'utilisateur grâce au drapeau `tradingCatSeeded`.
-  useEffect(() => {
-    setState(prev => {
-      if (prev.tradingCatSeeded) return prev;
-      const cats = Array.isArray(prev.categories) ? prev.categories : DEFAULT_CATEGORIES;
-      // Dédoublonnage par LIBELLÉ + id : si une carte « Trading » existe déjà
-      // (même avec un id personnalisé `cat_...`), on ne recrée pas la carte
-      // par défaut (id "trading") qui ferait apparaître un doublon.
-      if (hasTradingCategory(cats)) {
-        return { ...prev, tradingCatSeeded: true };
-      }
-      const def = DEFAULT_CATEGORIES.find(c => c.id === TRADING_CATEGORY_ID);
-      return { ...prev, categories: [...cats, def], tradingCatSeeded: true };
-    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -465,6 +466,76 @@ export default function LifeRpgPage() {
   }, [taskRpg, taskTimes]);
   const lvl = useMemo(() => levelInfo(progress.totalXp), [progress.totalXp]);
 
+  /* --- Année en cours : le cadre temporel de la page. --- */
+  const YEAR = currentYear();
+  const yp = useMemo(() => yearProgress(YEAR), [YEAR]);
+
+  /* --- Migration UNIQUE vers les 3 objectifs de l'année ---
+     Les comptes existants avaient jusqu'à neuf catégories. On garde les TROIS
+     PLUS AVANCÉES (XP, puis nombre d'objectifs rattachés, puis ordre d'origine) ;
+     les autres sont archivées dans `archivedCategories` — rien n'est effacé — et
+     détachées des habitudes, des tâches d'agenda et des objectifs.
+     Elle n'a lieu qu'une fois les vraies données chargées (`*Ready`) : la lancer
+     sur les valeurs par défaut supprimerait les mauvaises cartes. */
+  const yearGoalsMigRef = useRef(false);
+  useEffect(() => {
+    if (yearGoalsMigRef.current) return;
+    if (!stateReady || !habitsReady || !historyReady || !goalsReady) return;
+    yearGoalsMigRef.current = true;
+    if (state.yearGoalsMigrated) return;
+
+    const cats = Array.isArray(state.categories) ? state.categories : [];
+    if (cats.length <= MAX_YEAR_GOALS) {
+      setState(prev => ({ ...prev, yearGoalsMigrated: true }));
+      return;
+    }
+    const goalCounts = {};
+    for (const id in goalsByCat) goalCounts[id] = (goalsByCat[id] || []).length;
+    const keptIds = new Set(pickTopYearGoals(cats, progress.attributes, goalCounts).map(c => c.id));
+    const archived = cats.filter(c => !keptIds.has(c.id));
+
+    // Habitudes : on retire les cartes archivées de leurs rattachements (la
+    // liste des liens supprimés est conservée pour pouvoir les rétablir).
+    const removedLinks = {};
+    for (const h of habitsList) {
+      const drop = habitCategoryIds(h).filter(id => !keptIds.has(id));
+      if (drop.length) removedLinks[h.id] = drop;
+    }
+    if (Object.keys(removedLinks).length) {
+      setHabits(prev => (Array.isArray(prev) ? prev : []).map(h => {
+        const ids = habitCategoryIds(h);
+        if (!ids.some(id => !keptIds.has(id))) return h;
+        return { ...h, attributes: ids.filter(id => keptIds.has(id)), attribute: undefined };
+      }));
+    }
+    // Objectifs : ceux rattachés à une carte archivée redeviennent libres.
+    if (flattenGoals(goalsList).some(g => g.rpgCategory && !keptIds.has(g.rpgCategory))) {
+      setGoals(prev => detachGoalsNotIn(prev, keptIds));
+    }
+    // Tâches d'agenda : idem ; le lien disparaît s'il ne reste plus de carte.
+    setTaskRpg(prev => {
+      const next = {};
+      let changed = false;
+      for (const id in (prev || {})) {
+        const e = prev[id];
+        const cs = Array.isArray(e?.categories) ? e.categories.filter(c => keptIds.has(c)) : [];
+        if (cs.length === (e?.categories?.length || 0)) { next[id] = e; continue; }
+        changed = true;
+        if (cs.length) next[id] = { ...e, categories: cs };
+      }
+      return changed ? next : prev;
+    });
+
+    setState(prev => ({
+      ...prev,
+      categories: (Array.isArray(prev.categories) ? prev.categories : []).filter(c => keptIds.has(c.id)),
+      archivedCategories: [...(prev.archivedCategories || []), ...archived],
+      archivedHabitLinks: { ...(prev.archivedHabitLinks || {}), ...removedLinks },
+      yearGoalsMigrated: true,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateReady, habitsReady, historyReady, goalsReady]);
+
   // Coche / décoche une tâche de carte : met à jour l'horodatage de complétion
   // (source de vérité locale qui pilote l'affichage ET l'XP), puis synchronise la
   // vraie Google Task en arrière-plan. On NE revient PAS en arrière si Google
@@ -529,15 +600,19 @@ export default function LifeRpgPage() {
     }
   };
 
-  /* --- Actions : catégories --- */
-  // Sauvegarde automatique d'une catégorie (création ou édition), sans fermer le
+  /* --- Actions : objectifs de l'année --- */
+  // Sauvegarde automatique d'un objectif (création ou édition), sans fermer le
   // formulaire : appelée à chaque modification de champ. Upsert par id ; on ne
-  // crée une nouvelle catégorie qu'une fois qu'elle a un nom.
+  // crée un nouvel objectif qu'une fois qu'il a un nom, et jamais au-delà de
+  // trois (la contrainte est le cœur du système).
   const upsertCategory = (form) => {
     setState(prev => {
-      const cats = Array.isArray(prev.categories) ? prev.categories : DEFAULT_CATEGORIES;
+      const cats = Array.isArray(prev.categories) ? prev.categories : [];
       const fields = {
         label: (form.label || "").trim(), color: form.color, icon: form.icon,
+        outcome: (form.outcome || "").trim(),
+        deadline: form.deadline || yearDeadline(YEAR),
+        year: form.year || YEAR,
         identity: (form.identity || "").trim(),
         roleModel: (form.roleModel || "").trim(),
         roleModelWhy: (form.roleModelWhy || "").trim(),
@@ -546,25 +621,24 @@ export default function LifeRpgPage() {
       if (exists) {
         return { ...prev, categories: cats.map(c => c.id === form.id ? { ...c, ...fields } : c) };
       }
-      if (!fields.label) return prev; // pas de création tant qu'il n'y a pas de nom
+      if (!fields.label) return prev;              // pas de création sans nom
+      if (cats.length >= MAX_YEAR_GOALS) return prev; // trois objectifs, pas plus
       return { ...prev, categories: [...cats, { id: form.id, ...fields }] };
     });
   };
 
 
   const removeCategory = (id) => {
-    const cats = categories;
-    if (cats.length <= 1) return; // on garde toujours au moins une catégorie
     const snapCats = state.categories;
     const snapHabits = habits;
-    // On retire la catégorie supprimée de la liste des cartes de chaque habitude.
+    // On retire l'objectif supprimé de la liste des cartes de chaque habitude.
     const dropCat = (prev) => prev.map(h => habitCategoryIds(h).includes(id)
       ? { ...h, attributes: habitCategoryIds(h).filter(x => x !== id), attribute: undefined }
       : h);
     setState(prev => ({ ...prev, categories: prev.categories.filter(c => c.id !== id) }));
     setHabits(dropCat);
     pushUndo({
-      label: "Suppression de la catégorie",
+      label: "Suppression de l'objectif de l'année",
       undo: async () => { setState(prev => ({ ...prev, categories: snapCats })); setHabits(snapHabits); },
       redo: async () => {
         setState(prev => ({ ...prev, categories: prev.categories.filter(c => c.id !== id) }));
@@ -575,14 +649,29 @@ export default function LifeRpgPage() {
 
   /* --- Modales & vue --- */
   const [categoryModal, setCategoryModal] = useState(null);
-  // Modale « + Tâche » d'une carte : porte la catégorie ciblée (la tâche créée
+  // Modale « + Tâche » d'une carte : porte l'objectif ciblé (la tâche créée
   // lui sera rattachée). null = fermée.
   const [taskModal, setTaskModal] = useState(null);
 
-  const openNewCategory = () => setCategoryModal({ id: `cat_${Date.now()}`, isNew: true, label: "", color: PALETTE[0], icon: "star", identity: "", roleModel: "", roleModelWhy: "" });
-  const editCategory = (c) => setCategoryModal({ id: c.id, isNew: false, label: c.label, color: c.color, icon: c.icon, identity: c.identity || "", roleModel: c.roleModel || "", roleModelWhy: c.roleModelWhy || "" });
+  const isFull = categories.length >= MAX_YEAR_GOALS;
+  // Ouvre le formulaire d'un nouvel objectif de l'année, éventuellement
+  // pré-rempli par un modèle cliqué depuis un emplacement vide.
+  const openNewCategory = (tpl = null) => {
+    if (isFull) return;
+    setCategoryModal({
+      id: `cat_${Date.now()}`, isNew: true,
+      label: tpl?.label || "", color: tpl?.color || PALETTE[0], icon: tpl?.icon || "target",
+      outcome: tpl?.outcome || "", deadline: yearDeadline(YEAR), year: YEAR,
+      identity: tpl?.identity || "", roleModel: "", roleModelWhy: "",
+    });
+  };
+  const editCategory = (c) => setCategoryModal({
+    id: c.id, isNew: false, label: c.label, color: c.color, icon: c.icon,
+    outcome: c.outcome || "", deadline: c.deadline || yearDeadline(c.year || YEAR), year: c.year || YEAR,
+    identity: c.identity || "", roleModel: c.roleModel || "", roleModelWhy: c.roleModelWhy || "",
+  });
 
-  // Fermeture du formulaire : nettoie une catégorie tout juste créée mais restée
+  // Fermeture du formulaire : nettoie un objectif tout juste créé mais resté
   // sans nom (cas « ouvert puis abandonné »).
   const closeCategory = () => {
     const cur = categoryModal;
@@ -590,7 +679,7 @@ export default function LifeRpgPage() {
       setState(prev => {
         const cats = prev.categories || [];
         const c = cats.find(x => x.id === cur.id);
-        if (c && !(c.label || "").trim() && cats.length > 1) {
+        if (c && !(c.label || "").trim()) {
           return { ...prev, categories: cats.filter(x => x.id !== cur.id) };
         }
         return prev;
@@ -632,15 +721,16 @@ export default function LifeRpgPage() {
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
 
-      {/* ─── Bloc héros : le niveau, comme le P&L du dashboard ───
-          Libellé atténué, chiffre en gros, puis la barre d'XP (qui porte le
-          feedback « +N XP » et le pop de montée de niveau) et l'action de la
-          page, posée juste à côté d'elle. */}
+      {/* ─── Bloc héros : l'ANNÉE, comme le P&L du dashboard ───
+          Le cadre de la page n'est plus le niveau mais l'année en cours : ce
+          qu'il en reste, et ce qu'on en a fait. Le niveau global (barre d'XP,
+          feedback « +N XP » et pop de montée de niveau) passe à droite, avec
+          l'action de la page. */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
-          <span style={{ fontSize: 13, lineHeight: "17.05px", color: T.textSub }}>Niveau global</span>
-          <span style={{ fontSize: 26, fontWeight: 500, lineHeight: 1, letterSpacing: -0.2, color: T.text }}>
-            Niveau {lvl.level}
+          <span style={{ fontSize: 13, lineHeight: "17.05px", color: T.textSub }}>{`Mes ${MAX_YEAR_GOALS} objectifs de l'année`}</span>
+          <span style={{ fontSize: 26, fontWeight: 500, lineHeight: 1, letterSpacing: -0.2, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+            {YEAR}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -656,22 +746,40 @@ export default function LifeRpgPage() {
             mutedColor={T.textMut}
             width={180}
           />
+          {/* À ne pas confondre avec les trois objectifs de l'année : ceci crée
+              un objectif CHIFFRÉ (page Objectifs), qui mesure l'un d'eux. */}
           <button type="button" onClick={() => createGoalRef.current?.()} style={btnSecondary()}>
-            <Plus size={13} strokeWidth={1.75} /> Nouvel objectif
+            <Plus size={13} strokeWidth={1.75} /> Nouvel objectif chiffré
           </button>
-          <button type="button" onClick={openNewCategory} style={btnPrimary()}>
-            <Plus size={13} strokeWidth={1.75} /> Nouvelle catégorie
-          </button>
+          {!isFull && (
+            <button type="button" onClick={() => openNewCategory()} style={btnPrimary()}>
+              <Flag size={13} strokeWidth={1.75} /> {"Définir un objectif de l'année"}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ─── Catégories ─── */}
+      {/* ─── Rail de l'année : le temps qui passe, à confronter aux cartes ─── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, fontSize: 12, color: T.textSub }}>
+          <span>{`${Math.round(yp.pct)} % de l'année écoulée`}</span>
+          <span style={{ fontVariantNumeric: "tabular-nums", color: T.textMut }}>{yp.daysLeft} jours restants</span>
+        </div>
+        <div role="progressbar" aria-valuenow={Math.round(yp.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Année ${YEAR} écoulée`}
+          style={{ height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+          <div style={{ width: `${yp.pct}%`, height: "100%", background: T.textMut, borderRadius: 999 }} />
+        </div>
+      </div>
+
+      {/* ─── Les trois objectifs de l'année ───
+          Toujours trois emplacements : ceux qui sont définis, puis autant de
+          cartes vides qu'il en manque. L'ordre est celui de création (pas de tri
+          par XP) pour que chaque objectif garde sa place dans la page. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <SectionTitle size="sm">Catégories</SectionTitle>
-        {/* Grille pleine largeur : les cartes s'étirent (auto-fit + 1fr). */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
-            {[...categories].sort((a, b) => (progress.attributes[b.id] || 0) - (progress.attributes[a.id] || 0)).map(cat => (
-              <PortraitCard key={cat.id} cat={cat}
+        <SectionTitle size="sm">Mes {MAX_YEAR_GOALS} objectifs {YEAR}</SectionTitle>
+        <div className="tr4de-rpg-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${MAX_YEAR_GOALS}, minmax(0, 1fr))`, gap: 12, alignItems: "start" }}>
+            {categories.slice(0, MAX_YEAR_GOALS).map((cat, i) => (
+              <YearGoalCard key={cat.id} cat={cat} rank={i + 1} year={YEAR} yearPct={yp.pct}
                 xp={progress.attributes[cat.id] || 0}
                 habits={habitsList.filter(h => habitCategoryIds(h).includes(cat.id))}
                 linkedGoals={goalsByCat[cat.id] || []}
@@ -685,14 +793,19 @@ export default function LifeRpgPage() {
                 onEditTask={(tk) => setTaskModal({ cat, task: tk })}
                 onDeleteTask={deleteTaskFromCard}
                 onEdit={() => editCategory(cat)}
-                onDelete={categories.length > 1 ? () => removeCategory(cat.id) : null} />
+                onDelete={() => removeCategory(cat.id)} />
+            ))}
+            {Array.from({ length: Math.max(0, MAX_YEAR_GOALS - categories.length) }, (_, i) => (
+              <EmptyGoalSlot key={`slot_${i}`} rank={categories.length + i + 1}
+                onCreate={openNewCategory} />
             ))}
         </div>
       </div>
 
-      {/* ─── Objectifs (la page Objectifs, absorbée ici) ─── */}
+      {/* ─── Objectifs chiffrés (la page Objectifs, absorbée ici) : ce sont eux
+             qui mesurent l'avancement des trois objectifs de l'année. ─── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <SectionTitle size="sm">Objectifs</SectionTitle>
+        <SectionTitle size="sm">Objectifs chiffrés</SectionTitle>
         <GoalsPage embedded registerCreate={(fn) => { createGoalRef.current = fn; }} />
       </div>
 
@@ -705,17 +818,40 @@ export default function LifeRpgPage() {
           onGoToAgenda={() => { setTaskModal(null); setPage("agenda"); }} />
       )}
 
-      {/* Repli mobile / tablette. */}
+      {/* Repli mobile / tablette : les trois cartes sont denses, elles passent
+          à deux colonnes puis à une seule plutôt que de se comprimer. */}
       <style>{`
-        @media (max-width: 760px) { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } }
-        .tr4de-portrait > * + * { margin-top: 14px; }
+        @media (max-width: 1180px) { .tr4de-rpg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+        @media (max-width: 760px)  { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } }
       `}</style>
     </div>
   );
 }
 
-function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], tasks = [], onToggleObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
+/* ---------- Carte d'un objectif de l'année ---------- */
+// Une carte = l'un des trois combats de l'année. Elle répond à trois questions
+// dans cet ordre : où j'en suis (avancement confronté au temps écoulé), ce que
+// je vise (résultat + échéance, identité, modèle) et ce que je fais pour y
+// arriver (objectifs chiffrés, tâches, habitudes).
+function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, linkedGoals = [], allObjectives = [], tasks = [], onToggleObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
   const cl = categoryLevel(xp);
+  // Avancement affiché : la moyenne des objectifs chiffrés rattachés, qui sont
+  // la mesure la plus honnête. Sans objectif chiffré, on retombe sur la
+  // progression de niveau (habitudes, tâches, discipline).
+  const measured = linkedGoals.length > 0;
+  const pct = measured
+    ? Math.round(linkedGoals.reduce((s, g) => s + g.pct, 0) / linkedGoals.length)
+    : Math.round(cl.levelPct);
+  const deadline = cat.deadline || yearDeadline(cat.year || year);
+  const dLeft = daysUntil(deadline);
+  // Comparaison au calendrier : être à 40 % au mois de juin, c'est être en
+  // retard. C'est ce décalage qui fait agir, pas le pourcentage seul.
+  const delta = pct - yearPct;
+  const status = pct >= 100
+    ? { label: "Atteint", color: T.green }
+    : delta >= 5 ? { label: "En avance", color: T.green }
+    : delta <= -10 ? { label: "En retard", color: T.red }
+    : { label: "Dans les temps", color: T.textMut };
   const [hover, setHover] = useState(false);
   const [taskAddHov, setTaskAddHov] = useState(false);
   // Ajout de tâche INLINE : le bouton fait apparaître une ligne éditable vide
@@ -743,7 +879,7 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
     }
   };
   return (
-    <div className="tr4de-portrait" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    <div className="tr4de-year-goal" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       /* `overflow: visible` contre le réglage par défaut de CARD : le menu
          « Ajouter un objectif » s'ouvre en position absolue sous son
          déclencheur et serait sinon coupé par le bord de la carte. */
@@ -757,8 +893,9 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
           <CatIcon name={cat.icon} size={17} strokeWidth={1.75} color={cat.color} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.25, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.label}</div>
-          <div style={{ fontSize: 12, lineHeight: 1.25, color: T.text, opacity: 0.45, fontVariantNumeric: "tabular-nums", marginTop: 3 }}>Niveau {cl.level} · {xp} XP</div>
+          {/* Rang de l'objectif : il y en a trois, et celui-ci est le n°X. */}
+          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: cat.color, opacity: 0.9 }}>Objectif {rank} · {year}</div>
+          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.25, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{cat.label}</div>
         </div>
         {/* Boutons modifier / supprimer : masqués, visibles au survol de la carte */}
         <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hover ? 1 : 0.55, pointerEvents: "auto", transition: "opacity 120ms var(--ease-out)" }}>
@@ -767,15 +904,35 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
         </div>
       </div>
 
-      {/* Progression de niveau (illimitée, courbe progressive) */}
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.text, opacity: 0.5, marginBottom: 6 }}>
-          <span>Vers le niveau {cl.level + 1}</span>
-          <span style={{ fontVariantNumeric: "tabular-nums" }}>{cl.intoLevel} / {cl.neededForNext} XP</span>
+      {/* Résultat visé : la phrase qui dit à quoi ressemble la victoire. */}
+      {cat.outcome && (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.45, color: T.text }}>
+          <Flag size={14} strokeWidth={1.9} color={cat.color} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>{cat.outcome}</span>
         </div>
-        <div role="progressbar" aria-valuenow={Math.round(cl.levelPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Progression vers le niveau ${cl.level + 1}`}
-          style={{ height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-          <div style={{ width: `${cl.levelPct}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
+      )}
+
+      {/* Avancement de l'objectif, confronté au temps écoulé dans l'année.
+          Le repère vertical sur la barre marque où l'on « devrait » en être. */}
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 24, fontWeight: 600, lineHeight: 1, letterSpacing: -0.3, color: T.text, fontVariantNumeric: "tabular-nums" }}>{pct}%</span>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: status.color }}>{status.label}</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+            {dLeft == null ? "" : dLeft >= 0 ? `J-${dLeft}` : `${-dLeft} j de retard`}
+          </span>
+        </div>
+        <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+          aria-label={`${cat.label} : ${pct} % — ${status.label}`}
+          style={{ position: "relative", height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+          <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
+          {/* Repère du calendrier : position du jour dans l'année. */}
+          <div title={`${Math.round(yearPct)} % de l'année écoulée`}
+            style={{ position: "absolute", top: -1, bottom: -1, left: `${Math.min(100, Math.max(0, yearPct))}%`, width: 2, background: T.text, opacity: 0.35, borderRadius: 999 }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.textMut, marginTop: 6 }}>
+          <span>{measured ? `${linkedGoals.length} objectif${linkedGoals.length > 1 ? "s" : ""} chiffré${linkedGoals.length > 1 ? "s" : ""}` : `Vers le niveau ${cl.level + 1}`}</span>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>Niveau {cl.level} · {xp} XP</span>
         </div>
       </div>
 
@@ -783,7 +940,7 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
       {cat.identity ? (
         <div style={{ fontSize: 13, color: T.textSub, fontStyle: "italic", lineHeight: 1.45, borderLeft: `3px solid ${cat.color}`, paddingLeft: 10 }}>« {cat.identity} »</div>
       ) : (
-        <div style={{ fontSize: 12, color: T.textMut, fontStyle: "italic" }}>{"Aucune identité définie — cliquez sur ✎ pour décrire qui vous voulez devenir."}</div>
+        <div style={{ fontSize: 12, color: T.textMut, fontStyle: "italic" }}>{"Aucune identité définie — cliquez sur ✎ pour décrire qui vous devenez en atteignant cet objectif."}</div>
       )}
 
       {/* Personne à qui je veux ressembler (modèle) — couleur atténuée, moins visible que l'objectif */}
@@ -936,6 +1093,40 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
   );
 }
 
+/* ---------- Emplacement libre ---------- */
+// Les trois places existent toujours : une place vide n'est pas un trou, c'est
+// une invitation. On y propose quelques modèles pour démarrer en un clic.
+function EmptyGoalSlot({ rank, onCreate }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ ...CARD, boxShadow: "none", background: "transparent", border: `1px dashed ${hover ? T.textMut : T.border}`, padding: 16, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", justifyContent: "center", textAlign: "center", minHeight: 220, transition: "border-color .15s ease" }}>
+      <div style={{ width: 34, height: 34, borderRadius: "50%", background: T.accentBg, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+        <Flag size={16} strokeWidth={1.75} color={T.textMut} />
+      </div>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Objectif {rank}</div>
+        <div style={{ fontSize: 12, color: T.textMut, marginTop: 4, lineHeight: 1.45, maxWidth: 240 }}>
+          {"Quel est le combat que tu veux gagner cette année ?"}
+        </div>
+      </div>
+      <button type="button" onClick={() => onCreate()} style={{ ...btnPrimary(), padding: "8px 16px" }}>
+        <Plus size={13} strokeWidth={1.75} /> Le définir
+      </button>
+      {/* Démarrage rapide : un modèle pose le nom, la couleur et l'intention. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, justifyContent: "center" }}>
+        {YEAR_GOAL_TEMPLATES.slice(0, 4).map(tpl => (
+          <button key={tpl.label} type="button" onClick={() => onCreate(tpl)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, padding: "4px 9px", borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.textSub, cursor: "pointer", fontFamily: "inherit" }}>
+            <CatIcon name={tpl.icon} size={11} strokeWidth={1.9} color={tpl.color} />
+            {tpl.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Formate un jour "YYYY-MM-DD" en libellé court « 5 juil. » (fuseau local).
 function fmtDayShort(day) {
   const [y, m, d] = String(day).split("-").map(Number);
@@ -1054,12 +1245,18 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
 }
 
 
-/* ---------- Graphique de progression du niveau ---------- */
 /* ---------- Modales ---------- */
+// Formulaire d'un objectif de l'année (création ou édition). Enregistrement
+// automatique à chaque frappe : il n'y a pas de bouton « Valider », seulement
+// « Fermer ».
 function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
   const [form, setForm] = useState(initial);
   // Sélecteur d'icône + couleur, déplié en cliquant sur l'icône à côté du nom.
   const [showStyle, setShowStyle] = useState(false);
+  // Sélecteur d'échéance (mini-calendrier portalisé, comme la modale de tâche).
+  const [dueOpen, setDueOpen] = useState(false);
+  const dueBtnRef = useRef(null);
+  const endOfYear = yearDeadline(form.year || currentYear());
   // Sauvegarde automatique : chaque modification est persistée (petit debounce).
   // Le tout premier rendu (valeurs initiales) est ignoré, et on « flush » la
   // dernière valeur à la fermeture pour ne rien perdre.
@@ -1074,15 +1271,15 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
   }, [form]);
   useEffect(() => () => onSaveRef.current(formRef.current), []);
   return (
-    <Overlay onClose={onClose} title={initial.isNew ? "Nouvelle catégorie" : "Modifier la catégorie"}>
-      <Field label="Nom de la catégorie">
+    <Overlay onClose={onClose} title={initial.isNew ? "Objectif de l'année" : "Modifier l'objectif de l'année"}>
+      <Field label="Nom de l'objectif">
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={() => setShowStyle(v => !v)} title="Changer l'icône et la couleur"
             style={{ width: 40, height: 40, borderRadius: 10, background: `color-mix(in srgb, ${form.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: showStyle ? `1.5px solid ${form.color}` : "1.5px solid transparent", padding: 0, cursor: "pointer" }}>
             <CatIcon name={form.icon} size={18} strokeWidth={1.75} color={form.color} />
           </button>
           <input autoFocus value={form.label} onChange={e => setForm({ ...form, label: e.target.value })}
-            placeholder="ex : Spiritualité" style={input()} />
+            placeholder="ex : Trading rentable" style={input()} />
         </div>
       </Field>
 
@@ -1114,6 +1311,37 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
         </div>
       )}
 
+      <Field label="Résultat visé — à quoi ressemble la victoire ?">
+        <AutoTextarea value={form.outcome} onChange={e => setForm({ ...form, outcome: e.target.value })}
+          placeholder="ex : Passer une prop firm 100 k et la tenir financée six mois."
+          minRows={2} />
+      </Field>
+
+      <Field label="Échéance">
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button type="button" ref={dueBtnRef} onClick={() => setDueOpen(o => !o)}
+            style={{ ...input(), flex: 1, cursor: "pointer", textAlign: "left", textTransform: "capitalize" }}>
+            {fmtDayLong(form.deadline) || "Choisir une date"}
+          </button>
+          {/* Raccourci : la fin de l'année, échéance par défaut de la page. */}
+          {form.deadline !== endOfYear && (
+            <button type="button" onClick={() => setForm({ ...form, deadline: endOfYear })}
+              style={{ padding: "9px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              31 déc.
+            </button>
+          )}
+        </div>
+        {dueOpen && (
+          <MiniCalendar
+            anchorRef={dueBtnRef}
+            value={form.deadline ? new Date(`${form.deadline}T00:00:00`) : new Date()}
+            onSelect={(d) => setForm({ ...form, deadline: getLocalDateString(d) })}
+            onClose={() => setDueOpen(false)}
+            align="left"
+          />
+        )}
+      </Field>
+
       <Field label="Qui je veux devenir dans le futur">
         <AutoTextarea value={form.identity} onChange={e => setForm({ ...form, identity: e.target.value })}
           placeholder="ex : Je suis quelqu'un qui médite et cultive la gratitude chaque jour."
@@ -1131,7 +1359,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
           rows={2} style={{ ...input(), resize: "vertical", lineHeight: 1.4 }} />
       </Field>
 
-      <Field label="Objectifs">
+      <Field label="Objectifs chiffrés (ils mesurent l'avancement)">
         <button onClick={onGoToObjectives}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
           <Target size={14} strokeWidth={1.9} /> Gérer les objectifs

@@ -684,10 +684,10 @@ export default function DailyPlannerPage() {
                       style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: T.white, resize: "vertical", lineHeight: 1.5 }} />
                   </div>
 
-                  {/* Cartes Vie RPG — liens optionnels (plusieurs possibles) */}
+                  {/* Objectifs de l'année — liens optionnels (plusieurs possibles) */}
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 500, color: T.textSub, display: "block", marginBottom: 6 }}>
-                      Cartes Vie RPG <span style={{ color: T.textMut, fontWeight: 400 }}>· optionnel · plusieurs possibles</span>
+                      {"Objectifs de l'année"} <span style={{ color: T.textMut, fontWeight: 400 }}>· optionnel · plusieurs possibles</span>
                     </label>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {rpgCategories.map((c) => {
@@ -706,7 +706,9 @@ export default function DailyPlannerPage() {
                       })}
                     </div>
                     <div style={{ fontSize: 10.5, color: T.textMut, marginTop: 6, lineHeight: 1.4 }}>
-                      Rattache cette habitude à une ou plusieurs cartes de la page « Vie RPG » : son XP alimente chaque catégorie cochée.
+                      {rpgCategories.length === 0
+                        ? "Définis d'abord tes objectifs de l'année sur la page « Quête de soi » pour y rattacher cette habitude."
+                        : "Rattache cette habitude à un ou plusieurs objectifs de l'année (page « Quête de soi ») : la cocher les fait progresser."}
                     </div>
                   </div>
                 </div>

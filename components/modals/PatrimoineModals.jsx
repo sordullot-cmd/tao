@@ -26,10 +26,27 @@ import ComboInput from "@/components/ui/ComboInput";
 import { bankLogo } from "@/lib/bank/bankLogos";
 import { institutionLogo, useBankInstitutions } from "@/lib/bank/useBankInstitutions";
 import { ASSET_TYPES, assetTypeKey, newAssetId, usePatrimoine } from "@/lib/patrimoine";
+import { loanStats } from "@/lib/loans";
+import { loanGapsSentence } from "@/components/ui/loanUi";
+import { fmt, fmtMonthYear } from "@/lib/ui/format";
 import { useFavoriteBanks } from "@/lib/bank/useFavoriteBanks";
 import { startBankConnection } from "@/lib/bank/startConnection";
 
 const EMPTY_FORM = { name: "", type: "pea", balance: "", institution: "" };
+/* Conditions du prêt, en CHAÎNES : un champ vidé doit rester vide pendant la
+   frappe, là où un `null` numérique le remplirait d'un zéro. */
+const EMPTY_LOAN = { principal: "", rate: "", payment: "", insurance: "", startDate: "", months: "" };
+
+/** Nombre saisi, `null` si le champ est vide ou illisible. La virgule décimale
+ *  est acceptée : c'est celle du pavé numérique en français. */
+const num = (v) => {
+  const s = String(v ?? "").trim().replace(",", ".");
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+};
+
+const str = (v) => (v === null || v === undefined ? "" : String(v));
 
 /**
  * @param {object=}   props.asset     Actif à modifier ; absent = création.
@@ -57,9 +74,45 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
         }
       : { ...EMPTY_FORM, ...(defaultType ? { type: defaultType } : null) },
   );
+  /* Conditions du prêt, à part du reste du formulaire : elles ne concernent
+     qu'un type d'actif, et les garder séparées évite de les traîner dans la
+     saisie d'un PEA. */
+  const [loan, setLoan] = React.useState(() => {
+    const l = asset?.loan || null;
+    return l
+      ? {
+          principal: str(l.principal),
+          rate: str(l.rate),
+          payment: str(l.payment),
+          insurance: str(l.insurance),
+          startDate: l.startDate || "",
+          months: str(l.months),
+        }
+      : { ...EMPTY_LOAN };
+  });
   const [error, setError] = React.useState(null);
 
   const isLoan = form.type === "loan";
+
+  const terms = React.useMemo(
+    () => ({
+      principal: num(loan.principal),
+      rate: num(loan.rate),
+      payment: num(loan.payment),
+      insurance: num(loan.insurance),
+      startDate: loan.startDate || null,
+      months: num(loan.months),
+    }),
+    [loan],
+  );
+
+  /* Aperçu calculé pendant la frappe : c'est lui qui rend la saisie vérifiable.
+     Une mensualité qu'on croit juste et qui ne couvre pas les intérêts se voit
+     tout de suite, au lieu de produire une page Crédits muette. */
+  const preview = React.useMemo(
+    () => (isLoan ? loanStats(Math.abs(num(form.balance) ?? 0), terms) : null),
+    [isLoan, form.balance, terms],
+  );
 
   /* Favoris en tête, puis alphabétique : même ordre que le sélecteur de la
      connexion bancaire, pour que « sa » banque se trouve au même endroit dans
@@ -98,17 +151,22 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
     const sameInstitution = isEdit && (asset.institution || "") === (institution || "");
     const logo = institutionLogo(institutions, institution) || (sameInstitution ? asset.logo ?? null : null);
 
+    /* Les conditions ne sont écrites que pour un crédit — et remises à `null`
+       dès qu'un actif cesse d'en être un, sinon un ancien échéancier resterait
+       accroché à un livret rebaptisé. */
+    const loanTerms = isLoan ? terms : null;
+
     setStore((s) => {
       const list = Array.isArray(s.assets) ? s.assets : [];
       if (!isEdit) {
         return {
           ...s,
-          assets: [...list, { id, name, type: form.type, balance, institution, logo, updatedAt, holdings: [] }],
+          assets: [...list, { id, name, type: form.type, balance, institution, logo, updatedAt, holdings: [], loan: loanTerms }],
         };
       }
       return {
         ...s,
-        assets: list.map((a) => (a.id === id ? { ...a, name, type: form.type, balance, institution, logo, updatedAt } : a)),
+        assets: list.map((a) => (a.id === id ? { ...a, name, type: form.type, balance, institution, logo, updatedAt, loan: loanTerms } : a)),
       };
     });
     onSaved?.(id);
@@ -120,6 +178,9 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
       title={isEdit ? t("patrimoine.assets.editTitle") : t("patrimoine.assets.add")}
       subtitle={t("patrimoine.assets.modalSub")}
       onClose={onClose}
+      /* Un crédit porte six conditions de plus : à 480 px elles tombaient en
+         colonne unique et le pied de la modale passait sous le pli. */
+      width={isLoan ? 560 : 480}
       footer={
         <>
           <GhostBtn onClick={onClose}>{t("common.cancel")}</GhostBtn>
@@ -182,7 +243,130 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
           <span style={{ fontSize: 13, color: T.textSub, flexShrink: 0 }}>{getCurrencySymbol()}</span>
         </span>
       </Field>
+
+      {isLoan && <LoanFields loan={loan} setLoan={setLoan} preview={preview} />}
     </ModalShell>
+  );
+}
+
+/**
+ * Conditions du prêt : capital emprunté, taux, mensualité, assurance, durée,
+ * première échéance.
+ *
+ * Toutes facultatives — on ajoute souvent un crédit avec son seul restant dû, et
+ * refuser l'enregistrement faute de taux ferait perdre le patrimoine net juste
+ * pour un échéancier. L'aperçu dit ce que la saisie permet déjà de calculer, et
+ * `LoanGaps` ce qu'il faudrait ajouter : la page Crédits affiche exactement les
+ * mêmes phrases, l'utilisateur retrouve donc sa liste au même endroit.
+ */
+function LoanFields({ loan, setLoan, preview }) {
+  const sym = getCurrencySymbol();
+  const set = (k) => (v) => setLoan({ ...loan, [k]: v });
+  // Mensualité déduite plutôt que saisie : à signaler, sinon on croit avoir tapé
+  // un chiffre que le formulaire a en fait calculé.
+  const derived = num(loan.payment) === null && preview?.payment !== null;
+
+  return (
+    <>
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginTop: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{t("patrimoine.loan.section")}</div>
+        <div style={{ fontSize: 11, color: T.textMut, marginTop: 4, lineHeight: 1.5 }}>
+          {t("patrimoine.loan.sectionHint")}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+        <Field label={`${t("patrimoine.loan.fieldPrincipal")} (${sym})`}>
+          <TextInput
+            type="number" inputMode="decimal" min={0} step="any"
+            value={loan.principal} onChange={set("principal")} placeholder="200000"
+            aria-label={t("patrimoine.loan.fieldPrincipal")}
+          />
+        </Field>
+        <Field label={`${t("patrimoine.loan.fieldRate")} (%)`}>
+          <TextInput
+            type="number" inputMode="decimal" min={0} step="any"
+            value={loan.rate} onChange={set("rate")} placeholder="3.4"
+            aria-label={t("patrimoine.loan.fieldRate")}
+          />
+        </Field>
+        <Field label={`${t("patrimoine.loan.fieldPayment")} (${sym})`}>
+          <TextInput
+            type="number" inputMode="decimal" min={0} step="any"
+            value={loan.payment} onChange={set("payment")}
+            placeholder={preview?.payment !== null && derived ? String(Math.round(preview.payment)) : "990"}
+            aria-label={t("patrimoine.loan.fieldPayment")}
+          />
+        </Field>
+        <Field label={`${t("patrimoine.loan.fieldInsurance")} (${sym})`}>
+          <TextInput
+            type="number" inputMode="decimal" min={0} step="any"
+            value={loan.insurance} onChange={set("insurance")} placeholder="25"
+            aria-label={t("patrimoine.loan.fieldInsurance")}
+          />
+        </Field>
+        <Field label={t("patrimoine.loan.fieldMonths")}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <TextInput
+              type="number" inputMode="numeric" min={1} step={1}
+              value={loan.months} onChange={set("months")} placeholder="240"
+              aria-label={t("patrimoine.loan.fieldMonths")}
+            />
+            <span style={{ fontSize: 13, color: T.textSub, flexShrink: 0 }}>{t("patrimoine.loan.monthsUnit")}</span>
+          </span>
+        </Field>
+        <Field label={t("patrimoine.loan.fieldStart")}>
+          <TextInput
+            type="date"
+            value={loan.startDate} onChange={set("startDate")}
+            aria-label={t("patrimoine.loan.fieldStart")}
+          />
+        </Field>
+      </div>
+
+      <div style={{ fontSize: 11, color: T.textMut, lineHeight: 1.5 }}>
+        {t("patrimoine.loan.paymentHint")}
+      </div>
+
+      {preview && <LoanPreview preview={preview} derived={derived} />}
+    </>
+  );
+}
+
+/** Aperçu de la saisie : ce que le crédit coûte, jusqu'à quand, et ce qui manque. */
+function LoanPreview({ preview, derived }) {
+  const tooLow = !preview.complete && preview.payment !== null && preview.rate !== null && preview.outstanding > 0;
+
+  return (
+    <div style={{ background: T.accentBg, borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+      {preview.complete ? (
+        <>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 13, color: T.text }}>
+            <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+              {fmt(preview.monthlyCharge ?? preview.payment)}
+              <span style={{ fontWeight: 400, color: T.textSub }}> / {t("patrimoine.loan.perMonth")}</span>
+            </span>
+            <span style={{ color: T.textSub }}>
+              {t("patrimoine.loan.previewEnd").replace("{date}", fmtMonthYear(preview.endDate))}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+            {t("patrimoine.loan.previewMonths").replace("{n}", String(preview.monthsLeft))}
+            {" · "}
+            {t("patrimoine.loan.previewInterest").replace("{amount}", fmt(preview.interestLeft ?? 0))}
+            {derived ? ` · ${t("patrimoine.loan.derivedPayment")}` : ""}
+          </div>
+        </>
+      ) : tooLow ? (
+        <div role="alert" style={{ fontSize: 12, color: T.red, lineHeight: 1.5 }}>
+          {t("patrimoine.loan.errPaymentTooLow")}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
+          {loanGapsSentence(preview.gaps)}
+        </div>
+      )}
+    </div>
   );
 }
 

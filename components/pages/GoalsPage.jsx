@@ -1040,11 +1040,17 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                 );
               })()}
 
-              {/* Lien Vie RPG (tout en bas) — pills comme la page Habitudes.
-                  Rattache l'objectif à une carte de la page Vie RPG : sa
-                  progression donne de l'XP à cette catégorie, au prorata. */}
-              <StackField label="Catégorie Vie RPG (XP)" last>
+              {/* Lien « Quête de soi » (tout en bas) — pills comme la page
+                  Habitudes. Rattache l'objectif à l'un des trois objectifs de
+                  l'année : sa progression le fait avancer, et donne de l'XP au
+                  prorata. */}
+              <StackField label="Objectif de l'année (XP)" last>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 0 }}>
+                  {rpgCategories.length === 0 && (
+                    <div style={{ fontSize: 11.5, color: T.textMut, lineHeight: 1.45 }}>
+                      {"Aucun objectif d'année défini — rends-toi sur la page « Quête de soi » pour en créer un."}
+                    </div>
+                  )}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {rpgCategories.map((c) => {
                       const active = form.rpgCategory === c.id;

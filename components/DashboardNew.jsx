@@ -88,7 +88,6 @@ import {
   Mic as LucideMic,
   PiggyBank as LucidePiggyBank,
   Landmark as LucideLandmark,
-  Building2 as LucideBuilding2,
   CreditCard as LucideCreditCard,
 } from "lucide-react";
 
@@ -661,15 +660,16 @@ export default function App() {
        dans « Comptes ». Les pages viennent de l'app patrimoine (cf.
        lib/patrimoine.ts) ; « Budget » les rejoint, il y était déjà.
        Ordre : les deux vues d'ensemble d'abord — ce qu'on possède (Patrimoine)
-       puis ce qu'on prévoit (Budget) —, ensuite les détails par nature (actifs,
-       passifs, banque). */
+       puis ce qu'on prévoit (Budget) —, ensuite le détail des passifs. */
     {
       label: t("nav.finance"),
       items: [
         { id: "patrimoine",             icon: LucideLandmark,   label: t("nav.patrimoine") },
         { id: "budget",                 icon: LucidePiggyBank,  label: t("nav.budget") },
         { id: "patrimoine-liabilities", icon: LucideCreditCard, label: t("nav.patrimoineLiabilities") },
-        { id: "patrimoine-bank",        icon: LucideBuilding2,  label: t("nav.patrimoineBank") },
+        /* « Compte courant » (patrimoine-bank) n'est plus dans la navigation.
+           La page reste routée et joignable depuis la synthèse Patrimoine —
+           masquée ici seulement, pas retirée. */
       ],
     },
   ];

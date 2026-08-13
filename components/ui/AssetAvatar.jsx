@@ -4,19 +4,19 @@
  * Vignette d'un actif du patrimoine.
  *
  * Le logo de l'établissement quand on le connaît, à défaut les initiales sur la
- * teinte de la classe d'actifs. Les quatre pages Finance qui listent des actifs
+ * teinte du type d'actif. Les quatre pages Finance qui listent des actifs
  * (synthèse, classe, crédits, fiche) portaient chacune leur copie de ce bloc, et
  * seule la synthèse gérait le logo : le même compte s'affichait donc avec son
  * logo à un endroit et en initiales à l'autre.
  *
- * La classe se déduit du type — l'appelant n'a pas à la passer, et ne peut donc
+ * La teinte se déduit du type — l'appelant n'a pas à la passer, et ne peut donc
  * pas la passer fausse.
  */
 
 import React from "react";
 import { RoundLogo } from "@/components/ui/accountRows";
 import { bankLogo } from "@/lib/bank/bankLogos";
-import { classOfType } from "@/lib/patrimoine";
+import { styleOfType } from "@/lib/patrimoine";
 
 export default function AssetAvatar({ asset, size = 32 }) {
   if (!asset) return null;
@@ -29,13 +29,13 @@ export default function AssetAvatar({ asset, size = 32 }) {
     return <RoundLogo src={logo} size={size} name={asset.institution || asset.name} />;
   }
 
-  const cls = classOfType(asset.type);
+  const style = styleOfType(asset.type);
   return (
     <span
       aria-hidden="true"
       style={{
         width: size, height: size, borderRadius: "50%", flexShrink: 0,
-        background: cls.chip.bg, color: cls.chip.text,
+        background: style.chip.bg, color: style.chip.text,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         fontSize: Math.max(10, Math.round(size * 0.34)), fontWeight: 600,
         fontFamily: "var(--font-sans)",

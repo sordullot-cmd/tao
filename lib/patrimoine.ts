@@ -40,6 +40,31 @@ export interface Holding {
   price: number | null;
 }
 
+/**
+ * Conditions d'un crédit — le contrat, là où `balance` ne porte que l'instantané.
+ *
+ * Tout est facultatif : on saisit un crédit dès qu'on connaît son restant dû, et
+ * les conditions se complètent quand on a l'offre de prêt sous les yeux. Chaque
+ * champ absent retire une capacité à la page Crédits plutôt que de la bloquer
+ * (cf. `loanGaps` dans `lib/loans`).
+ */
+export interface LoanTerms {
+  /** Capital emprunté à l'origine — donne la progression du remboursement. */
+  principal: number | null;
+  /** Taux annuel nominal, en pourcentage, hors assurance. */
+  rate: number | null;
+  /** Mensualité hors assurance. Déduite des autres champs si absente. */
+  payment: number | null;
+  /** Assurance emprunteur mensuelle : prélevée avec l'échéance, mais elle
+   *  n'amortit pas le capital — d'où le champ séparé. */
+  insurance: number | null;
+  /** `AAAA-MM-JJ` de la PREMIÈRE échéance, pas de la signature : c'est elle qui
+   *  donne le jour de prélèvement et le rang de l'échéance en cours. */
+  startDate: string | null;
+  /** Durée totale du prêt, en mois. */
+  months: number | null;
+}
+
 export interface Asset {
   id: string;
   name: string;
@@ -51,6 +76,9 @@ export interface Asset {
   updatedAt: string | null;
   /** Portefeuilles seulement : la valeur vient alors des lignes, pas de `balance`. */
   holdings?: Holding[];
+  /** Crédits seulement. Absent sur tout actif saisi avant l'échéancier — d'où
+   *  l'optionnel, à ne pas retirer : le store n'est pas migré. */
+  loan?: LoanTerms | null;
   /** Logo de l'établissement. Renseigné pour les comptes agrégés, et pour un
    *  actif saisi dont l'établissement a été reconnu dans le catalogue des
    *  banques. `bankLogo()` reste consulté à l'affichage : un logo livré avec
@@ -150,6 +178,45 @@ export const ASSET_CLASSES: AssetClass[] = [
     chip: { bg: "#ffe3e0", text: "#9f2f22" },
   },
 ];
+
+/* ── Couleurs par type ─────────────────────────────────────────────────────
+   La pastille d'un actif se teinte par TYPE, là où la répartition et ses
+   légendes restent par CLASSE. Sans ça, un PEA, un compte-titres et une
+   assurance-vie — même classe — sortaient avec la pastille identique, alors que
+   ce sont les trois comptes qu'on cherche justement à distinguer dans une liste.
+
+   Chaque type seul dans sa classe garde la couleur de celle-ci : la pastille
+   reste accordée à la puce de légende du même actif. Seuls les types qui
+   partageaient une teinte en reçoivent une propre, choisie dans un secteur de
+   teinte libre pour ne pas se confondre avec les six autres. Mêmes contraintes
+   que les classes ci-dessus : couple pastel autonome, hors tokens `T`, lisible
+   sur les deux thèmes, contraste texte/fond ≥ 4,5:1.
+   ------------------------------------------------------------------------ */
+
+export interface AssetTypeStyle {
+  color: string;
+  chip: { bg: string; text: string };
+}
+
+export const ASSET_TYPE_STYLES: Record<AssetType, AssetTypeStyle> = {
+  // Classe « investissements » — bleu au PEA, les deux autres se démarquent.
+  pea: { color: "#0060a1", chip: { bg: "#d8efff", text: "#0060a1" } },
+  securities: { color: "#00696d", chip: { bg: "#d2f0f1", text: "#00696d" } },
+  life_insurance: { color: "#4e6b00", chip: { bg: "#e6f3c4", text: "#4e6b00" } },
+  // Types seuls dans leur classe : couleur de la classe, inchangée.
+  crypto: { color: "#9f5c04", chip: { bg: "#fff9d8", text: "#9f5c04" } },
+  real_estate: { color: "#046c39", chip: { bg: "#dcf5e5", text: "#046c39" } },
+  savings: { color: "#5b4bc4", chip: { bg: "#e9e4ff", text: "#5b4bc4" } },
+  checking: { color: "#9b0058", chip: { bg: "#ffdffa", text: "#9b0058" } },
+  loan: { color: "#9f2f22", chip: { bg: "#ffe3e0", text: "#9f2f22" } },
+  other: { color: "#4b5157", chip: { bg: "#eceef0", text: "#4b5157" } },
+};
+
+/** Teinte d'un type. Repli sur la classe — un type inconnu (donnée plus
+ *  ancienne que la palette) reste coloré plutôt que transparent. */
+export function styleOfType(type: AssetType): AssetTypeStyle {
+  return ASSET_TYPE_STYLES[type] ?? classOfType(type);
+}
 
 /** Classe « Autres » en repli : un type inconnu ne doit pas faire disparaître
  *  l'actif de la liste — il atterrit dans la classe fourre-tout. */

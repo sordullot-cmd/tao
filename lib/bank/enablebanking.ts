@@ -24,6 +24,13 @@
 import { createPrivateKey, type KeyObject } from "node:crypto";
 import { SignJWT } from "jose";
 
+import {
+  normalizeTransaction,
+  sortTransactions,
+  type BankTransaction,
+  type RawTransaction,
+} from "@/lib/bank/transactions";
+
 const BASE_URL = "https://api.enablebanking.com";
 
 /** Durée de consentement demandée. La banque peut la plafonner. */
@@ -317,4 +324,42 @@ export async function fetchAccounts(
   return results
     .filter((a): a is BankAccount => a !== null)
     .map((a) => ({ ...a, logo: logos.get(a.institution) ?? null }));
+}
+
+/* ── Mouvements ────────────────────────────────────────────────────────────
+   `GET /accounts/{uid}/transactions` pagine par `continuation_key`. La fenêtre
+   est bornée à 90 jours : au-delà, la DSP2 impose une nouvelle authentification
+   forte, et la banque répond alors une erreur plutôt qu'un historique.
+   ------------------------------------------------------------------------ */
+
+/** Fenêtre demandée, en jours. C'est aussi la durée de vie d'un consentement. */
+export const TRANSACTIONS_WINDOW_DAYS = 90;
+
+/** Garde-fou de pagination : 10 pages couvrent largement 90 jours, et une
+ *  `continuation_key` qui se répéterait ne peut pas boucler indéfiniment. */
+const TRANSACTIONS_MAX_PAGES = 10;
+
+/** Mouvements d'un compte, du plus récent au plus ancien. */
+export async function fetchTransactions(
+  uid: string,
+  days = TRANSACTIONS_WINDOW_DAYS,
+): Promise<BankTransaction[]> {
+  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const raw: RawTransaction[] = [];
+  let continuationKey: string | null = null;
+
+  for (let page = 0; page < TRANSACTIONS_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams({ date_from: from });
+    if (continuationKey) params.set("continuation_key", continuationKey);
+
+    const resp = await ebFetch(`/accounts/${uid}/transactions?${params.toString()}`);
+    if (!resp.ok) throw await ebError(resp, "Enable Banking (mouvements du compte)");
+
+    const data = await resp.json();
+    raw.push(...((data.transactions ?? []) as RawTransaction[]));
+    continuationKey = data.continuation_key ?? null;
+    if (!continuationKey) break;
+  }
+
+  return sortTransactions(raw.map((tx, i) => normalizeTransaction(tx, i)));
 }

@@ -278,7 +278,6 @@ export default function StrategiesNew() {
         .trade-cell-label {
           color: #8B95AA;
           font-size: 10px;
-          text-transform: uppercase;
         }
         .trade-cell-value {
           color: #FFFFFF;

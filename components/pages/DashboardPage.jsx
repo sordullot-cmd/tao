@@ -40,7 +40,7 @@ function SectionTitle({ children, action }) {
 }
 
 /** En-tête de tableau : 12px Medium en capitales, atténué. */
-const TH = { fontSize:12, fontWeight:500, lineHeight:"17.05px", color:T.text, textTransform:"uppercase" };
+const TH = { fontSize:12, fontWeight:500, lineHeight:"17.05px", color:T.text };
 
 /* Grille de « Performance par jour ». Une vraie grille plutôt que sept colonnes
    flexibles espacées de 60 px : les chiffres tombent au pixel sous leur en-tête,

@@ -44,9 +44,31 @@ function formatDate(iso) {
   }
 }
 
+/**
+ * Heure de la dernière agrégation. À l'heure et à la minute dans la journée, avec
+ * le jour au-delà : un solde relu il y a dix minutes et un solde d'avant-hier ne
+ * s'apprécient pas de la même façon, et « 14:05 » seul serait trompeur.
+ */
+function formatBalanceTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const sameDay = d.toDateString() === new Date().toDateString();
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(sameDay ? null : { day: "2-digit", month: "short" }),
+    }).format(d);
+  } catch {
+    return "";
+  }
+}
+
 export default function PatrimoineBankPage({ setPage }) {
   useLang();
-  const { configured, connections, accounts, error, reload } = useBankAccounts();
+  const {
+    configured, connections, accounts, error, reload, revalidating, updatedAt,
+  } = useBankAccounts();
   /* Le choix de l'établissement et la redirection DSP2 vivent dans la modale
      (components/modals/PatrimoineModals.jsx) : la page n'a plus qu'à l'ouvrir. */
   const [addingBank, setAddingBank] = React.useState(false);
@@ -171,18 +193,37 @@ export default function PatrimoineBankPage({ setPage }) {
             <SectionTitle
               size="sm"
               action={
-                <button
-                  type="button"
-                  onClick={reload}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
-                    padding: "0 12px", borderRadius: 999, border: "none",
-                    background: "transparent", color: T.textSub, fontSize: 13,
-                    cursor: "pointer", fontFamily: "inherit",
-                  }}
-                >
-                  <RefreshCw size={14} strokeWidth={1.75} /> {t("patrimoine.bank.refresh")}
-                </button>
+                /* Depuis que les soldes s'affichent d'abord depuis le cache, il
+                   faut pouvoir lire À QUAND ils remontent — et voir qu'une
+                   relecture tourne, puisqu'elle ne vide plus la liste. */
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <span style={{ fontSize: 12, color: T.textMut }}>
+                    {revalidating
+                      ? t("patrimoine.bank.refreshing")
+                      : updatedAt
+                        ? t("patrimoine.bank.balancesAt").replace("{time}", formatBalanceTime(updatedAt))
+                        : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={reload}
+                    disabled={revalidating}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                      padding: "0 12px", borderRadius: 999, border: "none",
+                      background: "transparent", color: T.textSub, fontSize: 13,
+                      cursor: revalidating ? "default" : "pointer", fontFamily: "inherit",
+                      opacity: revalidating ? 0.5 : 1,
+                    }}
+                  >
+                    <RefreshCw
+                      size={14}
+                      strokeWidth={1.75}
+                      style={revalidating ? { animation: "spin 900ms linear infinite" } : undefined}
+                    />
+                    {t("patrimoine.bank.refresh")}
+                  </button>
+                </span>
               }
             >
               {t("patrimoine.bank.accounts")}

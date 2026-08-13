@@ -6,6 +6,8 @@ import {
   clearStaleSession,
   isRefreshTokenError,
 } from "@/lib/supabase/client";
+import { clearBankAccountsCache } from "@/lib/bank/useBankAccounts";
+import { clearBankTransactionsCache } from "@/lib/bank/useBankTransactions";
 import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -113,6 +115,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       setUser(null);
       setSession(null);
+      /* Les soldes bancaires sont mis en cache pour s'afficher sans attente
+         (`useBankAccounts`) : ils ne doivent pas survivre à la session, ni sur
+         le disque, ni dans le store en mémoire — sans quoi ils resteraient
+         visibles jusqu'au prochain rechargement de l'application. */
+      clearBankAccountsCache();
+      clearBankTransactionsCache();
     } catch (error) {
       console.error("Error logging out:", error);
       throw error;

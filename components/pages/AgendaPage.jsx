@@ -1982,16 +1982,16 @@ export default function AgendaPage() {
                 </div>
               </FormRow>
 
-              {/* Quêtes de soi (cartes Vie RPG). Pour une tâche : terminer la tâche
-                  crédite de l'XP à chaque carte liée. Pour un évènement : aucun XP,
-                  la sélection sert uniquement à reprendre la couleur de la catégorie. */}
+              {/* Objectifs de l'année (cartes de la Quête de soi). Pour une tâche :
+                  la terminer fait progresser chaque objectif lié. Pour un évènement :
+                  aucun XP, la sélection sert seulement à reprendre sa couleur. */}
               <FormRow icon={Sparkles} top>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, color: T.textSub, marginBottom: 8 }}>
-                      Quêtes de soi
+                      {"Objectifs de l'année"}
                     </div>
                     {rpgCategories.length === 0 ? (
-                      <div style={{ fontSize: 12, color: T.textMut }}>Crée des cartes sur la page « Vie RPG » pour les lier ici.</div>
+                      <div style={{ fontSize: 12, color: T.textMut }}>{"Définis tes objectifs de l'année sur la page « Quête de soi » pour les lier ici."}</div>
                     ) : (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {rpgCategories.map((c) => {

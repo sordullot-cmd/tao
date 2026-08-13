@@ -22,7 +22,7 @@ import { ChevronRight, Crown, Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
-  AllocationChart, CARD, SectionTitle, HeroAmount, PeriodPills, PnlChart, TH,
+  AllocationChart, CARD, SectionTitle, HeroAmount, MiniKpi, PeriodPills, PnlChart, TH,
 } from "@/components/ui/da";
 import AssetAvatar from "@/components/ui/AssetAvatar";
 import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
@@ -166,6 +166,25 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
               </span>
             )}
             <HeroAmount value={heroValue} />
+
+            {/* Brut / passifs / net — seulement si des passifs existent : sans
+                eux les trois mesures répètent le chiffre héros. Elles étaient
+                en cartes SOUS la courbe ; elles remontent ici en mini-KPI,
+                comme les pages Compte et Firme, où les mesures secondaires se
+                lisent dans la foulée du chiffre héros et non après le
+                graphique. `marginTop` 6 complète le `gap` 6 du conteneur pour
+                retrouver les 12 px héros → KPI de ces pages. */}
+            {hasLiabilities && (
+              <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap", marginTop: 6 }}>
+                <MiniKpi label={t("patrimoine.grossAssets")} value={fmt(nw.gross)} />
+                <MiniKpi label={t("patrimoine.liabilities")} value={fmt(nw.liabilities)} tone="neg" />
+                <MiniKpi
+                  label={t("patrimoine.netWorth")}
+                  value={fmt(nw.total)}
+                  tone={nw.total < 0 ? "neg" : undefined}
+                />
+              </div>
+            )}
           </div>
 
           {/* Connexion d'une banque, à la hauteur du chiffre héros : c'est la
@@ -194,29 +213,6 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
           <div style={{ fontSize: 13, color: T.textMut }}>{t("patrimoine.historyHint")}</div>
         )}
       </div>
-
-      {/* Brut / passifs / net — seulement si des passifs existent, comme
-          l'original : sans eux ces trois tuiles répètent le même nombre. */}
-      {hasLiabilities && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          {[
-            { label: t("patrimoine.grossAssets"), value: nw.gross, neg: false },
-            { label: t("patrimoine.liabilities"), value: nw.liabilities, neg: true },
-            { label: t("patrimoine.netWorth"), value: nw.total, neg: nw.total < 0 },
-          ].map((tile) => (
-            <div key={tile.label} style={{ ...CARD, padding: 16 }}>
-              <div style={{ fontSize: 12, color: T.textSub }}>{tile.label}</div>
-              <div style={{
-                marginTop: 4, fontSize: 18, fontWeight: 600,
-                fontVariantNumeric: "tabular-nums",
-                color: tile.neg ? T.pnlNeg : T.text,
-              }}>
-                {fmt(tile.value)}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Tableau des actifs, groupés par classe */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -429,7 +425,11 @@ function BudgetSummary({ onOpen }) {
  * ouvre la page de la classe, là où le chevron ne fait que déplier.
  */
 function ClassSection({ cls, assets, total, positiveTotal, onOpenClass, onOpenAsset }) {
-  const [open, setOpen] = React.useState(false);
+  /* Ouvert d'emblée : la page n'a que quelques classes, et replié on n'y voyait
+     que des totaux — il fallait un clic par classe pour retrouver ses comptes,
+     qui sont ce qu'on vient lire. Le chevron sert donc à masquer une classe dont
+     on ne s'occupe pas, pas à révéler la liste. */
+  const [open, setOpen] = React.useState(true);
   const panelId = `patrimoine-classe-${cls.slug}`;
   const share = shareOf(total, positiveTotal);
 
@@ -502,7 +502,11 @@ function ClassSection({ cls, assets, total, positiveTotal, onOpenClass, onOpenAs
           {/* Une carte par actif, sur le fond de la carte de classe : la liste
               séparée d'un filet les faisait lire comme les lignes d'un relevé,
               alors que chaque compte est une entité qu'on peut ouvrir. */}
-          <ul style={{ listStyle: "none", margin: 0, padding: "4px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* 16 px sous le dernier actif, comme le padding bas de l'en-tête de
+              classe : sans ça une catégorie dépliée se terminait 4 px plus haut
+              qu'une catégorie repliée, et l'écart d'une catégorie à l'autre
+              changeait selon leur état alors que le `gap` est le même. */}
+          <ul style={{ listStyle: "none", margin: 0, padding: "4px 12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             {assets.map((a) => {
               const value = assetValue(a);
               const gain = assetGain(a);

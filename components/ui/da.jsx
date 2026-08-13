@@ -249,13 +249,15 @@ export function AllocationChart({
   );
 }
 
-/** En-tête de colonne : 12px Medium en capitales (à poser dans un bloc opacity .4). */
+/** En-tête de colonne : 12px Medium (à poser dans un bloc opacity .4).
+ *  Sans capitales forcées : en français les intitulés portent des accents que
+ *  les capitales rendent mal, et « P&L » ou « % total » n'y gagnaient rien.
+ *  L'en-tête se distingue déjà par sa taille et son opacité. */
 export const TH = {
   fontSize: 12,
   fontWeight: 500,
   lineHeight: "17.05px",
   color: T.text,
-  textTransform: "uppercase",
 };
 
 /**

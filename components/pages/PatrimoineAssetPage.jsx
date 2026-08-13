@@ -14,15 +14,30 @@
  *   — la courbe « investi » se traçait sur les avis d'opéré, qui n'existent pas ;
  *   — la plus-value affichée est donc uniquement LATENTE (cours − PRU). La part
  *     réalisée supposait l'historique des ventes.
+ *
+ * Un compte AGRÉGÉ, lui, a une source : sa banque. Il porte donc en plus la
+ * courbe de son solde et son relevé (`BankMovements`), ce qu'un actif saisi à la
+ * main ne peut pas avoir.
  */
 
 import React from "react";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  ArrowLeftRight, Banknote, Check, CreditCard, FileText, Landmark, Pencil,
+  Percent, Plus, Receipt, Repeat, Trash2, X,
+} from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { BackLink, CARD, HeroAmount, SectionTitle } from "@/components/ui/da";
+import {
+  BackLink, CARD, HeroAmount, MiniKpi, PeriodPills, PnlChart, SectionAction, SectionTitle,
+} from "@/components/ui/da";
 import AssetAvatar from "@/components/ui/AssetAvatar";
-import { bankAccountToAsset, isBankAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
+import {
+  bankAccountToAsset, bankAssetUid, isBankAsset, useBankAccounts,
+} from "@/lib/bank/useBankAccounts";
+import { useBankTransactions } from "@/lib/bank/useBankTransactions";
+import {
+  balanceSeries, groupByDay, kindLabelKey, parseDay, periodStats, withinDays,
+} from "@/lib/bank/transactions";
 import { ConfirmModal } from "@/components/modals/AccountModals";
 import { AssetFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt } from "@/lib/ui/format";
@@ -31,12 +46,14 @@ import {
   assetGain,
   assetTypeKey,
   assetValue,
+  dayKey,
   holdingCost,
   holdingGain,
   holdingGainPct,
   holdingValue,
   isPortfolio,
   newAssetId,
+  styleOfType,
   usePatrimoine,
 } from "@/lib/patrimoine";
 
@@ -87,7 +104,10 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
   const bank = useBankAccounts();
   const asset =
     (store.assets || []).find((a) => a.id === assetId) ||
-    bank.accounts.map(bankAccountToAsset).find((a) => a.id === assetId) ||
+    // L'horodatage de l'agrégation est porté par l'actif : depuis que les soldes
+    // s'affichent d'abord depuis le cache, l'en-tête peut dire « maj … » comme
+    // il le fait pour un actif saisi.
+    bank.accounts.map((a) => bankAccountToAsset(a, bank.updatedAt)).find((a) => a.id === assetId) ||
     null;
   // Un actif agrégé n'existe pas dans le store : son solde est relu à chaque
   // visite, il n'y a rien à modifier ni à supprimer ici.
@@ -266,6 +286,10 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
         </div>
       </header>
 
+      {/* Relevé du compte — seulement pour un compte agrégé : c'est la banque
+          qui le fournit, un actif saisi à la main n'a aucun mouvement à montrer. */}
+      {aggregated && <BankMovements asset={asset} />}
+
       {/* Positions — seulement pour les types qui en portent. Un livret ou un
           bien immobilier n'a pas de lignes : y proposer un formulaire de titres
           n'aurait aucun sens. */}
@@ -425,6 +449,219 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
         />
       )}
     </div>
+  );
+}
+
+/* ── Relevé d'un compte agrégé ─────────────────────────────────────────────
+   Fenêtres proposées. Elles ne redemandent RIEN à la banque : la requête
+   couvre déjà 90 jours (`TRANSACTIONS_WINDOW_DAYS`), les pastilles ne font que
+   recadrer ce qui est là — changer de période reste donc instantané.
+   ------------------------------------------------------------------------ */
+const MOVEMENT_PERIODS = [
+  { id: "1S", days: 7 },
+  { id: "1M", days: 30 },
+  { id: "3M", days: 90 },
+];
+
+/** Une icône par nature de mouvement : à l'œil, un relevé se parcourt par
+ *  colonne d'icônes bien avant de se lire ligne à ligne. */
+const KIND_ICONS = {
+  card: CreditCard,
+  transfer: ArrowLeftRight,
+  direct_debit: Repeat,
+  withdrawal: Banknote,
+  check: FileText,
+  fee: Receipt,
+  interest: Percent,
+  other: Landmark,
+};
+
+/** « mer. 13 août » — l'année n'apparaît que si le jour n'est pas de cette année. */
+function formatDay(iso) {
+  if (!iso) return "";
+  const d = parseDay(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      ...(sameYear ? null : { year: "numeric" }),
+    }).format(d);
+  } catch {
+    return iso;
+  }
+}
+
+/** Nombre de mouvements montrés avant dépliage. */
+const MOVEMENTS_FOLDED = 12;
+
+/**
+ * Courbe du solde et relevé d'un compte bancaire agrégé.
+ *
+ * La courbe est RECONSTRUITE à rebours depuis le solde courant (cf.
+ * `balanceSeries`) : la banque ne rend pas l'historique de ses soldes, seulement
+ * le solde du jour et les opérations. Elle est donc exacte aux opérations
+ * récupérées près — ce qui est le cas sur la fenêtre demandée.
+ */
+function BankMovements({ asset }) {
+  const uid = bankAssetUid(asset);
+  const { transactions, windowDays, loading, error } = useBankTransactions(uid);
+  const [period, setPeriod] = React.useState("3M");
+  const [expanded, setExpanded] = React.useState(false);
+
+  const days = MOVEMENT_PERIODS.find((p) => p.id === period)?.days ?? 90;
+  const balance = assetValue(asset);
+
+  const shown = React.useMemo(() => withinDays(transactions, days), [transactions, days]);
+  const points = React.useMemo(
+    () => balanceSeries(shown, balance, dayKey()),
+    [shown, balance],
+  );
+  const stats = React.useMemo(() => periodStats(shown), [shown]);
+  const groups = React.useMemo(
+    () => groupByDay(expanded ? shown : shown.slice(0, MOVEMENTS_FOLDED)),
+    [shown, expanded],
+  );
+
+  const color = styleOfType(asset.type).color;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <SectionTitle
+        size="sm"
+        action={<PeriodPills value={period} onChange={setPeriod} options={MOVEMENT_PERIODS} />}
+      >
+        {t("patrimoine.asset.movements")}
+      </SectionTitle>
+
+      {/* Un compte agrégé sans relevé n'est pas une anomalie : toutes les
+          banques n'ouvrent pas l'accès aux opérations, et un consentement expiré
+          se manifeste d'abord ici. On le dit, plutôt que de laisser un vide. */}
+      {error && (
+        <div role="alert" style={{ ...CARD, padding: 16, fontSize: 13, color: T.pnlNeg }}>
+          {t("patrimoine.asset.movementsError")} {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ ...CARD, padding: "32px 24px", textAlign: "center", fontSize: 14, color: T.textSub }}>
+          {t("patrimoine.asset.movementsLoading")}
+        </div>
+      ) : shown.length === 0 ? (
+        !error && (
+          <div style={{ ...CARD, padding: "32px 24px", textAlign: "center", fontSize: 14, color: T.textSub }}>
+            {t("patrimoine.asset.movementsEmpty")}
+          </div>
+        )
+      ) : (
+        <>
+          {/* Entrées, sorties, solde de la période : les trois chiffres que la
+              courbe ne donne pas d'un coup d'œil. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+            <MiniKpi label={t("patrimoine.asset.movementsIn")} value={fmt(stats.in, false)} tone={stats.in > 0 ? "pos" : undefined} />
+            <MiniKpi label={t("patrimoine.asset.movementsOut")} value={fmt(stats.out, false)} tone={stats.out < 0 ? "neg" : undefined} />
+            <MiniKpi
+              label={t("patrimoine.asset.movementsNet")}
+              value={fmt(stats.net, true)}
+              tone={stats.net > 0 ? "pos" : stats.net < 0 ? "neg" : undefined}
+            />
+            <MiniKpi label={t("patrimoine.asset.movementsCount")} value={String(shown.length)} />
+          </div>
+
+          <PnlChart points={points} color={color} />
+
+          <div style={{ fontSize: 12, color: T.textMut }}>
+            {t("patrimoine.asset.curveHint").replace("{days}", String(windowDays))}
+          </div>
+
+          {/* Le relevé, groupé par jour comme celui de la banque : la date est
+              portée une fois par groupe, pas répétée sur chaque ligne. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {groups.map((g) => (
+              <section key={g.date} data-card style={{ ...CARD, padding: 0 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  gap: 12, padding: "10px 20px", borderBottom: `1px solid ${T.border}`,
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: T.textSub }}>{formatDay(g.date)}</span>
+                  <span style={{ fontSize: 12, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                    {fmt(periodStats(g.items).net, true)}
+                  </span>
+                </div>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  {g.items.map((tx, i) => (
+                    <MovementRow key={tx.id} tx={tx} first={i === 0} />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+
+          {shown.length > MOVEMENTS_FOLDED && (
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <SectionAction onClick={() => setExpanded((v) => !v)}>
+                {expanded
+                  ? t("patrimoine.asset.movementsLess")
+                  : t("patrimoine.asset.movementsMore").replace("{n}", String(shown.length - MOVEMENTS_FOLDED))}
+              </SectionAction>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Une ligne de relevé : nature, libellé, et le montant signé à droite. */
+function MovementRow({ tx, first }) {
+  const Icon = KIND_ICONS[tx.kind] || KIND_ICONS.other;
+  const credit = tx.amount >= 0;
+  // La nature reste en sous-ligne avec le complément : deux informations de même
+  // rang, sous le libellé qui les porte.
+  const sub = [t(kindLabelKey(tx.kind)), tx.detail].filter(Boolean).join(" · ");
+
+  return (
+    <li style={{
+      display: "flex", alignItems: "center", gap: 12, padding: "12px 20px",
+      borderTop: first ? "none" : `1px solid ${T.border}`,
+    }}>
+      <span aria-hidden="true" style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 32, height: 32, flexShrink: 0, borderRadius: 999,
+        background: T.accentBg, color: T.textSub,
+      }}>
+        <Icon size={15} strokeWidth={1.75} />
+      </span>
+
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {tx.label || t(kindLabelKey(tx.kind))}
+        </span>
+        <span style={{ display: "block", fontSize: 12, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {sub}
+        </span>
+      </span>
+
+      {/* Une opération en attente n'est pas encore dans le solde de la banque —
+          et n'est donc pas non plus dans la courbe. Le dire ici évite de
+          chercher pourquoi les deux ne se répondent pas. */}
+      {tx.pending && (
+        <span style={{
+          flexShrink: 0, fontSize: 11, fontWeight: 500, color: T.amber,
+          background: T.amberBg, borderRadius: 999, padding: "2px 8px",
+        }}>
+          {t("patrimoine.asset.movementPending")}
+        </span>
+      )}
+
+      <span style={{
+        flexShrink: 0, fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+        color: credit ? T.pnlPos : T.text,
+      }}>
+        {fmt(tx.amount, true)}
+      </span>
+    </li>
   );
 }
 

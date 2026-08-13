@@ -8,6 +8,12 @@
  * - À chaque setValue : écrit localStorage immédiat + upsert Supabase debouncé.
  * - Écoute l'événement "focus" pour refetch après inactivité.
  * - Sans user connecté : fonctionne en localStorage uniquement.
+ *
+ * Le 3ᵉ élément retourné, `hydrated`, passe à `true` une fois la première
+ * lecture Supabase terminée (immédiatement s'il n'y a pas d'utilisateur). Il
+ * sert aux traitements DESTRUCTIFS (migrations qui suppriment des données) :
+ * les lancer avant l'hydratation les ferait travailler sur la valeur par défaut.
+ * Les usages simples continuent de déstructurer seulement `[value, setValue]`.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +24,7 @@ export function useCloudState<T>(
   storageKey: string,
   cloudKey: string,
   defaultValue: T
-): [T, (updater: T | ((prev: T) => T)) => void] {
+): [T, (updater: T | ((prev: T) => T)) => void, boolean] {
   const { user } = useAuth();
   const supabase = createClient();
 
@@ -34,6 +40,9 @@ export function useCloudState<T>(
     return defaultValue;
   });
 
+  // `hydrated` (ref) sert au flux interne ; `isHydrated` (state) est exposé aux
+  // appelants qui doivent attendre la vraie valeur avant d'agir dessus.
+  const [isHydrated, setIsHydrated] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = useRef(false);
   const dirty = useRef(false);
@@ -41,7 +50,7 @@ export function useCloudState<T>(
 
   // Fetch depuis Supabase au mount + sur focus
   useEffect(() => {
-    if (!user?.id) { hydrated.current = true; return; }
+    if (!user?.id) { hydrated.current = true; setIsHydrated(true); return; }
     let cancelled = false;
     const fetchCloud = async () => {
       // Ne jamais écraser des modifications locales non encore persistées
@@ -70,7 +79,7 @@ export function useCloudState<T>(
       } catch (e: any) {
         console.warn(`[useCloudState:${cloudKey}] load failed:`, e?.message || e);
       } finally {
-        if (!cancelled) hydrated.current = true;
+        if (!cancelled) { hydrated.current = true; setIsHydrated(true); }
       }
     };
     fetchCloud();
@@ -112,5 +121,5 @@ export function useCloudState<T>(
     });
   };
 
-  return [value, setValue];
+  return [value, setValue, isHydrated];
 }
