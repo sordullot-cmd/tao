@@ -18,6 +18,7 @@ import { accountBrandColor, assignSeriesColors } from "@/lib/ui/brandColors";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
 import { RoundLogo } from "@/components/ui/accountRows";
+import Popover from "@/components/ui/Popover";
 import { accountBrand, firmLogo } from "@/lib/accountBrand";
 import { AccountModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
@@ -706,14 +707,8 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
   const [error, setError] = React.useState("");
   const ref = React.useRef(null);
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [open]);
+  // Clic extérieur et Échap : gérés par le Popover, qui rend la liste hors de `ref`.
+  const close = React.useCallback(() => setOpen(false), []);
 
   const linked = firms.find((f) => f.id === account?.firm_id) || null;
 
@@ -750,17 +745,21 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
         {linked ? "Changer de prop firm" : "Relier à une prop firm"}
       </button>
 
-      {open && (
-        <div
-          role="listbox"
-          className="anim-pop"
-          style={{
-            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40,
-            minWidth: 240, maxHeight: 300, overflowY: "auto",
-            background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
-            boxShadow: "var(--elev-overlay)", padding: 6,
-          }}
-        >
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        align="end"
+        minWidth={240}
+        maxHeight={300}
+        role="listbox"
+        className="anim-pop"
+        style={{
+          background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
+          boxShadow: "var(--elev-overlay)", padding: 6,
+        }}
+      >
+        <>
           {error && (
             <div style={{ padding: "6px 8px", fontSize: 11.5, color: T.red, lineHeight: 1.4 }}>{error}</div>
           )}
@@ -817,8 +816,8 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
               </button>
             </>
           )}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

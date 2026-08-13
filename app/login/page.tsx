@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import {
+  createClient,
+  clearStaleSession,
+  isRefreshTokenError,
+} from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
 import { AlertTriangle } from "lucide-react";
 
@@ -30,10 +34,19 @@ export default function LoginPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data, error } = await supabase.auth.getSession();
+      // Sur la page de login, un token périmé doit simplement laisser
+      // l'utilisateur se reconnecter, storage nettoyé.
+      if (error) {
+        if (isRefreshTokenError(error)) await clearStaleSession();
+        return;
+      }
       if (data.session) router.push("/dashboard");
     };
-    checkAuth();
+    checkAuth().catch(async (error) => {
+      if (isRefreshTokenError(error)) await clearStaleSession();
+      else console.error("Error checking session:", error);
+    });
   }, [router, supabase.auth]);
 
   // Dans l'app desktop (Tauri), Google refuse l'OAuth lancé depuis une webview

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, BookOpen, Check, Trash2, Pencil, X, BookMarked, FileText, Library, ChevronDown } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { Stat } from "@/components/ui/Stat";
+import Popover from "@/components/ui/Popover";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
@@ -319,12 +320,8 @@ function miniBtn() { return { width: 24, height: 24, borderRadius: 6, border: `1
 function PrettySelect({ value, onChange, options }) {
   const [open, setOpen] = useState(false);
   const ref = React.useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  // Clic extérieur : géré par le Popover (liste portalisée hors de `ref`).
+  const close = React.useCallback(() => setOpen(false), []);
   const current = options.find(o => o.value === value) || options[0];
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -345,13 +342,19 @@ function PrettySelect({ value, onChange, options }) {
         </span>
         <ChevronDown size={14} strokeWidth={2} style={{ color: T.textSub, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }} />
       </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        gap={4}
+        matchAnchorWidth
+        maxHeight={260}
+        style={{
           background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
-          boxShadow: "var(--elev-overlay)",
-          padding: 4, maxHeight: 260, overflowY: "auto",
-        }}>
+          boxShadow: "var(--elev-overlay)", padding: 4,
+        }}
+      >
+        <>
           {options.map(o => {
             const selected = o.value === value;
             return (
@@ -375,8 +378,8 @@ function PrettySelect({ value, onChange, options }) {
               </button>
             );
           })}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

@@ -37,6 +37,7 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import MiniCalendar from "@/components/ui/MiniCalendar";
+import Popover from "@/components/ui/Popover";
 import { XpBar } from "@/components/ui/XpBar";
 import { TimeField } from "@/components/pages/AgendaDateFields";
 import { useApp } from "@/lib/contexts/AppContext";
@@ -992,12 +993,9 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
   const [open, setOpen] = useState(false);
   const [hov, setHov] = useState(false);
   const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
+  // Fermeture au clic extérieur : déléguée au Popover, dont le panneau est
+  // portalisé et n'appartient donc plus à `ref`.
+  const close = React.useCallback(() => setOpen(false), []);
   // En mode compact (des objectifs sont déjà rattachés), le déclencheur s'efface :
   // simple lien discret « + Ajouter », qui ne s'illumine qu'au survol ou à l'ouverture.
   return (
@@ -1016,8 +1014,19 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
           <Plus size={14} strokeWidth={2} color={T.textMut} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
         </button>
       )}
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)", maxHeight: 260, overflowY: "auto" }}>
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        gap={4}
+        /* En mode compact le déclencheur est un simple lien « + Ajouter » :
+           caler la liste sur sa largeur la rendrait illisible. */
+        matchAnchorWidth={!compact}
+        minWidth={220}
+        maxHeight={260}
+        style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}
+      >
+        <>
           {objectives.map(g => {
             const here = g.rpgCategory === catId;
             const elsewhere = !!g.rpgCategory && !here;
@@ -1038,8 +1047,8 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
               <Plus size={14} strokeWidth={2} /> Créer un objectif
             </button>
           )}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }
@@ -1154,15 +1163,12 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
   const [startTime, setStartTime] = useState(task?.startTime || "09:00");
   const [endTime, setEndTime] = useState(task?.endTime || "10:00");
   const [pickerOpen, setPickerOpen] = useState(false);
-  // Ancre du popover : le calendrier est rendu via un portail (position fixe) pour
-  // ne pas être rogné par l'`overflow` de la modale ; on mémorise la position du
-  // déclencheur au moment de l'ouverture.
+  // Ancre du popover. Le calendrier est portalisé pour ne pas être rogné par
+  // l'`overflow` de la modale ; le placement (suivi du déclencheur, bascule vers
+  // le haut, bornage à l'écran) est l'affaire du Popover — plus besoin de figer
+  // un rectangle à l'ouverture, qui devenait faux dès le premier défilement.
   const dateBtnRef = useRef(null);
-  const [anchorRect, setAnchorRect] = useState(null);
-  const openPicker = () => {
-    if (dateBtnRef.current) setAnchorRect(dateBtnRef.current.getBoundingClientRect());
-    setPickerOpen(o => !o);
-  };
+  const openPicker = () => setPickerOpen(o => !o);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   // On n'affiche le pont « connexion » qu'une fois l'état des tokens chargé.
@@ -1281,18 +1287,16 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
                 )}
               </div>
             )}
-            {/* Popover via portail (position fixe) : déborde librement au lieu d'être
-                coupé par le défilement/`overflow` de la modale. */}
-            {pickerOpen && anchorRect && ReactDOM.createPortal(
-              <div style={{ position: "fixed", top: anchorRect.bottom, left: anchorRect.left, width: anchorRect.width, zIndex: 11000 }}>
-                <MiniCalendar
-                  value={date ? new Date(`${date}T00:00:00`) : new Date()}
-                  onSelect={(d) => setDate(getLocalDateString(d))}
-                  onClose={() => setPickerOpen(false)}
-                  align="left"
-                />
-              </div>,
-              document.body
+            {/* Portalisé : déborde librement au lieu d'être coupé par le
+                défilement/`overflow` de la modale. */}
+            {pickerOpen && (
+              <MiniCalendar
+                anchorRef={dateBtnRef}
+                value={date ? new Date(`${date}T00:00:00`) : new Date()}
+                onSelect={(d) => setDate(getLocalDateString(d))}
+                onClose={() => setPickerOpen(false)}
+                align="left"
+              />
             )}
           </Field>
 

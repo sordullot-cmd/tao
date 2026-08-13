@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import ReactDOM from "react-dom";
+import Popover from "@/components/ui/Popover";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import {
@@ -1805,14 +1806,8 @@ function ExerciseNameCombobox({
 
   useEffect(() => { setActiveIdx(0); }, [q]);
 
-  useEffect(() => {
-    function onDocClick(e) {
-      if (!wrapRef.current) return;
-      if (!wrapRef.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  // Clic extérieur : géré par le Popover, la liste étant portalisée hors de `wrapRef`.
+  const close = React.useCallback(() => setOpen(false), []);
 
   const pick = (item) => {
     onPick?.(item);
@@ -1884,16 +1879,19 @@ function ExerciseNameCombobox({
         placeholder="Rechercher un exercice…"
         style={{ ...input(), borderRadius: 10, padding: "6px 10px", fontWeight: 500, width: "100%" }}
       />
-      {open && (matches.length > 0 || showAddRow) && (
-        <div
-          role="listbox"
-          style={{
-            position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
-            background: T.white, border: "none", borderRadius: 12,
-            boxShadow: "var(--elev-overlay)", zIndex: 100,
-            maxHeight: 280, overflowY: "auto", padding: 6, fontFamily: "var(--font-sans)",
-          }}
-        >
+      <Popover
+        anchorRef={wrapRef}
+        open={open && (matches.length > 0 || showAddRow)}
+        onClose={close}
+        matchAnchorWidth
+        maxHeight={280}
+        role="listbox"
+        style={{
+          background: T.white, border: "none", borderRadius: 12,
+          boxShadow: "var(--elev-overlay)", padding: 6, fontFamily: "var(--font-sans)",
+        }}
+      >
+        <>
           {matches.map((m, i) => {
             const cat = CATEGORIES.find(c => c.id === m.category) || CATEGORIES[4];
             const active = i === activeIdx;
@@ -2012,8 +2010,8 @@ function ExerciseNameCombobox({
               </button>
             </div>
           )}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }
@@ -2021,35 +2019,13 @@ function ExerciseNameCombobox({
 function DateField({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const btnRef = React.useRef(null);
-  const popRef = React.useRef(null);
-  const [rect, setRect] = useState(null);
   const [viewDate, setViewDate] = useState(() => {
     const d = value ? new Date(value + "T00:00:00") : new Date();
     return isNaN(d.getTime()) ? new Date() : d;
   });
-
-  useEffect(() => {
-    if (!open) { setRect(null); return; }
-    const update = () => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); };
-    update();
-    const onDoc = (e) => {
-      if ((popRef.current && popRef.current.contains(e.target)) ||
-          (btnRef.current && btnRef.current.contains(e.target))) return;
-      setOpen(false);
-    };
-    const onScroll = (e) => {
-      if (popRef.current && popRef.current.contains(e.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", update);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [open]);
+  // Placement et fermeture : Popover. Le calendrier suit son déclencheur au
+  // défilement au lieu de se fermer, et sa hauteur se borne à la place réelle.
+  const close = React.useCallback(() => setOpen(false), []);
 
   const label = value
     ? new Date(value + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
@@ -2076,26 +2052,14 @@ function DateField({ value, onChange }) {
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
         <Calendar size={13} strokeWidth={1.75} color={T.textSub} />
       </button>
-      {open && rect && typeof document !== "undefined" && ReactDOM.createPortal(
-        (() => {
-          const POPOVER_H = 320;
-          const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-          const vw = typeof window !== "undefined" ? window.innerWidth : 0;
-          const wouldOverflow = rect.bottom + POPOVER_H + 12 > vh;
-          const top = wouldOverflow ? Math.max(4, vh - POPOVER_H - 4) : rect.bottom + 6;
-          return (
-            <div ref={popRef} style={{ position: "fixed", top, left: Math.max(8, Math.min(rect.left, vw - 296)), zIndex: 10000 }}>
-              <MiniCalendar
-                value={value}
-                viewDate={viewDate}
-                setViewDate={setViewDate}
-                onPick={(iso) => { onChange(iso); setOpen(false); }}
-              />
-            </div>
-          );
-        })(),
-        document.body
-      )}
+      <Popover anchorRef={btnRef} open={open} onClose={close} maxHeight={360}>
+        <MiniCalendar
+          value={value}
+          viewDate={viewDate}
+          setViewDate={setViewDate}
+          onPick={(iso) => { onChange(iso); setOpen(false); }}
+        />
+      </Popover>
     </div>
   );
 }

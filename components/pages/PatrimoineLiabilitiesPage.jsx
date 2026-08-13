@@ -18,6 +18,7 @@ import { Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, SectionTitle, HeroAmount } from "@/components/ui/da";
+import AssetAvatar from "@/components/ui/AssetAvatar";
 import { AssetFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt } from "@/lib/ui/format";
 import {
@@ -148,17 +149,7 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
                             cursor: "pointer", fontFamily: "inherit", textAlign: "left",
                           }}
                         >
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                              background: cls?.chip.bg, color: cls?.chip.text,
-                              display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              fontSize: 11, fontWeight: 600,
-                            }}
-                          >
-                            {(a.name || "?").slice(0, 2).toUpperCase()}
-                          </span>
+                          <AssetAvatar asset={a} size={32} />
                           <span style={{ flex: 1, minWidth: 0 }}>
                             <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {a.name}

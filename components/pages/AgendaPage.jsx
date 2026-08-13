@@ -15,6 +15,7 @@ import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { DateField, TimeField } from "./AgendaDateFields";
 import MiniCalendar from "@/components/ui/MiniCalendar";
 import { FIELD_BG, PeriodPills, StepperPill } from "@/components/ui/da";
+import Popover from "@/components/ui/Popover";
 import {
   RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon,
   TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY,
@@ -513,6 +514,12 @@ export default function AgendaPage() {
   const [view, setView] = React.useState("week");
   const [cursor, setCursor] = React.useState(() => startOfDay(new Date()));
   const [datePickerOpen, setDatePickerOpen] = React.useState(false);
+  // Ancres des menus flottants : tous portalisés, il leur faut donc une
+  // référence explicite vers leur déclencheur pour se placer.
+  const datePickerAnchor = React.useRef(null);
+  const recurAnchor = React.useRef(null);
+  const colorAnchor = React.useRef(null);
+  const remindAnchor = React.useRef(null);
   // Horloge courante : sert à tracer la ligne « maintenant » et à griser le passé.
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
@@ -559,7 +566,10 @@ export default function AgendaPage() {
   React.useEffect(() => {
     if (!colorOpen && !remindOpen && !recurOpen) return;
     const onDown = (e) => {
-      if (e.target.closest?.("[data-menu-root]")) return;
+      // Les trois panneaux sont portalisés dans `document.body` : ils ne sont
+      // plus des descendants de leur `[data-menu-root]`, il faut donc les
+      // reconnaître à part sous peine de les fermer au premier clic dedans.
+      if (e.target.closest?.("[data-menu-root]") || e.target.closest?.("[data-popover-panel]")) return;
       setColorOpen(false);
       setRemindOpen(false);
       setRecurOpen(false);
@@ -1205,7 +1215,7 @@ export default function AgendaPage() {
           {/* Flèches + période dans la pastille de la page Calendrier, au lieu
               de deux chevrons nus suivis d'un libellé isolé. Le libellé garde son
               rôle de déclencheur du sélecteur de date (`onLabel`). */}
-          <div style={{ position: "relative", display: "inline-flex" }}>
+          <div ref={datePickerAnchor} style={{ position: "relative", display: "inline-flex" }}>
             <StepperPill
               label={monthYearLabel(view, cursor)}
               onPrev={() => setCursor(shiftCursor(view, cursor, -1))}
@@ -1215,6 +1225,7 @@ export default function AgendaPage() {
             />
             {datePickerOpen && (
               <MiniCalendar
+                anchorRef={datePickerAnchor}
                 value={cursor}
                 onSelect={(d) => setCursor(startOfDay(d))}
                 onClose={() => setDatePickerOpen(false)}
@@ -1226,7 +1237,7 @@ export default function AgendaPage() {
       )}
       {/* Mobile : pas de flèches ; le libellé ouvre le sélecteur de date. */}
       {connected && isMobile && (
-        <div style={{ position: "relative", display: "inline-flex" }}>
+        <div ref={datePickerAnchor} style={{ position: "relative", display: "inline-flex" }}>
           <button
             onClick={() => setDatePickerOpen((o) => !o)}
             title="Choisir une date"
@@ -1241,6 +1252,7 @@ export default function AgendaPage() {
           </button>
           {datePickerOpen && (
             <MiniCalendar
+              anchorRef={datePickerAnchor}
               value={cursor}
               onSelect={(d) => setCursor(startOfDay(d))}
               onClose={() => setDatePickerOpen(false)}
@@ -1778,13 +1790,21 @@ export default function AgendaPage() {
               {/* Récurrence (évènements uniquement — masquée en mode tâche) */}
               {!(modal.kind === "task" || modalTab === "tasks") && (
                 <FormRow icon={Repeat}>
-                  <div data-menu-root style={{ position: "relative" }}>
+                  <div ref={recurAnchor} data-menu-root style={{ position: "relative" }}>
                     <button type="button" onClick={() => { setRecurOpen((o) => !o); setColorOpen(false); setRemindOpen(false); }} style={pillBtn}>
                       {recurrenceLabel(modal.recur)}
                       <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                     </button>
-                    {recurOpen && (
-                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 240, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}>
+                    <Popover
+                      anchorRef={recurAnchor}
+                      open={recurOpen}
+                      closeOnOutside={false}
+                      gap={4}
+                      minWidth={240}
+                      maxHeight={380}
+                      style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+                    >
+                      <>
                         {RECUR_PRESETS.map((p) => {
                           const selected = (modal.recur?.preset || "once") === p.id;
                           return (
@@ -1870,8 +1890,8 @@ export default function AgendaPage() {
                             </div>
                           </div>
                         )}
-                      </div>
-                    )}
+                      </>
+                    </Popover>
                   </div>
                 </FormRow>
               )}
@@ -1904,33 +1924,47 @@ export default function AgendaPage() {
 
               {/* Couleur */}
               <FormRow icon={CalendarIcon}>
-                <div data-menu-root style={{ position: "relative" }}>
+                <div ref={colorAnchor} data-menu-root style={{ position: "relative" }}>
                   <button type="button" onClick={() => { setColorOpen((o) => !o); setRemindOpen(false); }} style={pillBtn}>
                     <span style={{ width: 14, height: 14, borderRadius: "50%", background: modal.colorId ? GCAL_COLORS[modal.colorId] : DEFAULT_EVENT_COLOR, display: "inline-block" }} />
                     Couleur
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                   </button>
-                  {colorOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+                  <Popover
+                    anchorRef={colorAnchor}
+                    open={colorOpen}
+                    closeOnOutside={false}
+                    gap={4}
+                    style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}
+                  >
+                    <>
                       <button type="button" onClick={() => { setModal({ ...modal, colorId: null }); setColorOpen(false); }} title="Par défaut" style={{ width: 24, height: 24, borderRadius: "50%", background: DEFAULT_EVENT_COLOR, border: modal.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
                       {Object.entries(GCAL_COLORS).map(([id, hex]) => (
                         <button key={id} type="button" onClick={() => { setModal({ ...modal, colorId: id }); setColorOpen(false); }} title={`Couleur ${id}`}
                           style={{ width: 24, height: 24, borderRadius: "50%", background: hex, border: String(modal.colorId) === id ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
                       ))}
-                    </div>
-                  )}
+                    </>
+                  </Popover>
                 </div>
               </FormRow>
 
               {/* Notification — bouton moderne + menu */}
               <FormRow icon={Bell}>
-                <div data-menu-root style={{ position: "relative" }}>
+                <div ref={remindAnchor} data-menu-root style={{ position: "relative" }}>
                   <button type="button" onClick={() => { setRemindOpen((o) => !o); setColorOpen(false); }} style={pillBtn}>
                     {REMINDER_OPTS.find((r) => String(r.v) === String(modal.reminder))?.label || "Notification"}
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                   </button>
-                  {remindOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 200, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}>
+                  <Popover
+                    anchorRef={remindAnchor}
+                    open={remindOpen}
+                    closeOnOutside={false}
+                    gap={4}
+                    minWidth={200}
+                    maxHeight={300}
+                    style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+                  >
+                    <>
                       {REMINDER_OPTS.map((r) => {
                         const selected = String(r.v) === String(modal.reminder);
                         return (
@@ -1943,8 +1977,8 @@ export default function AgendaPage() {
                           </button>
                         );
                       })}
-                    </div>
-                  )}
+                    </>
+                  </Popover>
                 </div>
               </FormRow>
 

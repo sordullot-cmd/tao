@@ -21,6 +21,7 @@ import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { BackLink, CARD, HeroAmount, SectionTitle } from "@/components/ui/da";
+import AssetAvatar from "@/components/ui/AssetAvatar";
 import { bankAccountToAsset, isBankAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { ConfirmModal } from "@/components/modals/AccountModals";
 import { AssetFormModal } from "@/components/modals/PatrimoineModals";
@@ -30,7 +31,6 @@ import {
   assetGain,
   assetTypeKey,
   assetValue,
-  classOfType,
   holdingCost,
   holdingGain,
   holdingGainPct,
@@ -116,7 +116,6 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
     );
   }
 
-  const cls = classOfType(asset.type);
   const holdings = Array.isArray(asset.holdings) ? asset.holdings : [];
   const value = assetValue(asset);
   const gain = assetGain(asset);
@@ -206,17 +205,9 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
       <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span
-              aria-hidden="true"
-              style={{
-                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-                background: cls.chip.bg, color: cls.chip.text,
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: 600,
-              }}
-            >
-              {(asset.name || "?").slice(0, 2).toUpperCase()}
-            </span>
+            {/* Le logo de l'établissement quand on l'a — la fiche s'ouvre alors
+                sur ce qu'on reconnaît, pas sur deux lettres. */}
+            <AssetAvatar asset={asset} size={36} />
             <div style={{ minWidth: 0 }}>
               <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: T.text }}>{asset.name}</h1>
               <div style={{ fontSize: 13, color: T.textSub }}>

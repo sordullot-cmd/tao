@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import ReactDOM from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import Popover from "@/components/ui/Popover";
 
 /* ─────────────── Helpers date (autonomes, alignés sur AgendaPage) ─────────────── */
 const WEEKDAYS_MIN = ["L", "M", "M", "J", "V", "S", "D"];
@@ -51,12 +51,8 @@ export function DateField({ value, min, onChange }) {
     if (open) setMonth(new Date(selected.getFullYear(), selected.getMonth(), 1));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [open]);
+  // Clic extérieur : confié au Popover (le panneau est portalisé).
+  const close = React.useCallback(() => setOpen(false), []);
 
   const today = startOfDay(new Date());
   const minDate = min ? new Date(`${min}T00:00:00`) : null;
@@ -70,8 +66,14 @@ export function DateField({ value, min, onChange }) {
         {value ? formatDateLong(value) : "Choisir une date"}
         <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
       </button>
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 20, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 12, boxShadow: "var(--elev-overlay)", width: 252 }}>
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        maxHeight={360}
+        style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 12, boxShadow: "var(--elev-overlay)", width: 252 }}
+      >
+        <>
           {/* En-tête mois + navigation */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Mois précédent" style={calNavBtn}>
@@ -113,58 +115,39 @@ export function DateField({ value, min, onChange }) {
               );
             })}
           </div>
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }
 
 /* ─────────────── Champ heure : déclencheur + liste maison ───────────────
- * `portal` : rend la liste via un portail en position fixe (ancrée sous le
- * déclencheur) pour qu'elle ne soit pas rognée par un conteneur à `overflow`
- * (ex. une modale scrollable). Comportement d'origine conservé sans la prop. */
-export function TimeField({ value, onChange, placeholder = "", triggerStyle, portal = false }) {
+ * La liste est toujours portalisée (Popover) : elle ne peut plus être rognée
+ * par un conteneur à `overflow`, modale défilante comprise. La prop `portal`
+ * subsiste pour ne pas casser les appels existants, mais n'a plus d'effet. */
+export function TimeField({ value, onChange, placeholder = "", triggerStyle }) {
   const [open, setOpen] = React.useState(false);
-  const [rect, setRect] = React.useState(null);
   const ref = React.useRef(null);
   const listRef = React.useRef(null);
 
-  React.useEffect(() => {
-    if (!open) return;
-    // Ferme si le clic est hors du déclencheur ET hors de la liste (la liste peut
-    // être portaillée, donc hors de `ref`).
-    const onDown = (e) => {
-      if (!ref.current?.contains(e.target) && !listRef.current?.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [open]);
+  const close = React.useCallback(() => setOpen(false), []);
 
   // À l'ouverture, fait défiler la liste jusqu'à l'heure sélectionnée.
   React.useEffect(() => {
     if (!open || !listRef.current) return;
     const sel = listRef.current.querySelector("[data-sel='1']");
-    if (sel) sel.scrollIntoView({ block: "center" });
+    // `nearest` et non `center` : depuis un portail, `center` recadrerait aussi
+    // la page derrière le popover.
+    if (sel) sel.scrollIntoView({ block: "nearest" });
   }, [open]);
 
   // Créneaux par pas de 15 min sur 24 h.
   const slots = Array.from({ length: 96 }, (_, i) => `${pad(Math.floor(i / 4))}:${pad((i % 4) * 15)}`);
 
-  const toggle = () => {
-    if (!open && portal && ref.current) setRect(ref.current.getBoundingClientRect());
-    setOpen((o) => !o);
-  };
+  const toggle = () => setOpen((o) => !o);
 
   const list = (
-    <div ref={listRef}
-      style={{
-        position: portal ? "fixed" : "absolute",
-        top: portal ? (rect ? rect.bottom + 6 : 0) : "calc(100% + 6px)",
-        left: portal ? (rect ? rect.left : 0) : 0,
-        zIndex: portal ? 11000 : 20,
-        background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6,
-        boxShadow: "var(--elev-overlay)", width: 110, maxHeight: 240, overflowY: "auto",
-      }}>
+    <>
       {slots.map((s) => {
         const isSel = s === value;
         return (
@@ -180,7 +163,7 @@ export function TimeField({ value, onChange, placeholder = "", triggerStyle, por
           </button>
         );
       })}
-    </div>
+    </>
   );
 
   return (
@@ -189,7 +172,18 @@ export function TimeField({ value, onChange, placeholder = "", triggerStyle, por
         <span style={{ color: value ? T.text : T.textMut }}>{value || placeholder}</span>
         <ChevronDown size={14} color={T.textMut} style={{ marginLeft: triggerStyle ? "auto" : 2 }} />
       </button>
-      {open && (portal ? ReactDOM.createPortal(list, document.body) : list)}
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        maxHeight={240}
+        style={{
+          background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6,
+          boxShadow: "var(--elev-overlay)", width: 110,
+        }}
+      >
+        <div ref={listRef}>{list}</div>
+      </Popover>
     </div>
   );
 }

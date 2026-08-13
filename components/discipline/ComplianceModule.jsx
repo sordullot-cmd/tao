@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { CARD } from "@/components/ui/da";
+import Popover from "@/components/ui/Popover";
 import {
   computeStats, describeRule, isRuleLive, RULE_LOCK_MS, computeJournaledDates,
 } from "@/lib/compliance";
@@ -45,17 +46,8 @@ function RuleTypeDropdown({ value, onChange }) {
   const selected = RULE_TYPES.find(r => r.value === value) || RULE_TYPES[0];
   const SelIcon = selected.Icon;
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // Fermeture confiée au Popover : la liste est portalisée, donc hors de `ref`.
+  const close = React.useCallback(() => setOpen(false), []);
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -100,20 +92,22 @@ function RuleTypeDropdown({ value, onChange }) {
         />
       </button>
 
-      {open && (
-        <div
-          role="listbox"
-          style={{
-            position: "absolute", zIndex: 50, top: "calc(100% + 6px)", left: 0, right: 0,
-            background: T.white,
-            border: `1px solid ${T.border}`,
-            borderRadius: "var(--radius-card)",
-            boxShadow: "var(--elev-overlay)",
-            padding: 6,
-            maxHeight: 320,
-            overflowY: "auto",
-          }}
-        >
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        matchAnchorWidth
+        maxHeight={320}
+        role="listbox"
+        style={{
+          background: T.white,
+          border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-card)",
+          boxShadow: "var(--elev-overlay)",
+          padding: 6,
+        }}
+      >
+        <>
           {RULE_TYPES.map(rt => {
             const Ic = rt.Icon;
             const isSel = rt.value === value;
@@ -156,8 +150,8 @@ function RuleTypeDropdown({ value, onChange }) {
               </button>
             );
           })}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

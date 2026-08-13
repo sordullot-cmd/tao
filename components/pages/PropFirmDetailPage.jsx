@@ -44,6 +44,7 @@ import {
   readFundedMeta,
 } from "@/lib/propFirms";
 import { RoundLogo, AddAccountsButton } from "@/components/ui/accountRows";
+import Popover from "@/components/ui/Popover";
 import {
   CARD, SectionTitle, SectionAction, HeroAmount, MiniKpi, StatsCard,
   PeriodPills, windowSeries, AGGREGATE_CURVE_COLOR, PnlChart, msOf, BackLink,
@@ -870,20 +871,17 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
   const ref = React.useRef(null);
   const triggerRef = React.useRef(null);
 
+  // Le Popover assure la fermeture (clic extérieur, Échap).
+  const close = React.useCallback(() => setOpen(false), []);
+
+  // Échap seulement : le focus revient sur le déclencheur pour ne pas perdre la
+  // navigation clavier. Un clic extérieur, lui, désigne déjà une autre cible —
+  // lui reprendre le focus serait hostile.
   React.useEffect(() => {
     if (!open) return;
-    const onPointer = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => {
-      if (e.key !== "Escape") return;
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-    document.addEventListener("mousedown", onPointer);
+    const onKey = (e) => { if (e.key === "Escape") triggerRef.current?.focus(); };
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
   const choose = (fn) => { setOpen(false); fn(); };
@@ -918,18 +916,21 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
         />
       </button>
 
-      {open && (
-        // `anim-pop` naît du coin haut-gauche, c'est-à-dire du déclencheur.
-        <div
-          role="menu"
-          className="anim-pop"
-          style={{
-            position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60,
-            minWidth: 260, maxHeight: 320, overflowY: "auto",
-            background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
-            boxShadow: T.elevCard, padding: 4,
-          }}
-        >
+      {/* `anim-pop` naît du coin haut-gauche, c'est-à-dire du déclencheur. */}
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        minWidth={260}
+        maxHeight={320}
+        role="menu"
+        className="anim-pop"
+        style={{
+          background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
+          boxShadow: T.elevCard, padding: 4,
+        }}
+      >
+        <>
           {accounts.length === 0 ? (
             <div style={{ padding: "10px 10px", fontSize: 13, color: T.textMut }}>
               {t("firms.noAccountYet")}
@@ -1020,8 +1021,8 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
               </button>
             </>
           )}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { T } from "@/lib/ui/tokens";
+import Popover from "@/components/ui/Popover";
 
 const MONTHS = [
   "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
@@ -26,15 +27,21 @@ const navBtn = {
  * Contrôlé par le parent : monté quand ouvert, fermé via `onClose`
  * (clic à l'extérieur ou Échap). `value` est la date sélectionnée (Date),
  * `onSelect(Date)` est appelé au clic sur un jour. `align` ancre le popover
- * à gauche ou à droite du conteneur relatif parent.
+ * à gauche ou à droite de l'ancre.
+ *
+ * `anchorRef` désigne le déclencheur ; le calendrier est alors portalisé et
+ * échappe à tout ancêtre qui découpe (barre d'outils, carte, corps de modale).
+ * Sans lui, on retombe sur l'ancien placement absolu dans le conteneur relatif
+ * parent — conservé pour les appels qui n'ont pas de référence à donner.
  */
-export default function MiniCalendar({ value, onSelect, onClose, align = "left" }) {
+export default function MiniCalendar({ value, onSelect, onClose, align = "left", anchorRef = null }) {
   const initial = value instanceof Date && !isNaN(value) ? value : new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
   const ref = useRef(null);
 
   useEffect(() => {
+    if (anchorRef) return; // le Popover s'en charge
     const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose?.(); };
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
     document.addEventListener("mousedown", onDown);
@@ -43,7 +50,7 @@ export default function MiniCalendar({ value, onSelect, onClose, align = "left" 
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   const today = new Date();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -64,16 +71,14 @@ export default function MiniCalendar({ value, onSelect, onClose, align = "left" 
 
   const pick = (d) => { onSelect?.(new Date(viewYear, viewMonth, d)); onClose?.(); };
 
-  return (
-    <div
-      ref={ref}
-      style={{
-        position: "absolute", top: "calc(100% + 6px)", [align]: 0, zIndex: 11000,
-        background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
-        padding: 12, width: 244, boxShadow: "var(--elev-overlay)",
-        fontFamily: "var(--font-sans)",
-      }}
-    >
+  const panelStyle = {
+    background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
+    padding: 12, width: 244, boxShadow: "var(--elev-overlay)",
+    fontFamily: "var(--font-sans)",
+  };
+
+  const body = (
+    <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <button onClick={prevMonth} aria-label="Mois précédent" style={navBtn}
           onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
@@ -117,6 +122,30 @@ export default function MiniCalendar({ value, onSelect, onClose, align = "left" 
           );
         })}
       </div>
+    </>
+  );
+
+  if (anchorRef) {
+    return (
+      <Popover
+        anchorRef={anchorRef}
+        open
+        onClose={onClose}
+        align={align === "right" ? "end" : "start"}
+        maxHeight={340}
+        style={panelStyle}
+      >
+        {body}
+      </Popover>
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      style={{ position: "absolute", top: "calc(100% + 6px)", [align]: 0, zIndex: 11000, ...panelStyle }}
+    >
+      {body}
     </div>
   );
 }

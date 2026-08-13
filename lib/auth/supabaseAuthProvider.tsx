@@ -1,7 +1,11 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import {
+  createClient,
+  clearStaleSession,
+  isRefreshTokenError,
+} from "@/lib/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -35,11 +39,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+        // Token de rafraîchissement périmé : ce n'est pas une panne, juste une
+        // session à jeter. On purge le storage pour ne pas rejouer l'erreur au
+        // prochain chargement, et on repart en état déconnecté.
+        if (error && isRefreshTokenError(error)) {
+          await clearStaleSession();
+          if (cancelled) return;
+          setSession(null);
+          setUser(null);
+          return;
+        }
         if (error) throw error;
         if (cancelled) return;
         setSession(session);
         setUser(session?.user ?? null);
       } catch (error) {
+        if (isRefreshTokenError(error)) {
+          await clearStaleSession();
+          if (!cancelled) {
+            setSession(null);
+            setUser(null);
+          }
+          return;
+        }
         console.error("Error getting session:", error);
       } finally {
         if (!cancelled) setLoading(false);
@@ -60,9 +82,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // l'app a été inactive longtemps et que le token a pu expirer pendant
     // que le navigateur dormait.
     const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        supabase.auth.getSession();
-      }
+      if (document.visibilityState !== "visible") return;
+      // Le refresh déclenché ici peut échouer si le token a été révoqué
+      // pendant la mise en veille : on purge plutôt que de laisser une
+      // promesse rejetée non traitée.
+      supabase.auth
+        .getSession()
+        .then(({ error }) => {
+          if (error && isRefreshTokenError(error)) return clearStaleSession();
+        })
+        .catch((error) => {
+          if (isRefreshTokenError(error)) return clearStaleSession();
+          console.error("Error refreshing session:", error);
+        });
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onVisibility);

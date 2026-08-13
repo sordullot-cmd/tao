@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { User, Settings as LucideSettings, Moon, Sun, LogOut } from "lucide-react";
+import Popover from "@/components/ui/Popover";
 
 function menuItemStyle() {
   return {
@@ -16,11 +17,8 @@ export default function TopBarUserMenu({ user, onProfile, onSettings, onDarkMode
   const [open, setOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const ref = useRef(null);
-  useEffect(() => {
-    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+  // Fermeture (clic extérieur, Échap) déléguée au Popover, qui vit hors de `ref`.
+  const close = useCallback(() => setOpen(false), []);
   useEffect(() => {
     const sync = () => setIsDark(document.documentElement.dataset.theme === "dark");
     sync();
@@ -51,13 +49,21 @@ export default function TopBarUserMenu({ user, onProfile, onSettings, onDarkMode
         }}>{user.initials}</div>
         <span style={{ fontSize: 14, fontWeight: 600 }}>{firstName}</span>
       </button>
-      {open && (
-        <div role="menu" style={{
-          position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 200,
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        gap={4}
+        align="end"
+        minWidth={200}
+        role="menu"
+        style={{
           background: "#FFFFFF", border: "1px solid #E5E5E5", borderRadius: 10,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.10)", padding: 4, zIndex: 100,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.10)", padding: 4,
           fontFamily: "var(--font-sans)",
-        }}>
+        }}
+      >
+        <>
           {onProfile && (
             <button onClick={() => { setOpen(false); onProfile(); }} style={menuItemStyle()}>
               <User size={14} strokeWidth={1.75} /><span>Profil</span>
@@ -105,8 +111,8 @@ export default function TopBarUserMenu({ user, onProfile, onSettings, onDarkMode
               <LogOut size={14} strokeWidth={1.75} /><span>Se déconnecter</span>
             </button>
           )}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

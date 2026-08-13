@@ -24,7 +24,7 @@ import { t, useLang } from "@/lib/i18n";
 import {
   AllocationChart, CARD, SectionTitle, HeroAmount, PeriodPills, PnlChart, TH,
 } from "@/components/ui/da";
-import { RoundLogo } from "@/components/ui/accountRows";
+import AssetAvatar from "@/components/ui/AssetAvatar";
 import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt } from "@/lib/ui/format";
 import {
@@ -523,23 +523,11 @@ function ClassSection({ cls, assets, total, positiveTotal, onOpenClass, onOpenAs
                     onMouseLeave={(e) => { e.currentTarget.style.background = T.bg; }}
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: 10, flex: 2, minWidth: 0 }}>
-                      {/* Logo de l'établissement pour un compte agrégé ; à défaut,
-                          les initiales sur la teinte de la classe. */}
-                      {a.logo ? (
-                        <RoundLogo src={a.logo} size={32} name={a.institution || a.name} />
-                      ) : (
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                            background: cls.chip.bg, color: cls.chip.text,
-                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 11, fontWeight: 600,
-                          }}
-                        >
-                          {(a.name || "?").slice(0, 2).toUpperCase()}
-                        </span>
-                      )}
+                      {/* Logo de l'établissement quand on le connaît — un actif
+                          saisi à la main y a droit aussi : son établissement
+                          suffit à le reconnaître. À défaut, les initiales sur la
+                          teinte de la classe. */}
+                      <AssetAvatar asset={a} size={32} />
                       <span style={{ minWidth: 0 }}>
                         <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {a.name}

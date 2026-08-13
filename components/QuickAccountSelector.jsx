@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { ChevronDown, ChevronUp, Search, Check, Plus, Pencil, Trash2, X } from "lucide-react";
+import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
 
 // Map id (lowercase) → chemin du logo. Utilisé pour afficher l'icône à gauche
@@ -104,17 +105,12 @@ export default function QuickAccountSelector({
     if (!open) { setConfirmingId(null); setEditingId(null); }
   }, [open]);
 
-  // Click outside
-  useEffect(() => {
-    const onClick = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setOpen(false);
-        setEditingId(null);
-        setConfirmingId(null);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+  // Click outside — délégué au Popover : la liste est portalisée hors de
+  // `containerRef`, qui ne peut donc plus servir de test de descendance.
+  const closeMenu = React.useCallback(() => {
+    setOpen(false);
+    setEditingId(null);
+    setConfirmingId(null);
   }, []);
 
   const resolveBrokerIcon = (broker) => {
@@ -319,18 +315,23 @@ export default function QuickAccountSelector({
       })()}
 
       {/* Dropdown */}
-      {open && (
-        <div
-          role="listbox"
-          style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-            background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)", borderRadius: 10,
-            boxShadow: "var(--elev-overlay)", zIndex: 100,
-            display: "flex", flexDirection: "column", overflow: "hidden",
-          }}
-        >
+      <Popover
+        anchorRef={containerRef}
+        open={open}
+        onClose={closeMenu}
+        gap={4}
+        matchAnchorWidth
+        scroll={false}
+        maxHeight={340}
+        role="listbox"
+        style={{
+          background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)", borderRadius: 10,
+          boxShadow: "var(--elev-overlay)",
+        }}
+      >
+        <>
           {/* Search / Create input */}
-          <div style={{ padding: 8, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
+          <div style={{ flexShrink: 0, padding: 8, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px" }}>
               <Search size={13} color="var(--color-text-muted)" />
               <input
@@ -354,7 +355,7 @@ export default function QuickAccountSelector({
           </div>
 
           {/* Liste */}
-          <div className="scroll-thin" style={{ overflowY: "auto", maxHeight: 280, padding: 4 }}>
+          <div className="scroll-thin" style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", maxHeight: 280, padding: 4 }}>
             {/* Option Créer (apparaît dynamiquement quand la requête ne matche aucun compte) */}
             {showCreate && (
               <button
@@ -545,8 +546,8 @@ export default function QuickAccountSelector({
               );
             })}
           </div>
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

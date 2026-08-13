@@ -12,6 +12,7 @@ import React from "react";
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
+import Popover from "@/components/ui/Popover";
 
 /** Carte blanche : coins 12, ombre très douce, pas de bordure. */
 export const CARD = {
@@ -719,14 +720,9 @@ export function windowSeries(points, periodId, getDate = p => p.date) {
 export function TableFilter({ label, value, options, onChange, multi = false, neutral = false }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
-  React.useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [open]);
+  // Clic extérieur et Échap : délégués au Popover, qui sait que son panneau
+  // n'est plus un descendant du déclencheur.
+  const close = React.useCallback(() => setOpen(false), []);
 
   const selected = multi ? (Array.isArray(value) ? value : []) : value;
   const active = neutral
@@ -763,17 +759,21 @@ export function TableFilter({ label, value, options, onChange, multi = false, ne
           style={{transform: open ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 140ms var(--ease-out, ease)"}}
         />
       </button>
-      {open && (
-        <div
-          role="listbox"
-          className="anim-pop"
-          style={{
-            position:"absolute", top:"calc(100% + 8px)", left:0, zIndex:40,
-            minWidth:200, maxHeight:280, overflowY:"auto",
-            background:T.white, borderRadius:12, boxShadow:"var(--elev-overlay)",
-            border:`1px solid ${T.border}`, padding:6,
-          }}
-        >
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        gap={8}
+        minWidth={200}
+        maxHeight={280}
+        role="listbox"
+        className="anim-pop"
+        style={{
+          background:T.white, borderRadius:12, boxShadow:"var(--elev-overlay)",
+          border:`1px solid ${T.border}`, padding:6,
+        }}
+      >
+        <>
           {!multi && (
             <FilterOption
               label="Tous"
@@ -802,8 +802,8 @@ export function TableFilter({ label, value, options, onChange, multi = false, ne
           {multi && active && (
             <FilterOption label="Tout effacer" onClick={() => { onChange?.([]); setOpen(false); }} />
           )}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

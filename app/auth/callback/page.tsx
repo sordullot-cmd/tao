@@ -2,7 +2,11 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import {
+  createClient,
+  clearStaleSession,
+  isRefreshTokenError,
+} from "@/lib/supabase/client";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -14,6 +18,13 @@ export default function AuthCallbackPage() {
         // Get the session from the URL
         const { data, error } = await supabase.auth.getSession();
 
+        // Ancienne session périmée dans le storage : on la purge et on
+        // renvoie vers le login plutôt que d'afficher une erreur.
+        if (error && isRefreshTokenError(error)) {
+          await clearStaleSession();
+          router.push("/login");
+          return;
+        }
         if (error) throw error;
 
         if (data.session) {

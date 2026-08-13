@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import ReactDOM from "react-dom";
+import Popover from "@/components/ui/Popover";
 import {
   Plus, Target, Trash2, Pencil, Copy, Pin, Check, X, TrendingUp, Heart,
   ChevronDown, ChevronRight, Calendar, AlertCircle, Flag, Sparkles,
@@ -1697,30 +1697,9 @@ function DeadlineField({ value, onChange }) {
 
   const [calOpen, setCalOpen] = useState(false);
   const calBtnRef = React.useRef(null);
-  const calPopRef = React.useRef(null);
-  const [calRect, setCalRect] = useState(null);
-  useEffect(() => {
-    if (!calOpen) { setCalRect(null); return; }
-    const update = () => { if (calBtnRef.current) setCalRect(calBtnRef.current.getBoundingClientRect()); };
-    update();
-    const onDoc = (e) => {
-      if ((calPopRef.current && calPopRef.current.contains(e.target)) ||
-          (calBtnRef.current && calBtnRef.current.contains(e.target))) return;
-      setCalOpen(false);
-    };
-    const onScroll = (e) => {
-      if (calPopRef.current && calPopRef.current.contains(e.target)) return;
-      setCalOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", update);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [calOpen]);
+  // Placement et fermeture : Popover. Le calendrier n'a plus besoin de se
+  // fermer au défilement — il suit désormais son déclencheur au lieu de rester
+  // figé où il avait été posé.
 
   // État du mois affiché dans le popover
   const [viewDate, setViewDate] = useState(() => {
@@ -1758,26 +1737,24 @@ function DeadlineField({ value, onChange }) {
           style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${T.border}`, background: calOpen ? T.accentBg : T.white, color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
           <Calendar size={13} strokeWidth={1.75} />
         </button>
-        {calOpen && calRect && typeof document !== "undefined" && ReactDOM.createPortal(
-          (() => {
-            const POPOVER_H = 320;
-            const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-            const wouldOverflow = calRect.bottom + POPOVER_H + 12 > vh;
-            const top = wouldOverflow ? Math.max(4, vh - POPOVER_H - 4) :calRect.bottom + 6;
-            return (
-              <div ref={calPopRef}
-                style={{ position: "fixed", top, right: Math.max(8, (typeof window !== "undefined" ? window.innerWidth : 0) - calRect.right), zIndex: 10000 }}>
-                <MiniCalendar
-                  value={value}
-                  viewDate={viewDate}
-                  setViewDate={setViewDate}
-                  onPick={(iso) => { onChange(iso); setCalOpen(false); }}
-                />
-              </div>
-            );
-          })(),
-          document.body
-        )}
+        <Popover
+          anchorRef={calBtnRef}
+          open={calOpen}
+          onClose={() => setCalOpen(false)}
+          align="end"
+          maxHeight={360}
+          style={{
+            width: 280, background: T.white, border: `1px solid ${T.border}`,
+            borderRadius: "var(--radius-card)", boxShadow: "var(--elev-overlay)", padding: 12,
+          }}
+        >
+          <MiniCalendar
+            value={value}
+            viewDate={viewDate}
+            setViewDate={setViewDate}
+            onPick={(iso) => { onChange(iso); setCalOpen(false); }}
+          />
+        </Popover>
       </div>
     </StackField>
   );
@@ -1805,12 +1782,10 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
   const goPrev = () => setViewDate(new Date(year, month - 1, 1));
   const goNext = () => setViewDate(new Date(year, month + 1, 1));
 
+  /* Panneau nu : le placement (ancrage, bascule, bornage) appartient au Popover
+     qui l'enveloppe, plus au calendrier lui-même. */
   return (
-    <div style={{
-      position: "absolute", top: "calc(100% + 6px)", right: 0,
-      width: 280, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
-      boxShadow: "var(--elev-overlay)", zIndex: 200, padding: 12,
-    }}>
+    <>
       {/* Header mois */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <button type="button" onClick={goPrev}
@@ -1861,7 +1836,7 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1978,40 +1953,12 @@ function DropdownItem({ option: o, active, onSelect, renderOption }) {
 function FancyDropdown({ value, options, onChange, renderValue, renderOption, align = "right" }) {
   const [open, setOpen] = useState(false);
   const btnRef = React.useRef(null);
-  const menuRef = React.useRef(null);
-  const [rect, setRect] = useState(null);
-  useEffect(() => {
-    if (!open) { setRect(null); return; }
-    const update = () => {
-      if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
-    };
-    update();
-    const onDoc = (e) => {
-      if ((menuRef.current && menuRef.current.contains(e.target)) ||
-          (btnRef.current && btnRef.current.contains(e.target))) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [open]);
+  // Placement, suivi du défilement, bascule vers le haut et bornage à l'écran :
+  // tout est passé au Popover. L'ancienne version portalisait déjà, mais gardait
+  // une hauteur de 320 px quelle que soit la place disponible — en bas de page,
+  // la fin de la liste sortait sous la fenêtre.
+  const close = React.useCallback(() => setOpen(false), []);
   const selected = options.find(o => o.id === value) || options[0];
-  const menuStyle = rect ? {
-    position: "fixed",
-    top: rect.bottom + 6,
-    minWidth: Math.max(200, rect.width),
-    background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
-    boxShadow: "var(--elev-overlay)",
-    padding: 4, zIndex: 10000, maxHeight: 320, overflowY: "auto",
-    ...(align === "left"
-      ? { left: rect.left }
-      : { right: Math.max(8, (typeof window !== "undefined" ? window.innerWidth : 0) - rect.right) }),
-  } : null;
   return (
     <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
       <button ref={btnRef} type="button" onClick={() => setOpen(v => !v)}
@@ -2027,15 +1974,24 @@ function FancyDropdown({ value, options, onChange, renderValue, renderOption, al
         <ChevronDown size={14} strokeWidth={1.75} color={T.textMut}
           style={{ transition: "transform .15s", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }} />
       </button>
-      {open && rect && typeof document !== "undefined" && ReactDOM.createPortal(
-        <div ref={menuRef} style={menuStyle}>
-          <DropdownBody
-            options={options} value={value} renderOption={renderOption}
-            onSelect={(id) => { onChange(id); setOpen(false); }}
-          />
-        </div>,
-        document.body
-      )}
+      <Popover
+        anchorRef={btnRef}
+        open={open}
+        onClose={close}
+        align={align === "left" ? "start" : "end"}
+        minWidth={200}
+        atLeastAnchorWidth
+        maxHeight={320}
+        style={{
+          background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
+          boxShadow: "var(--elev-overlay)", padding: 4,
+        }}
+      >
+        <DropdownBody
+          options={options} value={value} renderOption={renderOption}
+          onSelect={(id) => { onChange(id); setOpen(false); }}
+        />
+      </Popover>
     </div>
   );
 }
@@ -2063,35 +2019,12 @@ function countSubtasks(arr) {
 function DateChip({ value, onChange, placeholder = "Date" }) {
   const [open, setOpen] = useState(false);
   const btnRef = React.useRef(null);
-  const popRef = React.useRef(null);
-  const [rect, setRect] = useState(null);
   const [viewDate, setViewDate] = useState(() => {
     const d = value ? new Date(value + "T00:00:00") : new Date();
     return isNaN(d.getTime()) ? new Date() : d;
   });
-  useEffect(() => {
-    if (!open) { setRect(null); return; }
-    const update = () => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); };
-    update();
-    const onDoc = (e) => {
-      if ((popRef.current && popRef.current.contains(e.target)) ||
-          (btnRef.current && btnRef.current.contains(e.target))) return;
-      setOpen(false);
-    };
-    const onScroll = (e) => {
-      // On laisse passer le scroll interne du popover lui-même.
-      if (popRef.current && popRef.current.contains(e.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", update);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [open]);
+  // Placement et fermeture : Popover.
+  const close = React.useCallback(() => setOpen(false), []);
 
   const label = value
     ? new Date(value + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })
@@ -2115,28 +2048,24 @@ function DateChip({ value, onChange, placeholder = "Date" }) {
             style={{ marginLeft: 2, color: T.textMut, fontSize: 11, lineHeight: 1 }}>×</span>
         )}
       </button>
-      {open && rect && typeof document !== "undefined" && ReactDOM.createPortal(
-        (() => {
-          // Si le calendrier débordait par le bas de la fenêtre, on le colle
-          // juste au-dessus de la fin de la page (8 px de marge).
-          const POPOVER_H = 320;
-          const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-          const wouldOverflow = rect.bottom + POPOVER_H + 12 > vh;
-          const top = wouldOverflow ? Math.max(4, vh - POPOVER_H - 4) : rect.bottom + 6;
-          return (
-            <div ref={popRef} onClick={(e) => e.stopPropagation()}
-              style={{ position: "fixed", top, left: rect.left, zIndex: 10000 }}>
-              <MiniCalendar
-                value={value}
-                viewDate={viewDate}
-                setViewDate={setViewDate}
-                onPick={(iso) => { onChange(iso); setOpen(false); }}
-              />
-            </div>
-          );
-        })(),
-        document.body
-      )}
+      <Popover
+        anchorRef={btnRef}
+        open={open}
+        onClose={close}
+        maxHeight={360}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 280, background: T.white, border: `1px solid ${T.border}`,
+          borderRadius: "var(--radius-card)", boxShadow: "var(--elev-overlay)", padding: 12,
+        }}
+      >
+        <MiniCalendar
+          value={value}
+          viewDate={viewDate}
+          setViewDate={setViewDate}
+          onPick={(iso) => { onChange(iso); setOpen(false); }}
+        />
+      </Popover>
     </div>
   );
 }

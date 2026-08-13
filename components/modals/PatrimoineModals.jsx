@@ -16,13 +16,18 @@
  */
 
 import React from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Star } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { ModalShell, Field, TextInput, PrimaryBtn, GhostBtn } from "@/components/modals/AccountModals";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import ComboInput from "@/components/ui/ComboInput";
+import { bankLogo } from "@/lib/bank/bankLogos";
+import { institutionLogo, useBankInstitutions } from "@/lib/bank/useBankInstitutions";
 import { ASSET_TYPES, assetTypeKey, newAssetId, usePatrimoine } from "@/lib/patrimoine";
+import { useFavoriteBanks } from "@/lib/bank/useFavoriteBanks";
+import { startBankConnection } from "@/lib/bank/startConnection";
 
 const EMPTY_FORM = { name: "", type: "pea", balance: "", institution: "" };
 
@@ -34,6 +39,11 @@ const EMPTY_FORM = { name: "", type: "pea", balance: "", institution: "" };
 export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) {
   useLang();
   const [, setStore] = usePatrimoine();
+  /* Même catalogue que la connexion bancaire — d'où le logo. Le champ reste
+     LIBRE : la liste des banques d'un pays ne contient ni le courtier, ni
+     l'organisme d'un crédit auto, ni la personne qui a prêté l'apport. */
+  const { institutions, loading: loadingBanks } = useBankInstitutions();
+  const { isFavorite } = useFavoriteBanks();
   const isEdit = !!asset;
   const [form, setForm] = React.useState(() =>
     asset
@@ -51,6 +61,21 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
 
   const isLoan = form.type === "loan";
 
+  /* Favoris en tête, puis alphabétique : même ordre que le sélecteur de la
+     connexion bancaire, pour que « sa » banque se trouve au même endroit dans
+     les deux formulaires. */
+  const bankOptions = React.useMemo(
+    () =>
+      [...institutions]
+        .sort((a, b) => {
+          const fa = isFavorite(a.id), fb = isFavorite(b.id);
+          if (fa !== fb) return fa ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        })
+        .map((inst) => ({ id: inst.id, label: inst.name, iconUrl: bankLogo(inst.name, inst.logo) })),
+    [institutions, isFavorite],
+  );
+
   const submit = () => {
     const name = form.name.trim();
     if (!name) return setError(t("patrimoine.assets.errName"));
@@ -66,17 +91,24 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
     const updatedAt = new Date().toISOString();
     const id = asset?.id || newAssetId();
 
+    /* Le logo suit le NOM saisi, qu'il ait été cliqué dans la liste ou tapé.
+       Le repli conserve celui déjà enregistré quand l'établissement n'a pas
+       changé : sans lui, modifier le montant d'un crédit alors que le catalogue
+       est momentanément injoignable ferait disparaître son logo. */
+    const sameInstitution = isEdit && (asset.institution || "") === (institution || "");
+    const logo = institutionLogo(institutions, institution) || (sameInstitution ? asset.logo ?? null : null);
+
     setStore((s) => {
       const list = Array.isArray(s.assets) ? s.assets : [];
       if (!isEdit) {
         return {
           ...s,
-          assets: [...list, { id, name, type: form.type, balance, institution, updatedAt, holdings: [] }],
+          assets: [...list, { id, name, type: form.type, balance, institution, logo, updatedAt, holdings: [] }],
         };
       }
       return {
         ...s,
-        assets: list.map((a) => (a.id === id ? { ...a, name, type: form.type, balance, institution, updatedAt } : a)),
+        assets: list.map((a) => (a.id === id ? { ...a, name, type: form.type, balance, institution, logo, updatedAt } : a)),
       };
     });
     onSaved?.(id);
@@ -110,11 +142,18 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
         />
       </Field>
 
-      <Field label={t("patrimoine.assets.fieldInstitution")}>
-        <TextInput
+      <Field
+        label={t("patrimoine.assets.fieldInstitution")}
+        hint={bankOptions.length > 0 ? t("patrimoine.assets.institutionHint") : undefined}
+      >
+        <ComboInput
           value={form.institution}
           onChange={(v) => setForm({ ...form, institution: v })}
+          options={bankOptions}
+          loading={loadingBanks}
           placeholder={t("patrimoine.assets.phInstitution")}
+          ariaLabel={t("patrimoine.assets.fieldInstitution")}
+          emptyLabel={t("patrimoine.assets.institutionFree")}
         />
       </Field>
 
@@ -154,49 +193,75 @@ export function AssetFormModal({ asset = null, defaultType, onClose, onSaved }) 
  */
 export function BankFormModal({ onClose }) {
   useLang();
-  const [institutions, setInstitutions] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [loadError, setLoadError] = React.useState(null);
+  /* Le catalogue vient du cache partagé (`useBankInstitutions`) : le même que
+     celui du champ « établissement » d'un actif. Ouvrir la modale ne relance
+     donc pas l'appel réseau à chaque fois. */
+  const { institutions, loading, error: loadError } = useBankInstitutions();
   const [selected, setSelected] = React.useState("");
   const [connecting, setConnecting] = React.useState(false);
   const [connectError, setConnectError] = React.useState(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const resp = await fetch("/api/bank/institutions");
-        const data = await resp.json();
-        if (cancelled) return;
-        setInstitutions(Array.isArray(data.institutions) ? data.institutions : []);
-        setLoadError(data.error || null);
-      } catch (err) {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Erreur réseau");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const { isFavorite, toggle: toggleFavorite } = useFavoriteBanks();
 
   const connect = async () => {
     if (!selected) return;
     setConnectError(null);
     setConnecting(true);
     try {
-      const resp = await fetch("/api/bank/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ institution: selected }),
-      });
-      const data = await resp.json();
-      if (!resp.ok || !data.link) throw new Error(data.error || "Impossible de démarrer la connexion.");
-      window.location.href = data.link;
+      // Rend la main uniquement en cas d'échec : sinon la page entière est quittée.
+      await startBankConnection(selected);
     } catch (err) {
       setConnecting(false);
       setConnectError(err instanceof Error ? err.message : "Erreur inconnue");
     }
   };
+
+  /* Options du sélecteur : favoris en tête, puis alphabétique. Même parti pris
+     que les courtiers favoris du formulaire d'import (AddTradePage) — l'étoile
+     est un `role="button"` et non un `<button>`, car la ligne de l'option EST
+     déjà un bouton et l'imbrication est invalide. */
+  const options = (() => {
+    const sorted = [...institutions].sort((a, b) => {
+      const fa = isFavorite(a.id), fb = isFavorite(b.id);
+      if (fa !== fb) return fa ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    return sorted.map((inst) => {
+      const fav = isFavorite(inst.id);
+      const label = fav ? t("patrimoine.bank.removeFav") : t("patrimoine.bank.addFav");
+      return {
+        id: inst.id,
+        label: inst.name,
+        iconUrl: bankLogo(inst.name, inst.logo) || undefined,
+        accessory: (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label={label}
+            aria-pressed={fav}
+            title={label}
+            onClick={() => toggleFavorite(inst)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFavorite(inst); }
+            }}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 22, height: 22, borderRadius: 4,
+              background: "transparent", cursor: "pointer", padding: 0,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <Star
+              size={13}
+              strokeWidth={1.75}
+              color={fav ? T.amber : T.textMut}
+              fill={fav ? T.amber : "none"}
+            />
+          </span>
+        ),
+      };
+    });
+  })();
 
   return (
     <ModalShell
@@ -219,11 +284,11 @@ export function BankFormModal({ onClose }) {
         </div>
       )}
 
-      <Field label={t("patrimoine.bank.chooseBank")}>
+      <Field label={t("patrimoine.bank.chooseBank")} hint={t("patrimoine.bank.favHint")}>
         <SearchableSelect
           value={selected}
           onChange={setSelected}
-          options={institutions.map((inst) => ({ id: inst.id, label: inst.name }))}
+          options={options}
           placeholder={loading ? t("patrimoine.bank.loadingBanks") : t("patrimoine.bank.select")}
           searchPlaceholder={t("patrimoine.bank.select")}
           searchable

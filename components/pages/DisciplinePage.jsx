@@ -31,6 +31,7 @@ import { useDailySessionNotes } from "@/lib/hooks/useDailySessionNotes";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
 import { describeRule, isRuleLive, computeStats, computeJournaledDates } from "@/lib/compliance";
 import { CARD } from "@/components/ui/da";
+import Popover from "@/components/ui/Popover";
 
 function reorder(arr, from, to) {
   const next = [...arr];
@@ -588,23 +589,8 @@ export default function DisciplinePage({ trades = [] }) {
     setHeatmapVersion(v => v + 1);
   };
   const routineDoneCount = ROUTINE_ITEMS.reduce((n, it) => n + (routineChecks[it.id] ? 1 : 0), 0);
-  // Ferme la popover au clic extérieur / Esc.
-  useEffect(() => {
-    if (!showRoutinePopover) return;
-    const onKey = (e) => { if (e.key === "Escape") setShowRoutinePopover(false); };
-    const onClick = (e) => {
-      const pop = document.getElementById("tr4de-routine-popover");
-      if (pop && pop.contains(e.target)) return;
-      if (routineBtnRef.current && routineBtnRef.current.contains(e.target)) return;
-      setShowRoutinePopover(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onClick);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onClick);
-    };
-  }, [showRoutinePopover]);
+  // Fermeture (clic extérieur, Échap) : Popover.
+  const closeRoutinePopover = React.useCallback(() => setShowRoutinePopover(false), []);
   const [heatmapVersion, setHeatmapVersion] = useState(0);
   // Historique des checklists de routine, indexé par date, MÉMOÏSÉ.
   // Auparavant reconstruit dans le rendu de la heatmap en balayant tout
@@ -997,27 +983,25 @@ export default function DisciplinePage({ trades = [] }) {
                   : <ChevronDown size={14} strokeWidth={2} color={T.textMut} />}
               </button>
 
-              {showRoutinePopover && (
-                <div
-                  id="tr4de-routine-popover"
-                  role="listbox"
-                  style={{
-                    position:"absolute",
-                    top:"calc(100% + 4px)",
-                    left:0,
-                    right:0,
-                    minWidth:280,
-                    background:T.white,
-                    border:`1px solid ${T.border}`,
-                    borderRadius:"var(--radius-modal)",
-                    boxShadow:"var(--elev-overlay)",
-                    zIndex:100,
-                    overflow:"hidden",
-                    display:"flex",
-                    flexDirection:"column",
-                    padding:4,
-                  }}
-                >
+              <Popover
+                anchorRef={routineBtnRef}
+                open={showRoutinePopover}
+                onClose={closeRoutinePopover}
+                gap={4}
+                minWidth={280}
+                atLeastAnchorWidth
+                maxHeight={420}
+                id="tr4de-routine-popover"
+                role="listbox"
+                style={{
+                  background:T.white,
+                  border:`1px solid ${T.border}`,
+                  borderRadius:"var(--radius-modal)",
+                  boxShadow:"var(--elev-overlay)",
+                  padding:4,
+                }}
+              >
+                <>
                   <div style={{
                     display:"flex", alignItems:"center", justifyContent:"space-between",
                     padding:"4px 6px 4px 10px",
@@ -1160,9 +1144,8 @@ export default function DisciplinePage({ trades = [] }) {
                       </React.Fragment>
                     );
                   })}
-
-                </div>
-              )}
+                </>
+              </Popover>
             </div>
             <div id="tr4de-page-header-slot" />
           </div>

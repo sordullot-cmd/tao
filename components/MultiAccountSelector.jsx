@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import ReactDOM from "react-dom";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import Popover from "@/components/ui/Popover";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
 
@@ -18,19 +19,11 @@ export default function MultiAccountSelector({
   const [deleting, setDeleting] = useState(false);
   const menuRef = useRef(null);
 
-  useEffect(() => {
-    function handleClickOutside(event) {
-      // Si la modale de confirmation est ouverte, on ne ferme pas le dropdown
-      // (sinon la modale est unmount avant que l'utilisateur ne clique sur
-      // Annuler / Supprimer). La modale gère sa propre fermeture.
-      if (confirmDelete) return;
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [confirmDelete]);
+  // Fermeture au clic extérieur : gérée par le Popover. Elle est suspendue tant
+  // que la modale de confirmation est ouverte — sinon le clic dans cette modale
+  // (elle aussi portalisée, donc « extérieure ») démonterait le menu avant que
+  // l'utilisateur ait pu répondre.
+  const closeMenu = React.useCallback(() => setIsOpen(false), []);
 
   const handleToggleAccount = (accountId) => {
     let updatedIds;
@@ -100,25 +93,23 @@ export default function MultiAccountSelector({
       </button>
 
       {/* Dropdown menu */}
-      {isOpen && (
-        <div
-          role="listbox"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            background: "var(--color-card-bg, #FFFFFF)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-modal)",
-            boxShadow: "var(--elev-overlay)",
-            zIndex: 100,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            padding: 4,
-          }}
-        >
+      <Popover
+        anchorRef={menuRef}
+        open={isOpen}
+        onClose={closeMenu}
+        closeOnOutside={!confirmDelete}
+        gap={4}
+        matchAnchorWidth
+        role="listbox"
+        style={{
+          background: "var(--color-card-bg, #FFFFFF)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-modal)",
+          boxShadow: "var(--elev-overlay)",
+          padding: 4,
+        }}
+      >
+        <>
           {/* Tous les comptes */}
           {accounts.length > 0 && (
             <label
@@ -263,8 +254,8 @@ export default function MultiAccountSelector({
               </button>
             </>
           )}
-        </div>
-      )}
+        </>
+      </Popover>
 
       {/* Modale de confirmation suppression — rendue au root du composant
           (et non dans le dropdown) pour ne pas être unmount quand le

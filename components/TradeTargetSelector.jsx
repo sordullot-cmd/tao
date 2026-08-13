@@ -18,6 +18,7 @@
 import React from "react";
 import { ChevronDown, ChevronUp, Search, Check, Wallet } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
 import { firmLogo, accountLogo } from "@/lib/accountBrand";
 
@@ -77,13 +78,8 @@ export default function TradeTargetSelector({
   const [query, setQuery] = React.useState("");
   const ref = React.useRef(null);
 
-  React.useEffect(() => {
-    const onClickOutside = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  // Clic extérieur : géré par le Popover, seul à connaître son panneau portalisé.
+  const close = React.useCallback(() => setOpen(false), []);
 
   React.useEffect(() => { if (!open) setQuery(""); }, [open]);
 
@@ -174,13 +170,21 @@ export default function TradeTargetSelector({
         {open ? <ChevronUp size={14} color={T.textMut} /> : <ChevronDown size={14} color={T.textMut} />}
       </button>
 
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        gap={4}
+        matchAnchorWidth
+        scroll={false}
+        maxHeight={340}
+        style={{
           background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)", borderRadius: 10,
-          boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", overflow: "hidden",
-        }}>
-          <div style={{ padding: 8, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
+          boxShadow: "var(--elev-overlay)",
+        }}
+      >
+        <>
+          <div style={{ flexShrink: 0, padding: 8, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
               <Search size={13} color={T.textMut} />
               <input
@@ -199,7 +203,7 @@ export default function TradeTargetSelector({
             </div>
           </div>
 
-          <div className="scroll-thin" style={{ overflowY: "auto", maxHeight: 300, padding: 4 }}>
+          <div className="scroll-thin" style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", maxHeight: 300, padding: 4 }}>
             {nothingAtAll && (
               <button
                 type="button"
@@ -229,8 +233,8 @@ export default function TradeTargetSelector({
               />
             ))}
           </div>
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

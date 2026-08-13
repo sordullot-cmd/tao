@@ -14,6 +14,7 @@ import React from "react";
 import { ChevronDown, Trophy, Plus, Link2 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { CARD, TH } from "@/components/ui/da";
+import Popover from "@/components/ui/Popover";
 import { t } from "@/lib/i18n";
 
 /* Géométrie des colonnes — reprise de la maquette (nom 170 px avec sa gouttière,
@@ -345,30 +346,21 @@ export function TableRow({
   );
 }
 
-/* Ouverture d'un petit menu ancré : clic extérieur et Échap le referment.
+/* Ouverture d'un petit menu ancré. Le clic extérieur et Échap sont désormais
+   l'affaire du Popover : le panneau étant portalisé, un test de descendance sur
+   le déclencheur le tiendrait pour « extérieur » et le fermerait avant le clic.
    Partagé par les deux déclencheurs d'ajout de compte (ligne de liste et
    pastille de barre d'actions), qui ne diffèrent que par leur habillage. */
 function useAnchoredMenu() {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
-  React.useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
   return { open, setOpen, ref };
 }
 
 /* Les deux façons de garnir la liste d'une firme, dans l'ordre où on les
    cherche : créer un compte, ou récupérer un compte qui existe déjà (saisi
    avant la firme, ou hors firme). */
-function AddAccountsMenu({ align = "left", onCreate, onAttach, onDone }) {
+function AddAccountsMenu({ anchorRef, open, align = "left", onCreate, onAttach, onDone }) {
   const item = {
     width: "100%", display: "flex", alignItems: "center", gap: 8,
     padding: "8px 10px", minHeight: 36, borderRadius: 8, border: "none",
@@ -378,13 +370,16 @@ function AddAccountsMenu({ align = "left", onCreate, onAttach, onDone }) {
   };
   const choose = (fn) => { onDone?.(); fn?.(); };
   return (
-    <div
+    <Popover
+      anchorRef={anchorRef}
+      open={open}
+      onClose={onDone}
+      align={align === "right" ? "end" : "start"}
+      minWidth={236}
       role="menu"
       className="anim-pop"
       style={{
-        position: "absolute", top: "calc(100% + 6px)", zIndex: 40,
-        [align === "right" ? "right" : "left"]: 0,
-        minWidth: 236, background: T.white, border: `1px solid ${T.border}`,
+        background: T.white, border: `1px solid ${T.border}`,
         borderRadius: 12, boxShadow: "var(--elev-overlay)", padding: 6,
       }}
     >
@@ -402,7 +397,7 @@ function AddAccountsMenu({ align = "left", onCreate, onAttach, onDone }) {
         <Link2 size={14} strokeWidth={2} style={{ flexShrink: 0 }} />
         {t("firms.attachAccount")}
       </button>
-    </div>
+    </Popover>
   );
 }
 
@@ -461,9 +456,7 @@ export function AddAccountRow({ onClick, label, icon, onAttach }) {
   return (
     <div ref={ref} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
       {trigger}
-      {open && (
-        <AddAccountsMenu onCreate={onClick} onAttach={onAttach} onDone={() => setOpen(false)} />
-      )}
+      <AddAccountsMenu anchorRef={ref} open={open} onCreate={onClick} onAttach={onAttach} onDone={() => setOpen(false)} />
     </div>
   );
 }
@@ -495,9 +488,7 @@ export function AddAccountsButton({ onCreate, onAttach }) {
           style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms var(--ease-out, ease)" }}
         />
       </button>
-      {open && (
-        <AddAccountsMenu align="right" onCreate={onCreate} onAttach={onAttach} onDone={() => setOpen(false)} />
-      )}
+      <AddAccountsMenu anchorRef={ref} open={open} align="right" onCreate={onCreate} onAttach={onAttach} onDone={() => setOpen(false)} />
     </div>
   );
 }

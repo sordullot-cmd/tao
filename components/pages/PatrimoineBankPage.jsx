@@ -16,13 +16,16 @@
  */
 
 import React from "react";
-import { Check, Plus, RefreshCw, Unlink, X } from "lucide-react";
+import { Check, Loader2, Plus, RefreshCw, Star, Unlink, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, SectionTitle } from "@/components/ui/da";
 import { RoundLogo } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
+import { bankLogo, bankMatchKey } from "@/lib/bank/bankLogos";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
+import { useFavoriteBanks } from "@/lib/bank/useFavoriteBanks";
+import { startBankConnection } from "@/lib/bank/startConnection";
 import { BankFormModal } from "@/components/modals/PatrimoineModals";
 
 /** Jours restants avant expiration du consentement — négatif s'il est expiré. */
@@ -51,6 +54,24 @@ export default function PatrimoineBankPage({ setPage }) {
      sur la banque, pas sur le compte — d'où l'avertissement quand plusieurs
      comptes en dépendent. */
   const [confirmingId, setConfirmingId] = React.useState(null);
+  /* Favoris : les banques qu'on reconnecte régulièrement (un consentement DSP2
+     expire). Ils s'offrent ici en connexion directe, sans passer par le
+     sélecteur de quelques centaines d'établissements. */
+  const { favorites, toggle: toggleFavorite } = useFavoriteBanks();
+  const [connectingFav, setConnectingFav] = React.useState(null);
+  const [favError, setFavError] = React.useState(null);
+
+  const connectFavorite = async (fav) => {
+    setFavError(null);
+    setConnectingFav(fav.id);
+    try {
+      // Ne rend la main qu'en cas d'échec : sinon la page part chez la banque.
+      await startBankConnection(fav.id);
+    } catch (err) {
+      setConnectingFav(null);
+      setFavError(err instanceof Error ? err.message : "Erreur inconnue");
+    }
+  };
 
   const total = accounts.reduce((s, a) => s + a.balance, 0);
 
@@ -94,6 +115,35 @@ export default function PatrimoineBankPage({ setPage }) {
             </button>
           )}
         </div>
+
+        {/* Banques favorites — connexion en un geste. Elles sont AU-DESSUS des
+            comptes agrégés : c'est une action de départ, pas une donnée à lire.
+            Rien ne s'affiche sans favori : une section vide n'apprendrait rien,
+            l'étoile se découvre dans le sélecteur. */}
+        {configured && favorites.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <SectionTitle size="sm">{t("patrimoine.bank.favorites")}</SectionTitle>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {favorites.map((fav) => (
+                <FavoriteBankChip
+                  key={fav.id}
+                  fav={fav}
+                  connecting={connectingFav === fav.id}
+                  busy={connectingFav !== null}
+                  /* Comparaison sur la clé du nom, pas sur l'égalité stricte :
+                     le favori a pu être mémorisé sous une graphie voisine de
+                     celle que la connexion a enregistrée. */
+                  connected={connections.some((c) => bankMatchKey(c.aspsp_name) === bankMatchKey(fav.id))}
+                  onConnect={() => connectFavorite(fav)}
+                  onRemove={() => toggleFavorite(fav)}
+                />
+              ))}
+            </div>
+            {favError && (
+              <div role="alert" style={{ fontSize: 13, color: T.pnlNeg }}>{favError}</div>
+            )}
+          </div>
+        )}
 
         {/* Déploiement sans identifiants : inutile de proposer un formulaire qui
             échouera — on dit ce qui manque. */}
@@ -155,7 +205,7 @@ export default function PatrimoineBankPage({ setPage }) {
 
                 return (
                   <li key={a.id} data-card style={{ ...CARD, padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-                    <RoundLogo src={a.logo} size={36} name={a.institution} />
+                    <RoundLogo src={bankLogo(a.institution, a.logo)} size={36} name={a.institution} />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {a.name}
@@ -250,6 +300,73 @@ export default function PatrimoineBankPage({ setPage }) {
 
       {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
     </div>
+  );
+}
+
+/**
+ * Raccourci vers une banque favorite : la connecter (ou renouveler son
+ * consentement) en un geste.
+ *
+ * Les deux actions sont des boutons FRÈRES dans une pastille, jamais imbriqués :
+ * le `scale` d'appui de globals.css rétrécit le bouton parent sous le curseur et
+ * le relâchement tombe alors à côté de l'enfant — le retrait du favori ne
+ * répondrait qu'aux extrémités de l'étoile.
+ */
+function FavoriteBankChip({ fav, connecting, busy, connected, onConnect, onRemove }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 2,
+        border: `1px solid ${T.border}`, borderRadius: 999,
+        padding: "3px 6px 3px 4px", background: T.white,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onConnect}
+        // Pendant une redirection, tout le reste doit se taire : la page part.
+        disabled={busy}
+        title={t("patrimoine.bank.connectFav").replace("{name}", fav.name)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 8, minHeight: 30,
+          padding: "0 6px", border: "none", borderRadius: 999,
+          background: "transparent", color: T.text, fontSize: 13, fontWeight: 500,
+          cursor: busy ? "default" : "pointer", fontFamily: "inherit",
+          opacity: busy && !connecting ? 0.5 : 1,
+        }}
+      >
+        {connecting
+          ? <Loader2 size={20} strokeWidth={1.75} className="anim-spin" />
+          : <RoundLogo src={bankLogo(fav.name, fav.logo)} size={20} name={fav.name} />}
+        <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {fav.name}
+        </span>
+        {/* Déjà connectée : le geste reste offert (un consentement se renouvelle),
+            mais il ne doit pas se faire à l'aveugle — sans ce repère, un clic de
+            plus ajoute une seconde connexion à la même banque. */}
+        {connected && !connecting && (
+          <span style={{ fontSize: 11, color: T.textMut }}>{t("patrimoine.bank.favConnected")}</span>
+        )}
+      </button>
+
+      <button
+        type="button"
+        data-no-press
+        onClick={onRemove}
+        aria-label={t("patrimoine.bank.removeFav")}
+        title={t("patrimoine.bank.removeFav")}
+        style={{
+          width: 24, height: 24, borderRadius: 999, border: "none", flexShrink: 0,
+          background: "transparent", cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          transition: "background 120ms ease",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+      >
+        <Star size={13} strokeWidth={1.75} color={T.amber} fill={T.amber} />
+      </button>
+    </span>
   );
 }
 

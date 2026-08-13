@@ -16,6 +16,7 @@ import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { BackLink, CARD, HeroAmount, TH } from "@/components/ui/da";
 import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
+import AssetAvatar from "@/components/ui/AssetAvatar";
 import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { fmt } from "@/lib/ui/format";
 import {
@@ -157,17 +158,7 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
                     }}
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: 10, flex: 2, minWidth: 0 }}>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                          background: cls.chip.bg, color: cls.chip.text,
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 11, fontWeight: 600,
-                        }}
-                      >
-                        {(a.name || "?").slice(0, 2).toUpperCase()}
-                      </span>
+                      <AssetAvatar asset={a} size={32} />
                       <span style={{ minWidth: 0 }}>
                         <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {a.name}

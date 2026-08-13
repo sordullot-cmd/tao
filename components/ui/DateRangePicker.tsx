@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import Popover from "@/components/ui/Popover";
 
 export interface DateRange {
   start: string; // YYYY-MM-DD
@@ -170,22 +171,9 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
     }
   }, [open, value.start, value.end]);
 
-  // Close on outside click
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
-
-  // Fermeture au clavier (Échap)
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
+  // Clic extérieur et Échap : gérés par le Popover, qui rend le panneau hors
+  // de `containerRef`.
+  const close = React.useCallback(() => setOpen(false), []);
 
   const pickDate = (d: Date) => {
     if (!draftStart || (draftStart && draftEnd)) {
@@ -257,22 +245,23 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
         <span style={{ whiteSpace: "nowrap" }}>{fmtRange(value.start, value.end)}</span>
       </button>
 
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            right: 0,
-            background: "var(--color-card-bg, #FFFFFF)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-modal)",
-            boxShadow: "var(--elev-overlay)",
-            zIndex: 100,
-            display: "flex",
-            overflow: "hidden",
-            minWidth: "min(680px, calc(100vw - 24px))",
-          }}
-        >
+      <Popover
+        anchorRef={containerRef}
+        open={open}
+        onClose={close}
+        align="end"
+        scroll={false}
+        maxHeight={520}
+        style={{
+          background: "var(--color-card-bg, #FFFFFF)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-modal)",
+          boxShadow: "var(--elev-overlay)",
+          flexDirection: "row",
+          minWidth: "min(680px, calc(100vw - 24px))",
+        }}
+      >
+        <>
           {/* Presets */}
           <div style={{ width: 130, borderRight: "1px solid var(--color-border)", padding: 8, display: "flex", flexDirection: "column", gap: 2, background: "var(--color-hover-bg, #FAFAFA)" }}>
             {PRESETS.map((p) => (
@@ -368,8 +357,8 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

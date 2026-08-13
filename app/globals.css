@@ -668,6 +668,29 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
   scrollbar-color: rgba(0, 0, 0, 0.14) transparent;
 }
 
+/* ---------------------------------------------------------------------------
+   Hauteur des modales : viewport VISIBLE, pas viewport théorique.
+
+   `vh` ignore la barre d'URL des navigateurs mobiles : une modale plafonnée à
+   `90vh` dépasse donc l'écran de la hauteur de cette barre, et c'est son PIED
+   qui sort — c'est-à-dire ses boutons. Rien ne le rattrape, puisque c'est le
+   corps de la modale qui défile, pas la modale elle-même.
+
+   Les hauteurs vivent dans des styles en ligne (composants en objets de style),
+   d'où les sélecteurs d'attribut et le `!important` : c'est la seule façon de
+   les corriger sans réécrire dix modales. `dvh` se rabat proprement sur `vh`
+   dans les navigateurs qui ne le connaissent pas.
+   ------------------------------------------------------------------------ */
+[style*="max-height: 90vh"] { max-height: 90dvh !important; }
+[style*="max-height: 85vh"] { max-height: 85dvh !important; }
+[style*="max-height: 80vh"] { max-height: 80dvh !important; }
+[style*="max-height: calc(100vh - 32px)"] { max-height: calc(100dvh - 32px) !important; }
+
+/* Défilement tactile : une modale ou un menu qui arrive en butée ne doit pas
+   transmettre le geste à la page derrière — sinon on croit faire défiler la
+   liste et c'est le fond qui bouge. */
+[role="dialog"], [data-popover-panel] { overscroll-behavior: contain; }
+
 /* === Tableau des trades : scrollbar bien visible (surtout l'horizontale) ===
    Surcharge les scrollbars globales ultra-fines (4px) afin que la barre de
    défilement horizontale du tableau soit clairement perceptible sur desktop. */

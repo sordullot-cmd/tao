@@ -43,6 +43,7 @@ import {
 
 import { T } from "@/lib/ui/tokens";
 import { CARD, StepperPill, FIELD_BG } from "@/components/ui/da";
+import Popover from "@/components/ui/Popover";
 
 /* Surface secondaire (pastilles d'icône, champs, aplats internes). L'ancien
    `T.bg` local pointait sur le gris de survol pour ne pas être blanc ; la page
@@ -387,6 +388,7 @@ export default function DailyPlannerPage() {
   const emptyHabit = { name: "", description: "", time: "", location: "", icon: "", attributes: [] };
   const [habitDraft, setHabitDraft] = useState(emptyHabit);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const iconPickerAnchor = React.useRef(null);
   // Glisser-déposer du formulaire (comme le calendrier)
   const [modalPos, setModalPos] = useState({ x: 0, y: 0 });
   const [modalDragging, setModalDragging] = useState(false);
@@ -438,6 +440,8 @@ export default function DailyPlannerPage() {
 
   // Sélecteur de date (popover calendrier) sur le libellé du jour.
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
+  // Ancre du sélecteur de date, désormais portalisé hors de la barre d'outils.
+  const dayPickerAnchor = React.useRef(null);
   const pickDate = (d) => {
     setDateKey(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
   };
@@ -473,7 +477,7 @@ export default function DailyPlannerPage() {
         <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
           {habits.filter(h => habitHistory[h.id]?.[dateKey]).length}/{habits.length}
         </span>
-        <div style={{ position: "relative", display: "inline-flex" }}>
+        <div ref={dayPickerAnchor} style={{ position: "relative", display: "inline-flex" }}>
           <StepperPill
             label={(() => { const p = fmtDateParts(dateKey); return `${p.weekday} ${p.day} ${p.month}`; })()}
             onPrev={() => shiftDay(-1)}
@@ -485,6 +489,7 @@ export default function DailyPlannerPage() {
           />
           {dayPickerOpen && (
             <MiniCalendar
+              anchorRef={dayPickerAnchor}
               value={new Date(dateKey + "T00:00:00")}
               onSelect={pickDate}
               onClose={() => setDayPickerOpen(false)}
@@ -579,7 +584,7 @@ export default function DailyPlannerPage() {
                     <label style={{ fontSize: 11, fontWeight: 500, color: T.textSub, display: "block", marginBottom: 6 }}>
                       Icône <span style={{ color: T.textMut, fontWeight: 400 }}>· optionnel</span>
                     </label>
-                    <div data-menu-root style={{ position: "relative" }}>
+                    <div ref={iconPickerAnchor} data-menu-root style={{ position: "relative" }}>
                       <button type="button" onClick={() => setIconPickerOpen((o) => !o)} style={pillBtn}>
                         {(() => {
                           const PreviewIco = habitDraft.icon && ICON_LIBRARY[habitDraft.icon] ? ICON_LIBRARY[habitDraft.icon] : autoIcon(habitDraft.name?.trim() || "");
@@ -588,12 +593,17 @@ export default function DailyPlannerPage() {
                         {habitDraft.icon ? "Icône choisie" : "Icône · auto"}
                         <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                       </button>
-                      {iconPickerOpen && (
+                      <Popover
+                        anchorRef={iconPickerAnchor}
+                        open={iconPickerOpen}
+                        onClose={() => setIconPickerOpen(false)}
+                        gap={4}
+                        matchAnchorWidth
+                        maxHeight={260}
+                        style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)" }}
+                      >
                         <>
-                          {/* Capte le clic en dehors pour refermer le sélecteur */}
-                          <div onClick={() => setIconPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 4 }} />
-                          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5, width: "100%", background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)" }}>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(34px, 1fr))", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(34px, 1fr))", gap: 6 }}>
                               {(() => {
                                 const previewName = habitDraft.name?.trim() || "";
                                 const AutoIco = autoIcon(previewName);
@@ -637,10 +647,9 @@ export default function DailyPlannerPage() {
                                   </button>
                                 );
                               })}
-                            </div>
                           </div>
                         </>
-                      )}
+                      </Popover>
                     </div>
                   </div>
 

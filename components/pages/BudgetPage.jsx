@@ -396,32 +396,36 @@ export default function BudgetPage() {
         </div>
 
         <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* Revenu mensuel */}
-          <label style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
-            <span style={{ fontSize: 13, color: T.textSub }}>{t("budget.income")}</span>
-            <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                value={plan.income === 0 ? "" : plan.income}
-                placeholder="2000"
-                onChange={(e) => updateActive((p) => ({ ...p, income: Math.max(0, Number(e.target.value) || 0) }))}
-                style={{ ...FIELD, height: 48, width: 150, fontSize: 20, fontWeight: 500, padding: "0 12px" }}
-              />
-              <span style={{ fontSize: 13, color: T.textSub }}>
-                {getCurrencySymbol()} {t("budget.perMonth")}
-              </span>
-            </span>
-          </label>
-
-          {/* Répartition — anneau ou barre, au choix. Le sélecteur est posé au
-              dessus, à droite : il règle l'affichage, il ne fait pas partie du
-              graphique. Le choix vit dans le store du budget, donc il suit
-              l'utilisateur d'un appareil à l'autre et la synthèse Patrimoine
-              affiche la même forme. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          {/* Revenu mensuel, et à sa droite le choix de la forme du graphique —
+              anneau ou barre. Le sélecteur règle l'affichage, il ne fait pas
+              partie du graphique : il est donc posé sur la ligne du libellé,
+              pas au-dessus de la figure. Le choix vit dans le store du budget,
+              donc il suit l'utilisateur d'un appareil à l'autre et la synthèse
+              Patrimoine affiche la même forme. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                {/* La hauteur du libellé est calée sur celle des pastilles pour
+                    que les deux se lisent sur la même ligne. */}
+                <span style={{ display: "flex", alignItems: "center", minHeight: 34, fontSize: 13, color: T.textSub }}>
+                  {t("budget.income")}
+                </span>
+                {/* Sans cadre : c'est le chiffre de tête de la page, pas un champ
+                    de formulaire parmi d'autres. */}
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  value={plan.income === 0 ? "" : plan.income}
+                  placeholder="2000"
+                  onChange={(e) => updateActive((p) => ({ ...p, income: Math.max(0, Number(e.target.value) || 0) }))}
+                  style={{
+                    ...FIELD, height: 40, width: 150, padding: 0,
+                    fontSize: 26, fontWeight: 600, letterSpacing: -0.4,
+                    border: "none", background: "transparent",
+                  }}
+                />
+              </label>
               <PeriodPills
                 value={chartKind}
                 onChange={setChartKind}

@@ -11,6 +11,7 @@ import {
   LucideIcon,
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
+import Popover from "@/components/ui/Popover";
 
 export interface SidebarItem {
   id: string;
@@ -112,13 +113,8 @@ export default function Sidebar(props: SidebarProps) {
     });
   };
 
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+  // Clic extérieur : géré par le Popover (le menu vit hors de `userRef`).
+  const closeUserMenu = React.useCallback(() => setUserMenuOpen(false), []);
 
   // Menu utilisateur : fermeture au clavier (Échap) + retour du focus au trigger.
   useEffect(() => {
@@ -352,19 +348,24 @@ export default function Sidebar(props: SidebarProps) {
           </button>
         )}
 
-        {/* User menu popover (opens upward) */}
-        {userMenuOpen && user && (
-          <div
-            role="menu"
-            style={{
-              position: "absolute",
-              bottom: "calc(100% + 4px)",
-              left: 8, right: 8, minWidth: 176,
-              background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)",
-              borderRadius: 10, boxShadow: "var(--elev-overlay)",
-              overflow: "hidden", padding: 4, zIndex: 100,
-            }}
-          >
+        {/* Menu utilisateur. Ancré au pied de la barre, il bascule donc
+            naturellement vers le haut : le Popover choisit le côté où il reste
+            de la place. */}
+        <Popover
+          anchorRef={userRef}
+          open={userMenuOpen && !!user}
+          onClose={closeUserMenu}
+          gap={4}
+          minWidth={176}
+          atLeastAnchorWidth
+          maxHeight={360}
+          role="menu"
+          style={{
+            background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)",
+            borderRadius: 10, boxShadow: "var(--elev-overlay)", padding: 4,
+          }}
+        >
+          <>
             {onProfile && (
               <button
                 onClick={() => { setUserMenuOpen(false); onProfile(); }}
@@ -416,8 +417,8 @@ export default function Sidebar(props: SidebarProps) {
                 <span>{t("nav.logout")}</span>
               </button>
             )}
-          </div>
-        )}
+          </>
+        </Popover>
         {onToggleCollapsed && (
           <button
             onClick={onToggleCollapsed}

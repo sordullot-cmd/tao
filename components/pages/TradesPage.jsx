@@ -22,6 +22,7 @@ import {
   ChevronRight as LucideChevronRight,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
 import {
@@ -256,6 +257,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     });
   };
   const [showBulkStrategyDropdown, setShowBulkStrategyDropdown] = useState(false);
+  const bulkStrategyAnchor = useRef(null);
   const [openStratMenuId, setOpenStratMenuId] = useState(null);
 
   // Fermer le menu strategie au clic exterieur
@@ -264,7 +266,8 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     const handler = (e) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
-      if (!target.closest('[data-strat-menu]')) setOpenStratMenuId(null);
+      // Le panneau est portalisé : il n'est plus dans `[data-strat-menu]`.
+      if (!target.closest('[data-strat-menu]') && !target.closest('[data-popover-panel]')) setOpenStratMenuId(null);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -2202,87 +2205,23 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                                     <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:strat.color}}/>
                                     <div style={{fontSize:13,fontWeight:600,color:T.text,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{strat.name}</div>
-                                    <div data-strat-menu style={{marginLeft:"auto",position:"relative"}}>
-                                      <button
-                                        onClick={(e)=>{e.stopPropagation();setOpenStratMenuId(openStratMenuId===strat.id?null:strat.id);}}
-                                        aria-label="Options stratégie"
-                                        style={{background:"transparent",border:"none",cursor:"pointer",color:T.textSub,width:26,height:26,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"background var(--dur-fast) var(--ease-out)"}}
-                                        onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG}}
-                                        onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
-                                      >
-                                        <LucideMoreHorizontal size={16} strokeWidth={1.75} />
-                                      </button>
-                                      {openStratMenuId === strat.id && (
-                                        <div
-                                          role="menu"
-                                          style={{
-                                            position:"absolute",
-                                            top:"calc(100% + 4px)",
-                                            right:0,
-                                            background:T.white,
-                                            border:"none",
-                                            borderRadius:12,
-                                            boxShadow:"var(--elev-overlay)",
-                                            minWidth:180,
-                                            padding:6,
-                                            zIndex:50,
-                                            fontFamily:"var(--font-sans)",
-                                          }}
-                                        >
-                                          <button
-                                            onClick={(e)=>{
-                                              e.stopPropagation();
-                                              // Retirer la stratégie courante puis ouvrir le sélecteur
-                                              const newTradeStrategies = {...tradeStrategies};
-                                              tradeKeys.forEach(k => {
-                                                const current = newTradeStrategies[k] || [];
-                                                newTradeStrategies[k] = current.filter(id => id !== strat.id);
-                                              });
-                                              setTradeStrategies(newTradeStrategies);
-                                              localStorage.setItem("tr4de_trade_strategies", JSON.stringify(newTradeStrategies));
-                                              setOpenStratMenuId(null);
-                                              setShowStrategyDropdown(true);
-                                            }}
-                                            style={{
-                                              display:"flex",alignItems:"center",gap:8,width:"100%",
-                                              padding:"8px 10px",borderRadius:8,border:"none",
-                                              background:"transparent",color:T.text,
-                                              fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",textAlign:"left",
-                                            }}
-                                            onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG}}
-                                            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
-                                          >
-                                            <LucideRepeat size={14} strokeWidth={1.75} />
-                                            Changer de stratégie
-                                          </button>
-                                          <button
-                                            onClick={(e)=>{
-                                              e.stopPropagation();
-                                              // Retirer la stratégie de TOUTES les clés du trade
-                                              const newTradeStrategies = {...tradeStrategies};
-                                              tradeKeys.forEach(k => {
-                                                const current = newTradeStrategies[k] || [];
-                                                newTradeStrategies[k] = current.filter(id => id !== strat.id);
-                                              });
-                                              setTradeStrategies(newTradeStrategies);
-                                              localStorage.setItem("tr4de_trade_strategies", JSON.stringify(newTradeStrategies));
-                                              setOpenStratMenuId(null);
-                                            }}
-                                            style={{
-                                              display:"flex",alignItems:"center",gap:8,width:"100%",
-                                              padding:"8px 10px",borderRadius:6,border:"none",
-                                              background:"transparent",color:T.red,
-                                              fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",textAlign:"left",
-                                            }}
-                                            onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-red-bg, #FEF2F2)"}}
-                                            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
-                                          >
-                                            <LucideTrash2 size={14} strokeWidth={1.75} />
-                                            Enlever la stratégie
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
+                                    <StratMenu
+                                      open={openStratMenuId === strat.id}
+                                      onToggle={()=>setOpenStratMenuId(openStratMenuId===strat.id?null:strat.id)}
+                                      onClose={()=>setOpenStratMenuId(null)}
+                                      onDetach={(thenPick)=>{
+                                        // Retirer la stratégie de TOUTES les clés du trade
+                                        const newTradeStrategies = {...tradeStrategies};
+                                        tradeKeys.forEach(k => {
+                                          const current = newTradeStrategies[k] || [];
+                                          newTradeStrategies[k] = current.filter(id => id !== strat.id);
+                                        });
+                                        setTradeStrategies(newTradeStrategies);
+                                        localStorage.setItem("tr4de_trade_strategies", JSON.stringify(newTradeStrategies));
+                                        setOpenStratMenuId(null);
+                                        if (thenPick) setShowStrategyDropdown(true);
+                                      }}
+                                    />
                                   </div>
                                   {/* AVANCEMENT — libellé à gauche, compte à droite,
                                       comme les lignes de statistiques ; la piste
@@ -2420,30 +2359,34 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           <span style={{width:1,height:18,background:T.border}} />
 
           {/* Ajouter une strategie */}
-          <div style={{position:"relative"}}>
+          <div ref={bulkStrategyAnchor} style={{position:"relative"}}>
             <button
               onClick={() => setShowBulkStrategyDropdown(v => !v)}
+              aria-haspopup="menu"
+              aria-expanded={showBulkStrategyDropdown}
               style={{background:"transparent",border:"none",color:T.text,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px",borderRadius:6,display:"inline-flex",alignItems:"center",gap:4}}
               onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)"}}
               onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
             >
               {t("trades.addStrategy")}
             </button>
-            {showBulkStrategyDropdown && (
-              <div style={{
-                position:"absolute",
-                bottom:"calc(100% + 6px)",
-                left:0,
+            <Popover
+              anchorRef={bulkStrategyAnchor}
+              open={showBulkStrategyDropdown}
+              onClose={() => setShowBulkStrategyDropdown(false)}
+              minWidth={200}
+              maxHeight={240}
+              role="menu"
+              style={{
                 background:T.white,
                 color:T.text,
                 border:`1px solid ${T.border}`,
                 borderRadius:10,
                 boxShadow:"var(--elev-overlay)",
-                minWidth:200,
-                maxHeight:240,
-                overflowY:"auto",
                 padding:4,
-              }}>
+              }}
+            >
+              <>
                 {(strategiesByUsage && strategiesByUsage.length > 0) ? strategiesByUsage.map(s => (
                   <button
                     key={s.id}
@@ -2478,8 +2421,8 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                 )) : (
                   <div style={{padding:"10px 10px",fontSize:12,color:T.textMut}}>Aucune stratégie disponible</div>
                 )}
-              </div>
-            )}
+              </>
+            </Popover>
           </div>
 
           <span style={{width:1,height:18,background:T.border}} />
@@ -2527,15 +2470,74 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 /* Menu déroulant multi-sélection (émotions / erreurs) du panneau détail.
    Affiche les tags choisis en pastilles dans le déclencheur ; le menu liste
    tous les tags avec une case à cocher. Se ferme au clic en dehors. */
+/* Menu « … » d'une stratégie rattachée à un trade.
+   Composant à part parce qu'il est rendu dans une boucle : chaque menu a besoin
+   de SA propre ancre. Une référence partagée serait écrasée par la dernière
+   stratégie rendue, et tous les menus s'ouvriraient au même endroit. */
+function StratMenu({ open, onToggle, onClose, onDetach }) {
+  const ref = React.useRef(null);
+  const item = {
+    display:"flex",alignItems:"center",gap:8,width:"100%",
+    padding:"8px 10px",borderRadius:8,border:"none",
+    background:"transparent",
+    fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+  };
+  return (
+    <div ref={ref} data-strat-menu style={{marginLeft:"auto",position:"relative"}}>
+      <button
+        onClick={(e)=>{e.stopPropagation();onToggle();}}
+        aria-label="Options stratégie"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={{background:"transparent",border:"none",cursor:"pointer",color:T.textSub,width:26,height:26,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"background var(--dur-fast) var(--ease-out)"}}
+        onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG}}
+        onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
+      >
+        <LucideMoreHorizontal size={16} strokeWidth={1.75} />
+      </button>
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={onClose}
+        align="end"
+        gap={4}
+        minWidth={180}
+        role="menu"
+        style={{
+          background:T.white, border:"none", borderRadius:12,
+          boxShadow:"var(--elev-overlay)", padding:6, fontFamily:"var(--font-sans)",
+        }}
+      >
+        <>
+          <button
+            onClick={(e)=>{ e.stopPropagation(); onDetach(true); }}
+            style={{...item, color:T.text}}
+            onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG}}
+            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
+          >
+            <LucideRepeat size={14} strokeWidth={1.75} />
+            Changer de stratégie
+          </button>
+          <button
+            onClick={(e)=>{ e.stopPropagation(); onDetach(false); }}
+            style={{...item, borderRadius:6, color:T.red}}
+            onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-red-bg, #FEF2F2)"}}
+            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
+          >
+            <LucideTrash2 size={14} strokeWidth={1.75} />
+            Enlever la stratégie
+          </button>
+        </>
+      </Popover>
+    </div>
+  );
+}
+
 function TagMultiSelect({ placeholder, allTags, selected, onToggle }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
-  React.useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
+  // Clic extérieur : géré par le Popover (liste portalisée hors de `ref`).
+  const close = React.useCallback(() => setOpen(false), []);
   const chosen = allTags.filter((tg) => selected.includes(tg.id));
   return (
     <div ref={ref} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
@@ -2553,8 +2555,15 @@ function TagMultiSelect({ placeholder, allTags, selected, onToggle }) {
         </div>
         <LucideChevronDown size={15} strokeWidth={1.75} color={T.textSub} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform var(--dur-fast) var(--ease-out)" }} />
       </button>
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 20, background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)", maxHeight: 260, overflowY: "auto" }}>
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={close}
+        matchAnchorWidth
+        maxHeight={260}
+        style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+      >
+        <>
           {allTags.map((tg) => {
             const on = selected.includes(tg.id);
             return (
@@ -2570,8 +2579,8 @@ function TagMultiSelect({ placeholder, allTags, selected, onToggle }) {
               </button>
             );
           })}
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

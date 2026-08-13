@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronUp, ChevronDown, Search, Check } from "lucide-react";
+import Popover from "@/components/ui/Popover";
 
 export interface SearchableOption {
   id: string;
@@ -57,16 +58,10 @@ export default function SearchableSelect({
     });
   };
 
-  useEffect(() => {
-    const onClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  // Le clic extérieur et Échap sont gérés par le Popover : le menu étant
+  // portalisé hors de `containerRef`, un test de descendance sur le conteneur
+  // le considérerait comme « extérieur » et le fermerait avant le choix.
+  const close = React.useCallback(() => { setOpen(false); setQuery(""); }, []);
 
   const selected = options.find(o => o.id === value);
   const filtered = query
@@ -142,26 +137,30 @@ export default function SearchableSelect({
         {open ? <ChevronUp size={small ? 12 : 14} strokeWidth={2} color="var(--color-text-muted)" /> : <ChevronDown size={small ? 12 : 14} strokeWidth={2} color="var(--color-text-muted)" />}
       </button>
 
-      {open && (
-        <div
-          role="listbox"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            background: "var(--color-card-bg, #FFFFFF)",
-            border: "1px solid var(--color-border)",
-            borderRadius: 10,
-            boxShadow: "var(--elev-overlay)",
-            zIndex: 100,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+      <Popover
+        anchorRef={containerRef}
+        open={open}
+        onClose={close}
+        gap={4}
+        matchAnchorWidth
+        scroll={false}
+        maxHeight={maxMenuHeight + 44}
+        /* Le champ de recherche vit maintenant dans le portail : sans ce
+           gestionnaire, les flèches et Entrée ne remonteraient plus jusqu'au
+           conteneur du déclencheur. */
+        onKeyDown={onKeyDown}
+        role="listbox"
+        className="anim-pop"
+        style={{
+          background: "var(--color-card-bg, #FFFFFF)",
+          border: "1px solid var(--color-border)",
+          borderRadius: 10,
+          boxShadow: "var(--elev-overlay)",
+        }}
+      >
+        <>
           {searchable && options.length > 5 && (
-            <div style={{ padding: 4, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
+            <div style={{ flexShrink: 0, padding: 4, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px" }}>
                 <Search size={12} strokeWidth={1.75} color="var(--color-text-muted)" />
                 <input
@@ -185,7 +184,7 @@ export default function SearchableSelect({
             </div>
           )}
 
-          <div style={{ overflowY: "auto", maxHeight: maxMenuHeight, padding: 4 }} className="scroll-thin">
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", maxHeight: maxMenuHeight, padding: 4 }} className="scroll-thin">
             {filtered.length === 0 ? (
               <div style={{ padding: "12px 14px", fontSize: 12, color: "var(--color-text-muted)", textAlign: "center" }}>{emptyLabel}</div>
             ) : (
@@ -245,8 +244,8 @@ export default function SearchableSelect({
               })
             )}
           </div>
-        </div>
-      )}
+        </>
+      </Popover>
     </div>
   );
 }

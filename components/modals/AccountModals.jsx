@@ -97,7 +97,9 @@ export function ModalShell({ title, subtitle, onClose, children, footer, width =
           </button>
         </div>
 
-        <div className="scroll-thin" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+        {/* `minHeight: 0` : sans lui, un enfant flex refuse de descendre sous sa
+            hauteur de contenu et le corps ne défile jamais — il déborde. */}
+        <div className="scroll-thin" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16, overflowY: "auto", minHeight: 0 }}>
           {children}
         </div>
 
