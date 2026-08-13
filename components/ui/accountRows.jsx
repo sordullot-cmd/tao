@@ -11,7 +11,7 @@
  */
 
 import React from "react";
-import { ChevronDown, Trophy, Plus } from "lucide-react";
+import { ChevronDown, Trophy, Plus, Link2 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { CARD, TH } from "@/components/ui/da";
 import { t } from "@/lib/i18n";
@@ -345,20 +345,87 @@ export function TableRow({
   );
 }
 
+/* Ouverture d'un petit menu ancré : clic extérieur et Échap le referment.
+   Partagé par les deux déclencheurs d'ajout de compte (ligne de liste et
+   pastille de barre d'actions), qui ne diffèrent que par leur habillage. */
+function useAnchoredMenu() {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
+/* Les deux façons de garnir la liste d'une firme, dans l'ordre où on les
+   cherche : créer un compte, ou récupérer un compte qui existe déjà (saisi
+   avant la firme, ou hors firme). */
+function AddAccountsMenu({ align = "left", onCreate, onAttach, onDone }) {
+  const item = {
+    width: "100%", display: "flex", alignItems: "center", gap: 8,
+    padding: "8px 10px", minHeight: 36, borderRadius: 8, border: "none",
+    background: "transparent", color: T.text, fontSize: 13, fontWeight: 500,
+    cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+    transition: "background 120ms var(--ease-out, ease)",
+  };
+  const choose = (fn) => { onDone?.(); fn?.(); };
+  return (
+    <div
+      role="menu"
+      className="anim-pop"
+      style={{
+        position: "absolute", top: "calc(100% + 6px)", zIndex: 40,
+        [align === "right" ? "right" : "left"]: 0,
+        minWidth: 236, background: T.white, border: `1px solid ${T.border}`,
+        borderRadius: 12, boxShadow: "var(--elev-overlay)", padding: 6,
+      }}
+    >
+      <button type="button" role="menuitem" data-no-press style={item}
+        onClick={(e) => { e.stopPropagation(); choose(onCreate); }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+        <Plus size={14} strokeWidth={2} style={{ flexShrink: 0 }} />
+        {t("firms.addAccountNew")}
+      </button>
+      <button type="button" role="menuitem" data-no-press style={item}
+        onClick={(e) => { e.stopPropagation(); choose(onAttach); }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+        <Link2 size={14} strokeWidth={2} style={{ flexShrink: 0 }} />
+        {t("firms.attachAccount")}
+      </button>
+    </div>
+  );
+}
+
 /**
  * Dernière sous-ligne d'une firme dépliée : action d'ajout d'un compte rattaché
  * à cette firme. Alignée sur les sous-lignes (même gouttière) pour se lire
  * comme la suite de la liste, mais en texte atténué pour rester secondaire.
+ *
+ * `onAttach` fourni → la ligne devient un menu à deux entrées (créer / rattacher)
+ * au lieu de deux lignes empilées qui disaient deux fois « ajouter ».
  */
-export function AddAccountRow({ onClick, label, icon }) {
-  return (
+export function AddAccountRow({ onClick, label, icon, onAttach }) {
+  const { open, setOpen, ref } = useAnchoredMenu();
+  const trigger = (
     <button
       type="button"
       /* Bouton pleine largeur : le `scale` d'appui de globals.css déplacerait ses
          bords d'une dizaine de pixels, et un clic près d'une extrémité se
          perdrait entre l'appui et le relâchement. */
       data-no-press
-      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      aria-haspopup={onAttach ? "menu" : undefined}
+      aria-expanded={onAttach ? open : undefined}
+      onClick={(e) => { e.stopPropagation(); if (onAttach) setOpen((v) => !v); else onClick?.(); }}
       style={{
         display: "flex", alignItems: "center", gap: 8,
         paddingLeft: ROW_GUTTER, paddingRight: 8, marginRight: -8,
@@ -381,7 +448,57 @@ export function AddAccountRow({ onClick, label, icon }) {
         {icon || <Plus size={12} strokeWidth={2} />}
       </span>
       {label || t("firms.addAccount")}
+      {onAttach && (
+        <ChevronDown
+          size={13} strokeWidth={2}
+          style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms var(--ease-out, ease)" }}
+        />
+      )}
     </button>
+  );
+
+  if (!onAttach) return trigger;
+  return (
+    <div ref={ref} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+      {trigger}
+      {open && (
+        <AddAccountsMenu onCreate={onClick} onAttach={onAttach} onDone={() => setOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Même choix, en pastille pleine : c'est l'action première de la page d'une prop
+ * firm. Un seul bouton plutôt que « Ajouter » + « Rattacher » côte à côte, qui
+ * se disputaient la même intention.
+ */
+export function AddAccountsButton({ onCreate, onAttach }) {
+  const { open, setOpen, ref } = useAnchoredMenu();
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        data-no-press
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px",
+          minHeight: 32, borderRadius: 999, border: "none", background: T.text,
+          color: T.textInverted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
+        <Plus size={13} strokeWidth={1.75} /> {t("firms.addAccount")}
+        <ChevronDown
+          size={13} strokeWidth={2}
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms var(--ease-out, ease)" }}
+        />
+      </button>
+      {open && (
+        <AddAccountsMenu align="right" onCreate={onCreate} onAttach={onAttach} onDone={() => setOpen(false)} />
+      )}
+    </div>
   );
 }
 

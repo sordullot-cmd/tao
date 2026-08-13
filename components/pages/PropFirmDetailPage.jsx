@@ -27,7 +27,7 @@
  */
 
 import React from "react";
-import { Plus, Pencil, Trash2, Settings2, ChevronDown, Link2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Settings2, ChevronDown } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
@@ -43,7 +43,7 @@ import {
   readFirmHeroMode,
   readFundedMeta,
 } from "@/lib/propFirms";
-import { RoundLogo } from "@/components/ui/accountRows";
+import { RoundLogo, AddAccountsButton } from "@/components/ui/accountRows";
 import {
   CARD, SectionTitle, SectionAction, HeroAmount, MiniKpi, StatsCard,
   PeriodPills, windowSeries, AGGREGATE_CURVE_COLOR, PnlChart, msOf, BackLink,
@@ -450,32 +450,14 @@ export default function PropFirmDetailPage({
         </div>
         {/* Actions de la firme, par importance décroissante : l'ajout de comptes
             est l'action première de la page (c'est ici qu'on règle le nombre de
-            comptes), donc pleine ; le destructif reste à l'extrémité. */}
+            comptes), donc pleine ; le destructif reste à l'extrémité.
+            Créer et rattacher répondent à la même intention — « garnir cette
+            firme » — d'où un seul bouton qui ouvre les deux chemins. */}
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px",
-              minHeight: 32, borderRadius: 999, border: "none", background: T.text,
-              color: T.textInverted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <Plus size={13} strokeWidth={1.75} /> {t("firms.addAccount")}
-          </button>
-          {/* Second chemin, en retenue : rattacher un compte qui existe déjà.
-              Il ne crée rien, d'où le contour plutôt que le plein. */}
-          <button
-            type="button"
-            onClick={() => setAttachOpen(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px",
-              minHeight: 32, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white,
-              color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <Link2 size={13} strokeWidth={1.75} /> {t("firms.attachAccount")}
-          </button>
+          <AddAccountsButton
+            onCreate={() => setAddOpen(true)}
+            onAttach={() => setAttachOpen(true)}
+          />
           <button
             type="button"
             onClick={() => setEditingFirm(true)}

@@ -37,22 +37,43 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 const DEFAULT_PLAN_ID = "budget-1";
 const DEFAULT_INCOME = 2000;
 
-/* Teintes des catégories : ce sont des couleurs d'IDENTITÉ, comme les vignettes
-   d'instruments de da.jsx. Elles ne passent donc pas par les tokens et ne
-   bougent pas en thème sombre — deux catégories voisines doivent rester
-   distinguables, ce qu'une palette recalculée par thème ne garantit pas.
-   Contraste ≥ 3:1 sur blanc. */
+/* Teintes des catégories ─────────────────────────────────────────────────────
+   Ce sont des couleurs d'IDENTITÉ, comme les vignettes d'instruments de da.jsx :
+   elles ne passent pas par les tokens et ne bougent pas en thème sombre — deux
+   catégories voisines doivent rester distinguables, ce qu'une palette recalculée
+   par thème ne garantit pas.
+
+   Chacune reprend la TEINTE d'une couleur du site (bleu, ambre, cyan et violet
+   des tokens sémantiques, vert de l'accent de marque, rouge, teal des tags
+   « long », brun des tags « short », gris du texte secondaire) ; seule leur
+   clarté est ajustée, pour trois raisons mesurées :
+
+   • rester lisible sur les DEUX fonds : ≥ 3:1 (seuil des éléments graphiques)
+     sur le blanc des cartes comme sur le gris sombre du thème sombre. Cela
+     enferme la clarté dans une fenêtre étroite — trop clair, la couleur
+     disparaît sur blanc ; trop sombre, elle s'éteint en thème sombre ;
+   • séparer les VOISINES : la palette alterne une teinte sombre et une claire,
+     si bien que deux catégories côte à côte dans la barre tranchent toujours par
+     la clarté, et pas seulement par la teinte ;
+   • tenir en vision deutéranope, où rouge, vert et teal convergent : c'est
+     l'écart de clarté ci-dessus qui les garde séparables (le nom, la part et le
+     montant restent de toute façon écrits dans le tableau sous la barre — la
+     couleur n'est jamais le seul signal).
+
+   L'ordre compte : il est repris tel quel par `defaultItems`, et une catégorie
+   ajoutée prend la suivante. Toute retouche doit donc conserver l'alternance
+   clair/sombre. */
 const PALETTE = [
-  "#B47700", // logement
-  "#8F8419", // alimentation
-  "#4A7DE0", // transport
-  "#7F72E0", // abonnements
-  "#0F9AAB", // loisirs
-  "#008874", // épargne
-  "#D55181", // shopping
-  "#12A594", // santé
-  "#B0546F", // frais
-  "#A05FB0", // autres
+  "#2C72C3", // logement     — bleu du site, sombre
+  "#E77213", // alimentation — ambre, clair
+  "#0A7A93", // transport    — cyan, sombre
+  "#9D7AEF", // abonnements  — violet, clair
+  "#B92E74", // loisirs      — magenta, sombre
+  "#3EA817", // épargne      — vert de l'accent de marque, clair
+  "#C83131", // shopping     — rouge, sombre
+  "#10A594", // santé        — teal des tags « long », clair
+  "#96590E", // frais        — brun des tags « short », sombre
+  "#8B96A2", // autres       — gris ardoise neutre, clair
 ];
 
 /* Point de départ : la règle 50/30/20 adaptée. L'utilisateur ajuste ensuite —

@@ -18,7 +18,7 @@ import {
 } from "@/lib/eloquenceData";
 import { T } from "@/lib/ui/tokens";
 import {
-  CARD, SectionTitle, MiniKpi, PeriodPills, FIELD_BG,
+  CARD, MiniKpi, PeriodPills, FIELD_BG,
 } from "@/components/ui/da";
 
 /* ─────────────── Helpers génériques ─────────────── */
@@ -1940,12 +1940,11 @@ export default function EloquencePage() {
 
   return (
     <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
-      {/* ═══ 1. TITRE ═══ */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <SectionTitle action={<div id="tr4de-page-header-slot" />}>Éloquence</SectionTitle>
-        <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>
-          Structure, vocabulaire, clarté, confiance &amp; diction
-        </div>
+      {/* ═══ 1. EN-TÊTE ═══ Ni titre ni sous-titre : la barre latérale dit déjà
+          où l'on est, et le chiffre héros juste en dessous porte l'attention.
+          Ne reste que le slot d'en-tête, que toutes les pages rendent. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
 
       {/* ═══ 2. CHIFFRE HÉROS + MINI-KPI + SÉLECTEUR D'EXERCICE ═══

@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
 import { getCurrencySymbol, rMultiple, fmtR } from "@/lib/userPrefs";
 import { withNetPnl } from "@/lib/tradeFees";
 import TradesPage from "@/components/pages/TradesPage";
 import LoadingScreen from "@/components/ui/LoadingScreen";
 import { t, useLang } from "@/lib/i18n";
-import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
+import {
+  CARD, HAIRLINE, BackLink, SectionTitle, SectionAction, HeroAmount, MiniKpi, PnlChart,
+} from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 
 /* ─── TOKENS (palette monochrome partagée, dark-aware) ─────────────── */
@@ -19,11 +20,14 @@ function Pill({ children, color="gray", small }) {
   const map = {
     green: { bg:T.greenBg, bd:T.greenBd, txt:T.green },
     red:   { bg:T.redBg,   bd:T.redBd,   txt:T.red   },
-    blue:  { bg:T.blueBg,  bd:"#DCFCE7",  txt:T.blue  },
-    gray:  { bg:T.bg,      bd:T.border,   txt:T.textSub },
+    // Le fond bleu portait un contour VERT (#DCFCE7) : un copier-coller de la
+    // pastille verte, resté en dur alors que la page passe par les tokens.
+    blue:  { bg:T.blueBg,  bd:T.blueBd,   txt:T.blue  },
+    gray:  { bg:T.accentBg, bd:T.border,  txt:T.textSub },
   };
   const s = map[color] || map.gray;
-  return <span style={{display:"inline-flex", alignItems:"center", padding: small ? "1px 7px" : "3px 10px", borderRadius: "var(--radius-modal)", fontSize: small ? 11 : 12, fontWeight: 500, background: s.bg, border: `1px solid ${s.bd}`, color: s.txt,}}>{children}</span>;
+  // Pastille pleine, sans contour : la DA délimite ses badges par l'aplat.
+  return <span style={{display:"inline-flex", alignItems:"center", padding: small ? "2px 8px" : "3px 12px", borderRadius: 999, fontSize: small ? 11 : 12, fontWeight: 500, background: s.bg, color: s.txt,}}>{children}</span>;
 }
 
 export default function StrategyDetailPage({ setPage = () => {} }) {
@@ -34,7 +38,12 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
   const [loading, setLoading] = useState(true);
   const [tradeStrategiesData, setTradeStrategiesData] = useState({});
   const [checkedRules, setCheckedRules] = useState({});
-  const [hoveredDayIdx, setHoveredDayIdx] = useState(null);
+  /* Stratégie mise en avant DANS LE GRAPHIQUE — cliquer une entrée de la légende
+     la fait passer au premier plan (aire tramée + trait épais), les autres
+     repassant en lignes fines. `null` = celle dont la page affiche les stats.
+     C'est un état propre au graphique : les chiffres du haut, le tao score et le
+     tableau de trades continuent de porter sur la stratégie de la page. */
+  const [chartFocusId, setChartFocusId] = useState(null);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -224,9 +233,6 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
   const profitFactor = filteredTrades.length > 0 ? (wins.reduce((s,t)=>s+t.pnl,0)/Math.abs(losses.reduce((s,t)=>s+t.pnl,0)||1)).toFixed(2) : 0;
   const avgWin = wins.length ? wins.reduce((s,t)=>s+t.pnl,0)/wins.length : 0;
   const avgLoss = losses.length ? losses.reduce((s,t)=>s+t.pnl,0)/losses.length : 0;
-  const maxWin = filteredTrades.length > 0 ? Math.max(...filteredTrades.map(t=>t.pnl)) : 0;
-  const maxLoss = filteredTrades.length > 0 ? Math.min(...filteredTrades.map(t=>t.pnl)) : 0;
-
   // Calcul des statistiques par jour, heure, et symbole
   // Helper pour extraire l'heure : priorité à entryTime/entry_time (format "HH:MM[:SS]"),
   // fallback sur le timestamp de t.date si une heure y est encodée.
@@ -572,109 +578,51 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
   }
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:24}} className="anim-1">
-      {/* HEADER */}
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-        <button
-          type="button"
-          onClick={() => setPage('strategies')}
-          aria-label={t("strat.detail.back")}
-          style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:999,border:`1px solid ${T.border}`,background:T.white,color:T.text,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
-          onMouseEnter={(e) => { e.currentTarget.style.background = T.bg; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = T.white; }}
-        >
-          <ArrowLeft size={14} strokeWidth={1.75} />
-        </button>
-        <div>
-          <h1 className="t-h2" style={{color:T.text,margin:0,display:"flex",alignItems:"center",gap:8}}>
-            <span style={{width:10,height:10,borderRadius:"50%",background:selectedStrategy.color}}/>
+    <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:8,fontFamily:"var(--font-sans)"}} className="anim-1">
+      {/* ═══ 1. BARRE D'ACTIONS ═══ retour nommé, comme les fiches de compte et
+          de firme : le rond de 28 px portant une flèche seule ne disait pas où
+          il ramenait. */}
+      <div style={{display:"flex",alignItems:"center",minWidth:0,margin:"-7px -8px",marginBottom:8}}>
+        <BackLink label={t("nav.strategies")} onClick={() => setPage('strategies')} />
+      </div>
+
+      {/* ═══ 2. IDENTITÉ ═══ pastille de couleur, nom 16/500, description en
+          sous-titre atténué. */}
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <span style={{width:10,height:10,borderRadius:"50%",background:selectedStrategy.color,flexShrink:0}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
+          <h1 style={{margin:0,fontSize:16,fontWeight:500,lineHeight:1.25,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {selectedStrategy.name}
           </h1>
           {selectedStrategy.description && (
-            <p style={{fontSize:12,color:T.textMut,marginTop:2,marginBottom:0,fontFamily:"var(--font-sans)"}}>{selectedStrategy.description}</p>
+            <span style={{fontSize:14,lineHeight:1.25,color:T.text,opacity:0.4}}>{selectedStrategy.description}</span>
           )}
         </div>
       </div>
 
-      {/* CARD 1 : 8 KPIs en 2 rangées */}
+      {/* ═══ 3. CHIFFRE HÉROS + MINI-KPI ═══
+          Les huit mesures formaient un tableau 4×2 quadrillé de bordures, aux
+          coins soudés au bloc suivant. Elles prennent la lecture des fiches de
+          compte : le P&L en chiffre héros, le reste en mesures secondaires
+          alignées dessous. */}
       {filteredTrades.length > 0 && (
-        <div className="tr4de-kpi-row" style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card) var(--radius-card) 0 0",borderBottom:"none",overflow:"hidden"}}>
-          {/* ROW 1 - 4 KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)"}}>
-            {/* 1. P&L Net */}
-            <div style={{flex:1,padding:"16px 20px",borderRight:`1px solid ${T.border}`}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>{t("strat.kpi.netPnl")}</div>
-              <div style={{fontSize:20,fontWeight:600,color:totalPnL >= 0 ? T.green : T.red,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                {fmt(totalPnL,true)}
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{filteredTrades.length} trades</div>
-            </div>
-
-            {/* 2. Profit factor */}
-            <div style={{flex:1,padding:"16px 20px",borderRight:`1px solid ${T.border}`}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>{t("strat.kpi.profitFactor")}</div>
-              <div style={{fontSize:20,fontWeight:600,color:T.text,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                {profitFactor === Infinity ? "∞" : (filteredTrades.length > 0 ? profitFactor : "—")}
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{t("strat.kpi.profitFactorSub")}</div>
-            </div>
-
-            {/* 3. Drawdown max */}
-            <div style={{flex:1,padding:"16px 20px",borderRight:`1px solid ${T.border}`}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>{t("strat.kpi.maxDrawdown")}</div>
-              <div style={{fontSize:20,fontWeight:600,color:T.red,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                −{fmt(Math.max(...filteredTrades.map(t=>t.pnl||0),0), false)}
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{t("strat.kpi.maxDrawdownSub")}</div>
-            </div>
-
-            {/* 4. Trades */}
-            <div style={{flex:1,padding:"16px 20px"}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>Trades</div>
-              <div style={{fontSize:20,fontWeight:600,color:T.text,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                {filteredTrades.length}
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{winCount}W / {lossCount}L</div>
-            </div>
-          </div>
-
-          {/* ROW 2 - 4 KPIs - séparateur */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",borderTop:`1px solid ${T.border}`}}>
-            {/* 5. Taux de victoire */}
-            <div style={{flex:1,padding:"16px 20px",borderRight:`1px solid ${T.border}`}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>{t("strat.kpi.winRate")}</div>
-              <div style={{fontSize:20,fontWeight:600,color:T.text,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                {winRate}%
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{filteredTrades.length > 0 ? t("strat.kpi.winRateSub") : "—"}</div>
-            </div>
-
-            {/* 6. Espérance/trade */}
-            <div style={{flex:1,padding:"16px 20px",borderRight:`1px solid ${T.border}`}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>{t("strat.kpi.expectancy")}</div>
-              <div style={{fontSize:20,fontWeight:600,color:totalPnL/filteredTrades.length >= 0 ? T.green : T.red,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                {filteredTrades.length > 0 ? fmt(totalPnL/filteredTrades.length, true) : "—"}
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{t("strat.kpi.expectancySub")}</div>
-            </div>
-
-            {/* 7. Meilleur trade */}
-            <div style={{flex:1,padding:"16px 20px",borderRight:`1px solid ${T.border}`}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>{t("strat.kpi.bestTrade")}</div>
-              <div style={{fontSize:20,fontWeight:600,color:T.green,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                {fmt(maxWin)}
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{t("strat.kpi.bestTradeSub")}</div>
-            </div>
-
-            {/* 8. Pire trade */}
-            <div style={{flex:1,padding:"16px 20px"}}>
-              <div style={{fontSize:12,color:T.textSub,marginBottom:8,fontWeight:500}}>{t("strat.kpi.worstTrade")}</div>
-              <div style={{fontSize:20,fontWeight:600,color:T.red,letterSpacing:-0.2,lineHeight:1.1,marginBottom:6}}>
-                {fmt(maxLoss)}
-              </div>
-              <div style={{fontSize:11,color:T.textMut}}>{t("strat.kpi.worstTradeSub")}</div>
-            </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <HeroAmount value={totalPnL} size={28} />
+          <div style={{display:"flex",alignItems:"center",gap:28,flexWrap:"wrap"}}>
+            <MiniKpi
+              label={t("strat.kpi.winRate")}
+              value={`${winRate}%`}
+              tone={Number(winRate) >= 50 ? "pos" : "neg"}
+            />
+            <MiniKpi
+              label={t("strat.kpi.profitFactor")}
+              value={profitFactor === Infinity ? "∞" : String(profitFactor)}
+            />
+            <MiniKpi
+              label={t("strat.kpi.expectancy")}
+              value={fmt(totalPnL / filteredTrades.length, true)}
+              tone={totalPnL / filteredTrades.length >= 0 ? "pos" : "neg"}
+            />
           </div>
         </div>
       )}
@@ -701,234 +649,126 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
           const sorted = [...sTrades].sort((a, b) =>
             new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime()
           );
-          // Group by day
-          const byDay = {};
-          sorted.forEach(tr => {
-            const d = String(tr.date).split("T")[0];
-            byDay[d] = (byDay[d] || 0) + (tr.pnl || 0);
-          });
-          const dates = Object.keys(byDay).sort();
+          /* Un point par TRADE : chaque exécution fait sa marche sur la courbe,
+             les jours ne sont pas agrégés. L'abscisse reste temporelle (c'est ce
+             que lit `PnlChart`), et on lui donne l'heure d'entrée quand elle est
+             connue — sans elle, plusieurs trades du même jour tomberaient au même
+             point et le tracé sauterait à la verticale. */
+          const points = [];
           let cum = 0;
-          const points = dates.map(d => {
-            cum += byDay[d];
-            return { date: d, value: cum };
-          });
+          for (const tr of sorted) {
+            cum += tr.pnl || 0;
+            const day = String(tr.date || "").split("T")[0];
+            const time = tr.entryTime || tr.entry_time;
+            const stamp = /^\d{2}:\d{2}/.test(String(time || ""))
+              ? `${day}T${String(time).slice(0, 5)}:00`
+              : (String(tr.date || "").includes("T") ? String(tr.date) : day);
+            points.push({ date: stamp, value: cum });
+          }
           return { strategy: s, points };
         }).filter(Boolean);
 
         if (seriesPerStrategy.length === 0) return null;
 
-        // Toutes les dates uniques pour l'axe X
-        const allDatesSet = new Set();
-        seriesPerStrategy.forEach(s => s.points.forEach(p => allDatesSet.add(p.date)));
-        const allDates = Array.from(allDatesSet).sort();
+        /* Le graphique est celui de TOUTES les pages de stats — `PnlChart` de
+           components/ui/da.jsx, la même brique que les fiches de compte et de
+           prop firm : trame de points sous la courbe, quadrillage ouvert,
+           estompage de ce qui suit le curseur, tracé à fond perdu à gauche.
+           La page en portait sa propre version (SVG maison, légende en colonne
+           de 180 px, tooltip multi-séries) : ~200 lignes qui refaisaient, en
+           moins bien, ce que la brique partagée fait déjà.
 
-        // Forward-fill chaque stratégie sur toutes les dates
-        const seriesFilled = seriesPerStrategy.map(s => {
-          const map = Object.fromEntries(s.points.map(p => [p.date, p.value]));
-          let lastVal = 0;
-          const filled = allDates.map(d => {
-            if (map[d] !== undefined) lastVal = map[d];
-            return { date: d, value: lastVal };
-          });
-          return { ...s, filled };
-        });
+           Le format attendu est { date, cum }. Le recadrage des séries
+           secondaires sur la fenêtre affichée est fait par la brique elle-même
+           (ancrage à plat avant le premier trade et après le dernier). */
+        const asPoints = (s) => s.points.map((p) => ({ date: p.date, cum: p.value }));
 
-        // Min / max global pour l'axe Y
-        let yMin = 0, yMax = 0;
-        seriesFilled.forEach(s => s.filled.forEach(p => {
-          if (p.value < yMin) yMin = p.value;
-          if (p.value > yMax) yMax = p.value;
+        /* Série de premier plan : celle de la page, ou celle que l'utilisateur a
+           choisie dans la légende. Si la stratégie focalisée n'a plus de trades
+           (données rechargées entre-temps), on retombe sur celle de la page. */
+        const focusId = seriesPerStrategy.some((s) => String(s.strategy.id) === String(chartFocusId))
+          ? chartFocusId
+          : selectedStrategy?.id;
+        const isFocused = (s) => String(s.strategy.id) === String(focusId);
+
+        const current = seriesPerStrategy.find(isFocused);
+        // Aucun trade sur la stratégie mise en avant : pas de série au premier
+        // plan, donc rien à comparer — on ne trace pas les autres toutes seules.
+        if (!current) return null;
+
+        const others = seriesPerStrategy.filter((s) => !isFocused(s)).map((s) => ({
+          id: s.strategy.id,
+          name: s.strategy.name,
+          color: s.strategy.color,
+          points: asPoints(s),
         }));
-        const yRange = (yMax - yMin) || 1;
 
-        // SVG layout — ratio raisonnable, on évite preserveAspectRatio="none" qui distord les courbes
-        const W = 800;
-        const H = 220;
-        const padL = 0;
-        const padR = 28; // espace pour les Y labels à droite
-        const padT = 10;
-        const padB = 18;
-        const plotW = W - padL - padR;
-        const plotH = H - padT - padB;
-
-        const xFor = (i) => padL + (allDates.length === 1 ? plotW / 2 : (i / (allDates.length - 1)) * plotW);
-        const yFor = (v) => padT + plotH - ((v - yMin) / yRange) * plotH;
-
-        // Format date
-        const fmtD = (d) => {
-          const [, m, dd] = d.split("-");
-          const months = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
-          return `${parseInt(dd)} ${months[parseInt(m) - 1]}`;
-        };
-        const fmtVal = (v) => {
-          const sign = v >= 0 ? "+" : "-";
-          const abs = Math.abs(v);
-          // Arrondi "rond" : nearest 10k pour ≥10k, nearest 1k pour ≥1k
-          if (abs >= 10000) return `${sign}${Math.round(abs / 10000) * 10}k`;
-          if (abs >= 1000)  return `${sign}${Math.round(abs / 1000)}k`;
-          return `${sign}${Math.round(abs)}`;
-        };
-
-        // Y-axis ticks (4 niveaux)
-        const yTicks = [];
-        const N = 3;
-        for (let i = 0; i <= N; i++) {
-          const ratio = i / N;
-          const v = yMax - ratio * yRange;
-          yTicks.push({ y: padT + plotH * ratio, value: v });
-        }
+        const lastValue = (s) => s.points[s.points.length - 1]?.value ?? 0;
 
         return (
-          <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"0 0 var(--radius-card) var(--radius-card)",overflow:"visible",marginTop:-24,position:"relative",zIndex:1}}>
-            <div style={{padding:"16px 20px"}}>
-              <div style={{fontSize:13,fontWeight:600,color:T.text}}>{t("strat.detail.compareTitle")}</div>
-              <div style={{fontSize:11,color:T.textMut,marginTop:2}}>{t("strat.detail.compareSub")}</div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"180px 1fr"}}>
-              {/* Légende — triée par P&L décroissant */}
-              <div style={{padding:"16px 16px 16px 20px",borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",gap:8}}>
-                {[...seriesFilled]
-                  .sort((a, b) => b.filled[b.filled.length - 1].value - a.filled[a.filled.length - 1].value)
-                  .map(s => {
-                    const isSelected = String(s.strategy.id) === String(selectedStrategy?.id);
-                    const last = s.filled[s.filled.length - 1].value;
-                    return (
-                      <div key={s.strategy.id} style={{display:"flex",alignItems:"center",gap:8,opacity:isSelected ? 1 : 0.5}}>
-                        <span style={{width:8,height:8,borderRadius:"50%",background:s.strategy.color,flexShrink:0}}/>
-                        <span style={{fontSize:12,fontWeight:isSelected ? 600 : 500,color:T.text,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.strategy.name}</span>
-                        <span style={{fontSize:11,fontWeight:500,color:last >= 0 ? T.green : T.red}}>{fmtVal(last)}</span>
-                      </div>
-                    );
-                  })}
-              </div>
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <PnlChart points={asPoints(current)} others={others} color={current.strategy.color} />
 
-              {/* Chart — la courbe touche le bord gauche de la carte (le padding
-                  n'est repris qu'à droite, où les libellés de valeur respirent). */}
-              <div style={{padding:"12px 12px 12px 0", position:"relative"}}>
-                <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",overflow:"visible",aspectRatio:`${W} / ${H}`}}>
-                  {/* Y labels (colonne à droite, alignés verticalement sur chaque tick) */}
-                  {yTicks.map((tk, i) => (
-                    <text key={i} x={W - 2} y={tk.y + 2.5} fill={T.textMut} fontSize="6" fontWeight="500" textAnchor="end" dominantBaseline="middle">{fmtVal(tk.value)}</text>
-                  ))}
+            {/* Légende sous le tracé, à la façon d'un axe : elle nomme les
+                courbes qu'on vient de lire. Sans elle, les lignes fines derrière
+                la principale seraient muettes — les fiches de compte s'en
+                passent parce que la liste des comptes rappelle leurs couleurs,
+                ici rien ne le fait.
 
-                  {/* Lines : non-selected first (so selected stays on top) */}
-                  {seriesFilled.filter(s => String(s.strategy.id) !== String(selectedStrategy?.id)).map(s => {
-                    const path = s.filled.map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(1)} ${yFor(p.value).toFixed(1)}`).join(" ");
-                    return (
-                      <path key={s.strategy.id} d={path} fill="none" stroke={s.strategy.color} strokeWidth="1" strokeOpacity="0.4" strokeLinecap="round" strokeLinejoin="round"/>
-                    );
-                  })}
-                  {/* Selected on top — with gradient fill */}
-                  {seriesFilled.filter(s => String(s.strategy.id) === String(selectedStrategy?.id)).map(s => {
-                    const path = s.filled.map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(1)} ${yFor(p.value).toFixed(1)}`).join(" ");
-                    const baselineY = yFor(yMin);
-                    const lastX = xFor(s.filled.length - 1).toFixed(1);
-                    const firstX = xFor(0).toFixed(1);
-                    const areaPath = `${path} L ${lastX} ${baselineY.toFixed(1)} L ${firstX} ${baselineY.toFixed(1)} Z`;
-                    const areaId = `strat-area-${s.strategy.id}`;
-                    return (
-                      <g key={s.strategy.id}>
-                        {/* Aire tramée — trame commune à tous les graphiques du
-                            site, à la couleur de la stratégie. */}
-                        <defs>
-                          <AreaDotsDefs id={areaId} color={s.strategy.color} bottom={baselineY} width={W} height={H} />
-                        </defs>
-                        <path d={areaPath} {...areaDotsFill(areaId)} stroke="none"/>
-                        <path d={path} fill="none" stroke={s.strategy.color} strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
-                      </g>
-                    );
-                  })}
-
-                  {/* Vertical hover indicator */}
-                  {hoveredDayIdx !== null && allDates[hoveredDayIdx] && (
-                    <line x1={xFor(hoveredDayIdx)} y1={padT} x2={xFor(hoveredDayIdx)} y2={padT + plotH} stroke={T.textMut} strokeWidth="0.5" strokeDasharray="2 2"/>
-                  )}
-
-                  {/* Hover capture rects (transparent) */}
-                  {allDates.map((d, i) => {
-                    const cellW = (allDates.length === 1 ? plotW : plotW / (allDates.length - 1));
-                    const x = xFor(i) - cellW / 2;
-                    return (
-                      <rect
-                        key={`hov-${i}`}
-                        x={Math.max(0, x)}
-                        y={padT}
-                        width={cellW}
-                        height={plotH + padB}
-                        fill="transparent"
-                        style={{cursor:"crosshair"}}
-                        onMouseEnter={() => setHoveredDayIdx(i)}
-                        onMouseLeave={() => setHoveredDayIdx(null)}
-                      />
-                    );
-                  })}
-                </svg>
-
-                {/* Tooltip HTML overlay (n'est pas étiré par preserveAspectRatio) */}
-                {hoveredDayIdx !== null && allDates[hoveredDayIdx] && (() => {
-                  const date = allDates[hoveredDayIdx];
-                  // Trier les stratégies par P&L décroissant à cette date
-                  const items = [...seriesFilled]
-                    .map(s => ({ strategy: s.strategy, value: s.filled[hoveredDayIdx]?.value ?? 0 }))
-                    .sort((a, b) => b.value - a.value);
-                  const leftPct = (xFor(hoveredDayIdx) / W) * 100;
-                  // Position verticale : on suit le point de la stratégie sélectionnée (sinon le max).
-                  const selSeries = seriesFilled.find(s => String(s.strategy.id) === String(selectedStrategy?.id));
-                  const trackVal = selSeries ? (selSeries.filled[hoveredDayIdx]?.value ?? 0) : Math.max(...items.map(i => i.value));
-                  const trackY = yFor(trackVal);
-                  const topPct = (trackY / H) * 100;
-                  // Si on est à droite, basculer la tooltip à gauche du curseur
-                  const shouldFlip = leftPct > 60;
+                Chaque entrée est un bouton : elle fait passer sa stratégie au
+                premier plan du graphique. Cliquer celle qui y est déjà revient à
+                la stratégie de la page. */}
+            <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              {[...seriesPerStrategy]
+                .sort((a, b) => lastValue(b) - lastValue(a))
+                .map((s) => {
+                  const active = isFocused(s);
+                  const last = lastValue(s);
                   return (
-                    <div
+                    <button
+                      key={s.strategy.id}
+                      type="button"
+                      onClick={() => setChartFocusId(active ? selectedStrategy?.id : s.strategy.id)}
+                      aria-pressed={active}
+                      title={active ? undefined : `Mettre « ${s.strategy.name} » au premier plan`}
+                      /* Aucun décor : pas d'aplat, pas de contour. La stratégie
+                         au premier plan se signale par sa pleine encre et son
+                         nom en gras — les autres restent en retrait. */
                       style={{
-                        position:"absolute",
-                        left:`calc(12px + ${leftPct}% * (100% - 24px) / 100%)`,
-                        top:`${topPct}%`,
-                        transform: `translateY(-100%) translateY(-12px) ${shouldFlip ? "translateX(-100%) translateX(-8px)" : "translateX(8px)"}`,
-                        background:T.white,
-                        color:T.text,
-                        border:`1px solid ${T.border}`,
-                        padding:"8px 10px",
-                        borderRadius:6,
-                        fontSize:11,
-                        fontFamily:"var(--font-sans)",
-                        boxShadow:"var(--elev-overlay)",
-                        pointerEvents:"none",
-                        zIndex:9999,
-                        whiteSpace:"nowrap",
+                        display:"inline-flex",alignItems:"center",gap:6,minWidth:0,
+                        padding:0,border:"none",background:"transparent",cursor:"pointer",
+                        fontFamily:"inherit",
+                        opacity: active ? 1 : 0.5,
+                        transition:"opacity 120ms ease",
                       }}
+                      onMouseEnter={(e) => { if (!active) e.currentTarget.style.opacity = 1; }}
+                      onMouseLeave={(e) => { if (!active) e.currentTarget.style.opacity = 0.5; }}
                     >
-                      <div style={{fontWeight:600,marginBottom:6,color:T.textSub,fontSize:11}}>{fmtD(date)}</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                        {items.map(it => {
-                          const isSelected = String(it.strategy.id) === String(selectedStrategy?.id);
-                          return (
-                            <div key={it.strategy.id} style={{display:"flex",alignItems:"center",gap:6,opacity:isSelected ? 1 : 0.85}}>
-                              <span style={{width:6,height:6,borderRadius:"50%",background:it.strategy.color,flexShrink:0}}/>
-                              <span style={{fontWeight:isSelected ? 600 : 500,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis"}}>{it.strategy.name}</span>
-                              <span style={{marginLeft:"auto",fontWeight:600,color:it.value > 0 ? T.green : it.value < 0 ? T.red : T.text}}>{fmtVal(it.value)}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:s.strategy.color,flexShrink:0}}/>
+                      <span style={{fontSize:12,fontWeight:active ? 600 : 500,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>
+                        {s.strategy.name}
+                      </span>
+                      <span style={{fontSize:12,fontWeight:500,whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums",color:last > 0 ? T.pnlPos : last < 0 ? T.pnlNeg : T.textSub}}>
+                        {last > 0 ? "+" : ""}{fmt(last, false)}
+                      </span>
+                    </button>
                   );
-                })()}
-              </div>
+                })}
             </div>
           </div>
         );
       })()}
 
-      {/* CARDS 2 + 3 : cote a cote avec gap */}
+      {/* CARDS 2 + 3 : cote a cote avec gap.
+          Respiration supplémentaire au-dessus : le graphique et sa légende
+          terminent la lecture « performance », ces cartes ouvrent autre chose —
+          les 24 px du rythme de page ne suffisaient pas à marquer la coupure. */}
       {filteredTrades.length > 0 && (
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"stretch"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"stretch",marginTop:16}}>
         {/* CARD 2 : Condition probabilite */}
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
-          <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`}}>
-            <div style={{fontSize:13,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
+        <div style={{...CARD, padding:0}}>
+          <div style={{padding:"16px 20px",borderBottom:`1px solid ${HAIRLINE}`}}>
+            <div style={{fontSize:15,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
               {t("strat.detail.condProb")} <span style={{color:T.textMut,fontWeight:500}}>›</span>
             </div>
             <div style={{fontSize:11,color:T.textMut,marginTop:2}}>{t("strat.detail.condProbSub")}</div>
@@ -937,11 +777,11 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
             {/* BEST */}
             <div style={{padding:16,borderRight:`1px solid ${T.border}`}}>
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                <div style={{paddingBottom:14,borderBottom:`1px solid ${T.border}`}}>
+                <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.bestDay")}</div>
                   <div style={{fontSize:15,fontWeight:600,color:T.text}}>{bestDay.day}</div>
                 </div>
-                <div style={{paddingBottom:14,borderBottom:`1px solid ${T.border}`}}>
+                <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.bestWindow")}</div>
                   <div style={{fontSize:15,fontWeight:600,color:T.text}}>{bestHour.hour}</div>
                 </div>
@@ -954,11 +794,11 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
             {/* WORST */}
             <div style={{padding:16}}>
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                <div style={{paddingBottom:14,borderBottom:`1px solid ${T.border}`}}>
+                <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.worstDay")}</div>
                   <div style={{fontSize:15,fontWeight:600,color:T.text}}>{worstDay.day}</div>
                 </div>
-                <div style={{paddingBottom:14,borderBottom:`1px solid ${T.border}`}}>
+                <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.worstWindow")}</div>
                   <div style={{fontSize:15,fontWeight:600,color:T.text}}>{worstHour.hour}</div>
                 </div>
@@ -972,9 +812,9 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
         </div>
 
         {/* CARD 3 : tao score */}
-        <div style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
+        <div style={{...CARD, padding:0}}>
           <div style={{padding:"16px 20px"}}>
-            <div style={{fontSize:13,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
+            <div style={{fontSize:15,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
               tao score <span style={{color:T.textMut,fontWeight:500}}>›</span>
             </div>
             <div style={{fontSize:11,color:T.textMut,marginTop:2}}>{t("strat.detail.taoScoreSub")}</div>
@@ -1040,42 +880,18 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
       {/* HEADER VISUEL collé au tableau — petite barre titre + bouton "Tout
           voir". Le tableau réel est rendu juste en-dessous via TradesPage
           embedded ; un trait 1px sépare le header du tableau. */}
-      <div style={{display:"flex",flexDirection:"column",gap:0}}>
-        <div style={{
-          display:"flex",alignItems:"center",justifyContent:"space-between",
-          padding:"14px 18px",
-          background:T.white,
-          border:`1px solid ${T.border}`,
-          borderRadius:"var(--radius-card) var(--radius-card) 0 0",
-          borderBottom:"none",
-          marginBottom:0,
-        }}>
-          <div style={{fontSize:13,fontWeight:600,color:T.text}}>{t("strat.detail.recentTrades")}</div>
-          <button
-            type="button"
-            onClick={() => setPage?.("trades")}
-            style={{
-              display:"inline-flex",alignItems:"center",gap:6,
-              padding:"6px 14px",borderRadius:999,
-              border:`1px solid ${T.border}`,background:T.white,
-              color:T.textSub,fontSize:11,fontWeight:500,cursor:"pointer",
-              fontFamily:"inherit",
-            }}
-          >
-            {t("strat.detail.viewAll")} <ArrowRight size={11} />
-          </button>
-        </div>
-
-        {/* Séparateur explicite entre le titre du bloc et le tableau */}
-        <div style={{height:1,background:T.border,borderLeft:`1px solid ${T.border}`,borderRight:`1px solid ${T.border}`,boxSizing:"border-box"}} />
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <SectionTitle
+          action={<SectionAction onClick={() => setPage?.("trades")}>{t("strat.detail.viewAll")}</SectionAction>}
+        >
+          <span style={{display:"inline-flex",alignItems:"baseline",gap:8}}>
+            <span>{t("strat.detail.recentTrades")}</span>
+            <span style={{fontSize:20,fontWeight:400,color:T.text,opacity:0.4}}>{filteredTrades.length}</span>
+          </span>
+        </SectionTitle>
 
         {filteredTrades.length === 0 ? (
-          <div style={{
-            background:T.white,
-            border:`1px solid ${T.border}`,
-            borderRadius:"0 0 var(--radius-card) var(--radius-card)",
-            padding:"40px 24px",textAlign:"center",color:T.textSub,fontSize:13,
-          }}>
+          <div style={{...CARD, padding:"40px 24px",textAlign:"center",color:T.textMut,fontSize:13}}>
             {t("strat.detail.noTrade")}
           </div>
         ) : (

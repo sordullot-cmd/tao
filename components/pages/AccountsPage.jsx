@@ -20,7 +20,7 @@ const fmtNoCents = (n) => {
   const prefix = v < 0 ? "-" : "";
   return `${prefix}${sym}${Math.abs(v).toLocaleString("en-US")}`;
 };
-import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, X, Calendar, ChevronDown, Building2, Link2 } from "lucide-react";
+import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, X, Calendar, ChevronDown, Building2 } from "lucide-react";
 import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { isArchivedAccount, ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -880,20 +880,15 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                         );
                       })}
 
-                      {/* Fin de la liste des comptes de la firme : les deux
-                          façons de la garnir, dans l'ordre où on les cherche —
-                          créer un compte, ou rattacher un compte qui existe
-                          déjà (créé avant la firme, ou hors firme). Le second
-                          chemin n'existait que dans la modale du compte, un
-                          compte à la fois, à condition d'y trouver le champ
-                          « Firme ». */}
+                      {/* Fin de la liste des comptes de la firme : une seule
+                          ligne « Ajouter un compte », qui ouvre les deux façons
+                          de la garnir — créer un compte, ou rattacher un compte
+                          qui existe déjà (créé avant la firme, ou hors firme).
+                          Deux lignes empilées disaient deux fois « ajouter »
+                          pour une seule intention. */}
                       <AddAccountRow
                         onClick={() => setCreatingAccount({ firmId: summary.firm.id })}
-                      />
-                      <AddAccountRow
-                        icon={<Link2 size={12} strokeWidth={2} />}
-                        label={t("firms.attachAccount")}
-                        onClick={() => setAttachingToFirm(summary.firm)}
+                        onAttach={() => setAttachingToFirm(summary.firm)}
                       />
                     </TableRow>
                   );

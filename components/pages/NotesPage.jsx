@@ -8,7 +8,7 @@ import { useUndo } from "@/lib/contexts/UndoContext";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { CARD, SectionTitle, HAIRLINE, FIELD_BG } from "@/components/ui/da";
+import { CARD, HAIRLINE, FIELD_BG } from "@/components/ui/da";
 import DrawingCanvas, { strokeMaxY } from "@/components/notes/DrawingCanvas";
 import DrawingToolbar from "@/components/notes/DrawingToolbar";
 import { htmlToMarkdown, htmlHasStructure } from "@/lib/ui/clipboardMarkdown";
@@ -562,30 +562,25 @@ export default function NotesPage() {
           une feuille <style> embarquée ici en portait une seconde version aux
           seuils différents — les deux se contredisaient entre 767 et 900 px. */}
 
-      {/* En-tête : le titre de page de la nouvelle DA, l'action à sa droite. Le
-          bouton « Nouvelle note » flottait seul en haut, sans rien nommer. */}
-      <SectionTitle
-        action={
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <button
-              type="button"
-              onClick={createNote}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none",
-                background: T.text, color: T.textInverted,
-                fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              <Plus size={13} strokeWidth={1.75} />
-              <span className="tr4de-notes-newbtn-label">Nouvelle note</span>
-            </button>
-            <div id="tr4de-page-header-slot" />
-          </div>
-        }
-      >
-        Notes
-      </SectionTitle>
+      {/* En-tête sans titre de page : la barre latérale dit déjà où l'on est.
+          Ne restent que l'action et le slot d'en-tête, alignés à droite. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={createNote}
+          style={{
+            marginLeft: "auto",
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none",
+            background: T.text, color: T.textInverted,
+            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          <Plus size={13} strokeWidth={1.75} />
+          <span className="tr4de-notes-newbtn-label">Nouvelle note</span>
+        </button>
+        <div id="tr4de-page-header-slot" />
+      </div>
 
       <div className="tr4de-notes-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 12, flex: 1, minHeight: 0 }}>
         {/* Left : list — carte de la nouvelle DA (ombre douce, coins 12, aucune

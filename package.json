@@ -37,6 +37,7 @@
     "express-session": "^1.17.3",
     "google-auth-library-nodejs": "^0.0.1-security.6",
     "googleapis": "^171.4.0",
+    "jose": "^6.2.8",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",

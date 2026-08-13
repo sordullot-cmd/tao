@@ -942,44 +942,47 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
     );
   }
 
-  const t0 = msOf(points[0].date);
+  /* ─── Abscisse : un PAS PAR POINT, pas le temps écoulé ──────────────────────
+     Les points sont posés à intervalle régulier, dans leur ordre. Une semaine
+     sans trade ne creuse donc plus un vide au milieu du tracé : ce que la courbe
+     raconte, c'est une suite de résultats, pas un calendrier — deux trades
+     consécutifs sont voisins qu'ils soient séparés d'une heure ou d'un mois.
+     (L'axe était temporel : les périodes creuses étiraient le tracé et
+     tassaient les séries actives contre le bord.) */
   const t1 = msOf(points[points.length - 1].date);
-  const tSpan = (t1 - t0) || 1;
-  const xFor = (date) => ((msOf(date) - t0) / tSpan) * W;
+  const lastIdx = Math.max(points.length - 1, 1);
+  const xAt = (i) => (i / lastIdx) * W;
 
-  /* Les autres comptes sont recadrés sur la même fenêtre temporelle, puis
-     ANCRÉS au bord gauche : un compte ouvert plus tard commencerait sinon au
-     milieu du graphique, ce qui laisse croire à une interruption. On préfixe
-     donc sa série d'un point à t0 sur sa valeur de départ — le trait est plat
-     jusqu'à son premier trade, puis la courbe démarre réellement.
-     Symétriquement, une série qui s'arrête avant t1 est prolongée à plat
-     jusqu'au bord droit, pour ne pas donner l'illusion d'un retour à zéro. */
-  const otherClipped = (others || [])
-    // Un compte sans aucun trade n'a rien à montrer : on ne trace pas de ligne
-    // plate à zéro pour lui, elle serait indiscernable d'un compte à l'équilibre.
+  /* Les autres séries sont projetées SUR CET AXE : à chaque rang de la série
+     principale, on lit la valeur que l'autre avait à cette date-là (son dernier
+     point connu, à défaut 0 tant qu'elle n'a rien produit). Elles restent donc
+     comparables rang par rang, et une série ouverte plus tard part à plat depuis
+     le bord gauche au lieu de surgir au milieu du graphique.
+     Le report à plat vaut aussi après son dernier point : la ligne se prolonge
+     au niveau atteint, sans redescendre vers zéro. */
+  const otherProjected = (others || [])
+    // Une série sans aucun point n'a rien à montrer : on ne trace pas de ligne
+    // plate à zéro pour elle, elle serait indiscernable d'un compte à l'équilibre.
     .filter(s => Array.isArray(s?.points) && s.points.length > 0)
     .map(s => {
-      const inWindow = s.points.filter(p => msOf(p.date) >= t0 && msOf(p.date) <= t1);
-      // Aucun trade dans la fenêtre affichée : même raison, pas de ligne.
-      if (inWindow.length === 0) return { ...s, points: [] };
-      // Valeur au moment d'entrer dans la fenêtre : dernier point connu avant
-      // t0 s'il y en a un (le compte existait déjà), sinon 0 (il n'a pas encore
-      // tradé, sa courbe est plate à zéro).
-      const before = s.points.filter(p => msOf(p.date) < t0);
-      const startCum = before.length ? before[before.length - 1].cum : 0;
-      const head = msOf(inWindow[0].date) > t0
-        ? [{ date: points[0].date, cum: startCum }]
-        : [];
-      const last = inWindow[inWindow.length - 1];
-      const tail = msOf(last.date) < t1
-        ? [{ date: points[points.length - 1].date, cum: last.cum }]
-        : [];
-      return { ...s, points: [...head, ...inWindow, ...tail] };
+      const sorted = [...s.points].sort((a, b) => msOf(a.date) - msOf(b.date));
+      // Rien dans la fenêtre affichée : même raison, pas de ligne.
+      if (msOf(sorted[0].date) > t1) return { ...s, values: [] };
+      let cursor = 0, held = 0;
+      const values = points.map(p => {
+        const at = msOf(p.date);
+        while (cursor < sorted.length && msOf(sorted[cursor].date) <= at) {
+          held = sorted[cursor].cum;
+          cursor += 1;
+        }
+        return held;
+      });
+      return { ...s, values };
     })
-    .filter(s => s.points.length > 1);
+    .filter(s => s.values.length > 1);
 
   const values = points.map(p => p.cum);
-  otherClipped.forEach(s => s.points.forEach(p => values.push(p.cum)));
+  otherProjected.forEach(s => s.values.forEach(v => values.push(v)));
   const yMax = Math.max(...values);
   const yMin = Math.min(...values);
   const ySpan = (yMax - yMin) || 1;
@@ -988,15 +991,15 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
   // Couleur d'identité du compte : la maquette montre le compte XTB en rouge
   // ici ET sur sa carte de la liste. La couleur suit le compte, pas le P&L.
   const lineColor = color || T.kraken;
-  const coords = points.map(p => [xFor(p.date), yFor(p.cum)]);
+  const coords = points.map((p, i) => [xAt(i), yFor(p.cum)]);
   const pathD = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c[0].toFixed(2)} ${c[1].toFixed(2)}`).join(" ");
   // Aire fermée sous la courbe : c'est elle qui porte la trame de points.
   const areaD = `${pathD} L ${coords[coords.length - 1][0].toFixed(2)} ${H} L ${coords[0][0].toFixed(2)} ${H} Z`;
 
   /* Seuil d'opacité « après le curseur » : son abscisse, en fraction de la
-     largeur. `null` hors survol = aucun masque. Ici l'axe est TEMPOREL — les
-     points ne sont pas répartis régulièrement —, on relit donc l'abscisse déjà
-     calculée dans `coords` plutôt que de diviser un index par la longueur. */
+     largeur. `null` hors survol = aucun masque. On relit l'abscisse déjà calculée
+     dans `coords` plutôt que de la recalculer ici — une seule source pour la
+     position du seuil et celle du trait de survol. */
   const fadeRatio = hover !== null && coords[hover]
     ? coords[hover][0] / (W || 1)
     : null;
@@ -1027,8 +1030,6 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
     return { value: yMax - ratio * ySpan, top: topY - 7 + ratio * plotH };
   });
 
-
-  const cellW = W / Math.max(points.length - 1, 1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
@@ -1105,9 +1106,9 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
               le sien (la trame), et un élément ne peut en porter qu'un. */}
           <g mask={hoverFadeMask(uid, fadeRatio)}>
             {/* Autres comptes — lignes fines en arrière-plan */}
-            {otherClipped.map(s => {
-              const d = s.points
-                .map((p, i) => `${i === 0 ? "M" : "L"} ${xFor(p.date).toFixed(2)} ${yFor(p.cum).toFixed(2)}`)
+            {otherProjected.map(s => {
+              const d = s.values
+                .map((v, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(2)} ${yFor(v).toFixed(2)}`)
                 .join(" ");
               return (
                 <path
@@ -1148,14 +1149,25 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
             />
           )}
 
-          {/* Zones de capture, bornées à [0, W] : le <svg> est en
-              overflow:visible, et sur une courbe à deux points la
-              demi-cellule de débord atteindrait W/2 au-delà du bord — invisible
-              en desktop (le conteneur clippe) mais capable d'ouvrir un scroll
-              horizontal en mobile, où ce clip est désactivé. */}
+          {/* Zones de capture du survol : chacune s'étend jusqu'à MI-CHEMIN de
+              ses voisines, donc elles pavent exactement la largeur — aucun
+              chevauchement, aucun trou, et le point attrapé est toujours le plus
+              proche du curseur.
+              Elles avaient toutes la même largeur (W / nombre de points), ce qui
+              ne vaut que si les points sont régulièrement espacés. L'axe est
+              TEMPOREL : dès que le rythme des points est irrégulier — une pause
+              dans les trades, plusieurs trades le même jour —, ces cellules
+              uniformes se recouvraient et c'est la dernière rendue qui gagnait le
+              survol, d'où un curseur qui désignait un autre point que celui
+              affiché.
+              Bornées à [0, W] : le <svg> est en overflow:visible, et un débord
+              pourrait ouvrir un scroll horizontal en mobile, où le conteneur ne
+              clippe plus. */}
           {coords.map((c, i) => {
-            const x0 = Math.max(0, c[0] - cellW / 2);
-            const x1 = Math.min(W, c[0] + cellW / 2);
+            const prevX = i > 0 ? coords[i - 1][0] : null;
+            const nextX = i < coords.length - 1 ? coords[i + 1][0] : null;
+            const x0 = Math.max(0, prevX == null ? 0 : (c[0] + prevX) / 2);
+            const x1 = Math.min(W, nextX == null ? W : (c[0] + nextX) / 2);
             return (
               <rect
                 key={`hover-${i}`}

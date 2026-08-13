@@ -25,6 +25,13 @@ import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import EloquencePage from "@/components/pages/EloquencePage";
 import BudgetPage from "@/components/pages/BudgetPage";
+import PatrimoinePage from "@/components/pages/PatrimoinePage";
+import PatrimoineAssetsPage from "@/components/pages/PatrimoineAssetsPage";
+import PatrimoineAssetPage from "@/components/pages/PatrimoineAssetPage";
+import PatrimoineClassPage from "@/components/pages/PatrimoineClassPage";
+import PatrimoineHoldingPage from "@/components/pages/PatrimoineHoldingPage";
+import PatrimoineBankPage from "@/components/pages/PatrimoineBankPage";
+import PatrimoineLiabilitiesPage from "@/components/pages/PatrimoineLiabilitiesPage";
 import AgendaPage from "@/components/pages/AgendaPage";
 import CalendarPage from "@/components/pages/CalendarPage";
 import JournalPage from "@/components/pages/JournalPage";
@@ -81,6 +88,10 @@ import {
   FolderOpen as LucideFolderOpen,
   Mic as LucideMic,
   PiggyBank as LucidePiggyBank,
+  Landmark as LucideLandmark,
+  Coins as LucideCoins,
+  Building2 as LucideBuilding2,
+  CreditCard as LucideCreditCard,
 } from "lucide-react";
 
 /* ─── TOKENS ───────────────────────────────────────────────────────────
@@ -99,15 +110,14 @@ const css = `
 
 const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencySymbol()}${Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 
-/* Pages déjà passées à la nouvelle DA : elles posent leurs propres cartes sur le
-   fond gris, gèrent leur gouttière et peuvent la reprendre (cf. --page-gutter).
-   En desktop, la barre du haut n'y garde aucune hauteur : elle est vide, et le
-   contenu doit pouvoir monter jusqu'au bord. */
 /* Pages portées à la nouvelle DA : le conteneur de contenu les laisse posées à
-   même le fond gris du shell, sans cadre blanc pleine page. Une page rejoint
-   cette liste quand ses blocs sont devenus des cartes `CARD` — sinon elle
-   flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "budget", "sport", "notes", "agenda", "eloquence"];
+   même le fond gris du shell, sans cadre blanc pleine page — elles posent leurs
+   propres cartes, gèrent leur gouttière et peuvent la reprendre en marge négative
+   (cf. --page-gutter). En desktop, la barre du haut n'y garde aucune hauteur :
+   elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
+   Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
+   sinon elle flotterait sur le gris sans rien pour porter son contenu. */
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "budget", "sport", "notes", "agenda", "eloquence", "strategy-detail", "daily-planner", "patrimoine", "patrimoine-assets", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -182,6 +192,14 @@ export default function App() {
   const [selectedAccountDetailId, setSelectedAccountDetailId] = useState(null);
   // Firme dont on affiche les paramètres (page "firm-detail").
   const [selectedFirmId, setSelectedFirmId] = useState(null);
+  /* Section Finance — patrimoine. L'app d'origine passait ces identifiants par
+     l'URL ([id], [slug], [isin]) ; tr4de navigue par état, comme pour les
+     comptes de trading et les prop firms. */
+  const [selectedAssetId, setSelectedAssetId] = useState(null);
+  const [selectedClassSlug, setSelectedClassSlug] = useState(null);
+  // Ligne de titres : { assetId, holdingId } — le couple, car l'ISIN seul ne
+  // suffit pas à retrouver la ligne quand deux comptes portent le même titre.
+  const [selectedHolding, setSelectedHolding] = useState(null);
   // ✅ Utiliser les hooks pour Trades et Stratégies (auto-stockés dans Supabase)
   const { trades, addTrade, updateTrade, deleteTrade } = useTrades();
   const { pushUndo } = useUndo();
@@ -639,7 +657,19 @@ export default function App() {
         { id: "sport",         icon: LucideDumbbell,     label: "Sport" },
         { id: "notes",         icon: LucideFileText,     label: t("nav.notes") },
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
-        { id: "budget",        icon: LucidePiggyBank,    label: t("nav.budget") },
+      ],
+    },
+    /* Finance — l'argent personnel, à distinguer du capital de trading qui vit
+       dans « Comptes ». Les pages viennent de l'app patrimoine (cf.
+       lib/patrimoine.ts) ; « Budget » les rejoint, il y était déjà. */
+    {
+      label: t("nav.finance"),
+      items: [
+        { id: "patrimoine",             icon: LucideLandmark,   label: t("nav.patrimoine") },
+        { id: "patrimoine-assets",      icon: LucideCoins,      label: t("nav.patrimoineAssets") },
+        { id: "patrimoine-liabilities", icon: LucideCreditCard, label: t("nav.patrimoineLiabilities") },
+        { id: "patrimoine-bank",        icon: LucideBuilding2,  label: t("nav.patrimoineBank") },
+        { id: "budget",                 icon: LucidePiggyBank,  label: t("nav.budget") },
       ],
     },
   ];
@@ -706,6 +736,13 @@ export default function App() {
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,
     budget: <BudgetPage />,
+    patrimoine: <PatrimoinePage setPage={setPage} setSelectedAssetId={setSelectedAssetId} setSelectedClassSlug={setSelectedClassSlug} />,
+    "patrimoine-assets": <PatrimoineAssetsPage setPage={setPage} setSelectedAssetId={setSelectedAssetId} />,
+    "patrimoine-asset": <PatrimoineAssetPage assetId={selectedAssetId} setPage={setPage} setSelectedHolding={setSelectedHolding} />,
+    "patrimoine-class": <PatrimoineClassPage classSlug={selectedClassSlug} setPage={setPage} setSelectedAssetId={setSelectedAssetId} />,
+    "patrimoine-holding": <PatrimoineHoldingPage selection={selectedHolding} setPage={setPage} setSelectedAssetId={setSelectedAssetId} />,
+    "patrimoine-bank": <PatrimoineBankPage setPage={setPage} />,
+    "patrimoine-liabilities": <PatrimoineLiabilitiesPage setPage={setPage} setSelectedAssetId={setSelectedAssetId} />,
     settings: <SettingsPage user={user} onBack={() => setPage("dashboard")} setPage={setPage} />,
   };
 

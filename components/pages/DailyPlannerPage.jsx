@@ -8,7 +8,6 @@ import { useUndo } from "@/lib/contexts/UndoContext";
 import { t, useLang } from "@/lib/i18n";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { TimeField } from "./AgendaDateFields";
-import { NavArrow, NavLabel } from "@/components/ui/DateNav";
 import MiniCalendar from "@/components/ui/MiniCalendar";
 import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon, habitCategoryIds, CATEGORY_PALETTE } from "@/lib/lifeRpgCategories";
@@ -42,10 +41,15 @@ import {
   Skull, Ghost, Bone, BicepsFlexed,
 } from "lucide-react";
 
-import { T as BaseT } from "@/lib/ui/tokens";
-// `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
-// thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
-const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
+import { T } from "@/lib/ui/tokens";
+import { CARD, StepperPill, FIELD_BG } from "@/components/ui/da";
+
+/* Surface secondaire (pastilles d'icône, champs, aplats internes). L'ancien
+   `T.bg` local pointait sur le gris de survol pour ne pas être blanc ; la page
+   étant désormais POSÉE sur le gris du shell, un gris opaque de plus par-dessus
+   ferait un bloc dans le bloc. `FIELD_BG` est un voile d'encre : il s'assombrit
+   ou s'éclaircit tout seul avec la surface qui le porte. */
+const SURFACE = FIELD_BG;
 
 /* ─────────────── Helpers de style du formulaire (alignés sur l'Agenda) ─────────────── */
 // Ligne de formulaire : icône à gauche + contenu, comme la fiche d'événement du calendrier.
@@ -61,31 +65,32 @@ function FormRow({ icon: Icon, children, top = false, iconColor }) {
 }
 // Champ texte sans bordure (souligné par la ligne, pas de boîte).
 const rowInp = { width: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 14, color: T.text, padding: "5px 0", boxSizing: "border-box" };
-// Bouton icône discret de la barre du haut du modal (fermer).
+/* Boutons : métrique de la nouvelle DA — 12 px Medium, 32 px de haut, pastille
+   pleine sans contour pour l'action principale. Le blanc en dur a disparu : sur
+   l'aplat `T.text`, qui s'éclaircit en thème sombre, il devenait invisible. */
 const topIconBtn = {
   display: "inline-flex", alignItems: "center", justifyContent: "center",
-  width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent",
+  width: 32, height: 32, borderRadius: 999, border: "none", background: "transparent",
   color: T.textMut, cursor: "pointer", fontFamily: "inherit",
   transition: "background-color 120ms ease, color 120ms ease",
 };
-// Bouton « pilule » moderne.
 const pillBtn = {
-  display: "inline-flex", alignItems: "center", gap: 8,
-  padding: "8px 14px", borderRadius: 999,
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "7px 12px", minHeight: 32, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
-  fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+  fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
 };
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",
-  padding: "7px 14px", height: 34, borderRadius: 999,
+  padding: "7px 12px", minHeight: 32, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
-  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 const primaryBtn = (small = false) => ({
   display: "inline-flex", alignItems: "center",
-  padding: small ? "7px 14px" : "10px 20px", height: small ? 34 : undefined, borderRadius: 999,
-  border: `1px solid ${T.text}`, background: T.text, color: T.white,
-  fontSize: small ? 13 : 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  padding: small ? "7px 14px" : "10px 20px", minHeight: small ? 32 : undefined, borderRadius: 999,
+  border: "none", background: T.text, color: T.textInverted,
+  fontSize: small ? 12 : 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 
 const STORAGE_PLANNER = "tr4de_daily_planner";
@@ -455,10 +460,43 @@ export default function DailyPlannerPage() {
   const taskDoneCount = tasks.filter(p => p.done).length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
-      {/* Header : titre + navigation entre les jours */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+      {/* ═══ 1. BARRE DU JOUR ═══
+          Pas de titre de page — comme le dashboard et le calendrier, la page se
+          présente par son contenu. Les contrôles sont calés à droite : avancement
+          du jour, navigation, ajout.
+          La date passe par la brique commune de navigation de période
+          (`StepperPill`, celle du calendrier et de l'agenda) — le libellé ouvre
+          toujours le sélecteur de date. Le filet de 1 px qui poussait le compteur
+          vers la droite a disparu avec elle. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+          {habits.filter(h => habitHistory[h.id]?.[dateKey]).length}/{habits.length}
+        </span>
+        <div style={{ position: "relative", display: "inline-flex" }}>
+          <StepperPill
+            label={(() => { const p = fmtDateParts(dateKey); return `${p.weekday} ${p.day} ${p.month}`; })()}
+            onPrev={() => shiftDay(-1)}
+            onNext={() => shiftDay(1)}
+            onLabel={() => setDayPickerOpen((o) => !o)}
+            labelTitle="Choisir une date"
+            prevLabel="Jour précédent"
+            nextLabel="Jour suivant"
+          />
+          {dayPickerOpen && (
+            <MiniCalendar
+              value={new Date(dateKey + "T00:00:00")}
+              onSelect={pickDate}
+              onClose={() => setDayPickerOpen(false)}
+              align="left"
+            />
+          )}
+        </div>
+        <button onClick={openCreateHabit} title="Ajouter une habitude" aria-label="Ajouter une habitude"
+          style={{ width: 32, height: 32, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Plus size={14} strokeWidth={2} />
+        </button>
+        <div id="tr4de-page-header-slot" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24, alignItems: "start" }}>
@@ -466,38 +504,6 @@ export default function DailyPlannerPage() {
 
       {/* Habitudes du jour */}
       <div style={isMobile ? { alignSelf: "center", width: "100%", maxWidth: 480 } : undefined}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: "0 16px" }}>
-            {(() => {
-              const parts = fmtDateParts(dateKey);
-              return (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <NavArrow direction="left" onClick={() => shiftDay(-1)} title="Jour précédent" />
-                  <div style={{ position: "relative", display: "inline-flex" }}>
-                    <NavLabel onClick={() => setDayPickerOpen((o) => !o)} title="Choisir une date" minWidth={0}>
-                      {parts.weekday} {parts.day} {parts.month}
-                    </NavLabel>
-                    {dayPickerOpen && (
-                      <MiniCalendar
-                        value={new Date(dateKey + "T00:00:00")}
-                        onSelect={pickDate}
-                        onClose={() => setDayPickerOpen(false)}
-                        align="left"
-                      />
-                    )}
-                  </div>
-                  <NavArrow direction="right" onClick={() => shiftDay(1)} title="Jour suivant" />
-                </div>
-              );
-            })()}
-            <div style={{ flex: 1, height: 1, background: T.border }} />
-            <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
-              {habits.filter(h => habitHistory[h.id]?.[dateKey]).length}/{habits.length}
-            </span>
-            <button onClick={openCreateHabit} title="Ajouter une habitude" aria-label="Ajouter une habitude"
-              style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${T.text}`, background: T.text, color: T.white, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", marginRight: isMobile ? 0 : 64 }}>
-              <Plus size={13} strokeWidth={2} />
-            </button>
-          </div>
 
           {/* Formulaire ajout/edit */}
           {habitFormOpen && typeof document !== "undefined" && ReactDOM.createPortal(
@@ -517,7 +523,7 @@ export default function DailyPlannerPage() {
                 onKeyDown={(e) => { if (e.key === "Escape") closeHabitForm(); if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveHabit(); }}
                 style={{
                   background: T.white,
-                  borderRadius: "var(--radius-card)",
+                  borderRadius: 12,
                   padding: 0,
                   width: "100%", maxWidth: 540,
                   maxHeight: "92vh",
@@ -534,7 +540,7 @@ export default function DailyPlannerPage() {
                     position: "relative",
                     padding: "10px 16px 0", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2,
                     cursor: "move", userSelect: "none",
-                    borderTopLeftRadius: "var(--radius-card)", borderTopRightRadius: "var(--radius-card)",
+                    borderTopLeftRadius: 12, borderTopRightRadius: 12,
                   }}>
                   {/* Poignée de déplacement (barre grise centrée) */}
                   <div style={{
@@ -586,7 +592,7 @@ export default function DailyPlannerPage() {
                         <>
                           {/* Capte le clic en dehors pour refermer le sélecteur */}
                           <div onClick={() => setIconPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 4 }} />
-                          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5, width: "100%", background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 10, boxShadow: "var(--elev-overlay)" }}>
+                          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 5, width: "100%", background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)" }}>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(34px, 1fr))", gap: 6, maxHeight: 220, overflowY: "auto" }}>
                               {(() => {
                                 const previewName = habitDraft.name?.trim() || "";
@@ -598,14 +604,14 @@ export default function DailyPlannerPage() {
                                     style={{
                                       width: "100%", aspectRatio: "1 / 1",
                                       display: "flex", alignItems: "center", justifyContent: "center",
-                                      borderRadius: "var(--radius-card)",
+                                      borderRadius: 12,
                                       border: `1px solid ${isAuto ? T.text : T.border}`,
                                       background: isAuto ? T.text : T.white,
-                                      color: isAuto ? T.white : T.text,
+                                      color: isAuto ? T.textInverted : T.text,
                                       cursor: "pointer", padding: 0, position: "relative",
                                     }}>
                                     <AutoIco size={15} strokeWidth={1.75} />
-                                    <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 8, background: isAuto ? T.white : T.text, color: isAuto ? T.text : T.white, borderRadius: 6, padding: "1px 3px", lineHeight: 1, fontWeight: 600 }}>A</span>
+                                    <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 8, background: isAuto ? T.white : T.text, color: isAuto ? T.text : T.textInverted, borderRadius: 6, padding: "1px 3px", lineHeight: 1, fontWeight: 600 }}>A</span>
                                   </button>
                                 );
                               })()}
@@ -618,14 +624,14 @@ export default function DailyPlannerPage() {
                                     style={{
                                       width: "100%", aspectRatio: "1 / 1",
                                       display: "flex", alignItems: "center", justifyContent: "center",
-                                      borderRadius: "var(--radius-card)",
+                                      borderRadius: 12,
                                       border: `1px solid ${selected ? T.text : T.border}`,
                                       background: selected ? T.text : T.white,
-                                      color: selected ? T.white : T.text,
+                                      color: selected ? T.textInverted : T.text,
                                       cursor: "pointer", padding: 0,
                                       transition: "background .12s ease, border-color .12s ease",
                                     }}
-                                    onMouseEnter={(e) => { if (!selected) { e.currentTarget.style.background = T.bg; } }}
+                                    onMouseEnter={(e) => { if (!selected) { e.currentTarget.style.background = SURFACE; } }}
                                     onMouseLeave={(e) => { if (!selected) { e.currentTarget.style.background = T.white; } }}>
                                     <IconCmp size={15} strokeWidth={1.75} />
                                   </button>
@@ -709,11 +715,14 @@ export default function DailyPlannerPage() {
             document.body
           )}
 
-          {/* Liste des habitudes (style timeline de la page Objectifs) */}
+          {/* Liste des habitudes — dans une carte, comme toutes les listes des
+              nouvelles pages (les trades, les comptes) : une seule carte porte
+              toute la liste, ses lignes étant des rangées et non des objets
+              autonomes. */}
           {habits.length === 0 ? (
-            <div style={{ padding: "40px 16px", textAlign: "center", color: T.textMut, fontSize: 13 }}>Ajoute ta première habitude</div>
+            <div style={{ ...CARD, padding: "40px 24px", textAlign: "center", color: T.textMut, fontSize: 13 }}>Ajoute ta première habitude</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            <div style={{ ...CARD, padding: 8, display: "flex", flexDirection: "column", gap: 0 }}>
               {habits.map(h => {
                 const done = !!(habitHistory[h.id] && habitHistory[h.id][dateKey]);
                 const Ico = iconFor(h);
@@ -742,7 +751,7 @@ export default function DailyPlannerPage() {
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
                       padding: "12px 16px",
-                      borderRadius: "var(--radius-card)",
+                      borderRadius: 12,
                       transition: "background .12s ease, box-shadow .12s ease",
                       opacity: dragHabitId === h.id ? 0.4 : 1,
                       boxShadow: dragOverHabitId === h.id ? `inset 0 2px 0 ${T.text}` : "none",
@@ -762,7 +771,7 @@ export default function DailyPlannerPage() {
                     {/* Pastille d'icône — teintée de la couleur de la carte Vie RPG rattachée */}
                     <div style={{
                       width: 34, height: 34, borderRadius: "50%",
-                      background: done ? T.bg : (color ? `color-mix(in srgb, ${color} 10%, transparent)` : T.bg),
+                      background: done ? SURFACE : (color ? `color-mix(in srgb, ${color} 10%, transparent)` : SURFACE),
                       display: "flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0, color: done ? T.textMut : (color || T.text),
                       transition: "background .15s ease, color .15s ease",
@@ -818,7 +827,7 @@ export default function DailyPlannerPage() {
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
                         flexShrink: 0, transition: "all .15s ease",
                       }}>
-                      {done && <Check size={11} strokeWidth={3} color="#fff" />}
+                      {done && <Check size={11} strokeWidth={3} color={T.onSolid} />}
                     </button>
 
                     {/* Edit (masqué au survol sur desktop, toujours visible au tactile) */}
@@ -913,11 +922,11 @@ function HabitsChart({ habits, history }) {
   const xTicks = points.filter((_, i) => i === 0 || i === points.length - 1 || i % 5 === 0);
 
   return (
-    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16 }}>
+    <div style={CARD}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Complétion des habitudes</div>
-          <div style={{ fontSize: 11, color: T.textMut, marginTop: 2 }}>30 derniers jours</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Complétion des habitudes</div>
+          <div style={{ fontSize: 12, color: T.textMut, marginTop: 2 }}>30 derniers jours</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           {streak >= 2 && (
@@ -985,7 +994,7 @@ function HabitsChart({ habits, history }) {
                     : "translate(14px, -50%)",
                   background: T.white, color: T.text,
                   border: `1px solid ${T.border}`,
-                  borderRadius: "var(--radius-card)", padding: "10px 12px",
+                  borderRadius: 12, padding: "10px 12px",
                   fontSize: 11, lineHeight: 1.4,
                   minWidth: 170, maxWidth: 260,
                   boxShadow: "var(--elev-overlay)",
@@ -1073,7 +1082,7 @@ function Row({ done, text, onToggle, onDelete, accent }) {
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
       <button onClick={onToggle}
         style={{ width: 18, height: 18, borderRadius: "var(--radius-field)", border: `1.5px solid ${done ? accent : T.border}`, background: done ? accent : T.white, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        {done && <Check size={11} strokeWidth={2.5} color="#fff" />}
+        {done && <Check size={11} strokeWidth={2.5} color={T.onSolid} />}
       </button>
       <div style={{ flex: 1, fontSize: 13, color: done ? T.textMut : T.text, textDecoration: done ? "line-through" : "none" }}>{text}</div>
       <button onClick={onDelete} style={{ width: 22, height: 22, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: "var(--radius-field)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
@@ -1090,7 +1099,7 @@ function AddInput({ value, onChange, onAdd, placeholder }) {
         onKeyDown={(e) => { if (e.key === "Enter") onAdd(); }}
         placeholder={placeholder}
         style={{ flex: 1, padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: T.white }} />
-      <button onClick={onAdd} style={{ padding: "0 12px", height: 28, background: T.text, color: "#fff", border: `1px solid ${T.text}`, borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+      <button onClick={onAdd} style={{ padding: "0 12px", height: 28, background: T.text, color: T.textInverted, border: "none", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
         <Plus size={12} strokeWidth={2.5} />
       </button>
     </div>

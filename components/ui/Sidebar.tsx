@@ -292,9 +292,9 @@ export default function Sidebar(props: SidebarProps) {
       </nav>
 
       {/* FOOTER : user + collapse.
-          Le compte se résume à sa pastille d'initiales : plus de nom ni d'adresse
-          e-mail: à ce niveau de la barre, la seule information utile est
-          « c'est moi », et l'identité complète vit dans la page Profil. */}
+          La pastille d'initiales porte le compte, avec le nom complet à sa
+          droite ; l'adresse e-mail, elle, reste dans la page Profil. Barre
+          repliée : la pastille seule, centrée — il n'y a plus la place. */}
       <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 4, position: "relative" }} ref={userRef}>
         {user && (
           <button
@@ -305,8 +305,9 @@ export default function Sidebar(props: SidebarProps) {
             aria-haspopup="menu"
             aria-expanded={userMenuOpen}
             style={{
-              width: "100%", display: "flex", alignItems: "center",
-              justifyContent: "center", padding: "6px 0",
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              justifyContent: collapsed ? "center" : "flex-start",
+              padding: collapsed ? "6px 0" : "6px 8px",
               borderRadius: "var(--radius-field)", border: "none",
               background: userMenuOpen ? "var(--color-nav-hover-bg)" : "transparent",
               cursor: "pointer", fontFamily: "inherit", color: "var(--color-text)",
@@ -338,6 +339,15 @@ export default function Sidebar(props: SidebarProps) {
               }}>
                 {user.initials}
               </div>
+            )}
+            {!collapsed && (
+              <span style={{
+                flex: 1, minWidth: 0, textAlign: "left",
+                fontSize: 13, fontWeight: 500, lineHeight: 1.3,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {user.name}
+              </span>
             )}
           </button>
         )}
