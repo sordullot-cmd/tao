@@ -36,7 +36,8 @@ import {
 } from "@/lib/bank/useBankAccounts";
 import { useBankTransactions } from "@/lib/bank/useBankTransactions";
 import {
-  balanceSeries, groupByDay, kindLabelKey, parseDay, periodStats, withinDays,
+  ALL_DAYS, balanceSeries, depthOf, groupByDay, kindLabelKey, oldestDate, parseDay,
+  periodStats, withinDays,
 } from "@/lib/bank/transactions";
 import { ConfirmModal } from "@/components/modals/AccountModals";
 import { AssetFormModal } from "@/components/modals/PatrimoineModals";
@@ -453,15 +454,32 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
 }
 
 /* ── Relevé d'un compte agrégé ─────────────────────────────────────────────
-   Fenêtres proposées. Elles ne redemandent RIEN à la banque : la requête
-   couvre déjà 90 jours (`TRANSACTIONS_WINDOW_DAYS`), les pastilles ne font que
-   recadrer ce qui est là — changer de période reste donc instantané.
+   Fenêtres proposées, les mêmes que partout ailleurs dans l'app (`PERIODS` de
+   la DA), plus « tout ».
+
+   Les trois premières se servent dans ce qui est déjà chargé : la requête part
+   sur 90 jours et les pastilles ne font que recadrer. Les trois dernières
+   demandent une profondeur que le cache ne couvre pas encore — le relevé
+   affiché reste alors en place pendant que la fenêtre plus large se charge
+   par-dessus (cf. `useBankTransactions`), donc sans écran vide.
+
+   Combien la banque rend vraiment ne se décide pas ici : demander un an n'en
+   garantit pas un. C'est pourquoi la légende sous la courbe annonce la date du
+   plus ancien mouvement OBTENU, et non la fenêtre demandée.
    ------------------------------------------------------------------------ */
 const MOVEMENT_PERIODS = [
   { id: "1S", days: 7 },
   { id: "1M", days: 30 },
   { id: "3M", days: 90 },
+  { id: "6M", days: 180 },
+  { id: "1A", days: 365 },
+  { id: "ALL", days: ALL_DAYS },
 ];
+
+/** Profondeur à demander à la banque pour une fenêtre d'affichage. En dessous de
+ *  90 jours, rien à demander de plus : c'est déjà ce que le premier appel a
+ *  chargé, et redescendre ne doit jamais coûter une requête. */
+const depthFor = (days) => (depthOf(days) <= 90 ? 90 : days);
 
 /** Une icône par nature de mouvement : à l'œil, un relevé se parcourt par
  *  colonne d'icônes bien avant de se lire ligne à ligne. */
@@ -506,11 +524,11 @@ const MOVEMENTS_FOLDED = 12;
  */
 function BankMovements({ asset }) {
   const uid = bankAssetUid(asset);
-  const { transactions, windowDays, loading, error } = useBankTransactions(uid);
   const [period, setPeriod] = React.useState("3M");
   const [expanded, setExpanded] = React.useState(false);
 
   const days = MOVEMENT_PERIODS.find((p) => p.id === period)?.days ?? 90;
+  const { transactions, loading, revalidating, error } = useBankTransactions(uid, depthFor(days));
   const balance = assetValue(asset);
 
   const shown = React.useMemo(() => withinDays(transactions, days), [transactions, days]);
@@ -530,7 +548,15 @@ function BankMovements({ asset }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <SectionTitle
         size="sm"
-        action={<PeriodPills value={period} onChange={setPeriod} options={MOVEMENT_PERIODS} />}
+        action={
+          <PeriodPills
+            value={period}
+            onChange={setPeriod}
+            options={MOVEMENT_PERIODS.map((p) =>
+              p.id === "ALL" ? { ...p, label: t("patrimoine.asset.movementsAll") } : p,
+            )}
+          />
+        }
       >
         {t("patrimoine.asset.movements")}
       </SectionTitle>
@@ -544,7 +570,11 @@ function BankMovements({ asset }) {
         </div>
       )}
 
-      {loading ? (
+      {/* Rien à montrer ET une requête en cours : c'est un chargement, pas un
+          compte sans mouvement. Le cas se produit sur une fenêtre longue
+          demandée depuis un compte peu actif — annoncer « aucun mouvement »
+          avant l'arrivée de l'historique serait faux. */}
+      {loading || (shown.length === 0 && revalidating) ? (
         <div style={{ ...CARD, padding: "32px 24px", textAlign: "center", fontSize: 14, color: T.textSub }}>
           {t("patrimoine.asset.movementsLoading")}
         </div>
@@ -571,8 +601,14 @@ function BankMovements({ asset }) {
 
           <PnlChart points={points} color={color} />
 
+          {/* Jusqu'où l'historique remonte VRAIMENT : la profondeur obtenue
+              dépend de la banque, pas de la pastille choisie. Pendant qu'une
+              fenêtre plus longue se charge, on le dit ici plutôt que de faire
+              clignoter la liste. */}
           <div style={{ fontSize: 12, color: T.textMut }}>
-            {t("patrimoine.asset.curveHint").replace("{days}", String(windowDays))}
+            {revalidating
+              ? t("patrimoine.asset.movementsDeeper")
+              : t("patrimoine.asset.curveHint").replace("{date}", formatDay(oldestDate(shown)))}
           </div>
 
           {/* Le relevé, groupé par jour comme celui de la banque : la date est

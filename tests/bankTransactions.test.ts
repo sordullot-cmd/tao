@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  ALL_DAYS,
   balanceSeries,
   classifyTransaction,
+  depthOf,
   groupByDay,
   normalizeTransaction,
+  oldestDate,
   periodStats,
   sortTransactions,
   withinDays,
@@ -175,6 +178,30 @@ describe("agrégats et découpage", () => {
     const today = new Date(2026, 7, 13); // 13 août 2026, heure locale
     const list = [booked("2026-08-13", 1), booked("2026-08-07", 1), booked("2026-08-06", 1)];
     expect(withinDays(list, 7, today).map((t) => t.date)).toEqual(["2026-08-13", "2026-08-07"]);
+  });
+
+  it("couvre six mois et un an sans rien perdre entre les deux", () => {
+    const today = new Date(2026, 7, 13);
+    const list = [
+      booked("2026-08-13", 1),   // aujourd'hui
+      booked("2026-04-01", 1),   // ~4 mois
+      booked("2025-11-01", 1),   // ~9 mois
+      booked("2025-01-05", 1),   // ~19 mois
+    ];
+    expect(withinDays(list, 180, today)).toHaveLength(2);
+    expect(withinDays(list, 365, today)).toHaveLength(3);
+  });
+
+  it("« tout » ne filtre rien, quelle que soit l'ancienneté", () => {
+    const list = [booked("2026-08-13", 1), booked("2019-01-01", 1)];
+    expect(withinDays(list, ALL_DAYS, new Date(2026, 7, 13))).toHaveLength(2);
+    expect(depthOf(ALL_DAYS)).toBe(Infinity);
+    expect(depthOf(365)).toBe(365);
+  });
+
+  it("dit à quelle date remonte le plus ancien mouvement", () => {
+    expect(oldestDate([booked("2026-08-13", 1), booked("2025-11-01", 1)])).toBe("2025-11-01");
+    expect(oldestDate([])).toBeNull();
   });
 
   it("regroupe par jour en conservant l'ordre reçu", () => {

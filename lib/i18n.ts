@@ -1023,6 +1023,19 @@ const FR: Dict = {
   "patrimoine.updatedAt": "maj {date}",
   "patrimoine.emptyHint": "Rien à afficher pour l'instant. Ajoute un premier actif — un PEA, un livret, un bien, un crédit — pour voir ton patrimoine se construire.",
   "patrimoine.historyHint": "La courbe se remplit d'un point par jour à l'ouverture de cette page : reviens demain pour voir l'évolution.",
+  "patrimoine.periodAll": "Tout",
+  "patrimoine.periodAria": "Fenêtre de la courbe",
+  // Variation lue sur la fenêtre affichée : « +1 240 € (+1,8 %) sur 3 mois ».
+  "patrimoine.changeOver": "sur {period}",
+  "patrimoine.changeAll": "depuis le début",
+  "patrimoine.period.1S": "7 jours",
+  "patrimoine.period.1M": "30 jours",
+  "patrimoine.period.3M": "3 mois",
+  "patrimoine.period.6M": "6 mois",
+  "patrimoine.period.1A": "1 an",
+  // La fenêtre demandée n'est pas celle couverte (historique trop court, ou
+  // repli sur les deux derniers points) : annoncer son horizon serait faux.
+  "patrimoine.changeShort": "sur l'historique affiché",
   "patrimoine.budgetHint": "Le budget de tr4de est un budget prévisionnel : tu y répartis ton revenu mensuel à la main, il ne lit aucune opération bancaire.",
   "patrimoine.openBudget": "Ouvrir le budget",
   // Classes d'actifs
@@ -1102,7 +1115,9 @@ const FR: Dict = {
   "patrimoine.asset.movementsMore": "Voir les {n} autres mouvements",
   "patrimoine.asset.movementsLess": "Voir moins",
   "patrimoine.asset.movementPending": "en attente",
-  "patrimoine.asset.curveHint": "Courbe reconstruite depuis le solde actuel et les mouvements des {days} derniers jours — la banque ne rend pas l'historique de ses soldes. Les opérations en attente n'y sont pas comptées.",
+  "patrimoine.asset.movementsAll": "Tout",
+  "patrimoine.asset.movementsDeeper": "Récupération de l'historique auprès de la banque…",
+  "patrimoine.asset.curveHint": "Courbe reconstruite depuis le solde actuel et les mouvements depuis le {date} — la banque ne rend pas l'historique de ses soldes, et la profondeur disponible dépend d'elle. Les opérations en attente n'y sont pas comptées.",
   // Natures de mouvement (codes ISO 20022 de la banque, à défaut son libellé)
   "patrimoine.tx.card": "Carte",
   "patrimoine.tx.transfer": "Virement",
@@ -2205,6 +2220,16 @@ const EN: Dict = {
   "patrimoine.updatedAt": "updated {date}",
   "patrimoine.emptyHint": "Nothing to show yet. Add a first asset — a brokerage account, a savings account, property, a loan — to start building your net worth.",
   "patrimoine.historyHint": "The chart gains one point per day when you open this page: come back tomorrow to see it move.",
+  "patrimoine.periodAll": "All",
+  "patrimoine.periodAria": "Chart window",
+  "patrimoine.changeOver": "over {period}",
+  "patrimoine.changeAll": "since the start",
+  "patrimoine.period.1S": "7 days",
+  "patrimoine.period.1M": "30 days",
+  "patrimoine.period.3M": "3 months",
+  "patrimoine.period.6M": "6 months",
+  "patrimoine.period.1A": "1 year",
+  "patrimoine.changeShort": "over the shown history",
   "patrimoine.budgetHint": "The tr4de budget is a planned budget: you split your monthly income by hand, it does not read any bank transactions.",
   "patrimoine.openBudget": "Open the budget",
   // Asset classes
@@ -2282,7 +2307,9 @@ const EN: Dict = {
   "patrimoine.asset.movementsMore": "Show {n} more movements",
   "patrimoine.asset.movementsLess": "Show less",
   "patrimoine.asset.movementPending": "pending",
-  "patrimoine.asset.curveHint": "Curve rebuilt from the current balance and the movements of the last {days} days — the bank does not return its balance history. Pending operations are left out.",
+  "patrimoine.asset.movementsAll": "All",
+  "patrimoine.asset.movementsDeeper": "Fetching history from the bank…",
+  "patrimoine.asset.curveHint": "Curve rebuilt from the current balance and the movements since {date} — the bank does not return its balance history, and how far back it goes is up to it. Pending operations are left out.",
   // Movement kinds (ISO 20022 codes from the bank, its label otherwise)
   "patrimoine.tx.card": "Card",
   "patrimoine.tx.transfer": "Transfer",

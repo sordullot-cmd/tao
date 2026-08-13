@@ -25,6 +25,7 @@ import { createPrivateKey, type KeyObject } from "node:crypto";
 import { SignJWT } from "jose";
 
 import {
+  ALL_DAYS,
   normalizeTransaction,
   sortTransactions,
   type BankTransaction,
@@ -327,38 +328,59 @@ export async function fetchAccounts(
 }
 
 /* ── Mouvements ────────────────────────────────────────────────────────────
-   `GET /accounts/{uid}/transactions` pagine par `continuation_key`. La fenêtre
-   est bornée à 90 jours : au-delà, la DSP2 impose une nouvelle authentification
-   forte, et la banque répond alors une erreur plutôt qu'un historique.
+   `GET /accounts/{uid}/transactions` pagine par `continuation_key`.
+
+   La profondeur d'historique n'est PAS la même chose que la durée du
+   consentement : les 90 jours de la DSP2 bornent l'accès sans nouvelle
+   authentification forte, pas la fenêtre qu'on peut demander. La plupart des
+   banques rendent 12 à 24 mois, certaines beaucoup moins — d'où une profondeur
+   passée en paramètre, et un affichage qui dit ensuite jusqu'où l'historique
+   remonte réellement plutôt que de promettre ce qui a été demandé.
    ------------------------------------------------------------------------ */
 
-/** Fenêtre demandée, en jours. C'est aussi la durée de vie d'un consentement. */
+/** Profondeur par défaut, en jours : de quoi remplir les fenêtres courtes sans
+ *  faire attendre. Les vues longues la redemandent explicitement. */
 export const TRANSACTIONS_WINDOW_DAYS = 90;
 
-/** Garde-fou de pagination : 10 pages couvrent largement 90 jours, et une
- *  `continuation_key` qui se répéterait ne peut pas boucler indéfiniment. */
-const TRANSACTIONS_MAX_PAGES = 10;
+/** Profondeurs qu'un client peut demander. Liste fermée : `date_from` part chez
+ *  l'agrégateur, et une valeur arbitraire venue de l'URL n'a rien à y faire.
+ *  `ALL_DAYS` (0) demande tout ce que la banque veut bien rendre. */
+export const TRANSACTIONS_DEPTHS = [90, 180, 365, ALL_DAYS] as const;
 
-/** Mouvements d'un compte, du plus récent au plus ancien. */
+/** Garde-fous de pagination. Ils bornent le pire cas — un historique de
+ *  plusieurs années sur un compte très actif — et empêchent une
+ *  `continuation_key` qui se répéterait de boucler indéfiniment. */
+const TRANSACTIONS_MAX_PAGES = 40;
+const TRANSACTIONS_MAX_ROWS = 5000;
+
+/**
+ * Mouvements d'un compte, du plus récent au plus ancien.
+ *
+ * `days = ALL_DAYS` n'envoie aucun `date_from` : la banque décide alors de la
+ * profondeur, ce qui est exactement ce qu'on veut pour la vue « tout ».
+ */
 export async function fetchTransactions(
   uid: string,
-  days = TRANSACTIONS_WINDOW_DAYS,
+  days: number = TRANSACTIONS_WINDOW_DAYS,
 ): Promise<BankTransaction[]> {
-  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
   const raw: RawTransaction[] = [];
   let continuationKey: string | null = null;
 
   for (let page = 0; page < TRANSACTIONS_MAX_PAGES; page += 1) {
-    const params = new URLSearchParams({ date_from: from });
+    const params = new URLSearchParams();
+    if (days !== ALL_DAYS) {
+      params.set("date_from", new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10));
+    }
     if (continuationKey) params.set("continuation_key", continuationKey);
 
-    const resp = await ebFetch(`/accounts/${uid}/transactions?${params.toString()}`);
+    const query = params.toString();
+    const resp = await ebFetch(`/accounts/${uid}/transactions${query ? `?${query}` : ""}`);
     if (!resp.ok) throw await ebError(resp, "Enable Banking (mouvements du compte)");
 
     const data = await resp.json();
     raw.push(...((data.transactions ?? []) as RawTransaction[]));
     continuationKey = data.continuation_key ?? null;
-    if (!continuationKey) break;
+    if (!continuationKey || raw.length >= TRANSACTIONS_MAX_ROWS) break;
   }
 
   return sortTransactions(raw.map((tx, i) => normalizeTransaction(tx, i)));

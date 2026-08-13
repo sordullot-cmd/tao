@@ -279,11 +279,38 @@ export function periodStats(txs: BankTransaction[]): { in: number; out: number; 
   return { in: round2(credit), out: round2(debit), net: round2(credit + debit) };
 }
 
-/** Mouvements des `days` derniers jours (fenêtre glissante, bornes incluses). */
+/**
+ * Profondeur d'historique exprimée en jours. `0` vaut « tout ce que la banque
+ * veut bien rendre » — une seule valeur sentinelle, plutôt qu'un `null` à
+ * traiter à part dans chaque comparaison.
+ */
+export const ALL_DAYS = 0;
+
+/** La profondeur, en nombre comparable : « tout » devient l'infini. */
+export const depthOf = (days: number): number => (days === ALL_DAYS ? Infinity : days);
+
+/** Mouvements des `days` derniers jours (fenêtre glissante, bornes incluses).
+ *  `ALL_DAYS` ne filtre rien. */
 export function withinDays(txs: BankTransaction[], days: number, today = new Date()): BankTransaction[] {
+  if (depthOf(days) === Infinity) return txs;
   const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1);
   const key = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
   return txs.filter((tx) => tx.date >= key);
+}
+
+/**
+ * Date du plus ancien mouvement, ou `null` sur une liste vide.
+ *
+ * C'est ce qui permet de dire jusqu'où l'historique remonte VRAIMENT : demander
+ * un an ne garantit pas d'en obtenir un, la profondeur dépend de la banque.
+ */
+export function oldestDate(txs: BankTransaction[]): string | null {
+  let oldest: string | null = null;
+  for (const tx of txs) {
+    if (!tx.date) continue;
+    if (oldest === null || tx.date < oldest) oldest = tx.date;
+  }
+  return oldest;
 }
 
 /** Mouvements regroupés par jour, dans l'ordre où la liste les donne. */

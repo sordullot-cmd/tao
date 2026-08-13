@@ -5,11 +5,18 @@ import { createClient } from "@/lib/supabase/server";
 import {
   fetchTransactions,
   isBankConfigured,
+  TRANSACTIONS_DEPTHS,
   TRANSACTIONS_WINDOW_DAYS,
 } from "@/lib/bank/enablebanking";
 
 /**
- * GET /api/bank/transactions?uid=… — mouvements d'un compte agrégé.
+ * GET /api/bank/transactions?uid=…&days=… — mouvements d'un compte agrégé.
+ *
+ * `days` choisit la profondeur d'historique, parmi une liste fermée
+ * (`TRANSACTIONS_DEPTHS`, dont `0` = tout ce que la banque rend). Elle est
+ * validée plutôt que transmise telle quelle : la valeur finit en `date_from`
+ * chez l'agrégateur, et une profondeur arbitraire venue de l'URL n'y a rien à
+ * faire. Une valeur inconnue retombe sur la fenêtre par défaut.
  *
  * L'`uid` arrive du client : il est VÉRIFIÉ contre les connexions de
  * l'utilisateur avant tout appel à l'agrégateur. Sans ce contrôle, un uid
@@ -28,6 +35,11 @@ export async function GET(request: NextRequest) {
 
   const uid = request.nextUrl.searchParams.get("uid");
   if (!uid) return NextResponse.json({ error: "Compte manquant." }, { status: 400 });
+
+  const asked = Number(request.nextUrl.searchParams.get("days"));
+  const days = (TRANSACTIONS_DEPTHS as readonly number[]).includes(asked)
+    ? asked
+    : TRANSACTIONS_WINDOW_DAYS;
 
   if (!isBankConfigured()) {
     return NextResponse.json({ configured: false, transactions: [] });
@@ -49,10 +61,12 @@ export async function GET(request: NextRequest) {
   if (!owned) return NextResponse.json({ error: "Compte introuvable." }, { status: 404 });
 
   try {
-    const transactions = await fetchTransactions(uid);
+    const transactions = await fetchTransactions(uid, days);
     return NextResponse.json({
       configured: true,
-      windowDays: TRANSACTIONS_WINDOW_DAYS,
+      // La profondeur RÉELLEMENT demandée : le client s'en sert pour savoir ce
+      // que son cache couvre, et n'a donc pas à supposer qu'elle a été honorée.
+      windowDays: days,
       transactions,
     });
   } catch (err) {
@@ -63,7 +77,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         configured: true,
-        windowDays: TRANSACTIONS_WINDOW_DAYS,
+        windowDays: days,
         transactions: [],
         error: err instanceof Error ? err.message : "Erreur inconnue",
       },

@@ -4,6 +4,7 @@ import {
   assetValue,
   classOfType,
   classBySlug,
+  historyChange,
   holdingGain,
   holdingGainPct,
   holdingValue,
@@ -166,5 +167,58 @@ describe("historique", () => {
     expect(toChartPoints([{ date: "2020-01-01", total: 42 }])).toEqual([
       { date: "2020-01-01", cum: 42 },
     ]);
+  });
+});
+
+describe("variation sur la fenêtre affichée", () => {
+  const pts = (...v: [string, number][]) => v.map(([date, cum]) => ({ date, cum }));
+
+  it("compare le premier et le dernier point affichés", () => {
+    const c = historyChange(pts(["2026-01-01", 10_000], ["2026-01-15", 11_000], ["2026-01-31", 12_500]));
+    expect(c?.abs).toBe(2_500);
+    expect(c?.pct).toBeCloseTo(25, 5);
+    expect(c?.spanDays).toBe(30);
+  });
+
+  it("rend une variation négative telle quelle, pourcentage compris", () => {
+    const c = historyChange(pts(["2026-01-01", 20_000], ["2026-02-01", 15_000]));
+    expect(c?.abs).toBe(-5_000);
+    expect(c?.pct).toBeCloseTo(-25, 5);
+  });
+
+  it("calcule le pourcentage sur la MAGNITUDE de départ, y compris en patrimoine négatif", () => {
+    const c = historyChange(pts(["2026-01-01", -4_000], ["2026-02-01", -3_000]));
+    expect(c?.abs).toBe(1_000);
+    expect(c?.pct).toBeCloseTo(25, 5); // un endettement réduit d'un quart
+  });
+
+  it("ne rend aucun pourcentage quand le point de départ est nul", () => {
+    const c = historyChange(pts(["2026-01-01", 0], ["2026-02-01", 900]));
+    expect(c?.abs).toBe(900);
+    expect(c?.pct).toBeNull();
+  });
+
+  it("n'a rien à dire en dessous de deux points", () => {
+    expect(historyChange([])).toBeNull();
+    expect(historyChange(pts(["2026-01-01", 10]))).toBeNull();
+  });
+
+  it("signale un historique plus court que la fenêtre demandée", () => {
+    const short = pts(["2026-01-01", 10_000], ["2026-01-08", 10_400]);
+    expect(historyChange(short, 365)?.partial).toBe(true);
+    expect(historyChange(short, 7)?.partial).toBe(false);
+    // Fenêtre sans données : `windowSeries` retombe sur les deux derniers
+    // points, plus larges que demandé — l'horizon annoncé serait faux aussi.
+    expect(historyChange(pts(["2026-01-01", 10_000], ["2026-03-01", 11_000]), 7)?.partial).toBe(true);
+  });
+
+  it("tolère quelques jours sans mesure dans la fenêtre", () => {
+    // 28 jours couverts sur 30 demandés : la page n'a pas été ouverte deux
+    // jours, ce n'est pas un historique partiel.
+    expect(historyChange(pts(["2026-01-03", 10_000], ["2026-01-31", 10_100]), 30)?.partial).toBe(false);
+  });
+
+  it("sans fenêtre demandée, rien n'est partiel", () => {
+    expect(historyChange(pts(["2026-01-01", 1], ["2026-01-02", 2]))?.partial).toBe(false);
   });
 });

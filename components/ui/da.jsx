@@ -587,6 +587,11 @@ export const PERIODS = [
   { id: "1A", days: 365 },
 ];
 
+/** Fenêtre « depuis le début » : `windowSeries` rend alors la série entière.
+ *  Les pages qui la proposent lui donnent un libellé traduit (« Tout »), l'id
+ *  seul n'étant pas affichable. */
+export const PERIOD_ALL = "ALL";
+
 /**
  * Groupe de pastilles 1S/1M/3M/6M/1A — l'actif est blanc avec une ombre fine.
  *
@@ -689,10 +694,15 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
  * Ne garde que la fin d'une série pour la fenêtre demandée. La série reste
  * cumulée depuis le début (c'est un zoom, pas un filtre de données) et on
  * retombe sur les deux derniers points si la fenêtre est trop étroite.
+ *
+ * `PERIOD_ALL` rend la série entière. La fenêtre se mesure depuis le DERNIER
+ * point et non depuis aujourd'hui : une série qui s'arrête il y a un mois doit
+ * montrer sa dernière semaine de données, pas un graphique vide.
  */
 export function windowSeries(points, periodId, getDate = p => p.date) {
-  const days = (PERIODS.find(p => p.id === periodId) || PERIODS[1]).days;
   if (!points || points.length === 0) return points || [];
+  if (periodId === PERIOD_ALL) return points;
+  const days = (PERIODS.find(p => p.id === periodId) || PERIODS[1]).days;
   const last = new Date(getDate(points[points.length - 1]));
   if (isNaN(last.getTime())) return points;
   const from = new Date(last);

@@ -20,10 +20,10 @@ const tx = (id: string, amount: number) => ({
   pending: false,
 });
 
-const response = (transactions: ReturnType<typeof tx>[]) => ({
+const response = (transactions: ReturnType<typeof tx>[], windowDays = 90) => ({
   ok: true,
   status: 200,
-  json: async () => ({ configured: true, windowDays: 90, transactions }),
+  json: async () => ({ configured: true, windowDays, transactions }),
 });
 
 async function loadHook() {
@@ -34,8 +34,8 @@ async function loadHook() {
 type Hook = Awaited<ReturnType<typeof loadHook>>["useBankTransactions"];
 
 function probe(useBankTransactions: Hook) {
-  return function Probe({ uid }: { uid: string | null }) {
-    const { transactions, loading, revalidating } = useBankTransactions(uid);
+  return function Probe({ uid, days }: { uid: string | null; days?: number }) {
+    const { transactions, loading, revalidating } = useBankTransactions(uid, days);
     return (
       <div>
         <span data-testid="labels">{transactions.map((t) => t.id).join(",")}</span>
@@ -135,6 +135,61 @@ describe("relevé mis en cache", () => {
 
     expect(screen.getByTestId("loading")).toHaveTextContent("false");
     await waitFor(() => expect(fetchMock).not.toHaveBeenCalled());
+  });
+
+  it("va chercher plus loin quand on demande une fenêtre plus profonde", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const days = Number(new URL(url, "http://x").searchParams.get("days"));
+      return days === 365
+        ? response([tx("a", -10), tx("vieux", -30)], 365)
+        : response([tx("a", -10)], 90);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { useBankTransactions } = await loadHook();
+    const Probe = probe(useBankTransactions);
+
+    const view = render(<Probe uid="c1" days={90} />);
+    await waitFor(() => expect(screen.getByTestId("labels")).toHaveTextContent("a"));
+
+    // Passage à un an : ce qui est déjà là RESTE affiché pendant le chargement.
+    view.rerender(<Probe uid="c1" days={365} />);
+    expect(screen.getByTestId("labels")).toHaveTextContent("a");
+    expect(screen.getByTestId("loading")).toHaveTextContent("false");
+
+    await waitFor(() => expect(screen.getByTestId("labels")).toHaveTextContent("a,vieux"));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("ne redemande rien en redescendant sur une fenêtre plus courte", async () => {
+    const fetchMock = vi.fn(async () => response([tx("a", -10), tx("vieux", -30)], 365));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { useBankTransactions } = await loadHook();
+    const Probe = probe(useBankTransactions);
+
+    const view = render(<Probe uid="c1" days={365} />);
+    await waitFor(() => expect(screen.getByTestId("labels")).toHaveTextContent("a,vieux"));
+
+    view.rerender(<Probe uid="c1" days={90} />);
+    // L'année couvre les trois mois : le filtrage se fait chez l'appelant, sans
+    // aller-retour — et sans jamais rétrécir ce que le cache contient.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("labels")).toHaveTextContent("a,vieux");
+  });
+
+  it("« tout » couvre n'importe quelle fenêtre datée", async () => {
+    const fetchMock = vi.fn(async () => response([tx("a", -10), tx("ancien", -5)], 0));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { useBankTransactions } = await loadHook();
+    const Probe = probe(useBankTransactions);
+
+    const view = render(<Probe uid="c1" days={0} />);
+    await waitFor(() => expect(screen.getByTestId("labels")).toHaveTextContent("a,ancien"));
+
+    view.rerender(<Probe uid="c1" days={365} />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 
   it("clearBankTransactionsCache oblige la fiche à relire", async () => {

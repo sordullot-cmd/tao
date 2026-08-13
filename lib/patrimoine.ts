@@ -392,6 +392,63 @@ export function toChartPoints(history: HistoryPoint[]): { date: string; cum: num
   }));
 }
 
+export interface HistoryChange {
+  /** Valeur au premier point affiché, et au dernier. */
+  from: number;
+  to: number;
+  /** Variation absolue sur la fenêtre. */
+  abs: number;
+  /** Variation relative, en % de la valeur de départ — `null` si elle est nulle
+   *  (diviser par zéro donnerait un pourcentage infini, pas une information). */
+  pct: number | null;
+  /** Jours réellement couverts, du premier au dernier point. */
+  spanDays: number;
+  /** Ce qui est affiché ne couvre pas la fenêtre demandée — historique trop
+   *  court, ou repli sur les deux derniers points quand la fenêtre est vide.
+   *  L'horizon de la pastille serait alors faux, et l'appelant doit le dire. */
+  partial: boolean;
+}
+
+/** Tolérance de couverture : un ou deux jours sans ouvrir la page ne font pas
+ *  d'une fenêtre de 30 jours un historique « partiel ». */
+const COVERAGE_TOLERANCE = 0.9;
+
+/**
+ * Variation lue sur les points AFFICHÉS (donc sur la fenêtre choisie).
+ *
+ * On compare le premier et le dernier point de la fenêtre, pas la valeur d'il y
+ * a exactement N jours : l'historique n'a un point que les jours d'ouverture de
+ * la page, et interpoler une valeur jamais mesurée serait une invention.
+ * `null` en dessous de deux points — il n'y a alors aucune variation à lire.
+ */
+export function historyChange(
+  points: { date: string; cum: number }[],
+  days: number | null = null,
+): HistoryChange | null {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const abs = round2(last.cum - first.cum);
+  const base = Math.abs(first.cum);
+  const spanDays = daysBetween(first.date, last.date);
+  return {
+    from: first.cum,
+    to: last.cum,
+    abs,
+    pct: base ? (abs / base) * 100 : null,
+    spanDays,
+    partial: days != null && (spanDays < days * COVERAGE_TOLERANCE || spanDays > days),
+  };
+}
+
+/** Jours entiers entre deux clés "YYYY-MM-DD" (0 si l'une est illisible). */
+function daysBetween(a: string, b: string): number {
+  const d1 = new Date(`${String(a).slice(0, 10)}T00:00:00`).getTime();
+  const d2 = new Date(`${String(b).slice(0, 10)}T00:00:00`).getTime();
+  if (Number.isNaN(d1) || Number.isNaN(d2)) return 0;
+  return Math.round((d2 - d1) / 86400000);
+}
+
 /* ── Store ─────────────────────────────────────────────────────────────── */
 
 export const PATRIMOINE_LOCAL_KEY = "tr4de_patrimoine";

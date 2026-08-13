@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { BankTransaction } from "@/lib/bank/transactions";
+import { depthOf, type BankTransaction } from "@/lib/bank/transactions";
 
 interface State {
   transactions: BankTransaction[];
-  /** Fenêtre couverte par la réponse, en jours (90 côté agrégateur). */
+  /** Profondeur effectivement chargée, en jours (`ALL_DAYS` = tout). */
   windowDays: number;
   /** Vrai seulement quand il n'y a encore rien à afficher pour ce compte. */
   loading: boolean;
@@ -26,14 +26,20 @@ const EMPTY: State = {
 };
 
 /* ── Cache de session ──────────────────────────────────────────────────────
-   En MÉMOIRE seulement, contrairement aux soldes : un relevé de 90 jours est
+   En MÉMOIRE seulement, contrairement aux soldes : un relevé long est
    volumineux et son intérêt est de survivre à la navigation, pas au
    rechargement de l'application. Il disparaît donc avec l'onglet — donc avec la
    session, sans rien à purger.
+
+   Une entrée retient la PROFONDEUR qu'elle couvre. Passer de « 3 mois » à
+   « 1 an » ne repart donc pas de zéro : ce qu'on a déjà reste affiché pendant
+   que la fenêtre plus large se charge par-dessus, et redescendre à une fenêtre
+   courte ne coûte plus rien du tout.
    ------------------------------------------------------------------------ */
 
 interface Entry {
   transactions: BankTransaction[];
+  /** Profondeur demandée à la banque pour cette entrée. */
   windowDays: number;
   at: number;
 }
@@ -48,6 +54,7 @@ const FRESH_MS = 5 * 60_000;
 /** Vide le cache des relevés. À appeler quand on quitte la session. */
 export const clearBankTransactionsCache = (): void => {
   cache.clear();
+  inFlight.clear();
 };
 
 /**
@@ -58,10 +65,17 @@ export const clearBankTransactionsCache = (): void => {
  * déjà consultée est donc instantané, là où chaque visite coûtait auparavant
  * l'aller-retour complet jusqu'à la banque.
  *
+ * `days` demande une profondeur d'historique (`ALL_DAYS` pour tout). Elle n'est
+ * redemandée à la banque que si le cache ne la couvre PAS : les fenêtres plus
+ * courtes se servent dans ce qui est déjà chargé.
+ *
  * `uid` à `null` (actif saisi à la main, donc sans banque derrière) : le hook ne
  * requête rien et reste au repos.
  */
-export function useBankTransactions(uid: string | null): State & { reload: () => void } {
+export function useBankTransactions(
+  uid: string | null,
+  days: number = DEFAULT_WINDOW,
+): State & { reload: () => void } {
   /* L'état porte le compte auquel il appartient : la fiche reste montée quand on
      passe d'un compte à l'autre, et sans ce marqueur le rendu qui suit le
      changement d'`uid` montrerait encore le relevé du compte précédent — le
@@ -80,25 +94,32 @@ export function useBankTransactions(uid: string | null): State & { reload: () =>
       }
 
       const entry = cache.get(uid);
+      // Couvert = déjà chargé au moins aussi loin que ce qu'on demande.
+      const covered = entry ? depthOf(entry.windowDays) >= depthOf(days) : false;
       const fresh = entry && Date.now() - entry.at < FRESH_MS;
+
       if (entry) {
         setState({
           uid,
           transactions: entry.transactions,
           windowDays: entry.windowDays,
           loading: false,
-          revalidating: !fresh || force,
+          // Une fenêtre plus profonde que le cache se charge par-dessus ce qui
+          // est affiché : c'est une relecture, pas un chargement à vide.
+          revalidating: !covered || !fresh || force,
           error: null,
         });
-        if (fresh && !force) return;
+        if (covered && fresh && !force) return;
       } else {
-        setState({ uid, ...EMPTY, loading: true });
+        setState({ uid, ...EMPTY, windowDays: days, loading: true });
       }
 
       /* Requête déjà en vol pour ce compte : on l'attend au lieu d'en lancer une
-         seconde, puis on lit ce qu'elle a déposé dans le cache. */
+         seconde, puis on lit ce qu'elle a déposé dans le cache. On ne s'y greffe
+         que si elle va chercher AU MOINS aussi loin — sinon elle ne répondrait
+         pas à la fenêtre demandée. */
       const pending = inFlight.get(uid);
-      if (pending && !force) {
+      if (pending && !force && covered) {
         await pending;
         if (!signal?.aborted) setState({ uid, ...fromCache(uid) });
         return;
@@ -106,14 +127,26 @@ export function useBankTransactions(uid: string | null): State & { reload: () =>
 
       const job = (async () => {
         try {
-          const resp = await fetch(`/api/bank/transactions?uid=${encodeURIComponent(uid)}`);
+          const resp = await fetch(
+            `/api/bank/transactions?uid=${encodeURIComponent(uid)}&days=${days}`,
+          );
           const data = await resp.json();
           const transactions = Array.isArray(data.transactions) ? data.transactions : [];
-          const windowDays = Number(data.windowDays) || DEFAULT_WINDOW;
+          const windowDays = Number.isFinite(Number(data.windowDays))
+            ? Number(data.windowDays)
+            : days;
           // Hors session il n'y a rien à lire : ce n'est pas une panne à afficher.
           const error = resp.status === 401 ? null : data.error ?? null;
 
-          if (!error) cache.set(uid, { transactions, windowDays, at: Date.now() });
+          /* On n'écrase le cache que si la réponse va au moins aussi loin que ce
+             qu'il contient déjà : une fenêtre courte revenue après une longue
+             perdrait sinon l'historique déjà chargé. */
+          if (!error) {
+            const known = cache.get(uid);
+            if (!known || depthOf(windowDays) >= depthOf(known.windowDays)) {
+              cache.set(uid, { transactions, windowDays, at: Date.now() });
+            }
+          }
 
           if (signal?.aborted) return;
           /* Une relecture en échec laisse le relevé en place, comme pour les
@@ -134,7 +167,7 @@ export function useBankTransactions(uid: string | null): State & { reload: () =>
           setState({
             uid,
             transactions: kept?.transactions ?? [],
-            windowDays: kept?.windowDays ?? DEFAULT_WINDOW,
+            windowDays: kept?.windowDays ?? days,
             loading: false,
             revalidating: false,
             error: err instanceof Error ? err.message : "Erreur réseau",
@@ -147,7 +180,7 @@ export function useBankTransactions(uid: string | null): State & { reload: () =>
       inFlight.set(uid, job);
       await job;
     },
-    [uid],
+    [uid, days],
   );
 
   useEffect(() => {
@@ -174,6 +207,7 @@ export function useBankTransactions(uid: string | null): State & { reload: () =>
     reload,
   };
 }
+
 
 /** État de départ pour un compte : son relevé en cache s'il y en a un. */
 function fromCache(uid: string | null): State {

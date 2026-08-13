@@ -14,15 +14,18 @@
  *     donc vers elle plutôt que d'afficher un flux qu'on n'a pas.
  *
  * La courbe, elle, ne se reconstruit plus depuis des relevés quotidiens : elle
- * s'empile un point par jour d'ouverture de la page (`withTodayPoint`).
+ * s'empile un point par jour d'ouverture de la page (`withTodayPoint`). Elle se
+ * lit sur une fenêtre au choix — 1S / 1M / 3M / 6M / 1A / Tout —, avec la
+ * variation de cette fenêtre affichée juste à côté des pastilles.
  */
 
 import React from "react";
-import { ChevronRight, Crown, Plus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Crown, Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
   AllocationChart, CARD, SectionTitle, HeroAmount, MiniKpi, PeriodPills, PnlChart, TH,
+  PERIODS, PERIOD_ALL, windowSeries,
 } from "@/components/ui/da";
 import AssetAvatar from "@/components/ui/AssetAvatar";
 import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
@@ -31,6 +34,7 @@ import {
   assetGain,
   assetTypeKey,
   assetValue,
+  historyChange,
   netWorth,
   sectionsByClass,
   shareOf,
@@ -43,6 +47,12 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, planTotals, primaryPlan,
 } from "@/lib/budgetPlans";
+
+/* Fenêtres de la courbe : celles de la DA, plus « Tout » — l'historique d'un
+   patrimoine se lit aussi en entier, c'est même sa vue la plus parlante tant
+   qu'il ne compte que quelques semaines de points. */
+const HISTORY_PERIODS = [...PERIODS, { id: PERIOD_ALL }];
+const daysOfPeriod = (id) => PERIODS.find((p) => p.id === id)?.days ?? null;
 
 export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelectedClassSlug }) {
   useLang();
@@ -67,8 +77,17 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   );
 
   /* Vue héros : net ou brut. La bascule n'apparaît que s'il y a des passifs —
-     sans eux les deux chiffres sont égaux, et le choix n'aurait rien à dire. */
-  const [view, setView] = React.useState("net");
+     sans eux les deux chiffres sont égaux, et le choix n'aurait rien à dire.
+
+     Le choix suit le COMPTE et non l'onglet : quelqu'un qui pilote son
+     désendettement lit son patrimoine net, et le retrouvait en brut à chaque
+     retour sur la page — y compris depuis un autre appareil. Même mécanique que
+     le tri et les colonnes de la page Trades : cache localStorage immédiat,
+     Supabase derrière. */
+  const [rawView, setView] = useCloudState("tr4de_patrimoine_view", "patrimoine_view", "net");
+  // Une valeur venue du cloud n'est pas garantie : tout ce qui n'est pas « brut »
+  // retombe sur le net, plutôt que d'afficher un héros vide.
+  const view = rawView === "brut" ? "brut" : "net";
 
   const nw = React.useMemo(() => netWorth(assets), [assets]);
   const sections = React.useMemo(() => sectionsByClass(assets), [assets]);
@@ -93,7 +112,21 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
     });
   }, [assets, bankAssets, bank.loading, setStore]);
 
-  const points = React.useMemo(() => toChartPoints(store.history), [store.history]);
+  /* Fenêtre de la courbe. Elle suit le COMPTE comme la vue net/brut : on ne
+     revient pas sur « Tout » à chaque visite quand on suit son année en cours. */
+  const [rawPeriod, setPeriod] = useCloudState("tr4de_patrimoine_period", "patrimoine_period", PERIOD_ALL);
+  const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : PERIOD_ALL;
+
+  const allPoints = React.useMemo(() => toChartPoints(store.history), [store.history]);
+  /* `windowSeries` mesure la fenêtre depuis le DERNIER point, pas depuis
+     aujourd'hui : après quelques jours sans ouvrir la page, « 1S » montre la
+     dernière semaine de mesures au lieu d'un graphique vide. */
+  const points = React.useMemo(() => windowSeries(allPoints, period), [allPoints, period]);
+  // Variation sur la fenêtre affichée, lue sur les points eux-mêmes.
+  const change = React.useMemo(
+    () => historyChange(points, daysOfPeriod(period)),
+    [points, period],
+  );
 
   if (assets.length === 0) {
     return (
@@ -208,6 +241,26 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
           )}
         </div>
 
+        {/* Barre de la courbe : sa variation à gauche, sa fenêtre à droite.
+            Elle est posée ici et non contre le chiffre héros parce qu'elle
+            qualifie la COURBE — toujours nette — alors que le héros bascule
+            entre net et brut : collée en haut, elle se lirait comme la
+            variation du chiffre affiché. */}
+        {/* Tant qu'il n'y a pas de courbe, pas de barre : des pastilles de
+            fenêtre sur un point unique seraient un contrôle sans effet. */}
+        {allPoints.length > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", minHeight: 34 }}>
+            <PeriodChange change={change} period={period} />
+            <PeriodPills
+              value={period}
+              onChange={setPeriod}
+              options={HISTORY_PERIODS.map((p) =>
+                p.id === PERIOD_ALL ? { ...p, label: t("patrimoine.periodAll") } : p,
+              )}
+            />
+          </div>
+        )}
+
         <PnlChart points={points} />
         {points.length < 2 && (
           <div style={{ fontSize: 13, color: T.textMut }}>{t("patrimoine.historyHint")}</div>
@@ -250,6 +303,53 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
       {addingAsset && <AssetFormModal onClose={() => setAddingAsset(false)} />}
       {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
     </div>
+  );
+}
+
+/**
+ * Variation du patrimoine sur la fenêtre affichée : le montant d'abord, son
+ * pourcentage ensuite, puis l'horizon en toutes lettres — même lecture que le
+ * delta du chiffre héros d'un compte (la somme gagnée avant le ratio).
+ *
+ * Quand l'historique est plus court que la fenêtre demandée (« 1A » sur trois
+ * semaines de points), l'horizon annoncé serait faux : on dit alors « sur tout
+ * l'historique connu » plutôt que « sur 1 an ».
+ */
+function PeriodChange({ change, period }) {
+  // Moins de deux points : rien à comparer. Le hint sous la courbe dit déjà
+  // pourquoi elle est vide, inutile d'ajouter un tiret ici.
+  if (!change) return <span />;
+
+  const { abs, pct, partial } = change;
+  const color = abs > 0 ? T.pnlPos : abs < 0 ? T.pnlNeg : T.textSub;
+  const Icon = abs >= 0 ? ArrowUpRight : ArrowDownRight;
+  const horizon = partial
+    ? t("patrimoine.changeShort")
+    : period === PERIOD_ALL
+      ? t("patrimoine.changeAll")
+      : t("patrimoine.changeOver").replace("{period}", t(`patrimoine.period.${period}`));
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+      fontSize: 13, fontWeight: 500, lineHeight: 1, whiteSpace: "nowrap",
+      fontVariantNumeric: "tabular-nums", color,
+    }}>
+      <span>{fmt(abs, true)}</span>
+      {/* Sans base de calcul (patrimoine parti de zéro), la flèche seule : des
+          parenthèses vides se liraient comme une valeur manquante. */}
+      {pct != null ? (
+        <span style={{ display: "inline-flex", alignItems: "center" }}>
+          <span>(</span>
+          <Icon size={15} strokeWidth={1.75} style={{ margin: "0 1px" }} />
+          <span>{Math.abs(pct).toFixed(2)}%</span>
+          <span>&nbsp;)</span>
+        </span>
+      ) : (
+        <Icon size={15} strokeWidth={1.75} />
+      )}
+      <span style={{ color: T.textMut, fontWeight: 400 }}>{horizon}</span>
+    </span>
   );
 }
 
