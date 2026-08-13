@@ -21,7 +21,8 @@
  * Documentation : https://enablebanking.com/docs/api/reference/
  */
 
-import { SignJWT, importPKCS8 } from "jose";
+import { createPrivateKey, type KeyObject } from "node:crypto";
+import { SignJWT } from "jose";
 
 const BASE_URL = "https://api.enablebanking.com";
 
@@ -63,13 +64,56 @@ export function isBankConfigured(): boolean {
 // resigner à chaque appel (la signature RS256 n'est pas gratuite).
 let cachedJwt: { token: string; expiresAt: number } | null = null;
 
+/**
+ * Retrouve le PEM depuis la variable d'environnement.
+ *
+ * Le format attendu est le base64 du fichier `.pem` — une variable
+ * d'environnement ne peut pas porter ses retours à la ligne. Mais certains
+ * hébergeurs acceptent le multi-ligne, et il est naturel d'y coller le PEM tel
+ * quel : les deux formes sont donc reconnues, plutôt que de faire échouer la
+ * signature sur une saisie qui n'a rien d'absurde.
+ */
+export function readPrivateKeyPem(raw: string): string {
+  const value = raw.trim();
+  if (value.includes("-----BEGIN")) return value;
+
+  const decoded = Buffer.from(value, "base64").toString("utf8").trim();
+  if (decoded.includes("-----BEGIN")) return decoded;
+
+  throw new Error(
+    "ENABLEBANKING_PRIVATE_KEY_BASE64 ne contient pas de clé PEM. " +
+      "Attendu : le base64 du fichier .pem, ou son contenu tel quel " +
+      "(commençant par -----BEGIN).",
+  );
+}
+
+/**
+ * Charge la clé de signature.
+ *
+ * `crypto.createPrivateKey` remplace ici `jose.importPKCS8`, qui n'accepte QUE
+ * du PKCS#8 (`-----BEGIN PRIVATE KEY-----`) et rejette le PKCS#1
+ * (`-----BEGIN RSA PRIVATE KEY-----`) — un format que les fournisseurs livrent
+ * couramment. Node lit les deux, et jose signe indifféremment à partir d'un
+ * `KeyObject`. Cela évite d'imposer une conversion `openssl pkcs8 -topk8`
+ * préalable, et la signature est identique dans les deux cas.
+ */
+export function loadPrivateKey(raw: string = bankConfig.privateKeyBase64): KeyObject {
+  const pem = readPrivateKeyPem(raw);
+  try {
+    return createPrivateKey(pem);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Clé privée Enable Banking illisible (${detail}). ` +
+        "Vérifie qu'il s'agit bien d'une clé privée RSA non chiffrée.",
+    );
+  }
+}
+
 async function getJwt(): Promise<string> {
   if (cachedJwt && cachedJwt.expiresAt > Date.now() + 60_000) return cachedJwt.token;
 
-  // La clé privée .pem (PKCS#8) est fournie encodée en base64, sur une ligne —
-  // une variable d'environnement ne peut pas porter les retours à la ligne du PEM.
-  const pem = Buffer.from(bankConfig.privateKeyBase64, "base64").toString("utf8");
-  const key = await importPKCS8(pem, "RS256");
+  const key = loadPrivateKey();
 
   const iat = Math.floor(Date.now() / 1000);
   const ttl = 3600; // 1 h (24 h maximum autorisé)
