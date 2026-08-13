@@ -13,9 +13,14 @@
  *     tr4de est un budget PRÉVISIONNEL saisi à la main (page Budget) : on renvoie
  *     donc vers elle plutôt que d'afficher un flux qu'on n'a pas.
  *
- * La courbe, elle, ne se reconstruit plus depuis des relevés quotidiens : elle
- * s'empile un point par jour d'ouverture de la page (`withTodayPoint`). Elle se
- * lit sur une fenêtre au choix — 1S / 1M / 3M / 6M / 1A / Tout —, avec la
+ * La courbe est RECONSTRUITE (cf. `lib/patrimoineHistory`) : les soldes
+ * bancaires sont remontés mouvement par mouvement, le capital restant dû des
+ * crédits recalculé depuis leur échéancier, et les actifs sans passé connu
+ * reportés à plat. Elle montre donc une vraie évolution dès la première visite,
+ * là où l'ancien `withTodayPoint` seul ne donnait un point que par jour
+ * d'ouverture de la page — deux points, deux jours après l'installation. Ces
+ * points relevés sont conservés : ils portent le passé que la reconstruction ne
+ * couvre pas. Fenêtre au choix — 1S / 1M / 3M / 6M / 1A / Tout —, avec la
  * variation de cette fenêtre affichée juste à côté des pastilles.
  */
 
@@ -43,6 +48,9 @@ import {
   withTodayPoint,
 } from "@/lib/patrimoine";
 import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
+import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
+import { depthOf, ALL_DAYS } from "@/lib/bank/transactions";
+import { reconstructHistory } from "@/lib/patrimoineHistory";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, planTotals, primaryPlan,
@@ -117,7 +125,46 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   const [rawPeriod, setPeriod] = useCloudState("tr4de_patrimoine_period", "patrimoine_period", PERIOD_ALL);
   const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : PERIOD_ALL;
 
-  const allPoints = React.useMemo(() => toChartPoints(store.history), [store.history]);
+  /* Relevés de TOUS les comptes agrégés : c'est la matière de la courbe.
+
+     Ce chargement remplace le préchargement des fiches (`prefetchBankTransactions`)
+     que faisait cette page : il remplit le MÊME cache, en allant au moins aussi
+     loin, donc ouvrir la fiche d'un compte reste instantané — sans redemander à
+     la banque deux fois le même relevé à deux profondeurs différentes.
+
+     La profondeur demandée suit la fenêtre choisie : en dessous de 90 jours il
+     n'y a rien à demander de plus, c'est le minimum que l'API rend de toute
+     façon, et redescendre ne doit jamais coûter une requête. */
+  const depth = React.useMemo(() => {
+    const d = daysOfPeriod(period);
+    if (d == null) return ALL_DAYS;             // « Tout » : tout ce que la banque rend
+    return depthOf(d) <= 90 ? 90 : d;
+  }, [period]);
+  const bankUids = React.useMemo(() => bank.accounts.map((a) => a.uid), [bank.accounts]);
+  const { byUid: txByUid } = useBankTransactionsAll(bankUids, depth);
+  // Les relevés sont indexés par uid, la reconstruction raisonne par actif.
+  const txByAssetId = React.useMemo(() => {
+    const map = {};
+    for (const a of bank.accounts) {
+      const txs = txByUid[a.uid];
+      if (txs && txs.length > 0) map[a.id] = txs;
+    }
+    return map;
+  }, [bank.accounts, txByUid]);
+
+  /* Historique RECONSTRUIT : les soldes bancaires remontés mouvement par
+     mouvement, le capital restant dû des crédits recalculé depuis leur
+     échéancier, et les autres actifs reportés à plat (cf. lib/patrimoineHistory).
+     Les points relevés à l'ouverture de la page ne servent plus que pour le
+     passé que cette reconstruction ne couvre pas. */
+  const allPoints = React.useMemo(
+    () => toChartPoints(reconstructHistory(assets, {
+      txByAssetId,
+      measured: store.history,
+      days: daysOfPeriod(period),
+    })),
+    [assets, txByAssetId, store.history, period],
+  );
   /* `windowSeries` mesure la fenêtre depuis le DERNIER point, pas depuis
      aujourd'hui : après quelques jours sans ouvrir la page, « 1S » montre la
      dernière semaine de mesures au lieu d'un graphique vide. */

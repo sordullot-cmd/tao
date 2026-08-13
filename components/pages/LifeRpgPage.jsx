@@ -38,7 +38,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import {
   Plus, X, Trash2, Pencil, Target, UserRound, Check,
-  CalendarPlus, CalendarClock, Flag,
+  CalendarPlus, CalendarClock, Flag, Milestone,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
@@ -60,6 +60,10 @@ import {
 import GoalsPage, {
   GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, computeGoalProgress, goalUnitOf, fmtGoalVal,
 } from "@/components/pages/GoalsPage";
+import {
+  addStep, cardProgress, readSteps, removeStep, sortSteps, stepStatus, stepsProgress,
+  toggleStep, updateStep, yearMarkers, STEP_XP,
+} from "@/lib/lifeRpgSteps";
 import {
   RPG_STORAGE_KEY as STORAGE_KEY, RPG_CLOUD_KEY as CLOUD_KEY,
   CATEGORY_ICON_KEYS as ICON_KEYS, CatIcon,
@@ -228,6 +232,22 @@ function computeProgress(habits, history, goals = [], trades = [], accounts = []
     totalXp += TASK_XP;
     for (const cid of cats) attributes[cid] = (attributes[cid] || 0) + TASK_XP;
     activityLog.push({ ts: entry.completedAt, label: entry.title || "Tâche", xp: TASK_XP, attribute: cats[0] || null });
+  }
+  // XP des ÉTAPES franchies : `STEP_XP` par jalon coché, crédité à l'objectif
+  // de l'année qui le porte. Une étape n'est cochée qu'une fois et n'est
+  // rattachée qu'à une carte → source indépendante des habitudes, tâches,
+  // objectifs et discipline, donc aucun double comptage.
+  for (const cat of (categories || [])) {
+    for (const step of readSteps(cat)) {
+      if (!step.done) continue;
+      totalXp += STEP_XP;
+      attributes[cat.id] = (attributes[cat.id] || 0) + STEP_XP;
+      // Sans date connue (ni de complétion, ni d'échéance), l'étape crédite
+      // quand même son XP mais n'entre pas au journal : une ligne sans horaire
+      // s'y rangerait n'importe où.
+      const ts = step.doneAt || (step.due ? `${step.due}T12:00:00` : null);
+      if (ts) activityLog.push({ ts, label: `Étape · ${step.label}`, xp: STEP_XP, attribute: cat.id });
+    }
   }
   // XP de la DISCIPLINE : chaque règle respectée (cochée) un jour donné crédite
   // `DISCIPLINE_RULE_XP` à la catégorie « Trading ». On agrège par jour pour le
@@ -415,6 +435,10 @@ export default function LifeRpgPage() {
   }, []);
 
   const categories = Array.isArray(state.categories) ? state.categories : DEFAULT_CATEGORIES;
+  // Jour de référence des étapes (retard, « aujourd'hui »). Une seule lecture
+  // pour toute la page : deux appels à des instants différents pourraient
+  // tomber de part et d'autre de minuit et se contredire d'une carte à l'autre.
+  const todayKey = getLocalDateString();
   const habitsList = useMemo(() => (Array.isArray(habits) ? habits : []), [habits]);
   const goalsList = useMemo(() => (Array.isArray(goals) ? goals : []), [goals]);
 
@@ -628,6 +652,35 @@ export default function LifeRpgPage() {
   };
 
 
+  /* --- Actions : étapes d'un objectif de l'année ---
+     Les étapes vivent SUR la carte (`categories[].steps`), pas dans un store à
+     part : elles n'ont de sens que rattachées à leur objectif, et une clé de
+     plus se serait désynchronisée à la première suppression de carte. Toutes
+     les écritures passent par les helpers purs de `lib/lifeRpgSteps`. */
+  const patchSteps = (catId, fn) => {
+    setState(prev => ({
+      ...prev,
+      categories: (prev.categories || []).map(c =>
+        c.id === catId ? { ...c, steps: fn(readSteps(c)) } : c),
+    }));
+  };
+  const addStepTo = (catId, label) => patchSteps(catId, steps => addStep(steps, { label }));
+  const toggleStepOf = (catId, stepId) => patchSteps(catId, steps => toggleStep(steps, stepId));
+  const renameStepOf = (catId, stepId, label) => patchSteps(catId, steps => updateStep(steps, stepId, { label }));
+  const setStepDueOf = (catId, stepId, due) => patchSteps(catId, steps => updateStep(steps, stepId, { due }));
+  // Suppression annulable, comme celle d'un objectif de l'année : une étape
+  // effacée d'un clic emporte une intention qu'on a mis du temps à formuler.
+  const deleteStepOf = (catId, stepId) => {
+    const cat = (state.categories || []).find(c => c.id === catId);
+    const snapshot = readSteps(cat);
+    patchSteps(catId, steps => removeStep(steps, stepId));
+    pushUndo({
+      label: "Suppression de l'étape",
+      undo: async () => patchSteps(catId, () => snapshot),
+      redo: async () => patchSteps(catId, steps => removeStep(steps, stepId)),
+    });
+  };
+
   const removeCategory = (id) => {
     const snapCats = state.categories;
     const snapHabits = habits;
@@ -759,17 +812,14 @@ export default function LifeRpgPage() {
         </div>
       </div>
 
-      {/* ─── Rail de l'année : le temps qui passe, à confronter aux cartes ─── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, fontSize: 12, color: T.textSub }}>
-          <span>{`${Math.round(yp.pct)} % de l'année écoulée`}</span>
-          <span style={{ fontVariantNumeric: "tabular-nums", color: T.textMut }}>{yp.daysLeft} jours restants</span>
-        </div>
-        <div role="progressbar" aria-valuenow={Math.round(yp.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Année ${YEAR} écoulée`}
-          style={{ height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-          <div style={{ width: `${yp.pct}%`, height: "100%", background: T.textMut, borderRadius: 999 }} />
-        </div>
-      </div>
+      {/* ─── Frise de l'année ───
+          Le rail montrait le temps qui passe ; il montre maintenant AUSSI les
+          jalons des trois objectifs, à leur place dans l'année. C'est là que
+          « où on va » se lit d'un coup d'œil : ce qui est franchi derrière le
+          curseur du jour, ce qui arrive devant, et les grappes de fin d'année
+          qu'on ne tiendra pas. */}
+      <YearTimeline year={YEAR} yearPct={yp.pct} daysLeft={yp.daysLeft}
+        markers={yearMarkers(categories, YEAR)} today={todayKey} />
 
       {/* ─── Les trois objectifs de l'année ───
           Toujours trois emplacements : ceux qui sont définis, puis autant de
@@ -782,6 +832,13 @@ export default function LifeRpgPage() {
               <YearGoalCard key={cat.id} cat={cat} rank={i + 1} year={YEAR} yearPct={yp.pct}
                 xp={progress.attributes[cat.id] || 0}
                 habits={habitsList.filter(h => habitCategoryIds(h).includes(cat.id))}
+                steps={readSteps(cat)}
+                today={todayKey}
+                onAddStep={(label) => addStepTo(cat.id, label)}
+                onToggleStep={(stepId) => toggleStepOf(cat.id, stepId)}
+                onRenameStep={(stepId, label) => renameStepOf(cat.id, stepId, label)}
+                onSetStepDue={(stepId, due) => setStepDueOf(cat.id, stepId, due)}
+                onDeleteStep={(stepId) => deleteStepOf(cat.id, stepId)}
                 linkedGoals={goalsByCat[cat.id] || []}
                 allObjectives={flattenGoals(goalsList)}
                 onToggleObjective={(goalId) => toggleObjectiveLink(cat.id, goalId)}
@@ -833,15 +890,22 @@ export default function LifeRpgPage() {
 // dans cet ordre : où j'en suis (avancement confronté au temps écoulé), ce que
 // je vise (résultat + échéance, identité, modèle) et ce que je fais pour y
 // arriver (objectifs chiffrés, tâches, habitudes).
-function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, linkedGoals = [], allObjectives = [], tasks = [], onToggleObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
+function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onSetStepDue, onDeleteStep, onToggleObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
   const cl = categoryLevel(xp);
-  // Avancement affiché : la moyenne des objectifs chiffrés rattachés, qui sont
-  // la mesure la plus honnête. Sans objectif chiffré, on retombe sur la
-  // progression de niveau (habitudes, tâches, discipline).
-  const measured = linkedGoals.length > 0;
-  const pct = measured
-    ? Math.round(linkedGoals.reduce((s, g) => s + g.pct, 0) / linkedGoals.length)
-    : Math.round(cl.levelPct);
+  /* Avancement affiché : les deux mesures honnêtes de la carte, moyennées —
+     les objectifs chiffrés rattachés ET les étapes franchies (cf.
+     `cardProgress`). N'en compter qu'une affichait 0 % à quelqu'un qui pilote
+     son année par jalons plutôt que par chiffres. Sans ni l'un ni l'autre, on
+     retombe sur la progression de niveau (habitudes, tâches, discipline). */
+  const progress = cardProgress({
+    goalPcts: linkedGoals.map(g => g.pct),
+    steps,
+    levelPct: cl.levelPct,
+    today,
+  });
+  const measured = progress.source === "measured";
+  const pct = progress.pct;
+  const stepProg = stepsProgress(steps, today);
   const deadline = cat.deadline || yearDeadline(cat.year || year);
   const dLeft = daysUntil(deadline);
   // Comparaison au calendrier : être à 40 % au mois de juin, c'est être en
@@ -930,8 +994,18 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, linkedGoals = 
           <div title={`${Math.round(yearPct)} % de l'année écoulée`}
             style={{ position: "absolute", top: -1, bottom: -1, left: `${Math.min(100, Math.max(0, yearPct))}%`, width: 2, background: T.text, opacity: 0.35, borderRadius: 999 }} />
         </div>
+        {/* Ce qui compose le pourcentage, dit explicitement : sans cette ligne,
+            un même chiffre pourrait venir des chiffres, des jalons ou du seul
+            niveau, et ne voudrait plus rien dire. */}
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.textMut, marginTop: 6 }}>
-          <span>{measured ? `${linkedGoals.length} objectif${linkedGoals.length > 1 ? "s" : ""} chiffré${linkedGoals.length > 1 ? "s" : ""}` : `Vers le niveau ${cl.level + 1}`}</span>
+          <span>
+            {measured
+              ? [
+                  progress.hasGoals ? `${linkedGoals.length} objectif${linkedGoals.length > 1 ? "s" : ""} chiffré${linkedGoals.length > 1 ? "s" : ""}` : null,
+                  progress.hasSteps ? `${stepProg.done}/${stepProg.total} étape${stepProg.total > 1 ? "s" : ""}` : null,
+                ].filter(Boolean).join(" · ")
+              : `Vers le niveau ${cl.level + 1}`}
+          </span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>Niveau {cl.level} · {xp} XP</span>
         </div>
       </div>
@@ -955,6 +1029,16 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, linkedGoals = 
             {cat.roleModelWhy && <div style={{ fontSize: 11.5, color: T.textSub, marginTop: 3, lineHeight: 1.45 }}>{cat.roleModelWhy}</div>}
           </div>
         </div>
+      )}
+
+      {/* Étapes — le chemin. Placées en tête des blocs d'EXÉCUTION (étapes,
+          objectifs, tâches, habitudes), après ceux qui disent l'intention :
+          c'est par où l'on passe qu'on répond à « où on va », avant de savoir
+          ce qu'on mesure et ce qu'on fait aujourd'hui. */}
+      {onAddStep && (
+        <StepsBlock cat={cat} steps={steps} today={today}
+          onAdd={onAddStep} onToggle={onToggleStep} onRename={onRenameStep}
+          onSetDue={onSetStepDue} onDelete={onDeleteStep} />
       )}
 
       {/* Objectifs liés depuis la page « Objectifs » (rpgCategory). La progression
@@ -1139,6 +1223,317 @@ function fmtDayLong(day) {
   const [y, m, d] = String(day).split("-").map(Number);
   if (!y || !m || !d) return "";
   return new Date(y, m - 1, d).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" });
+}
+
+/* ---------- Frise de l'année ----------
+   Les douze mois, le curseur du jour, et les jalons des trois objectifs à leur
+   date. Un mois d'écart se lit ici en 8 % de largeur : la frise ne sert pas à
+   pointer une date précise (les cartes le font), mais à voir la RÉPARTITION —
+   trois jalons en janvier et douze en décembre, c'est une année qu'on ne tiendra
+   pas, et c'est le genre de chose qu'aucun pourcentage ne dit.
+   ------------------------------------------------------------------------ */
+const MONTH_INITIALS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
+  const [hover, setHover] = useState(null);
+  const late = markers.filter(m => !m.step.done && m.step.due < today).length;
+  const done = markers.filter(m => m.step.done).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, fontSize: 12, color: T.textSub }}>
+        <span>
+          {`${Math.round(yearPct)} % de l'année écoulée`}
+          {markers.length > 0 && (
+            <span style={{ color: T.textMut }}>
+              {` · ${done}/${markers.length} étape${markers.length > 1 ? "s" : ""} franchie${done > 1 ? "s" : ""}`}
+              {late > 0 && <span style={{ color: T.red, fontWeight: 600 }}>{` · ${late} en retard`}</span>}
+            </span>
+          )}
+        </span>
+        <span style={{ fontVariantNumeric: "tabular-nums", color: T.textMut }}>{daysLeft} jours restants</span>
+      </div>
+
+      {/* La piste : hauteur suffisante pour porter les pastilles sans les
+          rogner, la barre de progression restant fine au centre. */}
+      <div style={{ position: "relative", height: 18 }}
+        onMouseLeave={() => setHover(null)}>
+        <div role="progressbar" aria-valuenow={Math.round(yearPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Année ${year} écoulée`}
+          style={{ position: "absolute", top: 7, left: 0, right: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+          <div style={{ width: `${yearPct}%`, height: "100%", background: T.textMut, borderRadius: 999 }} />
+        </div>
+
+        {/* Séparateurs de mois, discrets : ils donnent l'échelle sans meubler. */}
+        {Array.from({ length: 11 }, (_, i) => (
+          <div key={`m${i}`} aria-hidden="true"
+            style={{ position: "absolute", top: 6, height: 6, width: 1, left: `${((i + 1) / 12) * 100}%`, background: T.border }} />
+        ))}
+
+        {/* Un jalon = une pastille à sa date. Le survol nomme l'étape et son
+            objectif : douze pastilles sur un rail ne se distinguent pas
+            autrement, et un libellé permanent serait illisible. */}
+        {markers.map(({ step, cat, left }) => {
+          const isLate = !step.done && step.due < today;
+          return (
+            <button key={`${cat.id}_${step.id}`} type="button"
+              onMouseEnter={() => setHover({ step, cat, left })}
+              onFocus={() => setHover({ step, cat, left })}
+              onBlur={() => setHover(null)}
+              title={`${cat.label} — ${step.label} · ${fmtDayShort(step.due)}`}
+              aria-label={`${cat.label} — ${step.label}, ${fmtDayShort(step.due)}${step.done ? ", franchie" : isLate ? ", en retard" : ""}`}
+              style={{
+                position: "absolute", top: 4, left: `${left}%`, transform: "translateX(-50%)",
+                width: 10, height: 10, borderRadius: "50%", padding: 0, cursor: "pointer",
+                border: `1.5px solid ${isLate ? T.red : cat.color}`,
+                background: step.done ? cat.color : T.white,
+                boxShadow: `0 0 0 2px ${T.white}`,
+              }} />
+          );
+        })}
+      </div>
+
+      {/* Étiquettes des mois, sous la piste. */}
+      <div aria-hidden="true" style={{ position: "relative", height: 12 }}>
+        {MONTH_INITIALS.map((mi, i) => (
+          <span key={`lbl${i}`}
+            style={{ position: "absolute", left: `${((i + 0.5) / 12) * 100}%`, transform: "translateX(-50%)", fontSize: 9.5, color: T.textMut, letterSpacing: 0.2 }}>
+            {mi}
+          </span>
+        ))}
+      </div>
+
+      {/* Détail du jalon survolé, à hauteur fixe pour que la page ne saute pas
+          quand on parcourt la frise. */}
+      <div style={{ minHeight: 16, fontSize: 11.5, color: T.textSub }}>
+        {hover && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: hover.cat.color, flexShrink: 0 }} />
+            <span style={{ fontWeight: 600, color: T.text }}>{hover.step.label}</span>
+            <span style={{ color: T.textMut }}>{hover.cat.label} · {fmtDayShort(hover.step.due)}</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Étapes : la frise d'un objectif de l'année ----------
+   Une étape est un JALON : daté, franchi ou non. Elle ne mesure rien (c'est le
+   rôle des objectifs chiffrés) et ne vit pas à la journée (c'est celui des
+   tâches) — elle dit par où l'on passe, et à quel moment de l'année.
+
+   L'affichage est une frise verticale : une pastille par étape reliée par un
+   trait, dans l'ordre chronologique. Les étapes franchies gardent leur place
+   dans le temps plutôt que de descendre en bas de liste : c'est ce qui donne à
+   voir le chemin parcouru en même temps que celui qui reste.
+   ------------------------------------------------------------------------ */
+
+// Teinte d'une étape selon son état. Le retard est la seule chose qui doit
+// sauter aux yeux : tout le reste porte la couleur de l'objectif, atténuée.
+function stepTone(status, color) {
+  if (status === "done") return { dot: color, text: T.textMut, label: null };
+  if (status === "late") return { dot: T.red, text: T.text, label: T.red };
+  if (status === "today") return { dot: color, text: T.text, label: color };
+  return { dot: T.border, text: T.text, label: T.textMut };
+}
+
+// Une étape de la frise : pastille cochable, date modifiable, libellé éditable
+// au clic. Les actions n'apparaissent qu'au survol de la ligne.
+function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDelete }) {
+  const [hov, setHov] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(step.label);
+  const [dueOpen, setDueOpen] = useState(false);
+  const dueRef = useRef(null);
+  const tone = stepTone(status, cat.color);
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next && next !== step.label) onRename(next);
+    else setDraft(step.label);
+  };
+
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ display: "flex", alignItems: "flex-start", gap: 9, position: "relative" }}>
+      {/* Colonne de la frise : la pastille, et le trait qui rejoint la suivante.
+          Le trait s'arrête à la dernière étape — une frise qui continue dans le
+          vide laisserait croire à une suite qui n'existe pas. */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", alignSelf: "stretch", flexShrink: 0, paddingTop: 3 }}>
+        <button type="button" onClick={onToggle}
+          role="checkbox" aria-checked={step.done}
+          aria-label={`${step.label} — ${step.done ? "franchie" : "à franchir"}`}
+          title={step.done ? "Marquer à franchir" : "Marquer franchie"}
+          style={{
+            width: 13, height: 13, borderRadius: "50%", flexShrink: 0, padding: 0, cursor: "pointer",
+            border: `1.5px solid ${tone.dot}`, background: step.done ? cat.color : T.white,
+            color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center",
+            transition: "background .12s ease, border-color .12s ease",
+          }}>
+          {step.done && <Check size={8} strokeWidth={3.5} />}
+        </button>
+        {!last && <div style={{ width: 1.5, flex: 1, minHeight: 12, marginTop: 3, background: T.border, borderRadius: 999 }} />}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {editing ? (
+            <input autoFocus value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") commit();
+                else if (e.key === "Escape") { setDraft(step.label); setEditing(false); }
+              }}
+              onBlur={commit}
+              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
+          ) : (
+            <button type="button" onClick={() => { setDraft(step.label); setEditing(true); }}
+              title="Renommer l'étape"
+              style={{
+                flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent",
+                padding: 0, cursor: "text", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600,
+                color: tone.text, textDecoration: step.done ? "line-through" : "none",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+              {step.label}
+            </button>
+          )}
+
+          {onDelete && (
+            <button onClick={onDelete} title="Supprimer l'étape" aria-label={`Supprimer l'étape ${step.label}`}
+              style={{ ...iconBtnSm(), width: 18, height: 18, flexShrink: 0, opacity: hov ? 1 : 0, transition: "opacity .15s ease" }}>
+              <Trash2 size={11} strokeWidth={1.75} />
+            </button>
+          )}
+        </div>
+
+        {/* La date EST l'information de la frise : elle reste visible, et
+            s'ouvre au clic sur le mini-calendrier. Sans date, un « Dater »
+            discret n'apparaît qu'au survol — une étape non située est
+            légitime, mais elle ne trouve pas sa place sur l'axe. */}
+        <button type="button" ref={dueRef} onClick={() => setDueOpen(o => !o)}
+          title={step.due ? "Modifier l'échéance" : "Situer cette étape dans l'année"}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2, padding: "1px 4px",
+            marginLeft: -4, borderRadius: 6, border: "none", background: "transparent",
+            cursor: "pointer", fontFamily: "inherit", fontSize: 10.5, fontWeight: 600,
+            fontVariantNumeric: "tabular-nums", color: step.due ? (tone.label ?? T.textMut) : T.blue,
+            opacity: step.due ? 1 : (hov || dueOpen ? 1 : 0), transition: "opacity .15s ease, background .12s ease",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = T.accentBg; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+          <CalendarClock size={10} strokeWidth={2} />
+          {step.due ? fmtDayShort(step.due) : "Dater"}
+          {status === "late" && " · en retard"}
+        </button>
+        {dueOpen && (
+          <MiniCalendar
+            anchorRef={dueRef}
+            value={step.due ? new Date(`${step.due}T00:00:00`) : new Date()}
+            onSelect={(d) => { onSetDue(getLocalDateString(d)); setDueOpen(false); }}
+            onClose={() => setDueOpen(false)}
+            align="left"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Bloc « Étapes » d'une carte : la frise, son avancement, et la saisie inline.
+ *
+ * Aucune modale : une étape se note en trois secondes ou ne se note pas. Le
+ * bouton ouvre une ligne vide au bas de la frise ; Entrée valide et rouvre une
+ * ligne (on en pose rarement une seule), Échap ou un champ vide referme.
+ */
+function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, onDelete }) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [addHov, setAddHov] = useState(false);
+  const submitted = useRef(false);
+
+  const ordered = useMemo(() => sortSteps(steps), [steps]);
+  const prog = stepsProgress(steps, today);
+
+  const submit = (keepOpen) => {
+    if (submitted.current) return;
+    const label = draft.trim();
+    if (!label) { setAdding(false); setDraft(""); return; }
+    submitted.current = true;
+    onAdd(label);
+    setDraft("");
+    submitted.current = false;
+    if (!keepOpen) setAdding(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: T.textMut }}>Étapes</span>
+        {prog.total > 0 && (
+          <span style={{ fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+            {prog.done}/{prog.total}
+          </span>
+        )}
+        {/* Le retard est la seule alerte de ce bloc : une étape dépassée et
+            toujours ouverte est précisément ce qu'on vient chercher ici. */}
+        {prog.late > 0 && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: T.red }}>
+            {prog.late} en retard
+          </span>
+        )}
+      </div>
+
+      {ordered.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", marginBottom: 8 }}>
+          {ordered.map((s, i) => (
+            <StepRow key={s.id} step={s} cat={cat} status={stepStatus(s, today)}
+              last={i === ordered.length - 1 && !adding}
+              onToggle={() => onToggle(s.id)}
+              onRename={(label) => onRename(s.id, label)}
+              onSetDue={(due) => onSetDue(s.id, due)}
+              onDelete={() => onDelete(s.id)} />
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+          <span style={{ width: 13, height: 13, borderRadius: "50%", flexShrink: 0, border: `1.5px dashed ${T.border}`, background: T.white }} />
+          <input autoFocus value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") submit(true);
+              else if (e.key === "Escape") { submitted.current = true; setAdding(false); setDraft(""); submitted.current = false; }
+            }}
+            onBlur={() => submit(false)}
+            placeholder="Nouvelle étape…"
+            style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
+        </div>
+      )}
+
+      {!adding && (ordered.length > 0 ? (
+        <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
+          onMouseEnter={() => setAddHov(true)} onMouseLeave={() => setAddHov(false)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: addHov ? T.textSub : T.textMut, opacity: addHov ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
+          <Plus size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
+          Ajouter
+        </button>
+      ) : (
+        /* Aucune étape : l'invitation porte la question, pas le mot « ajouter ».
+           C'est le manque que la page vient combler — un objectif d'un an sans
+           point de passage ne se pilote pas. */
+        <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 10%, transparent)`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 5%, transparent)`; }}>
+          <Milestone size={14} strokeWidth={2} /> Par où passer ?
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // Ligne d'une tâche de carte : case à cocher (complétion → XP), titre, date, et
