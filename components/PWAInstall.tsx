@@ -118,8 +118,10 @@ export default function PWAInstall() {
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+        {/* Ici, l'icône d'APP et non le logo du site : ce bandeau annonce ce qui
+            va apparaître sur l'écran d'accueil — il doit montrer cette image-là. */}
         <img
-          src="/favicon.svg"
+          src="/web-app-manifest-192x192.png"
           alt="tao"
           width={36}
           height={36}

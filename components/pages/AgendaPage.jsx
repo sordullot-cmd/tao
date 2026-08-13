@@ -2,7 +2,7 @@
 
 import React from "react";
 import {
-  Calendar as CalendarIcon, ChevronLeft, ChevronRight,
+  Calendar as CalendarIcon,
   LogOut, AlertTriangle, Plug, Trash2, X as IconX, ExternalLink,
   Clock, MapPin, AlignLeft, Bell, ChevronDown, Target, HelpCircle, Repeat,
   Plus, CheckSquare, Square, Check, Sparkles,
@@ -14,6 +14,7 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { DateField, TimeField } from "./AgendaDateFields";
 import MiniCalendar from "@/components/ui/MiniCalendar";
+import { FIELD_BG, PeriodPills, StepperPill } from "@/components/ui/da";
 import {
   RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon,
   TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY,
@@ -1189,27 +1190,11 @@ export default function AgendaPage() {
   }, []);
 
   /* ─────────────── Header ─────────────── */
+  /* Sélecteur de vues : la brique de la page Calendrier, sur sa piste arrondie.
+     Cette page en portait une copie — même intention, mais un gris, une ombre et
+     une graisse à elle, donc deux sélecteurs qui ne se ressemblaient pas. */
   const segmented = (
-    <div style={{ display: "inline-flex", background: T.accentBg, borderRadius: 999, padding: 3, gap: 2 }}>
-      {VIEWS.map((v) => {
-        const active = v.id === view;
-        return (
-          <button
-            key={v.id}
-            onClick={() => setView(v.id)}
-            style={{
-              padding: "5px 14px", borderRadius: 999, border: "none", cursor: "pointer",
-              fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
-              background: active ? T.white : "transparent",
-              color: active ? T.text : T.textMut,
-              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
-            }}
-          >
-            {v.label}
-          </button>
-        );
-      })}
-    </div>
+    <PeriodPills value={view} onChange={setView} options={VIEWS} track size={14} />
   );
 
   const header = (
@@ -1217,29 +1202,17 @@ export default function AgendaPage() {
       {connected && !isMobile && (
         <>
           <button onClick={goToday} style={ghostBtn()}>Aujourd'hui</button>
-          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <button onClick={() => setCursor(shiftCursor(view, cursor, -1))} aria-label="Précédent" style={{ ...iconBtn(), border: "none", background: "transparent" }}>
-              <ChevronLeft size={16} strokeWidth={2} />
-            </button>
-            <button onClick={() => setCursor(shiftCursor(view, cursor, 1))} aria-label="Suivant" style={{ ...iconBtn(), border: "none", background: "transparent" }}>
-              <ChevronRight size={16} strokeWidth={2} />
-            </button>
-          </div>
+          {/* Flèches + période dans la pastille de la page Calendrier, au lieu
+              de deux chevrons nus suivis d'un libellé isolé. Le libellé garde son
+              rôle de déclencheur du sélecteur de date (`onLabel`). */}
           <div style={{ position: "relative", display: "inline-flex" }}>
-            <button
-              onClick={() => setDatePickerOpen((o) => !o)}
-              title="Choisir une date"
-              style={{
-                fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1,
-                background: "transparent", border: "none", cursor: "pointer",
-                padding: "4px 8px", borderRadius: "var(--radius-card)", fontFamily: "var(--font-sans)",
-                transition: "background .12s ease",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-            >
-              {monthYearLabel(view, cursor)}
-            </button>
+            <StepperPill
+              label={monthYearLabel(view, cursor)}
+              onPrev={() => setCursor(shiftCursor(view, cursor, -1))}
+              onNext={() => setCursor(shiftCursor(view, cursor, 1))}
+              onLabel={() => setDatePickerOpen((o) => !o)}
+              labelTitle="Choisir une date"
+            />
             {datePickerOpen && (
               <MiniCalendar
                 value={cursor}
@@ -1258,9 +1231,10 @@ export default function AgendaPage() {
             onClick={() => setDatePickerOpen((o) => !o)}
             title="Choisir une date"
             style={{
-              fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1,
-              background: "transparent", border: "none", cursor: "pointer",
-              padding: "4px 8px", borderRadius: "var(--radius-card)", fontFamily: "var(--font-sans)",
+              fontSize: 14, fontWeight: 500, color: T.text,
+              background: T.white, border: "none", cursor: "pointer",
+              padding: "7px 14px", minHeight: 34, borderRadius: 999,
+              boxShadow: T.elevPill, fontFamily: "var(--font-sans)", textTransform: "capitalize",
             }}
           >
             {monthYearLabel(view, cursor)}
@@ -1321,7 +1295,7 @@ export default function AgendaPage() {
                   marginTop: 3, display: "inline-flex", alignItems: "center", justifyContent: "center",
                   minWidth: 26, height: 26, borderRadius: 999, padding: "0 7px",
                   fontSize: 14, fontWeight: isToday ? 700 : 600,
-                  background: isToday ? T.text : "transparent", color: isToday ? "#fff" : T.text,
+                  background: isToday ? T.text : "transparent", color: isToday ? T.textInverted : T.text,
                 }}>{d.getDate()}</div>
                 {/* Évènements « toute la journée » : au-dessus des tâches du jour */}
                 {allDay.length > 0 && (
@@ -1523,7 +1497,7 @@ export default function AgendaPage() {
                 }}>
                 <div style={{
                   alignSelf: "flex-start", fontSize: 12, fontWeight: isToday ? 700 : 500,
-                  color: isToday ? "#fff" : T.text, background: isToday ? T.text : "transparent",
+                  color: isToday ? T.textInverted : T.text, background: isToday ? T.text : "transparent",
                   borderRadius: 999, minWidth: 22, height: 22,
                   display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 6px",
                 }}>{d.getDate()}</div>
@@ -1582,7 +1556,7 @@ export default function AgendaPage() {
                         position: "relative", border: "none", cursor: "pointer", fontFamily: "inherit",
                         aspectRatio: "1 / 1", borderRadius: 6, fontSize: 10.5,
                         background: isToday ? T.text : has ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : "transparent",
-                        color: isToday ? "#fff" : T.text, fontWeight: isToday || has ? 700 : 400,
+                        color: isToday ? T.textInverted : T.text, fontWeight: isToday || has ? 700 : 400,
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                       {c.getDate()}
@@ -1650,7 +1624,7 @@ export default function AgendaPage() {
     body = (
       <>
         {error && error !== "insufficient_scope" && (
-          <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: "var(--radius-card)", padding: "8px 12px" }}>
+          <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: 8, padding: "8px 12px" }}>
             {error}
           </div>
         )}
@@ -1670,7 +1644,7 @@ export default function AgendaPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
       {header}
       {body}
       {modal && (
@@ -1684,8 +1658,10 @@ export default function AgendaPage() {
                 position: "relative",
                 display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, padding: "4px 10px",
                 cursor: modalDragging ? "grabbing" : "grab", userSelect: "none",
-                borderTopLeftRadius: "var(--radius-card)", borderTopRightRadius: "var(--radius-card)",
-                background: (dragHover || modalDragging) ? "rgba(0,0,0,0.035)" : "transparent",
+                borderTopLeftRadius: 12, borderTopRightRadius: 12,
+                // Aplat d'encre dark-aware : le noir translucide en dur ne se
+                // voyait pas sur la surface sombre d'une modale en thème sombre.
+                background: (dragHover || modalDragging) ? FIELD_BG : "transparent",
                 transition: "background-color 120ms ease",
               }}>
               {/* Poignée de déplacement (barre grise centrée) */}
@@ -1790,7 +1766,8 @@ export default function AgendaPage() {
                         border: `1.5px solid ${modal.allDay ? T.blue : T.textMut}`,
                         background: modal.allDay ? T.blue : "transparent",
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontSize: 10, lineHeight: 1,
+                        // ✓ sur l'aplat bleu saturé : blanc dans les deux thèmes.
+                        color: T.onSolid, fontSize: 10, lineHeight: 1,
                       }}>{modal.allDay ? "✓" : ""}</span>
                       Toute la journée
                     </button>
@@ -1807,7 +1784,7 @@ export default function AgendaPage() {
                       <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                     </button>
                     {recurOpen && (
-                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 240, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}>
+                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 240, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}>
                         {RECUR_PRESETS.map((p) => {
                           const selected = (modal.recur?.preset || "once") === p.id;
                           return (
@@ -1823,7 +1800,7 @@ export default function AgendaPage() {
                               }}
                               onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = T.bg; }}
                               onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
-                              style={{ width: "100%", textAlign: "left", border: "none", borderRadius: "var(--radius-card)", padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
+                              style={{ width: "100%", textAlign: "left", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
                               {p.label}
                             </button>
                           );
@@ -1837,9 +1814,9 @@ export default function AgendaPage() {
                               <span style={{ fontSize: 13, color: T.text }}>Tous les</span>
                               <input type="number" min={1} value={modal.recur.interval ?? 1}
                                 onChange={(e) => setRecur({ interval: e.target.value })}
-                                style={{ width: 52, padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", outline: "none" }} />
+                                style={{ width: 52, padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)", outline: "none" }} />
                               <select value={modal.recur.freq || "WEEKLY"} onChange={(e) => setRecur({ freq: e.target.value })}
-                                style={{ padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", outline: "none", cursor: "pointer" }}>
+                                style={{ padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)", outline: "none", cursor: "pointer" }}>
                                 <option value="DAILY">jour(s)</option>
                                 <option value="WEEKLY">semaine(s)</option>
                                 <option value="MONTHLY">mois</option>
@@ -1861,7 +1838,7 @@ export default function AgendaPage() {
                                       }}
                                       style={{
                                         width: 30, height: 30, borderRadius: "50%", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600,
-                                        border: `1px solid ${on ? T.blue : T.border}`, background: on ? T.blue : T.white, color: on ? "#fff" : T.text,
+                                        border: `1px solid ${on ? T.blue : T.border}`, background: on ? T.blue : T.white, color: on ? T.onSolid : T.text,
                                       }}>{w.label}</button>
                                   );
                                 })}
@@ -1880,7 +1857,7 @@ export default function AgendaPage() {
                                 Après
                                 <input type="number" min={1} value={modal.recur.count ?? 10} disabled={modal.recur.end !== "count"}
                                   onChange={(e) => setRecur({ count: e.target.value })}
-                                  style={{ width: 52, padding: "4px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", outline: "none", opacity: modal.recur.end === "count" ? 1 : 0.5 }} />
+                                  style={{ width: 52, padding: "4px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)", outline: "none", opacity: modal.recur.end === "count" ? 1 : 0.5 }} />
                                 occurrences
                               </label>
                               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.text, cursor: "pointer" }}>
@@ -1934,7 +1911,7 @@ export default function AgendaPage() {
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                   </button>
                   {colorOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
                       <button type="button" onClick={() => { setModal({ ...modal, colorId: null }); setColorOpen(false); }} title="Par défaut" style={{ width: 24, height: 24, borderRadius: "50%", background: DEFAULT_EVENT_COLOR, border: modal.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
                       {Object.entries(GCAL_COLORS).map(([id, hex]) => (
                         <button key={id} type="button" onClick={() => { setModal({ ...modal, colorId: id }); setColorOpen(false); }} title={`Couleur ${id}`}
@@ -1953,7 +1930,7 @@ export default function AgendaPage() {
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                   </button>
                   {remindOpen && (
-                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 200, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}>
+                    <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 5, minWidth: 200, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}>
                       {REMINDER_OPTS.map((r) => {
                         const selected = String(r.v) === String(modal.reminder);
                         return (
@@ -1961,7 +1938,7 @@ export default function AgendaPage() {
                             onClick={() => { setModal({ ...modal, reminder: r.v }); setRemindOpen(false); }}
                             onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = T.bg; }}
                             onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
-                            style={{ width: "100%", textAlign: "left", border: "none", borderRadius: "var(--radius-card)", padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
+                            style={{ width: "100%", textAlign: "left", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: selected ? 600 : 400 }}>
                             {r.label}
                           </button>
                         );
@@ -2012,7 +1989,7 @@ export default function AgendaPage() {
               </>
 
               {modalError && (
-                <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: "var(--radius-card)", padding: "8px 10px", marginTop: 8 }}>{modalError}</div>
+                <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: 8, padding: "8px 10px", marginTop: 8 }}>{modalError}</div>
               )}
             </div>
 
@@ -2145,7 +2122,9 @@ function TaskCircle({ done, onToggle, size = 13 }) {
         width: size, height: size, borderRadius: "50%", flexShrink: 0, cursor: "pointer", padding: 0,
         border: `1.5px solid ${done ? T.green : T.textMut}`,
         background: done ? T.green : "transparent",
-        display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 8, lineHeight: 1,
+        // Le ✓ est posé sur un aplat vert saturé : `onSolid` reste blanc dans
+        // les deux thèmes, contrairement à `textInverted` qui s'inverse.
+        display: "inline-flex", alignItems: "center", justifyContent: "center", color: T.onSolid, fontSize: 8, lineHeight: 1,
       }}>
       {done ? "✓" : ""}
     </button>
@@ -2164,16 +2143,24 @@ function FormRow({ icon: Icon, children, top = false, iconColor }) {
   );
 }
 
-/* ─────────────── Styles ─────────────── */
-const card = () => ({ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)" });
+/* ─────────────── Styles ───────────────
+   Fabriques partagées par toute la page. C'est ici que passe le portage à la
+   nouvelle DA : les cartes perdent leur bordure au profit de l'ombre très douce
+   `elevCard`, les boutons prennent la métrique 12 px / Medium des autres pages,
+   et plus aucun blanc n'est écrit en dur — `#fff` sur un aplat `T.text` devenait
+   invisible en thème sombre, où cet aplat s'éclaircit. */
+/* Mêmes valeurs que la carte de da.jsx, écrites à plat plutôt qu'en `{...CARD}` :
+   les appelants posent leur propre padding, et `CARD` clipperait au passage tout
+   ce qui dépasse (un menu ouvert depuis une carte). */
+const card = () => ({ background: T.white, borderRadius: 12, boxShadow: T.elevCard });
 const subInp = { padding: "5px 4px", fontSize: 14, fontFamily: "inherit", color: T.text, background: "transparent", border: "none", borderRadius: 6, outline: "none", cursor: "pointer" };
 const rowInp = { width: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 14, color: T.text, padding: "5px 0", boxSizing: "border-box" };
 // Bouton "pilule" moderne (couleur, notification)
 // Bouton icône discret de la barre du haut du modal (fermer / supprimer).
 const topIconBtn = {
   display: "inline-flex", alignItems: "center", justifyContent: "center",
-  width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent",
-  color: "var(--color-text-muted, #8E8E8E)", cursor: "pointer", fontFamily: "inherit",
+  width: 32, height: 32, borderRadius: 999, border: "none", background: "transparent",
+  color: T.textMut, cursor: "pointer", fontFamily: "inherit",
   transition: "background-color 120ms ease, color 120ms ease",
 };
 const pillBtn = {
@@ -2183,26 +2170,29 @@ const pillBtn = {
   fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
 };
 const codeStyle = { background: T.accentBg, padding: "1px 5px", borderRadius: "var(--radius-field)", fontSize: 12 };
-const fieldLbl = { display: "block", fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 };
+/* Libellé de champ : la DA écrit ses libellés en minuscules, à 12 px, et les
+   met en retrait par l'opacité (cf. `FieldLabel` de da.jsx) — les capitales
+   espacées de 11 px appartenaient à l'ancienne. */
+const fieldLbl = { display: "block", fontSize: 12, fontWeight: 500, color: T.text, opacity: 0.5, marginBottom: 6 };
 const inp = () => ({
-  width: "100%", padding: "9px 12px", fontSize: 13, fontFamily: "inherit",
-  color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
+  width: "100%", padding: "9px 12px", fontSize: 14, fontFamily: "inherit",
+  color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)",
   outline: "none", boxSizing: "border-box",
 });
 const iconBtn = () => ({
   display: "inline-flex", alignItems: "center", justifyContent: "center",
-  width: 32, height: 32, borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`,
+  width: 32, height: 32, borderRadius: 999, border: `1px solid ${T.border}`,
   background: T.white, color: T.text, cursor: "pointer", fontFamily: "inherit",
 });
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",
-  padding: "7px 14px", height: 34, borderRadius: 999,
+  padding: "7px 12px", minHeight: 32, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
-  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 const primaryBtn = (small = false) => ({
   display: "inline-flex", alignItems: "center",
-  padding: small ? "7px 14px" : "10px 20px", height: small ? 34 : undefined, borderRadius: 999,
-  border: `1px solid ${T.text}`, background: T.text, color: "#fff",
-  fontSize: small ? 13 : 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  padding: small ? "7px 14px" : "10px 20px", minHeight: small ? 32 : undefined, borderRadius: 999,
+  border: "none", background: T.text, color: T.textInverted,
+  fontSize: small ? 12 : 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });

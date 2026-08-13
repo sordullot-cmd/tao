@@ -24,43 +24,15 @@
 import React, { useState, useMemo } from "react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { fmt, fmtInt } from "@/lib/ui/format";
-import { CARD, HeroAmount, PeriodPills, StepperPill } from "@/components/ui/da";
-import { getCurrencySymbol } from "@/lib/userPrefs";
-
-/* Objectifs par taille de compte (paliers prop firms). */
-const EVAL_OBJECTIVES = {
-  "25k": 1500,
-  "50k": 3000,
-  "100k": 6000,
-  "150k": 9000,
-  "250k": 15000,
-};
-
-/** Convertit une taille de compte ("50k", "10000") en montant. */
-const parseSizeToUsd = (size) => {
-  if (size == null) return null;
-  const m = String(size).match(/(\d+(?:\.\d+)?)\s*([kKmM])?/);
-  if (!m) return null;
-  const num = parseFloat(m[1]);
-  const unit = (m[2] || "").toLowerCase();
-  if (unit === "k") return num * 1000;
-  if (unit === "m") return num * 1000000;
-  return num;
-};
-
-/** Objectif d'un compte : palier connu, sinon 6 % du capital. */
-const objectiveForSize = (size) => {
-  if (!size) return 0;
-  const key = String(size).toLowerCase();
-  if (EVAL_OBJECTIVES[key] != null) return EVAL_OBJECTIVES[key];
-  const usd = parseSizeToUsd(size);
-  return usd ? Math.round(usd * 0.06) : 0;
-};
+import { fmtInt } from "@/lib/ui/format";
+import { CARD, HeroAmount, PeriodPills, StepperPill, TILE_HOVER } from "@/components/ui/da";
 
 const WEEKDAY_KEYS = ["wd.monday", "wd.tuesday", "wd.wednesday", "wd.thursday", "wd.friday", "wd.saturday", "wd.sunday"];
 
-export default function CalendarPage({ trades = [], evalAccountSize = "25k", accounts = [], selectedAccountIds = [], setPage }) {
+/* Les props de comptes (evalAccountSize / accounts / selectedAccountIds) ne sont
+   plus lues depuis le retrait de l'indicateur d'objectif : la page ne dépend
+   plus que des trades. L'appelant peut continuer à les passer sans effet. */
+export default function CalendarPage({ trades = [], setPage }) {
   const lang = useLang();
   const locale = lang === "fr" ? "fr-FR" : "en-US";
 
@@ -92,25 +64,6 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
   }, [trades]);
 
   const isoOf = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-
-  /* ── Cible des comptes d'évaluation ─────────────────────────────────────
-     Absente de la maquette mais indispensable au suivi prop firm : elle se
-     loge sous le montant héros, dans la colonne que la maquette y réserve. */
-  const evalAccountsSelected = (accounts || []).filter(
-    a => selectedAccountIds.includes(a.id) && a.account_type === "eval"
-  );
-  const evalAccountIds = new Set(evalAccountsSelected.map(a => a.id));
-  const cumulativeObjective = evalAccountsSelected.length > 0
-    ? evalAccountsSelected.reduce((s, a) => s + objectiveForSize(a.eval_account_size), 0)
-    : objectiveForSize(evalAccountSize);
-  const cumulativeLabel = (() => {
-    if (evalAccountsSelected.length > 1) return t("accounts.multiple").replace("{n}", String(evalAccountsSelected.length));
-    const size = evalAccountsSelected.length === 1 ? evalAccountsSelected[0].eval_account_size : evalAccountSize;
-    return `EVAL ${getCurrencySymbol()}${String(size || "").toUpperCase()}`;
-  })();
-  const evalCumulativePnL = (trades || [])
-    .filter(tr => evalAccountIds.size === 0 || evalAccountIds.has(tr.account_id))
-    .reduce((s, tr) => s + (tr.pnl || 0), 0);
 
   /* ── Totaux de la période affichée ──────────────────────────────────────── */
   const sumOver = (predicate) => Object.entries(pnlByDate)
@@ -166,20 +119,32 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
           display: "flex", alignItems: "flex-start", justifyContent: "space-between",
           gap: 8, height: 83, padding: 12, borderRadius: 8, background: bg,
           cursor: clickable ? "pointer" : "default", minWidth: 0,
-          transition: "filter 140ms var(--ease-out, ease)",
+          transition: "box-shadow 140ms var(--ease-out, ease)",
         }}
-        onMouseEnter={clickable ? (e) => { e.currentTarget.style.filter = "brightness(0.97)"; } : undefined}
-        onMouseLeave={clickable ? (e) => { e.currentTarget.style.filter = "none"; } : undefined}
+        onMouseEnter={clickable ? (e) => { e.currentTarget.style.boxShadow = TILE_HOVER; } : undefined}
+        onMouseLeave={clickable ? (e) => { e.currentTarget.style.boxShadow = "none"; } : undefined}
       >
         <span style={{ fontSize: 14, lineHeight: "17.05px", color: dayInk }}>{day}</span>
-        <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", minWidth: 0 }}>
-          <span style={{ fontSize: 14, lineHeight: "17.05px", color: amountInk, whiteSpace: "nowrap" }}>
-            {fmtInt(pnl, true)}
+        {/* Un jour sans trade ne porte QUE son numéro : « €0 / 0 trade » répété
+            sur toutes les cases vides remplissait la grille de bruit et masquait
+            les jours qui comptent. Même règle que le calendrier des fiches de
+            compte et de firme (components/ui/monthCalendar.jsx). */}
+        {count > 0 && (
+          <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", minWidth: 0 }}>
+            <span style={{
+              fontSize: 14, lineHeight: "17.05px", color: amountInk, whiteSpace: "nowrap",
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              {fmtInt(pnl, true)}
+            </span>
+            <span style={{
+              fontSize: 12, lineHeight: "17.05px", color: subInk, opacity: pnl === 0 ? 1 : 0.6,
+              whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+            }}>
+              {count} {count > 1 ? t("cal.tradesPlural") : t("cal.tradeSingular")}
+            </span>
           </span>
-          <span style={{ fontSize: 12, lineHeight: "17.05px", color: subInk, opacity: pnl === 0 ? 1 : 0.6, whiteSpace: "nowrap" }}>
-            {count} {count > 1 ? t("cal.tradesPlural") : t("cal.tradeSingular")}
-          </span>
-        </span>
+        )}
       </div>
     );
   };
@@ -250,6 +215,9 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
       const negative = pnl < 0;
       const isToday = year === today.getFullYear() && m === today.getMonth() && day === today.getDate();
       const dateLabel = new Date(year, m, day).toLocaleDateString(locale, { day: "numeric", month: "long" });
+      // Le liseré « aujourd'hui » et le voile de survol partagent `boxShadow` :
+      // il faut donc les composer, sinon le survol effacerait le repère du jour.
+      const todayRing = isToday ? `inset 0 0 0 1px ${T.border2}` : null;
 
       return (
         <span
@@ -271,14 +239,16 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
             // tradé mais nul (BE) prend un gris franc pour s'en détacher.
             background: positive ? T.calPosBg : negative ? T.calNegBg : traded ? T.border2 : T.calEmptyBg,
             color: positive ? T.pnlPos : negative ? T.pnlNeg : traded ? T.text : T.calEmptyText,
-            boxShadow: isToday ? `inset 0 0 0 1px ${T.border2}` : "none",
+            boxShadow: todayRing || "none",
             fontSize: 11.5, lineHeight: 1, fontWeight: traded ? 500 : 400,
             fontVariantNumeric: "tabular-nums",
             cursor: traded ? "pointer" : "default",
-            transition: "filter 140ms var(--ease-out, ease)",
+            transition: "box-shadow 140ms var(--ease-out, ease)",
           }}
-          onMouseEnter={traded ? (e) => { e.currentTarget.style.filter = "brightness(0.96)"; } : undefined}
-          onMouseLeave={traded ? (e) => { e.currentTarget.style.filter = "none"; } : undefined}
+          onMouseEnter={traded ? (e) => {
+            e.currentTarget.style.boxShadow = [todayRing, TILE_HOVER].filter(Boolean).join(", ");
+          } : undefined}
+          onMouseLeave={traded ? (e) => { e.currentTarget.style.boxShadow = todayRing || "none"; } : undefined}
         >
           {String(day).padStart(2, "0")}
         </span>
@@ -314,7 +284,7 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
                 title={t("cal.monthTotal")}
                 style={{
                   position: "absolute", right: 0, top: 2, fontSize: 11, lineHeight: "14px",
-                  whiteSpace: "nowrap", fontWeight: 500,
+                  whiteSpace: "nowrap", fontWeight: 500, fontVariantNumeric: "tabular-nums",
                   color: monthPnL > 0 ? T.pnlPos : T.pnlNeg,
                 }}
               >
@@ -376,10 +346,10 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
               padding: 16, borderRadius: 8, border: "none", cursor: "pointer",
               fontFamily: "inherit", textAlign: "left",
               background: positive ? T.calPosSurface : negative ? T.calNegSurface : T.calEmptyBg,
-              transition: "filter 140ms var(--ease-out, ease)",
+              transition: "box-shadow 140ms var(--ease-out, ease)",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.97)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = TILE_HOVER; }}
+            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
           >
             <span style={{
               fontSize: 14, lineHeight: "17.05px", textTransform: "capitalize",
@@ -387,18 +357,28 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
             }}>
               {new Date(year, m).toLocaleString(locale, { month: "long" })}
             </span>
+            {/* Mois sans trade : le nom seul, et un tiret à la place du montant.
+                La tuile reste cliquable — c'est le chemin pour aller ouvrir ce
+                mois —, mais elle n'annonce pas « €0 » comme un résultat. */}
             <span style={{
               fontSize: 20, fontWeight: 500, lineHeight: 1, whiteSpace: "nowrap",
-              color: positive ? T.calPosText : negative ? T.calNegText : T.text,
+              fontVariantNumeric: "tabular-nums",
+              color: positive ? T.calPosText : negative ? T.calNegText : T.calEmptyText,
             }}>
-              {fmtInt(monthPnL, true)}
+              {monthTrades > 0 ? fmtInt(monthPnL, true) : "—"}
             </span>
+            {/* La ligne est toujours rendue, vide s'il n'y a rien à compter :
+                elle réserve sa hauteur, donc les douze tuiles gardent la même
+                taille d'une rangée à l'autre. */}
             <span style={{
-              fontSize: 12, lineHeight: "17.05px",
+              fontSize: 12, lineHeight: "17.05px", minHeight: "17.05px",
+              fontVariantNumeric: "tabular-nums",
               color: positive ? T.calPosSub : negative ? T.calNegText : T.calEmptyText,
               opacity: monthPnL === 0 ? 1 : 0.6,
             }}>
-              {monthTrades} {monthTrades > 1 ? t("cal.tradesPlural") : t("cal.tradeSingular")}
+              {monthTrades > 0
+                ? `${monthTrades} ${monthTrades > 1 ? t("cal.tradesPlural") : t("cal.tradeSingular")}`
+                : ""}
             </span>
           </button>
         );
@@ -424,34 +404,9 @@ export default function CalendarPage({ trades = [], evalAccountSize = "25k", acc
             </span>
             <HeroAmount value={periodPnL} />
 
-            {cumulativeObjective > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", minWidth: 200 }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ fontSize: 12, lineHeight: "17.05px", color: T.textSub }}>{cumulativeLabel}</span>
-                  <span style={{
-                    fontSize: 12, lineHeight: "17.05px", whiteSpace: "nowrap",
-                    color: evalCumulativePnL >= cumulativeObjective ? T.pnlPos : T.textSub,
-                  }}>
-                    {fmt(evalCumulativePnL)} / {fmt(cumulativeObjective)}
-                  </span>
-                </div>
-                <div
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={cumulativeObjective}
-                  aria-valuenow={Math.max(0, evalCumulativePnL)}
-                  aria-label={cumulativeLabel}
-                  style={{ height: 6, borderRadius: 999, background: T.calEmptyBg, overflow: "hidden" }}
-                >
-                  <div style={{
-                    height: "100%", borderRadius: 999,
-                    width: `${Math.max(0, Math.min(100, (evalCumulativePnL / cumulativeObjective) * 100))}%`,
-                    background: evalCumulativePnL >= cumulativeObjective ? T.pnlPos : T.kraken,
-                    transition: "width 240ms var(--ease-out, ease)",
-                  }} />
-                </div>
-              </div>
-            )}
+            {/* L'indicateur d'objectif des comptes d'évaluation (libellé du
+                nombre de comptes, montants et barre) a été retiré : l'en-tête
+                ne porte plus que la période et le P&L héros. */}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

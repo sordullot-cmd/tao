@@ -25,8 +25,6 @@ const fireError = (title, body) => {
 
 const css = `
   button { font-family: inherit; cursor: pointer; }
-  @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-  .anim-1 { animation: fadeUp .25s var(--ease-out) both; }
 `;
 
 const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencySymbol()}${Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;

@@ -31,6 +31,7 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { DEFAULT_ALERT_SETTINGS } from "@/lib/hooks/useTradeAlerts";
 import { notify, ensureNotifyPermission, isNotifyGranted, isTauri } from "@/lib/notify";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { ACCENT_PRESETS, applyAccent, isHexColor, readAccent } from "@/lib/ui/accent";
 
 // Clés locales absentes de BaseT mappées sur des tokens dark-aware.
 const T = { ...BaseT, panel: BaseT.accentBg, borderHover: BaseT.border2 };
@@ -649,6 +650,8 @@ function GlobalsSection() {
   });
   const [savedMsg, setSavedMsg] = useState("");
   const [loadedFromCloud, setLoadedFromCloud] = useState(false);
+  // Accent de marque : principale (--accent) et secondaire (--accent-2).
+  const [accent, setAccent] = useState(() => readAccent());
 
   // Applique le thème choisi : "system" retire l'attribut (fallback CSS
   // prefers-color-scheme), sinon force data-theme="light|dark".
@@ -658,6 +661,15 @@ function GlobalsSection() {
       else document.documentElement.dataset.theme = v;
       localStorage.setItem("tr4de_theme", v);
     } catch {}
+  };
+
+  // L'état initial est calculé côté serveur (valeurs par défaut) : on relit une
+  // fois monté pour refléter ce qui est réellement enregistré.
+  useEffect(() => { setAccent(readAccent()); }, []);
+
+  const setAccentColors = (primary, secondary) => {
+    setAccent({ primary, secondary });
+    applyAccent(primary, secondary);
   };
 
   // Charger depuis Supabase au montage (et sur focus)
@@ -822,11 +834,106 @@ function GlobalsSection() {
       />
       <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>Choisis l'apparence de l'interface (Système suit ton OS).</div>
 
+      <SectionLabel mt={20}>Couleurs d'accent</SectionLabel>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {ACCENT_PRESETS.map((p) => {
+          const active = p.primary.toLowerCase() === accent.primary.toLowerCase()
+            && p.secondary.toLowerCase() === accent.secondary.toLowerCase();
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setAccentColors(p.primary, p.secondary)}
+              aria-pressed={active}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "6px 10px", borderRadius: "var(--radius-pill)",
+                border: `1px solid ${active ? T.text : T.border}`,
+                background: active ? T.accentBg : T.white,
+                color: T.text, fontSize: 12, fontFamily: "inherit",
+                cursor: "pointer", transition: "border-color 150ms, background 150ms",
+              }}
+            >
+              <span style={{ display: "inline-flex" }}>
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: p.primary }} />
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: p.secondary, marginLeft: -4 }} />
+              </span>
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <AccentField
+          label="Principale"
+          hint="Nav active, pastilles, éléments actifs"
+          value={accent.primary}
+          onChange={(v) => setAccentColors(v, accent.secondary)}
+        />
+        <AccentField
+          label="Secondaire"
+          hint="Courbe de portefeuille, graphiques"
+          value={accent.secondary}
+          onChange={(v) => setAccentColors(accent.primary, v)}
+        />
+      </div>
+      <div style={{ fontSize: 11, color: T.textMut, marginTop: 6 }}>
+        Appliqué immédiatement et conservé sur cet appareil.
+      </div>
+
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 24, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
         {savedMsg && <span style={{ fontSize: 12, color: T.green }}>{savedMsg}</span>}
         <PrimaryButton onClick={onSave}>{t("settings.saveChanges")}</PrimaryButton>
       </div>
     </Card>
+  );
+}
+
+/* Sélecteur d'une teinte d'accent : pastille native + saisie hex.
+   Le champ texte garde son propre tampon pour laisser taper « #6 », « #64… »
+   sans repeindre l'app à chaque frappe : on ne remonte qu'une valeur valide. */
+function AccentField({ label, hint, value, onChange }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+
+  const commit = (raw) => {
+    const next = raw.trim();
+    if (isHexColor(next)) onChange(next.toUpperCase());
+    else setDraft(value);
+  };
+
+  return (
+    <label style={{ flex: "1 1 180px", minWidth: 160 }}>
+      <div style={{ fontSize: 12, fontWeight: 500, color: T.text, marginBottom: 6 }}>{label}</div>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
+        border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.white,
+      }}>
+        <input
+          type="color"
+          value={isHexColor(value) ? value : "#000000"}
+          onChange={(e) => onChange(e.target.value.toUpperCase())}
+          aria-label={`${label} — sélecteur de couleur`}
+          style={{
+            width: 28, height: 28, padding: 0, border: "none", borderRadius: 6,
+            background: "none", cursor: "pointer", flexShrink: 0,
+          }}
+        />
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") commit(e.currentTarget.value); }}
+          spellCheck={false}
+          style={{
+            flex: 1, minWidth: 0, border: "none", outline: "none", background: "none",
+            fontSize: 13, fontFamily: "var(--font-mono)", color: T.text, textTransform: "uppercase",
+          }}
+        />
+      </div>
+      {hint && <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{hint}</div>}
+    </label>
   );
 }
 

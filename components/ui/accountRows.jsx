@@ -42,6 +42,11 @@ export const LAST_CELL = { paddingRight: 16, boxSizing: "border-box" };
 /* Emplacement des actions de fin de ligne (modifier / supprimer). Seule colonne
    à largeur figée : deux boutons de 28 px n'ont aucune raison de s'étirer. */
 export const ACTIONS_COL = { width: 68, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2 };
+/* La colonne d'actions est un FRÈRE de la zone de navigation (voir TableRow),
+   et le conteneur de ligne a un `gap: 4` : sans cette compensation, la colonne
+   serait poussée de 4 px et la dernière cellule ne tomberait plus sous son
+   en-tête. À n'appliquer que là où un gap sépare réellement les deux blocs. */
+const ACTIONS_COL_GAPLESS = { ...ACTIONS_COL, marginLeft: -4 };
 
 /* Gouttière de tête d'une ligne : le carré du chevron (32) et son écart (4).
    L'en-tête et les sous-lignes la reprennent pour que tous les noms de la liste
@@ -80,12 +85,16 @@ export function RoundLogo({ src, size = 20, fallback, name }) {
   );
 }
 
-/* Bouton compact « Passer en Funded » (eval dont la cible est atteinte). */
+/* Bouton compact « Passer en Funded » (eval dont la cible est atteinte).
+   Il vit DANS la zone de navigation de la ligne (collé au nom du compte) : le
+   `scale` d'appui le rétrécirait sous le curseur et le relâchement tomberait sur
+   la ligne — donc sur la navigation — au lieu du bouton. D'où `data-no-press`. */
 export function PassFundedButton({ busy, onClick }) {
   return (
     <button
       type="button"
       disabled={busy}
+      data-no-press
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       style={{
         display: "inline-flex", alignItems: "center", gap: 4,
@@ -105,8 +114,14 @@ export function PassFundedButton({ busy, onClick }) {
  * ne pas concurrencer les chiffres de la ligne, plein au survol ; `danger` le
  * passe en rouge, réservé aux actions destructrices.
  *
- * `stopPropagation` sur le clic : la ligne entière est cliquable (elle ouvre la
- * fiche du compte), sans ça un clic sur la poubelle naviguerait aussi.
+ * `stopPropagation` sur le clic : ces boutons sont posés à côté d'une zone de
+ * navigation (la ligne ouvre la fiche du compte), et rien ne garantit qu'un
+ * appelant ne les remette pas dedans.
+ *
+ * `data-no-press` : globals.css fait scaler tout bouton à 0.97 au `:active`.
+ * Sur un carré de 34 px le retrait est d'environ 1 px — assez pour qu'un
+ * pointeur posé sur le bord extrême du bouton se retrouve HORS de lui au
+ * relâchement, auquel cas le navigateur n'émet aucun `click`.
  */
 export function RowIconButton({ label, onClick, danger = false, busy = false, children }) {
   const idle = danger ? T.red : T.textSub;
@@ -116,6 +131,7 @@ export function RowIconButton({ label, onClick, danger = false, busy = false, ch
       aria-label={label}
       title={label}
       disabled={busy}
+      data-no-press
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       /* Le clic est aussi intercepté au pointerdown : la ligne entière est une
          zone de navigation, et sans ça un relâchement légèrement décalé partait
@@ -272,10 +288,21 @@ export function TableRow({
           />
         </button>
 
-        {/* Zone de navigation : tout sauf le chevron. */}
+        {/* Zone de navigation : tout sauf le chevron ET les actions de fin de
+            ligne, qui sont ses FRÈRES (voir plus bas).
+
+            `data-no-press` retire le `transform: scale(0.97)` que globals.css
+            applique au `:active` de tout `[role="button"]`. Sur une ligne large
+            de plusieurs centaines de pixels, ce retrait de 3 % déplace ses bords
+            d'une dizaine de pixels PENDANT l'appui : la cible glissait sous le
+            curseur entre le mousedown et le mouseup, le navigateur n'émettait
+            alors aucun `click` sur le bouton visé — c'est ce qui donnait des
+            boutons « qui ne marchent qu'aux extrémités ». Une ligne de tableau
+            n'a de toute façon rien à gagner à se rétrécir au clic. */}
         <div
           role="button"
           tabIndex={0}
+          data-no-press
           onClick={onOpen}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
           style={{
@@ -295,10 +322,17 @@ export function TableRow({
           {cells.map((c, i) => (
             <span key={i} style={{ ...CELL_VALUE, ...(i === cells.length - 1 ? LAST_CELL : null), textAlign: i === cells.length - 1 ? "right" : "left" }}>{c}</span>
           ))}
-          {(actions || reserveActions) && (
-            <div style={ACTIONS_COL} onClick={(e) => e.stopPropagation()}>{actions}</div>
-          )}
         </div>
+
+        {/* Actions de fin de ligne — HORS de la zone de navigation, exactement
+            comme le chevron : tant qu'elles en étaient un descendant, il fallait
+            arrêter l'événement à la main, et le `:active` de la ligne les
+            déplaçait sous le curseur en pleine action. Ici aucun clic sur un
+            bouton d'action ne peut atteindre la navigation, il n'y a plus rien à
+            intercepter. */}
+        {(actions || reserveActions) && (
+          <div style={ACTIONS_COL_GAPLESS} aria-hidden={actions ? undefined : true}>{actions}</div>
+        )}
       </div>
 
       {isOpen && (
@@ -316,10 +350,14 @@ export function TableRow({
  * à cette firme. Alignée sur les sous-lignes (même gouttière) pour se lire
  * comme la suite de la liste, mais en texte atténué pour rester secondaire.
  */
-export function AddAccountRow({ onClick, label }) {
+export function AddAccountRow({ onClick, label, icon }) {
   return (
     <button
       type="button"
+      /* Bouton pleine largeur : le `scale` d'appui de globals.css déplacerait ses
+         bords d'une dizaine de pixels, et un clic près d'une extrémité se
+         perdrait entre l'appui et le relâchement. */
+      data-no-press
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       style={{
         display: "flex", alignItems: "center", gap: 8,
@@ -333,11 +371,14 @@ export function AddAccountRow({ onClick, label }) {
       onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; e.currentTarget.style.color = T.text; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
     >
+      {/* L'icône est paramétrable : plusieurs actions peuvent clore la liste
+          (créer un compte, en rattacher un qui existe déjà) et le « + » ne dit
+          pas la seconde. */}
       <span style={{
         width: 12, height: 12, flexShrink: 0,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
       }}>
-        <Plus size={12} strokeWidth={2} />
+        {icon || <Plus size={12} strokeWidth={2} />}
       </span>
       {label || t("firms.addAccount")}
     </button>
@@ -365,35 +406,46 @@ export function AddAccountRow({ onClick, label }) {
  */
 export function SubRow({ label, dot, badge, cells, onOpen, actions, reserveActions = false, indent = ROW_GUTTER }) {
   return (
+    /* La racine porte le survol et la géométrie de la ligne, mais n'est PAS
+       cliquable : la navigation vit dans son premier enfant, les actions de fin
+       de ligne dans le second. Voir TableRow — une zone de navigation qui
+       contient les boutons d'action se les déplace sous le curseur au `:active`,
+       et le clic n'arrive jamais. */
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onOpen?.(); } }}
       onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
       style={{
         display: "flex", alignItems: "center",
         paddingLeft: indent, paddingRight: 8, marginRight: -8,
         paddingTop: 6, paddingBottom: 6, marginTop: -6, marginBottom: -6,
-        borderRadius: 12, cursor: "pointer", transition: "background 120ms ease",
+        borderRadius: 12, transition: "background 120ms ease",
       }}
     >
-      {/* Retrait par défaut = la gouttière du chevron : le nom d'un compte tombe
-          exactement sous le logo de sa firme. Les cellules, elles, sont calées à
-          droite en largeur fixe : `indent` ne les déplace pas. */}
-      <div style={{ ...NAME_COL, display: "flex", alignItems: "center", gap: 8 }}>
-        {dot}
-        <span title={label} style={{ fontSize: 14, lineHeight: "17.05px", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {label}
-        </span>
-        {badge && <span style={{ flexShrink: 0, display: "inline-flex" }}>{badge}</span>}
+      <div
+        role="button"
+        tabIndex={0}
+        data-no-press
+        onClick={onOpen}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onOpen?.(); } }}
+        style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", cursor: "pointer" }}
+      >
+        {/* Retrait par défaut = la gouttière du chevron : le nom d'un compte tombe
+            exactement sous le logo de sa firme. Les cellules, elles, sont calées à
+            droite en largeur fixe : `indent` ne les déplace pas. */}
+        <div style={{ ...NAME_COL, display: "flex", alignItems: "center", gap: 8 }}>
+          {dot}
+          <span title={label} style={{ fontSize: 14, lineHeight: "17.05px", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {label}
+          </span>
+          {badge && <span style={{ flexShrink: 0, display: "inline-flex" }}>{badge}</span>}
+        </div>
+        {cells.map((c, i) => (
+          <span key={i} style={{ ...CELL_VALUE, ...(i === cells.length - 1 ? LAST_CELL : null), textAlign: i === cells.length - 1 ? "right" : "left" }}>{c}</span>
+        ))}
       </div>
-      {cells.map((c, i) => (
-        <span key={i} style={{ ...CELL_VALUE, ...(i === cells.length - 1 ? LAST_CELL : null), textAlign: i === cells.length - 1 ? "right" : "left" }}>{c}</span>
-      ))}
+      {/* Pas de compensation de gap ici : la ligne n'en a pas. */}
       {(actions || reserveActions) && (
-        <div style={ACTIONS_COL} onClick={(e) => e.stopPropagation()}>{actions}</div>
+        <div style={ACTIONS_COL} aria-hidden={actions ? undefined : true}>{actions}</div>
       )}
     </div>
   );

@@ -24,7 +24,10 @@ import {
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
-import { CARD, TH, DirectionTag, SymbolCell, TableFilter, symbolLabel } from "@/components/ui/da";
+import {
+  CARD, TH, DirectionTag, SymbolCell, TableFilter, symbolLabel,
+  HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow,
+} from "@/components/ui/da";
 import { rMultiple, fmtR } from "@/lib/userPrefs";
 import { calculateFees } from "@/lib/tradeFees";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
@@ -58,32 +61,9 @@ const HIDDEN_WHEN_EMBEDDED = ["entryDate", "exitDate", "pnlPct", "weekday", "acc
      • un libellé se lit à 12 px atténué, sa valeur à 13 px en 600.
    ========================================================================== */
 
-/** Trait dilué : contour d'une case à cocher, d'une zone de dépôt — là où un
- *  bord doit se deviner sans devenir un cadre. */
-const HAIRLINE = "color-mix(in srgb, var(--color-text) 8%, transparent)";
-
-/** Aplat d'un contrôle (pastille, champ, piste). Assez pour délimiter une
- *  petite surface, trop peu pour faire un bloc dans le bloc. */
-const FIELD_BG = "color-mix(in srgb, var(--color-text) 4%, transparent)";
-
-/** Aplat d'une zone d'écriture. Plus dilué que `FIELD_BG` : sur 120 px de haut,
- *  le même gris ferait un pavé. Même valeur que les notes du journal. */
-const WRITING_BG = "color-mix(in srgb, var(--color-text) 1.2%, transparent)";
-
-/** Libellé de section du panneau. */
-function PanelLabel({ children }) {
-  return <div style={{fontSize:12,fontWeight:500,color:T.text,opacity:0.5}}>{children}</div>;
-}
-
-/** Ligne « libellé → valeur », convention des cartes de statistiques. */
-function PanelRow({ label, value, color }) {
-  return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-      <span style={{fontSize:12,color:T.text,opacity:0.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
-      <span style={{fontSize:13,fontWeight:600,letterSpacing:-0.15,color:color||T.text,whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>{value}</span>
-    </div>
-  );
-}
+/* Les aplats (`FIELD_BG`, `WRITING_BG`), le trait dilué (`HAIRLINE`) et les deux
+   briques de texte (`FieldLabel`, `StatRow`) vivent dans components/ui/da.jsx :
+   les pages portées dans cette DA s'en servent toutes. */
 
 /**
  * Pastille à cocher — type d'entrée, liquidité ciblée, règles d'une stratégie.
@@ -1877,10 +1857,10 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                     {/* Ce que le trade dit de lui-même, en lignes
                         « libellé → valeur » comme les cartes de statistiques. */}
                     <div style={{display:"flex",flexDirection:"column",gap:compact?7:9}}>
-                      <PanelRow label="Date" value={dateTime} />
-                      <PanelRow label="Heure d'entrée" value={entryTime || "—"} />
-                      <PanelRow label="Heure de sortie" value={exitTime || "—"} />
-                      <PanelRow label="Note" value={tradeNote ? `${tradeNote.score}/10` : "—"} color={tradeNote ? tradeNote.color : T.textSub} />
+                      <StatRow label="Date" value={dateTime} />
+                      <StatRow label="Heure d'entrée" value={entryTime || "—"} />
+                      <StatRow label="Heure de sortie" value={exitTime || "—"} />
+                      <StatRow label="Note" value={tradeNote ? `${tradeNote.score}/10` : "—"} color={tradeNote ? tradeNote.color : T.textSub} />
                     </div>
                   </div>
 
@@ -1888,7 +1868,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                       Piste `segmentTrack` et pastille flottante : le sélecteur
                       segmenté de la DA. */}
                   <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <PanelLabel>Unité de temps</PanelLabel>
+                    <FieldLabel>Unité de temps</FieldLabel>
                     <div role="radiogroup" aria-label="Unité de temps" style={{display:"flex",gap:2,padding:3,background:T.segmentTrack,borderRadius:999}}>
                       {TIMEFRAME_OPTIONS.map((opt)=>{
                         const active = (tradeTimeframe[selectedTrade.id] || "") === opt;
@@ -1911,7 +1891,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
                   {/* ENTRÉE — type d'entrée (multi-sélection) */}
                   <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <PanelLabel>Entrée</PanelLabel>
+                    <FieldLabel>Entrée</FieldLabel>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                       {allEntryTags.map((tag)=>(
                         <CheckChip
@@ -1927,7 +1907,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
                   {/* LIQUIDITÉ CIBLÉE (multi-sélection) */}
                   <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <PanelLabel>Liquidité ciblée</PanelLabel>
+                    <FieldLabel>Liquidité ciblée</FieldLabel>
                     <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                       {allLiquidityTags.map((tag)=>(
                         <CheckChip
@@ -1943,7 +1923,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
                   {/* EMOTION TAGS — menu déroulant multi-sélection */}
                   <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}} key={`emotion-${selectedTrade.date}-${selectedTrade.symbol}-${selectedTrade.entry}`}>
-                    <PanelLabel>{t("trades.detail.emotionTags")}</PanelLabel>
+                    <FieldLabel>{t("trades.detail.emotionTags")}</FieldLabel>
                     <TagMultiSelect
                       placeholder={t("trades.detail.emotionTags")}
                       allTags={allEmotionTags}
@@ -1977,7 +1957,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                     return (
                       <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                          <PanelLabel>Screenshot</PanelLabel>
+                          <FieldLabel>Screenshot</FieldLabel>
                           {url && (
                             <div style={{display:"inline-flex",alignItems:"center",gap:2}}>
                               <label
@@ -2046,7 +2026,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
                   {/* NOTES (manuel) */}
                   <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <PanelLabel>Notes</PanelLabel>
+                    <FieldLabel>Notes</FieldLabel>
                     <textarea
                       placeholder={t("trades.notePlaceholder")}
                       value={tradeNotes[noteKeyOf(selectedTrade)] ?? tradeNotes[selectedTrade.id] ?? ""}
@@ -2116,7 +2096,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                 
                 return (
                   <div style={{order:-1,display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <PanelLabel>Stratégie</PanelLabel>
+                    <FieldLabel>Stratégie</FieldLabel>
                     {allSelectedStrats.length === 0 ? (
                       <>
                         <div style={{position:"relative",width:"100%",display:"flex"}}>
@@ -2308,7 +2288,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                                       comme les lignes de statistiques ; la piste
                                       reprend l'aplat des autres contrôles. */}
                                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                                    <PanelRow label="Règles suivies" value={`${checkedCount}/${allRules.length}`} />
+                                    <StatRow label="Règles suivies" value={`${checkedCount}/${allRules.length}`} />
                                     <div style={{width:"100%",height:6,background:FIELD_BG,borderRadius:999,overflow:"hidden"}}>
                                       <div style={{height:"100%",borderRadius:999,background:T.text,width:`${stratProgressPercent}%`,transition:"width var(--dur-base) var(--ease-out)"}}/>
                                     </div>
@@ -2318,7 +2298,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                                 <div style={{display:"flex",flexDirection:"column",gap:14}}>
                                   {strat.groups.map(group=>(
                                     <div key={group.id} style={{display:"flex",flexDirection:"column",gap:8}}>
-                                      <PanelLabel>{group.name}</PanelLabel>
+                                      <FieldLabel>{group.name}</FieldLabel>
                                       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                                         {group.rules.map(rule=>{
                                           const ruleKey = `${selectedTrade.date}_${selectedTrade.symbol}_${selectedTrade.entry}_${selectedTrade.exit}_${selectedTrade.direction}_${strat.id}_${rule.id}`;
@@ -2721,3 +2701,4 @@ function TradesPagination({ pageIndex, pageCount, pageSize, total, onPage, onPag
     </div>
   );
 }
+

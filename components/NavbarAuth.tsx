@@ -33,7 +33,7 @@ export default function NavbarAuth() {
       <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2">
-          <img src="/favicon.svg" alt="tao" className="w-8 h-8 rounded-full object-cover" />
+          <img src="/logo.svg" alt="tao" className="w-8 h-8 rounded-full object-cover" />
           <span className="text-xl font-bold text-gray-900">tao trade</span>
         </div>
 

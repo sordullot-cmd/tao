@@ -11,8 +11,31 @@ import {
   Star, EyeOff, Save, BookOpen, GripVertical, Camera, ImagePlus,
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
-import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
+import {
+  AreaDotsDefs, areaDotsFill,
+  CARD, SectionTitle, HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow,
+} from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
+
+/* ---------------------------------------------------------------------------
+   Page « Sport » — portée dans la direction artistique des pages récentes
+   (tableau de bord, comptes, journal, panneau « Trade info »).
+
+   Ce qui change par rapport à la version précédente :
+     • les cartes viennent de `CARD` (blanc, coins 12, ombre très douce, PAS de
+       bordure) au lieu du cadre gris 1 px qui entourait chaque bloc ;
+     • les titres de section passent par le `SectionTitle` partagé (18 px) et
+       non plus par une copie locale à 13 px, qui ne se distinguait pas du
+       contenu qu'elle annonçait ;
+     • les libellés se lisent à 12 px atténué et leurs valeurs à 13 px en 600 :
+       plus de capitales espacées à 10,5 px ;
+     • les aplats (champs, pistes, survols) s'expriment en transparence d'encre
+       (`FIELD_BG`, `WRITING_BG`) et suivent donc le thème sombre tout seuls.
+
+   Règle du projet : aucune couleur en dur, tout passe par les tokens `T` — sauf
+   les couleurs d'IDENTITÉ (disciplines, catégories d'exercice), qui sont des
+   données et restent des hex.
+   ------------------------------------------------------------------------- */
 
 // Tokens partagés (câblés sur les CSS vars, dark-mode aware). `bg` est redéfini
 // en surface subtile interne (les sous-cartes/hover) car BaseT.bg vaut la couleur
@@ -446,43 +469,46 @@ export default function SportPage() {
   }, [filteredSessions]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 22 }} className="anim-1">
-      {/* Header — titre + action */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <p style={{ fontSize: 12.5, color: T.textMut, margin: 0 }}>
-            {stats.total === 0
-              ? "Suis tes séances, tes records et ta progression."
-              : `${stats.total} séance${stats.total > 1 ? "s" : ""} enregistrée${stats.total > 1 ? "s" : ""}`}
-          </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8 }} className="anim-1">
+      {/* LIGNE DE TÊTE — onglets à gauche, décompte et action à droite : une
+          seule rangée au lieu de deux, comme les pages récentes qui posent
+          leurs commandes sur la même ligne. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        {/* Onglets : piste `segmentTrack` et pastille flottante de la DA. */}
+        <div style={{ display: "inline-flex", gap: 2, padding: 3, background: T.segmentTrack, borderRadius: 999 }}>
+          {[{ id: "workout", label: "Entraînement" }, { id: "photos", label: "Photos" }].map(tb => {
+            const active = tab === tb.id;
+            return (
+              <button key={tb.id} type="button" onClick={() => setTab(tb.id)}
+                style={{
+                  padding: "6px 16px", borderRadius: 999, border: "none",
+                  background: active ? T.white : "transparent",
+                  color: active ? T.text : T.textSub,
+                  fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+                  boxShadow: active ? T.elevPill : "none",
+                  transition: "color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out)",
+                }}>
+                {tb.label}
+              </button>
+            );
+          })}
         </div>
-        {tab === "workout" && (
-          <button onClick={openCreate}
-            style={{ marginLeft: "auto", padding: "9px 17px", height: 38, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Plus size={14} strokeWidth={2} /> Nouvelle séance
-          </button>
-        )}
-        <div id="tr4de-page-header-slot" style={{ marginLeft: tab === "workout" ? 0 : "auto" }} />
-      </div>
 
-      {/* Onglets */}
-      <div style={{ display: "inline-flex", gap: 4, padding: 3, background: T.accentBg, borderRadius: 999, alignSelf: "flex-start" }}>
-        {[{ id: "workout", label: "Entraînement" }, { id: "photos", label: "Photos" }].map(tb => {
-          const active = tab === tb.id;
-          return (
-            <button key={tb.id} type="button" onClick={() => setTab(tb.id)}
-              style={{
-                padding: "6px 16px", borderRadius: 999, border: "none",
-                background: active ? T.white : "transparent",
-                color: active ? T.text : T.textSub,
-                fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
-                boxShadow: active ? "0 1px 2px rgba(0,0,0,.08)" : "none",
-                transition: "all 120ms ease",
-              }}>
-              {tb.label}
+        <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>
+          {stats.total === 0
+            ? "Suis tes séances, tes records et ta progression."
+            : `${stats.total} séance${stats.total > 1 ? "s" : ""} enregistrée${stats.total > 1 ? "s" : ""}`}
+        </span>
+
+        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 12 }}>
+          <div id="tr4de-page-header-slot" />
+          {tab === "workout" && (
+            <button onClick={openCreate}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, border: "none", color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+              <Plus size={14} strokeWidth={1.75} /> Nouvelle séance
             </button>
-          );
-        })}
+          )}
+        </div>
       </div>
 
       {tab === "photos" && (
@@ -495,12 +521,16 @@ export default function SportPage() {
 
         {/* Colonne gauche : filtres + timeline mensuelle */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <SectionTitle>Historique</SectionTitle>
-            <span style={{ fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
-              {filteredSessions.length}{hasAnyFilter ? ` / ${(sessions || []).length}` : ""} séance{filteredSessions.length > 1 ? "s" : ""}
-            </span>
-          </div>
+          <SectionTitle
+            size="sm"
+            action={
+              <span style={{ fontSize: 12, color: T.text, opacity: 0.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                {filteredSessions.length}{hasAnyFilter ? ` / ${(sessions || []).length}` : ""} séance{filteredSessions.length > 1 ? "s" : ""}
+              </span>
+            }
+          >
+            Historique
+          </SectionTitle>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <FilterPills
@@ -516,25 +546,32 @@ export default function SportPage() {
           </div>
 
           {filteredSessions.length === 0 ? (
-            <div style={{
-              border: `1px dashed ${T.border}`, borderRadius: "var(--radius-modal)", padding: 36,
-              textAlign: "center", background: T.white, color: T.textMut, fontSize: 13, lineHeight: 1.6,
-            }}>
-              {hasAnyFilter
-                ? "Aucune séance ne correspond à ces filtres."
-                : "Aucune séance pour le moment. Crée ta première séance pour commencer à suivre ta progression."}
+            /* État vide : une carte, comme partout ailleurs — le cadre en
+               pointillés faisait un bloc à part au milieu de la page. */
+            <div style={{ ...CARD, padding: "48px 32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: FIELD_BG, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                <Dumbbell size={22} strokeWidth={1.75} color={T.text} />
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 500, color: T.text, marginBottom: 6 }}>
+                {hasAnyFilter ? "Aucune séance ne correspond" : "Aucune séance pour le moment"}
+              </div>
+              <div style={{ fontSize: 14, color: T.textSub, maxWidth: 340, lineHeight: 1.5 }}>
+                {hasAnyFilter
+                  ? "Élargis les filtres pour retrouver tes séances."
+                  : "Crée ta première séance pour commencer à suivre ta progression."}
+              </div>
             </div>
           ) : (
             <div className="anim-stagger" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               {monthGroups.map(group => (
                 <div key={group.key}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{group.label}</span>
-                    <span style={{ fontSize: 11, color: T.textMut }}>· {group.sessions.length} séance{group.sessions.length > 1 ? "s" : ""}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{group.label}</span>
+                    <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>· {group.sessions.length} séance{group.sessions.length > 1 ? "s" : ""}</span>
                   </div>
                   <div style={{ position: "relative", paddingLeft: 26 }}>
                     {/* Trait vertical de la timeline */}
-                    <div style={{ position: "absolute", left: 8, top: 4, bottom: 4, width: 2, background: T.border, borderRadius: "var(--radius-field)" }} />
+                    <div style={{ position: "absolute", left: 8, top: 4, bottom: 4, width: 2, background: HAIRLINE, borderRadius: 999 }} />
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {group.sessions.map(s => {
                         const disc = DISCIPLINES.find(d => d.id === s.discipline) || DISCIPLINES[0];
@@ -558,25 +595,27 @@ export default function SportPage() {
         </div>
 
         {/* Colonne droite : panneau collant (progression puis records) */}
-        <div style={{ position: "sticky", top: 8, display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ position: "sticky", top: 8, display: "flex", flexDirection: "column", gap: 24 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <SectionTitle>Progression</SectionTitle>
-              {allExerciseNames.length > 0 && (
+            <SectionTitle
+              size="sm"
+              action={allExerciseNames.length > 0 ? (
                 <select
                   value={chartExerciseName}
                   onChange={(e) => setChartExerciseName(e.target.value)}
                   style={{
-                    padding: "4px 12px", borderRadius: 999,
-                    border: `1px solid ${T.border}`, background: T.white,
-                    fontSize: 11, color: T.text, fontFamily: "inherit", cursor: "pointer",
-                    maxWidth: 170,
+                    padding: "5px 12px", borderRadius: 999,
+                    border: "none", background: FIELD_BG,
+                    fontSize: 12, color: T.text, fontFamily: "inherit", cursor: "pointer",
+                    maxWidth: 170, outline: "none",
                   }}
                 >
                   {allExerciseNames.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
-              )}
-            </div>
+              ) : null}
+            >
+              Progression
+            </SectionTitle>
             <ProgressChart
               allExerciseNames={allExerciseNames}
               selected={chartExerciseName}
@@ -587,7 +626,7 @@ export default function SportPage() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <SectionTitle>Records personnels</SectionTitle>
+            <SectionTitle size="sm">Records personnels</SectionTitle>
             <PRsCard prs={prs} />
           </div>
         </div>
@@ -615,16 +654,9 @@ function toISOLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/* ─── Titre de section ───────────────────────────────────────────── */
-function SectionTitle({ children }) {
-  return (
-    <h2 style={{
-      fontSize: 13, fontWeight: 600, color: T.text, letterSpacing: -0.1, margin: 0,
-    }}>
-      {children}
-    </h2>
-  );
-}
+/* Le titre de section vient de components/ui/da.jsx (`SectionTitle`, variante
+   `size="sm"` à 18 px). La copie locale rendait un titre à 13 px en 600 —
+   exactement la graisse et la taille du contenu qu'il annonçait. */
 
 /* ─── Compression d'image côté client (canvas) ──────────────────────
  * Redimensionne la photo (côté max ≈ 720px) et la ré-encode en JPEG pour
@@ -655,8 +687,8 @@ function compressImage(file, maxSize = 720, quality = 0.72) {
 
 function photoInput() {
   return {
-    width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`, borderRadius: 10,
-    padding: "9px 11px", fontSize: 13, color: T.text, fontFamily: "inherit", outline: "none", background: T.white,
+    width: "100%", boxSizing: "border-box", border: "none", borderRadius: 10,
+    padding: "10px 12px", fontSize: 13, color: T.text, fontFamily: "inherit", outline: "none", background: FIELD_BG,
   };
 }
 
@@ -754,41 +786,47 @@ function PhotosTab({ photos, setPhotos }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <input ref={inputRef} type="file" accept="image/*" multiple onChange={onPick} style={{ display: "none" }} />
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <SectionTitle>Évolution physique</SectionTitle>
-          <p style={{ fontSize: 12, color: T.textMut, margin: "5px 0 0" }}>
-            Ajoute des photos régulières pour visualiser ta transformation.
-          </p>
-        </div>
-        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
-          style={{ padding: "9px 16px", height: 38, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <ImagePlus size={15} strokeWidth={2} /> {busy ? "Ajout…" : "Ajouter des photos"}
-        </button>
-      </div>
+      <SectionTitle
+        size="sm"
+        action={
+          <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, border: "none", color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "inherit" }}>
+            <ImagePlus size={14} strokeWidth={1.75} /> {busy ? "Ajout…" : "Ajouter des photos"}
+          </button>
+        }
+      >
+        Évolution physique
+      </SectionTitle>
 
       {sorted.length === 0 ? (
         <button type="button" onClick={() => inputRef.current?.click()}
-          style={{ border: `1px dashed ${T.border}`, borderRadius: "var(--radius-modal)", padding: 44, textAlign: "center", background: T.white, color: T.textMut, fontSize: 13, lineHeight: 1.6, cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <Camera size={26} strokeWidth={1.5} />
-          Aucune photo pour l'instant. Clique pour ajouter ta première photo de progression.
+          style={{ ...CARD, padding: "48px 32px", textAlign: "center", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: FIELD_BG, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+            <Camera size={22} strokeWidth={1.75} color={T.text} />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 500, color: T.text, marginBottom: 6 }}>Aucune photo pour l'instant</div>
+          <div style={{ fontSize: 14, color: T.textSub, maxWidth: 340, lineHeight: 1.5 }}>
+            Clique pour ajouter ta première photo de progression.
+          </div>
         </button>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
           {monthGroups.map(group => (
             <div key={group.key}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{group.label}</span>
-                <span style={{ fontSize: 11, color: T.textMut }}>· {group.items.length} photo{group.items.length > 1 ? "s" : ""}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{group.label}</span>
+                <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>· {group.items.length} photo{group.items.length > 1 ? "s" : ""}</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
                 {group.items.map(p => (
+                  /* La vignette EST la carte : coins 12 et ombre douce comme les
+                     autres, plus de cadre gris autour de l'image. */
                   <button key={p.id} type="button" onClick={() => setViewerId(p.id)}
-                    style={{ position: "relative", padding: 0, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden", background: T.bg, cursor: "pointer", fontFamily: "inherit", aspectRatio: "3 / 4" }}>
+                    style={{ position: "relative", padding: 0, border: "none", borderRadius: 12, overflow: "hidden", background: FIELD_BG, boxShadow: T.elevCard, cursor: "pointer", fontFamily: "inherit", aspectRatio: "3 / 4" }}>
                     <img src={p.dataUrl} alt={fmtDate(p.date)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "18px 10px 8px", background: "linear-gradient(to top, rgba(0,0,0,0.62), transparent)", textAlign: "left" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#fff", textTransform: "capitalize" }}>{fmtDate(p.date)}</div>
-                      {p.weight !== "" && p.weight != null && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.85)" }}>{p.weight} kg</div>}
+                      <div style={{ fontSize: 12, fontWeight: 500, color: "#fff", textTransform: "capitalize" }}>{fmtDate(p.date)}</div>
+                      {p.weight !== "" && p.weight != null && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.85)" }}>{p.weight} kg</div>}
                     </div>
                   </button>
                 ))}
@@ -826,44 +864,46 @@ function PhotosTab({ photos, setPhotos }) {
                 </button>
               )}
             </div>
-            <div style={{ flex: "0 0 280px", maxWidth: "100%", display: "flex", flexDirection: "column", overflowY: "auto", borderLeft: `1px solid ${T.border}`, background: T.bg }}>
-              {/* En-tête : date en titre + fermeture */}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, padding: "18px 18px 14px", borderBottom: `1px solid ${T.border}`, background: T.white }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: T.textMut }}>Progression</div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: T.text, textTransform: "capitalize", marginTop: 3, lineHeight: 1.2 }}>{fmtDate(viewer.date)}</div>
-                </div>
+            <div style={{ flex: "0 0 280px", maxWidth: "100%", display: "flex", flexDirection: "column", overflowY: "auto", background: T.white }}>
+              {/* En-tête : date en titre + fermeture. Plus de sur-titre en
+                  capitales ni de filet — la date suffit à dire où l'on est. */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "18px 18px 0" }}>
+                <div style={{ fontSize: 17, fontWeight: 500, color: T.text, textTransform: "capitalize", lineHeight: 1.2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{fmtDate(viewer.date)}</div>
                 <button type="button" onClick={() => setViewerId(null)} aria-label="Fermer"
-                  style={{ flex: "0 0 auto", width: 30, height: 30, borderRadius: "50%", border: `1px solid ${T.border}`, background: T.white, color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                  <X size={16} strokeWidth={1.9} />
+                  style={{ flex: "0 0 auto", width: 28, height: 28, borderRadius: 999, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background var(--dur-fast) var(--ease-out)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                  <X size={16} strokeWidth={1.75} />
                 </button>
               </div>
 
-              {/* Poids — métrique mise en avant */}
+              {/* Poids — métrique mise en avant, posée sur un aplat plutôt que
+                  dans une carte dans la carte. */}
               <div style={{ padding: "16px 18px 0" }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, padding: "14px 16px", borderRadius: 14, background: T.white, border: `1px solid ${T.border}` }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, padding: "14px 16px", borderRadius: 12, background: FIELD_BG }}>
                   <input type="number" value={viewer.weight ?? ""} onChange={(e) => update(viewer.id, { weight: e.target.value })} placeholder="—"
-                    style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 28, fontWeight: 700, color: T.text, fontFamily: "inherit", padding: 0, fontVariantNumeric: "tabular-nums" }} />
-                  <span style={{ flex: "0 0 auto", fontSize: 14, fontWeight: 600, color: T.textMut }}>kg</span>
+                    style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 28, fontWeight: 500, letterSpacing: -0.4, color: T.text, fontFamily: "inherit", padding: 0, fontVariantNumeric: "tabular-nums" }} />
+                  <span style={{ flex: "0 0 auto", fontSize: 14, fontWeight: 500, color: T.text, opacity: 0.5 }}>kg</span>
                 </div>
               </div>
 
               {/* Champs éditables */}
               <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: T.textMut }}>Date</span>
+                  <FieldLabel>Date</FieldLabel>
                   <input type="date" value={viewer.date || ""} onChange={(e) => update(viewer.id, { date: e.target.value })} style={photoInput()} />
                 </label>
                 <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: T.textMut }}>Note</span>
-                  <textarea value={viewer.note ?? ""} onChange={(e) => update(viewer.id, { note: e.target.value })} rows={4} placeholder="Sensation, mensurations…" style={{ ...photoInput(), resize: "vertical", lineHeight: 1.5 }} />
+                  <FieldLabel>Note</FieldLabel>
+                  <textarea value={viewer.note ?? ""} onChange={(e) => update(viewer.id, { note: e.target.value })} rows={4} placeholder="Sensation, mensurations…"
+                    style={{ ...photoInput(), background: WRITING_BG, resize: "vertical", lineHeight: 1.55 }} />
                 </label>
               </div>
 
               {/* Suppression */}
               <button type="button" onClick={() => del(viewer.id)}
-                style={{ margin: "auto 18px 18px", padding: "10px 14px", borderRadius: 10, border: `1px solid ${T.border}`, background: T.white, color: T.red, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                <Trash2 size={13} strokeWidth={1.9} /> Supprimer la photo
+                style={{ margin: "auto 18px 18px", padding: "10px 14px", borderRadius: 999, border: "none", background: FIELD_BG, color: T.red, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <Trash2 size={13} strokeWidth={1.75} /> Supprimer la photo
               </button>
             </div>
           </div>
@@ -884,13 +924,16 @@ function FilterPills({ value, onChange, options }) {
         return (
           <button key={o.id} type="button"
             onClick={() => onChange(o.id)}
+            /* Actif : pastille pleine à l'encre du texte. Au repos : simple
+               aplat, sans cadre — une rangée de pilules cerclées faisait autant
+               de traits que de filtres. */
             style={{
-              padding: "5px 12px", borderRadius: 999,
-              border: `1px solid ${active ? T.text : T.border}`,
-              background: active ? T.text : T.white,
-              color: active ? T.white : T.textSub,
+              padding: "6px 13px", borderRadius: 999, border: "none",
+              background: active ? T.text : FIELD_BG,
+              color: active ? T.textInverted : T.textSub,
               fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: 6,
+              transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
             }}>
             {o.color && <span style={{ width: 6, height: 6, borderRadius: "50%", background: o.color, flexShrink: 0 }} />}
             {o.label}
@@ -931,17 +974,14 @@ function SessionCard({ session: s, onEdit, onDelete }) {
   })();
 
   return (
-    <div data-card style={{
-      background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-modal)",
-      overflow: "hidden",
-    }}>
+    <div data-card style={{ ...CARD, padding: 0 }}>
       <div
         onClick={() => setOpen(v => !v)}
         style={{
           padding: "12px 14px", display: "flex", alignItems: "center", gap: 12,
-          cursor: "pointer", transition: "background .12s ease",
+          cursor: "pointer", transition: "background var(--dur-fast) var(--ease-out)",
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = T.bg; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
       >
         <div style={{
@@ -963,14 +1003,14 @@ function SessionCard({ session: s, onEdit, onDelete }) {
                 padding: "1px 7px", borderRadius: 999, alignSelf: "center",
               }}>{sessionCategory.label}</span>
             )}
-            <span style={{ fontSize: 11, color: T.textSub, textTransform: "capitalize" }}>{disc.label}</span>
+            <span style={{ fontSize: 12, color: T.textSub, textTransform: "capitalize" }}>{disc.label}</span>
             {s.duration > 0 && (
-              <span style={{ fontSize: 11, color: T.textMut, display: "inline-flex", alignItems: "center", gap: 3 }}>
-                <Clock size={10} strokeWidth={1.75} /> {s.duration} min
+              <span style={{ fontSize: 12, color: T.text, opacity: 0.5, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <Clock size={11} strokeWidth={1.75} /> {s.duration} min
               </span>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, fontSize: 11, color: T.textMut, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, fontSize: 12, color: T.text, opacity: 0.5, flexWrap: "wrap" }}>
             <span>{(s.exercises || []).length} exercice{(s.exercises || []).length > 1 ? "s" : ""}</span>
             <span>·</span>
             <span>{totalSets} série{totalSets > 1 ? "s" : ""}</span>
@@ -985,35 +1025,37 @@ function SessionCard({ session: s, onEdit, onDelete }) {
         <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
           <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label="Modifier"
             style={iconBtn()}
-            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+            onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; e.currentTarget.style.color = T.text; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
             <Pencil size={11} strokeWidth={1.75} />
           </button>
           <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label="Supprimer"
             style={iconBtn()}
             onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
             <Trash2 size={11} strokeWidth={1.75} />
           </button>
-          <ChevronRight size={12} strokeWidth={2} color={T.textMut}
+          <ChevronRight size={12} strokeWidth={2} color={T.textSub}
             style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s ease", marginLeft: 2 }} />
         </div>
       </div>
 
       {open && (
-        <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${T.border}` }}>
+        /* Le dépliage garde un trait — mais dilué : il sépare le résumé
+           cliquable du détail, ce n'est plus un cadre de carte. */
+        <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${HAIRLINE}` }}>
           {(s.exercises || []).map((ex, i) => {
             return (
-              <div key={ex.id || i} style={{ paddingTop: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{ex.name}</span>
+              <div key={ex.id || i} style={{ paddingTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{ex.name}</span>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                   {(ex.sets || []).map((set, si) => {
                     if (s.discipline === "cardio") {
                       const speed = set.speed != null ? set.speed : computeSpeed(set.distance, set.time);
                       return (
-                        <div key={set.id || si} style={{ fontSize: 11, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+                        <div key={set.id || si} style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
                           {set.distance != null && <span>{set.distance} km</span>}
                           {set.time != null && <span>{set.distance != null ? " · " : ""}{set.time} min</span>}
                           {speed != null && <span> · {speed} km/h</span>}
@@ -1021,8 +1063,8 @@ function SessionCard({ session: s, onEdit, onDelete }) {
                       );
                     }
                     return (
-                      <div key={set.id || si} style={{ fontSize: 11, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
-                        <span style={{ color: T.textMut, marginRight: 8 }}>Série {si + 1}</span>
+                      <div key={set.id || si} style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ color: T.text, opacity: 0.5, marginRight: 8 }}>Série {si + 1}</span>
                         {set.reps != null && <span>{set.reps} reps</span>}
                         {set.weight != null && <span> · {set.weight} kg</span>}
                       </div>
@@ -1033,7 +1075,7 @@ function SessionCard({ session: s, onEdit, onDelete }) {
             );
           })}
           {s.notes && (
-            <div style={{ marginTop: 10, padding: "8px 10px", background: T.bg, borderRadius: 10, fontSize: 11, color: T.textSub, fontStyle: "italic", lineHeight: 1.45 }}>
+            <div style={{ marginTop: 12, padding: "10px 12px", background: WRITING_BG, borderRadius: 10, fontSize: 12, color: T.textSub, lineHeight: 1.55 }}>
               {s.notes}
             </div>
           )}
@@ -1045,41 +1087,37 @@ function SessionCard({ session: s, onEdit, onDelete }) {
 
 function iconBtn() {
   return {
-    width: 24, height: 24, borderRadius: 6, border: "none",
-    background: "transparent", color: T.textMut, cursor: "pointer",
+    width: 26, height: 26, borderRadius: 999, border: "none",
+    background: "transparent", color: T.textSub, cursor: "pointer",
     display: "inline-flex", alignItems: "center", justifyContent: "center",
-    transition: "background .15s ease, color .12s ease",
+    transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
   };
 }
 
 /* ─── Carte des records personnels ──────────────────────────────── */
 function PRsCard({ prs }) {
   return (
-    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-modal)", overflow: "hidden" }}>
+    /* Une carte, des lignes espacées : les filets entre records reprenaient un
+       tableau alors qu'il s'agit d'une liste de quatre mesures. */
+    <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
       {prs.length === 0 ? (
-        <div style={{ padding: "24px 18px", textAlign: "center", color: T.textMut, fontSize: 12 }}>
-          Aucun PR. Logge tes séries avec charges pour voir tes records.
+        <div style={{ padding: "16px 2px", textAlign: "center", color: T.textSub, fontSize: 13, lineHeight: 1.5 }}>
+          Aucun record. Enregistre tes séries avec charges pour les voir apparaître.
         </div>
       ) : (
-        <div>
-          {prs.map((pr, i) => (
-            <div key={pr.name} style={{
-              padding: "10px 14px",
-              display: "flex", alignItems: "center", gap: 10,
-              borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {pr.name}
-                </div>
-                <div style={{ fontSize: 10, color: T.textMut, marginTop: 1 }}>{fmtDate(pr.date)}</div>
+        prs.map((pr) => (
+          <div key={pr.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {pr.name}
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                {pr.weight} kg <span style={{ fontWeight: 500, color: T.textMut, fontSize: 11 }}>× {pr.reps}</span>
-              </div>
+              <div style={{ fontSize: 12, color: T.text, opacity: 0.5, marginTop: 1 }}>{fmtDate(pr.date)}</div>
             </div>
-          ))}
-        </div>
+            <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.15, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {pr.weight} kg <span style={{ fontWeight: 500, opacity: 0.5, fontSize: 12 }}>× {pr.reps}</span>
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
@@ -1107,11 +1145,11 @@ function ProgressChart({ allExerciseNames, selected, onChangeSelected, data, uni
     : "";
 
   return (
-    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-modal)", overflow: "hidden" }}>
+    <div style={{ ...CARD, padding: 0 }}>
       {data.length === 0 ? (
-        <div style={{ padding: "32px 18px", textAlign: "center", color: T.textMut, fontSize: 12 }}>
+        <div style={{ padding: "32px 18px", textAlign: "center", color: T.textSub, fontSize: 13, lineHeight: 1.5 }}>
           {allExerciseNames.length === 0
-            ? "Logge des séances pour voir l'évolution."
+            ? "Enregistre des séances pour voir l'évolution."
             : "Pas encore assez de points pour cet exercice."}
         </div>
       ) : (
@@ -1130,7 +1168,7 @@ function ProgressChart({ allExerciseNames, selected, onChangeSelected, data, uni
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>
           {/* Y label max */}
-          <div style={{ position: "absolute", top: 8, right: 6, fontSize: 10, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ position: "absolute", top: 8, right: 6, fontSize: 12, color: T.text, opacity: 0.5, fontVariantNumeric: "tabular-nums" }}>
             {Math.round(maxW)} {unit}
           </div>
         </div>
@@ -1311,21 +1349,21 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
           <div style={{
             position: "absolute", left: "50%", top: 7, transform: "translateX(-50%)",
             width: 40, height: 4, borderRadius: 999,
-            background: dragging ? T.textMut : T.border,
+            background: dragging ? T.textSub : T.border,
             transition: "background-color 120ms ease",
           }} />
           {editingId && (
             <button onMouseDown={(e) => e.stopPropagation()} onClick={onDelete} aria-label="Supprimer" title="Supprimer la séance"
-              style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background-color 120ms ease, color 120ms ease" }}
+              style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background-color 120ms ease, color 120ms ease" }}
               onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
               <Trash2 size={15} strokeWidth={1.9} />
             </button>
           )}
           <button onMouseDown={(e) => e.stopPropagation()} onClick={onClose} aria-label="Fermer"
-            style={{ marginLeft: editingId ? 0 : "auto", width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background-color 120ms ease, color 120ms ease" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+            style={{ marginLeft: editingId ? 0 : "auto", width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background-color 120ms ease, color 120ms ease" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; e.currentTarget.style.color = T.text; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
             <X size={16} strokeWidth={1.9} />
           </button>
         </div>
@@ -1340,14 +1378,8 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                 <button
                   type="button"
                   onClick={() => setShowPresets(v => !v)}
-                  style={{
-                    marginLeft: "auto", marginBottom: 6,
-                    padding: "4px 10px", borderRadius: 999,
-                    border: `1px solid ${T.border}`, background: T.white,
-                    color: T.textSub, fontSize: 11, fontWeight: 500, cursor: "pointer",
-                    fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4,
-                  }}>
-                  <BookOpen size={11} strokeWidth={1.75} />
+                  style={{ ...softPill(), marginLeft: "auto", marginBottom: 6 }}>
+                  <BookOpen size={12} strokeWidth={1.75} />
                   {showPresets ? "Masquer" : "Choisir un modèle"}
                 </button>
               </div>
@@ -1355,11 +1387,11 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                 <div style={{
                   display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
                   gap: 6, padding: 10,
-                  background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14,
+                  background: FIELD_BG, border: "none", borderRadius: 12,
                   maxHeight: 220, overflowY: "auto",
                 }}>
                   {allPresets.length === 0 && (
-                    <div style={{ gridColumn: "1 / -1", textAlign: "center", color: T.textMut, fontSize: 12, padding: "8px 0" }}>
+                    <div style={{ gridColumn: "1 / -1", textAlign: "center", color: T.textSub, fontSize: 12, padding: "8px 0" }}>
                       Aucun modèle.
                     </div>
                   )}
@@ -1368,7 +1400,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                     return (
                       <div key={p.id} style={{
                         position: "relative",
-                        background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
+                        background: T.white, border: "none", borderRadius: 10, boxShadow: T.elevPill,
                         padding: "8px 10px", display: "flex", flexDirection: "column", gap: 4,
                       }}>
                         <button type="button" onClick={() => applyPreset(p)}
@@ -1379,12 +1411,12 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                           }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             <span style={{ width: 6, height: 6, borderRadius: "50%", background: disc.color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {p.name}
                             </span>
-                            {p.custom && <span style={{ fontSize: 9, color: T.textMut, fontWeight: 500 }}>(perso)</span>}
+                            {p.custom && <span style={{ fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 }}>(perso)</span>}
                           </div>
-                          <div style={{ fontSize: 10, color: T.textMut }}>
+                          <div style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>
                             {(p.exercises || []).length} exercice{(p.exercises || []).length > 1 ? "s" : ""}
                           </div>
                         </button>
@@ -1393,11 +1425,11 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                             style={{
                               position: "absolute", top: 4, right: 4,
                               width: 20, height: 20, borderRadius: "var(--radius-field)", border: "none",
-                              background: "transparent", color: T.textMut, cursor: "pointer",
+                              background: "transparent", color: T.textSub, cursor: "pointer",
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
                             }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
                             <Trash2 size={10} strokeWidth={1.75} />
                           </button>
                         )}
@@ -1421,16 +1453,16 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                     onClick={() => setForm({ ...form, discipline: d.id })}
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
-                      padding: "9px 13px", borderRadius: 999,
-                      border: "1px solid transparent",
-                      background: active ? `${d.color}10` : T.white,
-                      color: T.text, cursor: "pointer", fontFamily: "inherit",
+                      padding: "9px 13px", borderRadius: 999, border: "none",
+                      background: active ? `${d.color}1F` : FIELD_BG,
+                      color: active ? T.text : T.textSub, cursor: "pointer", fontFamily: "inherit",
                       textAlign: "left",
+                      transition: "background var(--dur-fast) var(--ease-out)",
                     }}>
-                    <span style={{ width: 22, height: 22, borderRadius: "50%", background: `${d.color}1F`, color: d.color, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ width: 22, height: 22, borderRadius: "50%", background: active ? T.white : `${d.color}1F`, color: d.color, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <Icon size={11} strokeWidth={1.75} />
                     </span>
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{d.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500 }}>{d.label}</span>
                   </button>
                 );
               })}
@@ -1458,14 +1490,8 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Label>Exercices</Label>
               <button type="button" onClick={addExercise}
-                style={{
-                  marginLeft: "auto", marginBottom: 8,
-                  padding: "4px 10px", borderRadius: 999,
-                  border: `1px solid ${T.border}`, background: T.white,
-                  color: T.textSub, fontSize: 11, fontWeight: 500, cursor: "pointer",
-                  fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4,
-                }}>
-                <Plus size={11} strokeWidth={2} /> Ajouter
+                style={{ ...softPill(), marginLeft: "auto", marginBottom: 8 }}>
+                <Plus size={12} strokeWidth={1.75} /> Ajouter
               </button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1474,13 +1500,16 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                   onDragOver={(e) => { if (draggedExId != null && draggedExId !== ex.id) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragOverExId !== ex.id) setDragOverExId(ex.id); } }}
                   onDragLeave={() => { if (dragOverExId === ex.id) setDragOverExId(null); }}
                   onDrop={(e) => { e.preventDefault(); if (draggedExId != null) moveExercise(draggedExId, ex.id); setDraggedExId(null); setDragOverExId(null); }}
+                  /* Bloc d'exercice : aplat, sans cadre. La cible de dépôt se
+                     signale par un trait — c'est le seul moment où un contour
+                     porte une information. */
                   style={{
-                    background: T.bg,
-                    border: `1px solid ${dragOverExId === ex.id ? T.accent : T.border}`,
-                    borderRadius: 14,
+                    background: FIELD_BG,
+                    border: `1px solid ${dragOverExId === ex.id ? T.text : "transparent"}`,
+                    borderRadius: 12,
                     padding: "10px 12px",
                     opacity: draggedExId === ex.id ? 0.5 : 1,
-                    transition: "border-color 120ms, opacity 120ms",
+                    transition: "border-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out)",
                   }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                     <span
@@ -1491,7 +1520,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                       aria-label="Réordonner l'exercice"
                       style={{
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: 18, height: 22, color: T.textMut, cursor: "grab", flexShrink: 0,
+                        width: 18, height: 22, color: T.textSub, cursor: "grab", flexShrink: 0,
                         marginLeft: -4,
                       }}
                       onMouseDown={(e) => { e.currentTarget.style.cursor = "grabbing"; }}
@@ -1527,7 +1556,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                     <button type="button" onClick={() => removeExercise(ex.id)} aria-label="Supprimer l'exercice"
                       style={iconBtn()}
                       onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
                       <Trash2 size={11} strokeWidth={1.75} />
                     </button>
                   </div>
@@ -1540,11 +1569,11 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                         <SetInput value={set.distance ?? ""} onChange={(v) => updateCardio(ex.id, { distance: v })} placeholder="km" />
                         <SetInput value={set.time ?? ""} onChange={(v) => updateCardio(ex.id, { time: v })} placeholder="min" />
                         <div style={{
-                          flex: 1, minWidth: 0, height: 30, borderRadius: 10,
-                          border: `1px solid ${T.border}`, background: T.bg,
+                          flex: 1, minWidth: 0, height: 32, borderRadius: 999,
+                          border: "none", background: T.white,
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums",
-                          color: speed != null ? T.text : T.textMut,
+                          fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums",
+                          color: speed != null ? T.text : T.textSub,
                         }}>
                           {speed != null ? `${speed} km/h` : "km/h"}
                         </div>
@@ -1556,13 +1585,13 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         {(ex.sets || []).map((set, si) => (
                           <div key={set.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ width: 22, fontSize: 10, color: T.textMut, fontWeight: 500 }}>S{si + 1}</span>
+                            <span style={{ width: 22, fontSize: 12, color: T.text, opacity: 0.5, fontWeight: 500 }}>S{si + 1}</span>
                             <SetInput value={set.reps} onChange={(v) => updateSet(ex.id, set.id, { reps: v })} placeholder="reps" />
                             <SetInput value={set.weight} onChange={(v) => updateSet(ex.id, set.id, { weight: v })} placeholder="kg" />
                             <button type="button" onClick={() => removeSet(ex.id, set.id)} aria-label="Supprimer la série"
                               style={{ ...iconBtn(), width: 22, height: 22 }}
                               onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
                               <X size={10} strokeWidth={2} />
                             </button>
                           </div>
@@ -1570,12 +1599,12 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                       </div>
                       <button type="button" onClick={() => addSet(ex.id)}
                         style={{
-                          marginTop: 6, padding: "3px 10px", borderRadius: 999,
-                          border: `1px dashed ${T.border}`, background: T.white,
-                          color: T.textMut, fontSize: 10, fontWeight: 500, cursor: "pointer",
+                          marginTop: 8, padding: "5px 11px", borderRadius: 999,
+                          border: "none", background: T.white,
+                          color: T.textSub, fontSize: 12, fontWeight: 500, cursor: "pointer",
                           fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4,
                         }}>
-                        <Plus size={10} strokeWidth={2} /> Ajouter une série
+                        <Plus size={11} strokeWidth={1.75} /> Ajouter une série
                       </button>
                     </>
                   )}
@@ -1597,8 +1626,8 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
 
         {/* Inline prompt pour nommer un nouveau modèle */}
         {presetNamePrompt !== null && (
-          <div style={{ padding: "10px 18px", borderTop: `1px solid ${T.border}`, background: T.bg, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: T.textMut, whiteSpace: "nowrap" }}>Nom du modèle</span>
+          <div style={{ padding: "10px 18px", borderTop: `1px solid ${HAIRLINE}`, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: T.text, opacity: 0.5, whiteSpace: "nowrap" }}>Nom du modèle</span>
             <input
               autoFocus
               type="text"
@@ -1612,16 +1641,16 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
               style={{ ...input(), padding: "6px 10px", fontSize: 12 }}
             />
             <button type="button" onClick={() => setPresetNamePrompt(null)}
-              style={{ padding: "6px 12px", borderRadius: "var(--radius-card)", border: "none", background: "transparent", color: T.textSub, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ padding: "7px 13px", borderRadius: 999, border: "none", background: "transparent", color: T.textSub, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
               Annuler
             </button>
             <button type="button" onClick={confirmSaveAsPreset}
               disabled={!(presetNamePrompt || "").trim()}
               style={{
-                padding: "6px 12px", borderRadius: "var(--radius-card)", border: "none",
-                background: (presetNamePrompt || "").trim() ? T.text : "var(--color-hover-bg, #F0F0F0)",
-                color: (presetNamePrompt || "").trim() ? T.white : T.textMut,
-                fontSize: 12, fontWeight: 600,
+                padding: "7px 13px", borderRadius: 999, border: "none",
+                background: (presetNamePrompt || "").trim() ? T.text : FIELD_BG,
+                color: (presetNamePrompt || "").trim() ? T.textInverted : T.textSub,
+                fontSize: 12, fontWeight: 500,
                 cursor: (presetNamePrompt || "").trim() ? "pointer" : "not-allowed",
                 fontFamily: "inherit",
               }}>
@@ -1631,50 +1660,46 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
         )}
 
         {/* Footer */}
-        <div style={{ padding: "12px 18px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
-          <button type="button" onClick={openSaveAsPreset}
-            disabled={!(form.exercises || []).some(e => (e.name || "").trim())}
-            title="Enregistrer la composition de cette séance comme modèle réutilisable"
-            style={{
-              marginRight: "auto",
-              padding: "7px 12px", borderRadius: 999,
-              border: `1px solid ${T.border}`, background: T.white,
-              color: T.textSub, fontSize: 11, fontWeight: 500,
-              cursor: (form.exercises || []).some(e => (e.name || "").trim()) ? "pointer" : "not-allowed",
-              opacity: (form.exercises || []).some(e => (e.name || "").trim()) ? 1 : 0.5,
-              fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5,
-            }}>
-            <Save size={11} strokeWidth={1.75} /> Sauver comme modèle
-          </button>
+        <div style={{ padding: "12px 18px", borderTop: `1px solid ${HAIRLINE}`, display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+          {(() => {
+            const canSavePreset = (form.exercises || []).some(e => (e.name || "").trim());
+            return (
+              <button type="button" onClick={openSaveAsPreset}
+                disabled={!canSavePreset}
+                title="Enregistrer la composition de cette séance comme modèle réutilisable"
+                style={{ ...softPill(canSavePreset), marginRight: "auto", padding: "7px 13px" }}>
+                <Save size={12} strokeWidth={1.75} /> Sauver comme modèle
+              </button>
+            );
+          })()}
           {editingId ? (
             <>
-              <span style={{ fontSize: 11, color: T.textMut, fontFamily: "inherit" }}>
+              <span style={{ fontSize: 12, color: T.text, opacity: 0.5, fontFamily: "inherit" }}>
                 Modifications enregistrées automatiquement
               </span>
               <button onClick={onClose}
-                style={{ padding: "7px 16px", height: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: FIELD_BG, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                 Fermer
               </button>
             </>
           ) : (
             <>
               <button onClick={onClose}
-                style={{ padding: "7px 16px", height: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: FIELD_BG, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                 Annuler
               </button>
               <button onClick={onSave}
                 disabled={!form.date}
                 style={{
-                  padding: "7px 16px", height: 34, borderRadius: 999,
-                  border: `1px solid ${form.date ? T.text : T.border}`,
-                  background: form.date ? T.text : "var(--color-hover-bg, #F0F0F0)",
-                  color: form.date ? T.white : T.textMut,
-                  fontSize: 13, fontWeight: 600,
+                  padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
+                  background: form.date ? T.text : FIELD_BG,
+                  color: form.date ? T.textInverted : T.textSub,
+                  fontSize: 13, fontWeight: 500,
                   cursor: form.date ? "pointer" : "not-allowed",
                   fontFamily: "inherit",
                   display: "inline-flex", alignItems: "center", gap: 6,
                 }}>
-                <Check size={13} strokeWidth={2} /> Créer
+                <Check size={13} strokeWidth={1.75} /> Créer
               </button>
             </>
           )}
@@ -1684,19 +1709,35 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
   );
 }
 
+/* Libellé de champ de la modale : même écriture que `FieldLabel` de la DA,
+   avec la marge basse dont les `<label>` de ce formulaire ont besoin. */
 function Label({ children }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 500, color: T.textMut, marginBottom: 6 }}>
+    <div style={{ fontSize: 12, fontWeight: 500, color: T.text, opacity: 0.5, marginBottom: 6 }}>
       {children}
     </div>
   );
 }
 
+/* Champ de saisie : aplat plutôt que cadre. Sur un formulaire de dix champs,
+   dix contours faisaient dix rectangles à lire avant d'atteindre le contenu. */
 function input() {
   return {
-    width: "100%", padding: "8px 14px", borderRadius: 999,
-    border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit",
-    outline: "none", color: T.text, background: T.white,
+    width: "100%", padding: "9px 14px", borderRadius: 999,
+    border: "none", fontSize: 13, fontFamily: "inherit",
+    outline: "none", color: T.text, background: FIELD_BG,
+  };
+}
+
+/* Bouton d'action secondaire de la modale (« Ajouter », « Choisir un modèle »,
+   « Sauver comme modèle ») : pilule à aplat, sans contour. */
+function softPill(enabled = true) {
+  return {
+    padding: "5px 12px", borderRadius: 999, border: "none",
+    background: FIELD_BG, color: T.textSub,
+    fontSize: 12, fontWeight: 500,
+    cursor: enabled ? "pointer" : "not-allowed", opacity: enabled ? 1 : 0.5,
+    fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5,
   };
 }
 
@@ -1847,10 +1888,10 @@ function ExerciseNameCombobox({
         <div
           role="listbox"
           style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-            background: T.white, border: `1px solid ${T.border}`, borderRadius: 14,
+            position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
+            background: T.white, border: "none", borderRadius: 12,
             boxShadow: "var(--elev-overlay)", zIndex: 100,
-            maxHeight: 280, overflowY: "auto", padding: 4, fontFamily: "var(--font-sans)",
+            maxHeight: 280, overflowY: "auto", padding: 6, fontFamily: "var(--font-sans)",
           }}
         >
           {matches.map((m, i) => {
@@ -1866,7 +1907,7 @@ function ExerciseNameCombobox({
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   width: "100%", padding: "4px 6px 4px 8px", borderRadius: "var(--radius-card)",
-                  background: active ? T.accentBg : "transparent",
+                  background: active ? FIELD_BG : "transparent",
                 }}
               >
                 <button
@@ -1881,12 +1922,12 @@ function ExerciseNameCombobox({
                 >
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {m.name}
-                    {m.custom && <span style={{ color: T.textMut, fontSize: 10, marginLeft: 6, fontWeight: 400 }}>(perso)</span>}
+                    {m.custom && <span style={{ color: T.textSub, fontSize: 12, marginLeft: 6, fontWeight: 400 }}>(perso)</span>}
                   </span>
                   <span style={{
-                    fontSize: 10, fontWeight: 600,
-                    color: cat.color, background: `${cat.color}18`,
-                    padding: "1px 7px", borderRadius: 999, flexShrink: 0,
+                    fontSize: 11, fontWeight: 500,
+                    color: cat.color, background: `${cat.color}1F`,
+                    padding: "2px 9px", borderRadius: 999, flexShrink: 0,
                   }}>{cat.label}</span>
                 </button>
                 <button
@@ -1897,7 +1938,7 @@ function ExerciseNameCombobox({
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     width: 22, height: 22, border: "none", background: "transparent",
                     cursor: "pointer", borderRadius: "var(--radius-field)", flexShrink: 0,
-                    color: isFav ? "#F59E0B" : T.textMut,
+                    color: isFav ? "#F59E0B" : T.textSub,
                   }}
                 >
                   <Star size={12} strokeWidth={1.75} fill={isFav ? "#F59E0B" : "none"} />
@@ -1910,10 +1951,10 @@ function ExerciseNameCombobox({
                     style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       width: 22, height: 22, border: "none", background: "transparent",
-                      cursor: "pointer", borderRadius: "var(--radius-field)", flexShrink: 0, color: T.textMut,
+                      cursor: "pointer", borderRadius: "var(--radius-field)", flexShrink: 0, color: T.textSub,
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = T.red; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = T.textSub; }}
                   >
                     <Trash2 size={12} strokeWidth={1.75} />
                   </button>
@@ -1925,10 +1966,10 @@ function ExerciseNameCombobox({
                     style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       width: 22, height: 22, border: "none", background: "transparent",
-                      cursor: "pointer", borderRadius: "var(--radius-field)", flexShrink: 0, color: T.textMut,
+                      cursor: "pointer", borderRadius: "var(--radius-field)", flexShrink: 0, color: T.textSub,
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = T.text; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = T.textSub; }}
                   >
                     <EyeOff size={12} strokeWidth={1.75} />
                   </button>
@@ -1943,12 +1984,12 @@ function ExerciseNameCombobox({
               style={{
                 display: "flex", alignItems: "center", gap: 8,
                 width: "100%", padding: "6px 10px", marginTop: matches.length > 0 ? 4 : 0,
-                borderTop: matches.length > 0 ? `1px solid ${T.border}` : "none",
+                borderTop: matches.length > 0 ? `1px solid ${HAIRLINE}` : "none",
                 border: matches.length > 0 ? "none" : "none",
-                background: "transparent", cursor: "pointer", borderRadius: "var(--radius-card)",
+                background: "transparent", cursor: "pointer", borderRadius: 8,
                 color: T.text, fontSize: 12, fontFamily: "inherit", textAlign: "left",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
             >
               <Plus size={12} strokeWidth={2} />
@@ -1956,15 +1997,15 @@ function ExerciseNameCombobox({
             </button>
           )}
           {(hiddenExercises || []).length > 0 && (
-            <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 4, padding: "6px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: T.textMut }}>
+            <div style={{ borderTop: `1px solid ${HAIRLINE}`, marginTop: 4, padding: "8px 10px 4px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: T.textSub }}>
               <span>{(hiddenExercises || []).length} masqué{(hiddenExercises || []).length > 1 ? "s" : ""}</span>
               <button
                 type="button"
                 onMouseDown={(e) => { e.preventDefault(); setHiddenExercises?.([]); }}
                 style={{
                   border: "none", background: "transparent", cursor: "pointer",
-                  color: T.textSub, fontSize: 11, fontWeight: 500, fontFamily: "inherit",
-                  padding: "2px 6px", borderRadius: "var(--radius-field)",
+                  color: T.textSub, fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+                  padding: "2px 6px", borderRadius: 8,
                 }}
               >
                 Tout réafficher
@@ -2028,8 +2069,8 @@ function DateField({ value, onChange }) {
           gap: 8,
           cursor: "pointer",
           textAlign: "left",
-          color: value ? T.text : T.textMut,
-          background: open ? T.accentBg : T.white,
+          color: value ? T.text : T.textSub,
+          background: open ? FIELD_BG : T.white,
         }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
@@ -2088,14 +2129,14 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <button type="button" onClick={goPrev}
           style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
           <ChevronDown size={14} style={{ transform: "rotate(90deg)" }} />
         </button>
         <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{MONTHS[month]} {year}</div>
         <button type="button" onClick={goNext}
           style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
           <ChevronDown size={14} style={{ transform: "rotate(-90deg)" }} />
         </button>
@@ -2103,7 +2144,7 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
         {WD.map((w, i) => (
-          <div key={i} style={{ fontSize: 10, color: T.textMut, textAlign: "center", padding: "4px 0", fontWeight: 500 }}>{w}</div>
+          <div key={i} style={{ fontSize: 10, color: T.textSub, textAlign: "center", padding: "4px 0", fontWeight: 500 }}>{w}</div>
         ))}
       </div>
 
@@ -2125,7 +2166,7 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
                 borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
                 transition: "background .1s ease",
               }}
-              onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = T.accentBg; }}
+              onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = FIELD_BG; }}
               onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.background = "transparent"; }}>
               {d.getDate()}
             </button>
@@ -2143,13 +2184,16 @@ function SetInput({ value, onChange, placeholder, small }) {
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
+      /* Posé sur le bloc d'exercice, lui-même déjà en aplat : le champ ressort
+         donc en BLANC, l'inverse de la règle habituelle. */
       style={{
         flex: small ? "0 0 64px" : 1, minWidth: 0,
-        padding: "5px 9px", borderRadius: 10,
-        border: `1px solid ${T.border}`, fontSize: 12,
+        padding: "6px 12px", borderRadius: 999,
+        border: "none", fontSize: 12,
         fontFamily: "inherit", outline: "none", color: T.text,
         background: T.white, fontVariantNumeric: "tabular-nums",
       }}
     />
   );
 }
+

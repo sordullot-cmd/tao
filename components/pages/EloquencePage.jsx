@@ -16,14 +16,10 @@ import {
   EXERCISE_MODES, countWords, countFillers, countWordOccurrences, computeWpm, describeWpm, overallScore,
   getTopicsFromBank, pickRandomTopic, todayKey, buildDailyAggregate,
 } from "@/lib/eloquenceData";
-import { T as Tokens } from "@/lib/ui/tokens";
-
-/* ─────────────── Palette ───────────────
- * On réutilise les tokens partagés du projet (câblés sur les CSS vars) : la page
- * suit ainsi exactement le thème clair/sombre et la même palette que les autres
- * pages (orange #F97316, bleu/vert/rouge de statut, fonds pastel). Seul `bg` est
- * redéfini en surface subtile interne pour les cartes secondaires. */
-const T = { ...Tokens, bg: "var(--color-bg-subtle, #F5F5F5)" };
+import { T } from "@/lib/ui/tokens";
+import {
+  CARD, SectionTitle, MiniKpi, PeriodPills, FIELD_BG,
+} from "@/components/ui/da";
 
 /* ─────────────── Helpers génériques ─────────────── */
 // Couleur d'un score 0–100.
@@ -48,35 +44,37 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-/* Styles partagés */
-const card = {
-  background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
-  padding: 20, boxSizing: "border-box",
-  boxShadow: "var(--elev-rest)",
-};
+/* Styles partagés ───────────────────────────────────────────────────────────
+   Portés à la nouvelle DA : la carte perd sa bordure au profit de l'ombre très
+   douce `elevCard`, les boutons prennent la métrique 12 px / Medium des autres
+   pages, et plus aucun blanc n'est écrit en dur — `#fff` sur un aplat `T.text`
+   devenait invisible en thème sombre, où cet aplat s'éclaircit.
+   `SURFACE` remplace l'ancien `T.bg` gris : la page est désormais POSÉE sur le
+   gris du shell, un second gris opaque par-dessus ferait un bloc dans le bloc. */
+const card = { ...CARD, padding: 20, boxSizing: "border-box" };
+const SURFACE = FIELD_BG;
 const pill = (active) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "6px 14px", borderRadius: 999, cursor: "pointer",
-  border: `1px solid ${active ? T.text : T.border}`,
-  background: active ? T.text : T.white, color: active ? "#fff" : T.text,
-  fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-  transition: "all 120ms ease",
+  padding: "6px 14px", borderRadius: 999, cursor: "pointer", border: "none",
+  background: active ? T.text : FIELD_BG, color: active ? T.textInverted : T.text,
+  fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+  transition: "background 120ms ease, color 120ms ease",
 });
 const ghost = (disabled) => ({
-  display: "inline-flex", alignItems: "center", gap: 8,
-  padding: "9px 16px", borderRadius: 999,
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "7px 14px", minHeight: 32, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
-  fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+  fontSize: 12, fontWeight: 500, fontFamily: "inherit",
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
-  transition: "all 120ms ease",
+  transition: "opacity 120ms ease",
 });
 const primary = (disabled) => ({
-  display: "inline-flex", alignItems: "center", gap: 8,
-  padding: "9px 18px", borderRadius: 999,
-  border: `1px solid ${T.text}`, background: T.text, color: "#fff",
-  fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "7px 16px", minHeight: 32, borderRadius: 999,
+  border: "none", background: T.text, color: T.textInverted,
+  fontSize: 12, fontWeight: 500, fontFamily: "inherit",
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
-  transition: "all 120ms ease",
+  transition: "opacity 120ms ease",
 });
 
 /* ─────────────── Synthèse vocale (modèle à écouter) ─────────────── */
@@ -245,14 +243,18 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, onRes
             style={{
               width: 96, height: 96, borderRadius: "50%", cursor: "pointer",
               border: "none", fontFamily: "inherit",
-              background: recording ? T.red : T.text, color: "#fff",
+              /* En cours d'enregistrement, l'aplat est le rouge saturé : l'encre
+                 y reste blanche (`onSolid`) dans les deux thèmes. Au repos c'est
+                 l'aplat d'encre `T.text`, qui s'inverse avec le thème — d'où
+                 `textInverted`, sans quoi le bouton devient blanc sur blanc. */
+              background: recording ? T.red : T.text, color: recording ? T.onSolid : T.textInverted,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
               animation: recording ? "eloqPulse 1.6s infinite" : "none",
               transition: "background 150ms ease",
             }}
           >
-            {recording ? <Square size={26} fill="#fff" /> : <Mic size={28} />}
-            <span style={{ fontSize: 11, fontWeight: 700 }}>{recording ? "Arrêter" : "Commencer"}</span>
+            {recording ? <Square size={26} fill="currentColor" /> : <Mic size={28} />}
+            <span style={{ fontSize: 11, fontWeight: 600 }}>{recording ? "Arrêter" : "Commencer"}</span>
           </button>
 
           <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: recording ? T.red : T.textMut }}>
@@ -330,7 +332,7 @@ function ResultCard({ result, showFidelity }) {
       <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
         <div style={{
           width: 92, height: 92, borderRadius: "50%", flexShrink: 0,
-          background: scoreColor(overall), color: "#fff",
+          background: scoreColor(overall), color: T.onSolid,
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         }}>
           <span style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{overall}</span>
@@ -461,10 +463,13 @@ function ResultCard({ result, showFidelity }) {
   );
 }
 
-const metricBox = { flex: 1, minWidth: 120, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "10px 12px", background: T.bg };
-const metricLabel = { fontSize: 11, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 };
-const metricVal = { fontSize: 18, fontWeight: 700, color: T.text, marginTop: 2 };
-const sectionTitle = { fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 };
+/* Bloc de mesure : aplat d'encre sans bordure, libellé en minuscules atténuées
+   et valeur en chiffres tabulaires — la métrique de `StatRow`/`MiniKpi`. Les
+   capitales espacées et le 700 gras appartenaient à l'ancienne DA. */
+const metricBox = { flex: 1, minWidth: 120, borderRadius: 8, padding: "10px 12px", background: SURFACE };
+const metricLabel = { fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 };
+const metricVal = { fontSize: 18, fontWeight: 600, color: T.text, marginTop: 2, fontVariantNumeric: "tabular-nums" };
+const sectionTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 8 };
 
 function FeedbackList({ title, icon, color, items }) {
   if (!Array.isArray(items) || items.length === 0) return null;
@@ -492,7 +497,7 @@ function LevelFilter({ value, onChange, allLabel = "Tous" }) {
         <button
           key={l.id}
           type="button"
-          style={{ ...pill(value === l.id), borderColor: value === l.id ? l.color : T.border, background: value === l.id ? l.color : T.white, color: value === l.id ? "#fff" : T.text }}
+          style={{ ...pill(value === l.id), background: value === l.id ? l.color : FIELD_BG, color: value === l.id ? T.onSolid : T.text }}
           onClick={() => onChange(l.id)}
         >
           {l.label}
@@ -507,7 +512,7 @@ function LevelBadge({ level }) {
   const l = LEVEL_BY_ID[level];
   if (!l) return null;
   return (
-    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: l.color, padding: "2px 8px", borderRadius: 999 }}>
+    <span style={{ fontSize: 11, fontWeight: 500, color: T.onSolid, background: l.color, padding: "2px 8px", borderRadius: 999 }}>
       {l.label}
     </span>
   );
@@ -605,7 +610,7 @@ function StructureCheatSheet() {
         {STRUCTURE_FRAMEWORKS.map((f) => (
           <div
             key={f.id}
-            style={{ flex: "1 1 280px", minWidth: 260, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 14, background: T.bg }}
+            style={{ flex: "1 1 280px", minWidth: 260, borderRadius: 8, padding: 14, background: SURFACE }}
           >
             <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{f.name}</div>
             <div style={{ fontSize: 12, color: T.textMut, fontWeight: 600, marginBottom: 8 }}>{f.short}</div>
@@ -806,7 +811,7 @@ function TopicsTab({ onPractice }) {
 
               {/* Déroulé complet de la structure conseillée */}
               {fw && open && (
-                <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ background: SURFACE, borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4 }}>{fw.description}</div>
                   <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
                     {fw.steps.map((s, k) => (
@@ -994,7 +999,7 @@ function StructureTab({ onSession }) {
 
       {/* Exercice généré */}
       {exercise && (
-        <div style={{ ...card, display: "flex", flexDirection: "column", gap: 8, background: T.bg }}>
+        <div style={{ ...card, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4 }}>Exercice</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{exercise.prompt}</div>
           {exercise.framework && <div style={{ fontSize: 13, color: T.blue, fontWeight: 600 }}>Cadre conseillé : {exercise.framework}</div>}
@@ -1076,8 +1081,8 @@ function DrillBrief({ drill }) {
         </ul>
       )}
       {fw && (
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 2 }}>Structure conseillée · {fw.name}</div>
+        <div style={{ background: SURFACE, borderRadius: 8, padding: "10px 12px" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 2 }}>Structure conseillée · {fw.name}</div>
           <div style={{ fontSize: 12, color: T.textMut }}>{fw.short}</div>
         </div>
       )}
@@ -1302,10 +1307,10 @@ function MirrorDrill({ drill }) {
               muted
               style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
             />
-            <div style={{ position: "absolute", top: 10, right: 10, background: "rgba(0,0,0,.55)", color: "#fff", padding: "4px 10px", borderRadius: 999, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+            <div style={{ position: "absolute", top: 10, right: 10, background: T.scrim, color: T.onSolid, padding: "4px 10px", borderRadius: 999, fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
               {fmtTime(remaining)}
             </div>
-            <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center", color: "#fff", fontSize: 12.5, textShadow: "0 1px 3px rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center", color: T.onSolid, fontSize: 13, textShadow: "0 1px 3px rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               <Eye size={14} /> Regarde tes yeux, uniquement.
             </div>
           </div>
@@ -1323,12 +1328,12 @@ function MirrorDrill({ drill }) {
             onClick={start}
             style={{
               width: 96, height: 96, borderRadius: "50%", cursor: "pointer",
-              border: "none", fontFamily: "inherit", background: T.text, color: "#fff",
+              border: "none", fontFamily: "inherit", background: T.text, color: T.textInverted,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
             }}
           >
             <Video size={28} />
-            <span style={{ fontSize: 11, fontWeight: 700 }}>Démarrer</span>
+            <span style={{ fontSize: 11, fontWeight: 600 }}>Démarrer</span>
           </button>
           <div style={{ fontSize: 12.5, color: T.textMut, textAlign: "center" }}>
             La caméra reste sur ton appareil : rien n’est enregistré ni envoyé.
@@ -1421,7 +1426,7 @@ function ProgressByAxis({ sessions, mode }) {
 
   if (!sessions || sessions.length === 0) {
     return (
-      <div style={{ fontSize: 13, color: T.textMut, marginTop: 4 }}>
+      <div style={{ ...card, fontSize: 13, color: T.textMut, textAlign: "center", padding: 32 }}>
         Commence ta première session pour suivre ta progression sur « {catLabel} ».
       </div>
     );
@@ -1455,7 +1460,11 @@ function ProgressByAxis({ sessions, mode }) {
     .filter(Boolean);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "28px 18px 18px", marginTop: 28, borderTop: `1px solid ${T.border}` }}>
+    /* Carte, comme les blocs de statistiques des fiches de compte : ce suivi
+       était posé à nu sous un filet, ce qui le faisait lire comme un pied de
+       page alors que c'est la mesure des progrès. */
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={sectionTitle}>Progression · {catLabel}</div>
       {n === 0 ? (
         <div style={{ fontSize: 13, color: T.textMut }}>Pas encore de session pour « {catLabel} ».</div>
       ) : (
@@ -1464,7 +1473,7 @@ function ProgressByAxis({ sessions, mode }) {
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
             <div style={{
               width: 84, height: 84, borderRadius: "50%", flexShrink: 0,
-              background: scoreColor(avg), color: "#fff",
+              background: scoreColor(avg), color: T.onSolid,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
             }}>
               <span style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{avg}</span>
@@ -1544,7 +1553,7 @@ function LastSessionAdvice({ sessions, mode }) {
   } catch { /* ignore */ }
 
   return (
-    <details style={{ ...card, background: T.bg }}>
+    <details style={card}>
       <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 700, color: T.text, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <Lightbulb size={16} color={T.blue} />
         Conseils de ta dernière séance « {catLabel} »
@@ -1645,7 +1654,7 @@ function RecordingsHistory({ sessions, mode }) {
       {items.map((s) => (
         <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, background: scoreColor(s.overall), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, background: scoreColor(s.overall), color: T.onSolid, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
               {s.overall}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1759,7 +1768,7 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
           {review ? "Régénérer" : "Générer"}
         </button>
         <button type="button" title="Fermer le bilan" aria-label="Fermer le bilan" onClick={() => setDismissed(true)}
-          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.white, cursor: "pointer", color: T.textMut, padding: 0 }}>
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, border: `1px solid ${T.border}`, borderRadius: 999, background: T.white, cursor: "pointer", color: T.textMut, padding: 0 }}>
           <X size={16} />
         </button>
       </div>
@@ -1777,7 +1786,7 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
           {review.summary && <div style={{ fontSize: 14, color: T.text, lineHeight: 1.55 }}>{review.summary}</div>}
 
           {review.priority && (
-            <div style={{ background: T.accentBg, borderRadius: "var(--radius-card)", padding: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ background: FIELD_BG, borderRadius: 8, padding: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
               <Sparkles size={16} color={T.text} style={{ flexShrink: 0, marginTop: 1 }} />
               <div style={{ fontSize: 13.5, color: T.text }}>
                 <span style={{ fontWeight: 700 }}>Priorité n°1 : </span>{review.priority}
@@ -1848,6 +1857,51 @@ export default function EloquencePage() {
 
   const sessions = (store && store.sessions) || [];
 
+  /* ── Chiffre héros + mini-KPI ──────────────────────────────────────────────
+     Même lecture que les fiches de compte : un chiffre qui résume, quatre
+     mesures secondaires sous lui, et le sélecteur à droite. Le périmètre suit
+     l'exercice choisi — comme le P&L suit le compte affiché. « Sujets »
+     n'enregistre aucune séance : ce périmètre-là retombe sur toutes catégories. */
+  const scoped = useMemo(() => {
+    const noted = SESSION_MODES.some((m) => m.id === tab);
+    const list = noted ? sessions.filter((s) => s.mode === tab) : sessions;
+    const label = noted ? (SESSION_MODES.find((m) => m.id === tab) || {}).label : "Toutes catégories";
+    return { list, label, noted };
+  }, [sessions, tab]);
+
+  const hero = useMemo(() => {
+    const list = scoped.list;
+    if (list.length === 0) return { score: null, delta: null, count: 0, wpm: null, fillers: null, streak: 0 };
+    // L'historique est stocké du plus récent au plus ancien.
+    const overalls = [...list].reverse().map((s) => s.overall || 0);
+    const last = overalls[overalls.length - 1];
+    const mean = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+    const wpms = list.map((s) => s.wpm).filter((v) => typeof v === "number" && v > 0);
+    const fillers = list.map((s) => s.fillerCount).filter((v) => typeof v === "number");
+
+    /* Régularité : jours consécutifs travaillés en remontant depuis aujourd'hui.
+       On compte des JOURS distincts, pas des séances — trois exercices le même
+       jour ne font pas trois jours de suite. */
+    const days = new Set(list.map((s) => String(s.date || "").slice(0, 10)));
+    let streak = 0;
+    const cur = new Date();
+    for (;;) {
+      const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+      if (!days.has(key)) break;
+      streak += 1;
+      cur.setDate(cur.getDate() - 1);
+    }
+
+    return {
+      score: last,
+      delta: seriesTrend(overalls),
+      count: list.length,
+      wpm: wpms.length ? mean(wpms) : null,
+      fillers: fillers.length ? mean(fillers) : null,
+      streak,
+    };
+  }, [scoped.list]);
+
   // Enregistre une session dans l'historique (en tête, limité à 100).
   const recordSession = ({ mode, r }) => {
     if (!r || !r.analysis) return;
@@ -1885,49 +1939,76 @@ export default function EloquencePage() {
   };
 
   return (
-    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-
-      {/* En-tête de page — aligné sur les pages Productivité (titre 17/600) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: T.textMut }}>
+    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
+      {/* ═══ 1. TITRE ═══ */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <SectionTitle action={<div id="tr4de-page-header-slot" />}>Éloquence</SectionTitle>
+        <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>
           Structure, vocabulaire, clarté, confiance &amp; diction
-        </span>
-      </div>
-
-      {/* Onglets — segment control (style du projet) */}
-      <div style={{ display: "flex", overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 2 }}>
-        <div style={{ display: "inline-flex", gap: 4, padding: 3, background: T.accentBg, borderRadius: 999 }}>
-          {TABS.map((tb) => {
-            const active = tab === tb.id;
-            return (
-              <button
-                key={tb.id}
-                type="button"
-                onClick={() => setTab(tb.id)}
-                style={{
-                  flexShrink: 0, padding: "6px 14px", borderRadius: 999, border: "none",
-                  background: active ? T.white : "transparent",
-                  color: active ? T.text : T.textSub,
-                  fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
-                  boxShadow: active ? "0 1px 2px rgba(0,0,0,.08)" : "none",
-                  whiteSpace: "nowrap", transition: "all 120ms ease",
-                }}
-              >
-                {tb.label}
-              </button>
-            );
-          })}
         </div>
       </div>
 
-      {/* Bilan automatique de la journée + plan de travail (jour & semaine) */}
+      {/* ═══ 2. CHIFFRE HÉROS + MINI-KPI + SÉLECTEUR D'EXERCICE ═══
+          Les six exercices étaient un ruban d'onglets posé seul sous le titre, et
+          le suivi vivait tout en bas de page. Ils partagent maintenant la même
+          barre : on lit où on en est, et on choisit quoi travailler, au même
+          endroit — c'est le bloc d'en-tête des fiches de compte. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {/* Deux tons comme `HeroAmount` : le score en encre pleine, son
+                dénominateur en gris — le « / 100 » n'est pas la valeur. */}
+            <div style={{ fontSize: 28, fontWeight: 500, lineHeight: "22px", letterSpacing: -0.2, whiteSpace: "nowrap" }}>
+              <span style={{ color: hero.score == null ? T.numMuted : scoreColor(hero.score) }}>
+                {hero.score == null ? "—" : hero.score}
+              </span>
+              <span style={{ color: T.numMuted }}> / 100</span>
+            </div>
+            {hero.delta != null && hero.delta !== 0 && (
+              <span
+                title="Écart entre tes séances récentes et les plus anciennes"
+                style={{
+                  fontSize: 13, fontWeight: 500, lineHeight: 1, whiteSpace: "nowrap",
+                  fontVariantNumeric: "tabular-nums",
+                  color: hero.delta > 0 ? T.pnlPos : T.pnlNeg,
+                }}
+              >
+                {hero.delta > 0 ? `▲ +${hero.delta}` : `▼ ${hero.delta}`}
+              </span>
+            )}
+            <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap" }}>{scoped.label}</span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+            <MiniKpi label="Séances" value={String(hero.count)} />
+            <MiniKpi
+              label="Régularité"
+              value={hero.streak > 0 ? `${hero.streak} j` : "—"}
+              tone={hero.streak >= 3 ? "pos" : undefined}
+            />
+            <MiniKpi label="Débit" value={hero.wpm != null ? `${hero.wpm} mots/min` : "—"} />
+            <MiniKpi
+              label="Tics de langage"
+              value={hero.fillers != null ? String(hero.fillers) : "—"}
+              tone={hero.fillers == null ? undefined : hero.fillers <= 2 ? "pos" : hero.fillers >= 6 ? "neg" : undefined}
+            />
+          </div>
+        </div>
+
+        {/* Sélecteur d'exercice : la brique des autres pages, sur sa piste
+            arrondie. Il défile horizontalement en dessous de sa largeur — six
+            entrées ne tiennent pas sur un écran de téléphone. */}
+        <div className="scroll-thin" style={{ maxWidth: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <PeriodPills value={tab} onChange={setTab} options={TABS} track size={14} />
+        </div>
+      </div>
+
+      {/* ═══ 3. CE QU'IL FAUT TRAVAILLER AUJOURD'HUI ═══
+          Le bilan du jour reste AVANT l'exercice : il dit quoi faire, l'exercice
+          en dessous est le faire. */}
       <DailyReview sessions={sessions} store={store} setStore={setStore} onOpenTab={setTab} />
 
-      {/* Rappel des conseils du coach lors de la dernière séance de cet onglet */}
-      <LastSessionAdvice sessions={sessions} mode={tab} />
-
-      {/* Contenu de l'onglet actif */}
+      {/* ═══ 4. L'EXERCICE ═══ le cœur de la page */}
       {tab === EXERCISE_MODES.reading && <ReadingTab onSession={recordSession} />}
       {tab === EXERCISE_MODES.freeSpeech && (
         <FreeSpeechTab onSession={recordSession} presetTopic={presetTopic} clearPreset={() => setPresetTopic(null)} />
@@ -1937,11 +2018,23 @@ export default function EloquencePage() {
       {tab === EXERCISE_MODES.structure && <StructureTab onSession={recordSession} />}
       {tab === EXERCISE_MODES.drills && <DrillsTab onSession={recordSession} />}
 
-      {/* Suivi de progression du type d'exercice affiché (score global propre à l'onglet) */}
-      <ProgressByAxis sessions={sessions} mode={tab} />
-
-      {/* Réécoute des enregistrements passés (cloud) pour l'onglet courant */}
-      {tab !== EXERCISE_MODES.topics && <RecordingsHistory sessions={sessions} mode={tab} />}
+      {/* ═══ 5. LE SUIVI ═══
+          Progression, conseils de la dernière séance et réécoute formaient trois
+          bandeaux pleine largeur empilés sous l'exercice, qu'il fallait traverser
+          l'un après l'autre. Deux colonnes : la mesure à gauche, ce qui se lit à
+          droite. `tr4de-eloq-follow` porte le repli en une colonne (globals.css). */}
+      {tab !== EXERCISE_MODES.topics && (
+        <div className="tr4de-eloq-follow" style={{
+          display: "grid", gridTemplateColumns: "minmax(330px, 400px) minmax(0, 1fr)",
+          gap: 12, alignItems: "start",
+        }}>
+          <ProgressByAxis sessions={sessions} mode={tab} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <LastSessionAdvice sessions={sessions} mode={tab} />
+            <RecordingsHistory sessions={sessions} mode={tab} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

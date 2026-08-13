@@ -46,7 +46,7 @@ export default function Error({
         }}
       >
         <img
-          src="/favicon.svg"
+          src="/logo.svg"
           alt=""
           width={96}
           height={96}

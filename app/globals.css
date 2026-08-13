@@ -1,5 +1,44 @@
 @import "tailwindcss";
 
+/* === ACCENT DE MARQUE ===
+   Toutes les couleurs « principales » de l'app (item de nav actif, courbe de
+   portefeuille, aplats d'accent) descendent de deux teintes :
+
+     --accent    couleur principale  — nav active, pastilles, éléments actifs
+     --accent-2  couleur secondaire  — courbe de portefeuille, séries de charts
+
+   Les deux sont réglables dans Réglages → Apparence : la page écrit ces deux
+   variables en style inline sur <html> (voir lib/ui/accent.ts), ce qui prime
+   sur les valeurs ci-dessous. Les dérivés sont calculés en `color-mix` pour
+   suivre automatiquement n'importe quelle teinte choisie.
+
+   ESSAI EN COURS : vert #64D741. L'accent violet d'origine (maquette Figma)
+   est conservé comme préréglage « Violet (d'origine) » dans lib/ui/accent.ts —
+   #9C7BFF principale, #7C4DFF secondaire. */
+:root {
+  --accent:   #64D741;
+  --accent-2: #4CC72C;
+  /* Aplat d'un item actif (nav) */
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  /* Remplissage sous la courbe de portefeuille */
+  --accent-tint: color-mix(in srgb, var(--accent-2) 8%, #FFFFFF);
+  /* Pastille pastel (initiales du compte) : un voile de l'accent, pas l'aplat
+     saturé — et son encre, assez foncée pour rester lisible dessus. */
+  --accent-pastel: color-mix(in srgb, var(--accent) 20%, #FFFFFF);
+  --accent-ink:    color-mix(in srgb, var(--accent) 55%, #0B2A05);
+}
+
+:root[data-theme="dark"] {
+  /* Mêmes teintes, dérivés retravaillés : sur fond sombre un voile doit être
+     plus dense pour se voir, et le remplissage se dilue dans le noir. */
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-tint: color-mix(in srgb, var(--accent-2) 18%, #1A1A1B);
+  /* Sur fond sombre, « pastel » veut dire un voile sombre teinté et une encre
+     éclaircie : c'est l'écart qui fait la lisibilité, pas la valeur absolue. */
+  --accent-pastel: color-mix(in srgb, var(--accent) 22%, #1A1A1B);
+  --accent-ink:    color-mix(in srgb, var(--accent) 85%, #FFFFFF);
+}
+
 /* === Design Tokens en CSS Variables === */
 :root {
   /* Surfaces */
@@ -13,12 +52,17 @@
   /* === NOUVELLE DA (maquette Figma « Tableau de bord ») ===
      Valeurs extraites des nodes Figma. Toujours passer par ces variables
      plutôt que par les hex : c'est ce qui fait suivre le thème sombre. */
-  /* Navigation : item actif violet, items au repos gris soutenu.
+  /* Navigation : item actif à l'accent de marque, items au repos gris soutenu.
      `--color-nav-text` est le gris des items au repos : un cran à peine plus
      soutenu que `--color-text-sub`, sans peser face à l'entrée active. */
-  --color-nav-active-bg: rgba(156, 123, 255, 0.10);
-  --color-nav-active-text: #9C7BFF;
+  --color-nav-active-bg: var(--accent-soft);
+  --color-nav-active-text: var(--accent);
   --color-nav-text: #555555;
+  /* Survol de la barre latérale : plus léger que le `--color-hover-bg` général.
+     La sidebar est posée sur du blanc pur et ses items sont des pilules pleine
+     largeur — la même valeur qu'ailleurs y pèse trop. Le survol doit indiquer
+     la cible, pas la mettre en avant. */
+  --color-nav-hover-bg: #F6F6F6;
   /* Chiffres P&L — nuances plus sourdes que les couleurs status génériques */
   --color-pnl-pos: #008932;
   --color-pnl-neg: #B90707;
@@ -75,9 +119,10 @@
   --color-blue:   #3B82F6;
   --color-purple: #8B5CF6;
   --color-cyan:   #06B6D4;
-  /* Accent signature style Kraken (violet/indigo) — courbe portefeuille & pastilles */
-  --color-kraken:     #7C4DFF;
-  --color-kraken-bg:  #F4F0FF;
+  /* Accent signature style Kraken — courbe portefeuille & pastilles.
+     Dérivé de l'accent de marque (voir le bloc en tête de fichier). */
+  --color-kraken:     var(--accent-2);
+  --color-kraken-bg:  var(--accent-tint);
 
   /* Bordures */
   --color-border: #E5E5E5;
@@ -184,8 +229,8 @@
   --color-blue:   #60A5FA;
   --color-purple: #A78BFA;
   --color-cyan:   #22D3EE;
-  --color-kraken:     #9A7BFF;
-  --color-kraken-bg:  #241E3A;
+  /* `--color-kraken*` n'est plus redéfini ici : il suit `--accent-2` /
+     `--accent-tint`, qui ont déjà leur déclinaison sombre en tête de fichier. */
 
   /* Élévation plus marquée sur fond sombre */
   --elev-rest:    0 1px 2px rgba(0,0,0,.4);
@@ -208,11 +253,13 @@
      Mêmes rôles qu'en clair, teintes remontées pour rester lisibles sur fond
      sombre. La maquette Figma ne couvre que le mode clair : ces valeurs sont
      dérivées, pas relevées. */
-  --color-nav-active-bg: rgba(154, 123, 255, 0.16);
-  --color-nav-active-text: #B9A3FF;
+  /* `--color-nav-active-*` n'est plus redéfini ici : il suit `--accent*`, qui a
+     déjà sa déclinaison sombre en tête de fichier. */
   /* Sur fond sombre, « soutenu » veut dire plus CLAIR : c'est le contraste qui
      compte, pas la valeur absolue. */
   --color-nav-text: #999999;
+  /* Même écart réduit en sombre : à peine détaché du fond de la sidebar. */
+  --color-nav-hover-bg: #202021;
   --color-pnl-pos: #34D399;
   --color-pnl-neg: #F87171;
   --color-num-muted: #5A5A5C;
@@ -706,12 +753,11 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
 }
 .anim-fade-up { animation: fadeUp 280ms var(--ease-out) both; }
 
-/* Fondu d'entrée de page — `anim-1` / `anim-2` sont utilisés par ~25 pages
-   mais n'étaient définis que dans les <style> locaux de Dashboard/Strategy
-   (donc no-op sur les autres pages). Définition globale ici, sur le token
-   partagé, pour que l'entrée joue partout et de façon cohérente. */
-.anim-1 { animation: fadeUp 250ms var(--ease-out) both; }
-.anim-2 { animation: fadeUp 250ms 50ms var(--ease-out) both; }
+/* Entrée de page : plus d'animation. Les classes `anim-1` / `anim-2` restent
+   présentes dans ~25 pages, on les neutralise ici plutôt que de les retirer
+   fichier par fichier. Effet de bord bienvenu : plus de transform résiduel
+   (`both`), donc plus de bloc englobant parasite pour les `position: fixed`. */
+.anim-1, .anim-2 { animation: none; }
 
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -761,21 +807,9 @@ button:not([data-no-press]):not(:disabled):active {
   }
 }
 
-/* === Stagger : enfants apparaissent en cascade (50ms entre chaque) === */
-.anim-stagger > * { opacity: 0; animation: fadeUp 320ms var(--ease-out) both; }
-.anim-stagger > *:nth-child(1)  { animation-delay: 0ms; }
-.anim-stagger > *:nth-child(2)  { animation-delay: 40ms; }
-.anim-stagger > *:nth-child(3)  { animation-delay: 80ms; }
-.anim-stagger > *:nth-child(4)  { animation-delay: 120ms; }
-.anim-stagger > *:nth-child(5)  { animation-delay: 160ms; }
-.anim-stagger > *:nth-child(6)  { animation-delay: 200ms; }
-.anim-stagger > *:nth-child(7)  { animation-delay: 240ms; }
-.anim-stagger > *:nth-child(8)  { animation-delay: 280ms; }
-.anim-stagger > *:nth-child(9)  { animation-delay: 320ms; }
-.anim-stagger > *:nth-child(10) { animation-delay: 360ms; }
-.anim-stagger > *:nth-child(11) { animation-delay: 400ms; }
-.anim-stagger > *:nth-child(12) { animation-delay: 440ms; }
-.anim-stagger > *:nth-child(n+13) { animation-delay: 480ms; }
+/* === Stagger : neutralisé (le contenu s'affiche directement) ===
+   Classe conservée côté JSX, sans cascade ni opacité de départ. */
+.anim-stagger > * { opacity: 1; animation: none; }
 
 /* === Pop : popovers / dropdowns / menus contextuels ===
    scale 0.96 + opacity → arrive depuis le déclencheur (origine ajustée par le caller). */
@@ -961,6 +995,16 @@ a:active:not([data-no-press]),
 a, [role="button"] {
   transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
+/* Filet de sécurité : une zone cliquable qui CONTIENT ses propres boutons ne
+   scale pas à l'appui. Le retrait de 3 % déplace les enfants pendant le
+   mousedown — sur une ligne large, d'une dizaine de pixels — la cible glisse
+   sous le curseur et le navigateur n'émet plus de `click` sur le bouton visé
+   (il l'émet sur l'ancêtre commun, donc sur la zone de navigation). C'est le
+   symptôme « le bouton ne marche qu'aux extrémités ». */
+[role="button"]:has(button):active,
+[role="button"]:has(a):active {
+  transform: none;
+}
 
 /* === Tabs / pills actifs (data-active) : transition de fond === */
 [data-tab], [data-pill] {
@@ -1017,8 +1061,7 @@ img, canvas {
 /* Reduced motion : on garde la fade (compréhension) mais on retire les
    mouvements et scales — évite les motion sickness. */
 @media (prefers-reduced-motion: reduce) {
-  .anim-fade-up, .anim-fade-in, .anim-stagger > *,
-  .anim-1, .anim-2 {
+  .anim-fade-up, .anim-fade-in {
     animation: fadeIn 180ms ease both !important;
   }
   button:not([data-no-press]):not(:disabled):active { transform: none !important; }
@@ -1056,9 +1099,12 @@ img, canvas {
     box-shadow: 0 0 30px rgba(0,0,0,0.15);
   }
   .tr4de-sidebar.is-open { transform: translateX(0); }
+  /* Voile simple, sans flou : l'assombrissement suffit à détacher le tiroir du
+     contenu, et le `backdrop-filter` coûtait une passe de composition à chaque
+     frame de l'ouverture. */
   .tr4de-sidebar-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-    z-index: 79; backdrop-filter: blur(2px);
+    z-index: 79;
     animation: fadeIn 180ms ease both;
   }
   /* Hamburger visible dans la topbar */
@@ -1355,12 +1401,11 @@ button img,
   }
 
   /* Goals page : grid 5-cols → empilé en 2 lignes (titre+actions / meta) */
-  .tr4de-goals-headers { display: none !important; }
   .tr4de-goals-row {
     grid-template-columns: 1fr auto !important;
     grid-auto-rows: auto !important;
-    row-gap: 6px !important;
-    column-gap: 8px !important;
+    row-gap: 12px !important;
+    column-gap: 12px !important;
   }
   /* Created date column : caché sur mobile */
   .tr4de-goals-row > *:nth-child(1) { display: none !important; }
@@ -1429,7 +1474,10 @@ button img,
 /* Tao Score : radar + catégories côte à côte en desktop, empilés dès que la
    colonne des catégories ne peut plus tenir ses quatre colonnes de chiffres. */
 @media (max-width: 1023px) {
-  .tr4de-dash-score { grid-template-columns: minmax(0, 1fr) !important; }
+  /* Blocs « mesure à gauche / lecture à droite » : dashboard (Tao Score) et
+     Éloquence (progression + conseils). Même repli, une seule déclaration. */
+  .tr4de-dash-score,
+  .tr4de-eloq-follow { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* Journal : notes à gauche / trades à droite, empilés quand la liste de trades
@@ -1624,4 +1672,10 @@ button img,
   [style*="padding: 32px"], [style*="padding:32px"] {
     padding: 16px !important;
   }
+
+  /* NotesPage : le bouton « Nouvelle note » garde son + et perd son libellé —
+     l'en-tête porte déjà le titre de la page, l'icône seule reste comprise.
+     (Cette règle vivait dans une feuille <style> embarquée dans la page, en
+     double avec les règles `.tr4de-notes-*` déjà présentes ici.) */
+  .tr4de-notes-newbtn-label { display: none; }
 }

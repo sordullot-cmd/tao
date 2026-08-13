@@ -119,6 +119,11 @@ export default function RootLayout({
         <Script id="tr4de-theme-init" strategy="beforeInteractive">
           {`try{var t=localStorage.getItem('tr4de_theme');if(t==='dark')document.documentElement.dataset.theme='dark';}catch(e){}`}
         </Script>
+        {/* Idem pour l'accent choisi dans Réglages → Apparence (lib/ui/accent.ts) :
+            sans ça, la première frame s'affiche avec la couleur par défaut. */}
+        <Script id="tr4de-accent-init" strategy="beforeInteractive">
+          {`try{var h=/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,r=document.documentElement,a=localStorage.getItem('tr4de_accent'),b=localStorage.getItem('tr4de_accent_2');if(a&&h.test(a))r.style.setProperty('--accent',a);if(b&&h.test(b))r.style.setProperty('--accent-2',b);}catch(e){}`}
+        </Script>
         <ErrorBoundary>
           <AuthProvider>
             <UndoProvider>

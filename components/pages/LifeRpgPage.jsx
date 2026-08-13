@@ -655,7 +655,7 @@ export default function LifeRpgPage() {
             mutedColor={T.textMut}
             width={180}
           />
-          <button type="button" onClick={() => createGoalRef.current?.()} style={btnGhost()}>
+          <button type="button" onClick={() => createGoalRef.current?.()} style={btnSecondary()}>
             <Plus size={13} strokeWidth={1.75} /> Nouvel objectif
           </button>
           <button type="button" onClick={openNewCategory} style={btnPrimary()}>
@@ -746,7 +746,10 @@ function PortraitCard({ cat, xp, habits, linkedGoals = [], allObjectives = [], t
       /* `overflow: visible` contre le réglage par défaut de CARD : le menu
          « Ajouter un objectif » s'ouvre en position absolue sous son
          déclencheur et serait sinon coupé par le bord de la carte. */
-      style={{ ...CARD, overflow: "visible", padding: 16, display: "flex", flexDirection: "column", gap: 0 }}>
+      /* Les sept blocs de la carte (en-tête, progression, identité, modèle,
+         objectifs, tâches, habitudes) se suivaient sans aucun intervalle : leurs
+         seules marges sont internes. Un gap les sépare franchement. */
+      style={{ ...CARD, overflow: "visible", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {/* Vignette ronde, comme le logo d'un compte sur les pages Comptes. */}
         <div style={{ width: 34, height: 34, borderRadius: "50%", background: `color-mix(in srgb, ${cat.color} 12%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -1405,6 +1408,12 @@ function btnPrimary() {
 // Bouton d'action principal d'une modale (fond sombre, cible plus généreuse).
 function btnDark() {
   return { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
+}
+/* Pendant clair de btnPrimary : mêmes métriques (32 px, 12 px, gap 6) pour que
+   les deux actions de l'en-tête forment une paire. btnGhost est réservé aux
+   modales — plus haut, et sans inline-flex il désaligne l'icône. */
+function btnSecondary() {
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 // Bouton secondaire d'une modale.
 function btnGhost() {

@@ -8,7 +8,6 @@ import {
   LogOut,
   User,
   Moon,
-  ChevronDown,
   LucideIcon,
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
@@ -42,9 +41,10 @@ export interface SidebarProps {
   activeId: string;
   onSelect: (id: string) => void;
 
+  /** Le pied de barre n'affiche plus que la pastille d'initiales : `name` ne
+   *  sert qu'à l'infobulle et au libellé accessible. */
   user?: {
     name: string;
-    email?: string;
     initials: string;
     avatarUrl?: string | null;
   };
@@ -173,28 +173,26 @@ export default function Sidebar(props: SidebarProps) {
         fontFamily: "var(--font-sans)",
       }}
     >
-      {/* HEADER : brand */}
+      {/* HEADER : brand — le logo seul, sans nom écrit à côté.
+          Retrait bas volontairement court : le titre de la première section
+          apporte déjà sa propre respiration (padding du bouton + de la nav), et
+          la somme des trois éloignait le logo du reste de la barre. */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 8,
+        display: "flex", alignItems: "center",
         justifyContent: collapsed ? "center" : "flex-start",
-        padding: collapsed ? "18px 0" : "18px 12px",
+        padding: collapsed ? "18px 0 4px" : "18px 12px 4px",
       }}>
         <img
-          src="/favicon.svg"
-          alt="tao"
+          src="/logo.svg"
+          alt="tao trade"
           width={32}
           height={32}
           style={{ flexShrink: 0, display: "block", borderRadius: "50%", objectFit: "cover" }}
         />
-        {!collapsed && (
-          <div style={{ flex: 1, overflow: "hidden", fontSize: 14, fontWeight: 500, lineHeight: "21.7px", color: "var(--color-text)", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-            tao trade
-          </div>
-        )}
       </div>
 
       {/* NAV */}
-      <nav aria-label="Navigation principale" style={{ padding: "10px 6px", flex: 1, overflowY: "auto", scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+      <nav aria-label="Navigation principale" style={{ padding: "0 6px 10px", flex: 1, overflowY: "auto", scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
         {sections.map((sec, i) => {
           const containsActive = sec.items.some(it => it.id === activeId);
           const sectionCollapsed = !!(sec.label && collapsedSections[sec.label]);
@@ -265,7 +263,7 @@ export default function Sidebar(props: SidebarProps) {
                     transition: "background 150ms cubic-bezier(0.23,1,0.32,1), color 150ms cubic-bezier(0.23,1,0.32,1), padding 200ms cubic-bezier(0.23,1,0.32,1)",
                     position: "relative",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "var(--color-hover-bg)"; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "var(--color-nav-hover-bg)"; }}
                   onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                 >
                   <Icon size={18} strokeWidth={2} style={{ flexShrink: 0 }} />
@@ -293,54 +291,52 @@ export default function Sidebar(props: SidebarProps) {
         })}
       </nav>
 
-      {/* FOOTER : user + collapse */}
+      {/* FOOTER : user + collapse.
+          Le compte se résume à sa pastille d'initiales : plus de nom ni d'adresse
+          e-mail: à ce niveau de la barre, la seule information utile est
+          « c'est moi », et l'identité complète vit dans la page Profil. */}
       <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 4, position: "relative" }} ref={userRef}>
         {user && (
           <button
             ref={userBtnRef}
             onClick={() => { setUserMenuOpen(v => !v); onUserMenu?.(); }}
-            title={collapsed ? user.name : undefined}
+            title={user.name}
+            aria-label={`Compte — ${user.name}`}
             aria-haspopup="menu"
             aria-expanded={userMenuOpen}
             style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 8,
-              justifyContent: collapsed ? "center" : "flex-start",
-              padding: collapsed ? "6px 0" : "6px 8px",
+              width: "100%", display: "flex", alignItems: "center",
+              justifyContent: "center", padding: "6px 0",
               borderRadius: "var(--radius-field)", border: "none",
-              background: userMenuOpen ? "var(--color-hover-bg)" : "transparent",
+              background: userMenuOpen ? "var(--color-nav-hover-bg)" : "transparent",
               cursor: "pointer", fontFamily: "inherit", color: "var(--color-text)",
             }}
-            onMouseEnter={e => { if (!userMenuOpen) e.currentTarget.style.background = "var(--color-hover-bg)"; }}
+            onMouseEnter={e => { if (!userMenuOpen) e.currentTarget.style.background = "var(--color-nav-hover-bg)"; }}
             onMouseLeave={e => { if (!userMenuOpen) e.currentTarget.style.background = "transparent"; }}
           >
             {user.avatarUrl ? (
               <img
                 src={user.avatarUrl}
-                alt={user.name}
+                alt=""
                 referrerPolicy="no-referrer"
-                width={26}
-                height={26}
-                style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                width={34}
+                height={34}
+                style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
               />
             ) : (
+              /* Pastille pastel : un voile de l'accent de marque plutôt qu'un
+                 aplat saturé — la barre reste calme, les initiales portent la
+                 couleur. Le liseré intérieur, à peine plus dense que le fond,
+                 dessine le disque sans ajouter de bordure franche. */
               <div style={{
-                width: 26, height: 26, borderRadius: "50%", background: "var(--color-amber-bg, #FFE0B2)",
+                width: 34, height: 34, borderRadius: "50%",
+                background: "var(--accent-pastel)",
+                boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 700, color: "var(--color-amber, #9D5800)", flexShrink: 0,
+                fontSize: 14, fontWeight: 700, letterSpacing: 0.2,
+                color: "var(--accent-ink)", flexShrink: 0,
               }}>
                 {user.initials}
-              </div>
-            )}
-            {!collapsed && (
-              <div style={{ flex: 1, overflow: "hidden", textAlign: "left" }}>
-                <div style={{ fontSize: 12, fontWeight: 500, lineHeight: "18.6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {user.name}
-                </div>
-                {user.email && (
-                  <div style={{ fontSize: 10, fontWeight: 500, lineHeight: "15.5px", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {user.email}
-                  </div>
-                )}
               </div>
             )}
           </button>
@@ -353,7 +349,7 @@ export default function Sidebar(props: SidebarProps) {
             style={{
               position: "absolute",
               bottom: "calc(100% + 4px)",
-              left: 8, right: 8,
+              left: 8, right: 8, minWidth: 176,
               background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)",
               borderRadius: 10, boxShadow: "var(--elev-overlay)",
               overflow: "hidden", padding: 4, zIndex: 100,
@@ -424,7 +420,7 @@ export default function Sidebar(props: SidebarProps) {
               cursor: "pointer", fontFamily: "inherit",
               color: "var(--color-text-sub)",
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = "var(--color-hover-bg)"; }}
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--color-nav-hover-bg)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
           >
             {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
@@ -444,3 +440,4 @@ function dropdownItemStyle(): React.CSSProperties {
     fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
   };
 }
+

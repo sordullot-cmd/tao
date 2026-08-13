@@ -12,7 +12,7 @@ export default function LandingPage({ onLoginClick }) {
       <header className="border-b border-blue-700 bg-blue-700/50 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <img src="/favicon.svg" alt="tao" className="w-10 h-10 rounded-full object-cover" />
+            <img src="/logo.svg" alt="tao" className="w-10 h-10 rounded-full object-cover" />
             <h1 className="text-2xl font-bold text-white">tao trade</h1>
           </div>
           <button

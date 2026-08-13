@@ -22,6 +22,88 @@ export const CARD = {
   overflow: "hidden",
 };
 
+/* ── Aplats et traits ───────────────────────────────────────────────────────
+   Exprimés en TRANSPARENCE d'encre plutôt qu'en gris opaque : ils s'assombrissent
+   ou s'éclaircissent tout seuls avec la surface qui les porte, et n'ont donc pas
+   besoin d'un équivalent défini pour le thème sombre.
+   ------------------------------------------------------------------------- */
+
+/** Trait dilué : contour d'une case à cocher, d'une zone de dépôt, limite d'une
+ *  zone qui défile — là où un bord doit se deviner sans devenir un cadre. */
+export const HAIRLINE = "color-mix(in srgb, var(--color-text) 8%, transparent)";
+
+/** Aplat d'un contrôle (pastille, champ, piste, ligne survolée). Assez pour
+ *  délimiter une petite surface, trop peu pour faire un bloc dans le bloc. */
+export const FIELD_BG = "color-mix(in srgb, var(--color-text) 4%, transparent)";
+
+/** Aplat d'une zone d'écriture. Plus dilué que `FIELD_BG` : sur cent pixels de
+ *  haut, le même gris ferait un pavé. */
+export const WRITING_BG = "color-mix(in srgb, var(--color-text) 1.2%, transparent)";
+
+/**
+ * Survol d'une tuile déjà colorée (case de calendrier, vignette de mois) : un
+ * voile d'encre posé par-dessus son aplat, à appliquer en `boxShadow`.
+ *
+ * `filter: brightness(0.97)` ne convenait pas : il assombrit TOUJOURS, donc en
+ * thème sombre il éteignait la case au lieu de la relever. Le voile, lui, est de
+ * l'encre — il s'inverse avec le thème comme le reste de la DA.
+ */
+export const TILE_HOVER = `inset 0 0 0 999px ${FIELD_BG}`;
+
+/** Libellé d'un champ ou d'un bloc, dans une carte. */
+export function FieldLabel({ children }) {
+  return <div style={{fontSize:12,fontWeight:500,color:T.text,opacity:0.5}}>{children}</div>;
+}
+
+/** Ligne « libellé → valeur » : la mesure et son nom, sur une ligne. */
+export function StatRow({ label, value, color }) {
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+      <span style={{fontSize:12,color:T.text,opacity:0.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
+      <span style={{fontSize:13,fontWeight:600,letterSpacing:-0.15,color:color||T.text,whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Mesure secondaire posée sous un chiffre héros : libellé 11 px atténué, valeur
+ * 14 px. Les pages de détail en alignent quatre à 28 px d'écart.
+ * `tone` colore la valeur ("pos" | "neg"), sinon encre pleine.
+ */
+export function MiniKpi({ label, value, tone }) {
+  const color = tone === "pos" ? T.pnlPos : tone === "neg" ? T.pnlNeg : T.text;
+  return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:2}}>
+      <span style={{fontSize:11,lineHeight:1,color:T.textSub,whiteSpace:"nowrap"}}>{label}</span>
+      <span style={{fontSize:14,fontWeight:600,lineHeight:1,color,whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Carte de récapitulatif : un titre, puis des lignes `{ label, value, color? }`.
+ * Repliée elle n'en montre que `visible` — le « Voir plus » du titre de section
+ * déplie le reste, aucune mesure n'est perdue.
+ *
+ * Source unique du bloc « Statistiques » des pages de détail (compte, prop
+ * firm), qui en portaient chacune une copie divergente.
+ */
+export function StatsCard({ title, rows = [], expanded = false, visible = 4 }) {
+  const shown = expanded ? rows : rows.slice(0, visible);
+  return (
+    <div style={{...CARD, display:"flex", flexDirection:"column", gap:14}}>
+      <div style={{fontSize:15,fontWeight:600,lineHeight:1.2,color:T.text}}>{title}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {shown.map(r => (
+          <StatRow key={r.label} label={r.label} value={r.value} color={r.color} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** En-tête de colonne : 12px Medium en capitales (à poser dans un bloc opacity .4). */
 export const TH = {
   fontSize: 12,
@@ -402,10 +484,14 @@ export function PeriodPills({ value, onChange, options = PERIODS, track = false,
 /**
  * Pastille de navigation « ‹ Juillet › » (maquette Calendrier, node 283:5171) :
  * carte blanche arrondie portant le libellé de la période entre deux chevrons.
- * Les flèches sont de vrais boutons — la zone cliquable atteint 34 px de haut,
- * et le libellé central n'est pas cliquable pour éviter une cible ambiguë.
+ * Les flèches sont de vrais boutons — la zone cliquable atteint 34 px de haut.
+ *
+ * Le libellé central n'est PAS cliquable par défaut : entre deux flèches, une
+ * troisième cible sans affordance serait ambiguë. `onLabel` l'active pour les
+ * pages qui ouvrent un sélecteur de date dessus — il prend alors un survol, qui
+ * est ce qui le signale comme cliquable.
  */
-export function StepperPill({ label, onPrev, onNext, prevLabel = "Précédent", nextLabel = "Suivant" }) {
+export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLabel = "Précédent", nextLabel = "Suivant" }) {
   // La flèche mesure 16 px comme sur la maquette, mais sa zone cliquable prend
   // toute la hauteur de la pastille (marges négatives) : la cible reste
   // atteignable au pouce sans épaissir le contrôle.
@@ -424,9 +510,27 @@ export function StepperPill({ label, onPrev, onNext, prevLabel = "Précédent", 
       <button type="button" onClick={onPrev} aria-label={prevLabel} style={arrow}>
         <ChevronLeft size={16} strokeWidth={1.75} />
       </button>
-      <span style={{fontSize:14,lineHeight:"18.6px",color:T.text,whiteSpace:"nowrap",textTransform:"capitalize"}}>
-        {label}
-      </span>
+      {onLabel ? (
+        <button
+          type="button"
+          onClick={onLabel}
+          title={labelTitle}
+          style={{
+            margin:"-7px -6px", padding:"7px 6px", border:"none", background:"none",
+            borderRadius:8, cursor:"pointer", fontFamily:"inherit",
+            fontSize:14, lineHeight:"18.6px", color:T.text, whiteSpace:"nowrap",
+            textTransform:"capitalize", transition:"background 120ms ease",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+        >
+          {label}
+        </button>
+      ) : (
+        <span style={{fontSize:14,lineHeight:"18.6px",color:T.text,whiteSpace:"nowrap",textTransform:"capitalize"}}>
+          {label}
+        </span>
+      )}
       <button type="button" onClick={onNext} aria-label={nextLabel} style={arrow}>
         <ChevronRight size={16} strokeWidth={1.75} />
       </button>

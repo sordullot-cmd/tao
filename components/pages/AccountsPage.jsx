@@ -6,7 +6,7 @@ import { CARD, SectionTitle, HeroAmount, downsampleLTTB, sparklineBudget } from 
 import { accountBrandColor } from "@/lib/ui/brandColors";
 import {
   AccountRowsHeader, TableRow, SubRow, RoundLogo, PassFundedButton,
-  RowIconButton,
+  RowIconButton, AddAccountRow,
 } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
@@ -20,13 +20,13 @@ const fmtNoCents = (n) => {
   const prefix = v < 0 ? "-" : "";
   return `${prefix}${sym}${Math.abs(v).toLocaleString("en-US")}`;
 };
-import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, X, Calendar, ChevronDown, Building2 } from "lucide-react";
+import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, X, Calendar, ChevronDown, Building2, Link2 } from "lucide-react";
 import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { isArchivedAccount, ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import ReactDOM from "react-dom";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
-import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
+import { PropFirmModal, AccountModal, AttachAccountsModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm } from "@/lib/propFirms";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon } from "@/lib/brokers/platforms";
@@ -129,6 +129,11 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
      un compte hors firme, nulle part. */
   const [editingAccount, setEditingAccount] = React.useState(null);
   const [editingFirm, setEditingFirm] = React.useState(null);
+  /* Rattachement d'un compte qui EXISTE déjà à une firme existante : `null` =
+     fermée, sinon la firme d'accueil. Le geste part de la firme (sa ligne
+     dépliée), là où la question se pose — la modale du compte reste le chemin
+     inverse, un compte à la fois. */
+  const [attachingToFirm, setAttachingToFirm] = React.useState(null);
   // Comptes actifs (grille principale + KPI) vs comptes eval archivés (section
   // dédiée en bas). Un compte archivé garde ses trades mais son P&L ne compte
   // plus dans les totaux du site.
@@ -874,6 +879,22 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                           />
                         );
                       })}
+
+                      {/* Fin de la liste des comptes de la firme : les deux
+                          façons de la garnir, dans l'ordre où on les cherche —
+                          créer un compte, ou rattacher un compte qui existe
+                          déjà (créé avant la firme, ou hors firme). Le second
+                          chemin n'existait que dans la modale du compte, un
+                          compte à la fois, à condition d'y trouver le champ
+                          « Firme ». */}
+                      <AddAccountRow
+                        onClick={() => setCreatingAccount({ firmId: summary.firm.id })}
+                      />
+                      <AddAccountRow
+                        icon={<Link2 size={12} strokeWidth={2} />}
+                        label={t("firms.attachAccount")}
+                        onClick={() => setAttachingToFirm(summary.firm)}
+                      />
                     </TableRow>
                   );
                 })}
@@ -1051,6 +1072,29 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
           onDelete={(acc) => { setEditingAccount(null); setConfirmDelete(acc); }}
         />
       )}
+      {/* Rattachement de comptes existants — aucun compte n'est créé ici : les
+          comptes choisis changent de `firm_id`, et apparaissent aussitôt sous la
+          firme, dont on ouvre le dépliage pour qu'on les y voie. */}
+      {attachingToFirm && (
+        <AttachAccountsModal
+          firm={attachingToFirm}
+          accounts={visibleAccounts}
+          firms={firms}
+          onClose={() => setAttachingToFirm(null)}
+          onAttached={({ updated = [] }) => {
+            setAccounts?.((prev) => (prev || []).map((a) => {
+              const hit = updated.find((u) => u.id === a.id);
+              return hit ? { ...a, ...hit } : a;
+            }));
+            const rowId = `firm:${attachingToFirm.id}`;
+            setExpandedIds((prev) => {
+              const arr = Array.isArray(prev) ? prev : [];
+              return arr.includes(rowId) ? arr : [...arr, rowId];
+            });
+          }}
+        />
+      )}
+
       {editingFirm && (
         <PropFirmModal
           firm={editingFirm}

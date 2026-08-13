@@ -4,20 +4,22 @@ import React from "react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
-import { ArrowLeft, ArrowUpRight, ArrowDownRight, Pencil } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Pencil, Link2, Check, Plus } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import { ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
+import { parseAccountSize, updateTradingAccount } from "@/lib/propFirms";
+import { PLATFORMS } from "@/lib/brokers/platforms";
 import {
   CARD, SectionTitle, SectionAction, HeroAmount, BackLink,
   PeriodPills, windowSeries, AGGREGATE_CURVE_COLOR,
-  PnlChart, msOf,
+  PnlChart, msOf, MiniKpi, StatsCard, TableFilter,
 } from "@/components/ui/da";
 import { accountBrandColor, assignSeriesColors } from "@/lib/ui/brandColors";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
 import { RoundLogo } from "@/components/ui/accountRows";
-import { accountBrand } from "@/lib/accountBrand";
-import { AccountModal } from "@/components/modals/AccountModals";
+import { accountBrand, firmLogo } from "@/lib/accountBrand";
+import { AccountModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
 
@@ -25,37 +27,21 @@ import { createClient } from "@/lib/supabase/client";
    Page « détail d'un compte » — portée depuis la maquette Figma
    (fichier mqFgieIhnaljGeybhJRY0V, node 369:3984).
 
-   Ordre des sections relevé sur la maquette (24 px entre chaque) :
-     en-tête → chiffre héros (valeur du compte) + 4 mini-KPI + graphique
-             → Statistiques → tableau détaillé des trades.
+   Ordre des sections, identique à celui de la page d'une prop firm (24 px entre
+   chaque) : barre d'actions → identité → chiffre héros + 4 mini-KPI + graphique
+   → calendrier du mois → Statistiques → trades. Les deux pages sont des fiches
+   de détail : elles partagent leur squelette ET leurs briques (`MiniKpi`,
+   `StatsCard` de components/ui/da.jsx), sinon elles dérivent l'une de l'autre.
 
    Règle du projet : aucune couleur en dur, tout passe par les tokens `T`
    (ce sont des var(--color-*), c'est ce qui fait suivre le thème sombre).
    ------------------------------------------------------------------------- */
-
-// Palette des courbes secondaires (comparaison entre comptes). Uniquement des
-// tokens existants : pas de nouvelle couleur introduite.
-// Opacité des courbes des autres comptes, en arrière-plan de la courbe du
-// compte affiché (la maquette montre plusieurs séries pâles derrière la série
-// principale). // TODO token DA — pas d'équivalent dans tokens.ts
-// Opacité des séries secondaires — token DA (dark-aware).
 
 const fmtNoCents = (n) => {
   const sym = getCurrencySymbol();
   const v = Math.round(Number(n) || 0);
   const prefix = v < 0 ? "-" : "";
   return `${prefix}${sym}${Math.abs(v).toLocaleString("en-US")}`;
-};
-
-const parseEvalSize = (size) => {
-  if (size == null) return null;
-  const m = String(size).match(/(\d+(?:\.\d+)?)\s*([kKmM])?/);
-  if (!m) return null;
-  const num = parseFloat(m[1]);
-  const unit = (m[2] || "").toLowerCase();
-  if (unit === "k") return num * 1000;
-  if (unit === "m") return num * 1000000;
-  return num;
 };
 
 const BROKER_LOGOS = {
@@ -180,6 +166,7 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
   const [filterId, setFilterId] = React.useState("all"); // "all" | id d'un compte passé
   const [period, setPeriod] = React.useState("1A");
   const [statsExpanded, setStatsExpanded] = React.useState(false);
+  const [allTradesShown, setAllTradesShown] = React.useState(false);
   React.useEffect(() => {
     if (isArchivedView && filterId !== "all" && !archivedAccts.some(a => a.id === filterId)) {
       setFilterId("all");
@@ -382,18 +369,16 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
 
   // Vue normale sans compte, ou vue archivée sans aucun compte archivé.
   if ((!isArchivedView && !account) || (isArchivedView && archivedAccts.length === 0)) {
+    /* Même squelette que la page pleine — retour dans sa barre, message dans une
+       carte : l'écran vide reste une page de l'app, pas un cul-de-sac. */
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
-        <button
-          type="button"
-          onClick={() => setPage?.("accounts")}
-          style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 14, color: T.text }}
-        >
-          <ArrowLeft size={18} strokeWidth={1.75} /> Retour
-        </button>
-        <p style={{ margin: 0, fontSize: 16, color: T.textSub }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
+        <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
+          <BackLink label={t("nav.accounts")} onClick={() => setPage?.("accounts")} />
+        </div>
+        <div style={{ ...CARD, padding: 40, textAlign: "center", color: T.textMut, fontSize: 13 }}>
           {isArchivedView ? "Aucun compte eval passé." : "Compte introuvable."}
-        </p>
+        </div>
       </div>
     );
   }
@@ -415,20 +400,22 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
           : "Live";
 
   // Capital : agrégat (somme des tailles) en vue « tous », sinon celui du compte.
-  const capitalAgg = archivedAccts.reduce((s, a) => s + (parseEvalSize(a.eval_account_size) || 0), 0);
-  const capital = aggregatedAll ? (capitalAgg > 0 ? capitalAgg : null) : parseEvalSize(account?.eval_account_size);
+  const capitalAgg = archivedAccts.reduce((s, a) => s + (parseAccountSize(a.eval_account_size) || 0), 0);
+  const capital = aggregatedAll ? (capitalAgg > 0 ? capitalAgg : null) : parseAccountSize(account?.eval_account_size);
   const balance = capital !== null ? capital + stats.pnl : null;
 
   // Delta affiché sous le chiffre héros : variation sur la fenêtre choisie.
   const firstCum = curve.length ? curve[0].cum : 0;
   const lastCum = curve.length ? curve[curve.length - 1].cum : 0;
   const deltaAbs = lastCum - firstCum;
-  // Magnitude seule : c'est la flèche qui porte le sens de la variation (un
-  // capital de départ négatif inverserait le signe du ratio sans que la
-  // variation ait changé de sens).
-  const deltaPct = capital
-    ? Math.abs((deltaAbs / capital) * 100)
-    : (firstCum !== 0 ? Math.abs((deltaAbs / firstCum) * 100) : 0);
+  /* Base du pourcentage : le SOLDE au début de la fenêtre, c'est-à-dire le
+     capital du compte plus le cumulé déjà acquis à ce moment-là — même règle que
+     le dashboard. Le capital seul ignorait le chemin déjà parcouru ; le cumulé
+     seul figeait le rapport quand la fenêtre part de zéro et l'affolait quand
+     elle en partait de tout près. Magnitude seule : c'est la flèche qui porte le
+     sens de la variation. Sans base connue, pas de pourcentage du tout. */
+  const deltaBase = capital ? Math.abs(capital + firstCum) : Math.abs(firstCum);
+  const deltaPct = deltaBase ? Math.abs((deltaAbs / deltaBase) * 100) : null;
   const deltaColor = deltaAbs > 0 ? T.pnlPos : deltaAbs < 0 ? T.pnlNeg : T.textSub;
   const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
 
@@ -439,10 +426,12 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
   const brokerLine = [brand.label || null, typeLabel].filter(Boolean).join(" · ");
   const brokerLogo = brand.logo || (account ? getBrokerLogo(account.broker) : null);
 
-  // La maquette (node 370:4650) montre 6 lignes dans le tableau détaillé.
-  const recentTrades = [...accountTrades]
-    .sort((a, b) => msOf(b.date || b.entry_time || 0) - msOf(a.date || a.entry_time || 0))
-    .slice(0, 6);
+  /* Trades du plus récent au plus ancien. La liste se déplie SUR PLACE, comme
+     celle de la page d'une firme : l'ancien « Voir plus » quittait la page pour
+     un journal non filtré, où le compte qu'on regardait était perdu de vue. */
+  const sortedTrades = [...accountTrades]
+    .sort((a, b) => msOf(b.date || b.entry_time || 0) - msOf(a.date || a.entry_time || 0));
+  const shownTrades = allTradesShown ? sortedTrades : sortedTrades.slice(0, 12);
 
   // Chiffre héros de la maquette : « Valeur du compte » = capital + P&L. Sans
   // capital connu (compte live sans taille saisie), on retombe sur le P&L seul
@@ -450,48 +439,97 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
   const heroValue = balance !== null ? balance : stats.pnl;
 
   // 4 mini-KPI en ligne (node 369:4349) — ils remplacent la grille de 6 tuiles.
+  // Mêmes mesures, dans le même ordre, que la page d'une prop firm.
   const miniKpis = [
     {
       label: "P&L",
       value: `${stats.pnl > 0 ? "+" : ""}${fmt(stats.pnl, false)}`,
-      color: stats.pnl > 0 ? T.pnlPos : stats.pnl < 0 ? T.pnlNeg : T.text,
+      tone: stats.pnl > 0 ? "pos" : stats.pnl < 0 ? "neg" : undefined,
     },
     {
       // Coloré au seuil de 50 %, comme la page d'une prop firm : la maquette
       // montre « 33.3% » en rouge, mais ne dit pas où bascule la couleur.
       label: t("accountsPage.winRateL"),
       value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—",
-      color: stats.total === 0 ? T.text : stats.winRate >= 50 ? T.pnlPos : T.pnlNeg,
+      tone: stats.total === 0 ? undefined : stats.winRate >= 50 ? "pos" : "neg",
     },
     {
       label: t("accountsPage.profitFactor"),
       value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? stats.profitFactor.toFixed(2) : "—"),
-      color: T.text,
     },
-    { label: "Trade", value: String(stats.total), color: T.text },
+    { label: "Trades", value: String(stats.total) },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
 
-      {/* Retour vers le parent DIRECT du compte, et lui seul : sa prop firm
+      {/* ═══ 1. BARRE D'ACTIONS ═══
+          Une ligne à elle seule, comme sur la page d'une prop firm : le retour à
+          gauche, les actions à droite. Elles étaient jusqu'ici posées dans la
+          ligne d'identité, où elles se disputaient la place avec le nom du
+          compte — un nom long les repoussait hors de l'écran.
+
+          Le retour mène au parent DIRECT du compte, et à lui seul : sa prop firm
           quand il en a une, la liste des comptes sinon. La liste reste joignable
           en un clic depuis la page de la firme, qui porte déjà son propre
           retour — inutile de la doubler ici. */}
-      <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
-        {brand.firm ? (
-          <BackLink
-            icon={<RoundLogo src={brand.logo} size={16} name={brand.firm.name} />}
-            label={brand.firm.name}
-            onClick={() => { setSelectedFirmId?.(brand.firm.id); setPage?.("firm-detail"); }}
-          />
-        ) : (
-          <BackLink label={t("nav.accounts")} onClick={() => setPage?.("accounts")} />
-        )}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
+          {brand.firm ? (
+            <BackLink
+              icon={<RoundLogo src={brand.logo} size={16} name={brand.firm.name} />}
+              label={brand.firm.name}
+              onClick={() => { setSelectedFirmId?.(brand.firm.id); setPage?.("firm-detail"); }}
+            />
+          ) : (
+            <BackLink label={t("nav.accounts")} onClick={() => setPage?.("accounts")} />
+          )}
+        </div>
+
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          {/* Rattachement à une prop firm. Le réglage existait déjà dans la
+              modale « Modifier », noyé sous quatre autres champs : ici c'est une
+              action à part entière, à un clic du compte qu'elle concerne. */}
+          {!isArchivedView && account && (
+            <LinkFirmMenu
+              account={account}
+              firms={firms}
+              onLinked={(next) =>
+                setAccounts?.((prev) => (prev || []).map((a) => (a.id === next.id ? { ...a, ...next } : a)))
+              }
+              onCreateFirm={() => setPage?.("accounts")}
+            />
+          )}
+
+          {/* Modification du compte — même modale que la page Comptes et la page
+              d'une firme. Absente en vue archivée : un eval passé n'existe plus
+              en base, il n'y a rien à modifier. */}
+          {!isArchivedView && account && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              style={pillActionStyle()}
+            >
+              <Pencil size={13} strokeWidth={1.75} /> {t("accountModal.editTitle")}
+            </button>
+          )}
+
+          {/* Vue archivée : filtre par compte passé. Le même contrôle que les
+              filtres des tableaux de la DA, plutôt qu'un menu natif — il porte
+              son état dans son libellé (« Compte · Topstep 50k »). */}
+          {isArchivedView && (
+            <TableFilter
+              label="Compte"
+              value={filterId === "all" ? "" : filterId}
+              options={archivedAccts.map(a => ({ id: a.id, label: a.name || "Compte" }))}
+              onChange={(v) => setFilterId(v || "all")}
+            />
+          )}
+        </div>
       </div>
 
-      {/* ================= EN-TÊTE : logo + nom / broker ================= */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      {/* ═══ 2. IDENTITÉ ═══ logo 44 px, nom 16 px Medium, maison · type à 40 % */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           {/* Vignette du broker — 44 px. Passe par la brique partagée : cette page
               en avait sa propre copie, qui reposait le logo carré en `contain` au
@@ -512,44 +550,6 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
             )}
           </div>
         </div>
-
-        {/* Modification du compte — même modale que la page Comptes et la page
-            d'une firme. Absente en vue archivée : un eval passé n'existe plus
-            en base, il n'y a rien à modifier. */}
-        {!isArchivedView && account && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            style={{
-              marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "7px 12px", borderRadius: 999,
-              border: `1px solid ${T.border}`, background: T.white,
-              color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <Pencil size={13} strokeWidth={1.75} /> {t("accountModal.editTitle")}
-          </button>
-        )}
-
-        {/* Vue archivée : filtre par compte passé (fonctionnalité conservée) */}
-        {isArchivedView && (
-          <select
-            value={filterId}
-            onChange={(e) => setFilterId(e.target.value)}
-            aria-label="Trier par compte"
-            style={{
-              marginLeft: "auto", padding: "6px 14px", borderRadius: 999,
-              border: "none", background: T.white, boxShadow: T.elevPill,
-              color: T.text, fontSize: 12, lineHeight: "18.6px", cursor: "pointer",
-              fontFamily: "inherit", outline: "none",
-            }}
-          >
-            <option value="all">Tous les comptes passés</option>
-            {archivedAccts.map(a => (
-              <option key={a.id} value={a.id}>{a.name || "Compte"}</option>
-            ))}
-          </select>
-        )}
       </div>
 
       {/* ============ VALEUR DU COMPTE + 4 MINI-KPI + GRAPHIQUE ============ */}
@@ -565,24 +565,40 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
                   28 px et les mini-KPI suivent. */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <HeroAmount value={heroValue} size={28} />
+                {/* Montant de la variation PUIS son pourcentage entre
+                    parenthèses, comme le chiffre héros du dashboard : la somme
+                    gagnée ou perdue est ce qu'on lit d'abord, le ratio la
+                    replace dans l'échelle du compte. */}
                 {curve.length > 1 && (
                   <span
                     title="Variation sur la période affichée"
-                    style={{ display: "inline-flex", alignItems: "center", fontSize: 13, fontWeight: 500, lineHeight: 1, color: deltaColor, whiteSpace: "nowrap" }}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      fontSize: 13, fontWeight: 500, lineHeight: 1, color: deltaColor,
+                      whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+                    }}
                   >
-                    <DeltaIcon size={15} strokeWidth={1.75} style={{ marginRight: 1 }} />
-                    {deltaPct.toFixed(2)}%
+                    <span>{deltaAbs > 0 ? "+" : ""}{fmt(deltaAbs, false)}</span>
+                    {/* Sans base de calcul, la flèche seule : des parenthèses
+                        vides se liraient comme une valeur manquante. */}
+                    {deltaPct != null ? (
+                      <span style={{ display: "inline-flex", alignItems: "center" }}>
+                        <span>(</span>
+                        <DeltaIcon size={15} strokeWidth={1.75} style={{ margin: "0 1px" }} />
+                        <span>{deltaPct.toFixed(2)}%</span>
+                        <span>&nbsp;)</span>
+                      </span>
+                    ) : (
+                      <DeltaIcon size={15} strokeWidth={1.75} />
+                    )}
                   </span>
                 )}
               </div>
 
-              {/* 4 mini-KPI en ligne */}
+              {/* 4 mini-KPI en ligne — brique partagée avec la page d'une firme */}
               <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
                 {miniKpis.map(k => (
-                  <div key={k.label} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-                    <span style={{ fontSize: 11, lineHeight: 1, color: T.textSub, whiteSpace: "nowrap" }}>{k.label}</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1, color: k.color, whiteSpace: "nowrap" }}>{k.value}</span>
-                  </div>
+                  <MiniKpi key={k.label} label={k.label} value={k.value} tone={k.tone} />
                 ))}
               </div>
             </div>
@@ -623,18 +639,13 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
 
       {/* ============ LISTE DES TRADES (node 370:4630, épurée) ============ */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* La maquette ne pose pas de titre au-dessus du tableau, mais le lien
-            « Voir plus » (navigation vers la page Trades filtrée sur ce compte)
-            est une fonctionnalité existante : on la conserve ici. */}
+        {/* Le titre porte le compte de trades, et « Voir plus » déplie la liste
+            sur place — même comportement que la page d'une firme. */}
         <SectionTitle
           action={
-            !isArchivedView && account ? (
-              <SectionAction
-                onClick={() => {
-                  setPage?.("trades");
-                }}
-              >
-                Voir plus
+            sortedTrades.length > 12 ? (
+              <SectionAction onClick={() => setAllTradesShown(v => !v)}>
+                {allTradesShown ? "Voir moins" : "Voir plus"}
               </SectionAction>
             ) : null
           }
@@ -646,7 +657,7 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
         </SectionTitle>
 
         <TradesList
-          trades={recentTrades}
+          trades={shownTrades}
           strategies={strategies}
           tradeStrategies={tradeStrategies}
           empty="Aucun trade sur ce compte."
@@ -667,12 +678,161 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
     </div>
   );
 }
+
+/* Pastille d'action de la barre du haut — partagée par « Modifier » et par le
+   rattachement à une firme, pour que les deux ne divergent pas. */
+function pillActionStyle() {
+  return {
+    display: "inline-flex", alignItems: "center", gap: 6,
+    padding: "7px 12px", minHeight: 32, borderRadius: 999,
+    border: `1px solid ${T.border}`, background: T.white,
+    color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+  };
+}
+
 /* ---------------------------------------------------------------------------
-   Graphique multi-séries (maquette : courbe du compte en avant-plan avec une
-   trame de points sous la courbe, autres comptes en lignes fines derrière).
-   On dessine à l'échelle 1:1 : le viewBox reprend la largeur réellement
-   mesurée, sinon la trame de points serait écrasée en ellipses.
+   Rattachement du compte à une prop firm.
+
+   Le lien est une simple colonne `firm_id` sur le compte. Deux règles métier
+   l'accompagnent, reprises de la modale de compte :
+     - tous les comptes d'une même firme passent par la MÊME plateforme, donc
+       rattacher réaligne le broker du compte sur celui de la firme ;
+     - un compte peut redevenir isolé (`firm_id = null`), d'où l'entrée
+       « Compte isolé » quand une firme est déjà liée.
    ------------------------------------------------------------------------- */
+function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+
+  const linked = firms.find((f) => f.id === account?.firm_id) || null;
+
+  const link = async (firmId) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const firm = firms.find((f) => f.id === firmId) || null;
+      const patch = { firm_id: firmId || null };
+      // Rattaché : le broker suit la plateforme de la firme. Détaché : le compte
+      // garde le sien, il n'y a plus de firme pour l'imposer.
+      if (firm) patch.broker = PLATFORMS.find((p) => p.id === firm.platform)?.name || null;
+      await updateTradingAccount(account.id, patch);
+      onLinked?.({ ...account, ...patch });
+      setOpen(false);
+    } catch (e) {
+      setError(firmErrorLabel(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={pillActionStyle()}
+      >
+        <Link2 size={13} strokeWidth={1.75} />
+        {linked ? "Changer de prop firm" : "Relier à une prop firm"}
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="anim-pop"
+          style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40,
+            minWidth: 240, maxHeight: 300, overflowY: "auto",
+            background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
+            boxShadow: "var(--elev-overlay)", padding: 6,
+          }}
+        >
+          {error && (
+            <div style={{ padding: "6px 8px", fontSize: 11.5, color: T.red, lineHeight: 1.4 }}>{error}</div>
+          )}
+
+          {firms.length === 0 ? (
+            <>
+              <div style={{ padding: "8px 10px", fontSize: 12, color: T.textSub, lineHeight: 1.45 }}>
+                Aucune prop firm enregistrée pour l'instant.
+              </div>
+              <button type="button" onClick={() => { setOpen(false); onCreateFirm?.(); }} style={firmOptionStyle(false)}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  background: T.accentBg, color: T.textSub,
+                }}>
+                  <Plus size={12} strokeWidth={2} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>Créer une prop firm</span>
+              </button>
+            </>
+          ) : (
+            firms.map((f) => {
+              const active = f.id === account?.firm_id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  disabled={busy}
+                  onClick={() => link(f.id)}
+                  style={firmOptionStyle(active)}
+                  onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = T.accentBg; }}
+                  onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <RoundLogo src={firmLogo(f)} size={20} name={f.name} />
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {f.name}
+                  </span>
+                  {active && <Check size={14} strokeWidth={2} style={{ flexShrink: 0, color: T.textSub }} />}
+                </button>
+              );
+            })
+          )}
+
+          {linked && (
+            <>
+              <div style={{ height: 1, background: T.border, margin: "6px 4px" }} />
+              <button type="button" disabled={busy} onClick={() => link("")} style={firmOptionStyle(false)}
+                onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                <span style={{ width: 20, flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0, color: T.textSub }}>Compte isolé (aucune firme)</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function firmOptionStyle(active) {
+  return {
+    width: "100%", display: "flex", alignItems: "center", gap: 8,
+    padding: "8px 10px", borderRadius: 8, border: "none",
+    background: active ? T.accentBg : "transparent",
+    color: T.text, fontSize: 13, fontWeight: 500,
+    cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+    transition: "background 120ms var(--ease-out, ease)",
+  };
+}
 
 /* ---------------------------------------------------------------------------
    Statistiques : 4 cartes de listes « libellé → valeur » (volume d'activité,
@@ -757,8 +917,6 @@ function StatsSection({ stats, capital, balance, expanded, onToggle }) {
     groups[1].rows.splice(1, 0, { label: "Capital", value: fmtNoCents(capital) });
   }
 
-  const VISIBLE = 4;
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <SectionTitle
@@ -766,29 +924,11 @@ function StatsSection({ stats, capital, balance, expanded, onToggle }) {
       >
         Statistiques
       </SectionTitle>
+      {/* Quatre colonnes en desktop ; globals.css les ramène à deux sous 767 px
+          (règle générique sur `repeat(4`), puis à une seule sur mobile étroit. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, alignItems: "stretch" }}>
         {groups.map(g => (
-          <StatsCard key={g.title} title={g.title} rows={expanded ? g.rows : g.rows.slice(0, VISIBLE)} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StatsCard({ title, rows }) {
-  return (
-    <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-      <span style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.2, color: T.text }}>{title}</span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map((r, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <span style={{ fontSize: 12, color: T.text, opacity: 0.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {r.label}
-            </span>
-            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.15, color: T.text, whiteSpace: "nowrap" }}>
-              {r.value}
-            </span>
-          </div>
+          <StatsCard key={g.title} title={g.title} rows={g.rows} expanded={expanded} />
         ))}
       </div>
     </div>

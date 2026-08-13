@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { TableRow, RowIconButton } from "@/components/ui/accountRows";
+import { TableRow, SubRow, RowIconButton } from "@/components/ui/accountRows";
 
 /* Le chevron d'une ligne de firme a deux exigences opposées : déplier la liste
    des comptes, et ne PAS déclencher la navigation de la ligne (qui ouvre la
@@ -118,5 +118,63 @@ describe("RowIconButton — cible du clic", () => {
     fireEvent.click(screen.getByTestId("trash-icon"));
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  /* Garantie structurelle, le pendant de celle du chevron. Tant que les actions
+     vivaient DANS la zone de navigation, le `[role="button"]:active` de
+     globals.css rétrécissait la ligne de 3 % pendant l'appui : les boutons
+     glissaient sous le curseur (une dizaine de pixels sur une ligne large) et le
+     relâchement ne tombait plus sur eux — aucun `click` n'était émis. Elles
+     doivent rester en dehors, et la zone de navigation ne doit pas scaler. */
+  it("place les actions hors de la zone de navigation", () => {
+    renderWithAction();
+    const btn = screen.getByRole("button", { name: "Supprimer" });
+    expect(btn.closest('[role="button"]')).toBeNull();
+  });
+
+  it("neutralise le scale d'appui sur la zone de navigation et sur le bouton", () => {
+    renderWithAction();
+    const nav = screen.getByText("Topstep").closest('[role="button"]')!;
+    expect(nav.hasAttribute("data-no-press")).toBe(true);
+    expect(screen.getByRole("button", { name: "Supprimer" }).hasAttribute("data-no-press")).toBe(true);
+  });
+});
+
+describe("SubRow — actions et navigation", () => {
+  const renderSub = () => {
+    const onEdit = vi.fn();
+    const onOpen = vi.fn();
+    const utils = render(
+      <SubRow
+        label="Topstep 1"
+        cells={["Eval", "$50 000", "58%", "$0"]}
+        onOpen={onOpen}
+        actions={
+          <RowIconButton label="Modifier" onClick={onEdit}>
+            <svg data-testid="pencil-icon" width={14} height={14} />
+          </RowIconButton>
+        }
+      />
+    );
+    return { onEdit, onOpen, ...utils };
+  };
+
+  it("modifie au clic sur l'icône, sans ouvrir la fiche", () => {
+    const { onEdit, onOpen } = renderSub();
+    fireEvent.click(screen.getByTestId("pencil-icon"));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("ouvre la fiche depuis le nom du compte", () => {
+    const { onEdit, onOpen } = renderSub();
+    fireEvent.click(screen.getByText("Topstep 1"));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("place les actions hors de la zone de navigation", () => {
+    renderSub();
+    expect(screen.getByRole("button", { name: "Modifier" }).closest('[role="button"]')).toBeNull();
   });
 });

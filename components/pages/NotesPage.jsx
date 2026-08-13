@@ -8,6 +8,7 @@ import { useUndo } from "@/lib/contexts/UndoContext";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { CARD, SectionTitle, HAIRLINE, FIELD_BG } from "@/components/ui/da";
 import DrawingCanvas, { strokeMaxY } from "@/components/notes/DrawingCanvas";
 import DrawingToolbar from "@/components/notes/DrawingToolbar";
 import { htmlToMarkdown, htmlHasStructure } from "@/lib/ui/clipboardMarkdown";
@@ -25,6 +26,16 @@ const NotePreview = dynamic(() => import("@/components/notes/NotePreview"), {
 const T = { ...BaseT };
 
 const STORAGE_KEY = "tr4de_notes";
+
+/* Pastille d'action de la barre d'outils de l'éditeur (épingler, dessiner,
+   image, supprimer). Ronde et de 32 px comme les commandes des autres pages de
+   la nouvelle DA : elles étaient carrées, en 28 px à coins 6. Le fond et l'encre
+   restent au point d'appel — chacune porte son propre état actif. */
+const ICON_BTN = {
+  width: 32, height: 32, borderRadius: 999, border: "none",
+  cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
+  transition: "background 120ms ease, color 120ms ease",
+};
 
 const TAG_RE = /#([a-zA-Z][a-zA-Z0-9_-]*)/g;
 
@@ -74,7 +85,9 @@ function renderHighlighted(text) {
   let m;
   while ((m = re.exec(text)) !== null) {
     html += escapeHtml(text.slice(last, m.index));
-    html += `<span style="color:#3B82F6">${escapeHtml(m[0])}</span>`;
+    // Encre du tag : le token, pas un hex — le calque de coloration doit suivre
+    // le thème sombre comme le reste du texte.
+    html += `<span style="color:var(--color-blue, #3B82F6)">${escapeHtml(m[0])}</span>`;
     last = m.index + m[0].length;
   }
   html += escapeHtml(text.slice(last));
@@ -195,7 +208,7 @@ export default function NotesPage() {
   // utilisé au moins utilisé).
   const tagCounts = useMemo(() => {
     const counts = {};
-    notes.forEach(n => parseTags(n.content).forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
+    notes.forEach(n => parseTags(n.content).forEach(tag => { counts[tag] = (counts[tag] || 0) + 1; }));
     return counts;
   }, [notes]);
 
@@ -236,7 +249,7 @@ export default function NotesPage() {
     // triés par nb d'usage desc puis alpha. On exclut le tag exactement égal au
     // préfixe (rien à compléter).
     const cand = allTags
-      .filter(t => t.startsWith(lower) && t !== lower)
+      .filter(tag => tag.startsWith(lower) && tag !== lower)
       .sort((a, b) => (tagCounts[b] || 0) - (tagCounts[a] || 0) || a.localeCompare(b))
       .slice(0, 5);
     if (cand.length === 0) { setTagSuggest(null); return; }
@@ -540,68 +553,73 @@ export default function NotesPage() {
   const firstLine = (content) => (content || "").split("\n").find(l => l.trim()) || "(Sans titre)";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "calc(100vh - 120px)" }} className="anim-1 tr4de-notes-page">
-      {/* Responsive: en dessous de 900px on passe en stack vertical
-          (liste au-dessus, éditeur en dessous) ; en dessous de 600px la page
-          n'a plus de hauteur fixe pour pouvoir scroller naturellement. */}
-      <style>{`
-        @media (max-width: 900px) {
-          .tr4de-notes-layout {
-            grid-template-columns: 1fr !important;
-            grid-template-rows: auto 1fr;
-          }
-          .tr4de-notes-list { max-height: 260px; }
+    <div
+      style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, height: "calc(100vh - 120px)", fontFamily: "var(--font-sans)" }}
+      className="anim-1 tr4de-notes-page"
+    >
+      {/* Les reprises responsive de cette page vivent dans globals.css avec
+          celles des autres pages (`.tr4de-notes-*`) : elles y étaient déjà, et
+          une feuille <style> embarquée ici en portait une seconde version aux
+          seuils différents — les deux se contredisaient entre 767 et 900 px. */}
+
+      {/* En-tête : le titre de page de la nouvelle DA, l'action à sa droite. Le
+          bouton « Nouvelle note » flottait seul en haut, sans rien nommer. */}
+      <SectionTitle
+        action={
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              onClick={createNote}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none",
+                background: T.text, color: T.textInverted,
+                fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Plus size={13} strokeWidth={1.75} />
+              <span className="tr4de-notes-newbtn-label">Nouvelle note</span>
+            </button>
+            <div id="tr4de-page-header-slot" />
+          </div>
         }
-        @media (max-width: 600px) {
-          .tr4de-notes-page {
-            height: auto !important;
-            min-height: calc(100vh - 120px);
-          }
-          .tr4de-notes-layout { gap: 10px !important; }
-          .tr4de-notes-list { max-height: 220px; }
-          .tr4de-notes-editor { min-height: 60vh; }
-        }
-        @media (max-width: 900px) {
-          .tr4de-draw-hint { display: none; }
-        }
-        @media (max-width: 480px) {
-          .tr4de-notes-newbtn-label { display: none; }
-        }
-      `}</style>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button onClick={createNote}
-          style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Plus size={14} strokeWidth={2} /> <span className="tr4de-notes-newbtn-label">Nouvelle note</span>
-        </button>
-        <div id="tr4de-page-header-slot" />
-      </div>
+      >
+        Notes
+      </SectionTitle>
 
       <div className="tr4de-notes-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 12, flex: 1, minHeight: 0 }}>
-        {/* Left : list */}
-        <div className="tr4de-notes-list" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        {/* Left : list — carte de la nouvelle DA (ombre douce, coins 12, aucune
+            bordure). Les séparations internes passent par le trait dilué
+            `HAIRLINE` : une bordure franche redécouperait la carte en boîtes. */}
+        <div className="tr4de-notes-list" style={{ ...CARD, padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* Search */}
-          <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ padding: 12, borderBottom: `1px solid ${HAIRLINE}` }}>
             <div style={{ position: "relative" }}>
-              <Search size={13} strokeWidth={1.75} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.textMut }} />
+              <Search size={14} strokeWidth={1.75} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.textMut }} />
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher..."
-                style={{ width: "100%", padding: "8px 12px 8px 30px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: T.white }} />
+                style={{
+                  width: "100%", height: 34, padding: "0 12px 0 34px", border: "none",
+                  borderRadius: 999, background: FIELD_BG, fontSize: 13, outline: "none",
+                  fontFamily: "inherit", color: T.text,
+                }} />
             </div>
             {allTags.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
                 {activeTag && (
                   <button onClick={() => setActiveTag(null)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 8px", borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, fontSize: 10, cursor: "pointer", color: T.textSub, fontFamily: "inherit" }}>
-                    <X size={9} /> clear
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 999, border: "none", background: FIELD_BG, fontSize: 11, cursor: "pointer", color: T.textSub, fontFamily: "inherit" }}>
+                    <X size={10} strokeWidth={2} /> Tout
                   </button>
                 )}
                 {allTags.map(tag => (
                   <button key={tag} onClick={() => setActiveTag(tag === activeTag ? null : tag)}
+                    aria-pressed={activeTag === tag}
                     style={{
-                      padding: "3px 8px", borderRadius: 999,
-                      border: `1px solid ${activeTag === tag ? T.text : T.border}`,
-                      background: activeTag === tag ? T.text : T.white,
-                      color: activeTag === tag ? T.white : T.textSub,
-                      fontSize: 10, cursor: "pointer", fontFamily: "inherit",
+                      padding: "4px 10px", borderRadius: 999, border: "none",
+                      background: activeTag === tag ? T.text : FIELD_BG,
+                      color: activeTag === tag ? T.textInverted : T.textSub,
+                      fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                      transition: "background 120ms ease, color 120ms ease",
                     }}>
                     #{tag}
                   </button>
@@ -613,33 +631,38 @@ export default function NotesPage() {
           {/* List */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {filtered.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", color: T.textSub, fontSize: 12 }}>
+              <div style={{ padding: 24, textAlign: "center", color: T.textMut, fontSize: 13 }}>
                 {notes.length === 0 ? "Aucune note encore" : "Rien ne correspond"}
               </div>
             ) : filtered.map((n, i) => {
               const tags = parseTags(n.content);
+              const active = selectedId === n.id;
               return (
                 <div key={n.id}
                   onClick={() => setSelectedId(n.id)}
                   style={{
-                    padding: "10px 12px", borderBottom: i < filtered.length - 1 ? `1px solid ${T.border}` : "none",
+                    padding: "10px 12px", borderBottom: i < filtered.length - 1 ? `1px solid ${HAIRLINE}` : "none",
                     cursor: "pointer",
-                    background: selectedId === n.id ? T.accentBg : "transparent",
+                    background: active ? T.rowHighlight : "transparent",
+                    transition: "background 120ms ease",
                   }}
-                  onMouseEnter={(e) => { if (selectedId !== n.id) e.currentTarget.style.background = "var(--color-hover-bg, #F0F0F0)"; }}
-                  onMouseLeave={(e) => { if (selectedId !== n.id) e.currentTarget.style.background = "transparent"; }}
+                  onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = T.accentBg; }}
+                  onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                     {n.pinned && <Pin size={11} strokeWidth={2} style={{ flexShrink: 0, color: T.textMut, fill: T.textMut }} />}
                     <div style={{ fontSize: 13, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{firstLine(n.content)}</div>
                   </div>
-                  <div style={{ display: "flex", gap: 4, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, color: T.textMut }}>{new Date(n.updatedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: T.textMut }}>{new Date(n.updatedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
                     {(n.drawing?.strokes || []).length > 0 && (
-                      <PenLine size={10} strokeWidth={2} style={{ color: T.textMut, flexShrink: 0 }} aria-label="Contient un dessin" />
+                      <PenLine size={11} strokeWidth={2} style={{ color: T.textMut, flexShrink: 0 }} aria-label="Contient un dessin" />
                     )}
-                    {tags.slice(0, 3).map(t => (
-                      <span key={t} style={{ fontSize: 9, color: T.blue, background: `color-mix(in srgb, ${T.blue} 8%, transparent)`, padding: "1px 6px", borderRadius: 999, fontWeight: 500 }}>#{t}</span>
+                    {/* Variable de boucle nommée `tag` et non `t` : `t` est la
+                        fonction de traduction du module, la masquer ici a déjà
+                        piégé plus d'une modification. */}
+                    {tags.slice(0, 3).map(tag => (
+                      <span key={tag} style={{ fontSize: 11, color: T.blue, background: T.blueBg, padding: "2px 8px", borderRadius: 999, fontWeight: 500 }}>#{tag}</span>
                     ))}
                   </div>
                 </div>
@@ -649,12 +672,12 @@ export default function NotesPage() {
         </div>
 
         {/* Right : editor */}
-        <div className="tr4de-notes-editor" style={{ position: "relative", background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: selected ? 0 : 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+        <div className="tr4de-notes-editor" style={{ ...CARD, position: "relative", padding: selected ? 0 : 20, display: "flex", flexDirection: "column", minHeight: 0 }}>
           {selected ? (
             <>
-              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 11, color: T.textMut }}>Mis à jour {new Date(selected.updatedAt).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+                  <div style={{ fontSize: 12, color: T.textMut }}>Mis à jour {new Date(selected.updatedAt).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
                 </div>
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                   <button onClick={togglePreview}
@@ -662,22 +685,22 @@ export default function NotesPage() {
                     aria-pressed={preview}
                     title={preview ? "Modifier (Ctrl+E)" : "Aperçu formaté : formules $…$, titres, listes (Ctrl+E)"}
                     style={{
-                      height: 28, padding: "0 10px", borderRadius: 999,
-                      background: preview ? T.text : "transparent",
-                      border: `1px solid ${preview ? T.text : T.border}`,
-                      color: preview ? "#fff" : T.textSub,
-                      cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-                      display: "inline-flex", alignItems: "center", gap: 5, marginRight: 4,
+                      minHeight: 32, padding: "0 12px", borderRadius: 999,
+                      background: preview ? T.text : T.white,
+                      border: preview ? "none" : `1px solid ${T.border}`,
+                      color: preview ? T.textInverted : T.text,
+                      cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+                      display: "inline-flex", alignItems: "center", gap: 6, marginRight: 4,
                     }}
                   >
-                    {preview ? <Pencil size={12} strokeWidth={1.75} /> : <Eye size={12} strokeWidth={1.75} />}
+                    {preview ? <Pencil size={13} strokeWidth={1.75} /> : <Eye size={13} strokeWidth={1.75} />}
                     {preview ? "Modifier" : "Aperçu"}
                   </button>
                   <button onClick={() => togglePin(selected.id)}
                     aria-label={selected.pinned ? "Désépingler la note" : "Épingler la note en haut"}
                     aria-pressed={!!selected.pinned}
                     title={selected.pinned ? "Désépingler" : "Épingler en haut"}
-                    style={{ width: 28, height: 28, background: selected.pinned ? T.accentBg : "transparent", border: "none", color: selected.pinned ? T.text : T.textMut, cursor: "pointer", borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    style={{ ...ICON_BTN, background: selected.pinned ? T.accentBg : "transparent", color: selected.pinned ? T.text : T.textMut }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = selected.pinned ? T.accentBg : "transparent"; e.currentTarget.style.color = selected.pinned ? T.text : T.textMut; }}
                   >
@@ -687,7 +710,7 @@ export default function NotesPage() {
                     aria-label={drawMode ? "Quitter le mode dessin" : "Dessiner sur la note"}
                     aria-pressed={drawMode}
                     title={drawMode ? "Quitter le mode dessin (Échap)" : "Dessiner / annoter (schémas, flèches, surlignage)"}
-                    style={{ width: 28, height: 28, background: drawMode ? T.text : "transparent", border: "none", color: drawMode ? T.white : T.textMut, cursor: "pointer", borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    style={{ ...ICON_BTN, background: drawMode ? T.text : "transparent", color: drawMode ? T.textInverted : T.textMut }}
                     onMouseEnter={(e) => { if (drawMode) return; e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
                     onMouseLeave={(e) => { if (drawMode) return; e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}
                   >
@@ -704,7 +727,7 @@ export default function NotesPage() {
                   <button onClick={() => fileInputRef.current?.click()}
                     aria-label="Ajouter une image"
                     title="Ajouter une image (ou colle-la directement)"
-                    style={{ width: 28, height: 28, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    style={{ ...ICON_BTN, background: "transparent", color: T.textMut }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}
                   >
@@ -712,7 +735,7 @@ export default function NotesPage() {
                   </button>
                   <button onClick={() => removeNote(selected.id)}
                     aria-label="Supprimer la note"
-                    style={{ width: 28, height: 28, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 6, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    style={{ ...ICON_BTN, background: "transparent", color: T.textMut }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}
                     title="Supprimer"
@@ -722,15 +745,18 @@ export default function NotesPage() {
                 </div>
               </div>
               {(selected.images || []).length > 0 && (
-                <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ padding: "10px 14px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {(selected.images || []).map(img => (
-                    <div key={img.id} style={{ position: "relative", width: 96, height: 96, borderRadius: "var(--radius-card)", overflow: "hidden", border: `1px solid ${T.border}`, background: "var(--color-hover-bg, #F0F0F0)" }}>
+                    <div key={img.id} style={{ position: "relative", width: 96, height: 96, borderRadius: 12, overflow: "hidden", background: T.accentBg }}>
                       <img src={img.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "zoom-in" }}
                         onClick={() => window.open(img.src, "_blank")} />
+                      {/* Le bouton est posé SUR la photo : son fond passe par le
+                          voile `scrim` des modales, et son encre par `onSolid` —
+                          blanche dans les deux thèmes, le voile restant sombre. */}
                       <button onClick={() => removeImage(img.id)}
                         aria-label="Retirer l'image"
                         title="Retirer l'image"
-                        style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", border: "none", background: "rgba(13,13,13,0.72)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                        style={{ position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: "50%", border: "none", background: T.scrim, color: T.onSolid, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                         <X size={12} strokeWidth={2} />
                       </button>
                     </div>
@@ -888,11 +914,11 @@ export default function NotesPage() {
               )}
               </div>
               {tagSuggest && tagSuggest.candidates.length > 0 && (
-                <div style={{
+                <div className="anim-pop" style={{
                   position: "absolute", left: 12, right: 12, bottom: 10,
-                  background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
+                  background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
                   boxShadow: "var(--elev-overlay)",
-                  padding: "6px 8px",
+                  padding: "8px 10px",
                   display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
                   fontSize: 12, fontFamily: "inherit", zIndex: 5,
                 }}
@@ -921,11 +947,10 @@ export default function NotesPage() {
                         setTagSuggest(null);
                       }}
                       style={{
-                        padding: "3px 10px", borderRadius: 999,
-                        border: `1px solid ${i === 0 ? T.text : T.border}`,
-                        background: i === 0 ? T.text : T.white,
-                        color: i === 0 ? "#fff" : T.blue,
-                        fontWeight: 600, fontSize: 11, cursor: "pointer",
+                        padding: "4px 10px", borderRadius: 999, border: "none",
+                        background: i === 0 ? T.text : FIELD_BG,
+                        color: i === 0 ? T.textInverted : T.blue,
+                        fontWeight: 500, fontSize: 11, cursor: "pointer",
                         fontFamily: "inherit",
                         display: "inline-flex", alignItems: "center", gap: 4,
                       }}>
@@ -939,12 +964,16 @@ export default function NotesPage() {
               )}
             </>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: T.textSub, gap: 8 }}>
-              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: "var(--radius-card)", background: T.accentBg }}>
-                <Sparkles size={20} strokeWidth={1.75} color={T.textSub} />
+            /* État vide calé sur celui du dashboard : vignette 48 px à coins 12,
+               titre 20 px Medium, explication 14 px atténuée. */
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: T.textSub, gap: 6 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 12, background: T.accentBg, marginBottom: 10 }}>
+                <Sparkles size={22} strokeWidth={1.75} color={T.text} />
               </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Capture tes idées</div>
-              <div style={{ fontSize: 12, textAlign: "center", maxWidth: 280 }}>Sélectionne une note existante ou crée-en une nouvelle. Utilise <code style={{ background: T.accentBg, padding: "1px 4px", borderRadius: "var(--radius-field)" }}>#tag</code> pour trier.</div>
+              <div style={{ fontSize: 20, fontWeight: 500, color: T.text }}>Capture tes idées</div>
+              <div style={{ fontSize: 14, lineHeight: 1.5, textAlign: "center", maxWidth: 380, color: T.textSub }}>
+                Sélectionne une note existante ou crée-en une nouvelle. Utilise <code style={{ background: T.accentBg, padding: "1px 5px", borderRadius: "var(--radius-field)" }}>#tag</code> pour trier.
+              </div>
             </div>
           )}
         </div>

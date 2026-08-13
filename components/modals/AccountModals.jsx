@@ -18,7 +18,7 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
-import { X, Trash2, Lock } from "lucide-react";
+import { X, Trash2, Lock, Check, Link2, ArrowRight } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
@@ -535,6 +535,225 @@ export function PropFirmModal({ firm = null, accounts = [], userId, onClose, onS
             </div>
           )}
 
+        </>
+      )}
+    </ModalShell>
+  );
+}
+
+/* ────────── Rattachement de comptes EXISTANTS à une firme ────────── */
+
+/**
+ * Rattache à une firme des comptes qui existent déjà — elle n'en crée aucun.
+ *
+ * C'est le pendant de la création en lot (page de la firme, « Ajouter des
+ * comptes ») : un compte saisi avant sa firme, ou créé hors firme, n'avait qu'un
+ * seul chemin de rattachement — la modale du compte, un compte à la fois, à
+ * condition de savoir que le champ « Firme » s'y trouve. Ici on part de la
+ * firme, c'est-à-dire du sens dans lequel la question se pose.
+ *
+ * Les comptes d'une AUTRE firme sont proposés aussi : déplacer un compte est le
+ * même geste que le rattacher. L'origine est affichée sur la ligne et le
+ * déplacement récapitulé avant validation, pour qu'il ne soit jamais implicite.
+ *
+ * @param {object}    props.firm       Firme d'accueil.
+ * @param {Array}     props.accounts   Comptes actifs de l'utilisateur (archivés exclus).
+ * @param {Array=}    props.firms      Sert à nommer la firme d'origine d'un compte.
+ * @param {Function}  props.onClose
+ * @param {Function=} props.onAttached Reçoit { updated: [comptes patchés] }.
+ */
+export function AttachAccountsModal({ firm, accounts = [], firms = [], onClose, onAttached }) {
+  useLang();
+  const [picked, setPicked] = React.useState(() => new Set());
+  const [query, setQuery] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const candidates = React.useMemo(
+    () => (accounts || []).filter((a) => a && a.firm_id !== firm.id),
+    [accounts, firm.id]
+  );
+
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? candidates.filter((a) => `${a.name || ""} ${accountTypeSizeLabel(a)}`.toLowerCase().includes(q))
+    : candidates;
+
+  const firmNameOf = (id) => firms.find((f) => f.id === id)?.name || "";
+  const movedCount = candidates.filter((a) => picked.has(a.id) && a.firm_id).length;
+
+  const toggle = (id) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const submit = async () => {
+    if (picked.size === 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      /* La plateforme de la firme fait foi : tous les comptes d'une même prop
+         firm passent par le même broker (même règle que la modale du compte).
+         Mais on n'EFFACE pas le broker d'un compte pour une firme dont la
+         plateforme n'est pas réglée : rattacher ne doit pas perdre une donnée
+         déjà saisie. */
+      const brokerName = firm.platform
+        ? PLATFORMS.find((p) => p.id === firm.platform)?.name || null
+        : null;
+      const updated = [];
+      for (const acc of candidates.filter((a) => picked.has(a.id))) {
+        const patch = brokerName ? { firm_id: firm.id, broker: brokerName } : { firm_id: firm.id };
+        await updateTradingAccount(acc.id, patch);
+        updated.push({ ...acc, ...patch });
+      }
+      onAttached?.({ updated });
+      onClose?.();
+    } catch (e) {
+      setError(firmErrorLabel(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ModalShell
+      title={t("firms.attachTitle")}
+      subtitle={t("firms.attachSub").replace("{name}", firm.name || "")}
+      width={520}
+      onClose={onClose}
+      footer={
+        <>
+          <GhostBtn onClick={onClose}>{t("common.cancel")}</GhostBtn>
+          <PrimaryBtn onClick={submit} disabled={busy || picked.size === 0}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Link2 size={13} strokeWidth={2} />
+              {busy
+                ? t("common.saving")
+                : picked.size === 1
+                  ? t("firms.attachOneCta")
+                  : t("firms.attachNCta").replace("{n}", String(picked.size || 0))}
+            </span>
+          </PrimaryBtn>
+        </>
+      }
+    >
+      <ErrorLine>{error}</ErrorLine>
+
+      {candidates.length === 0 ? (
+        <div style={{ fontSize: 13, color: T.textMut, lineHeight: 1.6 }}>{t("firms.attachNone")}</div>
+      ) : (
+        <>
+          {/* La recherche n'apparaît que quand la liste cesse d'être lisible d'un
+              coup d'œil — même seuil que les autres sélecteurs de l'app. */}
+          {candidates.length > 6 && (
+            <TextInput value={query} onChange={setQuery} placeholder={t("firms.attachSearch")} autoFocus />
+          )}
+
+          <Field label={`${t("firms.accountsTitle")} (${picked.size}/${candidates.length})`} hint={t("firms.attachHint")}>
+            {shown.length === 0 ? (
+              <div style={{ fontSize: 12, color: T.textMut }}>{t("firms.attachNoMatch")}</div>
+            ) : (
+              /* Une seule surface encadrée, des lignes séparées par un filet —
+                 la même présentation que la liste des comptes de la modale
+                 firme, pour que les deux se lisent pareil. */
+              <div
+                className="scroll-thin"
+                style={{
+                  border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)",
+                  overflow: "hidden", background: T.white,
+                  maxHeight: 280, overflowY: "auto",
+                }}
+              >
+                {shown.map((acc, i) => {
+                  const on = picked.has(acc.id);
+                  const from = acc.firm_id ? firmNameOf(acc.firm_id) : "";
+                  return (
+                    /* La ligne ENTIÈRE est le bouton : pas de zone cliquable
+                       contenant un autre bouton — cette imbrication déplace la
+                       cible sous le curseur à l'appui et le clic se perd. */
+                    <button
+                      key={acc.id}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={on}
+                      data-no-press
+                      onClick={() => toggle(acc.id)}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 10,
+                        padding: "8px 10px", minHeight: 44, textAlign: "left",
+                        border: "none", borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
+                        /* `backgroundColor`, pas le raccourci `background` : on ne
+                           remplace qu'une couleur, et le raccourci réinitialise
+                           tout le reste du fond au passage. */
+                        backgroundColor: on ? T.accentBg : "transparent",
+                        fontFamily: "inherit", cursor: "pointer",
+                        transition: "background-color var(--dur-fast) var(--ease-out)",
+                      }}
+                      onMouseEnter={(e) => { if (!on) e.currentTarget.style.backgroundColor = T.rowHighlight; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = on ? T.accentBg : "transparent"; }}
+                    >
+                      <span aria-hidden style={{
+                        width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        border: `1px solid ${on ? T.text : T.border2}`,
+                        background: on ? T.text : T.white,
+                        color: T.textInverted,
+                      }}>
+                        {on && <Check size={11} strokeWidth={3} />}
+                      </span>
+                      {/* Même pastille de type que partout ailleurs. */}
+                      <span aria-hidden style={{
+                        width: 8, height: 8, borderRadius: 999, flexShrink: 0,
+                        background: accountColor(acc),
+                      }} />
+                      <span style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                        <span style={{
+                          fontSize: 13, fontWeight: 500, color: T.text,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {acc.name || acc.eval_account_size || t("accountsPage.account")}
+                        </span>
+                        <span style={{
+                          fontSize: 11, color: T.textMut, whiteSpace: "nowrap",
+                          overflow: "hidden", textOverflow: "ellipsis",
+                        }}>
+                          {accountTypeSizeLabel(acc)}
+                          {" · "}
+                          {from ? t("firms.attachMoveFrom").replace("{name}", from) : t("firms.attachFree")}
+                        </span>
+                      </span>
+                      {/* Un compte qui change de firme le dit sur sa ligne : la
+                          flèche rend le déplacement lisible avant validation. */}
+                      {on && from && (
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+                          fontSize: 11, color: T.textSub, whiteSpace: "nowrap",
+                        }}>
+                          <ArrowRight size={11} strokeWidth={2} />
+                          {firm.name}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Field>
+
+          {movedCount > 0 && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+              padding: "10px 12px", borderRadius: "var(--radius-field)",
+              border: `1px solid ${T.border}`, background: T.bg,
+              fontSize: 12, color: T.textSub, lineHeight: 1.5,
+            }}>
+              <ArrowRight size={13} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>{t("firms.attachMoveWarn").replace("{n}", String(movedCount))}</span>
+            </div>
+          )}
         </>
       )}
     </ModalShell>

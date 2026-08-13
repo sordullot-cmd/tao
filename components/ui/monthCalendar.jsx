@@ -19,7 +19,7 @@ import React from "react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmtInt } from "@/lib/ui/format";
-import { CARD, StepperPill } from "@/components/ui/da";
+import { CARD, StepperPill, TILE_HOVER } from "@/components/ui/da";
 
 const WEEKDAY_KEYS = ["wd.monday", "wd.tuesday", "wd.wednesday", "wd.thursday", "wd.friday", "wd.saturday", "wd.sunday"];
 
@@ -110,10 +110,10 @@ export default function MonthCalendar({ trades = [], onDayClick, title = "Calend
           display: "flex", flexDirection: "column", justifyContent: "space-between",
           gap: 4, height: 58, padding: 8, borderRadius: 8, background: bg,
           cursor: clickable ? "pointer" : "default", minWidth: 0,
-          transition: "filter var(--dur-fast) var(--ease-out)",
+          transition: "box-shadow var(--dur-fast) var(--ease-out)",
         }}
-        onMouseEnter={clickable ? (e) => { e.currentTarget.style.filter = "brightness(0.97)"; } : undefined}
-        onMouseLeave={clickable ? (e) => { e.currentTarget.style.filter = "none"; } : undefined}
+        onMouseEnter={clickable ? (e) => { e.currentTarget.style.boxShadow = TILE_HOVER; } : undefined}
+        onMouseLeave={clickable ? (e) => { e.currentTarget.style.boxShadow = "none"; } : undefined}
       >
         <span style={{ fontSize: 12, lineHeight: 1, color: dayInk }}>{day}</span>
         {count > 0 && (

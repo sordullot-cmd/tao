@@ -24,6 +24,7 @@ import NotesPage from "@/components/pages/NotesPage";
 import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import EloquencePage from "@/components/pages/EloquencePage";
+import BudgetPage from "@/components/pages/BudgetPage";
 import AgendaPage from "@/components/pages/AgendaPage";
 import CalendarPage from "@/components/pages/CalendarPage";
 import JournalPage from "@/components/pages/JournalPage";
@@ -79,6 +80,7 @@ import {
   Dumbbell as LucideDumbbell,
   FolderOpen as LucideFolderOpen,
   Mic as LucideMic,
+  PiggyBank as LucidePiggyBank,
 } from "lucide-react";
 
 /* ─── TOKENS ───────────────────────────────────────────────────────────
@@ -89,12 +91,8 @@ const css = `
   body { background: ${T.bg}; color: ${T.text}; font-family: var(--font-sans); min-height: 100vh; font-size: 14px; }
   button { font-family: inherit; cursor: pointer; }
   select { font-family: inherit; }
-  /* anim-1 / anim-2 sont désormais définis globalement (globals.css) sur le
-     token --ease-out. On garde le keyframe local par sécurité mais on route
-     l'animation vers la courbe partagée. */
-  @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-  .anim-1 { animation: fadeUp .25s var(--ease-out) both; }
-  .anim-2 { animation: fadeUp .25s .05s var(--ease-out) both; }
+  /* Pas d'animation d'entrée de page : anim-1 / anim-2 sont neutralisés
+     globalement (globals.css). */
   .nav-item:hover { background: ${T.accentBg} !important; }
   .card-hover:hover { border-color: ${T.border2} !important; box-shadow: 0 4px 12px rgba(0,0,0,.06) !important; }
 `;
@@ -105,7 +103,11 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    fond gris, gèrent leur gouttière et peuvent la reprendre (cf. --page-gutter).
    En desktop, la barre du haut n'y garde aucune hauteur : elle est vide, et le
    contenu doit pouvoir monter jusqu'au bord. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade"];
+/* Pages portées à la nouvelle DA : le conteneur de contenu les laisse posées à
+   même le fond gris du shell, sans cadre blanc pleine page. Une page rejoint
+   cette liste quand ses blocs sont devenus des cartes `CARD` — sinon elle
+   flotterait sur le gris sans rien pour porter son contenu. */
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "budget", "sport", "notes", "agenda", "eloquence"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -606,6 +608,9 @@ export default function App() {
   };
 
   const SIDEBAR_SECTIONS = [
+    /* Trading — tout ce qui touche aux trades, de la saisie au bilan. Le journal
+       et la discipline ont rejoint la section : ils LISENT les mêmes trades, les
+       isoler sous « Analyse » coupait le parcours en deux pour deux entrées. */
     {
       label: t("nav.trading"),
       items: [
@@ -615,17 +620,16 @@ export default function App() {
         { id: "trades",     icon: ListChecks,         label: t("nav.trades") },
         { id: "accounts",   icon: LucideWallet,       label: t("nav.accounts") },
         { id: "strategies", icon: LucideTarget,       label: t("nav.strategies") },
-      ],
-    },
-    {
-      label: t("nav.analyse"),
-      items: [
         { id: "journal",    icon: NotebookPen,        label: t("nav.journal") },
         { id: "discipline", icon: ShieldCheck,        label: t("nav.discipline") },
       ],
     },
+    /* Vie perso — tout le hors-trading : le quotidien, le corps, les idées et
+       l'argent personnel (à distinguer du capital de trading, qui vit dans
+       « Comptes »). « Productivité » ne couvrait plus ni le sport, ni
+       l'éloquence, ni le budget. */
     {
-      label: t("nav.productivity"),
+      label: t("nav.personal"),
       items: [
         { id: "daily-planner", icon: LucideCalendarDays, label: t("nav.dailyPlanner") },
         { id: "agenda",        icon: LucideCalendarClock, label: t("nav.agenda") },
@@ -635,6 +639,7 @@ export default function App() {
         { id: "sport",         icon: LucideDumbbell,     label: "Sport" },
         { id: "notes",         icon: LucideFileText,     label: t("nav.notes") },
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
+        { id: "budget",        icon: LucidePiggyBank,    label: t("nav.budget") },
       ],
     },
   ];
@@ -700,6 +705,7 @@ export default function App() {
     drive: <DrivePage />,
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,
+    budget: <BudgetPage />,
     settings: <SettingsPage user={user} onBack={() => setPage("dashboard")} setPage={setPage} />,
   };
 
@@ -739,7 +745,7 @@ export default function App() {
             });
           }}
           brand="tao trade"
-          user={{ name: displayUser.name, email: displayUser.email, initials: displayUser.initials, avatarUrl: displayUser.avatarUrl }}
+          user={{ name: displayUser.name, initials: displayUser.initials, avatarUrl: displayUser.avatarUrl }}
           onProfile={() => setPage("settings")}
           onSettings={() => setPage("settings")}
           onDarkMode={() => {

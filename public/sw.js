@@ -7,7 +7,7 @@
  *  - APIs (/api/*) : pas de cache (toujours réseau)
  */
 
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL_CACHE = `tao-shell-${VERSION}`;
 const RUNTIME_CACHE = `tao-runtime-${VERSION}`;
 
@@ -16,6 +16,7 @@ const SHELL_URLS = [
   "/dashboard",
   "/login",
   "/manifest.webmanifest",
+  "/logo.svg",   // logo affiché dans l'interface (écran de chargement hors-ligne)
   "/favicon.svg",
   "/favicon.ico",
 ];

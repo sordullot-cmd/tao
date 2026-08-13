@@ -36,14 +36,16 @@ export const T = {
   purpleBg: "var(--color-purple-bg, #F5F3FF)",
   purpleBd: "var(--color-purple-bd, #DDD6FE)",
   cyan:     "var(--color-cyan, #06B6D4)",
-  // Accent signature style Kraken (violet/indigo) — courbe portefeuille & pastilles
-  kraken:   "var(--color-kraken, #7C4DFF)",
-  krakenBg: "var(--color-kraken-bg, #F4F0FF)",
+  // Accent signature style Kraken — courbe portefeuille & pastilles.
+  // La teinte vient de `--accent-*` (bloc « ACCENT DE MARQUE » de globals.css) ;
+  // les hex ici ne servent que de repli si la feuille n'est pas chargée.
+  kraken:   "var(--color-kraken, #4CC72C)",
+  krakenBg: "var(--color-kraken-bg, #EEFBEA)",
 
   // === Nouvelle DA (maquette Figma « Tableau de bord ») ===
   // Navigation
-  navActiveBg:   "var(--color-nav-active-bg, rgba(156,123,255,0.10))",
-  navActiveText: "var(--color-nav-active-text, #9C7BFF)",
+  navActiveBg:   "var(--color-nav-active-bg, rgba(100,215,65,0.10))",
+  navActiveText: "var(--color-nav-active-text, #64D741)",
   // Chiffres P&L
   pnlPos:   "var(--color-pnl-pos, #008932)",
   pnlNeg:   "var(--color-pnl-neg, #B90707)",

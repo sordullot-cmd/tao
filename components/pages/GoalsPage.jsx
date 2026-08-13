@@ -642,10 +642,6 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goals, trades]);
 
-  // Filtre catégorie
-  const [catFilter, setCatFilter] = useState("all"); // all | trading | personal
-  const filtered = catFilter === "all" ? goals : goals.filter(g => (g.category || "trading") === catFilter);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className={embedded ? undefined : "anim-1"}>
       {/* Header : pleine largeur au-dessus du drawer. Intégré, l'hôte porte
@@ -670,47 +666,12 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
         </>
       )}
 
-      {/* Column headers */}
-      <div className="tr4de-goals-headers" style={{ display: "grid", gridTemplateColumns: "minmax(70px, 110px) minmax(0, 1fr) minmax(90px, 160px) minmax(110px, 160px) 124px", gap: 12, padding: "0 16px", fontSize: 11, color: T.textMut, fontWeight: 500 }}>
-        <div>Créé le</div>
-        <div>Objectif</div>
-        <div>Échéance</div>
-        <div>Cible</div>
-        <div />
-      </div>
-
-      {/* Category tabs : n'afficher que les catégories qui contiennent au moins un objectif */}
-      <div style={{ display: "flex", gap: 6, padding: "0 16px", flexWrap: "wrap" }}>
-        {(() => {
-          const tabs = [{ id: "all", label: "Tous", icon: null }];
-          CATEGORIES.forEach(c => {
-            const count = goals.filter(g => (g.category || "trading") === c.id).length;
-            if (count > 0) tabs.push(c);
-          });
-          return tabs.map(c => {
-            const Icon = c.icon;
-            const count = c.id === "all" ? goals.length : goals.filter(g => (g.category || "trading") === c.id).length;
-            return (
-              <button key={c.id} onClick={() => setCatFilter(c.id)}
-                style={{
-                  padding: "6px 12px", borderRadius: 999,
-                  border: `1px solid ${catFilter === c.id ? T.text : T.border}`,
-                  background: catFilter === c.id ? T.text : T.white,
-                  color: catFilter === c.id ? T.white : T.text,
-                  fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                }}>
-                {Icon && <Icon size={11} strokeWidth={1.75} />}
-                {c.label}
-                <span style={{ padding: "0 6px", borderRadius: 999, fontSize: 10, background: catFilter === c.id ? "rgba(255,255,255,0.18)" : T.accentBg, color: catFilter === c.id ? T.white : T.textSub }}>{count}</span>
-              </button>
-            );
-          });
-        })()}
-      </div>
+      {/* Ni en-têtes de colonnes ni onglets de catégorie : les valeurs des
+          lignes se lisent seules (date, x/y, %) et ces deux bandeaux
+          n'apportaient que du bruit au-dessus de la liste. */}
 
       {/* Timeline */}
-      {filtered.length === 0 ? (
+      {goals.length === 0 ? (
         <EmptyState onClick={openCreate} />
       ) : (
         <>
@@ -732,11 +693,11 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
               const db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
               return da - db;
             };
-            const onGoing = filtered.filter(g => {
+            const onGoing = goals.filter(g => {
               const { pct, current, target } = compute(g);
               return g.autoType === "max_dd" ? current > target : pct < 100;
             }).sort(byPriority);
-            const done = filtered.filter(g => {
+            const done = goals.filter(g => {
               const { pct, current, target } = compute(g);
               return g.autoType === "max_dd" ? current <= target : pct >= 100;
             }).sort(byPriority);
@@ -1217,11 +1178,11 @@ function StatCell({ icon: Icon, label, subLabel, value, isLast }) {
 
 function TimelineSection({ title, rows, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, drawerOpen }) {
   return (
-    /* 8 px entre les lignes : ce sont désormais des cartes, elles ont besoin
+    /* 12 px entre les lignes : ce sont désormais des cartes, elles ont besoin
        d'un intervalle pour se lire comme des blocs distincts (2 px les
        recollait en un pavé continu). */
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1, padding: "0 16px 4px" }}>{title}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1, padding: "0 16px 6px" }}>{title}</div>
       {rows.map(g => (
         <TimelineRow key={g.id} goal={g}
           compute={compute} unitOf={unitOf} fmtVal={fmtVal}
@@ -1403,9 +1364,9 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           gridTemplateColumns: nested
             ? "minmax(0, 1fr) minmax(80px, 130px) minmax(110px, 160px) 120px"
             : "minmax(70px, 110px) minmax(0, 1fr) minmax(90px, 160px) minmax(110px, 160px) 124px",
-          gap: nested ? 10 : 12,
+          gap: nested ? 14 : 20,
           alignItems: "center",
-          padding: nested ? "8px 10px" : "12px 16px",
+          padding: nested ? "12px 14px" : "18px 20px",
           /* Chaque objectif est sa PROPRE carte blanche posée sur le fond gris
              de la page : au repos il est blanc, le survol et l'ouverture le
              teintent comme n'importe quelle ligne cliquable de l'app. Les
@@ -1431,7 +1392,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           <div style={{ fontSize: 12, color: T.textMut, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{createdLabel}</div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", gap: nested ? 10 : 12, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: nested ? 12 : 14, minWidth: 0 }}>
           {/* Icon bubble — fond plein à la couleur de la catégorie,
               icône en blanc pour le contraste. */}
           <div style={{
@@ -1449,7 +1410,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               textDecoration: doneSection ? "line-through" : "none",
             }}>{g.label}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, fontSize: 11, color: T.textMut, overflow: "hidden", whiteSpace: "nowrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: 11, color: T.textMut, overflow: "hidden", whiteSpace: "nowrap" }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{cat.label}</span>
               {(() => {
                 const lv = LEVELS.find(l => l.id === (g.level || "normal")) || LEVELS[1];
@@ -1500,7 +1461,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
         <div style={{ fontSize: 12, color: T.text, fontWeight: 500 }}>
           {dueLabel}
           {dl !== null && !isAchieved && (
-            <div style={{ fontSize: 10, color: dl < 0 ? T.red : dl <= 3 ? T.amber : T.textMut, fontWeight: 500, marginTop: 1 }}>
+            <div style={{ fontSize: 10, color: dl < 0 ? T.red : dl <= 3 ? T.amber : T.textMut, fontWeight: 500, marginTop: 4 }}>
               {dl < 0 ? `${Math.abs(dl)}j dépassée` : dl === 0 ? "aujourd'hui" : `${dl}j restants`}
             </div>
           )}
@@ -1540,7 +1501,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
             <span style={{ color: T.textMut, margin: "0 3px" }}>/</span>
             <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtVal(target, unit)}</span>
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
             <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
               {/* Repère « où je devrais en être » : petit triangle POSÉ au-dessus de
                   la barre (ne la traverse pas), pointant vers le niveau attendu. */}
@@ -1568,7 +1529,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           {/* Rythme requis pour tenir l'échéance (métriques additives uniquement). */}
           {!isAchieved && pace?.requiredRate != null && (
             <div title="Ce qu'il reste à accomplir, réparti sur le temps restant jusqu'à l'échéance (jours de bourse pour le trading : le week-end ne compte pas)"
-              style={{ fontSize: 9, color: T.textMut, fontWeight: 500, marginTop: 4, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              style={{ fontSize: 9, color: T.textMut, fontWeight: 500, marginTop: 6, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               ≈ {fmtVal(pace.requiredRate, unit)}/{pace.rateUnit === "semaine" ? "sem." : pace.rateUnit === "mois" ? "mois" : "j"} requis
             </div>
           )}
@@ -2473,7 +2434,7 @@ function SubtaskNode({ node, onChange, onRemove, depth = 0 }) {
       </div>
 
       {open && (
-        <div style={{ marginLeft: 22, paddingLeft: 10, borderLeft: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 2, paddingTop: 2, paddingBottom: 4 }}>
+        <div style={{ marginLeft: 22, paddingLeft: 12, borderLeft: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 6, paddingTop: 6, paddingBottom: 6 }}>
           {sortByDeadline(children).map((child) => (
             <SubtaskNode
               key={child.id}

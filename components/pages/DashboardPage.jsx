@@ -5,11 +5,12 @@ import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
+import { parseAccountSize } from "@/lib/propFirms";
 import { Skeleton, SkeletonRows } from "@/components/ui/Skeleton";
 import { useApp } from "@/lib/contexts/AppContext";
 import {
   GRID_COLUMN_STOPS, GRID_TICKS, AreaDotsDefs, areaDotsFill,
-  HoverFadeDefs, hoverFadeMask, hoverFadeStyle, HOVER_FADE,
+  HoverFadeDefs, hoverFadeMask, hoverFadeStyle, HOVER_FADE, TILE_HOVER,
 } from "@/components/ui/da";
 import TradesList, { COMPACT_TRADE_COLUMNS } from "@/components/ui/tradesList";
 import { LayoutDashboard, Plus, ChevronLeft, ChevronRight, ArrowDownRight, ArrowUpRight } from "lucide-react";
@@ -89,13 +90,14 @@ function HeroAmount({ value }) {
   );
 }
 
-/** Montant sur deux lignes : valeur puis pourcentage entre parenthèses. */
-function StackedAmount({ value, percent, align = "flex-end" }) {
+/** Montant signé, colorisé. Le pourcentage « part du total » qui s'empilait
+    dessous ne disait rien de lisible : sur un P&L total proche de zéro, une
+    ligne pouvait peser 400 %, et le signe du dénominateur inversait la lecture. */
+function StackedAmount({ value, align = "flex-end" }) {
   const color = value > 0 ? T.pnlPos : value < 0 ? T.pnlNeg : T.textSub;
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:align,justifyContent:"center",color,fontWeight:500,whiteSpace:"nowrap"}}>
       <span style={{fontSize:16,lineHeight:"18.6px"}}>{value > 0 ? "+" : ""}{fmt(value, false)}</span>
-      {percent != null && <span style={{fontSize:12,lineHeight:1}}>( {percent.toFixed(2)}% )</span>}
     </div>
   );
 }
@@ -261,6 +263,18 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
     load("tr4de_trade_timeframe", setTimeframeTags);
   }, []);
 
+  /* Capital des comptes actifs — base du pourcentage de variation quand la
+     fenêtre de la courbe part de zéro (cas « Tout » : le premier point est le
+     zéro posé la veille du premier trade, il ne peut pas servir de diviseur).
+     Zéro si aucune taille de compte n'est renseignée : le pourcentage est alors
+     masqué plutôt qu'affiché à 0,00 %. */
+  const baseCapital = React.useMemo(() => {
+    const ids = new Set(selectedAccountIds);
+    return (accounts || [])
+      .filter(a => ids.size === 0 || ids.has(a.id))
+      .reduce((s, a) => s + (parseAccountSize(a.eval_account_size) || 0), 0);
+  }, [accounts, selectedAccountIds]);
+
   // Pendant que les trades arrivent depuis Supabase, afficher un skeleton
   // plutôt que l'état vide (évite le flash "Aucun trade" puis re-render).
   const { tradesLoading } = useApp();
@@ -342,9 +356,6 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
     : trades;
 
   const totalPnL = curveTrades.reduce((s,t)=>s+t.pnl,0);
-  // P&L de référence des blocs de stats — sert de dénominateur aux pourcentages
-  // « part du total » (cartes Tao Score, trades récents).
-  const statsPnL = filteredTrades.reduce((s,t)=>s+t.pnl,0);
   const wins = filteredTrades.filter(t=>t.pnl>0);
   const losses = filteredTrades.filter(t=>t.pnl<0);
   const winCount = wins.length;
@@ -680,7 +691,17 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   const lastCum = pnlCurve.length ? pnlCurve[pnlCurve.length - 1].cum : 0;
   const firstCum = pnlCurve.length ? pnlCurve[0].cum : 0;
   const deltaAbs = lastCum - firstCum;
-  const deltaPct = firstCum !== 0 ? Math.abs((deltaAbs / firstCum) * 100) : 0;
+  /* Base du pourcentage : le SOLDE au début de la fenêtre, c'est-à-dire le
+     capital des comptes plus le cumulé déjà acquis à ce moment-là. Le cumulé
+     seul ne marchait pas : sur « Tout » la fenêtre part du zéro posé avant le
+     premier trade, et le pourcentage restait figé à 0,00 % ; sur les fenêtres
+     courtes, un cumulé de départ proche de zéro faisait exploser le rapport.
+     Sans capital connu, on retombe sur le cumulé de départ, et à défaut le
+     pourcentage n'est pas affiché du tout. */
+  const deltaBase = baseCapital
+    ? Math.abs(baseCapital + firstCum)
+    : Math.abs(firstCum);
+  const deltaPct = deltaBase ? Math.abs((deltaAbs / deltaBase) * 100) : null;
   const deltaColor = deltaAbs > 0 ? T.pnlPos : deltaAbs < 0 ? T.pnlNeg : T.textSub;
   const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
 
@@ -732,12 +753,18 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
             <HeroAmount value={totalPnL} />
             <div style={{display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:500,lineHeight:"18.6px",color:deltaColor}}>
               <span>{deltaAbs > 0 ? "+" : ""}{fmt(deltaAbs, false)}</span>
-              <span style={{display:"inline-flex",alignItems:"center"}}>
-                <span>(</span>
-                <DeltaIcon size={20} strokeWidth={1.75} style={{margin:"0 1px"}} />
-                <span>{deltaPct.toFixed(2)}%</span>
-                <span>&nbsp;)</span>
-              </span>
+              {/* Sans base de calcul, la flèche seule : des parenthèses vides
+                  se liraient comme une valeur manquante. */}
+              {deltaPct != null ? (
+                <span style={{display:"inline-flex",alignItems:"center"}}>
+                  <span>(</span>
+                  <DeltaIcon size={20} strokeWidth={1.75} style={{margin:"0 1px"}} />
+                  <span>{deltaPct.toFixed(2)}%</span>
+                  <span>&nbsp;)</span>
+                </span>
+              ) : (
+                <DeltaIcon size={20} strokeWidth={1.75} />
+              )}
             </div>
           </div>
 
@@ -1057,10 +1084,10 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                         display:"flex", flexDirection:"column",
                         alignItems:"center", justifyContent:"center",
                         color:fg, cursor: clickable ? "pointer" : "default",
-                        transition:"filter .15s ease", minWidth:0, overflow:"hidden",
+                        transition:"box-shadow .15s ease", minWidth:0, overflow:"hidden",
                       }}
-                      onMouseEnter={clickable ? (e) => { e.currentTarget.style.filter = "brightness(0.96)"; } : undefined}
-                      onMouseLeave={clickable ? (e) => { e.currentTarget.style.filter = "none"; } : undefined}
+                      onMouseEnter={clickable ? (e) => { e.currentTarget.style.boxShadow = TILE_HOVER; } : undefined}
+                      onMouseLeave={clickable ? (e) => { e.currentTarget.style.boxShadow = "none"; } : undefined}
                     >
                       {pnl !== 0 ? (
                         <>
@@ -1210,8 +1237,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                       </span>
                       <span style={{textAlign:"right",fontSize:15,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
                       <span style={{textAlign:"right",fontSize:15,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
-                      {/* % = part de cette catégorie dans le P&L total de l'historique */}
-                      <StackedAmount value={r.pnl} percent={statsPnL !== 0 ? Math.abs((r.pnl / statsPnL) * 100) : 0} />
+                      <StackedAmount value={r.pnl} />
                     </div>
                   ))}
                 </div>

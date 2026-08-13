@@ -27,13 +27,14 @@
  */
 
 import React from "react";
-import { Plus, Pencil, Trash2, Settings2, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Settings2, ChevronDown, Link2 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { calculateFees } from "@/lib/tradeFees";
 import { t, useLang } from "@/lib/i18n";
 import { firmLogo } from "@/lib/accountBrand";
+import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import {
   createFirmAccounts,
   deleteFirm,
@@ -44,7 +45,7 @@ import {
 } from "@/lib/propFirms";
 import { RoundLogo } from "@/components/ui/accountRows";
 import {
-  CARD, SectionTitle, SectionAction, HeroAmount,
+  CARD, SectionTitle, SectionAction, HeroAmount, MiniKpi, StatsCard,
   PeriodPills, windowSeries, AGGREGATE_CURVE_COLOR, PnlChart, msOf, BackLink,
 } from "@/components/ui/da";
 import { assignSeriesColors, firmBrandColor } from "@/lib/ui/brandColors";
@@ -53,6 +54,7 @@ import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
 import {
   AccountModal,
+  AttachAccountsModal,
   ConfirmModal,
   Field,
   ModalShell,
@@ -118,6 +120,10 @@ export default function PropFirmDetailPage({
   /* Formulaire d'ajout en lot — dans une fenêtre volante ouverte par le bouton
      posé sous la liste des comptes. */
   const [addOpen, setAddOpen] = React.useState(false);
+  /* Rattachement de comptes qui EXISTENT déjà : l'ajout en lot ci-dessus en
+     CRÉE, il ne sait pas récupérer un compte saisi avant la firme ou rattaché
+     ailleurs. */
+  const [attachOpen, setAttachOpen] = React.useState(false);
   const [addType, setAddType] = React.useState("eval");
   // Taille normalisée pour eval/funded ; solde initial libre pour live/démo.
   const [addSize, setAddSize] = React.useState("50k");
@@ -457,6 +463,19 @@ export default function PropFirmDetailPage({
           >
             <Plus size={13} strokeWidth={1.75} /> {t("firms.addAccount")}
           </button>
+          {/* Second chemin, en retenue : rattacher un compte qui existe déjà.
+              Il ne crée rien, d'où le contour plutôt que le plein. */}
+          <button
+            type="button"
+            onClick={() => setAttachOpen(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px",
+              minHeight: 32, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white,
+              color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Link2 size={13} strokeWidth={1.75} /> {t("firms.attachAccount")}
+          </button>
           <button
             type="button"
             onClick={() => setEditingFirm(true)}
@@ -600,32 +619,32 @@ export default function PropFirmDetailPage({
         </SectionTitle>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, alignItems: "stretch" }}>
           <StatsCard title="Trades" expanded={statsExpanded} rows={[
-            ["Total trades", String(perf.total)],
-            ["Gagnants", String(perf.wins)],
-            ["Perdants", String(perf.losses)],
-            ["Neutres", String(perf.scratch)],
-            ["Long", String(perf.longCount)],
-            ["Short", String(perf.shortCount)],
-            ["Win rate", perf.total > 0 ? `${perf.winRate.toFixed(1)}%` : "—"],
-            ["Profit factor", perf.profitFactor === Infinity ? "∞" : perf.total > 0 ? perf.profitFactor.toFixed(2) : "—"],
+            { label: "Total trades", value: String(perf.total) },
+            { label: "Gagnants", value: String(perf.wins) },
+            { label: "Perdants", value: String(perf.losses) },
+            { label: "Neutres", value: String(perf.scratch) },
+            { label: "Long", value: String(perf.longCount) },
+            { label: "Short", value: String(perf.shortCount) },
+            { label: "Win rate", value: perf.total > 0 ? `${perf.winRate.toFixed(1)}%` : "—" },
+            { label: "Profit factor", value: perf.profitFactor === Infinity ? "∞" : perf.total > 0 ? perf.profitFactor.toFixed(2) : "—" },
           ]} />
           <StatsCard title="P&L" expanded={statsExpanded} rows={[
-            ["P&L cumulé", fmt(perf.pnl, true)],
-            ["Gain moyen", perf.wins ? fmt(perf.avgWin, true) : "—"],
-            ["Perte moyenne", perf.losses ? fmt(perf.avgLoss, true) : "—"],
-            ["Drawdown max", perf.maxDD < 0 ? fmt(perf.maxDD, false) : "—"],
-            ["Meilleur trade", perf.total ? fmt(perf.bestTrade, true) : "—"],
-            ["Pire trade", perf.total ? fmt(perf.worstTrade, true) : "—"],
-            ["Espérance / trade", perf.total > 0 ? fmt(perf.expectancy, true) : "—"],
-            ["Frais cumulés", perf.total > 0 ? fmt(perf.totalFees, false) : "—"],
+            { label: "P&L cumulé", value: fmt(perf.pnl, true) },
+            { label: "Gain moyen", value: perf.wins ? fmt(perf.avgWin, true) : "—" },
+            { label: "Perte moyenne", value: perf.losses ? fmt(perf.avgLoss, true) : "—" },
+            { label: "Drawdown max", value: perf.maxDD < 0 ? fmt(perf.maxDD, false) : "—" },
+            { label: "Meilleur trade", value: perf.total ? fmt(perf.bestTrade, true) : "—" },
+            { label: "Pire trade", value: perf.total ? fmt(perf.worstTrade, true) : "—" },
+            { label: "Espérance / trade", value: perf.total > 0 ? fmt(perf.expectancy, true) : "—" },
+            { label: "Frais cumulés", value: perf.total > 0 ? fmt(perf.totalFees, false) : "—" },
           ]} />
           <StatsCard title="Comptes" expanded={statsExpanded} rows={[
-            ["Comptes", String(totals.count)],
-            ["Capital géré", totals.capital > 0 ? fmtNoCents(totals.capital) : "—"],
-            ["Valeur actuelle", totals.capital > 0 ? fmtNoCents(firmValue) : fmt(perf.pnl, true)],
-            ["Payout dispo", fmtNoCents(firmAccounts.reduce((s, a) => s + viewOf(a).payout, 0))],
-            ["Jours tradés", String(perf.tradingDays)],
-            ["Trades / compte", totals.count > 0 ? (perf.total / totals.count).toFixed(1) : "—"],
+            { label: "Comptes", value: String(totals.count) },
+            { label: "Capital géré", value: totals.capital > 0 ? fmtNoCents(totals.capital) : "—" },
+            { label: "Valeur actuelle", value: totals.capital > 0 ? fmtNoCents(firmValue) : fmt(perf.pnl, true) },
+            { label: "Payout dispo", value: fmtNoCents(firmAccounts.reduce((s, a) => s + viewOf(a).payout, 0)) },
+            { label: "Jours tradés", value: String(perf.tradingDays) },
+            { label: "Trades / compte", value: totals.count > 0 ? (perf.total / totals.count).toFixed(1) : "—" },
           ]} />
         </div>
       </div>
@@ -775,6 +794,23 @@ export default function PropFirmDetailPage({
         />
       )}
 
+      {/* Rattachement de comptes existants : la modale ne propose que les
+          comptes qui ne sont pas DÉJÀ ici, le compte technique exclu. */}
+      {attachOpen && firm && (
+        <AttachAccountsModal
+          firm={firm}
+          accounts={accounts.filter((a) => a && !isPlaceholderAccount(a.id))}
+          firms={firms}
+          onClose={() => setAttachOpen(false)}
+          onAttached={({ updated = [] }) => {
+            setAccounts?.((prev) => (prev || []).map((a) => {
+              const hit = updated.find((u) => u.id === a.id);
+              return hit ? { ...a, ...hit } : a;
+            }));
+          }}
+        />
+      )}
+
       {editingAccount && (
         <AccountModal
           account={editingAccount}
@@ -839,18 +875,6 @@ export default function PropFirmDetailPage({
  * Mini-KPI du bloc valeur (node 369:4349) : libellé 14 px atténué au-dessus,
  * valeur 16 px Medium en dessous. Les 4 tuiles sont espacées de 38 px.
  */
-function MiniKpi({ label, value, tone }) {
-  const color = tone === "pos" ? T.pnlPos : tone === "neg" ? T.pnlNeg : T.text;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
-      <span style={{ fontSize: 11, lineHeight: 1, color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1, color, whiteSpace: "nowrap" }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 /**
  * Sous-titre « Plateforme · N comptes » de l'en-tête, doublé d'un menu vers les
  * comptes de la firme. Toute la ligne est le déclencheur — le chevron seul
@@ -1016,34 +1040,6 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-/* Carte de récapitulatif : un titre puis des lignes libellé → valeur.
-   Même présentation que les cartes « Statistiques » de la maquette (4 lignes
-   visibles ; « Voir plus » déplie tout le reste). */
-function StatsCard({ title, rows, expanded }) {
-  const VISIBLE = 4;
-  const shown = expanded ? rows : rows.slice(0, VISIBLE);
-  return (
-    <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.2, color: T.text }}>{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {shown.map(([label, value]) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <span style={{
-              fontSize: 12, color: T.text, opacity: 0.5,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {label}
-            </span>
-            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.15, color: T.text, whiteSpace: "nowrap" }}>
-              {value}
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
