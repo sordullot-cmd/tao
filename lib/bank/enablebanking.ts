@@ -44,6 +44,8 @@ export interface BankAccount {
   balance: number;
   currency: string;
   institution: string;
+  /** Logo de la banque, tel que publié par l'agrégateur. `null` s'il n'en a pas. */
+  logo: string | null;
 }
 
 export const bankConfig = {
@@ -239,6 +241,33 @@ function mapAccountType(cashAccountType?: string): "checking" | "savings" {
   return cashAccountType === "SVGS" ? "savings" : "checking";
 }
 
+/* ── Logos ─────────────────────────────────────────────────────────────────
+   Les soldes ne portent pas le logo de la banque : il vit sur la fiche ASPSP.
+   On récupère donc la liste une fois et on garde la correspondance nom → logo
+   en mémoire pour la durée du process. Elle change au rythme du catalogue de
+   l'agrégateur, soit à peu près jamais à l'échelle d'un déploiement.
+   ------------------------------------------------------------------------ */
+
+let cachedLogos: { map: Map<string, string>; expiresAt: number } | null = null;
+const LOGO_TTL = 6 * 3600_000; // 6 h
+
+async function getLogoMap(): Promise<Map<string, string>> {
+  if (cachedLogos && cachedLogos.expiresAt > Date.now()) return cachedLogos.map;
+  try {
+    const institutions = await listInstitutions();
+    const map = new Map<string, string>();
+    for (const inst of institutions) {
+      if (inst.logo) map.set(inst.name, inst.logo);
+    }
+    cachedLogos = { map, expiresAt: Date.now() + LOGO_TTL };
+    return map;
+  } catch {
+    // Un logo manquant n'est pas une raison de faire échouer l'agrégation :
+    // l'affichage retombe sur les initiales de la banque.
+    return new Map();
+  }
+}
+
 /** Un compte en échec rend `null` : il ne doit pas faire tomber toute l'agrégation. */
 async function fetchOneAccount(uid: string, aspspName: string): Promise<BankAccount | null> {
   try {
@@ -260,6 +289,7 @@ async function fetchOneAccount(uid: string, aspspName: string): Promise<BankAcco
       balance: Math.round(parseFloat(amount.amount) * 100) / 100,
       currency: amount.currency || "EUR",
       institution: aspspName,
+      logo: null, // rempli par `fetchAccounts`, qui a la table des logos
     };
   } catch {
     return null;
@@ -279,6 +309,12 @@ export async function fetchAccounts(
     const uids = Array.isArray(conn.account_uids) ? (conn.account_uids as string[]) : [];
     return uids.map((uid) => fetchOneAccount(uid, conn.aspsp_name));
   });
-  const results = await Promise.all(jobs);
-  return results.filter((a): a is BankAccount => a !== null);
+
+  // La table des logos se charge PENDANT les soldes, pas après : elle ne doit
+  // rien ajouter au temps d'attente.
+  const [results, logos] = await Promise.all([Promise.all(jobs), getLogoMap()]);
+
+  return results
+    .filter((a): a is BankAccount => a !== null)
+    .map((a) => ({ ...a, logo: logos.get(a.institution) ?? null }));
 }

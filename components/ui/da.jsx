@@ -104,6 +104,150 @@ export function StatsCard({ title, rows = [], expanded = false, visible = 4 }) {
   );
 }
 
+/* ── Répartition d'un tout ──────────────────────────────────────────────────
+   Une même donnée — des parts d'un total — sous DEUX formes, au choix de
+   l'utilisateur : l'anneau montre la silhouette de la répartition, la barre
+   tient sur une ligne et se compare d'un bloc à l'autre. Les deux vivent ici
+   parce que la page Budget et la synthèse Patrimoine affichent la MÊME
+   répartition : elles doivent la dessiner avec le même code, comme elles
+   partagent déjà ses couleurs.
+
+   `parts` : [{ id, label, color, pct, amount }] — `pct` en pourcentage du total.
+   `scale` : dénominateur des parts. Au-delà de 100 %, l'appelant passe le total
+   afin que le dessin reste plein et les proportions comparables entre elles.
+   ------------------------------------------------------------------------- */
+
+/** Les deux formes, pour le sélecteur ; `label` est résolu à l'appel. */
+export const ALLOCATION_KINDS = ["ring", "bar"];
+
+/**
+ * Écart entre deux parts voisines, dans l'unité de chaque forme. C'est
+ * l'encodage secondaire de la palette : il sépare deux parts même quand leurs
+ * teintes se confondent (vision des couleurs déficiente, impression en niveaux
+ * de gris).
+ */
+const PART_GAP = 2;
+
+export function AllocationChart({
+  kind = "ring",
+  parts = [],
+  scale = 100,
+  ariaLabel,
+  size = 180,
+  thickness = 22,
+  barHeight = 14,
+  centreLabel,
+  centreValue,
+  centreTone,
+  formatValue = (v) => String(Math.round(v)),
+}) {
+  const [hover, setHover] = React.useState(null);
+  const live = parts.filter(p => p.pct > 0);
+  const shown = hover != null ? live.find(p => p.id === hover) : null;
+
+  /* Infobulle native : la valeur exacte reste accessible sur chaque part sans
+     construire un calque flottant, les pages portant déjà leurs chiffres en
+     clair juste à côté. */
+  const partTitle = (p) => `${p.label} · ${formatValue(p.amount)} · ${Math.round(p.pct * 10) / 10}%`;
+
+  if (kind === "bar") {
+    return (
+      <div
+        role="img"
+        aria-label={ariaLabel}
+        style={{ display: "flex", gap: PART_GAP, height: barHeight, width: "100%", borderRadius: 999, overflow: "hidden", background: T.accentBg }}
+      >
+        {live.map(p => (
+          <div
+            key={p.id}
+            title={partTitle(p)}
+            style={{
+              width: `${(p.pct / scale) * 100}%`,
+              background: p.color,
+              transition: "width 200ms var(--ease-out, ease)",
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  /* Anneau : un cercle par part, tracé en pointillé et pivoté à son décalage —
+     plus exact que des arcs calculés à la main, et le trait garde une épaisseur
+     constante. La piste de fond est ce qui reste : le reste n'est pas dessiné
+     comme une part, il n'en est pas une. */
+  const R = (size - thickness) / 2;
+  const CIRC = 2 * Math.PI * R;
+  let acc = 0;
+  const arcs = live.map(p => {
+    const frac = p.pct / scale;
+    const arc = { ...p, frac, offset: acc };
+    acc += frac;
+    return arc;
+  });
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4px 0" }}>
+      <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+        <svg
+          viewBox={`0 0 ${size} ${size}`} width={size} height={size}
+          role="img" aria-label={ariaLabel}
+          style={{ display: "block", transform: "rotate(-90deg)" }}
+        >
+          <circle cx={size / 2} cy={size / 2} r={R} fill="none" stroke={T.accentBg} strokeWidth={thickness} />
+          {arcs.map(a => {
+            const len = Math.max(a.frac * CIRC - PART_GAP, 0.5);
+            return (
+              <circle
+                key={a.id}
+                cx={size / 2} cy={size / 2} r={R}
+                fill="none" stroke={a.color} strokeWidth={thickness}
+                strokeDasharray={`${len} ${CIRC - len}`}
+                strokeDashoffset={-a.offset * CIRC}
+                strokeLinecap="butt"
+                onMouseEnter={() => setHover(a.id)}
+                onMouseLeave={() => setHover(null)}
+                style={{
+                  opacity: hover == null || hover === a.id ? 1 : 0.45,
+                  transition: "opacity 140ms var(--ease-out, ease), stroke-dasharray 200ms var(--ease-out, ease)",
+                }}
+              >
+                <title>{partTitle(a)}</title>
+              </circle>
+            );
+          })}
+        </svg>
+
+        {/* Centre : ce que l'appelant y met, ou la part survolée. Le texte porte
+            les tokens d'encre, jamais la couleur de la série — seul le point de
+            couleur porte l'identité. */}
+        <div style={{
+          position: "absolute", inset: thickness + 6, borderRadius: "50%",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 2, pointerEvents: "none", textAlign: "center",
+        }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, lineHeight: 1.1, color: T.textSub, maxWidth: "100%" }}>
+            {shown && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: "50%", background: shown.color, flexShrink: 0 }} />}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {shown ? shown.label : centreLabel}
+            </span>
+          </span>
+          <span style={{
+            fontSize: 18, fontWeight: 600, lineHeight: 1.1, whiteSpace: "nowrap",
+            fontVariantNumeric: "tabular-nums",
+            color: !shown && centreTone ? centreTone : T.text,
+          }}>
+            {formatValue(shown ? shown.amount : centreValue)}
+          </span>
+          <span style={{ fontSize: 11, lineHeight: 1.1, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+            {Math.round((shown ? shown.pct : live.reduce((s, p) => s + p.pct, 0)) * 10) / 10}%
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** En-tête de colonne : 12px Medium en capitales (à poser dans un bloc opacity .4). */
 export const TH = {
   fontSize: 12,

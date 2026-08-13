@@ -26,13 +26,16 @@
  */
 
 import React from "react";
-import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
+import { Crown, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { CARD, SectionTitle } from "@/components/ui/da";
+import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import {
+  BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, amountOf, pctOf,
+} from "@/lib/budgetPlans";
 
 const DEFAULT_PLAN_ID = "budget-1";
 const DEFAULT_INCOME = 2000;
@@ -48,32 +51,41 @@ const DEFAULT_INCOME = 2000;
    « long », brun des tags « short », gris du texte secondaire) ; seule leur
    clarté est ajustée, pour trois raisons mesurées :
 
-   • rester lisible sur les DEUX fonds : ≥ 3:1 (seuil des éléments graphiques)
-     sur le blanc des cartes comme sur le gris sombre du thème sombre. Cela
-     enferme la clarté dans une fenêtre étroite — trop clair, la couleur
-     disparaît sur blanc ; trop sombre, elle s'éteint en thème sombre ;
+   • rester lisible sur les DEUX fonds : la clarté OKLCH tient dans [0.48, 0.67],
+     l'intersection des bandes admises en thème clair et en thème sombre, et le
+     contraste reste ≥ 3:1 (seuil des éléments graphiques) sur les deux surfaces.
+     Trop clair, la couleur disparaît sur blanc ; trop sombre, elle s'éteint en
+     thème sombre — la fenêtre est étroite ;
+   • garder assez de CHROMA (≥ 0.1) pour ne pas « lire gris » ;
    • séparer les VOISINES : la palette alterne une teinte sombre et une claire,
-     si bien que deux catégories côte à côte dans la barre tranchent toujours par
-     la clarté, et pas seulement par la teinte ;
-   • tenir en vision deutéranope, où rouge, vert et teal convergent : c'est
-     l'écart de clarté ci-dessus qui les garde séparables (le nom, la part et le
-     montant restent de toute façon écrits dans le tableau sous la barre — la
-     couleur n'est jamais le seul signal).
+     si bien que deux catégories côte à côte dans le graphique tranchent toujours
+     par la clarté, et pas seulement par la teinte. C'est ce qui les tient en
+     vision deutéranope, où rouge, vert et teal convergent (pire paire adjacente :
+     ΔE 8.6 en deutan, 18.7 en vision normale).
+
+   Ces valeurs ne sont pas estimées à l'œil : elles passent les six contrôles du
+   validateur de palette catégorielle (bande de clarté, plancher de chroma,
+   séparation CVD des paires adjacentes, plancher vision normale, contraste), en
+   clair ET en sombre. Toute retouche doit être repassée au validateur.
 
    L'ordre compte : il est repris tel quel par `defaultItems`, et une catégorie
    ajoutée prend la suivante. Toute retouche doit donc conserver l'alternance
-   clair/sombre. */
+   clair/sombre.
+
+   « Autres » est à part : c'est le slot fourre-tout, et la convention réserve le
+   gris au non-catégorisé. Il est donc volontairement sous le plancher de chroma
+   et ne compte pas dans la palette catégorielle. */
 const PALETTE = [
   "#2C72C3", // logement     — bleu du site, sombre
-  "#E77213", // alimentation — ambre, clair
-  "#0A7A93", // transport    — cyan, sombre
+  "#DF6C10", // alimentation — ambre, clair
+  "#0F8FAD", // transport    — cyan, sombre
   "#9D7AEF", // abonnements  — violet, clair
   "#B92E74", // loisirs      — magenta, sombre
   "#3EA817", // épargne      — vert de l'accent de marque, clair
   "#C83131", // shopping     — rouge, sombre
-  "#10A594", // santé        — teal des tags « long », clair
+  "#0E9A8A", // santé        — teal des tags « long », clair
   "#96590E", // frais        — brun des tags « short », sombre
-  "#8B96A2", // autres       — gris ardoise neutre, clair
+  "#8B96A2", // autres       — gris neutre : le slot « non catégorisé »
 ];
 
 /* Point de départ : la règle 50/30/20 adaptée. L'utilisateur ajuste ensuite —
@@ -95,17 +107,16 @@ const defaultStore = () => ({
   activeId: DEFAULT_PLAN_ID,
 });
 
-/* Les deux lectures d'une catégorie, selon son mode.
+/* `pctOf` / `amountOf` viennent de lib/budgetPlans.ts : la synthèse Patrimoine
+   lit le même budget et doit le calculer exactement pareil.
+
+   Rappel de leur règle — les deux lectures d'une catégorie, selon son mode.
    `fixed` ⇒ `amount` (en devise) est la source de vérité : la somme est liée à
    une dépense réelle, elle ne doit pas suivre les variations du revenu — c'est
    la part en % qui se recalcule. Sinon `pct` fait foi, comme au départ.
    Le pourcentage dérivé n'est PAS borné à 100 : un montant figé plus grand que
    le revenu doit apparaître comme un dépassement, pas être silencieusement
    ramené à la limite. */
-const pctOf = (it, income) =>
-  it.fixed ? (income > 0 ? ((it.amount || 0) / income) * 100 : 0) : (it.pct || 0);
-
-const amountOf = (it, income) => (it.fixed ? (it.amount || 0) : ((it.pct || 0) / 100) * income);
 
 const newId = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID)
@@ -136,6 +147,23 @@ const fieldSkin = (solid) => ({
   background: solid ? T.white : "transparent",
 });
 
+/** Marque du budget principal — celui que reprend la synthèse Patrimoine.
+ *  L'icône est masquée aux lecteurs d'écran : elle vit DANS l'onglet du plan,
+ *  et un libellé ici s'ajouterait au nom du bouton (« Budget principalMon
+ *  budget »). L'explication passe par l'infobulle, et la page Patrimoine nomme
+ *  de toute façon le budget qu'elle affiche. */
+function PrimaryCrown() {
+  return (
+    <span
+      title={t("budget.primaryHint")}
+      aria-hidden="true"
+      style={{ display: "inline-flex", flexShrink: 0, color: T.amber }}
+    >
+      <Crown size={13} strokeWidth={2} />
+    </span>
+  );
+}
+
 /** Pastille d'action discrète (Réinitialiser, Supprimer, Nouveau). */
 function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" }) {
   const base = danger ? T.red : tone === "ink" ? T.text : T.textSub;
@@ -162,7 +190,7 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
 
 export default function BudgetPage() {
   useLang();
-  const [store, setStore] = useCloudState("tr4de_budget_plans", "budget_plans", defaultStore());
+  const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   /* Id de l'élément qui vient d'être créé : son champ prend le focus au montage,
      texte sélectionné — on tape directement le nom voulu. */
@@ -234,6 +262,13 @@ export default function BudgetPage() {
     }));
   };
 
+  /* Forme du graphique de répartition — « ring » par défaut. Rangée dans le
+     store du budget, à côté du plan actif : c'est une préférence d'affichage de
+     CETTE donnée, et la synthèse Patrimoine, qui lit le même store, reprend donc
+     la forme choisie ici sans réglage de son côté. */
+  const chartKind = store?.chartKind === "bar" ? "bar" : "ring";
+  const setChartKind = (kind) => setStore((s) => ({ ...(s || {}), chartKind: kind }));
+
   const totalPct = items.reduce((s, it) => s + pctOf(it, plan.income), 0);
   const rest = plan.income * (1 - totalPct / 100);
   const over = totalPct > 100;
@@ -241,6 +276,17 @@ export default function BudgetPage() {
   // Au-delà de 100 %, la barre se normalise sur le total : elle reste pleine et
   // les proportions restent comparables entre elles.
   const barScale = Math.max(totalPct, 100);
+
+  /* Parts du graphique : les catégories qui pèsent quelque chose, dans l'ordre
+     de la liste — la couleur suit la catégorie, jamais son rang. */
+  const chartParts = items.map((it) => ({
+    id: it.id,
+    label: it.label,
+    color: it.color,
+    pct: pctOf(it, plan.income),
+    amount: amountOf(it, plan.income),
+  }));
+  const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
@@ -289,17 +335,22 @@ export default function BudgetPage() {
         </div>
 
         {/* Sélecteur de plans : le plan actif porte son nom en champ éditable
-            plutôt qu'un bouton « renommer » — le nom se corrige là où il se lit. */}
+            plutôt qu'un bouton « renommer » — le nom se corrige là où il se lit.
+
+            Le PREMIER plan est le budget principal : c'est lui que montre la
+            synthèse Patrimoine, et la couronne le dit là où on choisit ses
+            plans. Elle suit l'ordre de la liste, il n'y a rien à régler. */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {plans.map((p) =>
+          {plans.map((p, i) =>
             p.id === plan.id ? (
               <span
                 key={p.id}
                 style={{
-                  display: "inline-flex", alignItems: "center", height: 36, padding: "0 14px",
+                  display: "inline-flex", alignItems: "center", gap: 6, height: 36, padding: "0 14px",
                   borderRadius: 999, background: T.white, boxShadow: T.elevPill,
                 }}
               >
+                {i === 0 && <PrimaryCrown />}
                 <input
                   ref={(el) => {
                     if (el && p.id === focusPlanId.current) {
@@ -325,6 +376,7 @@ export default function BudgetPage() {
                 type="button"
                 onClick={() => selectPlan(p.id)}
                 style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
                   height: 36, padding: "0 14px", borderRadius: 999, border: "none",
                   background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
                   cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
@@ -333,6 +385,7 @@ export default function BudgetPage() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
               >
+                {i === 0 && <PrimaryCrown />}
                 {p.name}
               </button>
             )
@@ -362,22 +415,33 @@ export default function BudgetPage() {
             </span>
           </label>
 
-          {/* Barre de répartition */}
-          <div
-            role="img"
-            aria-label={t("budget.barAria").replace("{pct}", String(Math.round(totalPct * 10) / 10))}
-            style={{ display: "flex", height: 14, width: "100%", borderRadius: 999, overflow: "hidden", background: T.accentBg }}
-          >
-            {items.map((it) => (
-              <div
-                key={it.id}
-                style={{
-                  width: `${(pctOf(it, plan.income) / barScale) * 100}%`,
-                  background: it.color,
-                  transition: "width 200ms var(--ease-out, ease)",
-                }}
+          {/* Répartition — anneau ou barre, au choix. Le sélecteur est posé au
+              dessus, à droite : il règle l'affichage, il ne fait pas partie du
+              graphique. Le choix vit dans le store du budget, donc il suit
+              l'utilisateur d'un appareil à l'autre et la synthèse Patrimoine
+              affiche la même forme. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <PeriodPills
+                value={chartKind}
+                onChange={setChartKind}
+                options={[
+                  { id: "ring", label: t("budget.chartRing") },
+                  { id: "bar", label: t("budget.chartBar") },
+                ]}
+                track
               />
-            ))}
+            </div>
+            <AllocationChart
+              kind={chartKind}
+              parts={chartParts}
+              scale={barScale}
+              ariaLabel={t("budget.barAria").replace("{pct}", String(Math.round(totalPct * 10) / 10))}
+              centreLabel={t("budget.allocated")}
+              centreValue={allocated}
+              centreTone={over ? T.pnlNeg : undefined}
+              formatValue={(v) => fmt(v)}
+            />
           </div>
 
           {/* Catégories : nom, part en %, montant. Les deux champs chiffrés sont

@@ -51,6 +51,9 @@ export interface Asset {
   updatedAt: string | null;
   /** Portefeuilles seulement : la valeur vient alors des lignes, pas de `balance`. */
   holdings?: Holding[];
+  /** Logo de l'établissement — renseigné pour les comptes agrégés, jamais pour
+   *  un actif saisi (rien ne permet de deviner sa banque à partir d'un nom). */
+  logo?: string | null;
 }
 
 export interface HistoryPoint {

@@ -15,6 +15,8 @@ import { Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { BackLink, CARD, HeroAmount, TH } from "@/components/ui/da";
+import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
+import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { fmt } from "@/lib/ui/format";
 import {
   assetGain,
@@ -31,6 +33,10 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
   useLang();
   const [store] = usePatrimoine();
   const cls = classBySlug(classSlug || "");
+  const [addingAsset, setAddingAsset] = React.useState(false);
+  const [addingBank, setAddingBank] = React.useState(false);
+  const bank = useBankAccounts();
+  const isChecking = cls?.slug === "comptes";
 
   const back = (
     <div style={{ marginLeft: -8 }}>
@@ -49,7 +55,12 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
     );
   }
 
-  const assets = assetsOfClass(store.assets || [], cls);
+  /* Les deux sources réunies, comme dans la synthèse : les comptes bancaires ne
+     sont PAS écrits dans le store, et cette page ne lisait que lui — la classe
+     « Comptes courants » s'ouvrait donc vide alors que la synthèse d'où l'on
+     vient y montrait des comptes. */
+  const allAssets = [...(store.assets || []), ...bank.accounts.map(bankAccountToAsset)];
+  const assets = assetsOfClass(allAssets, cls);
   const total = assets.reduce((s, a) => s + assetValue(a), 0);
   const gains = assets.map(assetGain).filter((g) => g !== null);
   const classGain = gains.length > 0 ? gains.reduce((s, g) => s + g, 0) : null;
@@ -58,25 +69,46 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
      dans une page de classe, « 40 % » doit répondre à « quelle place cette
      ligne tient-elle dans mon patrimoine », sinon les parts d'une classe
      feraient toujours 100 % à elles seules. */
-  const positiveTotal = netWorth(store.assets || []).gross;
+  const positiveTotal = netWorth(allAssets).gross;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
       {back}
 
-      <header style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: T.textSub }}>
-          <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: cls.color, flexShrink: 0 }} />
-          {t(cls.labelKey)}
-        </div>
-        <HeroAmount value={total} size={32} />
-        {classGain !== null && classGain !== 0 && (
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 14 }}>
-            <span style={{ fontWeight: 600, color: classGain >= 0 ? T.pnlPos : T.pnlNeg, fontVariantNumeric: "tabular-nums" }}>
-              {fmt(classGain, true)}
-            </span>
-            <span style={{ fontSize: 12, color: T.textSub }}>{t("patrimoine.asset.unrealized")}</span>
+      <header style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: T.textSub }}>
+            <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: cls.color, flexShrink: 0 }} />
+            {t(cls.labelKey)}
           </div>
+          <HeroAmount value={total} size={32} />
+          {classGain !== null && classGain !== 0 && (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 14 }}>
+              <span style={{ fontWeight: 600, color: classGain >= 0 ? T.pnlPos : T.pnlNeg, fontVariantNumeric: "tabular-nums" }}>
+                {fmt(classGain, true)}
+              </span>
+              <span style={{ fontSize: 12, color: T.textSub }}>{t("patrimoine.asset.unrealized")}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Comptes courants : ils viennent des banques connectées, l'ajout d'une
+            banque est donc l'action de cette classe — les autres classes se
+            saisissent à la main et n'ont rien à y gagner. Masqué sans
+            identifiants Enable Banking, comme ailleurs. */}
+        {isChecking && bank.configured && (
+          <button
+            type="button"
+            onClick={() => setAddingBank(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
+              padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
+              background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.bank.addBank")}
+          </button>
         )}
       </header>
 
@@ -87,7 +119,7 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
           </div>
           <button
             type="button"
-            onClick={() => setPage?.("patrimoine-assets")}
+            onClick={() => setAddingAsset(true)}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
               padding: "0 16px", borderRadius: 999, border: "none",
@@ -170,6 +202,16 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
           </ul>
         </div>
       )}
+
+      {/* Saisie pré-réglée sur la classe affichée quand elle n'a qu'un type :
+          on arrive ici pour ajouter DANS cette classe. */}
+      {addingAsset && (
+        <AssetFormModal
+          defaultType={cls?.types?.length === 1 ? cls.types[0] : undefined}
+          onClose={() => setAddingAsset(false)}
+        />
+      )}
+      {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
     </div>
   );
 }

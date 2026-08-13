@@ -26,7 +26,6 @@ import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import EloquencePage from "@/components/pages/EloquencePage";
 import BudgetPage from "@/components/pages/BudgetPage";
 import PatrimoinePage from "@/components/pages/PatrimoinePage";
-import PatrimoineAssetsPage from "@/components/pages/PatrimoineAssetsPage";
 import PatrimoineAssetPage from "@/components/pages/PatrimoineAssetPage";
 import PatrimoineClassPage from "@/components/pages/PatrimoineClassPage";
 import PatrimoineHoldingPage from "@/components/pages/PatrimoineHoldingPage";
@@ -89,7 +88,6 @@ import {
   Mic as LucideMic,
   PiggyBank as LucidePiggyBank,
   Landmark as LucideLandmark,
-  Coins as LucideCoins,
   Building2 as LucideBuilding2,
   CreditCard as LucideCreditCard,
 } from "lucide-react";
@@ -117,7 +115,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "budget", "sport", "notes", "agenda", "eloquence", "strategy-detail", "daily-planner", "patrimoine", "patrimoine-assets", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities"];
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "budget", "sport", "notes", "agenda", "eloquence", "strategy-detail", "daily-planner", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -661,15 +659,17 @@ export default function App() {
     },
     /* Finance — l'argent personnel, à distinguer du capital de trading qui vit
        dans « Comptes ». Les pages viennent de l'app patrimoine (cf.
-       lib/patrimoine.ts) ; « Budget » les rejoint, il y était déjà. */
+       lib/patrimoine.ts) ; « Budget » les rejoint, il y était déjà.
+       Ordre : les deux vues d'ensemble d'abord — ce qu'on possède (Patrimoine)
+       puis ce qu'on prévoit (Budget) —, ensuite les détails par nature (actifs,
+       passifs, banque). */
     {
       label: t("nav.finance"),
       items: [
         { id: "patrimoine",             icon: LucideLandmark,   label: t("nav.patrimoine") },
-        { id: "patrimoine-assets",      icon: LucideCoins,      label: t("nav.patrimoineAssets") },
+        { id: "budget",                 icon: LucidePiggyBank,  label: t("nav.budget") },
         { id: "patrimoine-liabilities", icon: LucideCreditCard, label: t("nav.patrimoineLiabilities") },
         { id: "patrimoine-bank",        icon: LucideBuilding2,  label: t("nav.patrimoineBank") },
-        { id: "budget",                 icon: LucidePiggyBank,  label: t("nav.budget") },
       ],
     },
   ];
@@ -737,7 +737,6 @@ export default function App() {
     eloquence: <EloquencePage />,
     budget: <BudgetPage />,
     patrimoine: <PatrimoinePage setPage={setPage} setSelectedAssetId={setSelectedAssetId} setSelectedClassSlug={setSelectedClassSlug} />,
-    "patrimoine-assets": <PatrimoineAssetsPage setPage={setPage} setSelectedAssetId={setSelectedAssetId} />,
     "patrimoine-asset": <PatrimoineAssetPage assetId={selectedAssetId} setPage={setPage} setSelectedHolding={setSelectedHolding} />,
     "patrimoine-class": <PatrimoineClassPage classSlug={selectedClassSlug} setPage={setPage} setSelectedAssetId={setSelectedAssetId} />,
     "patrimoine-holding": <PatrimoineHoldingPage selection={selectedHolding} setPage={setPage} setSelectedAssetId={setSelectedAssetId} />,

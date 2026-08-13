@@ -21,6 +21,9 @@ import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { BackLink, CARD, HeroAmount, SectionTitle } from "@/components/ui/da";
+import { bankAccountToAsset, isBankAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
+import { ConfirmModal } from "@/components/modals/AccountModals";
+import { AssetFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import {
@@ -73,8 +76,28 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
   const [editingLineId, setEditingLineId] = React.useState(null);
   const [confirmingId, setConfirmingId] = React.useState(null);
   const [error, setError] = React.useState(null);
+  // Modification et suppression de l'ACTIF lui-même (les états ci-dessus
+  // portent ses LIGNES).
+  const [editingAsset, setEditingAsset] = React.useState(false);
+  const [confirmingAsset, setConfirmingAsset] = React.useState(false);
 
-  const asset = (store.assets || []).find((a) => a.id === assetId) || null;
+  /* L'actif peut venir du store (saisi à la main) ou d'une banque connectée :
+     la synthèse mêle les deux et rend les deux cliquables. Ne chercher que dans
+     le store affichait « actif introuvable » pour un compte bancaire. */
+  const bank = useBankAccounts();
+  const asset =
+    (store.assets || []).find((a) => a.id === assetId) ||
+    bank.accounts.map(bankAccountToAsset).find((a) => a.id === assetId) ||
+    null;
+  // Un actif agrégé n'existe pas dans le store : son solde est relu à chaque
+  // visite, il n'y a rien à modifier ni à supprimer ici.
+  const aggregated = !!asset && isBankAsset(asset);
+
+  const removeAsset = () => {
+    setConfirmingAsset(false);
+    setStore((s) => ({ ...s, assets: (s.assets || []).filter((a) => a.id !== assetId) }));
+    setPage?.("patrimoine");
+  };
 
   const back = (
     <div style={{ marginLeft: -8 }}>
@@ -217,18 +240,39 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setPage?.("patrimoine-assets")}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-            padding: "0 14px", borderRadius: 999, border: "none",
-            background: T.accentBg, color: T.text, fontSize: 13, fontWeight: 500,
-            cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-          }}
-        >
-          <Pencil size={14} strokeWidth={1.75} /> {t("common.edit")}
-        </button>
+        {/* Modifier et supprimer l'actif se faisaient depuis la page « Actifs »,
+            qui portait la liste et son formulaire. Elle n'existe plus : les deux
+            actions vivent ici, sur la fiche de l'actif concerné — sauf pour un
+            compte agrégé, qui appartient à la banque. */}
+        <div style={{ display: aggregated ? "none" : "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setEditingAsset(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
+              padding: "0 14px", borderRadius: 999, border: "none",
+              background: T.accentBg, color: T.text, fontSize: 13, fontWeight: 500,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Pencil size={14} strokeWidth={1.75} /> {t("common.edit")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingAsset(true)}
+            aria-label={t("patrimoine.assets.deleteAria").replace("{name}", asset.name || "")}
+            title={t("common.delete")}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, borderRadius: 999, border: "none",
+              background: "transparent", color: T.textMut, cursor: "pointer", fontFamily: "inherit",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}
+          >
+            <Trash2 size={15} strokeWidth={1.75} />
+          </button>
+        </div>
       </header>
 
       {/* Positions — seulement pour les types qui en portent. Un livret ou un
@@ -374,6 +418,20 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
             </div>
           </form>
         </div>
+      )}
+
+      {editingAsset && (
+        <AssetFormModal asset={asset} onClose={() => setEditingAsset(false)} />
+      )}
+
+      {confirmingAsset && (
+        <ConfirmModal
+          title={t("patrimoine.assets.deleteTitle")}
+          message={t("patrimoine.assets.deleteSub")}
+          confirmLabel={t("common.delete")}
+          onConfirm={removeAsset}
+          onClose={() => setConfirmingAsset(false)}
+        />
       )}
     </div>
   );

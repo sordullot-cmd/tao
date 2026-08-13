@@ -18,6 +18,7 @@ import { Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, SectionTitle, HeroAmount } from "@/components/ui/da";
+import { AssetFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt } from "@/lib/ui/format";
 import {
   assetTypeKey,
@@ -30,6 +31,9 @@ import {
 export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId }) {
   useLang();
   const [store] = usePatrimoine();
+  /* `null` = fermé ; un objet ouvre la modale de saisie, éventuellement avec un
+     type pré-choisi (« ajouter un crédit » depuis l'état vide). */
+  const [addingAsset, setAddingAsset] = React.useState(null);
   const cls = classBySlug("passifs");
   const assets = store.assets || [];
 
@@ -47,11 +51,28 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <SectionTitle>{t("patrimoine.liabilities.title")}</SectionTitle>
-          <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, maxWidth: 620 }}>
-            {t("patrimoine.liabilities.subtitle")}
+        {/* L'action de saisie est en haut à droite du titre : c'est ici qu'on
+            ajoute un crédit — et, plus largement, n'importe quel actif, la page
+            « Actifs » n'existant plus. */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: 1 }}>
+            <SectionTitle>{t("patrimoine.liabilities.title")}</SectionTitle>
+            <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, maxWidth: 620 }}>
+              {t("patrimoine.liabilities.subtitle")}
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setAddingAsset({})}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
+              padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
+              background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.assets.add")}
+          </button>
         </div>
 
         {liabilities.length === 0 ? (
@@ -59,7 +80,9 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
             <div style={{ fontSize: 14, color: T.textSub }}>{t("patrimoine.liabilities.empty")}</div>
             <button
               type="button"
-              onClick={() => setPage?.("patrimoine-assets")}
+              /* L'état vide propose directement un CRÉDIT : c'est ce qui manque
+                 à cette page, pas un actif quelconque. */
+              onClick={() => setAddingAsset({ type: "loan" })}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
                 padding: "0 16px", borderRadius: 999, border: "none",
@@ -158,6 +181,14 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
           </>
         )}
       </div>
+
+      {addingAsset && (
+        <AssetFormModal
+          defaultType={addingAsset.type}
+          onClose={() => setAddingAsset(null)}
+          onSaved={(id) => { setSelectedAssetId?.(id); }}
+        />
+      )}
     </div>
   );
 }

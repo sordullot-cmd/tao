@@ -12,6 +12,7 @@ export interface BankAccountDTO {
   balance: number;
   currency: string;
   institution: string;
+  logo: string | null;
 }
 
 export interface BankConnectionDTO {
@@ -117,6 +118,7 @@ export function bankAccountToAsset(a: BankAccountDTO): Asset {
     balance: a.balance,
     institution: a.institution,
     updatedAt: null,
+    logo: a.logo,
   };
 }
 

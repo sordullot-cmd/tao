@@ -18,12 +18,14 @@
  */
 
 import React from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, Crown, Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
-  CARD, SectionTitle, HeroAmount, PnlChart, TH,
+  AllocationChart, CARD, SectionTitle, HeroAmount, PeriodPills, PnlChart, TH,
 } from "@/components/ui/da";
+import { RoundLogo } from "@/components/ui/accountRows";
+import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt } from "@/lib/ui/format";
 import {
   assetGain,
@@ -37,11 +39,19 @@ import {
   withTodayPoint,
 } from "@/lib/patrimoine";
 import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
+import { useCloudState } from "@/lib/hooks/useCloudState";
+import {
+  BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, planTotals, primaryPlan,
+} from "@/lib/budgetPlans";
 
 export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelectedClassSlug }) {
   useLang();
   const [store, setStore] = usePatrimoine();
   const bank = useBankAccounts();
+  // Saisie d'un actif : la page « Actifs » n'existe plus, son formulaire est
+  // une modale ouverte depuis les pages qui montrent le patrimoine.
+  const [addingAsset, setAddingAsset] = React.useState(false);
+  const [addingBank, setAddingBank] = React.useState(false);
 
   /* Le patrimoine, c'est les deux sources réunies : ce qui est saisi à la main
      et ce qui remonte des banques connectées. Les comptes bancaires ne sont PAS
@@ -98,7 +108,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
             <button
               type="button"
-              onClick={() => setPage?.("patrimoine-assets")}
+              onClick={() => setAddingAsset(true)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
                 padding: "0 16px", borderRadius: 999, border: "none",
@@ -122,6 +132,8 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
             </button>
           </div>
         </section>
+
+        {addingAsset && <AssetFormModal onClose={() => setAddingAsset(false)} />}
       </div>
     );
   }
@@ -155,6 +167,26 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
             )}
             <HeroAmount value={heroValue} />
           </div>
+
+          {/* Connexion d'une banque, à la hauteur du chiffre héros : c'est la
+              source qui remplit cette page toute seule. Masquée quand le
+              déploiement n'a pas d'identifiants Enable Banking — la modale
+              n'aurait aucun établissement à proposer, et la page Banque, elle,
+              dit ce qui manque. */}
+          {bank.configured && (
+            <button
+              type="button"
+              onClick={() => setAddingBank(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
+                padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
+                background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.bank.addBank")}
+            </button>
+          )}
         </div>
 
         <PnlChart points={points} />
@@ -212,8 +244,40 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
         </div>
       </div>
 
-      {/* Renvoi vers le budget prévisionnel — l'original posait ici un Sankey
-          des flux réels du mois, qui n'a pas de source dans tr4de. */}
+      {/* Le budget prévisionnel, MONTRÉ — cette section ne portait qu'un renvoi
+          vers la page Budget : on venait chercher un chiffre et on repartait
+          avec un lien. L'original posait ici un Sankey des flux réels du mois,
+          qui n'a pas de source dans tr4de ; la répartition prévue, elle, existe
+          bel et bien. */}
+      <BudgetSummary onOpen={() => setPage?.("budget")} />
+
+      {addingAsset && <AssetFormModal onClose={() => setAddingAsset(false)} />}
+      {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
+    </div>
+  );
+}
+
+/**
+ * Aperçu du budget PRINCIPAL (le premier plan de la page Budget, cf.
+ * lib/budgetPlans.ts). Le plan actif de la page Budget n'est qu'un état de
+ * navigation : la synthèse changerait de budget selon le dernier onglet ouvert.
+ */
+function BudgetSummary({ onOpen }) {
+  const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
+  const plan = primaryPlan(store);
+  const { income, totalPct, rest, over, rows } = planTotals(plan);
+
+  /* Forme du graphique : la MÊME préférence que la page Budget, puisque c'est le
+     même store et la même répartition. Régler ici la change là-bas, et
+     réciproquement — il n'y a qu'un réglage pour cette donnée. */
+  const chartKind = store?.chartKind === "bar" ? "bar" : "ring";
+  const setChartKind = (kind) => setStore((s) => ({ ...(s || {}), chartKind: kind }));
+
+  /* Budget jamais ouvert : il n'y a rien à montrer, et un aperçu à zéro
+     laisserait croire à un budget vide plutôt qu'à un budget absent. On garde
+     alors le renvoi vers la page, qui créera le premier plan. */
+  if (!plan) {
+    return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <SectionTitle size="sm">{t("nav.budget")}</SectionTitle>
         <section style={{ ...CARD, padding: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
@@ -222,7 +286,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
           </div>
           <button
             type="button"
-            onClick={() => setPage?.("budget")}
+            onClick={onOpen}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
               padding: "0 16px", borderRadius: 999, border: "none",
@@ -234,6 +298,124 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
           </button>
         </section>
       </div>
+    );
+  }
+
+  // Au-delà de 100 %, la barre se normalise sur le total : elle reste pleine et
+  // les proportions restent comparables entre elles (même règle que la page).
+  const barScale = Math.max(totalPct, 100);
+  // Les plus grosses parts d'abord : c'est ce qui structure un budget.
+  const top = [...rows].sort((a, b) => b.pct - a.pct);
+  const shown = top.slice(0, 4);
+  const others = top.length - shown.length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <SectionTitle
+        size="sm"
+        action={
+          <button
+            type="button"
+            onClick={onOpen}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+              padding: "0 12px", borderRadius: 999, border: "none",
+              background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
+          >
+            {t("patrimoine.openBudget")}
+          </button>
+        }
+      >
+        {/* Le nom du budget affiché, avec sa couronne : on doit savoir LEQUEL
+            des plans est repris ici sans ouvrir la page Budget. */}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Crown size={14} strokeWidth={2} style={{ color: T.amber, flexShrink: 0 }} />
+          {plan?.name || t("nav.budget")}
+        </span>
+      </SectionTitle>
+
+      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 13, color: T.textSub }}>{t("patrimoine.budgetIncome")}</span>
+            <span style={{ fontSize: 24, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+              {fmt(income)}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
+            <span style={{ fontSize: 13, color: T.textSub }}>
+              {over ? t("patrimoine.budgetOver") : t("patrimoine.budgetRest")}
+            </span>
+            <span style={{
+              fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+              color: over ? T.pnlNeg : T.text,
+            }}>
+              {fmt(Math.abs(rest))}
+            </span>
+          </div>
+        </div>
+
+        {rows.length === 0 ? (
+          <div style={{ fontSize: 13, color: T.textSub }}>{t("patrimoine.budgetEmpty")}</div>
+        ) : (
+          <>
+            {/* Répartition — anneau ou barre, même brique et même choix que la
+                page Budget (components/ui/da.jsx). Les teintes d'identité sont
+                portées par les catégories elles-mêmes.
+                Le sélecteur est en retrait, aligné à droite : sur cette page la
+                répartition est un aperçu, pas le sujet. */}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <PeriodPills
+                value={chartKind}
+                onChange={setChartKind}
+                options={[
+                  { id: "ring", label: t("budget.chartRing") },
+                  { id: "bar", label: t("budget.chartBar") },
+                ]}
+                track
+              />
+            </div>
+            <AllocationChart
+              kind={chartKind}
+              parts={rows.map((r) => ({
+                id: r.id,
+                label: r.label,
+                color: r.color || T.textMut,
+                pct: r.pct,
+                amount: r.amount,
+              }))}
+              scale={barScale}
+              ariaLabel={t("budget.barAria").replace("{pct}", String(Math.round(totalPct * 10) / 10))}
+              size={150}
+              thickness={18}
+              barHeight={10}
+              centreLabel={t("budget.allocated")}
+              centreValue={rows.reduce((s, r) => s + r.amount, 0)}
+              centreTone={over ? T.pnlNeg : undefined}
+              formatValue={(v) => fmt(v)}
+            />
+
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: "8px 18px" }}>
+              {shown.map((r) => (
+                <li key={r.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: T.textSub }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: r.color || T.textMut, flexShrink: 0 }} />
+                  <span style={{ color: T.text }}>{r.label}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(r.amount)}</span>
+                </li>
+              ))}
+              {others > 0 && (
+                <li style={{ fontSize: 13, color: T.textMut }}>
+                  {t("patrimoine.budgetOthers").replace("{n}", String(others))}
+                </li>
+              )}
+            </ul>
+          </>
+        )}
+      </section>
     </div>
   );
 }
@@ -317,34 +499,47 @@ function ClassSection({ cls, assets, total, positiveTotal, onOpenClass, onOpenAs
         }}
       >
         <div style={{ overflow: "hidden" }}>
-          <ul style={{ listStyle: "none", margin: 0, padding: "0 20px 12px" }}>
+          {/* Une carte par actif, sur le fond de la carte de classe : la liste
+              séparée d'un filet les faisait lire comme les lignes d'un relevé,
+              alors que chaque compte est une entité qu'on peut ouvrir. */}
+          <ul style={{ listStyle: "none", margin: 0, padding: "4px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
             {assets.map((a) => {
               const value = assetValue(a);
               const gain = assetGain(a);
               const aShare = shareOf(value, positiveTotal);
               return (
-                <li key={a.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                <li key={a.id}>
                   <button
                     type="button"
                     onClick={() => onOpenAsset(a.id)}
                     style={{
                       display: "flex", alignItems: "center", gap: 16, width: "100%",
-                      padding: "10px 0", border: "none", background: "transparent",
+                      padding: "10px 8px", borderRadius: 10, border: "none",
+                      background: T.bg,
                       cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                      transition: "background 120ms ease",
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = T.bg; }}
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: 10, flex: 2, minWidth: 0 }}>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                          background: cls.chip.bg, color: cls.chip.text,
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 11, fontWeight: 600,
-                        }}
-                      >
-                        {(a.name || "?").slice(0, 2).toUpperCase()}
-                      </span>
+                      {/* Logo de l'établissement pour un compte agrégé ; à défaut,
+                          les initiales sur la teinte de la classe. */}
+                      {a.logo ? (
+                        <RoundLogo src={a.logo} size={32} name={a.institution || a.name} />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                            background: cls.chip.bg, color: cls.chip.text,
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 11, fontWeight: 600,
+                          }}
+                        >
+                          {(a.name || "?").slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
                       <span style={{ minWidth: 0 }}>
                         <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {a.name}
