@@ -7,7 +7,9 @@ import { sankeyLayout } from "@/lib/ui/sankey";
 
 const flow = (id: string, amount: number) => ({ id, color: "#000", amount });
 
-const OPTS = { width: 900, height: 300, gutter: 140, gap: 6, minBand: 3 };
+const OPTS = {
+  width: 900, height: 300, gutter: 140, gap: 6, hubGap: 2, minBand: 3, labelGap: 30,
+};
 
 describe("Géométrie du diagramme de flux", () => {
   it("donne la même épaisseur au même montant des deux côtés", () => {
@@ -65,19 +67,64 @@ describe("Géométrie du diagramme de flux", () => {
     expect(right.label.x).toBeGreaterThan(right.node.x);
   });
 
-  it("colle les rubans au centre et les espace au bord", () => {
+  it("resserre les rubans au centre sans les coller", () => {
     const { bands, hub } = sankeyLayout(
       [flow("a", 500), flow("b", 500)],
       [flow("c", 1000)],
       OPTS,
     );
 
-    // Au centre, la barre porte les deux flux d'un seul bloc : la convergence se
-    // lit d'autant mieux qu'il n'y a pas de trou dedans.
-    expect(hub.h).toBeCloseTo(bands.filter((b) => b.side === "out")[0].thickness, 1);
-    // Au bord, les deux nœuds sont séparés de l'espace demandé.
     const [a, b] = bands.filter((band) => band.side === "in");
+    // Au bord, les nœuds sont largement séparés : on les lit un par un.
     expect(b.node.y - (a.node.y + a.node.h)).toBeCloseTo(OPTS.gap, 1);
+
+    /* Au centre, ils se resserrent — mais gardent un jour. Sans lui, dix branches
+       se rejoignaient en un seul bloc de couleur où l'on n'en suivait plus une. */
+    const gapAtHub = OPTS.hubGap;
+    expect(hub.h).toBeCloseTo(
+      bands.filter((band) => band.side === "out")[0].thickness + gapAtHub,
+      1,
+    );
+    expect(gapAtHub).toBeLessThan(OPTS.gap);
+  });
+
+  it("écarte les libellés qui se marcheraient dessus", () => {
+    /* Trois branches minuscules côte à côte : leurs centres sont à quelques
+       pixels les uns des autres, leurs libellés font deux lignes chacun. Sans
+       écartement, les trois textes se superposent. */
+    const { bands } = sankeyLayout(
+      [flow("big", 900), flow("t1", 3), flow("t2", 3), flow("t3", 3)],
+      [flow("out", 909)],
+      OPTS,
+    );
+
+    const ys = bands.filter((b) => b.side === "in").map((b) => b.label.y);
+    for (let i = 1; i < ys.length; i++) {
+      expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(OPTS.labelGap - 0.01);
+    }
+    // Et personne ne sort du dessin.
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(OPTS.height + 0.01);
+  });
+
+  it("relie au ruban le seul libellé qui l'a quitté", () => {
+    /* Trois filets et un gros flux : les libellés des filets sont poussés hors de
+       leur bande et reçoivent leur trait de rappel ; celui du gros flux tombe en
+       plein dedans et n'en a pas besoin — un trait sur une branche épaisse serait
+       du bruit. */
+    const { bands } = sankeyLayout(
+      [flow("big", 900), flow("t1", 3), flow("t2", 3), flow("t3", 3)],
+      [flow("out", 909)],
+      OPTS,
+    );
+
+    const band = (id: string) => bands.find((b) => b.id === id)!;
+    expect(band("big").label.connector).toBeNull();
+    expect(band("t3").label.connector).toMatch(/^M[\d.,]+ C/);
+    // Le trait part du nœud, à la hauteur du ruban, et non du libellé.
+    expect(band("t3").label.centre).toBeCloseTo(
+      band("t3").node.y + band("t3").node.h / 2, 6,
+    );
   });
 
   it("ne dessine rien plutôt que n'importe quoi", () => {

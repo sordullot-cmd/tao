@@ -148,7 +148,14 @@ export default function CashflowPage({ setPage }) {
 
   const txs = React.useMemo(() => withinDays(all, days), [all, days]);
 
-  const flow = React.useMemo(() => buildCashflow(txs), [txs]);
+  /* Six postes et quatre sources au diagramme, pas plus : au-delà, les branches
+     deviennent des traits et leurs noms se marchent dessus. Ce qui est écrêté est
+     rassemblé sous une branche qui dit combien elle en porte, et le détail
+     complet est dans les deux listes juste en dessous. */
+  const flow = React.useMemo(
+    () => buildCashflow(txs, { topOutflows: 6, topInflows: 4 }),
+    [txs],
+  );
   const { slices } = React.useMemo(() => spendingByCategory(txs), [txs]);
   const incomes = React.useMemo(() => incomeBySource(txs), [txs]);
 

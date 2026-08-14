@@ -120,8 +120,10 @@ describe("Page Budget & cashflow", () => {
 
     // 150 sur 250 = 60 % pour l'alimentation, 80 → 32 %, 20 → 8 %.
     expect(pageText()).toMatch(/60 %/);
-    expect(screen.getByText(cat("utilities"))).toBeTruthy();
-    expect(screen.getByText(cat("subscriptions"))).toBeTruthy();
+    /* Chaque poste est nommé deux fois, et c'est voulu : une fois en libellé de sa
+       branche du flux, une fois dans le tableau qui le chiffre. */
+    expect(screen.getAllByText(cat("utilities")).length).toBe(2);
+    expect(screen.getAllByText(cat("subscriptions")).length).toBe(2);
   });
 
   it("répartit les entrées par source", () => {
