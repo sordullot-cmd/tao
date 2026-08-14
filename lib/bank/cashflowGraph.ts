@@ -9,10 +9,16 @@
  *   sources ──▶ budget ──▶ postes ──▶ sous-postes
  *
  * Le quatrième niveau vient de `spendingByCategory`, qui détaille déjà chaque
- * poste. La règle de dépliage est la sienne : un poste à sous-poste unique rend
- * une liste VIDE, parce que le redire sous son propre nom avec le même chiffre
- * n'apprend rien. Ce poste reste donc une branche terminale, et le dessin le
- * pousse au bord droit (cf. `lib/ui/sankeyGraph`).
+ * poste. La règle de dépliage n'est en revanche PAS la sienne : elle écarte le
+ * poste à sous-poste unique, ce qui vaut pour la liste qu'elle sert d'ordinaire
+ * mais laisserait ici une colonne à moitié vide et un bord droit en escalier. Le
+ * seul cas qu'on écarte est le sous-poste fourre-tout, qui donnerait un
+ * « Logement → Divers » ne désignant personne (cf. `detailOf`).
+ *
+ * Les ENTRÉES, elles, sont regroupées sur leur seule nature : `incomeBySource`
+ * sépare deux employeurs, ce qu'une liste sait montrer mais qui donne ici une
+ * colonne de gauche plus détaillée que celle des dépenses — alors qu'on regarde
+ * un flux pour l'inverse. Le détail par payeur reste sous le dessin.
  *
  * ── Ce que ce module N'ajoute PAS ───────────────────────────────────────────
  * Aucun libellé. Comme `cashflow`, il porte un `kind` et une référence métier,
@@ -26,7 +32,7 @@
  */
 
 import {
-  spendingByCategory,
+  isCatchAllSub, spendingByCategory,
   type CategorizableTransaction, type SubSlice,
 } from "@/lib/bank/categories";
 import { buildCashflow, type CashflowOptions } from "@/lib/bank/cashflow";
@@ -113,8 +119,17 @@ export function buildCashflowGraph(
   txs: CategorizableTransaction[],
   { topSubs = 3, ...options }: CashflowGraphOptions = {},
 ): CashflowGraph {
-  const flow = buildCashflow(txs, options);
-  const { slices } = spendingByCategory(txs);
+  /* Les entrées par NATURE et non par payeur : deux salaires font sinon deux
+     rubans dont l'un est souvent un trait, et la colonne des entrées finit plus
+     détaillée que celle des dépenses — alors qu'un flux se regarde pour
+     l'inverse. Les payeurs restent nommés dans la liste sous le dessin. */
+  const flow = buildCashflow(txs, { groupIncome: "nature", ...options });
+
+  /* Et le détail des postes GARDÉ même quand un poste ne s'est réparti que sur
+     un sous-poste : c'est la colonne de droite du diagramme, elle a la place, et
+     « Logement → Loyer » apprend que tout le logement est du loyer. La règle qui
+     l'écarte ailleurs vaut pour une liste, pas pour un flux (cf. `keepSingleSub`). */
+  const { slices } = spendingByCategory(txs, { keepSingleSub: true });
   /* Clé en `string` et non en `SpendingCategory` : les nœuds de `buildCashflow`
      portent un id générique (un poste, mais aussi `more` ou `left`), et c'est
      avec celui-là qu'on interroge la table. Un id de synthèse n'y trouve rien,
@@ -166,7 +181,7 @@ export function buildCashflowGraph(
     // « autres postes » en a un, mais c'est la liste sous le dessin qui le porte.
     if (n.kind !== "category") continue;
 
-    for (const sub of clipSubs(subsOf.get(n.id) ?? [], topSubs)) {
+    for (const sub of clipSubs(detailOf(subsOf.get(n.id) ?? []), topSubs)) {
       const subId = `sub:${n.id}:${sub.id}`;
       nodes.push({
         id: subId,
@@ -182,6 +197,21 @@ export function buildCashflowGraph(
   }
 
   return { nodes, links, income: flow.income, spent: flow.spent, net: flow.net, total: flow.total };
+}
+
+/**
+ * Le détail d'un poste, ou rien quand ce détail n'apprendrait rien.
+ *
+ * Le seul cas écarté est le poste dont l'unique sous-poste est son FOURRE-TOUT,
+ * celui qui n'a pas de nom à lui (cf. `isCatchAllSub`) : le dessin y écrirait
+ * « Logement → Divers », un ruban qui traverse pour ne désigner personne. Dès
+ * que le sous-poste unique porte un nom, il reste — « Logement → Loyer » dit
+ * que tout le logement est du loyer, ce que la seule barre « Logement » ne
+ * disait pas.
+ */
+function detailOf(subs: SubSlice[]): SubSlice[] {
+  if (subs.length === 1 && isCatchAllSub(subs[0].id)) return [];
+  return subs;
 }
 
 interface ClippedSub {

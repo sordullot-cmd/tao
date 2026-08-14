@@ -123,11 +123,13 @@ function shortDay(iso) {
  * même mot deux fois de suite, et on croirait à un ruban qui ne mène nulle part.
  * Il se dit donc « Divers », comme sous l'anneau des dépenses.
  *
- * Une SOURCE se dit par le nom de qui paie (« Unowhy », « CAF ») dès que le
- * relevé le donne, et par la nature de l'entrée (« Salaire & activité ») sinon.
- * C'est le côté gauche qui y gagne le plus : la moitié des relevés n'a qu'un
- * « Revenus » à mettre en face de ses rubans, ce qui ne fait que répéter de quel
- * côté du diagramme on se trouve. Le nom, lui, répond à la question.
+ * Une SOURCE se dit par sa nature (« Salaire & activité »), le diagramme
+ * regroupant les payeurs d'une même nature (cf. `buildCashflowGraph`) : deux
+ * employeurs y faisaient deux rubans dont l'un était souvent un trait, et la
+ * colonne des entrées finissait plus détaillée que celle des dépenses. Le nom de
+ * qui paie reste dans la liste « Entrées d'argent », qui a la place de le
+ * chiffrer ; on le reprend ici dès qu'il existe, pour le jour où l'appelant
+ * redemanderait le détail par payeur.
  */
 function flowLabel(node) {
   switch (node.kind) {

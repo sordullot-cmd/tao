@@ -86,6 +86,25 @@ const relevé = () => [
 
 const pageText = () => document.body.textContent || "";
 
+/**
+ * Le bloc des dernières opérations, titre compris.
+ *
+ * Depuis que le diagramme de flux déplie les postes sur leurs sous-postes, un
+ * libellé de sous-poste (« Electricity & gas ») paraît AUSSI dans le dessin :
+ * le chercher dans toute la page ne dit plus si la ligne du 20 juillet est dans
+ * la liste. Même parti pris que le bloc des enseignes plus bas.
+ */
+const blocRecent = () => {
+  const titre = screen.getByText("Latest transactions");
+  return titre.closest("div")?.parentElement as HTMLElement;
+};
+
+/** Le sous-poste du débit du 20 juillet, cherché dans la seule liste.
+ *  En sous-chaîne, et non par `queryByText` : la ligne écrit le sous-poste à
+ *  côté de la date, il n'est donc le texte entier d'aucun élément. */
+const edfDansLaListe = () =>
+  (blocRecent().textContent || "").includes("Electricity & gas");
+
 describe("Page Cashflow", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -166,7 +185,7 @@ describe("Page Cashflow", () => {
     /* Le marqueur du 20 juillet est son SOUS-POSTE, écrit sous le nom de
        l'enseigne : le libellé brut, lui, ne paraît jamais — « EDF » est
        reconnue, et la ligne porte son nom canonique. */
-    expect(pageText()).not.toContain("Electricity & gas");
+    expect(edfDansLaListe()).toBe(false);
   });
 
   it("déplie la suite des dernières opérations sur place", () => {
@@ -174,17 +193,17 @@ describe("Page Cashflow", () => {
 
     /* Six opérations dans la fenêtre, cinq montrées : le débit du 20 juillet est
        le seul qui reste, et le bouton dit combien il en apporte. */
-    expect(pageText()).not.toContain("Electricity & gas");
+    expect(edfDansLaListe()).toBe(false);
     expect(pageText()).toContain("5 of the 6 transactions in this period.");
 
     fireEvent.click(screen.getByText("Show more (1)"));
 
-    expect(pageText()).toContain("Electricity & gas");
+    expect(edfDansLaListe()).toBe(true);
     /* Tout est déplié : le bouton rend la liste à sa taille de départ plutôt que
        de disparaître, et le compte sous la carte n'a plus rien à dire. */
     expect(pageText()).not.toContain("of the 6 transactions");
     fireEvent.click(screen.getByText("Show less"));
-    expect(pageText()).not.toContain("Electricity & gas");
+    expect(edfDansLaListe()).toBe(false);
   });
 
   it("classe les enseignes reconnues par montant", () => {

@@ -86,11 +86,23 @@ export interface SankeyGraphLinkBand {
   thickness: number;
   /** Ruban rempli, contour fermé : à peindre en `fill`, jamais en `stroke`. */
   path: string;
-  /** Bornes horizontales, pour un dégradé qui suit le sens du flux. */
+  /** Bornes horizontales du ruban. */
   x0: number;
   x1: number;
   sourceColor: string;
   targetColor: string;
+  /**
+   * La teinte à PEINDRE, en aplat.
+   *
+   * C'est celle du bout DISTINCTIF du ruban, et les deux bouts ne se valent pas :
+   * un nœud où beaucoup de choses se rejoignent (le budget, que tout traverse)
+   * n'a pas de couleur qui apprenne quoi que ce soit — peindre les entrées de sa
+   * teinte les rendrait toutes identiques. On prend donc la couleur de la source
+   * quand la cible est un tel confluent, et celle de la cible partout ailleurs.
+   * Chaque ruban porte ainsi la couleur de ce qu'il DÉSIGNE, et se rattache à la
+   * pastille qui le nomme.
+   */
+  color: string;
 }
 
 export interface SankeyGraphLayout {
@@ -445,6 +457,9 @@ export function sankeyGraphLayout(
         x1,
         sourceColor: n.color,
         targetColor: t.color,
+        // Cible « confluent » (plusieurs rubans y arrivent) : c'est la source qui
+        // distingue. Sinon la cible, qui est ce que le ruban va nommer.
+        color: t.in.length > 1 ? n.color : t.color,
       });
     }
   }

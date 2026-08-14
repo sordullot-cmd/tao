@@ -22,10 +22,12 @@
  *   et on garde la teinte franche pour les BARRES, petites, où la couleur sert
  *   encore à identifier. Le ruban reste reconnaissable, il ne domine plus.
  *
- * • UN DÉGRADÉ DE LA SOURCE VERS LA CIBLE. Un ruban qui part d'un poste bleu et
- *   arrive sur un sous-poste bleu clair le dit en changeant de teinte en route.
- *   C'est ce qui rattache visuellement les deux bouts sans avoir à suivre le
- *   trait, quand dix rubans se croisent au milieu.
+ * • UN APLAT PAR RUBAN, et pas un dégradé. Un dégradé raconte le trajet, ce que
+ *   la courbe dit déjà ; il coûte en revanche la constance de la couleur, et donc
+ *   la possibilité de reconnaître une branche à sa teinte quand dix rubans se
+ *   croisent au milieu. La teinte retenue est celle du bout DISTINCTIF du ruban
+ *   (cf. `color` dans `lib/ui/sankeyGraph`) : celle de la source vers le budget,
+ *   où tout se rejoint, celle de la cible partout ailleurs.
  *
  * • PASTILLES EN HTML, posées par-dessus le SVG aux coordonnées du dessin. Un
  *   `<text>` SVG ne sait pas couper proprement un nom trop long, ne suit pas la
@@ -76,9 +78,6 @@ export default function SankeyGraph({
   const ref = React.useRef(null);
   const [width, setWidth] = React.useState(0);
   const [hover, setHover] = React.useState(null);
-  /* Les <defs> sont référencées par id : il doit être unique, sinon deux
-     diagrammes sur la même page partagent les dégradés du premier. */
-  const uid = React.useId().replace(/:/g, "");
 
   React.useEffect(() => {
     const el = ref.current;
@@ -192,23 +191,6 @@ export default function SankeyGraph({
         style={{ display: "block" }}
         onMouseLeave={() => setHover(null)}
       >
-        <defs>
-          {layout.links.map((band, i) => (
-            /* Un dégradé par ruban, en coordonnées du dessin : il suit donc le
-               SENS du flux, de la teinte de sa source vers celle de sa cible. */
-            <linearGradient
-              key={`grad-${band.id}`}
-              id={`${uid}-${i}`}
-              gradientUnits="userSpaceOnUse"
-              x1={band.x0}
-              x2={band.x1}
-            >
-              <stop offset="0%" stopColor={tint(band.sourceColor, RIBBON_TINT)} />
-              <stop offset="100%" stopColor={tint(band.targetColor, RIBBON_TINT)} />
-            </linearGradient>
-          ))}
-        </defs>
-
         {/* Les rubans d'abord, les barres par-dessus : la barre ferme proprement
             le bout du ruban, quelle que soit sa courbure. */}
         {layout.links.map((band, i) => (
@@ -216,7 +198,7 @@ export default function SankeyGraph({
             key={`ribbon-${band.id}`}
             className="tr4de-sankeygraph-part"
             d={band.path}
-            fill={`url(#${uid}-${i})`}
+            fill={tint(band.color, RIBBON_TINT)}
             opacity={dim(band.id) ? DIMMED : RIBBON}
             onMouseEnter={() => setHover(band.id)}
             style={{

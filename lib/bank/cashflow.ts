@@ -198,6 +198,18 @@ export interface CashflowOptions {
   topOutflows?: number;
   /** Sources de revenus montrées à part. Au-delà, elles sont regroupées aussi. */
   topInflows?: number;
+  /**
+   * Ce qui fait une source : QUI paie (défaut), ou seulement la NATURE de
+   * l'entrée.
+   *
+   * `payer` est ce que veut une liste, qui a la place de nommer chaque employeur
+   * et de les chiffrer un par un. `nature` est ce que veut un diagramme : deux
+   * salaires y font deux rubans dont l'un est souvent un trait, et la colonne
+   * des entrées finit plus détaillée que celle des dépenses — alors qu'un flux
+   * se regarde pour l'inverse. Les payeurs restent lisibles dans la liste sous
+   * le dessin, qui appelle `incomeBySource` directement.
+   */
+  groupIncome?: "payer" | "nature";
 }
 
 export interface Cashflow {
@@ -226,13 +238,18 @@ export interface Cashflow {
  */
 export function buildCashflow(
   txs: CategorizableTransaction[],
-  { topOutflows = 8, topInflows = 5 }: CashflowOptions = {},
+  { topOutflows = 8, topInflows = 5, groupIncome = "payer" }: CashflowOptions = {},
 ): Cashflow {
   const { slices: spending, total: spent } = spendingByCategory(txs);
   const { slices: incomes, total: income } = incomeBySource(txs);
 
+  /* Le regroupement par nature se fait AVANT l'écrêtage : deux salaires fondus
+     en un seul pèsent leur somme, et ce qui n'aurait pas tenu dans les cinq
+     premières sources y tient une fois rassemblé. Après l'écrêtage, ils se
+     seraient d'abord fait couper, puis auraient été refondus à un — ce qui aurait
+     produit un « + N autres » là où il n'y avait plus rien à regrouper. */
   const inflows = clip(
-    incomes.map<FlowNode>((s) => ({
+    (groupIncome === "nature" ? byNature(incomes) : incomes).map<FlowNode>((s) => ({
       id: s.id, kind: "income", color: s.color, amount: s.amount, count: s.count,
       sub: s.sub, source: s.source,
     })),
@@ -260,6 +277,34 @@ export function buildCashflow(
   ));
 
   return { inflows, outflows, income, spent, net, total };
+}
+
+/**
+ * Les sources refondues sur leur seule NATURE : un salaire est un salaire, quel
+ * que soit l'employeur qui le verse.
+ *
+ * La teinte redevient celle du sous-poste, pleine : l'éclaircissement par rang
+ * de payeur (cf. `PAYER_TINT_STEP`) n'a plus rien à distinguer, et garder la
+ * couleur du plus gros payeur ferait dépendre la teinte d'un classement qui
+ * n'existe plus. `source` retombe à `null`, ce qui est exact — la ligne ne
+ * désigne plus personne en particulier — et suffit à ce que l'appelant reprenne
+ * le libellé de la nature.
+ */
+function byNature(slices: IncomeSlice[]): IncomeSlice[] {
+  const sums = new Map<SpendingSubcategory, IncomeSlice>();
+  for (const s of slices) {
+    const merged = sums.get(s.sub);
+    if (merged) {
+      merged.amount = round2(merged.amount + s.amount);
+      merged.count += s.count;
+      merged.pct += s.pct;
+    } else {
+      sums.set(s.sub, {
+        ...s, id: s.sub, source: null, color: incomeColor(s.sub),
+      });
+    }
+  }
+  return [...sums.values()].sort((a, b) => b.amount - a.amount);
 }
 
 const synthetic = (id: FlowSynthetic, amount: number, count = 0): FlowNode => ({
