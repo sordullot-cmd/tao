@@ -94,8 +94,11 @@ describe("Dépenses par catégorie (synthèse du patrimoine)", () => {
     expect(screen.getByText("Spending by category")).toBeTruthy();
     expect(part("Food & dining", "$60.00")).toBeTruthy();
     expect(part("Transport", "$40.00")).toBeTruthy();
-    // 60 + 40 = 100 dépensés : le salaire de 2 400 n'en fait pas partie.
+    // 60 + 40 = 100 dépensés, au centre de l'anneau : le salaire n'en fait pas
+    // partie — il tient l'en-tête, avec ce qu'il en reste une fois dépensé.
     expect(screen.getByText("$100.00")).toBeTruthy();
+    expect(screen.getByText("$2,400.00")).toBeTruthy();
+    expect(screen.getByText("$2,300.00")).toBeTruthy();
     expect(screen.queryByText(/^Income ·/)).toBeNull();
   });
 

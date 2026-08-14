@@ -244,6 +244,21 @@ describe("Page Cashflow", () => {
     expect((screen.getByLabelText("Next window") as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("passe en fenêtre libre et rend la main aux dates", () => {
+    render(<CashflowPage setPage={() => {}} />);
+
+    // Trois fenêtres toutes faites, puis la saisie libre — ni semaine ni semestre.
+    expect(screen.queryByRole("button", { name: "1S" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "6M" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+
+    /* Les flèches laissent la place au sélecteur de dates : une fenêtre libre se
+       borne en clair, elle ne se déplace pas d'un cran. */
+    expect(screen.queryByLabelText("Previous window")).toBeNull();
+    expect(screen.getByText("Jul 16 - Aug 14, 2026")).toBeTruthy();
+  });
+
   it("classe les enseignes reconnues par montant", () => {
     render(<CashflowPage setPage={() => {}} />);
 

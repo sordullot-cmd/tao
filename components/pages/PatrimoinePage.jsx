@@ -54,6 +54,7 @@ import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts"
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import { depthOf, withinDays, ALL_DAYS } from "@/lib/bank/transactions";
 import { categoryLabelKey, spendingByCategory, spendingPalette } from "@/lib/bank/categories";
+import { incomeBySource } from "@/lib/bank/cashflow";
 import { reconstructHistory } from "@/lib/patrimoineHistory";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -382,14 +383,16 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
           les compare vraiment. L'un sous l'autre, il fallait faire défiler entre
           les deux, et comparer de mémoire n'est pas comparer.
 
-          Le réalisé prend la plus grosse part : c'est le chiffre qu'on vient
-          vérifier, le plan n'étant là que pour lui donner une mesure. En dessous
-          du bureau, les deux s'empilent — deux demi-colonnes de tablette ne
-          valent pas mieux qu'un défilement. */}
+          Colonnes ÉGALES, et deux cartes bâties pareil : c'est ce qui fait
+          qu'on lit un anneau après l'autre sans changer de mesure. Une colonne
+          plus large aurait donné du poids à l'un des deux chiffres, alors que
+          tout l'intérêt est de les mettre à égalité. En dessous du bureau, les
+          deux s'empilent — deux demi-colonnes de tablette ne valent pas mieux
+          qu'un défilement. */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: twoCols ? "minmax(0, 1.8fr) minmax(280px, 1fr)" : "minmax(0, 1fr)",
+          gridTemplateColumns: twoCols ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)",
           gap: 20,
           alignItems: "start",
         }}
@@ -503,6 +506,13 @@ function SpendingByCategory({ accounts }) {
   }, [byUid, uids, days]);
 
   const { slices, total } = React.useMemo(() => spendingByCategory(txs), [txs]);
+  /* L'encaissé de la même fenêtre : c'est lui qui donne sa mesure au dépensé, et
+     c'est le pendant exact du « Revenu mensuel » de l'aperçu du budget. Il passe
+     par `incomeBySource` et non par une somme des crédits : un remboursement
+     reconnu reste déduit de son poste de dépense plutôt que compté comme une
+     entrée, sans quoi le même euro gonflerait les deux chiffres. */
+  const { total: income } = React.useMemo(() => incomeBySource(txs), [txs]);
+  const rest = income - total;
 
   /* Les teintes viennent du BUDGET de l'utilisateur, et non d'une copie figée de
      ses couleurs par défaut : les deux anneaux sont voisins sur cette page, et
@@ -529,6 +539,13 @@ function SpendingByCategory({ accounts }) {
     amount: s.amount,
   }));
 
+  /* Les mêmes règles de légende que l'aperçu du budget d'à côté : les quatre
+     plus grosses parts nommées, le reste compté. Ici l'ordre est déjà celui des
+     montants — `spendingByCategory` trie —, alors que le budget garde l'ordre de
+     saisie et doit trier lui-même. */
+  const shown = parts.slice(0, 4);
+  const others = parts.length - shown.length;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <SectionTitle
@@ -546,32 +563,72 @@ function SpendingByCategory({ accounts }) {
         {t("patrimoine.spending.title")}
       </SectionTitle>
 
+      {/* La carte est calquée sur l'aperçu du budget d'à côté : deux chiffres en
+          en-tête, l'anneau de même taille, la légende en dessous. Les deux
+          répondent à la même question à un temps près — ce qu'on a dépensé, ce
+          qu'on avait prévu de dépenser — et deux cartes de formes différentes
+          demandaient de réapprendre à lire en passant de l'une à l'autre. */}
       <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          {/* Les trois chiffres sont ceux de l'aperçu du budget, à un temps
+              près : ce qui est entré tient la place du revenu, ce qui reste
+              celle du reste à répartir, et le dépensé celle de l'alloué, au
+              centre de l'anneau. Aucun ne se répète d'un endroit à l'autre. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 13, color: T.textSub }}>{t("cashflow.in")}</span>
+            <span style={{ fontSize: 24, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+              {fmt(income)}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
+            <span style={{ fontSize: 13, color: T.textSub }}>
+              {t(rest < 0 ? "cashflow.drawn" : "cashflow.left")}
+            </span>
+            <span style={{
+              fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+              color: rest < 0 ? T.pnlNeg : T.text,
+            }}>
+              {fmt(Math.abs(rest))}
+            </span>
+          </div>
+        </div>
+
         {/* Chargement à vide seulement : dès qu'un relevé est arrivé, on montre
             la répartition et elle se précise compte par compte. */}
         {slices.length === 0 ? (
-          <div style={{ fontSize: 14, color: T.textSub, textAlign: "center", padding: "24px 0" }}>
+          <div style={{ fontSize: 13, color: T.textSub }}>
             {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
           </div>
         ) : (
-          /* L'anneau SEUL, centré dans la carte : la liste des postes qui le
-             doublait à droite est partie, et la carte ne tient plus qu'une demi
-             largeur — une légende y aurait de toute façon écrasé la figure. Le
-             centre porte le total, une part survolée y écrit son nom et son
-             montant, et le détail chiffré vit sur la page Cashflow, qui est
-             l'endroit où l'on creuse. */
-          <AllocationChart
-            kind="ring"
-            parts={parts}
-            scale={100}
-            ariaLabel={t("patrimoine.spending.aria")}
-            size={190}
-            thickness={22}
-            centreLabel={t("patrimoine.spending.centre")}
-            centreValue={total}
-            showPct={false}
-            formatValue={(v) => fmt(v)}
-          />
+          <>
+            <AllocationChart
+              kind="ring"
+              parts={parts}
+              scale={100}
+              ariaLabel={t("patrimoine.spending.aria")}
+              size={150}
+              thickness={18}
+              centreLabel={t("patrimoine.spending.centre")}
+              centreValue={total}
+              showPct={false}
+              formatValue={(v) => fmt(v)}
+            />
+
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: "8px 18px" }}>
+              {shown.map((p) => (
+                <li key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: T.textSub }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
+                  <span style={{ color: T.text }}>{p.label}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.amount)}</span>
+                </li>
+              ))}
+              {others > 0 && (
+                <li style={{ fontSize: 13, color: T.textMut }}>
+                  {t("patrimoine.budgetOthers").replace("{n}", String(others))}
+                </li>
+              )}
+            </ul>
+          </>
         )}
       </section>
     </div>
@@ -584,15 +641,9 @@ function SpendingByCategory({ accounts }) {
  * navigation : la synthèse changerait de budget selon le dernier onglet ouvert.
  */
 function BudgetSummary({ onOpen }) {
-  const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
+  const [store] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
   const plan = primaryPlan(store);
   const { income, totalPct, rest, over, rows } = planTotals(plan);
-
-  /* Forme du graphique : la MÊME préférence que la page Budget, puisque c'est le
-     même store et la même répartition. Régler ici la change là-bas, et
-     réciproquement — il n'y a qu'un réglage pour cette donnée. */
-  const chartKind = store?.chartKind === "bar" ? "bar" : "ring";
-  const setChartKind = (kind) => setStore((s) => ({ ...(s || {}), chartKind: kind }));
 
   /* Budget jamais ouvert : il n'y a rien à montrer, et un aperçu à zéro
      laisserait croire à un budget vide plutôt qu'à un budget absent. On garde
@@ -681,24 +732,14 @@ function BudgetSummary({ onOpen }) {
           <div style={{ fontSize: 13, color: T.textSub }}>{t("patrimoine.budgetEmpty")}</div>
         ) : (
           <>
-            {/* Répartition — anneau ou barre, même brique et même choix que la
-                page Budget (components/ui/da.jsx). Les teintes d'identité sont
-                portées par les catégories elles-mêmes.
-                Le sélecteur est en retrait, aligné à droite : sur cette page la
-                répartition est un aperçu, pas le sujet. */}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <PeriodPills
-                value={chartKind}
-                onChange={setChartKind}
-                options={[
-                  { id: "ring", label: t("budget.chartRing") },
-                  { id: "bar", label: t("budget.chartBar") },
-                ]}
-                track
-              />
-            </div>
+            {/* Répartition en anneau, sans choix de forme : la barre servait à
+                comparer des parts à un total, ce que l'anneau fait aussi, et le
+                sélecteur mettait un réglage d'affichage au milieu d'un aperçu
+                qui n'en demandait pas. C'est aussi ce qui permet aux deux cartes
+                du bas de se ressembler — deux anneaux de même taille, côte à
+                côte, le dépensé en face du prévu. */}
             <AllocationChart
-              kind={chartKind}
+              kind="ring"
               parts={rows.map((r) => ({
                 id: r.id,
                 label: r.label,
@@ -710,7 +751,6 @@ function BudgetSummary({ onOpen }) {
               ariaLabel={t("budget.barAria").replace("{pct}", String(Math.round(totalPct * 10) / 10))}
               size={150}
               thickness={18}
-              barHeight={10}
               centreLabel={t("budget.allocated")}
               centreValue={rows.reduce((s, r) => s + r.amount, 0)}
               centreTone={over ? T.pnlNeg : undefined}

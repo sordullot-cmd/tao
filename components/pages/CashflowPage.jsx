@@ -54,7 +54,8 @@ import React from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, Landmark, PiggyBank } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, PERIODS, PERIOD_ALL } from "@/components/ui/da";
+import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, PERIODS } from "@/components/ui/da";
+import DateRangePicker from "@/components/ui/DateRangePicker";
 import CashflowSummary from "@/components/ui/CashflowSummary";
 import CategoryIcon from "@/components/ui/CategoryIcon";
 import MerchantAvatar from "@/components/ui/MerchantAvatar";
@@ -67,16 +68,34 @@ import {
 } from "@/lib/bank/categories";
 import { incomeBySource } from "@/lib/bank/cashflow";
 import {
-  ALL_DAYS, dayKey, daysSince, kindLabelKey, parseDay, sortTransactions, withinRange,
+  dayKey, daysSince, kindLabelKey, parseDay, sortTransactions, withinRange,
 } from "@/lib/bank/transactions";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { fmt } from "@/lib/ui/format";
 
-/* Les fenêtres de la DA, plus « Tout » — comme la courbe du patrimoine. Un mois
-   par défaut : c'est le pas auquel un budget se pense. */
-const CASHFLOW_PERIODS = [...PERIODS, { id: PERIOD_ALL }];
+/* Trois fenêtres, et une saisie libre. La semaine et le semestre sont partis :
+   un budget se lit au mois, au trimestre ou à l'année, et six pastilles où trois
+   suffisent font hésiter à chaque visite. Ce qui tombe entre les trois se
+   demande en clair — d'où « Personnalisé », qui ouvre un sélecteur de dates et
+   remplace le « Tout » d'avant : une fenêtre sans bornes ne se compare à rien.
+
+   Un mois par défaut : c'est le pas auquel un budget se pense. */
+const PERIOD_CUSTOM = "CUSTOM";
+const CASHFLOW_PERIODS = [
+  ...PERIODS.filter((p) => ["1M", "3M", "1A"].includes(p.id)),
+  { id: PERIOD_CUSTOM },
+];
 const daysOfPeriod = (id) => PERIODS.find((p) => p.id === id)?.days ?? null;
+
+/** Fenêtre libre de départ : les trente derniers jours, soit celle qu'on quitte
+ *  en cliquant « Personnalisé ». Ouvrir sur autre chose ferait sauter les
+ *  chiffres au moment même où l'on demande à choisir. */
+const defaultCustom = () => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
+  return { start: dayKey(start), end: dayKey(today) };
+};
 
 /* Six postes et cinq sources au diagramme, pas plus : au-delà, les branches
    deviennent des traits et leurs noms se marchent dessus. Ce qui est écrêté est
@@ -113,9 +132,9 @@ const RECENT_STEP = 15;
    le prévu et le réalisé se lisent l'un après l'autre, et deux tableaux qui
    disent la même chose doivent s'aligner pareil. La dernière colonne est celle
    du chevron ; le prévisionnel y met ses deux actions. */
-const COL_PCT = 80;
+const COL_PCT = 72;
 const COL_AMOUNT = 116;
-const COL_BTN = 36;
+const COL_BTN = 24;
 
 /** « 13 août » — l'année n'apparaît que si le jour n'est pas de cette année. */
 function shortDay(iso) {
@@ -143,29 +162,31 @@ export default function CashflowPage({ setPage }) {
   const [rawPeriod, setPeriod] = useCloudState("tr4de_spending_period", "spending_period", "1M");
   const period = CASHFLOW_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : "1M";
 
-  const days = daysOfPeriod(period) ?? ALL_DAYS;
+  const days = daysOfPeriod(period) ?? 0;
 
-  /* La fenêtre a une LONGUEUR (les pastilles) et une POSITION (les flèches) : on
-     recule d'autant de jours qu'elle en couvre, si bien que deux fenêtres
-     voisines se suivent sans se chevaucher ni laisser de trou. La position est
-     remise à zéro quand la longueur change — un décalage de trois crans en
-     « 1 semaine » n'a pas de sens une fois passé en « 1 an ». */
+  /* La fenêtre libre, gardée avec la période : revenir sur « Personnalisé » doit
+     rouvrir les dates qu'on y avait posées, pas trente jours par défaut. */
+  const [rawCustom, setCustom] = useCloudState("tr4de_spending_custom", "spending_custom", defaultCustom());
+  const custom = rawCustom?.start && rawCustom?.end ? rawCustom : defaultCustom();
+
+  /* La fenêtre a une LONGUEUR (les pastilles, ou les dates saisies) et une
+     POSITION (les flèches) : on recule d'autant de jours qu'elle en couvre, si
+     bien que deux fenêtres voisines se suivent sans se chevaucher ni laisser de
+     trou. La position est remise à zéro quand la longueur change — un décalage
+     de trois crans en « 1 mois » n'a pas de sens une fois passé en « 1 an ». */
   const [offset, setOffset] = React.useState(0);
-  React.useEffect(() => { setOffset(0); }, [period]);
+  React.useEffect(() => { setOffset(0); }, [period, custom.start, custom.end]);
 
   const range = React.useMemo(() => {
-    if (days === ALL_DAYS) return null;
-    const now = new Date();
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset * days);
-    const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - days + 1);
+    const libre = period === PERIOD_CUSTOM;
+    const length = libre ? daysSince(custom.start, parseDay(custom.end)) : days;
+    const anchor = libre ? parseDay(custom.end) : new Date();
+    const end = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - offset * length);
+    const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - length + 1);
     return { from: dayKey(start), to: dayKey(end) };
-  }, [days, offset]);
+  }, [period, days, custom, offset]);
 
-  /* Profondeur demandée à la banque : de quoi couvrir la fenêtre où qu'elle se
-     trouve, jamais moins de 90 jours — c'est le minimum que l'API rend de toute
-     façon, et c'est ce que demandent déjà la synthèse Patrimoine et la page
-     Budget, donc le MÊME cache. Reculer ne redemande que ce qui manque. */
-  const depth = range === null ? ALL_DAYS : Math.max(daysSince(range.from), 90);
+  const depth = Math.max(daysSince(range.from), 90);
 
   const uids = React.useMemo(() => bank.accounts.map((a) => a.uid), [bank.accounts]);
   const { byUid, loading } = useBankTransactionsAll(uids, depth);
@@ -181,15 +202,11 @@ export default function CashflowPage({ setPage }) {
     return list;
   }, [byUid, uids]);
 
-  const txs = React.useMemo(
-    () => (range === null ? all : withinRange(all, range.from, range.to)),
-    [all, range],
-  );
+  const txs = React.useMemo(() => withinRange(all, range.from, range.to), [all, range]);
 
   /* « 16 juil. – 14 août ». L'année n'apparaît que si la fenêtre sort de l'année
      en cours : sur douze mois de relevé elle serait vraie partout, donc muette. */
   const rangeLabel = React.useMemo(() => {
-    if (range === null) return "";
     const year = String(new Date().getFullYear());
     const sameYear = range.from.slice(0, 4) === year && range.to.slice(0, 4) === year;
     const opts = { day: "numeric", month: "short", ...(sameYear ? null : { year: "numeric" }) };
@@ -269,36 +286,33 @@ export default function CashflowPage({ setPage }) {
      tablette. La colonne des postes est la plus large — elle en a plus à dire. */
   const twoCols = bp === "desktop";
 
-  /* En-tête : le titre, puis la fenêtre — sa longueur en pastilles, sa position
-     en flèches. Pas de sous-titre : la page se lit, elle n'a pas à s'expliquer. */
-  const header = (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <SectionTitle>{t("cashflow.title")}</SectionTitle>
-      </div>
-      {bank.accounts.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {/* La position n'a de sens que si la fenêtre a une longueur : sur
-              « Tout », il n'y a nulle part où reculer. */}
-          {range !== null && (
-            <StepperPill
-              label={rangeLabel}
-              onPrev={() => setOffset((o) => o + 1)}
-              onNext={() => setOffset((o) => Math.max(0, o - 1))}
-              nextDisabled={offset <= 0}
-              prevLabel={t("cashflow.prevRange")}
-              nextLabel={t("cashflow.nextRange")}
-            />
-          )}
-          <PeriodPills
-            value={period}
-            onChange={setPeriod}
-            options={CASHFLOW_PERIODS.map((p) =>
-              p.id === PERIOD_ALL ? { ...p, label: t("patrimoine.periodAll") } : p,
-            )}
-          />
-        </div>
+  /* En-tête : la fenêtre, et rien d'autre. Pas de titre — la navigation dit
+     déjà où l'on est, et la carte du dessous porte le nom du diagramme ; deux
+     fois « Cashflow » sur trois centimètres de haut n'apprenaient rien.
+
+     À gauche la POSITION (les flèches, ou les dates quand elle est libre), à
+     droite la LONGUEUR : on lit ce qu'on regarde avant de lire le réglage. */
+  const header = bank.accounts.length === 0 ? null : (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      {period === PERIOD_CUSTOM ? (
+        <DateRangePicker value={custom} onChange={setCustom} />
+      ) : (
+        <StepperPill
+          label={rangeLabel}
+          onPrev={() => setOffset((o) => o + 1)}
+          onNext={() => setOffset((o) => Math.max(0, o - 1))}
+          nextDisabled={offset <= 0}
+          prevLabel={t("cashflow.prevRange")}
+          nextLabel={t("cashflow.nextRange")}
+        />
       )}
+      <PeriodPills
+        value={period}
+        onChange={setPeriod}
+        options={CASHFLOW_PERIODS.map((p) =>
+          p.id === PERIOD_CUSTOM ? { ...p, label: t("cashflow.custom") } : p,
+        )}
+      />
     </div>
   );
 
@@ -352,19 +366,14 @@ export default function CashflowPage({ setPage }) {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
               <SectionTitle size="sm">{t("cashflow.spending")}</SectionTitle>
-              <section style={{ ...CARD, padding: "16px 20px 8px", display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 6, fontSize: 12, color: T.textMut }}>
-                  {/* Aligné sur la vignette de couleur des lignes, pas sur une
-                      pastille de 10 px : sinon l'en-tête flotte à gauche du nom. */}
-                  <span aria-hidden="true" style={{ width: 32, flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>{t("spending.colCategory")}</span>
-                  <span style={{ width: COL_PCT, textAlign: "right", flexShrink: 0 }}>{t("budget.colShare")}</span>
-                  <span style={{ width: COL_AMOUNT, textAlign: "right", flexShrink: 0 }}>{t("budget.colAmount")}</span>
-                  <span aria-hidden="true" style={{ width: COL_BTN, flexShrink: 0 }} />
-                </div>
-
+              {/* Sans en-tête de colonnes : les deux listes de ce bloc se lisent
+                  l'une à côté de l'autre, et trois intitulés d'un seul côté
+                  décalaient la première ligne des postes d'une hauteur de texte
+                  par rapport à la première enseigne. Ce que disent les colonnes
+                  se lit dans les valeurs elles-mêmes — un « % » et un montant. */}
+              <section style={{ ...CARD, padding: slices.length === 0 ? "16px 20px" : "8px 0", display: "flex", flexDirection: "column" }}>
                 {slices.length === 0 ? (
-                  <div style={{ padding: "12px 0 16px", fontSize: 14, color: T.textSub }}>
+                  <div style={{ fontSize: 14, lineHeight: 1.5, color: T.textSub }}>
                     {t("patrimoine.spending.empty")}
                   </div>
                 ) : (
@@ -586,26 +595,37 @@ function CategoryRow({ slice, txs }) {
         aria-expanded={open}
         aria-controls={panelId}
         style={{
-          display: "flex", alignItems: "center", gap: 10, width: "100%",
-          padding: "8px 0", border: "none", background: "transparent",
+          display: "flex", alignItems: "center", gap: 12, width: "100%",
+          padding: "10px 20px", border: "none", background: "transparent",
           cursor: "pointer", fontFamily: "inherit", textAlign: "left",
         }}
       >
-        <CategoryIcon category={slice.id} size={32} />
-        <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {label}
+        <CategoryIcon category={slice.id} />
+        {/* Exactement la ligne d'une enseigne : le nom, puis son nombre
+            d'opérations en dessous. Les deux listes se lisent côte à côte, et
+            deux mises en page différentes pour la même forme de donnée se
+            remarquent tout de suite. */}
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {label}
+          </span>
+          <span style={{ display: "block", fontSize: 12, color: T.textSub }}>
+            {t("spending.nTxns").replace("{n}", String(slice.count))}
+          </span>
         </span>
-        <span style={{ width: COL_PCT, flexShrink: 0, textAlign: "right", fontSize: 14, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+        {/* La part et le montant sont deux chiffres de nature différente : sans
+            un vrai jour entre eux, ils se lisent comme une seule colonne. */}
+        <span style={{ width: COL_PCT, flexShrink: 0, textAlign: "right", paddingRight: 16, fontSize: 14, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
           {Math.round(slice.pct)} %
         </span>
-        <span style={{ width: COL_AMOUNT, flexShrink: 0, textAlign: "right", fontSize: 14, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ width: COL_AMOUNT, flexShrink: 0, textAlign: "right", fontSize: 14, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
           {fmt(slice.amount)}
         </span>
         <span
           aria-hidden="true"
           style={{
             width: COL_BTN, flexShrink: 0, display: "inline-flex",
-            alignItems: "center", justifyContent: "center", color: T.textMut,
+            alignItems: "center", justifyContent: "flex-end", color: T.textMut,
           }}
         >
           <ChevronRight
@@ -626,9 +646,9 @@ function CategoryRow({ slice, txs }) {
           qu'on perd — le chevron, lui, tourne toujours. */}
       {open && (
         <div id={panelId}>
-          {/* 42 px d'indentation : la vignette (32) et son espace (10), soit
-              exactement là où commence le nom du poste au-dessus. */}
-          <ul style={{ listStyle: "none", margin: 0, padding: "0 0 10px 42px", display: "flex", flexDirection: "column", gap: 8 }} className="anim-1">
+          {/* 64 px d'indentation : le bord de la carte (20), la vignette (32) et
+              son espace (12), soit exactement là où commence le nom du poste. */}
+          <ul style={{ listStyle: "none", margin: 0, padding: "0 20px 10px 64px", display: "flex", flexDirection: "column", gap: 8 }} className="anim-1">
             {shown.map((tx) => {
               const merchant = findMerchant(tx);
               return (
