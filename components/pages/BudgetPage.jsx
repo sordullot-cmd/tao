@@ -3,14 +3,12 @@
 /**
  * Budget type — plusieurs plans nommés de répartition du revenu mensuel.
  *
- * C'était une page à soi (« Budget »), c'est maintenant le DERNIER bloc de la
- * page Cashflow : le flux réel se lit d'abord, le plan qu'on se donne ensuite.
- * Les deux ne se comparaient pas quand ils vivaient dans deux entrées de
- * navigation — on ne les avait jamais sous les yeux en même temps.
- *
- * Le bloc n'a donc plus d'en-tête de page ni de marge haute : c'est la page qui
- * les porte. Tout le reste est inchangé, la persistance comprise (même store,
- * mêmes clés) — un plan saisi avant la fusion se retrouve tel quel.
+ * Une page à soi, de nouveau. Elle avait été rangée en dernier bloc de la page
+ * Cashflow pour qu'on lise le réalisé avant le prévu ; en pratique c'était une
+ * page entière ajoutée sous une autre page entière, et le plan se saisit — on
+ * n'y arrive pas en faisant défiler un relevé, on y va exprès. La persistance
+ * n'a pas bougé (même store, mêmes clés) : un plan saisi du temps de la fusion
+ * se retrouve tel quel, et l'ancienne route `budget` mène de nouveau ici.
  *
  * Pour chaque plan : un revenu mensuel, puis des catégories qui ont chacune
  * l'un de DEUX modes (voir `pctOf` / `amountOf`) :
@@ -35,7 +33,7 @@
  */
 
 import React from "react";
-import { Crown, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
+import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
@@ -156,23 +154,6 @@ const fieldSkin = (solid) => ({
   background: solid ? T.white : "transparent",
 });
 
-/** Marque du budget principal — celui que reprend la synthèse Patrimoine.
- *  L'icône est masquée aux lecteurs d'écran : elle vit DANS l'onglet du plan,
- *  et un libellé ici s'ajouterait au nom du bouton (« Budget principalMon
- *  budget »). L'explication passe par l'infobulle, et la page Patrimoine nomme
- *  de toute façon le budget qu'elle affiche. */
-function PrimaryCrown() {
-  return (
-    <span
-      title={t("budget.primaryHint")}
-      aria-hidden="true"
-      style={{ display: "inline-flex", flexShrink: 0, color: T.amber }}
-    >
-      <Crown size={13} strokeWidth={2} />
-    </span>
-  );
-}
-
 /** Pastille d'action discrète (Réinitialiser, Supprimer, Nouveau). */
 function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" }) {
   const base = danger ? T.red : tone === "ink" ? T.text : T.textSub;
@@ -197,7 +178,7 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
   );
 }
 
-export default function BudgetPlanner() {
+export default function BudgetPage() {
   useLang();
   const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -298,14 +279,10 @@ export default function BudgetPlanner() {
   const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {/* En « sm » : le bloc n'est plus une page, c'est une section parmi
-              celles de la page Cashflow, et le 24 px prenait le dessus sur le
-              flux réel qu'on lit au-dessus. */}
           <SectionTitle
-            size="sm"
             action={
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 <GhostButton
@@ -338,7 +315,7 @@ export default function BudgetPlanner() {
           >
             {t("budget.title")}
           </SectionTitle>
-          <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>
+          <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, maxWidth: 620 }}>
             {t("budget.subtitle")}
           </div>
         </div>
@@ -346,11 +323,11 @@ export default function BudgetPlanner() {
         {/* Sélecteur de plans : le plan actif porte son nom en champ éditable
             plutôt qu'un bouton « renommer » — le nom se corrige là où il se lit.
 
-            Le PREMIER plan est le budget principal : c'est lui que montre la
-            synthèse Patrimoine, et la couronne le dit là où on choisit ses
-            plans. Elle suit l'ordre de la liste, il n'y a rien à régler. */}
+            Le PREMIER plan est celui que reprend la synthèse Patrimoine. Rien ne
+            le marque ici : la synthèse écrit le nom du plan qu'elle affiche, ce
+            qui répond à la question au moment où elle se pose. */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {plans.map((p, i) =>
+          {plans.map((p) =>
             p.id === plan.id ? (
               <span
                 key={p.id}
@@ -359,7 +336,6 @@ export default function BudgetPlanner() {
                   borderRadius: 999, background: T.white, boxShadow: T.elevPill,
                 }}
               >
-                {i === 0 && <PrimaryCrown />}
                 <input
                   ref={(el) => {
                     if (el && p.id === focusPlanId.current) {
@@ -394,7 +370,6 @@ export default function BudgetPlanner() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
               >
-                {i === 0 && <PrimaryCrown />}
                 {p.name}
               </button>
             )

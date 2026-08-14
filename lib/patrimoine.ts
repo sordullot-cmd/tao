@@ -485,7 +485,7 @@ export const newAssetId = (): string =>
  *
  * Le store vient de localStorage ou du cloud : il peut être d'une version
  * antérieure, ou tronqué. On normalise donc à la lecture plutôt que de laisser
- * un `undefined` traverser tout le rendu — même parti pris que `BudgetPlanner`.
+ * un `undefined` traverser tout le rendu — même parti pris que `BudgetPage`.
  */
 export function usePatrimoine(): [
   PatrimoineStore,

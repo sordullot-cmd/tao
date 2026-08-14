@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * Budget & cashflow — le flux d'argent d'une fenêtre, et le plan qu'on se donne.
+ * Cashflow — le flux d'argent d'une fenêtre : ce qui est RÉELLEMENT entré et
+ * sorti, lu sur les relevés.
  *
- * Cette page fusionne « Budget » (le prévisionnel saisi à la main) et
- * « Dépenses » (le réalisé lu sur les relevés). Les deux répondaient à la même
- * question par les deux bouts, et les tenir dans deux entrées de navigation
- * garantissait qu'on ne les ait jamais sous les yeux en même temps — donc qu'on
- * ne compare jamais.
+ * Cette page a un temps porté aussi le prévisionnel (l'ancienne page « Budget »),
+ * pour que le prévu et le réalisé soient sous les yeux en même temps. En pratique
+ * c'était une page entière posée sous une autre : le plan est reparti dans sa
+ * page, et il n'en reste ici qu'un renvoi, en bas, là où la question « et par
+ * rapport à ce que je m'étais fixé ? » se pose.
  *
  * L'ordre de lecture est celui d'une réponse, du plus général au plus précis :
  *
@@ -19,19 +20,20 @@
  *   2. LE DÉTAIL, en deux colonnes : les postes de dépense à gauche, dépliables
  *      sur leurs opérations ; les entrées d'argent à droite. Les deux côtés du
  *      diagramme, chiffrés.
- *   3. LES CINQ DERNIÈRES OPÉRATIONS réelles — ce qui vient de se passer, sans
- *      quitter la page pour le relevé complet.
+ *   3. LES DERNIÈRES OPÉRATIONS réelles — ce qui vient de se passer, sans
+ *      quitter la page pour le relevé complet. Cinq d'emblée, la suite se
+ *      déplie sur place, par paquets, jusqu'à toute la fenêtre choisie.
  *   4. LES ENSEIGNES qui pèsent le plus, logo compris : une fuite se voit là, et
  *      pas dans un poste.
- *   5. LE PRÉVISIONNEL (`BudgetPlanner`), en dernier : ce qu'on VOUDRAIT, après
- *      ce qui EST. L'ordre inverse ferait discuter le plan avant de regarder les
+ *   5. LE RENVOI VERS LE BUDGET, en dernier : ce qu'on VOUDRAIT, après ce qui
+ *      EST. L'ordre inverse ferait discuter le plan avant de regarder les
  *      chiffres.
  *
- * Tout ce qui est réel vient des RELEVÉS des comptes agrégés : il n'y a aucune
- * saisie manuelle de dépense dans tr4de, et il n'en est pas prévu. Sans banque
- * connectée, les quatre premiers blocs le disent et ne montrent rien d'autre —
- * des colonnes et des zéros se liraient comme « tu n'as rien dépensé », ce qui
- * est faux. Le prévisionnel, lui, reste utilisable : il ne dépend d'aucun compte.
+ * Tout vient des RELEVÉS des comptes agrégés : il n'y a aucune saisie manuelle
+ * de dépense dans tr4de, et il n'en est pas prévu. Sans banque connectée, la
+ * page le dit et ne montre rien d'autre — des colonnes et des zéros se liraient
+ * comme « tu n'as rien dépensé », ce qui est faux. Le renvoi vers le budget
+ * reste, lui : le plan ne dépend d'aucun compte.
  *
  * Le classement (postes ET sources) est DEVINÉ d'après le libellé par
  * `lib/bank/categories`, et la page le dit : un classement faux se lit comme un
@@ -47,21 +49,21 @@
  */
 
 import React from "react";
-import { ArrowDownLeft, ArrowUpRight, ChevronRight, Landmark } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, Landmark, PiggyBank } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, PeriodPills, SectionAction, SectionTitle, PERIODS, PERIOD_ALL } from "@/components/ui/da";
-import SankeyFlow from "@/components/ui/SankeyFlow";
+import SankeyGraph from "@/components/ui/SankeyGraph";
 import MerchantAvatar from "@/components/ui/MerchantAvatar";
-import BudgetPlanner from "@/components/pages/BudgetPlanner";
 import { findMerchant } from "@/lib/bank/merchants";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import {
-  categorizeTransaction, categoryColor, categoryLabelKey, parentOfSub,
+  categorizeTransaction, categoryColor, categoryLabelKey, isCatchAllSub, parentOfSub,
   spendingByCategory, subLabelKey, subcategorizeTransaction,
 } from "@/lib/bank/categories";
-import { buildCashflow, incomeBySource } from "@/lib/bank/cashflow";
+import { incomeBySource } from "@/lib/bank/cashflow";
+import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
 import { ALL_DAYS, depthOf, kindLabelKey, sortTransactions, withinDays } from "@/lib/bank/transactions";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -78,9 +80,13 @@ const TOP_MERCHANTS = 8;
 /** Opérations montrées par poste avant dépliage complet. */
 const TX_FOLDED = 6;
 
-/** Opérations récentes montrées : de quoi reconnaître les derniers jours, pas de
- *  quoi refaire le relevé — la fiche du compte le fait déjà, en mieux. */
+/** Opérations récentes montrées d'emblée : de quoi reconnaître les derniers
+ *  jours, pas de quoi refaire le relevé — la fiche du compte le fait déjà, en
+ *  mieux. La suite se déplie sur place, par paquets : cinq lignes suffisent à se
+ *  situer, mais « qu'est-ce qui est passé cette semaine » en demande plus, et
+ *  aller chercher la réponse dans le relevé fait perdre la période choisie. */
 const RECENT = 5;
+const RECENT_STEP = 15;
 
 /* Colonnes des tableaux — les mêmes largeurs que le prévisionnel en bas de page :
    le prévu et le réalisé se lisent l'un après l'autre, et deux tableaux qui
@@ -105,19 +111,43 @@ function shortDay(iso) {
   }
 }
 
-/** Libellé d'un nœud du flux. Les trois nœuds de synthèse ont leurs propres
- *  clés — ce ne sont ni des postes ni des sources, et « + 4 autres postes » doit
- *  dire combien il en rassemble, sans quoi il passerait pour un poste réel. */
+/**
+ * Libellé d'un nœud du flux.
+ *
+ * Les nœuds de synthèse ont leurs propres clés — ce ne sont ni des postes ni des
+ * sources, et « + 4 autres postes » doit dire COMBIEN il en rassemble, sans quoi
+ * il passerait pour un poste réel.
+ *
+ * Le sous-poste fourre-tout d'un poste (`housing` sous « Logement ») porte le
+ * nom de son poste : écrit juste à droite de lui dans le diagramme, ce serait le
+ * même mot deux fois de suite, et on croirait à un ruban qui ne mène nulle part.
+ * Il se dit donc « Divers », comme sous l'anneau des dépenses.
+ *
+ * Une SOURCE se dit par le nom de qui paie (« Unowhy », « CAF ») dès que le
+ * relevé le donne, et par la nature de l'entrée (« Salaire & activité ») sinon.
+ * C'est le côté gauche qui y gagne le plus : la moitié des relevés n'a qu'un
+ * « Revenus » à mettre en face de ses rubans, ce qui ne fait que répéter de quel
+ * côté du diagramme on se trouve. Le nom, lui, répond à la question.
+ */
 function flowLabel(node) {
-  if (node.kind === "synthetic") {
-    return t(`cashflow.node.${node.id}`).replace("{n}", String(node.count));
+  switch (node.kind) {
+    case "hub":
+      return t("cashflow.hub");
+    case "income":
+      return node.source || t(subLabelKey(node.ref));
+    case "category":
+      return t(categoryLabelKey(node.ref));
+    case "sub":
+      return isCatchAllSub(node.ref) ? t("patrimoine.sub.divers") : t(subLabelKey(node.ref));
+    default:
+      return t(`cashflow.node.${node.ref}`).replace("{n}", String(node.count));
   }
-  if (node.kind === "income") return t(subLabelKey(node.id));
-  return t(categoryLabelKey(node.id));
 }
 
 export default function CashflowPage({ setPage }) {
-  useLang();
+  // La langue sert de dépendance aux libellés du diagramme : sans elle, changer
+  // de langue laisserait les pastilles dans l'ancienne, le graphe n'ayant pas bougé.
+  const lang = useLang();
   const bank = useBankAccounts();
   const bp = useBreakpoint();
 
@@ -148,12 +178,17 @@ export default function CashflowPage({ setPage }) {
 
   const txs = React.useMemo(() => withinDays(all, days), [all, days]);
 
-  /* Six postes et quatre sources au diagramme, pas plus : au-delà, les branches
-     deviennent des traits et leurs noms se marchent dessus. Ce qui est écrêté est
-     rassemblé sous une branche qui dit combien elle en porte, et le détail
-     complet est dans les deux listes juste en dessous. */
+  /* Six postes, cinq sources et trois sous-postes par poste, pas plus : au-delà,
+     les branches deviennent des traits et leurs noms se marchent dessus. Ce qui
+     est écrêté est rassemblé sous une branche qui dit combien elle en porte, et
+     le détail complet est dans les listes juste en dessous.
+
+     Cinq sources et non quatre : depuis qu'une source porte le NOM de qui paie,
+     un même salaire versé par deux employeurs fait deux branches là où il n'en
+     faisait qu'une. À quatre, un relevé ordinaire (deux salaires, une aide, un
+     remboursement, un virement) commençait à regrouper. */
   const flow = React.useMemo(
-    () => buildCashflow(txs, { topOutflows: 6, topInflows: 4 }),
+    () => buildCashflowGraph(txs, { topOutflows: 6, topInflows: 5, topSubs: 3 }),
     [txs],
   );
   const { slices } = React.useMemo(() => spendingByCategory(txs), [txs]);
@@ -180,8 +215,20 @@ export default function CashflowPage({ setPage }) {
 
   /* Les dernières opérations, tous comptes confondus — entrées comprises : ce
      bloc répond à « qu'est-ce qui vient de passer », question qui ne trie pas
-     par signe. */
-  const recent = React.useMemo(() => sortTransactions(txs).slice(0, RECENT), [txs]);
+     par signe. La liste entière est triée ici ; c'est l'affichage qui coupe. */
+  const recentAll = React.useMemo(() => sortTransactions(txs), [txs]);
+
+  /* Combien de lignes on montre. Se remet à cinq quand la fenêtre change : un
+     compteur gardé à 50 d'une période à l'autre déplierait « 1 semaine » en
+     entier sans qu'on l'ait demandé, et le bouton n'aurait plus rien à dire. */
+  const [recentShown, setRecentShown] = React.useState(RECENT);
+  React.useEffect(() => { setRecentShown(RECENT); }, [period]);
+
+  const recent = React.useMemo(
+    () => recentAll.slice(0, recentShown),
+    [recentAll, recentShown],
+  );
+  const recentRest = recentAll.length - recent.length;
 
   /* Classement des enseignes. Seuls les marchands RECONNUS y figurent : le
      libellé brut d'une carte porte la date et le numéro de terminal, deux
@@ -201,8 +248,17 @@ export default function CashflowPage({ setPage }) {
     return [...map.values()].sort((a, b) => b.amount - a.amount).slice(0, TOP_MERCHANTS);
   }, [txs]);
 
-  const inflows = flow.inflows.map((n) => ({ ...n, label: flowLabel(n) }));
-  const outflows = flow.outflows.map((n) => ({ ...n, label: flowLabel(n) }));
+  /* Le diagramme ne veut que trois choses d'un nœud : son identité, sa teinte et
+     son nom. Le reste (le montant, le rang, le poste d'appartenance) a déjà servi
+     à construire le graphe et ne doit pas repartir dans le dessin. */
+  const flowNodes = React.useMemo(
+    () => flow.nodes.map((n) => ({ id: n.id, color: n.color, label: flowLabel(n) })),
+    // `lang` n'apparaît pas dans le corps mais `flowLabel` appelle `t()`, qui lit
+    // la langue courante : sans cette dépendance, changer de langue laisserait les
+    // pastilles dans l'ancienne, le graphe n'ayant lui pas bougé.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [flow, lang],
+  );
 
   /* Deux colonnes sur grand écran, empilées en dessous : le tableau des postes
      porte quatre colonnes chiffrées, il ne tient pas dans une demi-largeur de
@@ -276,11 +332,9 @@ export default function CashflowPage({ setPage }) {
               />
             </div>
 
-            <SankeyFlow
-              inflows={inflows}
-              outflows={outflows}
-              centreLabel={t("cashflow.hub")}
-              centreValue={flow.income}
+            <SankeyGraph
+              nodes={flowNodes}
+              links={flow.links}
               formatValue={(v) => fmt(v)}
               ariaLabel={t("cashflow.flowAria")
                 .replace("{in}", fmt(flow.income))
@@ -347,11 +401,18 @@ export default function CashflowPage({ setPage }) {
                       >
                         <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
                         <span style={{ flex: 1, minWidth: 0 }}>
+                          {/* Qui paie en titre, sa nature en dessous : « Unowhy »
+                              répond à la question, « Salaire & activité » dit ce
+                              que c'est. Sans nom lu sur le relevé, la nature
+                              remonte en titre — une ligne vide dirait moins. */}
                           <span style={{ display: "block", fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {t(subLabelKey(s.id))}
+                            {s.source || t(subLabelKey(s.sub))}
                           </span>
-                          <span style={{ display: "block", fontSize: 12, color: T.textSub }}>
-                            {t("spending.nTxns").replace("{n}", String(s.count))}
+                          <span style={{ display: "block", fontSize: 12, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {[
+                              s.source ? t(subLabelKey(s.sub)) : null,
+                              t("spending.nTxns").replace("{n}", String(s.count)),
+                            ].filter(Boolean).join(" · ")}
                           </span>
                         </span>
                         <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
@@ -383,7 +444,55 @@ export default function CashflowPage({ setPage }) {
                     <RecentRow key={tx.id} tx={tx} first={i === 0} />
                   ))}
                 </ul>
+
+                {/* La suite, sur place. Le bouton dit COMBIEN il reste : « voir
+                    plus » sur trois lignes restantes et sur deux cents, ce n'est
+                    pas la même décision. Une fois tout déplié, il rend la liste
+                    à sa taille de départ plutôt que de disparaître — sinon on
+                    reste avec deux cents lignes sous les yeux jusqu'au
+                    rechargement. */}
+                {(recentRest > 0 || recentShown > RECENT) && (
+                  <div style={{ borderTop: `1px solid ${T.border}`, display: "flex" }}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRecentShown(recentRest > 0 ? recentShown + RECENT_STEP : RECENT)
+                      }
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        width: "100%", minHeight: 44, padding: "0 20px",
+                        border: "none", background: "transparent", cursor: "pointer",
+                        fontFamily: "inherit", fontSize: 13, fontWeight: 500, color: T.textSub,
+                      }}
+                    >
+                      {recentRest > 0 ? (
+                        <>
+                          {t("cashflow.recentMore").replace(
+                            "{n}",
+                            String(Math.min(RECENT_STEP, recentRest)),
+                          )}
+                          <ChevronDown size={15} strokeWidth={1.75} />
+                        </>
+                      ) : (
+                        <>
+                          {t("spending.txLess")}
+                          <ChevronUp size={15} strokeWidth={1.75} />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </section>
+
+              {/* Ce qui est déplié reste borné à la FENÊTRE choisie en haut de
+                  page : le relevé complet du compte, lui, ne l'est pas. */}
+              {recentRest > 0 && (
+                <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
+                  {t("cashflow.recentCount")
+                    .replace("{shown}", String(recent.length))
+                    .replace("{total}", String(recentAll.length))}
+                </div>
+              )}
             </div>
           )}
 
@@ -425,12 +534,23 @@ export default function CashflowPage({ setPage }) {
         </>
       )}
 
-      {/* ── 5. Le prévisionnel ───────────────────────────────────────────────
-          Séparé par un filet : ce qui suit ne vient plus de la banque, il se
-          SAISIT. Sans cette rupture, un plan à 2 000 € se lirait comme un chiffre
-          relevé sur le compte. */}
-      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 28 }}>
-        <BudgetPlanner />
+      {/* ── 5. Le prévisionnel, ailleurs ─────────────────────────────────────
+          Le plan se SAISIT et ne vient d'aucun relevé : il a sa page. Il en
+          reste ce renvoi, parce que la question « et par rapport à ce que je
+          m'étais fixé ? » se pose ici, une fois le réalisé lu. */}
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 20 }}>
+        <button
+          type="button"
+          onClick={() => setPage?.("budget")}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
+            padding: "0 16px", borderRadius: 999, border: "none",
+            background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
+            cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          <PiggyBank size={15} strokeWidth={1.75} /> {t("cashflow.openBudget")}
+        </button>
       </div>
     </div>
   );

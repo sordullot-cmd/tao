@@ -956,7 +956,7 @@ const FR: Dict = {
   "accounts.searchOnlyPlaceholder": "Rechercher un compte…",
   "settings.accounts.manage": "Gérer les comptes",
 
-  // Finance — Budget type (l'entrée vit dans la section « Vie perso »)
+  // Finance — Budget type (page à part entière, section « Finance »)
   "nav.budget": "Budget",
   "budget.title": "Budget type",
   "budget.subtitle": "Répartis ton revenu mensuel en pourcentages pour voir le budget que tu devrais viser.",
@@ -964,8 +964,6 @@ const FR: Dict = {
   "budget.newPlan": "Nouveau",
   "budget.newPlanName": "Nouveau budget",
   "budget.planNameAria": "Nom du budget (modifiable)",
-  "budget.primaryAria": "Budget principal",
-  "budget.primaryHint": "Budget principal — c'est celui que reprend la page Patrimoine.",
   /* Carte de la synthèse Patrimoine */
   "patrimoine.budgetIncome": "Revenu mensuel",
   "patrimoine.budgetRest": "Reste à répartir",
@@ -1247,12 +1245,13 @@ const FR: Dict = {
   "patrimoine.spending.hint": "Classement automatique d'après le libellé de chaque opération : il n'est pas infaillible, et ce qu'aucune règle ne reconnaît tombe dans « Autres ». Les virements vers tes propres comptes comptent comme un poste à part, pas comme une dépense de consommation.",
   "patrimoine.spending.openAccount": "Voir le relevé",
 
-  /* Page Budget & cashflow — l'ancienne page Dépenses a fusionné avec l'ancienne
-     page Budget. Les clés `spending.*` restent : elles nomment les blocs venus du
-     réalisé, réutilisés tels quels dans la page fusionnée. */
+  /* Page Cashflow — l'ancienne page Dépenses y a fondu. Les clés `spending.*`
+     restent : elles nomment les blocs venus du réalisé, repris tels quels. Le
+     prévisionnel, lui, a de nouveau sa page (clés `budget.*`). */
   "nav.cashflow": "Cashflow",
-  "cashflow.title": "Budget & cashflow",
-  "cashflow.subtitle": "Ce qui entre, ce qui sort, ce qu'il reste — d'après le relevé de tes comptes agrégés. Le budget que tu te fixes se règle en bas de page.",
+  "cashflow.title": "Cashflow",
+  "cashflow.subtitle": "Ce qui entre, ce qui sort, ce qu'il reste — d'après le relevé de tes comptes agrégés.",
+  "cashflow.openBudget": "Voir mon budget type",
   "cashflow.in": "Encaissé",
   "cashflow.out": "Dépensé",
   "cashflow.left": "Reste",
@@ -1261,14 +1260,17 @@ const FR: Dict = {
   "cashflow.flowAria": "Flux de la période : {in} encaissés, {out} dépensés.",
   "cashflow.flowEmpty": "Aucune opération sur cette période : le flux se dessinera dès que le relevé en portera.",
   "cashflow.node.more": "+ {n} autres postes",
+  "cashflow.node.subMore": "+ {n} autres",
   "cashflow.node.left": "Reste",
   "cashflow.node.draw": "Pris sur le solde",
   "cashflow.spending": "Dépenses par poste",
   "cashflow.incomes": "Entrées d'argent",
   "cashflow.incomesEmpty": "Aucune entrée sur la période. Un virement reçu d'un proche compte comme un virement, pas comme un revenu.",
-  "cashflow.incomesHint": "Les sources sont devinées d'après le libellé du crédit. Un remboursement reconnu (pharmacie, avoir d'un marchand) reste déduit de son poste de dépense plutôt que compté ici : sinon le même euro gonflerait les deux côtés du flux.",
+  "cashflow.incomesHint": "Les sources sont devinées d'après le libellé du crédit : le nom de qui paie quand le relevé le donne, la nature de l'entrée sinon. Un remboursement reconnu (pharmacie, avoir d'un marchand) reste déduit de son poste de dépense plutôt que compté ici : sinon le même euro gonflerait les deux côtés du flux.",
   "cashflow.recent": "Dernières opérations",
   "cashflow.recentAll": "Voir le relevé",
+  "cashflow.recentMore": "Voir la suite ({n})",
+  "cashflow.recentCount": "{shown} des {total} opérations de la période.",
   "spending.colCategory": "Poste",
   "spending.nTxns": "{n} opérations",
   "spending.txMore": "Voir les {n} autres opérations",
@@ -2302,7 +2304,7 @@ const EN: Dict = {
   "accounts.searchOnlyPlaceholder": "Search an account…",
   "settings.accounts.manage": "Manage accounts",
 
-  // Finance — Target budget (the entry lives in the « Personal » section)
+  // Finance — Target budget (a page of its own, under « Finance »)
   "nav.budget": "Budget",
   "budget.title": "Target budget",
   "budget.subtitle": "Split your monthly income into percentages to see the budget you should aim for.",
@@ -2310,8 +2312,6 @@ const EN: Dict = {
   "budget.newPlan": "New",
   "budget.newPlanName": "New budget",
   "budget.planNameAria": "Budget name (editable)",
-  "budget.primaryAria": "Main budget",
-  "budget.primaryHint": "Main budget — this is the one the Net worth page shows.",
   "patrimoine.budgetIncome": "Monthly income",
   "patrimoine.budgetRest": "Left to allocate",
   "patrimoine.budgetOver": "Over budget",
@@ -2587,10 +2587,11 @@ const EN: Dict = {
   "patrimoine.spending.hint": "Categories are guessed from each transaction's label: it is not infallible, and anything no rule recognises falls into “Other”. Transfers to your own accounts count as their own bucket, not as consumer spending.",
   "patrimoine.spending.openAccount": "See statement",
 
-  // Budget & cashflow page (the former Spending and Budget pages, merged)
+  // Cashflow page (the former Spending page merged into it; the budget has its own page again)
   "nav.cashflow": "Cashflow",
-  "cashflow.title": "Budget & cashflow",
-  "cashflow.subtitle": "What comes in, what goes out, what is left — from the statements of your connected accounts. The budget you set yourself lives at the bottom of the page.",
+  "cashflow.title": "Cashflow",
+  "cashflow.subtitle": "What comes in, what goes out, what is left — from the statements of your connected accounts.",
+  "cashflow.openBudget": "See my target budget",
   "cashflow.in": "Money in",
   "cashflow.out": "Money out",
   "cashflow.left": "Left over",
@@ -2599,14 +2600,17 @@ const EN: Dict = {
   "cashflow.flowAria": "Flow over the period: {in} in, {out} out.",
   "cashflow.flowEmpty": "No transaction over this period: the flow will show up as soon as the statement carries one.",
   "cashflow.node.more": "+ {n} more categories",
+  "cashflow.node.subMore": "+ {n} more",
   "cashflow.node.left": "Left over",
   "cashflow.node.draw": "Taken from balance",
   "cashflow.spending": "Spending by category",
   "cashflow.incomes": "Money in",
   "cashflow.incomesEmpty": "No income over the period. A transfer received from someone counts as a transfer, not as income.",
-  "cashflow.incomesHint": "Sources are guessed from the credit's label. A recognised refund (pharmacy, merchant credit note) stays deducted from its spending category rather than counted here: otherwise the same euro would inflate both sides of the flow.",
+  "cashflow.incomesHint": "Sources are guessed from the credit's label: who pays when the statement says so, the kind of income otherwise. A recognised refund (pharmacy, merchant credit note) stays deducted from its spending category rather than counted here: otherwise the same euro would inflate both sides of the flow.",
   "cashflow.recent": "Latest transactions",
   "cashflow.recentAll": "See statement",
+  "cashflow.recentMore": "Show more ({n})",
+  "cashflow.recentCount": "{shown} of the {total} transactions in this period.",
   "spending.colCategory": "Category",
   "spending.nTxns": "{n} transactions",
   "spending.txMore": "Show {n} more transactions",

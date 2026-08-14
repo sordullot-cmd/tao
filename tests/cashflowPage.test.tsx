@@ -9,9 +9,9 @@ import { render, screen, fireEvent, within } from "@testing-library/react";
      — la fenêtre affichée, et les trois chiffres de tête qu'elle donne ;
      — le contenu d'un poste, qu'on n'obtient qu'en le dépliant ;
      — les deux colonnes du détail : les postes, et les entrées d'argent ;
-     — les cinq dernières opérations, entrées comprises ;
+     — les dernières opérations, entrées comprises, et leur dépliage ;
      — le classement des enseignes ;
-     — le prévisionnel, qui doit rester là même sans banque connectée ;
+     — le renvoi vers la page Budget, qui doit rester joignable même sans banque ;
      — l'état sans banque, qui ne doit pas ressembler à « zéro dépense ».
    Les libellés viennent du dictionnaire anglais : c'est la langue par défaut. */
 
@@ -86,7 +86,7 @@ const relevé = () => [
 
 const pageText = () => document.body.textContent || "";
 
-describe("Page Budget & cashflow", () => {
+describe("Page Cashflow", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-08-14T10:00:00"));
@@ -163,7 +163,28 @@ describe("Page Budget & cashflow", () => {
        fait partie (une entrée est une opération comme une autre), le débit du
        20 juillet non. */
     expect(pageText()).toMatch(/\+\$1,800\.00/);
-    expect(pageText()).not.toContain("PRLV SEPA EDF");
+    /* Le marqueur du 20 juillet est son SOUS-POSTE, écrit sous le nom de
+       l'enseigne : le libellé brut, lui, ne paraît jamais — « EDF » est
+       reconnue, et la ligne porte son nom canonique. */
+    expect(pageText()).not.toContain("Electricity & gas");
+  });
+
+  it("déplie la suite des dernières opérations sur place", () => {
+    render(<CashflowPage setPage={() => {}} />);
+
+    /* Six opérations dans la fenêtre, cinq montrées : le débit du 20 juillet est
+       le seul qui reste, et le bouton dit combien il en apporte. */
+    expect(pageText()).not.toContain("Electricity & gas");
+    expect(pageText()).toContain("5 of the 6 transactions in this period.");
+
+    fireEvent.click(screen.getByText("Show more (1)"));
+
+    expect(pageText()).toContain("Electricity & gas");
+    /* Tout est déplié : le bouton rend la liste à sa taille de départ plutôt que
+       de disparaître, et le compte sous la carte n'a plus rien à dire. */
+    expect(pageText()).not.toContain("of the 6 transactions");
+    fireEvent.click(screen.getByText("Show less"));
+    expect(pageText()).not.toContain("Electricity & gas");
   });
 
   it("classe les enseignes reconnues par montant", () => {
@@ -183,12 +204,16 @@ describe("Page Budget & cashflow", () => {
     expect(names).toEqual(["Carrefour", "EDF", "Netflix"]);
   });
 
-  it("garde le prévisionnel en bas de page", () => {
-    render(<CashflowPage setPage={() => {}} />);
+  it("renvoie vers la page Budget plutôt que de porter le prévisionnel", () => {
+    const pages: string[] = [];
+    render(<CashflowPage setPage={(p: string) => pages.push(p)} />);
 
-    // Le bloc venu de l'ancienne page Budget : son titre, et son revenu saisi.
-    expect(screen.getByText("Target budget")).toBeTruthy();
-    expect(screen.getByLabelText("Budget name (editable)")).toBeTruthy();
+    /* Le plan ne se saisit plus ici : la page n'en porte que le renvoi. Le
+       marqueur du bloc disparu est son champ de nom de plan. */
+    expect(screen.queryByLabelText("Budget name (editable)")).toBeNull();
+
+    fireEvent.click(screen.getByText("See my target budget"));
+    expect(pages).toEqual(["budget"]);
   });
 
   it("dit qu'il n'y a pas de matière plutôt que d'afficher zéro", () => {
@@ -199,9 +224,8 @@ describe("Page Budget & cashflow", () => {
     // Ni chiffres de tête, ni postes : il n'y a rien à répartir.
     expect(screen.queryByText("Money out")).toBeNull();
     expect(screen.queryByText(cat("food"))).toBeNull();
-    /* Le prévisionnel, lui, ne dépend d'aucune banque : le retirer là où il n'y a
-       pas de relevé priverait la page de la seule chose qu'elle peut encore
-       faire. */
-    expect(screen.getByText("Target budget")).toBeTruthy();
+    /* Le renvoi vers le budget, lui, ne dépend d'aucune banque : le plan reste
+       joignable là où il n'y a pas encore de relevé. */
+    expect(screen.getByText("See my target budget")).toBeTruthy();
   });
 });

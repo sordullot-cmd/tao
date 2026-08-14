@@ -8,7 +8,9 @@
  *
  * Le budget principal est le PREMIER plan de la liste — pas le plan actif, qui
  * n'est qu'un état de navigation dans la page Budget : la synthèse afficherait
- * sinon un plan différent selon le dernier onglet ouvert.
+ * sinon un plan différent selon le dernier onglet ouvert. Rien ne le marque dans
+ * la page Budget : c'est la synthèse qui écrit le nom du plan qu'elle montre,
+ * là où la question se pose.
  */
 
 export const BUDGET_STORAGE_KEY = "tr4de_budget_plans";
@@ -46,11 +48,6 @@ export function plansOf(store: BudgetStore | null | undefined): BudgetPlan[] {
 /** Le budget principal : le premier de la liste. `null` s'il n'y en a aucun. */
 export function primaryPlan(store: BudgetStore | null | undefined): BudgetPlan | null {
   return plansOf(store)[0] || null;
-}
-
-/** Vrai pour le plan principal — sert à poser la couronne. */
-export function isPrimaryPlan(store: BudgetStore | null | undefined, planId: string): boolean {
-  return primaryPlan(store)?.id === planId;
 }
 
 /* Les deux lectures d'une catégorie, selon son mode.

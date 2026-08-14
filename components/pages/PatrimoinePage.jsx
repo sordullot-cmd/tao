@@ -28,7 +28,7 @@
  */
 
 import React from "react";
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Crown, Plus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
@@ -381,7 +381,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
           avec un lien. L'original posait ici un Sankey des flux réels du mois,
           qui n'a pas de source dans tr4de ; la répartition prévue, elle, existe
           bel et bien. */}
-      <BudgetSummary onOpen={() => setPage?.("cashflow")} />
+      <BudgetSummary onOpen={() => setPage?.("budget")} />
 
       {addingAsset && <AssetFormModal onClose={() => setAddingAsset(false)} />}
       {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
@@ -672,12 +672,9 @@ function BudgetSummary({ onOpen }) {
           </button>
         }
       >
-        {/* Le nom du budget affiché, avec sa couronne : on doit savoir LEQUEL
-            des plans est repris ici sans ouvrir la page Budget. */}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Crown size={14} strokeWidth={2} style={{ color: T.amber, flexShrink: 0 }} />
-          {plan?.name || t("nav.budget")}
-        </span>
+        {/* Le nom du budget affiché : on doit savoir LEQUEL des plans est repris
+            ici sans ouvrir la page Budget. */}
+        {plan?.name || t("nav.budget")}
       </SectionTitle>
 
       <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
