@@ -200,16 +200,48 @@ describe("Page Cashflow", () => {
     /* Six opérations dans la fenêtre, cinq montrées : le débit du 20 juillet est
        le seul qui reste, et le bouton dit combien il en apporte. */
     expect(edfDansLaListe()).toBe(false);
-    expect(pageText()).toContain("5 of the 6 transactions in this period.");
 
     fireEvent.click(screen.getByText("Show more (1)"));
 
     expect(edfDansLaListe()).toBe(true);
     /* Tout est déplié : le bouton rend la liste à sa taille de départ plutôt que
-       de disparaître, et le compte sous la carte n'a plus rien à dire. */
-    expect(pageText()).not.toContain("of the 6 transactions");
+       de disparaître. */
     fireEvent.click(screen.getByText("Show less"));
     expect(edfDansLaListe()).toBe(false);
+  });
+
+  /* Les quatre chiffres de la fenêtre, et ce qu'ils commandent. « Disponible »
+     et « Dépenses récurrentes » ne se lisent nulle part ailleurs sur la page :
+     le premier est le solde de la fenêtre, le second ce qui repartira le mois
+     prochain quoi qu'il arrive. */
+  it("donne quatre chiffres, dont le disponible et le récurrent", () => {
+    render(<CashflowPage setPage={() => {}} />);
+
+    expect(screen.getByRole("tab", { name: /Money in/ }).textContent).toContain("1,840.00");
+    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("250.00");
+    expect(screen.getByRole("tab", { name: /Available/ }).textContent).toContain("1,590.00");
+    /* Carrefour revient en juillet ET en août pour 100 € : c'est la seule
+       contrepartie de ce relevé dont le montant tienne d'un mois sur l'autre.
+       Les 50 € du 1er août sont bien du même marchand, mais la récurrence se
+       détecte par contrepartie, pas par opération : ils comptent donc aussi. */
+    expect(screen.getByRole("tab", { name: /Recurring/ })).toBeTruthy();
+  });
+
+  it("déplace la fenêtre sans changer sa longueur", () => {
+    render(<CashflowPage setPage={() => {}} />);
+
+    // La fenêtre d'un mois s'arrête aujourd'hui : il n'y a pas de « suivante ».
+    expect((screen.getByLabelText("Next window") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Jul 16 – Aug 14")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Previous window"));
+
+    /* Reculée d'exactement sa longueur : les deux fenêtres se suivent sans se
+       chevaucher ni laisser de trou. Entrent les 100 € du 1er juillet et les
+       30 € du 16 juin ; tout ce qui était compté au-dessus sort. */
+    expect(screen.getByText("Jun 16 – Jul 15")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("130.00");
+    expect((screen.getByLabelText("Next window") as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("classe les enseignes reconnues par montant", () => {

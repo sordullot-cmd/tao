@@ -1,28 +1,19 @@
 "use client";
 
 /**
- * Budget — le mois qui vient de passer, puis le plan qu'on se donne.
+ * Budget — le plan qu'on se donne. Le budget TYPE, et rien d'autre.
  *
- * La page tient deux choses, dans cet ordre, et l'ordre est le propos :
+ * Plusieurs plans nommés de répartition du revenu mensuel, saisis à la main.
  *
- *   1. CE MOIS-CI, lu sur les relevés : le flux réel en diagramme, la
- *      répartition en anneau à côté, et les trois chiffres du mois posés en
- *      onglets sous le dessin — ce sont eux qui choisissent ce que l'anneau
- *      détaille. Un mois calendaire, pas une fenêtre glissante : un loyer tombe
- *      une fois par mois, et « les trente derniers jours » en attrape tantôt un,
- *      tantôt deux. La navigation se fait donc de mois en mois.
- *   2. LE BUDGET TYPE, saisi à la main : plusieurs plans nommés de répartition
- *      du revenu mensuel.
+ * La page a un temps porté aussi le mois RÉEL, lu sur les relevés : le flux en
+ * diagramme, sa répartition en anneau et les trois chiffres du mois. C'est
+ * reparti. Le réalisé se lit sur la page Cashflow, qui le dit mieux parce
+ * qu'elle le DÉPLIE (opérations d'un poste, enseignes, relevé) là où ce bloc ne
+ * pouvait que le résumer ; le tenir aux deux endroits demandait de garder deux
+ * mises en page d'accord sur la même matière.
  *
- * Le réalisé AVANT le prévu, séparés par un filet : un plan discuté avant
- * d'avoir regardé le mois est un vœu. Et le mois seul ne dit pas ce qu'on
- * voulait — d'où les deux sur la même page, plutôt qu'un renvoi de l'une à
- * l'autre. La page Cashflow, elle, reste l'endroit où le mois se DÉPLIE
- * (opérations d'un poste, enseignes, relevé) ; ici il se résume.
- *
- * Sans banque connectée, le premier bloc dit qu'il n'a pas de matière et renvoie
- * là où ça se branche — des zéros se liraient comme « tu n'as rien dépensé ».
- * Le plan, lui, ne dépend d'aucun compte et reste utilisable.
+ * Ce qui reste ici ne dépend donc d'AUCUN compte bancaire : la page s'ouvre et
+ * s'utilise sans banque connectée, et rien n'y attend de relevé.
  *
  * La persistance du plan n'a pas bougé (même store, mêmes clés) : un plan saisi
  * du temps où cette page vivait sous la page Cashflow se retrouve tel quel.
@@ -52,17 +43,13 @@
  */
 
 import React from "react";
-import { Landmark, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
+import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { AllocationChart, CARD, PeriodPills, SectionTitle, StepperPill } from "@/components/ui/da";
-import CashflowSummary from "@/components/ui/CashflowSummary";
+import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { useCloudState } from "@/lib/hooks/useCloudState";
-import { useBankAccounts } from "@/lib/bank/useBankAccounts";
-import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
-import { daysSince, monthWindow, parseDay, periodStats, withinRange } from "@/lib/bank/transactions";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, amountOf, pctOf,
 } from "@/lib/budgetPlans";
@@ -201,7 +188,11 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
   );
 }
 
-export default function BudgetPage({ setPage }) {
+/* Pas de `setPage` : la page ne renvoie plus nulle part depuis qu'elle ne lit
+   plus la banque. Le routeur le passe toujours, et l'ignorer ici est sans
+   conséquence — le déclarer pour ne pas s'en servir en aurait une, celle de
+   laisser croire qu'il reste un lien à suivre. */
+export default function BudgetPage() {
   useLang();
   const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -303,14 +294,7 @@ export default function BudgetPage({ setPage }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
-      {/* ── 1. Le mois qui vient de passer ───────────────────────────────── */}
-      <MonthlyFlow setPage={setPage} />
-
-      {/* ── 2. Le plan ────────────────────────────────────────────────────────
-          Séparé par un filet : ce qui suit ne vient plus de la banque, il se
-          SAISIT. Sans cette rupture, un plan à 2 000 € se lirait comme un
-          chiffre relevé sur le compte. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, borderTop: `1px solid ${T.border}`, paddingTop: 28 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <SectionTitle
             action={
@@ -483,12 +467,18 @@ export default function BudgetPage({ setPage }) {
               <span aria-hidden="true" style={{ width: COL_BTN, flexShrink: 0 }} />
             </div>
 
+            {/* Pas de filet entre deux catégories : chaque ligne porte déjà sa
+                gommette de couleur, qui la sépare de la suivante mieux qu'un
+                trait — et dix filets sur une carte font une grille là où on ne
+                voulait qu'une liste. L'interligne suffit à les tenir distinctes.
+                Celui du « Reste », plus bas, reste : ce n'est pas une catégorie
+                de plus, c'est le trait d'un total. */}
             {items.map((it) => (
               <div
                 key={it.id}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
-                  padding: "6px 0", borderTop: `1px solid ${T.border}`,
+                  padding: "5px 0",
                 }}
               >
                 <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
@@ -712,109 +702,3 @@ function PctInput({ value, derived, onValue, ariaLabel }) {
   );
 }
 
-/* ── Le mois qui vient de passer ────────────────────────────────────────────
-   Le bloc « réel » de la page : le flux du mois, sa répartition et ses trois
-   chiffres — le tout dans `CashflowSummary`, partagé avec la page Cashflow, qui
-   pose la même question sur une autre fenêtre. Ce qui reste ici est ce qui est
-   PROPRE au budget : le mois calendaire, et sa navigation.
-
-   Composant à part et non un bout du corps de la page : il porte ses propres
-   hooks (banque, relevés, mois montré), et le plan n'a aucune raison de se
-   re-rendre quand un relevé arrive.
-   ------------------------------------------------------------------------- */
-
-function MonthlyFlow({ setPage }) {
-  useLang();
-  const bank = useBankAccounts();
-
-  /* Le mois montré, en nombre de mois avant celui-ci. État LOCAL et non rangé
-     dans le store : c'est une position de lecture, pas un réglage — revenir sur
-     la page doit rouvrir le mois en cours, pas celui qu'on regardait la
-     semaine dernière. */
-  const [offset, setOffset] = React.useState(0);
-  const { from, to } = React.useMemo(() => monthWindow(offset), [offset]);
-
-  /* Profondeur demandée à la banque : de quoi couvrir le mois montré, jamais
-     moins de 90 jours — c'est le minimum que l'API rend de toute façon, et
-     c'est ce que demandent déjà la synthèse Patrimoine et la page Cashflow,
-     donc le MÊME cache. Reculer d'un mois ne redemande que ce qui manque. */
-  const depth = React.useMemo(() => Math.max(daysSince(from), 90), [from]);
-
-  const uids = React.useMemo(() => bank.accounts.map((a) => a.uid), [bank.accounts]);
-  const { byUid, loading } = useBankTransactionsAll(uids, depth);
-
-  /* Les relevés de tous les comptes mis bout à bout, recadrés sur le mois. Le
-     cache peut contenir plus profond que ce qu'on affiche : le recadrage se
-     fait ici, pas à la requête. */
-  const txs = React.useMemo(() => {
-    const list = [];
-    for (const uid of uids) {
-      const rows = byUid[uid];
-      if (rows) list.push(...rows);
-    }
-    return withinRange(list, from, to);
-  }, [byUid, uids, from, to]);
-
-  /* « août 2026 ». Le format vient du système : c'est la langue de l'appareil
-     qui décide de l'ordre et de la casse, pas nous. */
-  const monthLabel = React.useMemo(() => {
-    try {
-      return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(parseDay(from));
-    } catch {
-      return from.slice(0, 7);
-    }
-  }, [from]);
-
-  /* Un mois sans mouvement compté : le dire vaut mieux qu'un diagramme vide et
-     un anneau à zéro, qui se liraient comme « tu n'as rien dépensé ». Le test
-     porte sur les DEUX côtés — un mois où il n'est rien entré mais où l'on a
-     dépensé a bien quelque chose à montrer. */
-  const stats = React.useMemo(() => periodStats(txs), [txs]);
-  const empty = stats.in === 0 && stats.out === 0;
-
-  const noBank = bank.accounts.length === 0;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <SectionTitle>{t("budget.thisMonth")}</SectionTitle>
-        {/* Le mois suivant n'existe pas encore quand on est sur le mois en
-            cours : la flèche s'éteint plutôt que de ne rien faire. */}
-        <StepperPill
-          label={monthLabel}
-          onPrev={() => setOffset((o) => o - 1)}
-          onNext={() => setOffset((o) => Math.min(0, o + 1))}
-          nextDisabled={offset >= 0}
-          prevLabel={t("budget.prevMonth")}
-          nextLabel={t("budget.nextMonth")}
-        />
-      </div>
-
-      {noBank ? (
-        <section style={{ ...CARD, padding: "48px 32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-          <div style={{ fontSize: 14, color: T.textSub, maxWidth: 420 }}>
-            {bank.loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.noAccount")}
-          </div>
-          <button
-            type="button"
-            onClick={() => setPage?.("patrimoine-bank")}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-              padding: "0 16px", borderRadius: 999, border: "none",
-              background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <Landmark size={15} strokeWidth={1.75} /> {t("patrimoine.bank.connect")}
-          </button>
-        </section>
-      ) : empty ? (
-        <section style={{ ...CARD, padding: "48px 32px", textAlign: "center", fontSize: 14, color: T.textSub }}>
-          {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
-        </section>
-      ) : (
-        <CashflowSummary txs={txs} />
-      )}
-    </div>
-  );
-}

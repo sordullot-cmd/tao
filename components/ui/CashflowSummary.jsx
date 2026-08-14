@@ -37,6 +37,7 @@ import SankeyGraph from "@/components/ui/SankeyGraph";
 import { categoryLabelKey, spendingByCategory, subLabelKey } from "@/lib/bank/categories";
 import { incomeBySource } from "@/lib/bank/cashflow";
 import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
+import { recurringOf } from "@/lib/bank/recurring";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { flowLabel } from "@/lib/ui/flowLabel";
 import { fmt } from "@/lib/ui/format";
@@ -55,7 +56,7 @@ const DRAW_COLOR = "#C05A46";
  *  écrêté est rassemblé sous une branche qui dit combien elle en porte. */
 const GRAPH_CLIP = { topOutflows: 6, topInflows: 5, topSubs: 3 };
 
-export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
+export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }) {
   // La langue sert de dépendance aux libellés du diagramme : sans elle, changer
   // de langue laisserait les pastilles dans l'ancienne, le graphe n'ayant pas bougé.
   const lang = useLang();
@@ -64,6 +65,15 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
   const flow = React.useMemo(() => buildCashflowGraph(txs, clip), [txs, clip]);
   const spending = React.useMemo(() => spendingByCategory(txs), [txs]);
   const incomes = React.useMemo(() => incomeBySource(txs), [txs]);
+
+  /* Ce qui revient tous les mois, réparti par poste comme le reste — c'est la
+     même matière, vue à travers un filtre. La DÉTECTION porte sur l'historique
+     le plus large que la page ait chargé (`history`), jamais sur la seule
+     fenêtre : sur un mois isolé, aucune dépense ne peut être dite récurrente. */
+  const recurring = React.useMemo(
+    () => spendingByCategory(recurringOf(txs, history ?? txs)),
+    [txs, history],
+  );
 
   /* L'onglet choisi décide ce que l'anneau détaille. « Dépensé » par défaut :
      c'est la question qu'on se pose devant un budget, et les deux autres onglets
@@ -83,15 +93,29 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
           id: s.id, label: s.source || t(subLabelKey(s.sub)),
           color: s.color, pct: s.pct, amount: s.amount,
         })),
-        label: t("cashflow.in"),
+        label: t("cashflow.moneyIn"),
         value: flow.income,
       };
     }
 
-    /* « Reste » n'a pas de répartition à montrer : ce qu'on veut voir, c'est sa
-       place dans la fenêtre. L'anneau porte donc DEUX parts, et le sens des deux
-       change avec le signe — ce qui reste sur ce qui est entré, ou ce qu'il a
-       fallu prendre en plus de ce qui est entré. */
+    /* Ce qui revient : les mêmes postes que « sorties », mais réduits aux
+       contreparties qui reviennent tous les mois. L'anneau y répond à « qu'est-ce
+       qui est engagé », là où l'onglet ne donne que le total. */
+    if (tab === "recurring") {
+      return {
+        parts: recurring.slices.map((s) => ({
+          id: s.id, label: t(categoryLabelKey(s.id)),
+          color: s.color, pct: s.pct, amount: s.amount,
+        })),
+        label: t("cashflow.recurring"),
+        value: recurring.total,
+      };
+    }
+
+    /* « Disponible » n'a pas de répartition à montrer : ce qu'on veut voir, c'est
+       sa place dans la fenêtre. L'anneau porte donc DEUX parts, et le sens des
+       deux change avec le signe — ce qui reste sur ce qui est entré, ou ce qu'il
+       a fallu prendre en plus de ce qui est entré. */
     if (tab === "left") {
       const drawn = flow.net < 0;
       const total = drawn ? flow.spent : flow.income;
@@ -101,16 +125,16 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
       return {
         parts: [
           {
-            id: "covered", label: t(drawn ? "cashflow.in" : "cashflow.out"),
+            id: "covered", label: t(drawn ? "cashflow.moneyIn" : "cashflow.moneyOut"),
             color: COVERED_COLOR, pct: share(covered), amount: covered,
           },
           {
-            id: "edge", label: t(drawn ? "cashflow.drawn" : "cashflow.left"),
+            id: "edge", label: t("cashflow.available"),
             color: drawn ? DRAW_COLOR : LEFT_COLOR, pct: share(edge), amount: edge,
           },
         ],
-        label: t(drawn ? "cashflow.drawn" : "cashflow.left"),
-        value: edge,
+        label: t("cashflow.available"),
+        value: drawn ? -edge : edge,
         tone: drawn ? T.pnlNeg : undefined,
       };
     }
@@ -120,12 +144,12 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
         id: s.id, label: t(categoryLabelKey(s.id)),
         color: s.color, pct: s.pct, amount: s.amount,
       })),
-      label: t("cashflow.out"),
+      label: t("cashflow.moneyOut"),
       value: flow.spent,
     };
     // `lang` : les libellés des parts passent par `t()` (cf. `flowNodes`).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, incomes, spending, flow, lang]);
+  }, [tab, incomes, spending, recurring, flow, lang]);
 
   /* Deux colonnes sur grand écran : l'anneau demande sa place et le diagramme ne
      se lit plus en dessous de 640 px de large. Empilés en dessous. */
@@ -137,7 +161,11 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
         display: "grid",
         gridTemplateColumns: twoCols ? "minmax(0, 2.1fr) minmax(260px, 1fr)" : "minmax(0, 1fr)",
         gap: 20,
-        alignItems: "start",
+        /* Étirées et non calées en haut : la carte de la répartition descend
+           jusqu'au bas de celle du flux, et l'anneau se centre dans la hauteur
+           qu'elle lui donne. Deux cartes de hauteurs différentes côte à côte
+           laissaient un vide sous la plus courte. */
+        alignItems: "stretch",
       }}
     >
       <section style={{ ...CARD, padding: "20px 24px 0", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
@@ -153,33 +181,47 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
           emptyLabel={t("cashflow.flowEmpty")}
         />
 
-        {/* Les trois chiffres, en onglets : ils résument ET ils commandent. Le
-            filet qui les sépare du dessin va d'un bord à l'autre de la carte —
-            d'où les marges négatives, qui annulent son rembourrage. */}
+        {/* Les chiffres de la fenêtre, en onglets : ils résument ET ils
+            commandent l'anneau. Le filet qui les sépare du dessin va d'un bord à
+            l'autre de la carte — d'où les marges négatives, qui annulent son
+            rembourrage.
+
+            Petits, et c'est le propos : ce sont quatre repères qu'on balaie du
+            regard, pas les chiffres de tête de la page. Gros, ils entraient en
+            concurrence avec le diagramme juste au-dessus, qui dit déjà les
+            proportions. */}
         <div
           role="tablist"
           aria-label={t("budget.tabsAria")}
-          style={{ display: "flex", gap: 4, flexWrap: "wrap", borderTop: `1px solid ${T.border}`, margin: "0 -24px", padding: "0 12px" }}
+          style={{ display: "flex", gap: 2, flexWrap: "wrap", borderTop: `1px solid ${T.border}`, margin: "0 -24px", padding: "0 12px" }}
         >
           <FlowTab
             active={tab === "in"} onClick={() => setTab("in")}
-            label={t("cashflow.in")} value={flow.income} tone={T.pnlPos}
+            label={t("cashflow.moneyIn")} value={flow.income} tone={T.pnlPos}
           />
           <FlowTab
             active={tab === "out"} onClick={() => setTab("out")}
-            label={t("cashflow.out")} value={flow.spent}
+            label={t("cashflow.moneyOut")} value={flow.spent}
           />
+          {/* Disponible : le même chiffre porte les deux cas, de part et d'autre
+              de zéro — ce qui reste, ou ce qu'il a fallu prendre ailleurs. Le
+              signe suffit à les distinguer, et il vient du formatage. */}
           <FlowTab
             active={tab === "left"} onClick={() => setTab("left")}
-            label={t(flow.net < 0 ? "cashflow.drawn" : "cashflow.left")}
-            value={Math.abs(flow.net)}
+            label={t("cashflow.available")}
+            value={flow.net}
             tone={flow.net < 0 ? T.pnlNeg : undefined}
+          />
+          <FlowTab
+            active={tab === "recurring"} onClick={() => setTab("recurring")}
+            label={t("cashflow.recurring")} value={recurring.total}
           />
         </div>
       </section>
 
-      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 12, minWidth: 0, height: "100%" }}>
         <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{t("budget.distribution")}</div>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
         <AllocationChart
           parts={ring.parts}
           ariaLabel={`${ring.label} : ${fmt(ring.value)}`}
@@ -191,8 +233,6 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
           showPct={false}
           formatValue={(v) => fmt(v)}
         />
-        <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
-          {t("patrimoine.spending.hint")}
         </div>
       </section>
     </div>
@@ -200,11 +240,12 @@ export default function CashflowSummary({ txs = [], clip = GRAPH_CLIP }) {
 }
 
 /**
- * Un des trois chiffres de la fenêtre, en onglet.
+ * Un des chiffres de la fenêtre, en onglet.
  *
- * Le trait sous l'onglet actif prend la TEINTE du chiffre (vert pour l'encaissé,
- * rouge pour un découvert) : c'est le même signal que la couleur du montant, et
- * il tient quand l'œil ne regarde que le bas de la carte.
+ * Petit format assumé : quatre chiffres alignés sous un diagramme ne sont pas
+ * quatre titres. Le trait sous l'onglet actif prend la TEINTE du chiffre (vert
+ * pour les entrées, rouge pour un découvert) : c'est le même signal que la
+ * couleur du montant, et il tient quand l'œil ne regarde que le bas de la carte.
  */
 function FlowTab({ active, onClick, label, value, tone }) {
   return (
@@ -214,8 +255,8 @@ function FlowTab({ active, onClick, label, value, tone }) {
       aria-selected={active}
       onClick={onClick}
       style={{
-        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
-        minWidth: 0, padding: "12px 14px 10px", border: "none", background: "transparent",
+        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1,
+        minWidth: 0, padding: "9px 12px 8px", border: "none", background: "transparent",
         borderBottom: `2px solid ${active ? (tone || T.text) : "transparent"}`,
         opacity: active ? 1 : 0.55, cursor: "pointer", fontFamily: "inherit",
         transition: "opacity 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease)",
@@ -223,10 +264,10 @@ function FlowTab({ active, onClick, label, value, tone }) {
       onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
       onMouseLeave={(e) => { e.currentTarget.style.opacity = active ? 1 : 0.55; }}
     >
-      <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: 11, lineHeight: "15px", color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
       <span style={{
-        fontSize: 22, fontWeight: 600, letterSpacing: -0.3,
-        color: tone || T.text, fontVariantNumeric: "tabular-nums",
+        fontSize: 15, fontWeight: 600, lineHeight: "20px",
+        color: tone || T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
       }}>
         {fmt(value)}
       </span>

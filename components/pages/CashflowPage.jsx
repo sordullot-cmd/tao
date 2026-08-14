@@ -54,7 +54,7 @@ import React from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, Landmark, PiggyBank } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { CARD, PeriodPills, SectionAction, SectionTitle, PERIODS, PERIOD_ALL } from "@/components/ui/da";
+import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, PERIODS, PERIOD_ALL } from "@/components/ui/da";
 import CashflowSummary from "@/components/ui/CashflowSummary";
 import CategoryIcon from "@/components/ui/CategoryIcon";
 import MerchantAvatar from "@/components/ui/MerchantAvatar";
@@ -66,7 +66,9 @@ import {
   spendingByCategory, subLabelKey, subcategorizeTransaction,
 } from "@/lib/bank/categories";
 import { incomeBySource } from "@/lib/bank/cashflow";
-import { ALL_DAYS, depthOf, kindLabelKey, sortTransactions, withinDays } from "@/lib/bank/transactions";
+import {
+  ALL_DAYS, dayKey, daysSince, kindLabelKey, parseDay, sortTransactions, withinRange,
+} from "@/lib/bank/transactions";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { fmt } from "@/lib/ui/format";
@@ -142,9 +144,28 @@ export default function CashflowPage({ setPage }) {
   const period = CASHFLOW_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : "1M";
 
   const days = daysOfPeriod(period) ?? ALL_DAYS;
-  // Même règle que la courbe du patrimoine : sous 90 jours il n'y a rien de plus
-  // à demander, c'est le minimum que l'API rend de toute façon.
-  const depth = days === ALL_DAYS ? ALL_DAYS : depthOf(days) <= 90 ? 90 : days;
+
+  /* La fenêtre a une LONGUEUR (les pastilles) et une POSITION (les flèches) : on
+     recule d'autant de jours qu'elle en couvre, si bien que deux fenêtres
+     voisines se suivent sans se chevaucher ni laisser de trou. La position est
+     remise à zéro quand la longueur change — un décalage de trois crans en
+     « 1 semaine » n'a pas de sens une fois passé en « 1 an ». */
+  const [offset, setOffset] = React.useState(0);
+  React.useEffect(() => { setOffset(0); }, [period]);
+
+  const range = React.useMemo(() => {
+    if (days === ALL_DAYS) return null;
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset * days);
+    const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - days + 1);
+    return { from: dayKey(start), to: dayKey(end) };
+  }, [days, offset]);
+
+  /* Profondeur demandée à la banque : de quoi couvrir la fenêtre où qu'elle se
+     trouve, jamais moins de 90 jours — c'est le minimum que l'API rend de toute
+     façon, et c'est ce que demandent déjà la synthèse Patrimoine et la page
+     Budget, donc le MÊME cache. Reculer ne redemande que ce qui manque. */
+  const depth = range === null ? ALL_DAYS : Math.max(daysSince(range.from), 90);
 
   const uids = React.useMemo(() => bank.accounts.map((a) => a.uid), [bank.accounts]);
   const { byUid, loading } = useBankTransactionsAll(uids, depth);
@@ -154,13 +175,31 @@ export default function CashflowPage({ setPage }) {
   const all = React.useMemo(() => {
     const list = [];
     for (const uid of uids) {
-      const txs = byUid[uid];
-      if (txs) list.push(...txs);
+      const rows = byUid[uid];
+      if (rows) list.push(...rows);
     }
     return list;
   }, [byUid, uids]);
 
-  const txs = React.useMemo(() => withinDays(all, days), [all, days]);
+  const txs = React.useMemo(
+    () => (range === null ? all : withinRange(all, range.from, range.to)),
+    [all, range],
+  );
+
+  /* « 16 juil. – 14 août ». L'année n'apparaît que si la fenêtre sort de l'année
+     en cours : sur douze mois de relevé elle serait vraie partout, donc muette. */
+  const rangeLabel = React.useMemo(() => {
+    if (range === null) return "";
+    const year = String(new Date().getFullYear());
+    const sameYear = range.from.slice(0, 4) === year && range.to.slice(0, 4) === year;
+    const opts = { day: "numeric", month: "short", ...(sameYear ? null : { year: "numeric" }) };
+    try {
+      const f = new Intl.DateTimeFormat(undefined, opts);
+      return `${f.format(parseDay(range.from))} – ${f.format(parseDay(range.to))}`;
+    } catch {
+      return `${range.from} – ${range.to}`;
+    }
+  }, [range]);
 
   const { slices, total: spent } = React.useMemo(() => spendingByCategory(txs), [txs]);
   const incomes = React.useMemo(() => incomeBySource(txs), [txs]);
@@ -230,22 +269,35 @@ export default function CashflowPage({ setPage }) {
      tablette. La colonne des postes est la plus large — elle en a plus à dire. */
   const twoCols = bp === "desktop";
 
+  /* En-tête : le titre, puis la fenêtre — sa longueur en pastilles, sa position
+     en flèches. Pas de sous-titre : la page se lit, elle n'a pas à s'expliquer. */
   const header = (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: 1 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
         <SectionTitle>{t("cashflow.title")}</SectionTitle>
-        <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, maxWidth: 620 }}>
-          {t("cashflow.subtitle")}
-        </div>
       </div>
       {bank.accounts.length > 0 && (
-        <PeriodPills
-          value={period}
-          onChange={setPeriod}
-          options={CASHFLOW_PERIODS.map((p) =>
-            p.id === PERIOD_ALL ? { ...p, label: t("patrimoine.periodAll") } : p,
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {/* La position n'a de sens que si la fenêtre a une longueur : sur
+              « Tout », il n'y a nulle part où reculer. */}
+          {range !== null && (
+            <StepperPill
+              label={rangeLabel}
+              onPrev={() => setOffset((o) => o + 1)}
+              onNext={() => setOffset((o) => Math.max(0, o - 1))}
+              nextDisabled={offset <= 0}
+              prevLabel={t("cashflow.prevRange")}
+              nextLabel={t("cashflow.nextRange")}
+            />
           )}
-        />
+          <PeriodPills
+            value={period}
+            onChange={setPeriod}
+            options={CASHFLOW_PERIODS.map((p) =>
+              p.id === PERIOD_ALL ? { ...p, label: t("patrimoine.periodAll") } : p,
+            )}
+          />
+        </div>
       )}
     </div>
   );
@@ -287,7 +339,7 @@ export default function CashflowPage({ setPage }) {
               Le diagramme, ses trois chiffres et sa répartition : le même bloc
               que la page Budget, qui pose la question sur un mois calendaire là
               où celle-ci la pose sur la fenêtre choisie. */}
-          <CashflowSummary txs={txs} clip={GRAPH_CLIP} />
+          <CashflowSummary txs={txs} history={all} clip={GRAPH_CLIP} />
 
           {/* ── 2. Le détail : les postes, puis les entrées ─────────────────── */}
           <div
@@ -304,7 +356,7 @@ export default function CashflowPage({ setPage }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 6, fontSize: 12, color: T.textMut }}>
                   {/* Aligné sur la vignette de couleur des lignes, pas sur une
                       pastille de 10 px : sinon l'en-tête flotte à gauche du nom. */}
-                  <span aria-hidden="true" style={{ width: 26, flexShrink: 0 }} />
+                  <span aria-hidden="true" style={{ width: 32, flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>{t("spending.colCategory")}</span>
                   <span style={{ width: COL_PCT, textAlign: "right", flexShrink: 0 }}>{t("budget.colShare")}</span>
                   <span style={{ width: COL_AMOUNT, textAlign: "right", flexShrink: 0 }}>{t("budget.colAmount")}</span>
@@ -338,13 +390,10 @@ export default function CashflowPage({ setPage }) {
                   </div>
                 ) : (
                   <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                    {merchants.map((m, i) => (
+                    {merchants.map((m) => (
                       <li
                         key={m.merchant.slug}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 12, padding: "12px 20px",
-                          borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
-                        }}
+                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px" }}
                       >
                         <MerchantAvatar merchant={m.merchant} size={32} />
                         <span style={{ flex: 1, minWidth: 0 }}>
@@ -363,9 +412,6 @@ export default function CashflowPage({ setPage }) {
                   </ul>
                 )}
               </section>
-              <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
-                {t("spending.merchantsHint")}
-              </div>
             </div>
           </div>
 
@@ -378,10 +424,10 @@ export default function CashflowPage({ setPage }) {
               >
                 {t("cashflow.recent")}
               </SectionTitle>
-              <section style={{ ...CARD, padding: 0 }}>
+              <section style={{ ...CARD, padding: "8px 0 0" }}>
                 <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                  {recent.map((tx, i) => (
-                    <RecentRow key={tx.id} tx={tx} first={i === 0} />
+                  {recent.map((tx) => (
+                    <RecentRow key={tx.id} tx={tx} />
                   ))}
                 </ul>
 
@@ -424,15 +470,6 @@ export default function CashflowPage({ setPage }) {
                 )}
               </section>
 
-              {/* Ce qui est déplié reste borné à la FENÊTRE choisie en haut de
-                  page : le relevé complet du compte, lui, ne l'est pas. */}
-              {recentRest > 0 && (
-                <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
-                  {t("cashflow.recentCount")
-                    .replace("{shown}", String(recent.length))
-                    .replace("{total}", String(recentAll.length))}
-                </div>
-              )}
             </div>
           )}
 
@@ -469,7 +506,7 @@ export default function CashflowPage({ setPage }) {
  * SENS : dans une liste où entrées et sorties se mêlent, le signe du montant
  * seul se rate.
  */
-function RecentRow({ tx, first }) {
+function RecentRow({ tx }) {
   const credit = tx.amount >= 0;
   const merchant = findMerchant(tx);
   const sub = subcategorizeTransaction(tx);
@@ -477,10 +514,7 @@ function RecentRow({ tx, first }) {
   const title = merchant?.name || tx.label || t(kindLabelKey(tx.kind));
 
   return (
-    <li style={{
-      display: "flex", alignItems: "center", gap: 12, padding: "12px 20px",
-      borderTop: first ? "none" : `1px solid ${T.border}`,
-    }}>
+    <li style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px" }}>
       {merchant ? (
         <MerchantAvatar merchant={merchant} size={32} />
       ) : (
@@ -557,7 +591,7 @@ function CategoryRow({ slice, txs }) {
           cursor: "pointer", fontFamily: "inherit", textAlign: "left",
         }}
       >
-        <CategoryIcon category={slice.id} />
+        <CategoryIcon category={slice.id} size={32} />
         <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {label}
         </span>
@@ -592,9 +626,9 @@ function CategoryRow({ slice, txs }) {
           qu'on perd — le chevron, lui, tourne toujours. */}
       {open && (
         <div id={panelId}>
-          {/* 36 px d'indentation : la vignette (26) et son espace (10), soit
+          {/* 42 px d'indentation : la vignette (32) et son espace (10), soit
               exactement là où commence le nom du poste au-dessus. */}
-          <ul style={{ listStyle: "none", margin: 0, padding: "0 0 10px 36px", display: "flex", flexDirection: "column", gap: 8 }} className="anim-1">
+          <ul style={{ listStyle: "none", margin: 0, padding: "0 0 10px 42px", display: "flex", flexDirection: "column", gap: 8 }} className="anim-1">
             {shown.map((tx) => {
               const merchant = findMerchant(tx);
               return (
