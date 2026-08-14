@@ -17,15 +17,17 @@
  *      comme dernière branche. C'est la seule figure qui dise d'un coup d'où
  *      vient l'argent ET où il va — un anneau ne sait faire que la seconde
  *      moitié. Les proportions se lisent dans l'épaisseur des rubans.
- *   2. LE DÉTAIL, en deux colonnes : les postes de dépense à gauche, dépliables
- *      sur leurs opérations ; les entrées d'argent à droite. Les deux côtés du
- *      diagramme, chiffrés.
+ *   2. LE DÉTAIL DE CE QUI SORT, en deux colonnes : les postes à gauche,
+ *      dépliables sur leurs opérations ; les enseignes qui pèsent le plus à
+ *      droite, logo compris. Les deux répondent à la même question par ses deux
+ *      bouts — « dans quoi » et « chez qui » —, et une fuite se voit dans la
+ *      seconde là où la première ne montre qu'un poste un peu gros. Les ENTRÉES
+ *      n'ont pas de bloc à elles : elles se lisent dans la colonne de gauche du
+ *      diagramme, qui les nomme et les chiffre.
  *   3. LES DERNIÈRES OPÉRATIONS réelles — ce qui vient de se passer, sans
  *      quitter la page pour le relevé complet. Cinq d'emblée, la suite se
  *      déplie sur place, par paquets, jusqu'à toute la fenêtre choisie.
- *   4. LES ENSEIGNES qui pèsent le plus, logo compris : une fuite se voit là, et
- *      pas dans un poste.
- *   5. LE RENVOI VERS LE BUDGET, en dernier : ce qu'on VOUDRAIT, après ce qui
+ *   4. LE RENVOI VERS LE BUDGET, en dernier : ce qu'on VOUDRAIT, après ce qui
  *      EST. L'ordre inverse ferait discuter le plan avant de regarder les
  *      chiffres.
  *
@@ -53,7 +55,8 @@ import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, Land
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, PeriodPills, SectionAction, SectionTitle, PERIODS, PERIOD_ALL } from "@/components/ui/da";
-import SankeyGraph from "@/components/ui/SankeyGraph";
+import CashflowSummary from "@/components/ui/CashflowSummary";
+import CategoryIcon from "@/components/ui/CategoryIcon";
 import MerchantAvatar from "@/components/ui/MerchantAvatar";
 import { findMerchant } from "@/lib/bank/merchants";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
@@ -63,19 +66,32 @@ import {
   spendingByCategory, subLabelKey, subcategorizeTransaction,
 } from "@/lib/bank/categories";
 import { incomeBySource } from "@/lib/bank/cashflow";
-import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
 import { ALL_DAYS, depthOf, kindLabelKey, sortTransactions, withinDays } from "@/lib/bank/transactions";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
-// Le nommage des nœuds est partagé avec la page Budget, qui dessine le même
-// graphe : deux copies auraient divergé au premier poste ajouté.
-import { flowLabel } from "@/lib/ui/flowLabel";
 import { fmt } from "@/lib/ui/format";
 
 /* Les fenêtres de la DA, plus « Tout » — comme la courbe du patrimoine. Un mois
    par défaut : c'est le pas auquel un budget se pense. */
 const CASHFLOW_PERIODS = [...PERIODS, { id: PERIOD_ALL }];
 const daysOfPeriod = (id) => PERIODS.find((p) => p.id === id)?.days ?? null;
+
+/* Six postes et cinq sources au diagramme, pas plus : au-delà, les branches
+   deviennent des traits et leurs noms se marchent dessus. Ce qui est écrêté est
+   rassemblé sous une branche qui dit combien elle en porte, et le détail complet
+   est dans les listes juste en dessous.
+
+   Cinq sources et non quatre : depuis qu'une source porte le NOM de qui paie, un
+   même salaire versé par deux employeurs fait deux branches là où il n'en
+   faisait qu'une. À quatre, un relevé ordinaire (deux salaires, une aide, un
+   remboursement, un virement) commençait à regrouper.
+
+   Pas de `topSubs` : le diagramme s'arrête aux POSTES. Les déplier sur leurs
+   sous-postes doublait le nombre de branches pour un détail que le tableau juste
+   en dessous donne mieux — chiffré, trié, et dépliable sur les opérations
+   elles-mêmes. Posée au niveau du module et non en littéral dans le rendu : un
+   objet neuf à chaque passage ferait reconstruire le graphe pour rien. */
+const GRAPH_CLIP = { topOutflows: 6, topInflows: 5 };
 
 /** Marchands montrés dans le classement. Au-delà, ce n'est plus un « top ». */
 const TOP_MERCHANTS = 8;
@@ -115,9 +131,7 @@ function shortDay(iso) {
 }
 
 export default function CashflowPage({ setPage }) {
-  // La langue sert de dépendance aux libellés du diagramme : sans elle, changer
-  // de langue laisserait les pastilles dans l'ancienne, le graphe n'ayant pas bougé.
-  const lang = useLang();
+  useLang();
   const bank = useBankAccounts();
   const bp = useBreakpoint();
 
@@ -148,27 +162,14 @@ export default function CashflowPage({ setPage }) {
 
   const txs = React.useMemo(() => withinDays(all, days), [all, days]);
 
-  /* Six postes et cinq sources, pas plus : au-delà, les branches deviennent des
-     traits et leurs noms se marchent dessus. Ce qui est écrêté est rassemblé
-     sous une branche qui dit combien elle en porte, et le détail complet est
-     dans les listes juste en dessous.
-
-     Cinq sources et non quatre : depuis qu'une source porte le NOM de qui paie,
-     un même salaire versé par deux employeurs fait deux branches là où il n'en
-     faisait qu'une. À quatre, un relevé ordinaire (deux salaires, une aide, un
-     remboursement, un virement) commençait à regrouper.
-
-     Pas de `topSubs` : le diagramme s'arrête aux POSTES. Les déplier sur leurs
-     sous-postes doublait le nombre de branches pour un détail que le tableau
-     juste en dessous donne mieux — chiffré, trié, et dépliable sur les
-     opérations elles-mêmes. La colonne reste disponible dans
-     `buildCashflowGraph` si on la veut un jour. */
-  const flow = React.useMemo(
-    () => buildCashflowGraph(txs, { topOutflows: 6, topInflows: 5 }),
-    [txs],
-  );
-  const { slices } = React.useMemo(() => spendingByCategory(txs), [txs]);
+  const { slices, total: spent } = React.useMemo(() => spendingByCategory(txs), [txs]);
   const incomes = React.useMemo(() => incomeBySource(txs), [txs]);
+
+  /* Rien de compté sur la fenêtre : on le DIT, plutôt que d'aligner un
+     diagramme vide et des zéros, qui se liraient comme « tu n'as rien
+     dépensé ». Le test porte sur les deux côtés — une fenêtre où il n'est rien
+     entré mais où l'on a dépensé a bien quelque chose à montrer. */
+  const empty = spent <= 0 && incomes.total <= 0;
 
   /* Opérations de chaque poste, la plus grosse d'abord — c'est la question qu'on
      pose en dépliant un poste (« qu'est-ce qui l'a fait monter »), pas l'ordre
@@ -224,18 +225,6 @@ export default function CashflowPage({ setPage }) {
     return [...map.values()].sort((a, b) => b.amount - a.amount).slice(0, TOP_MERCHANTS);
   }, [txs]);
 
-  /* Le diagramme ne veut que trois choses d'un nœud : son identité, sa teinte et
-     son nom. Le reste (le montant, le rang, le poste d'appartenance) a déjà servi
-     à construire le graphe et ne doit pas repartir dans le dessin. */
-  const flowNodes = React.useMemo(
-    () => flow.nodes.map((n) => ({ id: n.id, color: n.color, label: flowLabel(n) })),
-    // `lang` n'apparaît pas dans le corps mais `flowLabel` appelle `t()`, qui lit
-    // la langue courante : sans cette dépendance, changer de langue laisserait les
-    // pastilles dans l'ancienne, le graphe n'ayant lui pas bougé.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flow, lang],
-  );
-
   /* Deux colonnes sur grand écran, empilées en dessous : le tableau des postes
      porte quatre colonnes chiffrées, il ne tient pas dans une demi-largeur de
      tablette. La colonne des postes est la plus large — elle en a plus à dire. */
@@ -288,43 +277,17 @@ export default function CashflowPage({ setPage }) {
             <Landmark size={15} strokeWidth={1.75} /> {t("patrimoine.bank.connect")}
           </button>
         </section>
-      ) : flow.total <= 0 ? (
+      ) : empty ? (
         <section style={{ ...CARD, padding: "48px 32px", textAlign: "center", fontSize: 14, color: T.textSub }}>
           {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
         </section>
       ) : (
         <>
-          {/* ── 1. Le flux ─────────────────────────────────────────────────── */}
-          <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 32, flexWrap: "wrap" }}>
-              <Figure label={t("cashflow.in")} value={flow.income} tone={T.pnlPos} />
-              <Figure label={t("cashflow.out")} value={flow.spent} />
-              {/* Le même chiffre porte les deux cas, de part et d'autre de zéro :
-                  ce qui reste, ou ce qu'il a fallu prendre ailleurs. */}
-              <Figure
-                label={t(flow.net < 0 ? "cashflow.drawn" : "cashflow.left")}
-                value={Math.abs(flow.net)}
-                tone={flow.net < 0 ? T.pnlNeg : undefined}
-              />
-            </div>
-
-            <SankeyGraph
-              nodes={flowNodes}
-              links={flow.links}
-              formatValue={(v) => fmt(v)}
-              ariaLabel={t("cashflow.flowAria")
-                .replace("{in}", fmt(flow.income))
-                .replace("{out}", fmt(flow.spent))}
-              emptyLabel={t("cashflow.flowEmpty")}
-            />
-
-            {/* Le classement est deviné, pas déclaré : le dire évite de prendre
-                pour argent comptant un « Autres » qui n'est qu'un libellé
-                illisible. */}
-            <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
-              {t("patrimoine.spending.hint")}
-            </div>
-          </section>
+          {/* ── 1. Le flux ─────────────────────────────────────────────────
+              Le diagramme, ses trois chiffres et sa répartition : le même bloc
+              que la page Budget, qui pose la question sur un mois calendaire là
+              où celle-ci la pose sur la fenêtre choisie. */}
+          <CashflowSummary txs={txs} clip={GRAPH_CLIP} />
 
           {/* ── 2. Le détail : les postes, puis les entrées ─────────────────── */}
           <div
@@ -339,7 +302,9 @@ export default function CashflowPage({ setPage }) {
               <SectionTitle size="sm">{t("cashflow.spending")}</SectionTitle>
               <section style={{ ...CARD, padding: "16px 20px 8px", display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 6, fontSize: 12, color: T.textMut }}>
-                  <span aria-hidden="true" style={{ width: 10, flexShrink: 0 }} />
+                  {/* Aligné sur la vignette de couleur des lignes, pas sur une
+                      pastille de 10 px : sinon l'en-tête flotte à gauche du nom. */}
+                  <span aria-hidden="true" style={{ width: 26, flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>{t("spending.colCategory")}</span>
                   <span style={{ width: COL_PCT, textAlign: "right", flexShrink: 0 }}>{t("budget.colShare")}</span>
                   <span style={{ width: COL_AMOUNT, textAlign: "right", flexShrink: 0 }}>{t("budget.colAmount")}</span>
@@ -358,41 +323,40 @@ export default function CashflowPage({ setPage }) {
               </section>
             </div>
 
+            {/* Les enseignes en face des postes, et non plus les entrées d'argent.
+                Les deux colonnes répondent maintenant à la même question par ses
+                deux bouts — « dans quoi » à gauche, « chez qui » à droite —, alors
+                qu'une liste de revenus posée là parlait de l'autre côté du flux.
+                Les sources, elles, se lisent dans la colonne de gauche du
+                diagramme, qui les nomme et les chiffre. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-              <SectionTitle size="sm">{t("cashflow.incomes")}</SectionTitle>
-              <section style={{ ...CARD, padding: incomes.slices.length === 0 ? "16px 20px" : 0 }}>
-                {incomes.slices.length === 0 ? (
+              <SectionTitle size="sm">{t("spending.merchants")}</SectionTitle>
+              <section style={{ ...CARD, padding: merchants.length === 0 ? "16px 20px" : 0 }}>
+                {merchants.length === 0 ? (
                   <div style={{ fontSize: 14, lineHeight: 1.5, color: T.textSub }}>
-                    {t("cashflow.incomesEmpty")}
+                    {t("spending.merchantsEmpty")}
                   </div>
                 ) : (
                   <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                    {incomes.slices.map((s, i) => (
+                    {merchants.map((m, i) => (
                       <li
-                        key={s.id}
+                        key={m.merchant.slug}
                         style={{
-                          display: "flex", alignItems: "center", gap: 10, padding: "12px 20px",
+                          display: "flex", alignItems: "center", gap: 12, padding: "12px 20px",
                           borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
                         }}
                       >
-                        <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+                        <MerchantAvatar merchant={m.merchant} size={32} />
                         <span style={{ flex: 1, minWidth: 0 }}>
-                          {/* Qui paie en titre, sa nature en dessous : « Unowhy »
-                              répond à la question, « Salaire & activité » dit ce
-                              que c'est. Sans nom lu sur le relevé, la nature
-                              remonte en titre — une ligne vide dirait moins. */}
-                          <span style={{ display: "block", fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {s.source || t(subLabelKey(s.sub))}
+                          <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {m.merchant.name}
                           </span>
-                          <span style={{ display: "block", fontSize: 12, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {[
-                              s.source ? t(subLabelKey(s.sub)) : null,
-                              t("spending.nTxns").replace("{n}", String(s.count)),
-                            ].filter(Boolean).join(" · ")}
+                          <span style={{ display: "block", fontSize: 12, color: T.textSub }}>
+                            {t("spending.nTxns").replace("{n}", String(m.count))}
                           </span>
                         </span>
-                        <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 500, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                          {fmt(s.amount)}
+                        <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                          {fmt(m.amount)}
                         </span>
                       </li>
                     ))}
@@ -400,7 +364,7 @@ export default function CashflowPage({ setPage }) {
                 )}
               </section>
               <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
-                {t("cashflow.incomesHint")}
+                {t("spending.merchantsHint")}
               </div>
             </div>
           </div>
@@ -472,41 +436,6 @@ export default function CashflowPage({ setPage }) {
             </div>
           )}
 
-          {/* ── 4. Les enseignes ───────────────────────────────────────────── */}
-          {merchants.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <SectionTitle size="sm">{t("spending.merchants")}</SectionTitle>
-              <section style={{ ...CARD, padding: 0 }}>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                  {merchants.map((m, i) => (
-                    <li
-                      key={m.merchant.slug}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 12, padding: "12px 20px",
-                        borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
-                      }}
-                    >
-                      <MerchantAvatar merchant={m.merchant} size={32} />
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {m.merchant.name}
-                        </span>
-                        <span style={{ display: "block", fontSize: 12, color: T.textSub }}>
-                          {t("spending.nTxns").replace("{n}", String(m.count))}
-                        </span>
-                      </span>
-                      <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                        {fmt(m.amount)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-              <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
-                {t("spending.merchantsHint")}
-              </div>
-            </div>
-          )}
         </>
       )}
 
@@ -528,18 +457,6 @@ export default function CashflowPage({ setPage }) {
           <PiggyBank size={15} strokeWidth={1.75} /> {t("cashflow.openBudget")}
         </button>
       </div>
-    </div>
-  );
-}
-
-/** Un chiffre de tête de la carte du flux. */
-function Figure({ label, value, tone }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-      <span style={{ fontSize: 13, color: T.textSub }}>{label}</span>
-      <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: -0.4, color: tone || T.text, fontVariantNumeric: "tabular-nums" }}>
-        {fmt(value)}
-      </span>
     </div>
   );
 }
@@ -623,8 +540,12 @@ function CategoryRow({ slice, txs }) {
   const label = t(categoryLabelKey(slice.id));
   const shown = all ? txs : txs.slice(0, TX_FOLDED);
 
+  /* Pas de filet entre deux postes : les lignes portent déjà une vignette de
+     couleur en tête, qui les sépare mieux qu'un trait — et quinze filets sur une
+     carte font une grille là où on ne voulait qu'une liste. L'espacement des
+     lignes suffit à les tenir distinctes. */
   return (
-    <div style={{ borderTop: `1px solid ${T.border}` }}>
+    <div>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -632,11 +553,11 @@ function CategoryRow({ slice, txs }) {
         aria-controls={panelId}
         style={{
           display: "flex", alignItems: "center", gap: 10, width: "100%",
-          padding: "10px 0", border: "none", background: "transparent",
+          padding: "8px 0", border: "none", background: "transparent",
           cursor: "pointer", fontFamily: "inherit", textAlign: "left",
         }}
       >
-        <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: categoryColor(slice.id), flexShrink: 0 }} />
+        <CategoryIcon category={slice.id} />
         <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {label}
         </span>
@@ -671,9 +592,9 @@ function CategoryRow({ slice, txs }) {
           qu'on perd — le chevron, lui, tourne toujours. */}
       {open && (
         <div id={panelId}>
-          {/* 20 px d'indentation : la pastille (10) et son espace (10), soit
+          {/* 36 px d'indentation : la vignette (26) et son espace (10), soit
               exactement là où commence le nom du poste au-dessus. */}
-          <ul style={{ listStyle: "none", margin: 0, padding: "0 0 10px 20px", display: "flex", flexDirection: "column", gap: 8 }} className="anim-1">
+          <ul style={{ listStyle: "none", margin: 0, padding: "0 0 10px 36px", display: "flex", flexDirection: "column", gap: 8 }} className="anim-1">
             {shown.map((tx) => {
               const merchant = findMerchant(tx);
               return (

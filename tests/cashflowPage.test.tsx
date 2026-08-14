@@ -124,9 +124,11 @@ describe("Page Cashflow", () => {
 
     /* La fenêtre d'un mois s'arrête au 16 juillet : les 100 € du 1er juillet et
        les 30 € du 16 juin n'en font pas partie. */
-    expect(screen.getByText("Money out")).toBeTruthy();
-    /* « Reste » paraît deux fois, et c'est voulu : comme chiffre de tête, et
-       comme dernière branche du flux — c'est là qu'on voit qu'il en fait partie. */
+    /* Chaque chiffre paraît plusieurs fois, et c'est voulu : comme onglet sous le
+       diagramme, comme centre de l'anneau quand c'est lui qu'il détaille, et
+       « Reste » aussi comme dernière branche du flux — c'est là qu'on voit qu'il
+       en fait partie. */
+    expect(screen.getAllByText("Money out").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Left over/).length).toBeGreaterThan(0);
     expect(pageText()).toMatch(/250\.00/);   // dépensé
     expect(pageText()).toMatch(/1,840\.00/); // encaissé
@@ -150,8 +152,12 @@ describe("Page Cashflow", () => {
 
     /* Le salaire et le remboursement de la Sécu ne sont pas la même chose, et le
        flux part de cette distinction. Le remboursement ne porte PAS de règle de
-       dépense (« soins » n'en est pas une) : il compte donc comme une entrée. */
-    expect(screen.getByText("Money in", { selector: "h2" })).toBeTruthy();
+       dépense (« soins » n'en est pas une) : il compte donc comme une entrée.
+
+       Les sources se lisent dans la COLONNE DE GAUCHE du diagramme, qui les nomme
+       et les chiffre. Elles avaient aussi leur liste à droite du tableau des
+       postes ; cette place est passée aux enseignes, et une entrée d'argent n'y
+       a plus de bloc à elle. */
     expect(screen.getAllByText(sub("income.salary")).length).toBeGreaterThan(0);
     expect(screen.getAllByText(sub("income.refund")).length).toBeGreaterThan(0);
   });
@@ -241,7 +247,7 @@ describe("Page Cashflow", () => {
 
     expect(pageText()).toContain("Connect a bank");
     // Ni chiffres de tête, ni postes : il n'y a rien à répartir.
-    expect(screen.queryByText("Money out")).toBeNull();
+    expect(screen.queryAllByText("Money out")).toHaveLength(0);
     expect(screen.queryByText(cat("food"))).toBeNull();
     /* Le renvoi vers le budget, lui, ne dépend d'aucune banque : le plan reste
        joignable là où il n'y a pas encore de relevé. */

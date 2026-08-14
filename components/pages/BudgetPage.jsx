@@ -56,18 +56,13 @@ import { Landmark, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle, StepperPill } from "@/components/ui/da";
-import SankeyGraph from "@/components/ui/SankeyGraph";
+import CashflowSummary from "@/components/ui/CashflowSummary";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
-import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
-import { categoryLabelKey, spendingByCategory, subLabelKey } from "@/lib/bank/categories";
-import { incomeBySource } from "@/lib/bank/cashflow";
-import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
-import { daysSince, monthWindow, parseDay, withinRange } from "@/lib/bank/transactions";
-import { flowLabel } from "@/lib/ui/flowLabel";
+import { daysSince, monthWindow, parseDay, periodStats, withinRange } from "@/lib/bank/transactions";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, amountOf, pctOf,
 } from "@/lib/budgetPlans";
@@ -718,31 +713,19 @@ function PctInput({ value, derived, onValue, ariaLabel }) {
 }
 
 /* ── Le mois qui vient de passer ────────────────────────────────────────────
-   Le bloc « réel » de la page : le flux du mois, sa répartition, et les trois
-   chiffres qui le résument. Composant à part et non un bout du corps de la
-   page : il porte ses propres hooks (banque, relevés, mois montré), et la page
-   du plan n'a aucune raison de se re-rendre quand un relevé arrive.
+   Le bloc « réel » de la page : le flux du mois, sa répartition et ses trois
+   chiffres — le tout dans `CashflowSummary`, partagé avec la page Cashflow, qui
+   pose la même question sur une autre fenêtre. Ce qui reste ici est ce qui est
+   PROPRE au budget : le mois calendaire, et sa navigation.
+
+   Composant à part et non un bout du corps de la page : il porte ses propres
+   hooks (banque, relevés, mois montré), et le plan n'a aucune raison de se
+   re-rendre quand un relevé arrive.
    ------------------------------------------------------------------------- */
 
-/** Teintes des deux parts de l'onglet « Reste ». Elles ne sortent pas de la
- *  palette des postes : ces parts n'en SONT pas, et une couleur de poste leur
- *  donnerait l'air d'en être un. Bleu du nœud central pour ce qui est couvert,
- *  gris pour ce qui n'a pas été dépensé, terre cuite pour le découvert — la
- *  seule des trois qui mérite d'être vue. */
-const COVERED_COLOR = "#2C72C3";
-const LEFT_COLOR = "#B9C2CB";
-const DRAW_COLOR = "#C05A46";
-
-/** Six postes, cinq sources et trois sous-postes au diagramme : les mêmes
- *  écrêtages que la page Cashflow, qui dessine le même graphe. */
-const GRAPH_CLIP = { topOutflows: 6, topInflows: 5 };
-
 function MonthlyFlow({ setPage }) {
-  // La langue sert de dépendance aux libellés du diagramme : sans elle, changer
-  // de langue laisserait les pastilles dans l'ancienne, le graphe n'ayant pas bougé.
-  const lang = useLang();
+  useLang();
   const bank = useBankAccounts();
-  const bp = useBreakpoint();
 
   /* Le mois montré, en nombre de mois avant celui-ci. État LOCAL et non rangé
      dans le store : c'est une position de lecture, pas un réglage — revenir sur
@@ -772,21 +755,6 @@ function MonthlyFlow({ setPage }) {
     return withinRange(list, from, to);
   }, [byUid, uids, from, to]);
 
-  const flow = React.useMemo(() => buildCashflowGraph(txs, GRAPH_CLIP), [txs]);
-  const spending = React.useMemo(() => spendingByCategory(txs), [txs]);
-  const incomes = React.useMemo(() => incomeBySource(txs), [txs]);
-
-  /* L'onglet choisi sous le diagramme décide ce que l'anneau détaille. « Sorti »
-     par défaut : c'est la question qu'on se pose devant un budget, et les deux
-     autres onglets portent déjà leur chiffre en clair. */
-  const [tab, setTab] = React.useState("out");
-
-  const flowNodes = React.useMemo(
-    () => flow.nodes.map((n) => ({ id: n.id, color: n.color, label: flowLabel(n) })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flow, lang],
-  );
-
   /* « août 2026 ». Le format vient du système : c'est la langue de l'appareil
      qui décide de l'ordre et de la casse, pas nous. */
   const monthLabel = React.useMemo(() => {
@@ -797,62 +765,14 @@ function MonthlyFlow({ setPage }) {
     }
   }, [from]);
 
-  const ring = React.useMemo(() => {
-    if (tab === "in") {
-      return {
-        parts: incomes.slices.map((s) => ({
-          id: s.id, label: s.source || t(subLabelKey(s.sub)),
-          color: s.color, pct: s.pct, amount: s.amount,
-        })),
-        label: t("cashflow.in"),
-        value: flow.income,
-      };
-    }
+  /* Un mois sans mouvement compté : le dire vaut mieux qu'un diagramme vide et
+     un anneau à zéro, qui se liraient comme « tu n'as rien dépensé ». Le test
+     porte sur les DEUX côtés — un mois où il n'est rien entré mais où l'on a
+     dépensé a bien quelque chose à montrer. */
+  const stats = React.useMemo(() => periodStats(txs), [txs]);
+  const empty = stats.in === 0 && stats.out === 0;
 
-    /* « Reste » n'a pas de répartition à montrer : ce qu'on veut voir, c'est sa
-       place dans le mois. L'anneau porte donc DEUX parts, et le sens des deux
-       change avec le signe — ce qui reste sur ce qui est entré, ou ce qu'il a
-       fallu prendre en plus de ce qui est entré. */
-    if (tab === "left") {
-      const drawn = flow.net < 0;
-      const total = drawn ? flow.spent : flow.income;
-      const covered = drawn ? flow.income : flow.spent;
-      const edge = Math.abs(flow.net);
-      const share = (v) => (total > 0 ? (v / total) * 100 : 0);
-      return {
-        parts: [
-          {
-            id: "covered", label: t(drawn ? "cashflow.in" : "cashflow.out"),
-            color: COVERED_COLOR, pct: share(covered), amount: covered,
-          },
-          {
-            id: "edge", label: t(drawn ? "cashflow.drawn" : "cashflow.left"),
-            color: drawn ? DRAW_COLOR : LEFT_COLOR, pct: share(edge), amount: edge,
-          },
-        ],
-        label: t(drawn ? "cashflow.drawn" : "cashflow.left"),
-        value: edge,
-        tone: drawn ? T.pnlNeg : undefined,
-      };
-    }
-
-    return {
-      parts: spending.slices.map((s) => ({
-        id: s.id, label: t(categoryLabelKey(s.id)),
-        color: s.color, pct: s.pct, amount: s.amount,
-      })),
-      label: t("cashflow.out"),
-      value: flow.spent,
-    };
-    // `lang` : les libellés des parts passent par `t()` (cf. `flowNodes`).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, incomes, spending, flow, lang]);
-
-  /* Deux colonnes sur grand écran : l'anneau demande sa place et le diagramme
-     ne se lit plus en dessous de 640 px de large. Empilés en dessous. */
-  const twoCols = bp === "desktop";
   const noBank = bank.accounts.length === 0;
-  const empty = flow.total <= 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -893,110 +813,8 @@ function MonthlyFlow({ setPage }) {
           {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
         </section>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: twoCols ? "minmax(0, 2.1fr) minmax(260px, 1fr)" : "minmax(0, 1fr)",
-            gap: 20,
-            alignItems: "start",
-          }}
-        >
-          <section style={{ ...CARD, padding: "20px 24px 0", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{t("cashflow.title")}</div>
-
-            <SankeyGraph
-              nodes={flowNodes}
-              links={flow.links}
-              formatValue={(v) => fmt(v)}
-              ariaLabel={t("cashflow.flowAria")
-                .replace("{in}", fmt(flow.income))
-                .replace("{out}", fmt(flow.spent))}
-              emptyLabel={t("cashflow.flowEmpty")}
-            />
-
-            {/* Les trois chiffres du mois, en onglets : ils résument ET ils
-                commandent. Sans le second rôle, ce serait une rangée de chiffres
-                de plus, et l'anneau d'à côté n'aurait aucun moyen de dire autre
-                chose que les dépenses. */}
-            <div
-              role="tablist"
-              aria-label={t("budget.tabsAria")}
-              style={{ display: "flex", gap: 4, flexWrap: "wrap", borderTop: `1px solid ${T.border}`, margin: "0 -24px", padding: "0 12px" }}
-            >
-              <FlowTab
-                active={tab === "in"} onClick={() => setTab("in")}
-                label={t("cashflow.in")} value={flow.income} tone={T.pnlPos}
-              />
-              <FlowTab
-                active={tab === "out"} onClick={() => setTab("out")}
-                label={t("cashflow.out")} value={flow.spent}
-              />
-              <FlowTab
-                active={tab === "left"} onClick={() => setTab("left")}
-                label={t(flow.net < 0 ? "cashflow.drawn" : "cashflow.left")}
-                value={Math.abs(flow.net)}
-                tone={flow.net < 0 ? T.pnlNeg : undefined}
-              />
-            </div>
-          </section>
-
-          <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{t("budget.distribution")}</div>
-            <AllocationChart
-              parts={ring.parts}
-              ariaLabel={`${ring.label} : ${fmt(ring.value)}`}
-              size={196}
-              thickness={24}
-              centreLabel={ring.label}
-              centreValue={ring.value}
-              centreTone={ring.tone}
-              showPct={false}
-              formatValue={(v) => fmt(v)}
-            />
-            {/* Le classement est deviné, pas déclaré : le dire évite de prendre
-                pour argent comptant un « Autres » qui n'est qu'un libellé
-                illisible. */}
-            <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
-              {t("patrimoine.spending.hint")}
-            </div>
-          </section>
-        </div>
+        <CashflowSummary txs={txs} />
       )}
     </div>
-  );
-}
-
-/**
- * Un des trois chiffres du mois, en onglet.
- *
- * Le trait sous l'onglet actif prend la TEINTE du chiffre (vert pour l'encaissé,
- * rouge pour un découvert) : c'est le même signal que la couleur du montant, et
- * il tient quand l'œil ne regarde que le bas de la carte.
- */
-function FlowTab({ active, onClick, label, value, tone }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      style={{
-        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
-        minWidth: 0, padding: "12px 14px 10px", border: "none", background: "transparent",
-        borderBottom: `2px solid ${active ? (tone || T.text) : "transparent"}`,
-        opacity: active ? 1 : 0.55, cursor: "pointer", fontFamily: "inherit",
-        transition: "opacity 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease)",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
-      onMouseLeave={(e) => { e.currentTarget.style.opacity = active ? 1 : 0.55; }}
-    >
-      <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
-      <span style={{
-        fontSize: 22, fontWeight: 600, letterSpacing: -0.3,
-        color: tone || T.text, fontVariantNumeric: "tabular-nums",
-      }}>
-        {fmt(value)}
-      </span>
-    </button>
   );
 }

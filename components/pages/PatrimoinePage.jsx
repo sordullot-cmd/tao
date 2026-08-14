@@ -36,6 +36,7 @@ import {
   PERIODS, PERIOD_ALL, windowSeries,
 } from "@/components/ui/da";
 import AssetAvatar from "@/components/ui/AssetAvatar";
+import SankeyGraph from "@/components/ui/SankeyGraph";
 import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt } from "@/lib/ui/format";
 import {
@@ -53,8 +54,11 @@ import {
 import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import { depthOf, withinDays, ALL_DAYS } from "@/lib/bank/transactions";
-import { categoryLabelKey, spendingByCategory, spendingPalette } from "@/lib/bank/categories";
+import { spendingPalette } from "@/lib/bank/categories";
+import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
+import { flowLabel } from "@/lib/ui/flowLabel";
 import { reconstructHistory } from "@/lib/patrimoineHistory";
+import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, planTotals, primaryPlan,
@@ -66,10 +70,17 @@ import {
 const HISTORY_PERIODS = [...PERIODS, { id: PERIOD_ALL }];
 const daysOfPeriod = (id) => PERIODS.find((p) => p.id === id)?.days ?? null;
 
+/* Écrêtage du diagramme de flux. Moins large qu'en page Cashflow : ici la figure
+   ne tient que la moitié de la page, et cinq postes en face de quatre sources
+   remplissent déjà la hauteur. Ce qui est écrêté est rassemblé sous une branche
+   qui dit combien elle en porte. */
+const FLOW_CLIP = { topOutflows: 5, topInflows: 4 };
+
 export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelectedClassSlug }) {
   useLang();
   const [store, setStore] = usePatrimoine();
   const bank = useBankAccounts();
+  const bp = useBreakpoint();
   // Saisie d'un actif : la page « Actifs » n'existe plus, son formulaire est
   // une modale ouverte depuis les pages qui montrent le patrimoine.
   const [addingAsset, setAddingAsset] = React.useState(false);
@@ -100,6 +111,11 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   // Une valeur venue du cloud n'est pas garantie : tout ce qui n'est pas « brut »
   // retombe sur le net, plutôt que d'afficher un héros vide.
   const view = rawView === "brut" ? "brut" : "net";
+
+  /* Deux colonnes en bas de page, mais seulement s'il y a DEUX blocs : sans
+     banque connectée, le flux réel n'a pas de matière et ne s'affiche pas — le
+     budget resterait alors coincé dans une demi-largeur, à côté d'un vide. */
+  const twoCols = bp === "desktop" && bank.accounts.length > 0;
 
   const nw = React.useMemo(() => netWorth(assets), [assets]);
   const sections = React.useMemo(() => sectionsByClass(assets), [assets]);
@@ -371,17 +387,30 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
         </div>
       </div>
 
-      {/* Où part l'argent, POUR DE VRAI — juste avant le budget prévisionnel :
-          les deux se lisent l'un contre l'autre, avec le même vocabulaire de
-          postes et les mêmes teintes. */}
-      <SpendingByCategory accounts={bank.accounts} />
+      {/* Le réalisé et le prévu, CÔTE À CÔTE : c'est la seule disposition où on
+          les compare vraiment. L'un sous l'autre, il fallait faire défiler entre
+          les deux, et comparer de mémoire n'est pas comparer.
 
-      {/* Le budget prévisionnel, MONTRÉ — cette section ne portait qu'un renvoi
-          vers la page Budget : on venait chercher un chiffre et on repartait
-          avec un lien. L'original posait ici un Sankey des flux réels du mois,
-          qui n'a pas de source dans tr4de ; la répartition prévue, elle, existe
-          bel et bien. */}
-      <BudgetSummary onOpen={() => setPage?.("budget")} />
+          Le flux prend la plus grosse part : c'est un dessin qui a besoin de
+          largeur (sous 720 px il perd ses pastilles), là où l'aperçu du budget
+          est un anneau, qui n'en demande aucune. En dessous du bureau, les deux
+          s'empilent — deux demi-colonnes de tablette ne valent pas mieux qu'un
+          défilement. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: twoCols ? "minmax(0, 1.8fr) minmax(280px, 1fr)" : "minmax(0, 1fr)",
+          gap: 20,
+          alignItems: "start",
+        }}
+      >
+        <SpendingByCategory accounts={bank.accounts} />
+
+        {/* Le budget prévisionnel, MONTRÉ — cette section ne portait qu'un renvoi
+            vers la page Budget : on venait chercher un chiffre et on repartait
+            avec un lien. */}
+        <BudgetSummary onOpen={() => setPage?.("budget")} />
+      </div>
 
       {addingAsset && <AssetFormModal onClose={() => setAddingAsset(false)} />}
       {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
@@ -437,11 +466,17 @@ function PeriodChange({ change, period }) {
 }
 
 /**
- * Dépenses par poste, tous comptes agrégés confondus.
+ * Le flux réel, tous comptes agrégés confondus : d'où l'argent vient, où il part.
  *
- * Le pendant RÉALISÉ du budget prévisionnel affiché juste en dessous : mêmes
- * postes, mêmes teintes (cf. `lib/bank/categories`), pour que le prévu et le
- * réalisé se lisent d'un coup d'œil l'un contre l'autre.
+ * Le pendant RÉALISÉ du budget prévisionnel affiché À CÔTÉ : mêmes postes, mêmes
+ * teintes (cf. `lib/bank/categories`), pour que le prévu et le réalisé se lisent
+ * d'un coup d'œil l'un contre l'autre.
+ *
+ * Un diagramme de flux, et non plus un anneau : l'anneau ne sait dire que la
+ * moitié « où ça part », et le budget d'à côté EST déjà un anneau — deux
+ * couronnes voisines se copiaient la forme sans se répondre. Le dessin porte ses
+ * propres noms (cf. `SankeyGraph`), il n'a donc pas de légende ; sous 720 px de
+ * large il retire ses pastilles et ne garde que les proportions.
  *
  * La fenêtre est libre — 1S à 1A, ou tout l'historique que les banques rendent.
  * Elle est demandée à la MÊME profondeur que la courbe du patrimoine plus haut,
@@ -452,6 +487,11 @@ function PeriodChange({ change, period }) {
  * saisie manuelle derrière elle, un état vide serait un contrôle sans matière.
  */
 function SpendingByCategory({ accounts }) {
+  /* La langue sert de dépendance aux libellés du diagramme : sans elle, changer
+     de langue laisserait les pastilles dans l'ancienne, le graphe n'ayant pas
+     bougé. */
+  const lang = useLang();
+
   /* La fenêtre suit le COMPTE, comme celle de la courbe : quelqu'un qui suit
      son mois en cours ne doit pas retrouver « 3 mois » à chaque visite. Un mois
      par défaut — c'est le pas auquel un budget se pense. */
@@ -477,13 +517,17 @@ function SpendingByCategory({ accounts }) {
     return withinDays(all, days);
   }, [byUid, uids, days]);
 
-  const { slices, total } = React.useMemo(() => spendingByCategory(txs), [txs]);
+  /* Le flux en GRAPHE : d'où l'argent vient, et où il part. Un anneau ne sait
+     dire que la seconde moitié — et sur une page qui montre déjà une répartition
+     juste à côté (le budget prévu), deux anneaux voisins se répondaient sans
+     rien ajouter l'un à l'autre. */
+  const flow = React.useMemo(() => buildCashflowGraph(txs, FLOW_CLIP), [txs]);
 
   /* Les teintes viennent du BUDGET de l'utilisateur, et non d'une copie figée de
-     ses couleurs par défaut : les deux anneaux sont voisins sur cette page, et
-     une catégorie recolorée dans la page Budget doit suivre ici. Chaque poste
-     prend la couleur de la catégorie de budget dont il relève, les postes
-     secondaires d'une même famille en recevant une variante (cf.
+     ses couleurs par défaut : le diagramme et l'anneau du budget sont voisins
+     sur cette page, et une catégorie recolorée dans la page Budget doit suivre
+     ici. Chaque poste prend la couleur de la catégorie de budget dont il relève,
+     les postes secondaires d'une même famille en recevant une variante (cf.
      `spendingPalette`). Sans budget saisi, on retombe sur la palette de
      `lib/bank/categories`. */
   const [budgetStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
@@ -494,15 +538,21 @@ function SpendingByCategory({ accounts }) {
     return spendingPalette(couleurs);
   }, [budgetStore]);
 
-  if (accounts.length === 0) return null;
+  /* Les nœuds nommés, et repeints pour les seuls POSTES : le nœud central et les
+     sources n'ont pas d'équivalent dans un budget prévisionnel, leur imposer une
+     couleur de poste leur en donnerait l'air. */
+  const nodes = React.useMemo(
+    () => flow.nodes.map((n) => ({
+      id: n.id,
+      color: n.kind === "category" ? palette[n.ref] || n.color : n.color,
+      label: flowLabel(n),
+    })),
+    // `lang` : les libellés passent par `t()`, que le graphe ne connaît pas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [flow, palette, lang],
+  );
 
-  const parts = slices.map((s) => ({
-    id: s.id,
-    label: t(categoryLabelKey(s.id)),
-    color: palette[s.id] || s.color,
-    pct: s.pct,
-    amount: s.amount,
-  }));
+  if (accounts.length === 0) return null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -521,79 +571,28 @@ function SpendingByCategory({ accounts }) {
         {t("patrimoine.spending.title")}
       </SectionTitle>
 
-      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
-        {/* Chargement à vide seulement : dès qu'un relevé est arrivé, on montre
-            la répartition et elle se précise compte par compte. */}
-        {slices.length === 0 ? (
+      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+        {/* Chargement à vide seulement : dès qu'un relevé est arrivé, on dessine
+            le flux et il se précise compte par compte. */}
+        {flow.links.length === 0 ? (
           <div style={{ fontSize: 14, color: T.textSub, textAlign: "center", padding: "24px 0" }}>
             {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
           </div>
         ) : (
-          /* Trois colonnes — une cale, l'anneau, la légende : c'est ce qui laisse
-             l'anneau au MILIEU de la carte tout en collant la liste des postes à
-             son BORD DROIT. Les deux colonnes latérales portent la même part
-             (`minmax(0, 1fr)`), donc la colonne centrale tombe pile au centre,
-             quelle que soit la largeur de la légende. Les mettre simplement côte
-             à côte aurait collé la liste contre l'anneau et laissé un vide à
-             droite.
-             Plus de pourcentages : l'anneau EST la proportion, la répéter en
-             chiffres à côté de chaque poste faisait lire deux fois la même
-             chose. Le montant, lui, ne se lit nulle part ailleurs. */
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
-            alignItems: "center", gap: 24,
-          }}>
-            <span aria-hidden="true" />
-            <AllocationChart
-              kind="ring"
-              parts={parts}
-              scale={100}
-              ariaLabel={t("patrimoine.spending.aria")}
-              size={190}
-              thickness={22}
-              centreLabel={t("patrimoine.spending.centre")}
-              centreValue={total}
-              showPct={false}
-              formatValue={(v) => fmt(v)}
-            />
-
-            {/* Les postes en COLONNE contre le bord droit de la carte, du plus
-                gros au plus petit : c'est l'ordre des parts, l'œil descend la
-                liste comme il ferait le tour du cercle. Les pastilles restent
-                alignées entre elles à gauche du bloc — une liste alignée à
-                droite ferait danser les points de couleur.
-                Le poste et son total restent collés l'un à l'autre : les étirer
-                d'un bord à l'autre obligeait à traverser la carte pour
-                rapprocher un nom d'un chiffre.
-                Le détail par sous-poste n'est PAS ici : la synthèse répond à
-                « où va mon argent », et une seconde ligne de chiffres sous
-                chaque part la faisait lire deux fois. Le sous-poste se lit là
-                où il sert — sur la ligne du relevé qui le porte. */}
-            <ul style={{
-              listStyle: "none", margin: 0, padding: 0, minWidth: 0, maxWidth: 380,
-              justifySelf: "end",
-              display: "flex", flexDirection: "column", gap: 10,
-            }}>
-              {slices.map((s) => (
-                <li key={s.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, minWidth: 0 }}>
-                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                  <span style={{ color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {t(categoryLabelKey(s.id))}
-                  </span>
-                  <span style={{ fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(s.amount)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          /* Plus de légende à droite : les noms et les montants sont DANS le
+             dessin, en pastilles sur les rubans, et une liste qui les répétait à
+             côté faisait lire deux fois la même chose. C'est aussi ce qui rend
+             la figure tenable en demi-largeur — la place gagnée sur la légende
+             est de la place donnée aux branches. Le détail chiffré, lui, vit sur
+             la page Cashflow, qui est l'endroit où l'on creuse. */
+          <SankeyGraph
+            nodes={nodes}
+            links={flow.links}
+            formatValue={(v) => fmt(v)}
+            ariaLabel={t("patrimoine.spending.aria")}
+            emptyLabel={t("cashflow.flowEmpty")}
+          />
         )}
-
-        {/* Ni compte d'opérations ni avertissement sur le classement : la synthèse
-            répond d'un coup d'œil à « où va mon argent », et un paragraphe sous
-            l'anneau se lisait plus longtemps que l'anneau lui-même. Les deux
-            vivent sur la page Dépenses, qui est l'endroit où l'on creuse. */}
       </section>
     </div>
   );

@@ -1240,9 +1240,8 @@ const FR: Dict = {
   "patrimoine.sub.income.sale": "Ventes",
   "patrimoine.sub.divers": "Divers",
   // Répartition des dépenses (synthèse du patrimoine)
-  "patrimoine.spending.title": "Dépenses par catégorie",
-  "patrimoine.spending.centre": "Dépensé",
-  "patrimoine.spending.aria": "Répartition des dépenses par catégorie",
+  "patrimoine.spending.title": "Flux d'argent",
+  "patrimoine.spending.aria": "Flux de la période : d'où vient l'argent, où il part.",
   "patrimoine.spending.loading": "Récupération des opérations…",
   "patrimoine.spending.empty": "Aucune dépense sur cette période.",
   "patrimoine.spending.noAccount": "Connecte une banque pour voir où part ton argent.",
@@ -1281,6 +1280,7 @@ const FR: Dict = {
   "spending.txMore": "Voir les {n} autres opérations",
   "spending.txLess": "Voir moins",
   "spending.merchants": "Enseignes",
+  "spending.merchantsEmpty": "Aucune enseigne reconnue sur la période. Un paiement chez un commerçant que tr4de ne connaît pas reste compté dans son poste, mais ne peut pas être classé ici.",
   "spending.merchantsHint": "Seules les enseignes reconnues apparaissent ici : le libellé d'un paiement par carte porte la date et le numéro de terminal, deux passages chez le même commerçant n'y ont donc pas la même chaîne. Un regroupement sur le libellé brut ne compterait rien.",
   // Détail d'une ligne de titres
   "patrimoine.holding.notFound": "Ligne introuvable. Elle a peut-être été supprimée.",
@@ -2587,9 +2587,8 @@ const EN: Dict = {
   "patrimoine.sub.income.sale": "Sales",
   "patrimoine.sub.divers": "Other",
   // Spending breakdown (net worth summary)
-  "patrimoine.spending.title": "Spending by category",
-  "patrimoine.spending.centre": "Spent",
-  "patrimoine.spending.aria": "Spending broken down by category",
+  "patrimoine.spending.title": "Money flow",
+  "patrimoine.spending.aria": "Flow over the period: where the money comes from, where it goes.",
   "patrimoine.spending.loading": "Fetching transactions…",
   "patrimoine.spending.empty": "No spending over this period.",
   "patrimoine.spending.noAccount": "Connect a bank to see where your money goes.",
@@ -2626,6 +2625,7 @@ const EN: Dict = {
   "spending.txMore": "Show {n} more transactions",
   "spending.txLess": "Show less",
   "spending.merchants": "Merchants",
+  "spending.merchantsEmpty": "No recognised brand over this period. A payment at a shop tr4de does not know still counts in its category, but cannot be ranked here.",
   "spending.merchantsHint": "Only recognised brands show up here: a card payment label carries the date and the terminal number, so two visits to the same shop never share the same string. Grouping on the raw label would count nothing.",
   // Holding detail
   "patrimoine.holding.notFound": "Holding not found. It may have been deleted.",

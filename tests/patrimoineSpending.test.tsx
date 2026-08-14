@@ -1,11 +1,15 @@
 /**
- * Répartition des dépenses de la synthèse du patrimoine.
+ * Le flux réel de la synthèse du patrimoine.
  *
- * Le graphique lit les relevés des comptes agrégés, les classe par poste
- * (`lib/bank/categories`) et n'en garde que les DÉBITS. Trois choses peuvent
- * casser sans qu'aucun test unitaire ne le voie : la section n'est pas rendue du
- * tout, elle compte le salaire dans les dépenses, ou la fenêtre choisie ne
- * recadre rien.
+ * Le diagramme lit les relevés des comptes agrégés et les classe par poste
+ * (`lib/bank/categories`). Trois choses peuvent casser sans qu'aucun test
+ * unitaire ne le voie : la section n'est pas rendue du tout, le salaire tombe du
+ * côté des dépenses, ou la fenêtre choisie ne recadre rien.
+ *
+ * Les branches se lisent par leur PASTILLE — « Poste : montant », posée sur le
+ * ruban (cf. `SankeyGraph`). Le nom est le texte propre de la pastille et le
+ * montant celui de son <span> : d'où le helper, qui repère l'une et vérifie
+ * l'autre d'un seul geste.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -69,43 +73,50 @@ import { PATRIMOINE_LOCAL_KEY } from "@/lib/patrimoine";
 
 const SPEND_PERIOD_KEY = "tr4de_patrimoine_spend_period";
 
+/** La pastille d'une branche, montant compris : « Transport : $40.00 ». */
+const branch = (name: string, amount: string) => {
+  const pastille = screen.getByText(name);
+  expect(pastille.textContent?.replace(/\s+/g, " ")).toBe(`${name} : ${amount}`);
+};
+
 const seed = (period?: string) => {
   cloudStore.clear();
   cloudStore.set(PATRIMOINE_LOCAL_KEY, { assets: [], history: [] });
   if (period !== undefined) cloudStore.set(SPEND_PERIOD_KEY, period);
 };
 
-describe("Dépenses par catégorie (synthèse du patrimoine)", () => {
+describe("Flux réel (synthèse du patrimoine)", () => {
   beforeEach(() => cleanup());
 
   it("classe les débits par poste et écarte les revenus", () => {
     seed("1M");
     render(<PatrimoinePage />);
 
-    expect(screen.getByText("Spending by category")).toBeTruthy();
-    expect(screen.getByText("Food & dining")).toBeTruthy();
-    expect(screen.getByText("Transport")).toBeTruthy();
-    // 60 + 40 = 100 dépensés : le salaire de 2 400 n'en fait pas partie.
-    expect(screen.getByText("$100.00")).toBeTruthy();
+    expect(screen.getByText("Money flow")).toBeTruthy();
+    branch("Food & dining", "$60.00");
+    branch("Transport", "$40.00");
+    /* Le salaire entre PAR LA GAUCHE : il nourrit le nœud central et ne devient
+       jamais un poste de dépense. Le poste « Autres revenus » n'existe donc pas
+       dans le dessin — une branche à 2 400 du mauvais côté se verrait ici. */
+    branch("Money in", "$2,400.00");
     expect(screen.queryByText("Income")).toBeNull();
   });
 
   it("recadre sur la fenêtre choisie", () => {
-    // « 3 mois » attrape en plus l'achat d'il y a 45 jours : 100 + 200 = 300.
+    // « 3 mois » attrape en plus l'achat d'il y a 45 jours.
     seed("3M");
     render(<PatrimoinePage />);
-    expect(screen.getByText("Shopping")).toBeTruthy();
-    expect(screen.getByText("$300.00")).toBeTruthy();
+    branch("Shopping", "$200.00");
   });
 
   it("suit le changement de fenêtre", () => {
     seed("3M");
     render(<PatrimoinePage />);
     /* Deux jeux de pastilles sur la page : celui de la courbe du patrimoine
-       d'abord, celui des dépenses ensuite. C'est le SECOND qu'on règle ici. */
+       d'abord, celui du flux ensuite. C'est le SECOND qu'on règle ici. */
     const weekPills = screen.getAllByText("1S");
     fireEvent.click(weekPills[weekPills.length - 1]);
     expect(screen.queryByText("Shopping")).toBeNull();
-    expect(screen.getByText("$100.00")).toBeTruthy();
+    branch("Food & dining", "$60.00");
   });
 });
