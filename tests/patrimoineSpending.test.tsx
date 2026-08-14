@@ -4,16 +4,16 @@
  * L'anneau lit les relevés des comptes agrégés, les classe par poste
  * (`lib/bank/categories`) et n'en garde que les DÉBITS. Trois choses peuvent
  * casser sans qu'aucun test unitaire ne le voie : la section n'est pas rendue du
- * tout, elle compte le salaire dans les dépenses, ou la fenêtre choisie ne
- * recadre rien.
+ * tout, elle compte le salaire dans les dépenses, ou elle sort du mois en cours
+ * — sa fenêtre est FIXE, celle du budget affiché juste à côté.
  *
  * L'anneau n'a plus de légende : les postes ne se nomment que dans l'infobulle
  * de leur part — « Poste · montant · part » —, d'où le helper, qui la lit.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 
 const cloudStore = new Map<string, unknown>();
 vi.mock("@/lib/hooks/useCloudState", () => ({
@@ -46,8 +46,9 @@ vi.mock("@/lib/bank/useBankAccounts", async (importOriginal) => ({
   }),
 }));
 
-/* Le relevé est daté À PARTIR D'AUJOURD'HUI : la fenêtre est glissante, des
-   dates en dur sortiraient du cadre au bout de quelques jours. */
+/* Le relevé est daté à partir d'un « aujourd'hui » FIGÉ au 14 août. La fenêtre
+   est le mois en cours : sans horloge fixe, le même test passerait le 14 et
+   échouerait le 2, où « il y a quatre jours » tombe le mois d'avant. */
 const dayAgo = (n: number): string => {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -70,25 +71,28 @@ vi.mock("@/lib/bank/useBankTransactions", async (importOriginal) => ({
 import PatrimoinePage from "@/components/pages/PatrimoinePage";
 import { PATRIMOINE_LOCAL_KEY } from "@/lib/patrimoine";
 
-const SPEND_PERIOD_KEY = "tr4de_patrimoine_spend_period";
-
 /** L'infobulle d'une part : « Transport · $40.00 · 40% ». */
 const part = (name: string, amount: string) =>
   screen.getByText((_, el) =>
     el?.tagName.toLowerCase() === "title"
     && (el.textContent || "").startsWith(`${name} · ${amount} · `));
 
-const seed = (period?: string) => {
+const seed = () => {
   cloudStore.clear();
   cloudStore.set(PATRIMOINE_LOCAL_KEY, { assets: [], history: [] });
-  if (period !== undefined) cloudStore.set(SPEND_PERIOD_KEY, period);
 };
 
 describe("Dépenses par catégorie (synthèse du patrimoine)", () => {
-  beforeEach(() => cleanup());
+  beforeEach(() => {
+    cleanup();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-14T10:00:00"));
+  });
+
+  afterEach(() => vi.useRealTimers());
 
   it("classe les débits par poste et écarte les revenus", () => {
-    seed("1M");
+    seed();
     render(<PatrimoinePage />);
 
     expect(screen.getByText("Spending by category")).toBeTruthy();
@@ -102,23 +106,18 @@ describe("Dépenses par catégorie (synthèse du patrimoine)", () => {
     expect(screen.queryByText(/^Income ·/)).toBeNull();
   });
 
-  it("recadre sur la fenêtre choisie", () => {
-    // « 3 mois » attrape en plus l'achat d'il y a 45 jours.
-    seed("3M");
+  it("s'en tient au mois en cours, sans pastilles pour en sortir", () => {
+    seed();
     render(<PatrimoinePage />);
-    expect(part("Shopping", "$200.00")).toBeTruthy();
-    // 100 + 200 = 300 sur la fenêtre.
-    expect(screen.getByText("$300.00")).toBeTruthy();
-  });
 
-  it("suit le changement de fenêtre", () => {
-    seed("3M");
-    render(<PatrimoinePage />);
-    /* Deux jeux de pastilles sur la page : celui de la courbe du patrimoine
-       d'abord, celui des dépenses ensuite. C'est le SECOND qu'on règle ici. */
-    const weekPills = screen.getAllByText("1S");
-    fireEvent.click(weekPills[weekPills.length - 1]);
+    /* L'achat d'il y a 45 jours est d'un mois précédent : il n'entre pas, et
+       plus rien sur la carte ne permet d'aller le chercher — le bloc porte le
+       mois du budget qu'il jouxte, pas une fenêtre au choix. */
     expect(screen.queryByText(/^Shopping ·/)).toBeNull();
     expect(screen.getByText("$100.00")).toBeTruthy();
+
+    /* Un seul jeu de pastilles sur la page, celui de la courbe du patrimoine :
+       le bloc des dépenses n'a plus le sien. */
+    expect(screen.getAllByText("1S")).toHaveLength(1);
   });
 });

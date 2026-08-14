@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * L'icône d'un poste de dépense, dans sa couleur — en pastille RONDE et sourde.
+ * L'icône d'un poste de dépense, sur une pastille RONDE de sa couleur.
  *
  * Remplace la pastille ronde qui tenait ce rôle : une gommette de 10 px ne dit
  * QUE « ce poste a une couleur », et il faut lire le nom à côté pour savoir
@@ -10,21 +10,22 @@
  * est la même que dans l'anneau et le diagramme de flux, est conservée : c'est
  * elle qui relie la ligne du tableau à sa part dans les graphiques.
  *
- * ── Ronde, et sourde ────────────────────────────────────────────────────────
- * Elle se lit dans la même colonne que les logos d'enseignes, qui sont ronds et
- * photographiques. Un carré arrondi à couleur pleine y détonnait : deux formes
- * et deux niveaux de saturation pour deux listes qui se lisent l'une sous
- * l'autre. D'où le cercle, un fond à peine teinté et un trait rabattu vers le
- * gris — la couleur reste identifiable (c'est elle qui relie la ligne à sa part
- * dans l'anneau) sans venir concurrencer un vrai logo.
+ * ── Ronde et PLEINE, comme un logo ──────────────────────────────────────────
+ * Elle se lit dans la même colonne que les vignettes d'enseignes, qui sont des
+ * logos ronds à couleur pleine. Une pastille pâle à côté d'eux ne se lisait pas
+ * comme la même famille d'objet : elle avait l'air d'un état désactivé. D'où le
+ * même dessin qu'`AssetAvatar` et `MerchantAvatar` — disque opaque de la couleur
+ * du poste, glyphe dans l'encre qui contraste dessus.
  *
- * ── Pourquoi le fond est en alpha et non en teinte claire ────────────────────
- * Un `tint(couleur, 0.9)` donnerait un pastel calculé sur du BLANC, qui vire au
- * gris sale dès que la carte passe en thème sombre. La même couleur à 12 %
- * d'opacité se pose au contraire sur le fond réel, quel qu'il soit : elle
- * s'éclaircit sur blanc et s'assombrit sur noir, sans qu'on ait deux palettes à
- * tenir. C'est aussi ce qui garde l'icône lisible sur les deux fonds, puisque le
- * trait, lui, reste à pleine saturation.
+ * L'encre est CALCULÉE (`inkOn`, la même fonction que les initiales d'un
+ * marchand) et non choisie : la palette des postes tient une trentaine de
+ * teintes, et un couple couleur/encre à maintenir par poste finirait par
+ * comporter un blanc sur jaune. Le seuil est le point d'équilibre des contrastes
+ * WCAG, pas l'intuition — un vert vif « paraît » sombre et ne rend pourtant
+ * que 2,3:1 en blanc.
+ *
+ * La couleur pleine, à l'identique dans l'anneau et le diagramme de flux, est ce
+ * qui relie la ligne du tableau à sa part dans les graphiques.
  *
  * Le choix des icônes est de la PRÉSENTATION, pas du classement : il vit donc
  * ici et non dans `lib/bank/categories`, qui décide des postes et de leurs
@@ -39,7 +40,7 @@ import {
   Sparkles, Ticket, TrainFront, UtensilsCrossed, Wallet, Zap,
 } from "lucide-react";
 import { categoryColor } from "@/lib/bank/categories";
-import { mixHex } from "@/lib/ui/color";
+import { inkOn } from "@/lib/bank/merchants";
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste
    ACHÈTE, pas la famille dans laquelle il est rangé : « carburant » prend la
@@ -78,16 +79,13 @@ const ICONS = {
   other: Shapes,
 };
 
-/** Fond de la vignette : la couleur du poste, très diluée (cf. en-tête). */
-const BG_ALPHA = "14"; // 8 %
-
-/** Part de gris dans le trait. Assez pour que l'icône ne vibre plus à côté d'un
- *  logo, pas assez pour qu'on ne reconnaisse plus la couleur du poste. */
-const MUTE = 0.3;
-const GREY = "#8B96A2";
-
 /** Taille par défaut : celle d'un logo d'enseigne. Les deux listes se lisent
- *  l'une sous l'autre, leurs vignettes doivent avoir le même encombrement. */
+ *  l'une à côté de l'autre, leurs vignettes doivent avoir le même encombrement.
+ *
+ *  Le glyphe occupe un peu plus de la moitié du disque : plus gros, il touche le
+ *  bord et la pastille cesse de se lire comme une vignette ; plus petit, il se
+ *  perd dans l'aplat. Le trait est épaissi d'un cran par rapport aux icônes de
+ *  l'interface — sur fond plein, un trait de 1,75 disparaît. */
 export default function CategoryIcon({ category, size = 32 }) {
   const Icon = ICONS[category] || Shapes;
   const color = categoryColor(category);
@@ -95,12 +93,12 @@ export default function CategoryIcon({ category, size = 32 }) {
     <span
       aria-hidden="true"
       style={{
-        width: size, height: size, flexShrink: 0, borderRadius: "50%",
+        width: size, height: size, flexShrink: 0, borderRadius: 999,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: `${color}${BG_ALPHA}`, color: mixHex(color, GREY, MUTE),
+        background: color, color: inkOn(color),
       }}
     >
-      <Icon size={Math.round(size * 0.5)} strokeWidth={1.6} />
+      <Icon size={Math.round(size * 0.52)} strokeWidth={2} />
     </span>
   );
 }

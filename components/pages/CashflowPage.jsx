@@ -54,7 +54,8 @@ import React from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, Landmark, PiggyBank } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, PERIODS } from "@/components/ui/da";
+import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, TH, PERIODS } from "@/components/ui/da";
+import { periodRange } from "@/lib/ui/period";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import CashflowSummary from "@/components/ui/CashflowSummary";
 import CategoryIcon from "@/components/ui/CategoryIcon";
@@ -86,7 +87,6 @@ const CASHFLOW_PERIODS = [
   ...PERIODS.filter((p) => ["1M", "3M", "1A"].includes(p.id)),
   { id: PERIOD_CUSTOM },
 ];
-const daysOfPeriod = (id) => PERIODS.find((p) => p.id === id)?.days ?? null;
 
 /** Fenêtre libre de départ : les trente derniers jours, soit celle qu'on quitte
  *  en cliquant « Personnalisé ». Ouvrir sur autre chose ferait sauter les
@@ -136,6 +136,25 @@ const COL_PCT = 72;
 const COL_AMOUNT = 116;
 const COL_BTN = 24;
 
+/**
+ * Intitulé d'une liste, dans le ton des en-têtes de colonnes du tableau des
+ * comptes (`AccountRowsHeader`) : petit, gris, aligné sur le texte des lignes.
+ *
+ * Et non un `SectionTitle` : les deux listes de ce bloc ne sont pas des sections
+ * de la page, ce sont les deux moitiés d'une seule réponse — « dans quoi » et
+ * « chez qui ». Deux titres de section les annonçaient comme deux sujets, et
+ * pesaient plus lourd que les lignes qu'ils coiffent. Le gris vient d'une
+ * OPACITÉ et non d'une couleur de texte : c'est ce que fait le tableau des
+ * comptes, et ça tient sur les deux thèmes sans qu'on ait deux teintes à régler.
+ */
+function ListLabel({ children }) {
+  return (
+    <div style={{ padding: "0 20px", opacity: 0.4 }}>
+      <span style={TH}>{children}</span>
+    </div>
+  );
+}
+
 /** « 13 août » — l'année n'apparaît que si le jour n'est pas de cette année. */
 function shortDay(iso) {
   if (!iso) return "";
@@ -162,7 +181,6 @@ export default function CashflowPage({ setPage }) {
   const [rawPeriod, setPeriod] = useCloudState("tr4de_spending_period", "spending_period", "1M");
   const period = CASHFLOW_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : "1M";
 
-  const days = daysOfPeriod(period) ?? 0;
 
   /* La fenêtre libre, gardée avec la période : revenir sur « Personnalisé » doit
      rouvrir les dates qu'on y avait posées, pas trente jours par défaut. */
@@ -177,14 +195,24 @@ export default function CashflowPage({ setPage }) {
   const [offset, setOffset] = React.useState(0);
   React.useEffect(() => { setOffset(0); }, [period, custom.start, custom.end]);
 
+  /* La fenêtre d'une pastille est CALÉE SUR LE CALENDRIER (cf. `lib/ui/period`) :
+     « 1 mois » va du 1er à aujourd'hui, et reculer d'un cran donne le mois
+     précédent en entier — pas trente jours de plus en arrière. Deux fenêtres
+     voisines se suivent donc sans se chevaucher ni laisser de trou, ce qu'un
+     décalage en jours ne pouvait pas tenir dès que les mois n'ont pas la même
+     longueur.
+
+     La fenêtre LIBRE garde l'ancienne règle : elle n'a pas de bord de mois sur
+     lequel se caler, on la recule donc de sa propre longueur. */
   const range = React.useMemo(() => {
-    const libre = period === PERIOD_CUSTOM;
-    const length = libre ? daysSince(custom.start, parseDay(custom.end)) : days;
-    const anchor = libre ? parseDay(custom.end) : new Date();
+    const cadre = periodRange(period, offset);
+    if (cadre) return { from: dayKey(cadre.start), to: dayKey(cadre.end) };
+    const length = daysSince(custom.start, parseDay(custom.end));
+    const anchor = parseDay(custom.end);
     const end = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - offset * length);
     const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - length + 1);
     return { from: dayKey(start), to: dayKey(end) };
-  }, [period, days, custom, offset]);
+  }, [period, custom, offset]);
 
   const depth = Math.max(daysSince(range.from), 90);
 
@@ -364,8 +392,8 @@ export default function CashflowPage({ setPage }) {
               alignItems: "start",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-              <SectionTitle size="sm">{t("cashflow.spending")}</SectionTitle>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <ListLabel>{t("cashflow.spending")}</ListLabel>
               {/* Sans en-tête de colonnes : les deux listes de ce bloc se lisent
                   l'une à côté de l'autre, et trois intitulés d'un seul côté
                   décalaient la première ligne des postes d'une hauteur de texte
@@ -390,9 +418,9 @@ export default function CashflowPage({ setPage }) {
                 qu'une liste de revenus posée là parlait de l'autre côté du flux.
                 Les sources, elles, se lisent dans la colonne de gauche du
                 diagramme, qui les nomme et les chiffre. */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-              <SectionTitle size="sm">{t("spending.merchants")}</SectionTitle>
-              <section style={{ ...CARD, padding: merchants.length === 0 ? "16px 20px" : 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <ListLabel>{t("spending.merchants")}</ListLabel>
+              <section style={{ ...CARD, padding: merchants.length === 0 ? "16px 20px" : "8px 0" }}>
                 {merchants.length === 0 ? (
                   <div style={{ fontSize: 14, lineHeight: 1.5, color: T.textSub }}>
                     {t("spending.merchantsEmpty")}

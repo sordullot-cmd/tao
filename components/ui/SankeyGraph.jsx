@@ -3,12 +3,9 @@
 /**
  * Diagramme de flux (Sankey) à plusieurs niveaux.
  *
- * `SankeyFlow` dessine le cas à un nœud central, avec les libellés rangés dans
- * deux gouttières, à gauche et à droite. Ce dessin-ci répond à la même question
- * un cran plus loin — les postes s'y déplient sur leurs sous-postes — et il ne
- * peut donc plus s'appuyer sur des gouttières : les colonnes du milieu n'en ont
- * pas. Les noms se posent en PASTILLES sur les rubans, contre le nœud qu'ils
- * désignent. C'est ce qui permet de garder toute la largeur pour le dessin.
+ * `SankeyFlow` dessine le cas à un nœud central. Ce dessin-ci répond à la même
+ * question un cran plus loin — les postes peuvent s'y déplier sur leurs
+ * sous-postes — et travaille sur un graphe quelconque.
  *
  * La géométrie est dans `lib/ui/sankeyGraph` — testable sans navigateur. Ici :
  * la mesure de la largeur disponible, la peinture, les pastilles et le survol.
@@ -29,13 +26,25 @@
  *   (cf. `color` dans `lib/ui/sankeyGraph`) : celle de la source vers le budget,
  *   où tout se rejoint, celle de la cible partout ailleurs.
  *
- * • PASTILLES EN HTML, posées par-dessus le SVG aux coordonnées du dessin. Un
- *   `<text>` SVG ne sait pas couper proprement un nom trop long, ne suit pas la
- *   taille de police du système et rend mal les chiffres alignés.
+ * • LES NOMS DANS DEUX GOUTTIÈRES, à gauche pour la colonne de départ, à droite
+ *   pour celle d'arrivée ; le montant sur une DEUXIÈME LIGNE, sous le nom. Posés
+ *   sur les rubans, ils se lisaient sur un fond qui change et deux voisins
+ *   finissaient par se toucher ; en marge, ils s'alignent et le dessin reste
+ *   net. Les colonnes du milieu n'ont pas de marge où se ranger : leur libellé
+ *   se centre sur la barre, qui est étroite et le porte bien.
+ *
+ * • EN HTML, posés par-dessus le SVG aux coordonnées du dessin. Un `<text>` SVG
+ *   ne sait pas couper proprement un nom trop long, ne suit pas la taille de
+ *   police du système et rend mal les chiffres alignés.
+ *
+ * • AUCUN SURVOL. Le dessin ne réagit pas au passage de la souris : tout ce
+ *   qu'un survol révélait (le nom, le montant) est maintenant écrit à côté de
+ *   chaque branche, et une figure qui s'éteint à moitié dès qu'on passe dessus
+ *   se lit plus mal qu'une figure fixe.
  *
  * • DEUX RÉGIMES selon la place, et non un seul dessin rétréci. Sous 720 px, les
- *   pastilles se marcheraient dessus dans chaque colonne : on les retire et la
- *   figure devient une figure de PROPORTIONS — les noms et les montants se
+ *   gouttières mangeraient la figure : on les retire avec les libellés, et le
+ *   dessin devient une figure de PROPORTIONS — les noms et les montants se
  *   lisent alors dans les listes juste en dessous, qui portent la même matière.
  */
 
@@ -64,9 +73,13 @@ const PAD_BOTTOM = 12;
 const RIBBON_TINT = 0.58;
 const NODE_TINT = 0.06;
 
-/** Opacité des rubans, et ce que devient celui dont on survole un autre. */
+/** Opacité des rubans. Une seule valeur : le dessin ne réagit pas au survol. */
 const RIBBON = 0.92;
-const DIMMED = 0.14;
+
+/** Place réservée aux libellés de part et d'autre du dessin. Deux lignes de
+ *  texte (le nom, puis le montant) tiennent là-dedans sans coupure pour un nom
+ *  de poste ordinaire ; au-delà, l'ellipse du navigateur s'en charge. */
+const GUTTER = 132;
 
 export default function SankeyGraph({
   nodes = [],
@@ -77,7 +90,6 @@ export default function SankeyGraph({
 }) {
   const ref = React.useRef(null);
   const [width, setWidth] = React.useState(0);
-  const [hover, setHover] = React.useState(null);
 
   React.useEffect(() => {
     const el = ref.current;
@@ -125,8 +137,11 @@ export default function SankeyGraph({
          branches voisines. */
       nodeGap: compact ? 6 : 10,
       minBand: compact ? 2 : 3,
-      labelPad: 9,
-      labelGap: compact ? 0 : 26,
+      labelPad: 10,
+      labelGap: compact ? 0 : 34,
+      // Pas de gouttières en régime compact : sans libellés, elles ne feraient
+      // que rétrécir le dessin.
+      gutter: compact ? 0 : GUTTER,
     }),
     [nodes, links, width, height, compact],
   );
@@ -136,26 +151,6 @@ export default function SankeyGraph({
     [nodes],
   );
   const labelOf = (id) => labels.get(id) ?? id;
-
-  /* Le survol met en avant un nœud ET tout ce qui le touche : un poste sans ses
-     rubans, ce sont deux barres isolées dont on ne voit plus le lien. */
-  const lit = React.useMemo(() => {
-    if (!hover) return null;
-    const keep = new Set([hover]);
-    for (const l of layout.links) {
-      if (l.source === hover || l.target === hover) {
-        keep.add(l.id);
-        keep.add(l.source);
-        keep.add(l.target);
-      } else if (l.id === hover) {
-        keep.add(l.source);
-        keep.add(l.target);
-      }
-    }
-    return keep;
-  }, [hover, layout.links]);
-
-  const dim = (id) => lit != null && !lit.has(id);
 
   const total = PAD_TOP + height + PAD_BOTTOM;
 
@@ -189,7 +184,6 @@ export default function SankeyGraph({
         role="img"
         aria-label={ariaLabel}
         style={{ display: "block" }}
-        onMouseLeave={() => setHover(null)}
       >
         {/* Les rubans d'abord, les barres par-dessus : la barre ferme proprement
             le bout du ruban, quelle que soit sa courbure. */}
@@ -199,12 +193,8 @@ export default function SankeyGraph({
             className="tr4de-sankeygraph-part"
             d={band.path}
             fill={tint(band.color, RIBBON_TINT)}
-            opacity={dim(band.id) ? DIMMED : RIBBON}
-            onMouseEnter={() => setHover(band.id)}
-            style={{
-              animationDelay: `${Math.min(i, 16) * 28}ms`,
-              transition: "opacity 160ms var(--ease-out, ease)",
-            }}
+            opacity={RIBBON}
+            style={{ animationDelay: `${Math.min(i, 16) * 28}ms` }}
           >
             <title>{`${labelOf(band.source)} → ${labelOf(band.target)} · ${formatValue(band.value)}`}</title>
           </path>
@@ -217,22 +207,23 @@ export default function SankeyGraph({
             y={n.y}
             width={n.w}
             height={n.h}
-            rx={Math.min(n.w / 2, n.h / 2)}
+            /* Bouts CARRÉS : arrondie, une barre de 9 px de large se lit comme
+               une gélule posée là, et son extrémité ne coïncide plus avec le
+               bord du ruban qu'elle ferme. */
             fill={tint(n.color, NODE_TINT)}
-            opacity={dim(n.id) ? 0.24 : 1}
-            onMouseEnter={() => setHover(n.id)}
-            style={{ transition: "opacity 160ms var(--ease-out, ease)" }}
           >
             <title>{`${labelOf(n.id)} · ${formatValue(n.value)}`}</title>
           </rect>
         ))}
 
-        {/* Traits de rappel : une branche fine dont la pastille a été poussée
-            plus bas (pour ne pas recouvrir celle de sa voisine) se verrait
-            attribuer le nom d'à côté. Le trait dit lequel va avec lequel. On ne
-            le trace que si la pastille a QUITTÉ l'épaisseur de son nœud — tant
-            qu'elle tombe en face, elle le désigne sans ambiguïté. */}
+        {/* Traits de rappel : une branche fine dont le libellé a été poussé plus
+            bas (pour ne pas recouvrir celui de sa voisine) se verrait attribuer
+            le nom d'à côté. Le trait dit lequel va avec lequel — et seulement
+            quand le libellé a QUITTÉ l'épaisseur de son nœud : tant qu'il tombe
+            en face, il le désigne sans ambiguïté. Les libellés centrés, eux,
+            sont sur leur barre : rien à relier. */}
         {!compact && layout.nodes.map((n) => {
+          if (n.labelSide === "centre") return null;
           const outside = n.labelY < n.y - 2 || n.labelY > n.y + n.h + 2;
           if (!outside) return null;
           const from = n.labelSide === "before" ? n.x - 1 : n.x + n.w + 1;
@@ -245,52 +236,66 @@ export default function SankeyGraph({
               fill="none"
               stroke={n.color}
               strokeWidth={1}
-              opacity={dim(n.id) ? 0.1 : 0.4}
-              style={{ transition: "opacity 160ms var(--ease-out, ease)" }}
+              opacity={0.4}
             />
           );
         })}
+
       </svg>
 
-      {/* Les pastilles, posées aux coordonnées du dessin. Elles restent
-          survolables : pointer le nom d'une branche est le geste naturel pour
-          l'isoler. Translucides, pour que le ruban reste lisible dessous. */}
-      {!compact && layout.nodes.map((n) => (
-        <div
-          key={`label-${n.id}`}
-          className="tr4de-sankeygraph-part"
-          onMouseEnter={() => setHover(n.id)}
-          onMouseLeave={() => setHover(null)}
-          style={{
-            position: "absolute",
-            top: n.labelY,
-            left: n.labelX,
-            transform: n.labelSide === "before"
-              ? "translate(-100%, -50%)"
-              : "translateY(-50%)",
-            maxWidth: "26%",
-            padding: "2px 8px",
-            borderRadius: 7,
-            background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 84%, transparent)",
-            border: `1px solid color-mix(in srgb, var(--color-border, #E5E5E5) 70%, transparent)`,
-            fontSize: 12,
-            lineHeight: "17px",
-            color: T.text,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            opacity: dim(n.id) ? 0.3 : 1,
-            transition: "opacity 160ms var(--ease-out, ease)",
-            cursor: "default",
-            pointerEvents: "auto",
-          }}
-        >
-          {labelOf(n.id)}
-          <span style={{ color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
-            {" : "}{formatValue(n.value)}
-          </span>
-        </div>
-      ))}
+      {/* Les libellés, posés aux coordonnées du dessin : le nom, puis le montant
+          sur une deuxième ligne. Deux lignes plutôt qu'une : « Alimentation :
+          150,00 € » se coupait au milieu du nom dès que la gouttière était
+          étroite, et c'est le nom qu'on lit en premier. Le montant, lui, s'aligne
+          d'une branche à l'autre en chiffres tabulaires.
+
+          Ils ne réagissent plus au survol (cf. en-tête) : ils portent déjà tout
+          ce qu'un survol aurait montré. */}
+      {!compact && layout.nodes.map((n) => {
+        const centre = n.labelSide === "centre";
+        const before = n.labelSide === "before";
+        return (
+          <div
+            key={`label-${n.id}`}
+            className="tr4de-sankeygraph-part"
+            style={{
+              position: "absolute",
+              top: n.labelY,
+              left: n.labelX,
+              transform: before
+                ? "translate(-100%, -50%)"
+                : centre
+                  ? "translate(-50%, -50%)"
+                  : "translateY(-50%)",
+              maxWidth: GUTTER - 8,
+              textAlign: before ? "right" : centre ? "center" : "left",
+              /* Le libellé du milieu se pose SUR sa barre : il lui faut un fond,
+                 sinon le texte se lit par-dessus le nœud et les rubans. Ceux des
+                 gouttières sont sur du blanc, ils n'en ont pas besoin. */
+              ...(centre ? {
+                padding: "3px 10px",
+                borderRadius: 8,
+                background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 88%, transparent)",
+                border: `1px solid color-mix(in srgb, var(--color-border, #E5E5E5) 70%, transparent)`,
+              } : null),
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{
+              fontSize: 12, lineHeight: "16px", fontWeight: centre ? 600 : 500, color: T.text,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              {labelOf(n.id)}
+            </div>
+            <div style={{
+              fontSize: 12, lineHeight: "16px", color: T.textSub,
+              fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+            }}>
+              {formatValue(n.value)}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

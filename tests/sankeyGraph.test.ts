@@ -146,15 +146,30 @@ describe("Géométrie du diagramme de flux multi-niveaux", () => {
     expect(ys[ys.length - 1]).toBeLessThanOrEqual(OPTS.padTop + OPTS.height + 0.01);
   });
 
-  it("pose la pastille à droite en première colonne, à gauche ensuite", () => {
-    /* La première colonne n'a rien à sa gauche ; partout ailleurs la pastille se
-       pose au bout des rubans qui arrivent, contre le nœud. */
+  it("range les libellés dans les gouttières, et centre ceux du milieu", () => {
+    /* Les noms sortent du dessin : à gauche pour la colonne d'où part le flux, à
+       droite pour celle où il aboutit. Les colonnes du milieu n'ont pas de
+       gouttière où se ranger — leur libellé se centre sur la barre. */
     const source = boxOf("in:salary");
+    const hub = boxOf("hub");
     const leaf = boxOf("sub:rent");
-    expect(source.labelSide).toBe("after");
-    expect(source.labelX).toBeGreaterThan(source.x + source.w);
-    expect(leaf.labelSide).toBe("before");
-    expect(leaf.labelX).toBeLessThan(leaf.x);
+
+    expect(source.labelSide).toBe("before");
+    expect(source.labelX).toBeLessThan(source.x);
+    expect(leaf.labelSide).toBe("after");
+    expect(leaf.labelX).toBeGreaterThan(leaf.x + leaf.w);
+    expect(hub.labelSide).toBe("centre");
+    expect(hub.labelX).toBeCloseTo(hub.x + hub.w / 2, 1);
+  });
+
+  it("réserve la place des libellés sur la largeur du dessin", () => {
+    /* Sans gouttières, la première colonne colle au bord gauche et son nom sort
+       de la carte. Avec, le dessin rétrécit d'autant des deux côtés. */
+    const gutter = 120;
+    const { nodes } = sankeyGraphLayout(NODES, LINKS, { ...OPTS, gutter });
+    const xs = nodes.map((n) => n.x);
+    expect(Math.min(...xs)).toBeCloseTo(gutter, 1);
+    expect(Math.max(...xs) + OPTS.nodeW).toBeCloseTo(OPTS.width - gutter, 1);
   });
 
   it("ignore un lien dont un bout n'existe pas plutôt que d'échouer", () => {

@@ -65,10 +65,12 @@ const tx = (date: string, label: string, amount: number, kind = "card") => ({
   pending: false,
 });
 
-/* Au 14 août, la fenêtre d'un mois couvre le 16 juillet → 14 août.
-     dépenses de la fenêtre : 100 + 50 (Carrefour) + 20 (Netflix) + 80 (EDF) = 250
-     entrées de la fenêtre   : 1 800 (salaire) + 40 (remboursement)           = 1 840
-     donc 1 590 de reste, et le 1er juillet comme le 16 juin restent dehors.
+/* Au 14 août, la fenêtre d'un mois est le MOIS EN COURS : du 1er au 14 août.
+     dépenses de la fenêtre : 100 + 50 (Carrefour) + 20 (Netflix)  = 170
+     entrées de la fenêtre   : 1 800 (salaire) + 40 (remboursement) = 1 840
+     donc 1 670 de reste. Le prélèvement EDF du 20 juillet est DEHORS, comme le
+     1er juillet et le 16 juin — c'est ce qui distingue le mois civil des trente
+     derniers jours, et plusieurs cas ci-dessous ne tiennent qu'à ça.
 
      Le remboursement est VOLONTAIREMENT générique : dès qu'un libellé porte un
      poste de dépense (« CPAM », « pharmacie »), le crédit reste déduit de ce
@@ -122,29 +124,33 @@ describe("Page Cashflow", () => {
   it("donne les trois chiffres du flux sur la fenêtre", () => {
     render(<CashflowPage setPage={() => {}} />);
 
-    /* La fenêtre d'un mois s'arrête au 16 juillet : les 100 € du 1er juillet et
-       les 30 € du 16 juin n'en font pas partie. */
+    /* La fenêtre d'un mois commence le 1er août : rien de juillet n'y entre. */
     /* Chaque chiffre paraît plusieurs fois, et c'est voulu : comme onglet sous le
        diagramme, comme centre de l'anneau quand c'est lui qu'il détaille, et
        « Reste » aussi comme dernière branche du flux — c'est là qu'on voit qu'il
        en fait partie. */
     expect(screen.getAllByText("Money out").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Left over/).length).toBeGreaterThan(0);
-    expect(pageText()).toMatch(/250\.00/);   // dépensé
+    expect(pageText()).toMatch(/170\.00/);   // dépensé
     expect(pageText()).toMatch(/1,840\.00/); // encaissé
-    expect(pageText()).toMatch(/1,590\.00/); // reste
-    expect(pageText()).not.toMatch(/380\.00/);
+    expect(pageText()).toMatch(/1,670\.00/); // reste
+    /* 250, c'est ce que donnait la fenêtre glissante de trente jours, EDF
+       compris : le voir ici voudrait dire que le calage sur le mois a sauté. */
+    expect(pageText()).not.toMatch(/250\.00/);
   });
 
   it("répartit les dépenses par poste, du plus lourd au plus léger", () => {
     render(<CashflowPage setPage={() => {}} />);
 
-    // 150 sur 250 = 60 % pour l'alimentation, 80 → 32 %, 20 → 8 %.
-    expect(pageText()).toMatch(/60 %/);
+    // 150 sur 170 = 88 % pour l'alimentation, 20 → 12 %.
+    expect(pageText()).toMatch(/88 %/);
     /* Chaque poste est nommé deux fois, et c'est voulu : une fois en libellé de sa
        branche du flux, une fois dans le tableau qui le chiffre. */
-    expect(screen.getAllByText(cat("utilities")).length).toBe(2);
+    expect(screen.getAllByText(cat("food")).length).toBe(2);
     expect(screen.getAllByText(cat("subscriptions")).length).toBe(2);
+    /* L'électricité est un poste du mois DERNIER : elle n'a rien à faire dans
+       celui-ci, ni en branche du flux ni en ligne de tableau. */
+    expect(screen.queryAllByText(cat("utilities"))).toHaveLength(0);
   });
 
   it("répartit les entrées par source", () => {
@@ -197,11 +203,13 @@ describe("Page Cashflow", () => {
   it("déplie la suite des dernières opérations sur place", () => {
     render(<CashflowPage setPage={() => {}} />);
 
-    /* Six opérations dans la fenêtre, cinq montrées : le débit du 20 juillet est
-       le seul qui reste, et le bouton dit combien il en apporte. */
+    /* Sur trois mois — juin, juillet, août —, les huit opérations du relevé sont
+       dans la fenêtre : cinq montrées, trois à déplier, et le bouton dit
+       combien il en apporte. */
+    fireEvent.click(screen.getByRole("button", { name: "3M" }));
     expect(edfDansLaListe()).toBe(false);
 
-    fireEvent.click(screen.getByText("Show more (1)"));
+    fireEvent.click(screen.getByText("Show more (3)"));
 
     expect(edfDansLaListe()).toBe(true);
     /* Tout est déplié : le bouton rend la liste à sa taille de départ plutôt que
@@ -218,8 +226,8 @@ describe("Page Cashflow", () => {
     render(<CashflowPage setPage={() => {}} />);
 
     expect(screen.getByRole("tab", { name: /Money in/ }).textContent).toContain("1,840.00");
-    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("250.00");
-    expect(screen.getByRole("tab", { name: /Available/ }).textContent).toContain("1,590.00");
+    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("170.00");
+    expect(screen.getByRole("tab", { name: /Available/ }).textContent).toContain("1,670.00");
     /* Carrefour revient en juillet ET en août pour 100 € : c'est la seule
        contrepartie de ce relevé dont le montant tienne d'un mois sur l'autre.
        Les 50 € du 1er août sont bien du même marchand, mais la récurrence se
@@ -230,17 +238,18 @@ describe("Page Cashflow", () => {
   it("déplace la fenêtre sans changer sa longueur", () => {
     render(<CashflowPage setPage={() => {}} />);
 
-    // La fenêtre d'un mois s'arrête aujourd'hui : il n'y a pas de « suivante ».
+    // Le mois en cours s'arrête aujourd'hui : il n'y a pas de « suivante ».
     expect((screen.getByLabelText("Next window") as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("Jul 16 – Aug 14")).toBeTruthy();
+    expect(screen.getByText("Aug 1 – Aug 14")).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText("Previous window"));
 
-    /* Reculée d'exactement sa longueur : les deux fenêtres se suivent sans se
-       chevaucher ni laisser de trou. Entrent les 100 € du 1er juillet et les
-       30 € du 16 juin ; tout ce qui était compté au-dessus sort. */
-    expect(screen.getByText("Jun 16 – Jul 15")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("130.00");
+    /* Reculée d'un mois CIVIL entier — juillet du 1er au 31, et non trente jours
+       de plus en arrière. Les deux fenêtres se suivent sans se chevaucher ni
+       laisser de trou. Entrent le prélèvement du 20 (80 €) et les courses du
+       1er (100 €) ; tout ce qui était compté au-dessus sort. */
+    expect(screen.getByText("Jul 1 – Jul 31")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("180.00");
     expect((screen.getByLabelText("Next window") as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -262,14 +271,18 @@ describe("Page Cashflow", () => {
   it("classe les enseignes reconnues par montant", () => {
     render(<CashflowPage setPage={() => {}} />);
 
+    /* Sur trois mois : le relevé n'a qu'une enseigne par poste sur le seul mois
+       en cours, et un classement de deux lignes ne dit rien d'un classement. */
+    fireEvent.click(screen.getByRole("button", { name: "3M" }));
+
     const titre = screen.getByText("Merchants");
     /* Le bloc entier, titre compris : les noms d'enseignes paraissent aussi dans
        les dernières opérations juste au-dessus, et l'ordre qu'on teste ici est
        celui du classement, pas celui du relevé. */
     const bloc = titre.closest("div")?.parentElement as HTMLElement;
 
-    /* Carrefour (100 €) devant EDF (80 €) devant Netflix (20 €). Le second passage
-       Carrefour n'y est pas : « CARREFOURCITY4979 » n'est pas reconnu comme
+    /* Carrefour (200 € en deux passages) devant EDF (80 €) devant Netflix (20 €).
+       Le passage « CARREFOURCITY4979 » n'y est pas : il n'est pas reconnu comme
        enseigne, alors que le POSTE l'attrape — les deux tables ne nettoient pas le
        libellé pareil. Il compte donc dans l'alimentation, pas dans l'enseigne. */
     const names = within(bloc).getAllByText(/^(Carrefour|EDF|Netflix)$/).map((n) => n.textContent);

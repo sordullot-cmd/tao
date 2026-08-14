@@ -168,9 +168,11 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
         alignItems: "stretch",
       }}
     >
-      <section style={{ ...CARD, padding: "20px 24px 0", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{t("cashflow.title")}</div>
-
+      {/* Sans titre dans la carte : le diagramme se reconnaît sans qu'on le
+          nomme, et l'anneau d'à côté porte déjà son propos au centre. Deux
+          intitulés de plus ne faisaient qu'éloigner les figures du haut de la
+          page. */}
+      <section style={{ ...CARD, padding: "16px 24px 0", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
         <SankeyGraph
           nodes={flowNodes}
           links={flow.links}
@@ -220,7 +222,6 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
       </section>
 
       <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 12, minWidth: 0, height: "100%" }}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{t("budget.distribution")}</div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
         <AllocationChart
           parts={ring.parts}

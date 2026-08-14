@@ -56,6 +56,7 @@ import { depthOf, withinDays, ALL_DAYS } from "@/lib/bank/transactions";
 import { categoryLabelKey, spendingByCategory, spendingPalette } from "@/lib/bank/categories";
 import { incomeBySource } from "@/lib/bank/cashflow";
 import { reconstructHistory } from "@/lib/patrimoineHistory";
+import { periodDays } from "@/lib/ui/period";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import {
@@ -66,7 +67,15 @@ import {
    patrimoine se lit aussi en entier, c'est même sa vue la plus parlante tant
    qu'il ne compte que quelques semaines de points. */
 const HISTORY_PERIODS = [...PERIODS, { id: PERIOD_ALL }];
-const daysOfPeriod = (id) => PERIODS.find((p) => p.id === id)?.days ?? null;
+
+/** « août 2026 » — le mois en cours, dans la langue du système. */
+function monthLabel(today = new Date()) {
+  try {
+    return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(today);
+  } catch {
+    return `${today.getMonth() + 1}/${today.getFullYear()}`;
+  }
+}
 
 export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelectedClassSlug }) {
   useLang();
@@ -150,7 +159,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
      n'y a rien à demander de plus, c'est le minimum que l'API rend de toute
      façon, et redescendre ne doit jamais coûter une requête. */
   const depth = React.useMemo(() => {
-    const d = daysOfPeriod(period);
+    const d = periodDays(period);
     if (d == null) return ALL_DAYS;             // « Tout » : tout ce que la banque rend
     return depthOf(d) <= 90 ? 90 : d;
   }, [period]);
@@ -179,7 +188,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
     () => toChartPoints(reconstructHistory(assets, {
       txByAssetId,
       measured: store.history,
-      days: daysOfPeriod(period),
+      days: periodDays(period),
       gross: view === "brut",
     })),
     [assets, txByAssetId, store.history, period, view],
@@ -190,7 +199,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   const points = React.useMemo(() => windowSeries(allPoints, period), [allPoints, period]);
   // Variation sur la fenêtre affichée, lue sur les points eux-mêmes.
   const change = React.useMemo(
-    () => historyChange(points, daysOfPeriod(period)),
+    () => historyChange(points, periodDays(period)),
     [points, period],
   );
 
@@ -471,25 +480,23 @@ function PeriodChange({ change, period }) {
  * au survol, au centre. C'est le prix de la demi-largeur, et le détail chiffré
  * est sur la page Cashflow, à un clic de là.
  *
- * La fenêtre est libre — 1S à 1A, ou tout l'historique que les banques rendent.
- * Elle est demandée à la MÊME profondeur que la courbe du patrimoine plus haut,
- * et sert donc le même cache : changer de fenêtre ici ne redemande à la banque
- * que ce qu'elle n'a pas encore donné, et jamais deux fois la même chose.
+ * La fenêtre est FIXE : le mois en cours, du 1er à aujourd'hui. C'est celle du
+ * budget d'à côté — un plan mensuel en face de trois mois de dépenses n'aurait
+ * rien dit —, et elle se sert dans le cache que la courbe du patrimoine remplit
+ * déjà : ce bloc ne coûte aucune requête de plus.
  *
  * Rien ne s'affiche sans compte agrégé : la répartition des dépenses n'a pas de
  * saisie manuelle derrière elle, un état vide serait un contrôle sans matière.
  */
 function SpendingByCategory({ accounts }) {
-  /* La fenêtre suit le COMPTE, comme celle de la courbe : quelqu'un qui suit
-     son mois en cours ne doit pas retrouver « 3 mois » à chaque visite. Un mois
-     par défaut — c'est le pas auquel un budget se pense. */
-  const [rawPeriod, setPeriod] = useCloudState(
-    "tr4de_patrimoine_spend_period", "patrimoine_spend_period", "1M",
-  );
-  const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : "1M";
-  const days = daysOfPeriod(period) ?? ALL_DAYS;
+  /* Le MOIS EN COURS, et rien d'autre : la carte d'à côté montre un budget
+     mensuel, et deux fenêtres différentes côte à côte donnaient deux chiffres
+     qu'on croyait comparables. Les pastilles qui la réglaient sont donc parties
+     — le reste du relevé se découpe sur la page Cashflow, qui a la place de dire
+     de quelle fenêtre elle parle. */
+  const days = periodDays("1M");
   // Même règle que la courbe : sous 90 jours il n'y a rien de plus à demander.
-  const depth = days === ALL_DAYS ? ALL_DAYS : depthOf(days) <= 90 ? 90 : days;
+  const depth = depthOf(days) <= 90 ? 90 : days;
 
   const uids = React.useMemo(() => accounts.map((a) => a.uid), [accounts]);
   const { byUid, loading } = useBankTransactionsAll(uids, depth);
@@ -548,18 +555,9 @@ function SpendingByCategory({ accounts }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <SectionTitle
-        size="sm"
-        action={
-          <PeriodPills
-            value={period}
-            onChange={setPeriod}
-            options={HISTORY_PERIODS.map((p) =>
-              p.id === PERIOD_ALL ? { ...p, label: t("patrimoine.periodAll") } : p,
-            )}
-          />
-        }
-      >
+      {/* Le mois affiché est ÉCRIT, faute d'être choisi : sans pastilles, rien
+          d'autre ne dit de quelle période le total parle. */}
+      <SectionTitle size="sm" action={<span style={{ fontSize: 13, color: T.textMut }}>{monthLabel()}</span>}>
         {t("patrimoine.spending.title")}
       </SectionTitle>
 

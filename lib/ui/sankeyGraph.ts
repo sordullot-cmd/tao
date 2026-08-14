@@ -62,13 +62,17 @@ export interface SankeyGraphNodeBox {
   w: number;
   h: number;
   /**
-   * Où poser la pastille du libellé : `after` à droite du nœud, `before` à sa
-   * gauche. La première colonne n'a rien à sa gauche et prend `after` ; partout
-   * ailleurs la pastille se pose AU BOUT des rubans qui arrivent, contre le
-   * nœud — c'est là que l'œil cherche le nom de ce qu'il vient de suivre.
+   * Où poser le libellé :
+   *   `before` — dans la gouttière de GAUCHE, aligné à droite contre le nœud.
+   *              C'est la première colonne, celle d'où part le flux ;
+   *   `after`  — dans la gouttière de DROITE, aligné à gauche. C'est la dernière
+   *              colonne, celle où il aboutit ;
+   *   `centre` — centré sur la barre. Les colonnes du milieu n'ont pas de
+   *              gouttière : leur nom se pose sur le nœud lui-même.
    */
-  labelSide: "before" | "after";
-  /** Bord de la pastille du côté du nœud : le texte part de là, vers l'extérieur. */
+  labelSide: "before" | "after" | "centre";
+  /** Ancre horizontale du libellé : le bord d'où il part, ou le milieu de la
+   *  barre pour un libellé centré. */
   labelX: number;
   /** Hauteur de la pastille, une fois les voisines écartées (cf. `labelGap`). */
   labelY: number;
@@ -125,8 +129,11 @@ export interface SankeyGraphOptions {
   minBand?: number;
   /** Marge au-dessus du dessin. */
   padTop?: number;
-  /** Écart entre le bord du nœud et sa pastille. */
+  /** Écart entre le bord du nœud et son libellé. */
   labelPad?: number;
+  /** Place réservée aux libellés, à gauche et à droite. 0 = pas de gouttières,
+   *  le dessin prend toute la largeur (régime compact). */
+  gutter?: number;
   /**
    * Hauteur d'une pastille : deux voisines d'une même colonne ne s'approchent
    * pas plus que ça. 0 = pas d'écartement, chaque pastille reste sur son nœud.
@@ -266,7 +273,7 @@ export function sankeyGraphLayout(
   links: SankeyGraphLink[],
   {
     width, height, nodeW = 10, nodeGap = 14, minBand = 3,
-    padTop = 0, labelPad = 10, labelGap = 0,
+    padTop = 0, labelPad = 10, labelGap = 0, gutter = 0,
   }: SankeyGraphOptions,
 ): SankeyGraphLayout {
   const byId = new Map<string, Work>();
@@ -347,7 +354,10 @@ export function sankeyGraphLayout(
   );
   if (!Number.isFinite(scale) || scale <= 0) return empty;
 
-  const colX = (k: number): number => (maxCol === 0 ? 0 : (k * (width - nodeW)) / maxCol);
+  /* Les colonnes se répartissent sur ce qui reste une fois les gouttières
+     retirées : le dessin rétrécit, les noms ne débordent plus. */
+  const span = Math.max(width - 2 * gutter - nodeW, 1);
+  const colX = (k: number): number => (maxCol === 0 ? gutter : gutter + (k * span) / maxCol);
 
   /* Balayage GAUCHE→DROITE : on ordonne chaque colonne d'après la hauteur déjà
      fixée de la précédente, puis on l'empile. Sur un arbre, ça suffit à ne
@@ -478,7 +488,12 @@ export function sankeyGraphLayout(
       padTop + height - labelGap / 2,
     );
     live.forEach((n, i) => {
-      const before = n.column > 0;
+      const side = n.column === 0 ? "before" : n.column === maxCol ? "after" : "centre";
+      const labelX = side === "before"
+        ? n.x - labelPad
+        : side === "after"
+          ? n.x + nodeW + labelPad
+          : n.x + nodeW / 2;
       boxes.push({
         id: n.id,
         color: n.color,
@@ -488,8 +503,8 @@ export function sankeyGraphLayout(
         y: round2(n.y),
         w: nodeW,
         h: round2(n.h),
-        labelSide: before ? "before" : "after",
-        labelX: round2(before ? n.x - labelPad : n.x + nodeW + labelPad),
+        labelSide: side,
+        labelX: round2(labelX),
         labelY: round2(ys[i]),
         centreY: round2(n.y + n.h / 2),
       });
