@@ -3,6 +3,15 @@
 /**
  * Budget type — plusieurs plans nommés de répartition du revenu mensuel.
  *
+ * C'était une page à soi (« Budget »), c'est maintenant le DERNIER bloc de la
+ * page Cashflow : le flux réel se lit d'abord, le plan qu'on se donne ensuite.
+ * Les deux ne se comparaient pas quand ils vivaient dans deux entrées de
+ * navigation — on ne les avait jamais sous les yeux en même temps.
+ *
+ * Le bloc n'a donc plus d'en-tête de page ni de marge haute : c'est la page qui
+ * les porte. Tout le reste est inchangé, la persistance comprise (même store,
+ * mêmes clés) — un plan saisi avant la fusion se retrouve tel quel.
+ *
  * Pour chaque plan : un revenu mensuel, puis des catégories qui ont chacune
  * l'un de DEUX modes (voir `pctOf` / `amountOf`) :
  *   — part en % du revenu (défaut) : le montant suit le revenu ;
@@ -188,7 +197,7 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
   );
 }
 
-export default function BudgetPage() {
+export default function BudgetPlanner() {
   useLang();
   const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -289,14 +298,14 @@ export default function BudgetPage() {
   const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* En « sm » : le bloc n'est plus une page, c'est une section parmi
+              celles de la page Cashflow, et le 24 px prenait le dessus sur le
+              flux réel qu'on lit au-dessus. */}
           <SectionTitle
+            size="sm"
             action={
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 <GhostButton

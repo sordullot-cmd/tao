@@ -19,7 +19,7 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
   },
 }));
 
-import BudgetPage from "@/components/pages/BudgetPage";
+import BudgetPlanner from "@/components/pages/BudgetPlanner";
 
 /** Champ « part en % » d'une catégorie, repéré par son libellé accessible. */
 const pctField = (name: string) =>
@@ -32,7 +32,7 @@ const incomeField = () => screen.getByPlaceholderText("2000") as HTMLInputElemen
 describe("Page Budget", () => {
   it("déduit le montant du pourcentage, et le reste non alloué", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     // Revenu par défaut 2000, épargne à 20 % → 400.
     const amount = screen.getByLabelText("Savings & investing amount") as HTMLInputElement;
@@ -45,7 +45,7 @@ describe("Page Budget", () => {
 
   it("annonce le dépassement au-delà de 100 %", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     fireEvent.change(pctField("Housing & bills"), { target: { value: "60" } });
 
@@ -56,7 +56,7 @@ describe("Page Budget", () => {
 
   it("recalcule le pourcentage quand on saisit un montant", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     // 500 € sur 2000 € de revenu → 25 %.
     fireEvent.change(screen.getByLabelText("Transport amount"), { target: { value: "500" } });
@@ -68,7 +68,7 @@ describe("Page Budget", () => {
      — c'est la part en % qui s'ajuste. */
   it("garde les montants saisis quand le revenu change", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     /* La valeur saisie doit DIFFÉRER de celle déjà affichée (30 % de 2000 = 600) :
        sur un champ contrôlé, fireEvent.change à valeur identique n'émet aucun
@@ -89,7 +89,7 @@ describe("Page Budget", () => {
 
   it("libère un montant figé quand on saisit une part en pourcentage", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     const transport = () => screen.getByLabelText("Transport amount") as HTMLInputElement;
     fireEvent.change(transport(), { target: { value: "500" } });
@@ -107,7 +107,7 @@ describe("Page Budget", () => {
      donc figer la somme d'un clic, sans avoir à retaper la valeur affichée. */
   it("fige une catégorie d'un clic sur le cadenas", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     fireEvent.click(
       screen.getByLabelText("Lock Leisure & going out's amount (it will stop following income)")
@@ -123,7 +123,7 @@ describe("Page Budget", () => {
      La page doit donc l'annoncer avant, sinon la commande reste invisible. */
   it("nomme la colonne du cadenas et explique son effet dès l'arrivée", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     expect(screen.getByText("Lock")).toBeTruthy();
     expect(screen.getByText(/Close its padlock/)).toBeTruthy();
@@ -131,7 +131,7 @@ describe("Page Budget", () => {
 
   it("crée un budget supplémentaire et bascule dessus", () => {
     cloudStore.clear();
-    render(<BudgetPage />);
+    render(<BudgetPlanner />);
 
     fireEvent.click(screen.getByRole("button", { name: "New" }));
 

@@ -1,0 +1,222 @@
+/**
+ * Cashflow — ce qui entre, ce qui sort, ce qu'il reste.
+ *
+ * `lib/bank/categories` répond déjà à « où part l'argent » : elle répartit les
+ * DÉBITS par poste. Le flux d'un mois demande deux choses de plus, et c'est tout
+ * ce que ce module ajoute :
+ *   — d'où vient l'argent, source par source ;
+ *   — la mise en balance des deux côtés, pour qu'un diagramme de flux se
+ *     dessine sans mentir.
+ *
+ * La règle du partage entre entrée et dépense est celle de `categories`, pas une
+ * nouvelle : une opération dont le poste est « revenus » est une ENTRÉE ; un
+ * crédit qu'une règle de dépense a reconnu (remboursement de pharmacie, avoir
+ * d'un marchand) reste sur SON poste, en déduction. Sans quoi le même euro
+ * gonflerait à la fois les entrées et les dépenses du mois.
+ *
+ * Conséquence assumée : un virement reçu d'un particulier (« VIR SEPA RECU DE
+ * M. MARTIN ») tombe dans le poste « virements » et vient en déduction de ce
+ * poste, plutôt que d'apparaître comme une entrée. C'est le comportement de
+ * l'anneau des dépenses depuis toujours ; le changer ici ferait dire deux choses
+ * différentes à deux graphiques de la même page.
+ *
+ * ── La mise en balance ─────────────────────────────────────────────────────
+ * Un diagramme de flux CONSERVE : ce qui entre à gauche ressort à droite. Le
+ * relevé, lui, ne s'équilibre jamais tout seul. On ferme donc le bilan par un
+ * nœud, et un seul :
+ *   — entrées > dépenses ⇒ un nœud de sortie « reste » ;
+ *   — dépenses > entrées ⇒ un nœud d'entrée « puisé sur le solde ».
+ * Le second n'est pas une faute de lecture : payer plus que ce qu'on encaisse
+ * dans la fenêtre est courant (un mois à deux loyers, un achat sur l'épargne).
+ * Le nommer vaut mieux que de laisser un diagramme déséquilibré.
+ *
+ * Module PUR : pas de React, pas de `t()`. Les nœuds portent un `kind` et un
+ * `id` ; c'est l'appelant qui les nomme, parce que les libellés dépendent de la
+ * langue et que ce module est testé sans dictionnaire.
+ */
+
+import {
+  categoryColor, incomeColor, parentOfSub, subcategorizeTransaction,
+  spendingByCategory,
+  type CategorizableTransaction, type SpendingSubcategory,
+} from "@/lib/bank/categories";
+
+/** Ce qu'un nœud du flux représente — l'appelant en tire son libellé. */
+export type FlowKind =
+  /** Une source de revenus : `id` est un sous-poste de « revenus ». */
+  | "income"
+  /** Un poste de dépense : `id` est un poste de `SPENDING_CATEGORIES`. */
+  | "category"
+  /** Un nœud de synthèse : `more`, `left` ou `draw`. Voir `FlowSynthetic`. */
+  | "synthetic";
+
+/** Les trois nœuds que ce module fabrique lui-même. */
+export type FlowSynthetic =
+  /** Les postes écrêtés, regroupés — `count` porte leur NOMBRE de postes. */
+  | "more"
+  /** Ce qui n'a pas été dépensé sur la fenêtre. */
+  | "left"
+  /** Ce qui a été dépensé en plus de ce qui est entré. */
+  | "draw";
+
+export interface FlowNode {
+  id: string;
+  kind: FlowKind;
+  color: string;
+  /** Toujours POSITIF : un flux se dessine dans un sens, pas en négatif. */
+  amount: number;
+  /** Nombre d'opérations — de postes pour le nœud « more », 0 pour les autres. */
+  count: number;
+}
+
+export interface IncomeSlice {
+  /** Sous-poste de « revenus » : `income.salary`, ou `income` pour le divers. */
+  id: SpendingSubcategory;
+  color: string;
+  amount: number;
+  count: number;
+  /** Part du total encaissé, en %. */
+  pct: number;
+}
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/* Un flux sous ce seuil ne se dessine plus et n'apprend rien : deux centimes de
+   régularisation feraient un nœud de plus dans le diagramme et une ligne de plus
+   dans la liste. Ils restent comptés dans les totaux. */
+const CRUMB = 0.5;
+
+/**
+ * Entrées d'argent réparties par source, de la plus grosse à la plus petite.
+ *
+ * Seules comptent les opérations dont le POSTE est « revenus » (cf. en-tête).
+ * Un débit classé là — cas théorique, aucune règle ne le produit — est ignoré
+ * plutôt que compté en négatif : une source de revenus qui retire de l'argent
+ * n'a pas de sens dans un flux.
+ */
+export function incomeBySource(txs: CategorizableTransaction[]): {
+  slices: IncomeSlice[];
+  total: number;
+  count: number;
+} {
+  const sums = new Map<string, { amount: number; count: number }>();
+  let count = 0;
+
+  for (const tx of txs) {
+    if (tx.amount <= 0) continue;
+    const sub = subcategorizeTransaction(tx);
+    if (parentOfSub(sub) !== "income") continue;
+    const bucket = sums.get(sub) ?? { amount: 0, count: 0 };
+    bucket.amount += tx.amount;
+    bucket.count += 1;
+    sums.set(sub, bucket);
+    count += 1;
+  }
+
+  const rows = [...sums.entries()]
+    .map(([id, b]) => ({ id, color: incomeColor(id), amount: round2(b.amount), count: b.count }))
+    .filter((r) => r.amount >= CRUMB)
+    .sort((a, b) => b.amount - a.amount);
+
+  const total = round2(rows.reduce((s, r) => s + r.amount, 0));
+
+  return {
+    slices: rows.map((r) => ({ ...r, pct: total > 0 ? (r.amount / total) * 100 : 0 })),
+    total,
+    count,
+  };
+}
+
+/* Teintes des nœuds de synthèse. Elles ne sortent pas de la palette des postes :
+   ces trois nœuds ne SONT pas des postes, et une couleur de poste leur donnerait
+   l'air d'en être un. Gris pour ce qui est agrégé ou non dépensé, terre cuite
+   pour le découvert — la seule des trois qui mérite d'être vue. */
+const SYNTHETIC_COLORS: Record<FlowSynthetic, string> = {
+  more: "#A8B0B8",
+  left: "#B9C2CB",
+  draw: "#C05A46",
+};
+
+export interface CashflowOptions {
+  /** Postes de dépense montrés à part. Au-delà, ils sont regroupés en « more ». */
+  topOutflows?: number;
+  /** Sources de revenus montrées à part. Au-delà, elles sont regroupées aussi. */
+  topInflows?: number;
+}
+
+export interface Cashflow {
+  /** Sources, du plus gros au plus petit, « puisé sur le solde » en dernier. */
+  inflows: FlowNode[];
+  /** Postes, du plus gros au plus petit, « reste » en dernier. */
+  outflows: FlowNode[];
+  /** Total encaissé sur la fenêtre. */
+  income: number;
+  /** Total dépensé, net des remboursements. */
+  spent: number;
+  /** `income - spent` — négatif quand on a dépensé plus qu'encaissé. */
+  net: number;
+  /** Somme de chaque côté du diagramme, les deux étant égales par construction. */
+  total: number;
+}
+
+/**
+ * Le flux d'une fenêtre, prêt à dessiner : deux listes équilibrées.
+ *
+ * L'écrêtage n'est pas cosmétique : il y a vingt-huit postes et le diagramme
+ * n'en distingue pas vingt-huit. Les plus petits sont donc regroupés sous un
+ * nœud unique, qui dit COMBIEN de postes il rassemble — un « autres » muet
+ * laisserait croire à un poste réel. La liste complète, elle, reste sous le
+ * diagramme : rien n'est caché, seulement rassemblé.
+ */
+export function buildCashflow(
+  txs: CategorizableTransaction[],
+  { topOutflows = 8, topInflows = 5 }: CashflowOptions = {},
+): Cashflow {
+  const { slices: spending, total: spent } = spendingByCategory(txs);
+  const { slices: incomes, total: income } = incomeBySource(txs);
+
+  const inflows = clip(
+    incomes.map<FlowNode>((s) => ({
+      id: s.id, kind: "income", color: s.color, amount: s.amount, count: s.count,
+    })),
+    topInflows,
+  );
+
+  const outflows = clip(
+    spending
+      .filter((s) => s.amount >= CRUMB)
+      .map<FlowNode>((s) => ({
+        id: s.id, kind: "category", color: categoryColor(s.id), amount: s.amount, count: s.count,
+      })),
+    topOutflows,
+  );
+
+  /* La fermeture du bilan. Sous le seuil des miettes on ne l'ajoute pas : un
+     nœud « reste : 0,12 € » ne dit rien et prend une ligne dans la légende. */
+  const net = round2(income - spent);
+  if (net >= CRUMB) outflows.push(synthetic("left", net));
+  else if (net <= -CRUMB) inflows.push(synthetic("draw", -net));
+
+  const total = round2(Math.max(
+    inflows.reduce((s, n) => s + n.amount, 0),
+    outflows.reduce((s, n) => s + n.amount, 0),
+  ));
+
+  return { inflows, outflows, income, spent, net, total };
+}
+
+const synthetic = (id: FlowSynthetic, amount: number, count = 0): FlowNode => ({
+  id, kind: "synthetic", color: SYNTHETIC_COLORS[id], amount: round2(amount), count,
+});
+
+/** Les `top` premiers nœuds, la queue regroupée sous « more » quand il y en a
+ *  plus d'un à regrouper — sinon le nœud « more » remplacerait un poste nommé
+ *  par un « + 1 autre poste », ce qui ne fait que perdre son nom. */
+function clip(nodes: FlowNode[], top: number): FlowNode[] {
+  if (nodes.length <= top + 1) return nodes;
+  const head = nodes.slice(0, top);
+  const tail = nodes.slice(top);
+  const amount = tail.reduce((s, n) => s + n.amount, 0);
+  head.push(synthetic("more", amount, tail.length));
+  return head;
+}

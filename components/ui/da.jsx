@@ -140,6 +140,10 @@ export function AllocationChart({
   centreLabel,
   centreValue,
   centreTone,
+  /* Part en % sous le montant du centre. À couper quand les parts couvrent tout
+     le total affiché : la ligne dirait alors « 100 % » en permanence, ce qui
+     n'apprend rien et fait un troisième étage au centre de l'anneau. */
+  showPct = true,
   formatValue = (v) => String(Math.round(v)),
 }) {
   const [hover, setHover] = React.useState(null);
@@ -240,9 +244,11 @@ export function AllocationChart({
           }}>
             {formatValue(shown ? shown.amount : centreValue)}
           </span>
-          <span style={{ fontSize: 11, lineHeight: 1.1, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
-            {Math.round((shown ? shown.pct : live.reduce((s, p) => s + p.pct, 0)) * 10) / 10}%
-          </span>
+          {showPct && (
+            <span style={{ fontSize: 11, lineHeight: 1.1, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+              {Math.round((shown ? shown.pct : live.reduce((s, p) => s + p.pct, 0)) * 10) / 10}%
+            </span>
+          )}
         </div>
       </div>
     </div>

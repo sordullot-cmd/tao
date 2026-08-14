@@ -163,6 +163,19 @@ describe("historique", () => {
     expect(withTodayPoint(history, 1_000)).toBe(history);
   });
 
+  /* Le brut est relevé avec le net : la courbe brute ne peut pas retirer les
+     crédits d'un total net déjà figé, il faut l'avoir gardé le jour même. */
+  it("relève le brut à côté du net quand on le lui donne", () => {
+    const next = withTodayPoint([], -195_000, 5_000);
+    expect(next).toEqual([{ date: dayKey(), total: -195_000, gross: 5_000 }]);
+  });
+
+  it("réécrit le point du jour quand seul le brut a bougé", () => {
+    const history = [{ date: dayKey(), total: 1_000, gross: 1_000 }];
+    expect(withTodayPoint(history, 1_000, 1_000)).toBe(history);
+    expect(withTodayPoint(history, 1_000, 1_200)[0].gross).toBe(1_200);
+  });
+
   it("traduit l'historique dans le contrat de PnlChart (`cum`, pas `total`)", () => {
     expect(toChartPoints([{ date: "2020-01-01", total: 42 }])).toEqual([
       { date: "2020-01-01", cum: 42 },

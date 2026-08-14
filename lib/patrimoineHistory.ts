@@ -52,10 +52,14 @@ export interface ReconstructOptions {
   today?: string;
   /** Profondeur maximale demandée, en jours. `null` = tout ce qu'on peut. */
   days?: number | null;
+  /** Courbe du patrimoine BRUT : les passifs sont écartés, comme dans
+   *  `netWorth().gross`. La courbe finit alors sur le chiffre héros brut. */
+  gross?: boolean;
 }
 
 /**
- * Série quotidienne du patrimoine net, du plus ancien au plus récent.
+ * Série quotidienne du patrimoine, du plus ancien au plus récent — nette par
+ * défaut, brute (crédits masqués) avec `options.gross`.
  *
  * Le dernier point vaut TOUJOURS le patrimoine d'aujourd'hui : la courbe doit
  * finir sur le chiffre héros, sans quoi la page se contredirait elle-même.
@@ -69,16 +73,25 @@ export function reconstructHistory(
     measured = [],
     today = dayKey(),
     days = null,
+    gross = false,
   } = options;
 
   const list = Array.isArray(assets) ? assets : [];
-  const past = Array.isArray(measured) ? [...measured].sort((a, b) => (a.date < b.date ? -1 : 1)) : [];
+  /* En vue brute, un point mesuré ne sert que s'il porte son propre brut :
+     retirer les crédits d'un total net déjà figé est impossible, et réutiliser
+     ce net tel quel ferait plonger la courbe brute sur tout le vieux passé. */
+  const usable = Array.isArray(measured)
+    ? (gross
+      ? measured.filter((p) => typeof p.gross === "number").map((p) => ({ ...p, total: p.gross as number }))
+      : measured)
+    : [];
+  const past = [...usable].sort((a, b) => (a.date < b.date ? -1 : 1));
 
   // Rien à valoriser : on rend l'historique mesuré tel quel, il n'y a pas mieux.
   if (list.length === 0) return past;
 
-  const start = earliestKnownDay(list, txByAssetId, today, days);
-  const valueAt = valuator(list, txByAssetId);
+  const start = earliestKnownDay(list, txByAssetId, today, days, gross);
+  const valueAt = valuator(list, txByAssetId, gross);
 
   // Aucune profondeur exploitable (ni mouvement, ni crédit, ni relevé) : la
   // courbe se limite aux points mesurés, plus celui d'aujourd'hui.
@@ -111,6 +124,7 @@ export function reconstructHistory(
 function valuator(
   assets: Asset[],
   txByAssetId: Record<string, BankTransaction[]>,
+  grossOnly = false,
 ): (day: string) => number {
   interface BankSeries {
     /** Soldes de clôture par jour de mouvement, du plus ancien au plus récent. */
@@ -126,6 +140,14 @@ function valuator(
 
   for (const a of assets) {
     const current = assetValue(a);
+
+    /* Vue brute : on écarte ce que `netWorth()` compte comme passif, c'est-à-dire
+       tout actif dont la valeur du JOUR est négative — crédit, mais aussi compte
+       à découvert. Trier sur la valeur du jour et non sur le type garantit que le
+       dernier point de la courbe vaut exactement `nw.gross` : la courbe finit sur
+       le chiffre héros, sans quoi la page se contredirait. */
+    if (grossOnly && current < 0) continue;
+
     const txs = (txByAssetId[a.id] || []).filter((tx) => !tx.pending && tx.date);
 
     if (txs.length > 0) {
@@ -212,13 +234,18 @@ function earliestKnownDay(
   txByAssetId: Record<string, BankTransaction[]>,
   today: string,
   days: number | null,
+  grossOnly = false,
 ): string | null {
-  let oldest: string | null = null;
+  /* Les candidats sont collectés puis réduits, plutôt qu'un minimum tenu à jour
+     dans une variable capturée : TypeScript ne suit pas les affectations faites
+     dans une closure, et ramenait le type de ce minimum à `never` après le test
+     de nullité — le fichier ne compilait plus. */
+  const candidates: string[] = [];
   const keep = (d: string | null | undefined) => {
     if (!d) return;
     const key = String(d).slice(0, 10);
     if (key >= today) return;
-    if (oldest === null || key < oldest) oldest = key;
+    candidates.push(key);
   };
 
   for (const id in txByAssetId) {
@@ -227,14 +254,18 @@ function earliestKnownDay(
     }
   }
 
+  /* Vue brute : un crédit n'ouvre plus la fenêtre — il ne compte plus dans la
+     valeur, et remonter cinq ans pour lui ne tracerait qu'une ligne plate. */
   const loanFloor = addDays(today, -LOAN_LOOKBACK_DAYS);
   for (const a of assets) {
+    if (grossOnly) break;
     if (a.type !== "loan" || !a.loan?.startDate) continue;
     const startedAt = String(a.loan.startDate).slice(0, 10);
     keep(startedAt < loanFloor ? loanFloor : startedAt);
   }
 
-  if (oldest === null) return null;
+  if (candidates.length === 0) return null;
+  const oldest = candidates.reduce((a, b) => (a < b ? a : b));
   if (days == null) return oldest;
   const floor = addDays(today, -days);
   return oldest < floor ? floor : oldest;

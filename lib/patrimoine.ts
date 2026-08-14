@@ -90,6 +90,11 @@ export interface HistoryPoint {
   /** ISO du jour (AAAA-MM-JJ) — un point par jour, le dernier écrase. */
   date: string;
   total: number;
+  /** Patrimoine BRUT du même jour, pour la courbe qui masque les crédits.
+   *  Optionnel : les points posés avant cette fonctionnalité ne l'ont pas, et
+   *  aucun calcul ne peut le retrouver — la courbe brute les ignore alors
+   *  plutôt que de reporter du net dedans. */
+  gross?: number;
 }
 
 export interface PatrimoineStore {
@@ -155,12 +160,18 @@ export const ASSET_CLASSES: AssetClass[] = [
     color: "#5b4bc4",
     chip: { bg: "#e9e4ff", text: "#5b4bc4" },
   },
+  /* Comptes courants : violine profond. C'était un framboise vif sur rose
+     bonbon (#9b0058 / #ffdffa) — la pastille la plus fréquente de la liste, et
+     la plus criarde de la palette. Le violine garde ce que le framboise avait
+     d'utile (un secteur de teinte que personne d'autre n'occupe : 36 d'écart
+     ΔE avec la plus proche des huit autres, là où la palette en tolère 24) et
+     tient mieux sur fond sombre, sans le rose. */
   {
     slug: "comptes",
     labelKey: "patrimoine.class.checking",
     types: ["checking"],
-    color: "#9b0058",
-    chip: { bg: "#ffdffa", text: "#9b0058" },
+    color: "#8a2f80",
+    chip: { bg: "#f6e4f5", text: "#8a2f80" },
   },
   {
     slug: "autres",
@@ -202,12 +213,15 @@ export const ASSET_TYPE_STYLES: Record<AssetType, AssetTypeStyle> = {
   // Classe « investissements » — bleu au PEA, les deux autres se démarquent.
   pea: { color: "#0060a1", chip: { bg: "#d8efff", text: "#0060a1" } },
   securities: { color: "#00696d", chip: { bg: "#d2f0f1", text: "#00696d" } },
-  life_insurance: { color: "#4e6b00", chip: { bg: "#e6f3c4", text: "#4e6b00" } },
+  // Pastel de l'assurance-vie adouci (#e6f3c4 → #eef6dd) : c'était le fond le
+  // plus saturé de la palette après le rose des comptes. L'encre y gagne même
+  // un peu de contraste (5,5:1 contre 5,25:1).
+  life_insurance: { color: "#4e6b00", chip: { bg: "#eef6dd", text: "#4e6b00" } },
   // Types seuls dans leur classe : couleur de la classe, inchangée.
   crypto: { color: "#9f5c04", chip: { bg: "#fff9d8", text: "#9f5c04" } },
   real_estate: { color: "#046c39", chip: { bg: "#dcf5e5", text: "#046c39" } },
   savings: { color: "#5b4bc4", chip: { bg: "#e9e4ff", text: "#5b4bc4" } },
-  checking: { color: "#9b0058", chip: { bg: "#ffdffa", text: "#9b0058" } },
+  checking: { color: "#8a2f80", chip: { bg: "#f6e4f5", text: "#8a2f80" } },
   loan: { color: "#9f2f22", chip: { bg: "#ffe3e0", text: "#9f2f22" } },
   other: { color: "#4b5157", chip: { bg: "#eceef0", text: "#4b5157" } },
 };
@@ -373,15 +387,20 @@ export const dayKey = (d: Date = new Date()): string =>
  * inchangé (même référence) si le point est déjà à jour — l'appelant peut donc
  * comparer par identité et éviter une écriture inutile dans le store.
  */
-export function withTodayPoint(history: HistoryPoint[], total: number): HistoryPoint[] {
+export function withTodayPoint(
+  history: HistoryPoint[],
+  total: number,
+  gross?: number,
+): HistoryPoint[] {
   const today = dayKey();
   const list = Array.isArray(history) ? history : [];
+  const point: HistoryPoint = gross === undefined ? { date: today, total } : { date: today, total, gross };
   const last = list[list.length - 1];
   if (last && last.date === today) {
-    if (last.total === total) return list;
-    return [...list.slice(0, -1), { date: today, total }];
+    if (last.total === total && last.gross === point.gross) return list;
+    return [...list.slice(0, -1), point];
   }
-  return [...list, { date: today, total }];
+  return [...list, point];
 }
 
 /** Points de `PnlChart`, qui lit `{ date, cum }` et non `{ date, total }`. */
@@ -466,7 +485,7 @@ export const newAssetId = (): string =>
  *
  * Le store vient de localStorage ou du cloud : il peut être d'une version
  * antérieure, ou tronqué. On normalise donc à la lecture plutôt que de laisser
- * un `undefined` traverser tout le rendu — même parti pris que `BudgetPage`.
+ * un `undefined` traverser tout le rendu — même parti pris que `BudgetPlanner`.
  */
 export function usePatrimoine(): [
   PatrimoineStore,

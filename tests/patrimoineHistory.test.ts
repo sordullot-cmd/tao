@@ -176,6 +176,66 @@ describe("crédits", () => {
   });
 });
 
+/* Courbe brute : les crédits sortent du calcul, pas seulement du chiffre héros.
+   Le piège est le passé — un total net déjà relevé ne se « débrute » pas, et le
+   réutiliser tel quel ferait plonger la courbe sur toute la partie ancienne. */
+describe("courbe du patrimoine brut", () => {
+  const bank = asset({ id: "enablebanking-x", balance: 1_000 });
+  const loan = asset({
+    id: "l1",
+    type: "loan",
+    name: "Prêt immo",
+    balance: -195_000,
+    loan: {
+      principal: 200_000, rate: 3, payment: null, insurance: null,
+      startDate: "2026-01-05", months: 240,
+    },
+  });
+
+  it("écarte les crédits de toute la courbe, pas seulement du dernier point", () => {
+    const options = { today: TODAY, txByAssetId: { "enablebanking-x": [tx("2026-08-13", -200)] } };
+    const net = reconstructHistory([bank, loan], options);
+    const brut = reconstructHistory([bank, loan], { ...options, gross: true });
+
+    expect(at(brut, TODAY)).toBe(1_000);
+    expect(at(brut, "2026-08-12")).toBe(1_200);
+    // La même courbe en net porte le restant dû : elle est très en dessous.
+    expect(at(net, TODAY) as number).toBeLessThan(-100_000);
+  });
+
+  it("ne remonte plus jusqu'au début du prêt : sans lui, il n'y a rien à y voir", () => {
+    // En net, le prêt seul ouvre la fenêtre en janvier (cf. « crédits »).
+    const brut = reconstructHistory([loan], { today: TODAY, gross: true });
+    expect(brut).toEqual([{ date: TODAY, total: 0 }]);
+  });
+
+  it("écarte aussi un compte à découvert, comme le fait le chiffre brut", () => {
+    const decouvert = asset({ id: "c2", balance: -400 });
+    const brut = reconstructHistory([bank, decouvert], {
+      today: TODAY,
+      gross: true,
+      txByAssetId: { "enablebanking-x": [tx("2026-08-13", -200)] },
+    });
+    expect(at(brut, TODAY)).toBe(1_000);
+  });
+
+  it("n'utilise que les relevés qui portent leur propre brut", () => {
+    const brut = reconstructHistory([bank, loan], {
+      today: TODAY,
+      gross: true,
+      // Le relevé de juin est d'avant la fonctionnalité : pas de brut, donc pas
+      // exploitable. Celui de juillet en a un, et c'est LUI qui est tracé.
+      measured: [
+        { date: "2026-06-01", total: -190_000 },
+        { date: "2026-07-01", total: -192_000, gross: 800 },
+      ],
+      txByAssetId: { "enablebanking-x": [tx("2026-08-13", -200)] },
+    });
+    expect(brut[0]).toEqual({ date: "2026-07-01", total: 800, gross: 800 });
+    expect(brut.some((p) => p.date === "2026-06-01")).toBe(false);
+  });
+});
+
 describe("fenêtre et échantillonnage", () => {
   it("borne la reconstruction à la profondeur demandée", () => {
     const points = reconstructHistory([asset({ id: "enablebanking-x", balance: 1_000 })], {

@@ -350,14 +350,32 @@ export const TRANSACTIONS_DEPTHS = [90, 180, 365, ALL_DAYS] as const;
 /** Garde-fous de pagination. Ils bornent le pire cas — un historique de
  *  plusieurs années sur un compte très actif — et empêchent une
  *  `continuation_key` qui se répéterait de boucler indéfiniment. */
-const TRANSACTIONS_MAX_PAGES = 40;
+const TRANSACTIONS_MAX_PAGES = 60;
 const TRANSACTIONS_MAX_ROWS = 5000;
 
 /**
  * Mouvements d'un compte, du plus récent au plus ancien.
  *
- * `days = ALL_DAYS` n'envoie aucun `date_from` : la banque décide alors de la
- * profondeur, ce qui est exactement ce qu'on veut pour la vue « tout ».
+ * Deux régimes, et c'est TOUT le sujet de la profondeur d'historique :
+ *
+ *  - jusqu'à 90 jours, un simple `date_from`. C'est la fenêtre que toutes les
+ *    banques ouvrent sans condition (le plancher DSP2), donc elle ne rate rien
+ *    et ne coûte qu'une page ou deux ;
+ *
+ *  - au-delà, `strategy=longest`. Sans ce paramètre, l'ASPSP répond avec SA
+ *    profondeur par défaut — le plus souvent 90 jours — et un `date_from` plus
+ *    ancien se solde par un `WRONG_TRANSACTIONS_PERIOD` plutôt que par ce
+ *    qu'elle a. Avec, l'agrégateur cherche la plus ancienne opération
+ *    disponible et remonte jusqu'à elle ; `date_from` n'est plus qu'une
+ *    suggestion de point de départ, et une banque courte rend simplement moins
+ *    que demandé au lieu d'échouer. `ALL_DAYS` n'envoie pas de `date_from` du
+ *    tout : la recherche part alors du plus loin que l'agrégateur connaisse.
+ *
+ * Ce que la banque rend vraiment reste sa décision : l'accès à l'historique
+ * long dépend surtout de la fraîcheur de l'authentification forte, beaucoup
+ * d'ASPSP le refermant à 90 jours passé le consentement initial. L'appelant
+ * annonce donc la date du plus ancien mouvement OBTENU, jamais la fenêtre
+ * demandée.
  */
 export async function fetchTransactions(
   uid: string,
@@ -365,12 +383,14 @@ export async function fetchTransactions(
 ): Promise<BankTransaction[]> {
   const raw: RawTransaction[] = [];
   let continuationKey: string | null = null;
+  const longest = days === ALL_DAYS || days > TRANSACTIONS_WINDOW_DAYS;
 
   for (let page = 0; page < TRANSACTIONS_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     if (days !== ALL_DAYS) {
       params.set("date_from", new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10));
     }
+    if (longest) params.set("strategy", "longest");
     if (continuationKey) params.set("continuation_key", continuationKey);
 
     const query = params.toString();
@@ -379,6 +399,11 @@ export async function fetchTransactions(
 
     const data = await resp.json();
     raw.push(...((data.transactions ?? []) as RawTransaction[]));
+    /* Une page VIDE accompagnée d'une clé n'est pas la fin : en `longest`,
+       l'agrégateur remonte le temps par paliers et rend des pages vides tant
+       qu'il cherche. C'est la clé qui dit s'il reste quelque chose, jamais le
+       nombre de lignes — d'où le plafond de pages relevé, qui doit absorber
+       cette recherche en plus des lignes elles-mêmes. */
     continuationKey = data.continuation_key ?? null;
     if (!continuationKey || raw.length >= TRANSACTIONS_MAX_ROWS) break;
   }

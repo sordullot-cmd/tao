@@ -18,6 +18,14 @@
  * Un compte AGRÉGÉ, lui, a une source : sa banque. Il porte donc en plus la
  * courbe de son solde et son relevé (`BankMovements`), ce qu'un actif saisi à la
  * main ne peut pas avoir.
+ *
+ * Un CRÉDIT n'est ni l'un ni l'autre. Sa fiche était vide : un crédit n'a pas de
+ * positions et pas de relevé, donc les deux seules sections de la page se
+ * taisaient — il ne restait qu'un nom et un montant négatif. Elle porte
+ * désormais `LoanSheet`, qui n'est que le bloc de la page « Crédits & passifs »
+ * (`LoanBody`) posé à plat : échéances, part capital / intérêts de la prochaine
+ * échéance, simulateur de remboursement anticipé, échéancier. Un crédit doit se
+ * lire pareil des deux côtés — même source, mêmes chiffres.
  */
 
 import React from "react";
@@ -28,19 +36,27 @@ import {
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
-  BackLink, CARD, HeroAmount, MiniKpi, PeriodPills, PnlChart, SectionAction, SectionTitle,
+  BackLink, CARD, HeroAmount, PeriodPills, PnlChart, SectionAction, SectionTitle,
 } from "@/components/ui/da";
 import AssetAvatar from "@/components/ui/AssetAvatar";
+import { findMerchant } from "@/lib/bank/merchants";
 import {
   bankAccountToAsset, bankAssetUid, isBankAsset, useBankAccounts,
 } from "@/lib/bank/useBankAccounts";
 import { useBankTransactions } from "@/lib/bank/useBankTransactions";
+import {
+  categoryColor, parentOfSub, subLabelKey, subcategorizeTransaction,
+} from "@/lib/bank/categories";
 import {
   ALL_DAYS, balanceSeries, depthOf, groupByDay, kindLabelKey, oldestDate, parseDay,
   periodStats, withinDays,
 } from "@/lib/bank/transactions";
 import { ConfirmModal } from "@/components/modals/AccountModals";
 import { AssetFormModal } from "@/components/modals/PatrimoineModals";
+import {
+  AmortTable, LoanAmount, LoanBody, LoanIdentity, LoanProgress,
+} from "@/components/ui/loanUi";
+import { loanStats } from "@/lib/loans";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import {
@@ -73,15 +89,6 @@ const FIELD = {
 
 const EMPTY_LINE = { name: "", isin: "", quantity: "", avgPrice: "", price: "" };
 
-function formatUpdatedAt(iso) {
-  if (!iso) return null;
-  try {
-    return new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
-  } catch {
-    return null;
-  }
-}
-
 const num = (v) => {
   const n = Number(String(v).replace(",", "."));
   return Number.isFinite(n) ? n : null;
@@ -106,13 +113,23 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
   const asset =
     (store.assets || []).find((a) => a.id === assetId) ||
     // L'horodatage de l'agrégation est porté par l'actif : depuis que les soldes
-    // s'affichent d'abord depuis le cache, l'en-tête peut dire « maj … » comme
-    // il le fait pour un actif saisi.
+    // s'affichent d'abord depuis le cache, la fiche d'un crédit agrégé peut dire
+    // « maj … » comme elle le fait pour un actif saisi.
     bank.accounts.map((a) => bankAccountToAsset(a, bank.updatedAt)).find((a) => a.id === assetId) ||
     null;
   // Un actif agrégé n'existe pas dans le store : son solde est relu à chaque
   // visite, il n'y a rien à modifier ni à supprimer ici.
   const aggregated = !!asset && isBankAsset(asset);
+
+  /* Synthèse du crédit — calculée AVANT la sortie « actif introuvable » : un hook
+     ne peut pas vivre après un `return`. Le restant dû est stocké négatif
+     (cf. `lib/patrimoine`) et `loanStats` raisonne en positif, d'où la valeur
+     absolue. `null` pour tout ce qui n'est pas un crédit : c'est ce qui décide
+     de la fiche à afficher. */
+  const credit = React.useMemo(() => {
+    if (!asset || asset.type !== "loan") return null;
+    return loanStats(Math.abs(assetValue(asset)), asset.loan);
+  }, [asset]);
 
   const removeAsset = () => {
     setConfirmingAsset(false);
@@ -120,6 +137,10 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
     setPage?.("patrimoine");
   };
 
+  /* Toujours vers la synthèse, crédit compris. Un crédit s'ouvre depuis plusieurs
+     endroits (la synthèse, la page Crédits) et remonter vers celui dont on vient
+     supposerait de le retenir ; le patrimoine, lui, est le parent de tout actif —
+     c'est de là qu'on repart pour aller ailleurs. */
   const back = (
     <div style={{ marginLeft: -8 }}>
       <BackLink label={t("patrimoine.title")} onClick={() => setPage?.("patrimoine")} />
@@ -141,7 +162,6 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
   const value = assetValue(asset);
   const gain = assetGain(asset);
   const portfolio = isPortfolio(asset.type);
-  const updated = formatUpdatedAt(asset.updatedAt);
 
   const totalCost = holdings
     .map(holdingCost)
@@ -218,78 +238,93 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
     setPage?.("patrimoine-holding");
   };
 
+  /* Les deux gestes d'entretien d'un crédit, les mêmes qu'en liste : le restant
+     dû descend de la PART CAPITAL de l'échéance et non de la mensualité — la part
+     d'intérêts est payée, elle ne rembourse rien. */
+  const payInstallment = (row) =>
+    patchAsset((a) => ({ ...a, balance: -row.balance, updatedAt: new Date().toISOString() }));
+
+  /** Recale le restant dû sur le théorique du contrat. */
+  const syncOutstanding = (value) =>
+    patchAsset((a) => ({ ...a, balance: -Math.max(0, value), updatedAt: new Date().toISOString() }));
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
       {back}
 
-      {/* En-tête */}
-      <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Le logo de l'établissement quand on l'a — la fiche s'ouvre alors
-                sur ce qu'on reconnaît, pas sur deux lettres. */}
-            <AssetAvatar asset={asset} size={36} />
-            <div style={{ minWidth: 0 }}>
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: T.text }}>{asset.name}</h1>
-              <div style={{ fontSize: 13, color: T.textSub }}>
-                {t(assetTypeKey(asset.type))}
-                {asset.institution ? ` · ${asset.institution}` : ""}
-                {updated ? ` · ${t("patrimoine.updatedAt").replace("{date}", updated)}` : ""}
+      {/* Un crédit se lit dans UNE carte, la même que celle de la page
+          « Crédits & passifs » : même en-tête, même progression, même corps. Les
+          autres actifs gardent leur en-tête de page — un titre, le montant en
+          héros, la plus-value latente. */}
+      {credit ? (
+        <LoanSheet
+          asset={asset}
+          stats={credit}
+          aggregated={aggregated}
+          onEdit={() => setEditingAsset(true)}
+          onDelete={() => setConfirmingAsset(true)}
+          onPay={payInstallment}
+          onSync={syncOutstanding}
+        />
+      ) : (
+        <>
+          {/* En-tête */}
+          <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Le logo de l'établissement quand on l'a — la fiche s'ouvre
+                    alors sur ce qu'on reconnaît, pas sur deux lettres. */}
+                <AssetAvatar asset={asset} size={36} />
+                <div style={{ minWidth: 0 }}>
+                  <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: T.text }}>{asset.name}</h1>
+                  <div style={{ fontSize: 13, color: T.textSub }}>
+                    {t(assetTypeKey(asset.type))}
+                    {asset.institution ? ` · ${asset.institution}` : ""}
+                  </div>
+                </div>
               </div>
+
+              <HeroAmount value={value} size={32} />
+
+              {gain !== null && gain !== 0 && (
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 14 }}>
+                  <span style={{ fontWeight: 600, color: gain >= 0 ? T.pnlPos : T.pnlNeg, fontVariantNumeric: "tabular-nums" }}>
+                    {fmt(gain, true)}
+                    {gainPct !== null ? ` (${gainPct >= 0 ? "+" : ""}${gainPct.toFixed(2)} %)` : ""}
+                  </span>
+                  <span style={{ fontSize: 12, color: T.textSub }}>{t("patrimoine.asset.unrealized")}</span>
+                </div>
+              )}
             </div>
-          </div>
 
-          <HeroAmount value={value} size={32} />
-
-          {gain !== null && gain !== 0 && (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 14 }}>
-              <span style={{ fontWeight: 600, color: gain >= 0 ? T.pnlPos : T.pnlNeg, fontVariantNumeric: "tabular-nums" }}>
-                {fmt(gain, true)}
-                {gainPct !== null ? ` (${gainPct >= 0 ? "+" : ""}${gainPct.toFixed(2)} %)` : ""}
-              </span>
-              <span style={{ fontSize: 12, color: T.textSub }}>{t("patrimoine.asset.unrealized")}</span>
+            {/* Modifier et supprimer l'actif se faisaient depuis la page
+                « Actifs », qui portait la liste et son formulaire. Elle n'existe
+                plus : les deux actions vivent ici, sur la fiche de l'actif
+                concerné — sauf pour un compte agrégé, qui appartient à la
+                banque. */}
+            <div style={{ display: aggregated ? "none" : "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setEditingAsset(true)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
+                  padding: "0 14px", borderRadius: 999, border: "none",
+                  background: T.accentBg, color: T.text, fontSize: 13, fontWeight: 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                <Pencil size={14} strokeWidth={1.75} /> {t("common.edit")}
+              </button>
+              <DeleteAssetButton name={asset.name} onClick={() => setConfirmingAsset(true)} />
             </div>
-          )}
-        </div>
+          </header>
 
-        {/* Modifier et supprimer l'actif se faisaient depuis la page « Actifs »,
-            qui portait la liste et son formulaire. Elle n'existe plus : les deux
-            actions vivent ici, sur la fiche de l'actif concerné — sauf pour un
-            compte agrégé, qui appartient à la banque. */}
-        <div style={{ display: aggregated ? "none" : "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={() => setEditingAsset(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-              padding: "0 14px", borderRadius: 999, border: "none",
-              background: T.accentBg, color: T.text, fontSize: 13, fontWeight: 500,
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <Pencil size={14} strokeWidth={1.75} /> {t("common.edit")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmingAsset(true)}
-            aria-label={t("patrimoine.assets.deleteAria").replace("{name}", asset.name || "")}
-            title={t("common.delete")}
-            style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, borderRadius: 999, border: "none",
-              background: "transparent", color: T.textMut, cursor: "pointer", fontFamily: "inherit",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}
-          >
-            <Trash2 size={15} strokeWidth={1.75} />
-          </button>
-        </div>
-      </header>
-
-      {/* Relevé du compte — seulement pour un compte agrégé : c'est la banque
-          qui le fournit, un actif saisi à la main n'a aucun mouvement à montrer. */}
-      {aggregated && <BankMovements asset={asset} />}
+          {/* Relevé du compte — seulement pour un compte agrégé : c'est la banque
+              qui le fournit, un actif saisi à la main n'a aucun mouvement à
+              montrer. */}
+          {aggregated && <BankMovements asset={asset} />}
+        </>
+      )}
 
       {/* Positions — seulement pour les types qui en portent. Un livret ou un
           bien immobilier n'a pas de lignes : y proposer un formulaire de titres
@@ -453,6 +488,97 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
   );
 }
 
+/* ── Fiche d'un crédit ─────────────────────────────────────────────────────
+   La carte de la page « Crédits & passifs », à l'identique : même en-tête (logo,
+   identité, restant dû à droite), même progression, même corps (`LoanBody`).
+
+   Deux différences, et seulement deux : rien à replier — la fiche ne montre qu'un
+   crédit, un chevron n'y range rien —, et les actions de l'actif (modifier,
+   supprimer) prennent la place du chevron. La fiche n'invente aucun chiffre : ce
+   qu'on y lit doit être ce qu'on lisait dans la liste.
+
+   Les deux gestes qui MODIFIENT le patrimoine (passer une échéance, recaler le
+   restant dû) remontent au parent : c'est lui qui tient le store.
+   ------------------------------------------------------------------------ */
+
+function LoanSheet({ asset, stats, aggregated, onEdit, onDelete, onPay, onSync }) {
+  return (
+    <>
+    <section style={{ ...CARD, padding: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
+        <AssetAvatar asset={asset} size={32} />
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <LoanIdentity asset={asset} stats={stats} />
+        </div>
+
+        <LoanAmount stats={stats} />
+
+        {/* Un compte agrégé appartient à sa banque : rien à modifier ni à
+            supprimer ici. */}
+        {!aggregated && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            <IconButton label={t("common.edit")} onClick={onEdit}>
+              <Pencil size={15} strokeWidth={1.75} />
+            </IconButton>
+            <DeleteAssetButton name={asset.name} onClick={onDelete} />
+          </span>
+        )}
+      </div>
+
+      {/* La progression garde sa place : sous l'en-tête, avant le détail. */}
+      {stats.progress !== null && (
+        <div style={{ padding: "0 16px 14px" }}>
+          <LoanProgress stats={stats} />
+        </div>
+      )}
+
+      <div style={{ borderTop: `1px solid ${T.border}`, padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+        <LoanBody
+          terms={asset.loan}
+          stats={stats}
+          aggregated={aggregated}
+          onEdit={onEdit}
+          onPay={onPay}
+          onSync={onSync}
+        />
+      </div>
+    </section>
+
+    {/* L'échéancier a son propre bloc : c'est une pièce de référence, longue et
+        chiffrée, qu'on vient consulter à côté du reste. `framed={false}` — le
+        bloc porte déjà le cadre, le tableau n'a pas à en remettre un dedans. */}
+    {stats.schedule.length > 0 && (
+      <section style={{ ...CARD, padding: 20 }}>
+        <AmortTable rows={stats.schedule} insurance={stats.insurance} framed={false} />
+      </section>
+    )}
+    </>
+  );
+}
+
+/** Suppression d'un actif : une cible discrète qui ne devient rouge qu'au survol
+ *  — le geste est destructeur, il n'a pas à s'annoncer en rouge en permanence. */
+function DeleteAssetButton({ name, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={t("patrimoine.assets.deleteAria").replace("{name}", name || "")}
+      title={t("common.delete")}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 36, height: 36, borderRadius: 999, border: "none",
+        background: "transparent", color: T.textMut, cursor: "pointer", fontFamily: "inherit",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}
+    >
+      <Trash2 size={15} strokeWidth={1.75} />
+    </button>
+  );
+}
+
 /* ── Relevé d'un compte agrégé ─────────────────────────────────────────────
    Fenêtres proposées, les mêmes que partout ailleurs dans l'app (`PERIODS` de
    la DA), plus « tout ».
@@ -536,7 +662,6 @@ function BankMovements({ asset }) {
     () => balanceSeries(shown, balance, dayKey()),
     [shown, balance],
   );
-  const stats = React.useMemo(() => periodStats(shown), [shown]);
   const groups = React.useMemo(
     () => groupByDay(expanded ? shown : shown.slice(0, MOVEMENTS_FOLDED)),
     [shown, expanded],
@@ -546,20 +671,18 @@ function BankMovements({ asset }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <SectionTitle
-        size="sm"
-        action={
-          <PeriodPills
-            value={period}
-            onChange={setPeriod}
-            options={MOVEMENT_PERIODS.map((p) =>
-              p.id === "ALL" ? { ...p, label: t("patrimoine.asset.movementsAll") } : p,
-            )}
-          />
-        }
-      >
-        {t("patrimoine.asset.movements")}
-      </SectionTitle>
+      {/* Plus de titre de section : la courbe et le relevé se reconnaissent
+          d'eux-mêmes, et la fiche n'a qu'un sujet. Le choix de la fenêtre reste,
+          seul, à la place que tenait la ligne de titre. */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <PeriodPills
+          value={period}
+          onChange={setPeriod}
+          options={MOVEMENT_PERIODS.map((p) =>
+            p.id === "ALL" ? { ...p, label: t("patrimoine.asset.movementsAll") } : p,
+          )}
+        />
+      </div>
 
       {/* Un compte agrégé sans relevé n'est pas une anomalie : toutes les
           banques n'ouvrent pas l'accès aux opérations, et un consentement expiré
@@ -586,19 +709,6 @@ function BankMovements({ asset }) {
         )
       ) : (
         <>
-          {/* Entrées, sorties, solde de la période : les trois chiffres que la
-              courbe ne donne pas d'un coup d'œil. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
-            <MiniKpi label={t("patrimoine.asset.movementsIn")} value={fmt(stats.in, false)} tone={stats.in > 0 ? "pos" : undefined} />
-            <MiniKpi label={t("patrimoine.asset.movementsOut")} value={fmt(stats.out, false)} tone={stats.out < 0 ? "neg" : undefined} />
-            <MiniKpi
-              label={t("patrimoine.asset.movementsNet")}
-              value={fmt(stats.net, true)}
-              tone={stats.net > 0 ? "pos" : stats.net < 0 ? "neg" : undefined}
-            />
-            <MiniKpi label={t("patrimoine.asset.movementsCount")} value={String(shown.length)} />
-          </div>
-
           <PnlChart points={points} color={color} />
 
           {/* Jusqu'où l'historique remonte VRAIMENT : la profondeur obtenue
@@ -612,25 +722,32 @@ function BankMovements({ asset }) {
           </div>
 
           {/* Le relevé, groupé par jour comme celui de la banque : la date est
-              portée une fois par groupe, pas répétée sur chaque ligne. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              portée une fois par groupe, pas répétée sur chaque ligne.
+
+              Elle est posée AU-DESSUS de la carte, hors du blanc : c'est le blanc
+              lui-même qui dit « une journée », et la date n'a plus besoin d'un
+              filet pour se détacher des opérations qu'elle annonce. Les lignes
+              d'un même jour se suivent donc sans séparateur — un seul bloc. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {groups.map((g) => (
-              <section key={g.date} data-card style={{ ...CARD, padding: 0 }}>
+              <div key={g.date} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  gap: 12, padding: "10px 20px", borderBottom: `1px solid ${T.border}`,
+                  display: "flex", alignItems: "baseline", justifyContent: "space-between",
+                  gap: 12, padding: "0 4px",
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 500, color: T.textSub }}>{formatDay(g.date)}</span>
                   <span style={{ fontSize: 12, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
                     {fmt(periodStats(g.items).net, true)}
                   </span>
                 </div>
-                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                  {g.items.map((tx, i) => (
-                    <MovementRow key={tx.id} tx={tx} first={i === 0} />
-                  ))}
-                </ul>
-              </section>
+                <section data-card style={{ ...CARD, padding: "4px 0" }}>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                    {g.items.map((tx) => (
+                      <MovementRow key={tx.id} tx={tx} />
+                    ))}
+                  </ul>
+                </section>
+              </div>
             ))}
           </div>
 
@@ -650,18 +767,38 @@ function BankMovements({ asset }) {
 }
 
 /** Une ligne de relevé : nature, libellé, et le montant signé à droite. */
-function MovementRow({ tx, first }) {
+function MovementRow({ tx }) {
   const Icon = KIND_ICONS[tx.kind] || KIND_ICONS.other;
   const credit = tx.amount >= 0;
-  // La nature reste en sous-ligne avec le complément : deux informations de même
-  // rang, sous le libellé qui les porte.
-  const sub = [t(kindLabelKey(tx.kind)), tx.detail].filter(Boolean).join(" · ");
+
+  /* Marchand reconnu (cf. lib/bank/merchants) : son nom canonique remplace le
+     libellé de la banque — « Carrefour » plutôt que « CARTE 12/08 CARREFOUR CITY
+     4979 », le libellé brut redescendant en sous-ligne.
+
+     Son LOGO, en revanche, ne s'affiche plus ici : la vignette reste l'icône de
+     nature, la même sur toute la colonne. `MerchantAvatar` et la table de logos
+     restent en place — ils sont prêts à être rebranchés ailleurs, et rien dans
+     cette page n'en dépend. */
+  const merchant = findMerchant(tx);
+  const title = merchant?.name || tx.label || t(kindLabelKey(tx.kind));
+
+  /* La NATURE ne se répète plus sous le libellé : « Opération », « Carte » ou
+     « Virement » n'apprennent rien que l'icône ne dise déjà, et sur les lignes
+     que la banque ne qualifie pas, la sous-ligne se réduisait au mot vide.
+     Il reste le complément quand la banque en donne un — et, quand le nom
+     canonique a pris la première ligne, le libellé brut, qui porte encore la
+     date d'achat et le point de vente exact. */
+  const detail = tx.detail || (merchant && tx.label && tx.label !== merchant.name ? tx.label : "");
+
+  /* Poste de dépense, deviné du libellé (cf. lib/bank/categories). La ligne
+     porte le SOUS-poste, qui est le plus précis qu'on sache dire — « Fast-food »
+     plutôt qu'« Alimentation ». La pastille, elle, garde la couleur du POSTE :
+     c'est la même que celle de sa part dans l'anneau de la synthèse. */
+  const sub = subcategorizeTransaction(tx);
+  const category = parentOfSub(sub);
 
   return (
-    <li style={{
-      display: "flex", alignItems: "center", gap: 12, padding: "12px 20px",
-      borderTop: first ? "none" : `1px solid ${T.border}`,
-    }}>
+    <li style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px" }}>
       <span aria-hidden="true" style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: 32, height: 32, flexShrink: 0, borderRadius: 999,
@@ -672,11 +809,22 @@ function MovementRow({ tx, first }) {
 
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {tx.label || t(kindLabelKey(tx.kind))}
+          {title}
         </span>
-        <span style={{ display: "block", fontSize: 12, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {sub}
-        </span>
+        {/* Le sous-poste, avec la pastille du poste : on retrouve ici, ligne à
+            ligne, ce qui a fait grossir une part de l'anneau.
+            « Autres » ne se dit pas — c'est l'absence de classement, l'écrire
+            n'apprendrait rien de plus que « Opération » ne le faisait. */}
+        {(category !== "other" || detail) && (
+          <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, fontSize: 12, color: T.textSub }}>
+            {category !== "other" && (
+              <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: categoryColor(category), flexShrink: 0 }} />
+            )}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {[category === "other" ? null : t(subLabelKey(sub)), detail].filter(Boolean).join(" · ")}
+            </span>
+          </span>
+        )}
       </span>
 
       {/* Une opération en attente n'est pas encore dans le solde de la banque —

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAuth, isAuthSuccess } from "@/lib/auth/apiAuth";
 import { createClient } from "@/lib/supabase/server";
+import { mergeTransactions } from "@/lib/bank/archive";
+import { archiveTransactions, readArchivedTransactions } from "@/lib/bank/archiveStore";
 import {
   fetchTransactions,
   isBankConfigured,
@@ -24,8 +26,11 @@ import {
  * signature Enable Banking est celle de l'application, pas celle du porteur du
  * compte, donc l'API distante, elle, ne poserait aucune question.
  *
- * Rien n'est stocké : comme les soldes, les mouvements sont relus à chaque
- * appel (cf. `useBankAccounts`).
+ * Les mouvements sont relus à chaque appel, comme les soldes — mais contrairement
+ * à eux ils sont AUSSI archivés au passage (`bank_transactions`, migration 034).
+ * La banque referme l'accès à son historique profond peu après le consentement :
+ * sans archive, le passé de l'application reculerait tout seul jusqu'à 90 jours.
+ * La réponse est donc l'union de ce que la banque rend et de ce qu'on a conservé.
  */
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -61,19 +66,46 @@ export async function GET(request: NextRequest) {
   if (!owned) return NextResponse.json({ error: "Compte introuvable." }, { status: 404 });
 
   try {
-    const transactions = await fetchTransactions(uid, days);
+    const fresh = await fetchTransactions(uid, days);
+
+    /* Ce que la banque rend AUJOURD'HUI est le passé inaccessible de demain :
+       chaque lecture alimente donc l'archive au passage. C'est ce qui fait que
+       l'historique s'allonge avec le temps au lieu de reculer avec la fenêtre
+       DSP2 (cf. migration 034). */
+    await archiveTransactions(supabase, auth.user.id, uid, fresh);
+    const archived = await readArchivedTransactions(supabase, auth.user.id, uid, days);
+    const transactions = mergeTransactions(fresh, archived);
+
     return NextResponse.json({
       configured: true,
       // La profondeur RÉELLEMENT demandée : le client s'en sert pour savoir ce
       // que son cache couvre, et n'a donc pas à supposer qu'elle a été honorée.
       windowDays: days,
       transactions,
+      // Ce que l'archive a ajouté par-dessus la fenêtre de la banque.
+      fromArchive: transactions.length - fresh.length,
     });
   } catch (err) {
     /* Toutes les banques n'ouvrent pas l'accès aux opérations, et un
-       consentement expiré échoue ici avant d'échouer sur les soldes. La page
-       affiche le message tel quel : « mouvements indisponibles » sans raison ne
-       dit pas s'il faut reconnecter la banque ou attendre. */
+       consentement expiré échoue ici avant d'échouer sur les soldes.
+
+       L'archive prend alors le relais : un relevé conservé vaut mieux qu'un
+       écran vide doublé d'un message d'erreur, et c'est exactement le cas
+       qu'elle existe pour couvrir. On ne le signale pas comme une panne — il
+       n'y a rien à faire pour l'utilisateur tant que les opérations récentes
+       sont là. */
+    const archived = await readArchivedTransactions(supabase, auth.user.id, uid, days);
+    if (archived.length > 0) {
+      return NextResponse.json({
+        configured: true,
+        windowDays: days,
+        transactions: archived,
+        source: "archive",
+      });
+    }
+
+    // Rien en archive non plus : là, le message doit dire s'il faut reconnecter
+    // la banque ou attendre.
     return NextResponse.json(
       {
         configured: true,

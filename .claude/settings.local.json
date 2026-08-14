@@ -69,7 +69,9 @@
       "Bash(node -e \"require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\('components/pages/DailyPlannerPage.jsx','utf8'\\), {sourceType:'module', plugins:['jsx']}\\)\")",
       "Bash(grep -rn \"value >= 0 ? T.green\\\\|cum>=0?\\\\\"#16A34A\\\\\"\\\\|>= 0 ? T\\\\\\\\.green\\\\|p\\\\\\\\.cum.*>=0\" components/pages/DashboardPage.jsx components/pages/AccountDetailPage.jsx components/StrategyDetailPage.jsx components/pages/JournalPage.jsx components/pages/DailyPlannerPage.jsx)",
       "Bash(grep -n \"filled\\\\[hoverIdx\\\\]?\\\\\\\\.value.*>= 0\\\\|s.filled\\\\[hoverIdx\\\\]\" components/pages/AccountDetailPage.jsx)",
-      "Bash(grep -E \"\\\\.\\(js|jsx|ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(js|jsx|ts|tsx\\)$\")",
+      "Bash(rm components/pages/SpendingPage.jsx)",
+      "Bash(git mv *)"
     ]
   }
 }

@@ -44,3 +44,5 @@ next-env.d.ts
 
 # captures temporaires du plugin Figma
 .figma-tmp
+
+.env*

@@ -7,6 +7,9 @@
  * bascule patrimoine net / brut quand des passifs existent, puis le tableau
  * « Actif » en accordéon — une carte par classe, qui se déplie sur ses comptes.
  *
+ * La bascule net / brut pilote le chiffre héros ET la courbe : en brut, les
+ * crédits sont écartés des deux, ce qui permet de lire son patrimoine sans eux.
+ *
  * Deux sections de l'original ne sont pas reprises, faute de source :
  *   — « Transactions récentes » lisait les opérations de la banque connectée ;
  *   — le Sankey de budget lisait ces mêmes opérations catégorisées. Le budget de
@@ -20,8 +23,8 @@
  * là où l'ancien `withTodayPoint` seul ne donnait un point que par jour
  * d'ouverture de la page — deux points, deux jours après l'installation. Ces
  * points relevés sont conservés : ils portent le passé que la reconstruction ne
- * couvre pas. Fenêtre au choix — 1S / 1M / 3M / 6M / 1A / Tout —, avec la
- * variation de cette fenêtre affichée juste à côté des pastilles.
+ * couvre pas. Fenêtre au choix — 1S / 1M / 3M / 6M / 1A / Tout —, et ce que la
+ * fenêtre a fait gagner ou perdre s'affiche sous le chiffre héros.
  */
 
 import React from "react";
@@ -29,7 +32,7 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, Crown, Plus } from "lucide-
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
-  AllocationChart, CARD, SectionTitle, HeroAmount, MiniKpi, PeriodPills, PnlChart, TH,
+  AllocationChart, CARD, SectionTitle, HeroAmount, PeriodPills, PnlChart, TH,
   PERIODS, PERIOD_ALL, windowSeries,
 } from "@/components/ui/da";
 import AssetAvatar from "@/components/ui/AssetAvatar";
@@ -49,7 +52,8 @@ import {
 } from "@/lib/patrimoine";
 import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
-import { depthOf, ALL_DAYS } from "@/lib/bank/transactions";
+import { depthOf, withinDays, ALL_DAYS } from "@/lib/bank/transactions";
+import { categoryLabelKey, spendingByCategory, spendingPalette } from "@/lib/bank/categories";
 import { reconstructHistory } from "@/lib/patrimoineHistory";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import {
@@ -114,8 +118,10 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
     // amputé des comptes bancaires, qui resterait le point de la journée.
     if (bank.loading) return;
     setStore((s) => {
-      const total = netWorth([...(s.assets || []), ...bankAssets]).total;
-      const next = withTodayPoint(s.history || [], total);
+      // Net ET brut sont relevés : la courbe brute ne peut pas déduire les
+      // crédits d'un total net déjà figé, il faut donc les avoir gardés.
+      const measured = netWorth([...(s.assets || []), ...bankAssets]);
+      const next = withTodayPoint(s.history || [], measured.total, measured.gross);
       return next === s.history ? s : { ...s, history: next };
     });
   }, [assets, bankAssets, bank.loading, setStore]);
@@ -156,14 +162,19 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
      mouvement, le capital restant dû des crédits recalculé depuis leur
      échéancier, et les autres actifs reportés à plat (cf. lib/patrimoineHistory).
      Les points relevés à l'ouverture de la page ne servent plus que pour le
-     passé que cette reconstruction ne couvre pas. */
+     passé que cette reconstruction ne couvre pas.
+
+     La courbe suit la vue : en brut, les crédits sont écartés du calcul, comme
+     ils le sont du chiffre héros. Un seul contrôle pour les deux — un graphique
+     net sous un héros brut ferait lire la même page de deux façons. */
   const allPoints = React.useMemo(
     () => toChartPoints(reconstructHistory(assets, {
       txByAssetId,
       measured: store.history,
       days: daysOfPeriod(period),
+      gross: view === "brut",
     })),
-    [assets, txByAssetId, store.history, period],
+    [assets, txByAssetId, store.history, period, view],
   );
   /* `windowSeries` mesure la fenêtre depuis le DERNIER point, pas depuis
      aujourd'hui : après quelques jours sans ouvrir la page, « 1S » montre la
@@ -247,57 +258,64 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
             )}
             <HeroAmount value={heroValue} />
 
-            {/* Brut / passifs / net — seulement si des passifs existent : sans
-                eux les trois mesures répètent le chiffre héros. Elles étaient
-                en cartes SOUS la courbe ; elles remontent ici en mini-KPI,
-                comme les pages Compte et Firme, où les mesures secondaires se
-                lisent dans la foulée du chiffre héros et non après le
-                graphique. `marginTop` 6 complète le `gap` 6 du conteneur pour
-                retrouver les 12 px héros → KPI de ces pages. */}
-            {hasLiabilities && (
-              <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap", marginTop: 6 }}>
-                <MiniKpi label={t("patrimoine.grossAssets")} value={fmt(nw.gross)} />
-                <MiniKpi label={t("patrimoine.liabilities")} value={fmt(nw.liabilities)} tone="neg" />
-                <MiniKpi
-                  label={t("patrimoine.netWorth")}
-                  value={fmt(nw.total)}
-                  tone={nw.total < 0 ? "neg" : undefined}
-                />
+            {/* Ce qui a été gagné ou perdu sur la fenêtre choisie, collé au
+                chiffre héros — comme le delta d'un compte. Les mini-KPI brut /
+                passifs / net occupaient cette place : ils répétaient trois fois
+                le patrimoine du JOUR, quand la seule mesure qui ajoute quelque
+                chose au chiffre héros est son MOUVEMENT. Le brut se lit
+                maintenant par la bascule au-dessus, et le détail des passifs
+                dans leur classe plus bas. */}
+            {change && (
+              <div style={{ marginTop: 2 }}>
+                <PeriodChange change={change} period={period} />
               </div>
             )}
           </div>
 
-          {/* Connexion d'une banque, à la hauteur du chiffre héros : c'est la
-              source qui remplit cette page toute seule. Masquée quand le
-              déploiement n'a pas d'identifiants Enable Banking — la modale
-              n'aurait aucun établissement à proposer, et la page Banque, elle,
-              dit ce qui manque. */}
-          {bank.configured && (
+          {/* Les DEUX façons de garnir cette page, côte à côte à la hauteur du
+              chiffre héros : brancher une banque, qui la remplit toute seule, et
+              saisir un actif à la main pour ce qu'aucune banque ne connaît.
+              La banque d'abord : elle est masquée quand le déploiement n'a pas
+              d'identifiants Enable Banking — la modale n'aurait aucun
+              établissement à proposer, et la page Banque, elle, dit ce qui
+              manque. La saisie manuelle, elle, marche toujours. */}
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+            {bank.configured && (
+              <button
+                type="button"
+                onClick={() => setAddingBank(true)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
+                  padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
+                  background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.bank.addBank")}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setAddingBank(true)}
+              onClick={() => setAddingAsset(true)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
                 padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
-                background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
+                background: T.accentBg, color: T.text, fontSize: 13, fontWeight: 500,
                 cursor: "pointer", fontFamily: "inherit",
               }}
             >
-              <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.bank.addBank")}
+              <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.assets.add")}
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Barre de la courbe : sa variation à gauche, sa fenêtre à droite.
-            Elle est posée ici et non contre le chiffre héros parce qu'elle
-            qualifie la COURBE — toujours nette — alors que le héros bascule
-            entre net et brut : collée en haut, elle se lirait comme la
-            variation du chiffre affiché. */}
-        {/* Tant qu'il n'y a pas de courbe, pas de barre : des pastilles de
+        {/* Fenêtre de la courbe, seule sur sa ligne maintenant que la variation
+            est remontée sous le chiffre héros : elle s'aligne à droite, au-dessus
+            du graphique qu'elle règle.
+            Tant qu'il n'y a pas de courbe, pas de barre : des pastilles de
             fenêtre sur un point unique seraient un contrôle sans effet. */}
         {allPoints.length > 1 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", minHeight: 34 }}>
-            <PeriodChange change={change} period={period} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, flexWrap: "wrap", minHeight: 34 }}>
             <PeriodPills
               value={period}
               onChange={setPeriod}
@@ -316,6 +334,10 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
 
       {/* Tableau des actifs, groupés par classe */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Le bouton « Ajouter un actif » n'est plus ici mais en tête de page, à
+            côté de « Ajouter une banque » : les deux façons de garnir cette page
+            sont le même geste, elles se choisissent au même endroit. Le titre de
+            section n'a donc plus d'action propre. */}
         <SectionTitle>{t("patrimoine.assetsSection")}</SectionTitle>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "0 20px", opacity: 0.4 }}>
@@ -333,19 +355,33 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
               assets={list}
               total={total}
               positiveTotal={positiveTotal}
-              onOpenClass={() => { setSelectedClassSlug?.(cls.slug); setPage?.("patrimoine-class"); }}
+              /* Les passifs ouvrent leur page dédiée et non la page de classe :
+                 elle porte l'échéancier, la charge mensuelle et le simulateur,
+                 là où une page de classe ne sait qu'aligner des valeurs. Depuis
+                 que « Crédits » n'est plus dans la navigation, c'est aussi le
+                 chemin qui y mène. */
+              onOpenClass={() => {
+                if (cls.slug === "passifs") return setPage?.("patrimoine-liabilities");
+                setSelectedClassSlug?.(cls.slug);
+                setPage?.("patrimoine-class");
+              }}
               onOpenAsset={(id) => { setSelectedAssetId?.(id); setPage?.("patrimoine-asset"); }}
             />
           ))}
         </div>
       </div>
 
+      {/* Où part l'argent, POUR DE VRAI — juste avant le budget prévisionnel :
+          les deux se lisent l'un contre l'autre, avec le même vocabulaire de
+          postes et les mêmes teintes. */}
+      <SpendingByCategory accounts={bank.accounts} />
+
       {/* Le budget prévisionnel, MONTRÉ — cette section ne portait qu'un renvoi
           vers la page Budget : on venait chercher un chiffre et on repartait
           avec un lien. L'original posait ici un Sankey des flux réels du mois,
           qui n'a pas de source dans tr4de ; la répartition prévue, elle, existe
           bel et bien. */}
-      <BudgetSummary onOpen={() => setPage?.("budget")} />
+      <BudgetSummary onOpen={() => setPage?.("cashflow")} />
 
       {addingAsset && <AssetFormModal onClose={() => setAddingAsset(false)} />}
       {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
@@ -397,6 +433,169 @@ function PeriodChange({ change, period }) {
       )}
       <span style={{ color: T.textMut, fontWeight: 400 }}>{horizon}</span>
     </span>
+  );
+}
+
+/**
+ * Dépenses par poste, tous comptes agrégés confondus.
+ *
+ * Le pendant RÉALISÉ du budget prévisionnel affiché juste en dessous : mêmes
+ * postes, mêmes teintes (cf. `lib/bank/categories`), pour que le prévu et le
+ * réalisé se lisent d'un coup d'œil l'un contre l'autre.
+ *
+ * La fenêtre est libre — 1S à 1A, ou tout l'historique que les banques rendent.
+ * Elle est demandée à la MÊME profondeur que la courbe du patrimoine plus haut,
+ * et sert donc le même cache : changer de fenêtre ici ne redemande à la banque
+ * que ce qu'elle n'a pas encore donné, et jamais deux fois la même chose.
+ *
+ * Rien ne s'affiche sans compte agrégé : la répartition des dépenses n'a pas de
+ * saisie manuelle derrière elle, un état vide serait un contrôle sans matière.
+ */
+function SpendingByCategory({ accounts }) {
+  /* La fenêtre suit le COMPTE, comme celle de la courbe : quelqu'un qui suit
+     son mois en cours ne doit pas retrouver « 3 mois » à chaque visite. Un mois
+     par défaut — c'est le pas auquel un budget se pense. */
+  const [rawPeriod, setPeriod] = useCloudState(
+    "tr4de_patrimoine_spend_period", "patrimoine_spend_period", "1M",
+  );
+  const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : "1M";
+  const days = daysOfPeriod(period) ?? ALL_DAYS;
+  // Même règle que la courbe : sous 90 jours il n'y a rien de plus à demander.
+  const depth = days === ALL_DAYS ? ALL_DAYS : depthOf(days) <= 90 ? 90 : days;
+
+  const uids = React.useMemo(() => accounts.map((a) => a.uid), [accounts]);
+  const { byUid, loading } = useBankTransactionsAll(uids, depth);
+
+  /* Les relevés de tous les comptes mis bout à bout, puis recadrés sur la
+     fenêtre : le cache peut contenir plus profond que ce qu'on affiche. */
+  const txs = React.useMemo(() => {
+    const all = [];
+    for (const uid of uids) {
+      const list = byUid[uid];
+      if (list) all.push(...list);
+    }
+    return withinDays(all, days);
+  }, [byUid, uids, days]);
+
+  const { slices, total } = React.useMemo(() => spendingByCategory(txs), [txs]);
+
+  /* Les teintes viennent du BUDGET de l'utilisateur, et non d'une copie figée de
+     ses couleurs par défaut : les deux anneaux sont voisins sur cette page, et
+     une catégorie recolorée dans la page Budget doit suivre ici. Chaque poste
+     prend la couleur de la catégorie de budget dont il relève, les postes
+     secondaires d'une même famille en recevant une variante (cf.
+     `spendingPalette`). Sans budget saisi, on retombe sur la palette de
+     `lib/bank/categories`. */
+  const [budgetStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
+  const palette = React.useMemo(() => {
+    const plan = primaryPlan(budgetStore);
+    const couleurs = {};
+    for (const it of plan?.items || []) if (it.color) couleurs[it.id] = it.color;
+    return spendingPalette(couleurs);
+  }, [budgetStore]);
+
+  if (accounts.length === 0) return null;
+
+  const parts = slices.map((s) => ({
+    id: s.id,
+    label: t(categoryLabelKey(s.id)),
+    color: palette[s.id] || s.color,
+    pct: s.pct,
+    amount: s.amount,
+  }));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <SectionTitle
+        size="sm"
+        action={
+          <PeriodPills
+            value={period}
+            onChange={setPeriod}
+            options={HISTORY_PERIODS.map((p) =>
+              p.id === PERIOD_ALL ? { ...p, label: t("patrimoine.periodAll") } : p,
+            )}
+          />
+        }
+      >
+        {t("patrimoine.spending.title")}
+      </SectionTitle>
+
+      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
+        {/* Chargement à vide seulement : dès qu'un relevé est arrivé, on montre
+            la répartition et elle se précise compte par compte. */}
+        {slices.length === 0 ? (
+          <div style={{ fontSize: 14, color: T.textSub, textAlign: "center", padding: "24px 0" }}>
+            {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
+          </div>
+        ) : (
+          /* Trois colonnes — une cale, l'anneau, la légende : c'est ce qui laisse
+             l'anneau au MILIEU de la carte tout en collant la liste des postes à
+             son BORD DROIT. Les deux colonnes latérales portent la même part
+             (`minmax(0, 1fr)`), donc la colonne centrale tombe pile au centre,
+             quelle que soit la largeur de la légende. Les mettre simplement côte
+             à côte aurait collé la liste contre l'anneau et laissé un vide à
+             droite.
+             Plus de pourcentages : l'anneau EST la proportion, la répéter en
+             chiffres à côté de chaque poste faisait lire deux fois la même
+             chose. Le montant, lui, ne se lit nulle part ailleurs. */
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+            alignItems: "center", gap: 24,
+          }}>
+            <span aria-hidden="true" />
+            <AllocationChart
+              kind="ring"
+              parts={parts}
+              scale={100}
+              ariaLabel={t("patrimoine.spending.aria")}
+              size={190}
+              thickness={22}
+              centreLabel={t("patrimoine.spending.centre")}
+              centreValue={total}
+              showPct={false}
+              formatValue={(v) => fmt(v)}
+            />
+
+            {/* Les postes en COLONNE contre le bord droit de la carte, du plus
+                gros au plus petit : c'est l'ordre des parts, l'œil descend la
+                liste comme il ferait le tour du cercle. Les pastilles restent
+                alignées entre elles à gauche du bloc — une liste alignée à
+                droite ferait danser les points de couleur.
+                Le poste et son total restent collés l'un à l'autre : les étirer
+                d'un bord à l'autre obligeait à traverser la carte pour
+                rapprocher un nom d'un chiffre.
+                Le détail par sous-poste n'est PAS ici : la synthèse répond à
+                « où va mon argent », et une seconde ligne de chiffres sous
+                chaque part la faisait lire deux fois. Le sous-poste se lit là
+                où il sert — sur la ligne du relevé qui le porte. */}
+            <ul style={{
+              listStyle: "none", margin: 0, padding: 0, minWidth: 0, maxWidth: 380,
+              justifySelf: "end",
+              display: "flex", flexDirection: "column", gap: 10,
+            }}>
+              {slices.map((s) => (
+                <li key={s.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, minWidth: 0 }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+                  <span style={{ color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t(categoryLabelKey(s.id))}
+                  </span>
+                  <span style={{ fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                    {fmt(s.amount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Ni compte d'opérations ni avertissement sur le classement : la synthèse
+            répond d'un coup d'œil à « où va mon argent », et un paragraphe sous
+            l'anneau se lisait plus longtemps que l'anneau lui-même. Les deux
+            vivent sur la page Dépenses, qui est l'endroit où l'on creuse. */}
+      </section>
+    </div>
   );
 }
 
