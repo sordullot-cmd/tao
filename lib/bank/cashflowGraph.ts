@@ -1,24 +1,24 @@
 /**
- * Le cashflow en GRAPHE à quatre colonnes, pour un Sankey multi-niveaux.
+ * Le cashflow en GRAPHE, pour un Sankey multi-niveaux.
  *
  * `buildCashflow` répond déjà à « d'où vient l'argent, où va-t-il », et il fait
  * le travail délicat : l'écrêtage des petits postes, et la mise en balance des
  * deux côtés par un nœud « reste » ou « puisé sur le solde ». Ce module ne
- * refait rien de tout ça — il l'appelle, puis ajoute la colonne qui manquait :
+ * refait rien de tout ça — il l'appelle et le met en nœuds et en liens :
  *
- *   sources ──▶ budget ──▶ postes ──▶ sous-postes
+ *   sources ──▶ budget ──▶ postes
  *
- * Le quatrième niveau vient de `spendingByCategory`, qui détaille déjà chaque
- * poste. La règle de dépliage n'est en revanche PAS la sienne : elle écarte le
- * poste à sous-poste unique, ce qui vaut pour la liste qu'elle sert d'ordinaire
- * mais laisserait ici une colonne à moitié vide et un bord droit en escalier. Le
- * seul cas qu'on écarte est le sous-poste fourre-tout, qui donnerait un
- * « Logement → Divers » ne désignant personne (cf. `detailOf`).
+ * Une quatrième colonne existe, qui déplie chaque poste sur ses SOUS-POSTES
+ * (« Logement → Loyer, Charges »), mais elle est FERMÉE par défaut : trois
+ * colonnes répondent déjà à la question que le dessin pose, et la quatrième
+ * double le nombre de branches pour un détail que les listes sous le diagramme
+ * donnent mieux, chiffré et trié. `topSubs` l'ouvre (cf. l'option) — tout ce
+ * qu'elle demande est en place, teinte des sous-postes et écrêtage compris.
  *
- * Les ENTRÉES, elles, sont regroupées sur leur seule nature : `incomeBySource`
- * sépare deux employeurs, ce qu'une liste sait montrer mais qui donne ici une
- * colonne de gauche plus détaillée que celle des dépenses — alors qu'on regarde
- * un flux pour l'inverse. Le détail par payeur reste sous le dessin.
+ * Les ENTRÉES sont regroupées sur leur seule nature : `incomeBySource` sépare
+ * deux employeurs, ce qu'une liste sait montrer mais qui donne ici une colonne
+ * de gauche plus détaillée que celle des dépenses — alors qu'on regarde un flux
+ * pour l'inverse. Le détail par payeur reste sous le dessin.
  *
  * ── Ce que ce module N'ajoute PAS ───────────────────────────────────────────
  * Aucun libellé. Comme `cashflow`, il porte un `kind` et une référence métier,
@@ -92,7 +92,13 @@ export interface CashflowGraph {
 }
 
 export interface CashflowGraphOptions extends CashflowOptions {
-  /** Sous-postes montrés par poste. Au-delà, ils sont regroupés en `subMore`. */
+  /**
+   * Sous-postes montrés par poste — au-delà, ils sont regroupés en `subMore`.
+   *
+   * **0 (défaut) ferme la quatrième colonne** : le graphe s'arrête aux postes.
+   * C'est le réglage des deux pages, et la raison est dans l'en-tête du module.
+   * Passer 3 la rouvre, sans rien d'autre à changer.
+   */
   topSubs?: number;
 }
 
@@ -117,7 +123,7 @@ const subTint = (i: number): number => Math.min(SUB_TINT_BASE + i * SUB_TINT_STE
  */
 export function buildCashflowGraph(
   txs: CategorizableTransaction[],
-  { topSubs = 3, ...options }: CashflowGraphOptions = {},
+  { topSubs = 0, ...options }: CashflowGraphOptions = {},
 ): CashflowGraph {
   /* Les entrées par NATURE et non par payeur : deux salaires font sinon deux
      rubans dont l'un est souvent un trait, et la colonne des entrées finit plus
@@ -125,11 +131,18 @@ export function buildCashflowGraph(
      l'inverse. Les payeurs restent nommés dans la liste sous le dessin. */
   const flow = buildCashflow(txs, { groupIncome: "nature", ...options });
 
-  /* Et le détail des postes GARDÉ même quand un poste ne s'est réparti que sur
-     un sous-poste : c'est la colonne de droite du diagramme, elle a la place, et
-     « Logement → Loyer » apprend que tout le logement est du loyer. La règle qui
-     l'écarte ailleurs vaut pour une liste, pas pour un flux (cf. `keepSingleSub`). */
-  const { slices } = spendingByCategory(txs, { keepSingleSub: true });
+  /* Le détail des postes, et seulement si on l'a demandé : le second passage sur
+     les opérations coûte autant que le premier, il n'a pas à se payer pour une
+     colonne qu'on ne dessinera pas.
+
+     `keepSingleSub` parce qu'un poste réparti sur un seul sous-poste a quand
+     même sa place ici : « Logement → Loyer » apprend que tout le logement est du
+     loyer. La règle qui l'écarte ailleurs vaut pour une liste, où ce serait le
+     même chiffre redit une ligne plus bas, pas pour un flux. */
+  const detail = topSubs > 0;
+  const { slices } = detail
+    ? spendingByCategory(txs, { keepSingleSub: true })
+    : { slices: [] };
   /* Clé en `string` et non en `SpendingCategory` : les nœuds de `buildCashflow`
      portent un id générique (un poste, mais aussi `more` ou `left`), et c'est
      avec celui-là qu'on interroge la table. Un id de synthèse n'y trouve rien,
@@ -167,7 +180,7 @@ export function buildCashflowGraph(
     links.push({ source: id, target: HUB_ID, value: n.amount });
   }
 
-  /* ── Colonne 2 : les postes, puis colonne 3 : leurs sous-postes ───────── */
+  /* ── Colonne 2 : les postes, et leurs sous-postes quand on les a demandés ── */
   for (const n of flow.outflows) {
     const id = `cat:${n.id}`;
     nodes.push({
@@ -177,9 +190,11 @@ export function buildCashflowGraph(
     });
     links.push({ source: HUB_ID, target: id, value: n.amount });
 
-    // Les nœuds de synthèse ne se déplient pas : « reste » n'a pas de détail, et
-    // « autres postes » en a un, mais c'est la liste sous le dessin qui le porte.
-    if (n.kind !== "category") continue;
+    // Les nœuds de synthèse ne se déplient jamais : « reste » n'a pas de détail,
+    // et « autres postes » en a un, mais c'est la liste sous le dessin qui le
+    // porte. Le test sur `detail` est explicite plutôt que laissé à une table de
+    // sous-postes vide : il dit qu'on a CHOISI de ne pas déplier.
+    if (!detail || n.kind !== "category") continue;
 
     for (const sub of clipSubs(detailOf(subsOf.get(n.id) ?? []), topSubs)) {
       const subId = `sub:${n.id}:${sub.id}`;

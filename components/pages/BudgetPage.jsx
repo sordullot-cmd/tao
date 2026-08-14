@@ -1,14 +1,31 @@
 "use client";
 
 /**
- * Budget type — plusieurs plans nommés de répartition du revenu mensuel.
+ * Budget — le mois qui vient de passer, puis le plan qu'on se donne.
  *
- * Une page à soi, de nouveau. Elle avait été rangée en dernier bloc de la page
- * Cashflow pour qu'on lise le réalisé avant le prévu ; en pratique c'était une
- * page entière ajoutée sous une autre page entière, et le plan se saisit — on
- * n'y arrive pas en faisant défiler un relevé, on y va exprès. La persistance
- * n'a pas bougé (même store, mêmes clés) : un plan saisi du temps de la fusion
- * se retrouve tel quel, et l'ancienne route `budget` mène de nouveau ici.
+ * La page tient deux choses, dans cet ordre, et l'ordre est le propos :
+ *
+ *   1. CE MOIS-CI, lu sur les relevés : le flux réel en diagramme, la
+ *      répartition en anneau à côté, et les trois chiffres du mois posés en
+ *      onglets sous le dessin — ce sont eux qui choisissent ce que l'anneau
+ *      détaille. Un mois calendaire, pas une fenêtre glissante : un loyer tombe
+ *      une fois par mois, et « les trente derniers jours » en attrape tantôt un,
+ *      tantôt deux. La navigation se fait donc de mois en mois.
+ *   2. LE BUDGET TYPE, saisi à la main : plusieurs plans nommés de répartition
+ *      du revenu mensuel.
+ *
+ * Le réalisé AVANT le prévu, séparés par un filet : un plan discuté avant
+ * d'avoir regardé le mois est un vœu. Et le mois seul ne dit pas ce qu'on
+ * voulait — d'où les deux sur la même page, plutôt qu'un renvoi de l'une à
+ * l'autre. La page Cashflow, elle, reste l'endroit où le mois se DÉPLIE
+ * (opérations d'un poste, enseignes, relevé) ; ici il se résume.
+ *
+ * Sans banque connectée, le premier bloc dit qu'il n'a pas de matière et renvoie
+ * là où ça se branche — des zéros se liraient comme « tu n'as rien dépensé ».
+ * Le plan, lui, ne dépend d'aucun compte et reste utilisable.
+ *
+ * La persistance du plan n'a pas bougé (même store, mêmes clés) : un plan saisi
+ * du temps où cette page vivait sous la page Cashflow se retrouve tel quel.
  *
  * Pour chaque plan : un revenu mensuel, puis des catégories qui ont chacune
  * l'un de DEUX modes (voir `pctOf` / `amountOf`) :
@@ -27,19 +44,30 @@
  * plan actif fait partie du même store : il suit donc l'utilisateur d'un
  * appareil à l'autre, comme le reste de ses préférences dans cette app.
  *
- * Adapté d'une page de l'app patrimoine : la version d'origine pré-remplissait
- * le revenu avec la moyenne des salaires réels lus sur le compte bancaire.
- * tr4de n'a pas de connexion bancaire — le revenu se saisit à la main.
+ * Le revenu du plan se SAISIT, alors même que le bloc du dessus connaît les
+ * salaires réels du mois. C'est voulu : un plan se fait sur ce qu'on gagne
+ * d'habitude, pas sur ce qui vient de tomber — un mois à treizième mois
+ * gonflerait tout le plan sans qu'on l'ait demandé. Le chiffre encaissé est
+ * juste au-dessus, à recopier si c'est bien celui qu'on veut.
  */
 
 import React from "react";
-import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
+import { Landmark, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
-import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
+import { AllocationChart, CARD, PeriodPills, SectionTitle, StepperPill } from "@/components/ui/da";
+import SankeyGraph from "@/components/ui/SankeyGraph";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
+import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useBankAccounts } from "@/lib/bank/useBankAccounts";
+import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
+import { categoryLabelKey, spendingByCategory, subLabelKey } from "@/lib/bank/categories";
+import { incomeBySource } from "@/lib/bank/cashflow";
+import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
+import { daysSince, monthWindow, parseDay, withinRange } from "@/lib/bank/transactions";
+import { flowLabel } from "@/lib/ui/flowLabel";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, amountOf, pctOf,
 } from "@/lib/budgetPlans";
@@ -178,7 +206,7 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
   );
 }
 
-export default function BudgetPage() {
+export default function BudgetPage({ setPage }) {
   useLang();
   const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -279,8 +307,15 @@ export default function BudgetPage() {
   const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+      {/* ── 1. Le mois qui vient de passer ───────────────────────────────── */}
+      <MonthlyFlow setPage={setPage} />
+
+      {/* ── 2. Le plan ────────────────────────────────────────────────────────
+          Séparé par un filet : ce qui suit ne vient plus de la banque, il se
+          SAISIT. Sans cette rupture, un plan à 2 000 € se lirait comme un
+          chiffre relevé sur le compte. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, borderTop: `1px solid ${T.border}`, paddingTop: 28 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <SectionTitle
             action={
@@ -679,5 +714,289 @@ function PctInput({ value, derived, onValue, ariaLabel }) {
         color: derived ? T.textSub : T.text,
       }}
     />
+  );
+}
+
+/* ── Le mois qui vient de passer ────────────────────────────────────────────
+   Le bloc « réel » de la page : le flux du mois, sa répartition, et les trois
+   chiffres qui le résument. Composant à part et non un bout du corps de la
+   page : il porte ses propres hooks (banque, relevés, mois montré), et la page
+   du plan n'a aucune raison de se re-rendre quand un relevé arrive.
+   ------------------------------------------------------------------------- */
+
+/** Teintes des deux parts de l'onglet « Reste ». Elles ne sortent pas de la
+ *  palette des postes : ces parts n'en SONT pas, et une couleur de poste leur
+ *  donnerait l'air d'en être un. Bleu du nœud central pour ce qui est couvert,
+ *  gris pour ce qui n'a pas été dépensé, terre cuite pour le découvert — la
+ *  seule des trois qui mérite d'être vue. */
+const COVERED_COLOR = "#2C72C3";
+const LEFT_COLOR = "#B9C2CB";
+const DRAW_COLOR = "#C05A46";
+
+/** Six postes, cinq sources et trois sous-postes au diagramme : les mêmes
+ *  écrêtages que la page Cashflow, qui dessine le même graphe. */
+const GRAPH_CLIP = { topOutflows: 6, topInflows: 5 };
+
+function MonthlyFlow({ setPage }) {
+  // La langue sert de dépendance aux libellés du diagramme : sans elle, changer
+  // de langue laisserait les pastilles dans l'ancienne, le graphe n'ayant pas bougé.
+  const lang = useLang();
+  const bank = useBankAccounts();
+  const bp = useBreakpoint();
+
+  /* Le mois montré, en nombre de mois avant celui-ci. État LOCAL et non rangé
+     dans le store : c'est une position de lecture, pas un réglage — revenir sur
+     la page doit rouvrir le mois en cours, pas celui qu'on regardait la
+     semaine dernière. */
+  const [offset, setOffset] = React.useState(0);
+  const { from, to } = React.useMemo(() => monthWindow(offset), [offset]);
+
+  /* Profondeur demandée à la banque : de quoi couvrir le mois montré, jamais
+     moins de 90 jours — c'est le minimum que l'API rend de toute façon, et
+     c'est ce que demandent déjà la synthèse Patrimoine et la page Cashflow,
+     donc le MÊME cache. Reculer d'un mois ne redemande que ce qui manque. */
+  const depth = React.useMemo(() => Math.max(daysSince(from), 90), [from]);
+
+  const uids = React.useMemo(() => bank.accounts.map((a) => a.uid), [bank.accounts]);
+  const { byUid, loading } = useBankTransactionsAll(uids, depth);
+
+  /* Les relevés de tous les comptes mis bout à bout, recadrés sur le mois. Le
+     cache peut contenir plus profond que ce qu'on affiche : le recadrage se
+     fait ici, pas à la requête. */
+  const txs = React.useMemo(() => {
+    const list = [];
+    for (const uid of uids) {
+      const rows = byUid[uid];
+      if (rows) list.push(...rows);
+    }
+    return withinRange(list, from, to);
+  }, [byUid, uids, from, to]);
+
+  const flow = React.useMemo(() => buildCashflowGraph(txs, GRAPH_CLIP), [txs]);
+  const spending = React.useMemo(() => spendingByCategory(txs), [txs]);
+  const incomes = React.useMemo(() => incomeBySource(txs), [txs]);
+
+  /* L'onglet choisi sous le diagramme décide ce que l'anneau détaille. « Sorti »
+     par défaut : c'est la question qu'on se pose devant un budget, et les deux
+     autres onglets portent déjà leur chiffre en clair. */
+  const [tab, setTab] = React.useState("out");
+
+  const flowNodes = React.useMemo(
+    () => flow.nodes.map((n) => ({ id: n.id, color: n.color, label: flowLabel(n) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [flow, lang],
+  );
+
+  /* « août 2026 ». Le format vient du système : c'est la langue de l'appareil
+     qui décide de l'ordre et de la casse, pas nous. */
+  const monthLabel = React.useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(parseDay(from));
+    } catch {
+      return from.slice(0, 7);
+    }
+  }, [from]);
+
+  const ring = React.useMemo(() => {
+    if (tab === "in") {
+      return {
+        parts: incomes.slices.map((s) => ({
+          id: s.id, label: s.source || t(subLabelKey(s.sub)),
+          color: s.color, pct: s.pct, amount: s.amount,
+        })),
+        label: t("cashflow.in"),
+        value: flow.income,
+      };
+    }
+
+    /* « Reste » n'a pas de répartition à montrer : ce qu'on veut voir, c'est sa
+       place dans le mois. L'anneau porte donc DEUX parts, et le sens des deux
+       change avec le signe — ce qui reste sur ce qui est entré, ou ce qu'il a
+       fallu prendre en plus de ce qui est entré. */
+    if (tab === "left") {
+      const drawn = flow.net < 0;
+      const total = drawn ? flow.spent : flow.income;
+      const covered = drawn ? flow.income : flow.spent;
+      const edge = Math.abs(flow.net);
+      const share = (v) => (total > 0 ? (v / total) * 100 : 0);
+      return {
+        parts: [
+          {
+            id: "covered", label: t(drawn ? "cashflow.in" : "cashflow.out"),
+            color: COVERED_COLOR, pct: share(covered), amount: covered,
+          },
+          {
+            id: "edge", label: t(drawn ? "cashflow.drawn" : "cashflow.left"),
+            color: drawn ? DRAW_COLOR : LEFT_COLOR, pct: share(edge), amount: edge,
+          },
+        ],
+        label: t(drawn ? "cashflow.drawn" : "cashflow.left"),
+        value: edge,
+        tone: drawn ? T.pnlNeg : undefined,
+      };
+    }
+
+    return {
+      parts: spending.slices.map((s) => ({
+        id: s.id, label: t(categoryLabelKey(s.id)),
+        color: s.color, pct: s.pct, amount: s.amount,
+      })),
+      label: t("cashflow.out"),
+      value: flow.spent,
+    };
+    // `lang` : les libellés des parts passent par `t()` (cf. `flowNodes`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, incomes, spending, flow, lang]);
+
+  /* Deux colonnes sur grand écran : l'anneau demande sa place et le diagramme
+     ne se lit plus en dessous de 640 px de large. Empilés en dessous. */
+  const twoCols = bp === "desktop";
+  const noBank = bank.accounts.length === 0;
+  const empty = flow.total <= 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <SectionTitle>{t("budget.thisMonth")}</SectionTitle>
+        {/* Le mois suivant n'existe pas encore quand on est sur le mois en
+            cours : la flèche s'éteint plutôt que de ne rien faire. */}
+        <StepperPill
+          label={monthLabel}
+          onPrev={() => setOffset((o) => o - 1)}
+          onNext={() => setOffset((o) => Math.min(0, o + 1))}
+          nextDisabled={offset >= 0}
+          prevLabel={t("budget.prevMonth")}
+          nextLabel={t("budget.nextMonth")}
+        />
+      </div>
+
+      {noBank ? (
+        <section style={{ ...CARD, padding: "48px 32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+          <div style={{ fontSize: 14, color: T.textSub, maxWidth: 420 }}>
+            {bank.loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.noAccount")}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPage?.("patrimoine-bank")}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
+              padding: "0 16px", borderRadius: 999, border: "none",
+              background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Landmark size={15} strokeWidth={1.75} /> {t("patrimoine.bank.connect")}
+          </button>
+        </section>
+      ) : empty ? (
+        <section style={{ ...CARD, padding: "48px 32px", textAlign: "center", fontSize: 14, color: T.textSub }}>
+          {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
+        </section>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: twoCols ? "minmax(0, 2.1fr) minmax(260px, 1fr)" : "minmax(0, 1fr)",
+            gap: 20,
+            alignItems: "start",
+          }}
+        >
+          <section style={{ ...CARD, padding: "20px 24px 0", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{t("cashflow.title")}</div>
+
+            <SankeyGraph
+              nodes={flowNodes}
+              links={flow.links}
+              formatValue={(v) => fmt(v)}
+              ariaLabel={t("cashflow.flowAria")
+                .replace("{in}", fmt(flow.income))
+                .replace("{out}", fmt(flow.spent))}
+              emptyLabel={t("cashflow.flowEmpty")}
+            />
+
+            {/* Les trois chiffres du mois, en onglets : ils résument ET ils
+                commandent. Sans le second rôle, ce serait une rangée de chiffres
+                de plus, et l'anneau d'à côté n'aurait aucun moyen de dire autre
+                chose que les dépenses. */}
+            <div
+              role="tablist"
+              aria-label={t("budget.tabsAria")}
+              style={{ display: "flex", gap: 4, flexWrap: "wrap", borderTop: `1px solid ${T.border}`, margin: "0 -24px", padding: "0 12px" }}
+            >
+              <FlowTab
+                active={tab === "in"} onClick={() => setTab("in")}
+                label={t("cashflow.in")} value={flow.income} tone={T.pnlPos}
+              />
+              <FlowTab
+                active={tab === "out"} onClick={() => setTab("out")}
+                label={t("cashflow.out")} value={flow.spent}
+              />
+              <FlowTab
+                active={tab === "left"} onClick={() => setTab("left")}
+                label={t(flow.net < 0 ? "cashflow.drawn" : "cashflow.left")}
+                value={Math.abs(flow.net)}
+                tone={flow.net < 0 ? T.pnlNeg : undefined}
+              />
+            </div>
+          </section>
+
+          <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{t("budget.distribution")}</div>
+            <AllocationChart
+              parts={ring.parts}
+              ariaLabel={`${ring.label} : ${fmt(ring.value)}`}
+              size={196}
+              thickness={24}
+              centreLabel={ring.label}
+              centreValue={ring.value}
+              centreTone={ring.tone}
+              showPct={false}
+              formatValue={(v) => fmt(v)}
+            />
+            {/* Le classement est deviné, pas déclaré : le dire évite de prendre
+                pour argent comptant un « Autres » qui n'est qu'un libellé
+                illisible. */}
+            <div style={{ fontSize: 12, lineHeight: 1.6, color: T.textMut }}>
+              {t("patrimoine.spending.hint")}
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Un des trois chiffres du mois, en onglet.
+ *
+ * Le trait sous l'onglet actif prend la TEINTE du chiffre (vert pour l'encaissé,
+ * rouge pour un découvert) : c'est le même signal que la couleur du montant, et
+ * il tient quand l'œil ne regarde que le bas de la carte.
+ */
+function FlowTab({ active, onClick, label, value, tone }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
+        minWidth: 0, padding: "12px 14px 10px", border: "none", background: "transparent",
+        borderBottom: `2px solid ${active ? (tone || T.text) : "transparent"}`,
+        opacity: active ? 1 : 0.55, cursor: "pointer", fontFamily: "inherit",
+        transition: "opacity 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease)",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
+      onMouseLeave={(e) => { e.currentTarget.style.opacity = active ? 1 : 0.55; }}
+    >
+      <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{
+        fontSize: 22, fontWeight: 600, letterSpacing: -0.3,
+        color: tone || T.text, fontVariantNumeric: "tabular-nums",
+      }}>
+        {fmt(value)}
+      </span>
+    </button>
   );
 }

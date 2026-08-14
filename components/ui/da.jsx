@@ -648,8 +648,13 @@ export function PeriodPills({ value, onChange, options = PERIODS, track = false,
  * troisième cible sans affordance serait ambiguë. `onLabel` l'active pour les
  * pages qui ouvrent un sélecteur de date dessus — il prend alors un survol, qui
  * est ce qui le signale comme cliquable.
+ *
+ * `prevDisabled` / `nextDisabled` éteignent une flèche qui ne mène nulle part —
+ * le mois prochain sur un budget, par exemple. Éteinte plutôt que retirée : la
+ * pastille garderait sinon deux largeurs différentes selon l'endroit où l'on se
+ * trouve, et le libellé sauterait d'un cran à chaque bout de course.
  */
-export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLabel = "Précédent", nextLabel = "Suivant" }) {
+export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLabel = "Précédent", nextLabel = "Suivant", prevDisabled = false, nextDisabled = false }) {
   // La flèche mesure 16 px comme sur la maquette, mais sa zone cliquable prend
   // toute la hauteur de la pastille (marges négatives) : la cible reste
   // atteignable au pouce sans épaissir le contrôle.
@@ -665,7 +670,10 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
       height:34, padding:"7px 14px", borderRadius:999,
       background:T.white, boxShadow:T.elevPill,
     }}>
-      <button type="button" onClick={onPrev} aria-label={prevLabel} style={arrow}>
+      <button
+        type="button" onClick={onPrev} aria-label={prevLabel} disabled={prevDisabled}
+        style={{...arrow, cursor: prevDisabled ? "default" : "pointer", opacity: prevDisabled ? 0.3 : 1}}
+      >
         <ChevronLeft size={16} strokeWidth={1.75} />
       </button>
       {onLabel ? (
@@ -689,7 +697,10 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
           {label}
         </span>
       )}
-      <button type="button" onClick={onNext} aria-label={nextLabel} style={arrow}>
+      <button
+        type="button" onClick={onNext} aria-label={nextLabel} disabled={nextDisabled}
+        style={{...arrow, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.3 : 1}}
+      >
         <ChevronRight size={16} strokeWidth={1.75} />
       </button>
     </div>

@@ -59,7 +59,7 @@ import { findMerchant } from "@/lib/bank/merchants";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import {
-  categorizeTransaction, categoryColor, categoryLabelKey, isCatchAllSub, parentOfSub,
+  categorizeTransaction, categoryColor, categoryLabelKey, parentOfSub,
   spendingByCategory, subLabelKey, subcategorizeTransaction,
 } from "@/lib/bank/categories";
 import { incomeBySource } from "@/lib/bank/cashflow";
@@ -67,6 +67,9 @@ import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
 import { ALL_DAYS, depthOf, kindLabelKey, sortTransactions, withinDays } from "@/lib/bank/transactions";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+// Le nommage des nœuds est partagé avec la page Budget, qui dessine le même
+// graphe : deux copies auraient divergé au premier poste ajouté.
+import { flowLabel } from "@/lib/ui/flowLabel";
 import { fmt } from "@/lib/ui/format";
 
 /* Les fenêtres de la DA, plus « Tout » — comme la courbe du patrimoine. Un mois
@@ -111,41 +114,6 @@ function shortDay(iso) {
   }
 }
 
-/**
- * Libellé d'un nœud du flux.
- *
- * Les nœuds de synthèse ont leurs propres clés — ce ne sont ni des postes ni des
- * sources, et « + 4 autres postes » doit dire COMBIEN il en rassemble, sans quoi
- * il passerait pour un poste réel.
- *
- * Le sous-poste fourre-tout d'un poste (`housing` sous « Logement ») porte le
- * nom de son poste : écrit juste à droite de lui dans le diagramme, ce serait le
- * même mot deux fois de suite, et on croirait à un ruban qui ne mène nulle part.
- * Il se dit donc « Divers », comme sous l'anneau des dépenses.
- *
- * Une SOURCE se dit par sa nature (« Salaire & activité »), le diagramme
- * regroupant les payeurs d'une même nature (cf. `buildCashflowGraph`) : deux
- * employeurs y faisaient deux rubans dont l'un était souvent un trait, et la
- * colonne des entrées finissait plus détaillée que celle des dépenses. Le nom de
- * qui paie reste dans la liste « Entrées d'argent », qui a la place de le
- * chiffrer ; on le reprend ici dès qu'il existe, pour le jour où l'appelant
- * redemanderait le détail par payeur.
- */
-function flowLabel(node) {
-  switch (node.kind) {
-    case "hub":
-      return t("cashflow.hub");
-    case "income":
-      return node.source || t(subLabelKey(node.ref));
-    case "category":
-      return t(categoryLabelKey(node.ref));
-    case "sub":
-      return isCatchAllSub(node.ref) ? t("patrimoine.sub.divers") : t(subLabelKey(node.ref));
-    default:
-      return t(`cashflow.node.${node.ref}`).replace("{n}", String(node.count));
-  }
-}
-
 export default function CashflowPage({ setPage }) {
   // La langue sert de dépendance aux libellés du diagramme : sans elle, changer
   // de langue laisserait les pastilles dans l'ancienne, le graphe n'ayant pas bougé.
@@ -180,17 +148,23 @@ export default function CashflowPage({ setPage }) {
 
   const txs = React.useMemo(() => withinDays(all, days), [all, days]);
 
-  /* Six postes, cinq sources et trois sous-postes par poste, pas plus : au-delà,
-     les branches deviennent des traits et leurs noms se marchent dessus. Ce qui
-     est écrêté est rassemblé sous une branche qui dit combien elle en porte, et
-     le détail complet est dans les listes juste en dessous.
+  /* Six postes et cinq sources, pas plus : au-delà, les branches deviennent des
+     traits et leurs noms se marchent dessus. Ce qui est écrêté est rassemblé
+     sous une branche qui dit combien elle en porte, et le détail complet est
+     dans les listes juste en dessous.
 
      Cinq sources et non quatre : depuis qu'une source porte le NOM de qui paie,
      un même salaire versé par deux employeurs fait deux branches là où il n'en
      faisait qu'une. À quatre, un relevé ordinaire (deux salaires, une aide, un
-     remboursement, un virement) commençait à regrouper. */
+     remboursement, un virement) commençait à regrouper.
+
+     Pas de `topSubs` : le diagramme s'arrête aux POSTES. Les déplier sur leurs
+     sous-postes doublait le nombre de branches pour un détail que le tableau
+     juste en dessous donne mieux — chiffré, trié, et dépliable sur les
+     opérations elles-mêmes. La colonne reste disponible dans
+     `buildCashflowGraph` si on la veut un jour. */
   const flow = React.useMemo(
-    () => buildCashflowGraph(txs, { topOutflows: 6, topInflows: 5, topSubs: 3 }),
+    () => buildCashflowGraph(txs, { topOutflows: 6, topInflows: 5 }),
     [txs],
   );
   const { slices } = React.useMemo(() => spendingByCategory(txs), [txs]);

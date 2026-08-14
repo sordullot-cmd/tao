@@ -299,6 +299,50 @@ export function withinDays(txs: BankTransaction[], days: number, today = new Dat
 }
 
 /**
+ * Le mois calendaire à `offset` mois d'ici — `0` le mois courant, `-1` le
+ * précédent. Bornes incluses, au format des dates de mouvement (AAAA-MM-JJ).
+ *
+ * Un mois n'est PAS une fenêtre glissante : « ce mois-ci » commence le 1er, et
+ * c'est le seul découpage sur lequel un budget se raisonne (un loyer tombe une
+ * fois par mois, pas une fois par trente jours). Le jour 0 du mois suivant donne
+ * le dernier jour du mois demandé, ce qui règle février et les bissextiles sans
+ * table.
+ */
+export function monthWindow(offset = 0, today = new Date()): { from: string; to: string } {
+  const first = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+  const last = new Date(today.getFullYear(), today.getMonth() + offset + 1, 0);
+  return { from: dayKey(first), to: dayKey(last) };
+}
+
+/** AAAA-MM-JJ d'une date locale — le format que porte `BankTransaction.date`. */
+export function dayKey(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/**
+ * Mouvements d'un intervalle de jours, bornes INCLUSES.
+ *
+ * La comparaison est faite sur les chaînes : le format AAAA-MM-JJ se trie dans
+ * l'ordre chronologique, et passer par `Date` ne ferait qu'ajouter un risque de
+ * fuseau pour le même résultat.
+ */
+export function withinRange(txs: BankTransaction[], from: string, to: string): BankTransaction[] {
+  return txs.filter((tx) => tx.date >= from && tx.date <= to);
+}
+
+/** Nombre de jours entre un jour et aujourd'hui, bornes incluses — ce qu'il faut
+ *  demander à la banque pour couvrir une fenêtre qui commence à `from`. */
+export function daysSince(from: string, today = new Date()): number {
+  const start = parseDay(from).getTime();
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
+}
+
+/**
  * Date du plus ancien mouvement, ou `null` sur une liste vide.
  *
  * C'est ce qui permet de dire jusqu'où l'historique remonte VRAIMENT : demander

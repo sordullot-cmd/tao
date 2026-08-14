@@ -741,7 +741,7 @@ export default function App() {
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,
     cashflow: <CashflowPage setPage={setPage} />,
-    budget: <BudgetPage />,
+    budget: <BudgetPage setPage={setPage} />,
     /* Ancienne route « Dépenses » : le réalisé vit dans Cashflow, et les liens
        existants (palette de commandes, renvois d'autres pages) doivent tomber
        là plutôt que dans le vide. */

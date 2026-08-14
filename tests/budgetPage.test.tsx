@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 
@@ -17,6 +17,25 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
     });
     return [v, set];
   },
+}));
+
+/* Comptes et relevés sont mockés : le hook réel irait chercher `/api/bank/...`,
+   qui n'existe pas sous jsdom. Vides par défaut — les tests du plan n'ont rien à
+   voir avec la banque, et le bloc du mois affiche alors son état « pas de compte
+   connecté », qui ne rend ni diagramme ni anneau. */
+const accounts: { uid: string }[] = [];
+let transactions: unknown[] = [];
+
+vi.mock("@/lib/bank/useBankAccounts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/bank/useBankAccounts")>()),
+  useBankAccounts: () => ({
+    configured: true, connections: [], accounts, loading: false, error: null, reload: () => {},
+  }),
+}));
+
+vi.mock("@/lib/bank/useBankTransactions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/bank/useBankTransactions")>()),
+  useBankTransactionsAll: () => ({ byUid: { c1: transactions }, loading: false }),
 }));
 
 import BudgetPage from "@/components/pages/BudgetPage";
@@ -139,5 +158,103 @@ describe("Page Budget", () => {
     expect(nameField.value).toBe("New budget");
     // L'ancien budget reste accessible d'un clic.
     expect(screen.getByRole("button", { name: "My budget" })).toBeTruthy();
+  });
+});
+
+/* ── Le bloc « Ce mois-ci » ─────────────────────────────────────────────────
+   Ce que la page décide ici, et que ni `cashflow` ni `categories` ne tiennent :
+     — la fenêtre est un MOIS CALENDAIRE, et les flèches en changent ;
+     — le mois suivant n'existe pas quand on est sur le mois en cours ;
+     — les trois chiffres commandent l'anneau, qui doit donc changer de propos
+       quand on change d'onglet. */
+
+const tx = (date: string, label: string, amount: number, kind = "card") => ({
+  id: `${date}-${label}`,
+  date,
+  label,
+  detail: null,
+  amount,
+  currency: "EUR",
+  kind,
+  pending: false,
+});
+
+/** Le mois tel que le système l'écrit — la page le formate par `Intl`, et la
+ *  langue de l'appareil décide de l'ordre des mots comme de la casse. */
+const monthLabel = (iso: string) =>
+  new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" })
+    .format(new Date(`${iso}T00:00:00`));
+
+describe("Page Budget — le mois qui vient de passer", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-15T10:00:00"));
+    cloudStore.clear();
+    accounts.length = 0;
+    accounts.push({ uid: "c1" });
+    transactions = [
+      tx("2026-08-03", "VIR SEPA SALAIRE", 2000, "transfer"),
+      tx("2026-08-10", "CARTE 10/08 CARREFOUR", -300),
+      tx("2026-07-05", "VIR SEPA SALAIRE", 1000, "transfer"),
+      tx("2026-07-20", "PRLV SEPA EDF", -100, "direct_debit"),
+    ];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    accounts.length = 0;
+    transactions = [];
+  });
+
+  it("s'ouvre sur le mois en cours, sans les opérations du mois d'avant", () => {
+    render(<BudgetPage />);
+
+    expect(screen.getByText(monthLabel("2026-08-01"))).toBeTruthy();
+    const text = document.body.textContent || "";
+    expect(text).toMatch(/2,000\.00/); // encaissé en août
+    expect(text).toMatch(/300\.00/);   // dépensé en août
+    expect(text).toMatch(/1,700\.00/); // reste
+    // Le salaire de juillet est hors du mois montré.
+    expect(text).not.toMatch(/1,000\.00/);
+  });
+
+  it("recule d'un mois, et le mois suivant s'éteint sur le mois en cours", () => {
+    render(<BudgetPage />);
+
+    const next = screen.getByLabelText("Next month") as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+
+    fireEvent.click(screen.getByLabelText("Previous month"));
+
+    expect(screen.getByText(monthLabel("2026-07-01"))).toBeTruthy();
+    const text = document.body.textContent || "";
+    expect(text).toMatch(/1,000\.00/); // encaissé en juillet
+    expect(text).toMatch(/900\.00/);   // reste
+    expect(text).not.toMatch(/2,000\.00/);
+    // Et la flèche du mois suivant s'est rallumée.
+    expect((screen.getByLabelText("Next month") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("l'anneau détaille ce que l'onglet choisi désigne", () => {
+    render(<BudgetPage />);
+
+    // Par défaut, les dépenses : c'est la question qu'on se pose devant un budget.
+    expect(screen.getByRole("img", { name: /^Money out/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Money in/ }));
+    expect(screen.getByRole("img", { name: /^Money in/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Left over/ }));
+    expect(screen.getByRole("img", { name: /^Left over/ })).toBeTruthy();
+  });
+
+  it("dit qu'il n'y a pas de matière plutôt que d'afficher des zéros", () => {
+    accounts.length = 0;
+    render(<BudgetPage />);
+
+    expect(screen.getByText("Connect a bank to see where your money goes.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect a bank" })).toBeTruthy();
+    // Le plan, lui, ne dépend d'aucune banque et reste utilisable.
+    expect(screen.getByText("Target budget")).toBeTruthy();
   });
 });
