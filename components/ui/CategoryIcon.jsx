@@ -10,28 +10,27 @@
  * est la même que dans l'anneau et le diagramme de flux, est conservée : c'est
  * elle qui relie la ligne du tableau à sa part dans les graphiques.
  *
- * ── Ronde et PLEINE, comme un logo ──────────────────────────────────────────
- * Elle se lit dans la même colonne que les vignettes d'enseignes, qui sont des
- * logos ronds à couleur pleine. Une pastille pâle à côté d'eux ne se lisait pas
- * comme la même famille d'objet : elle avait l'air d'un état désactivé. D'où le
- * même dessin qu'`AssetAvatar` et `MerchantAvatar` — disque opaque de la couleur
- * du poste.
+ * ── Un cercle BLANC, la couleur dans le glyphe ──────────────────────────────
+ * Le disque a d'abord été plein — la couleur du poste en aplat, le glyphe par
+ * dessus. Deux essais, deux impasses : en blanc, le trait donnait un pictogramme
+ * d'application ; du même ton en plus foncé, un camaïeu qui empâtait la couleur
+ * et rendait les vingt-huit postes difficiles à distinguer les uns des autres à
+ * cette taille.
  *
- * ── Le glyphe est la MÊME couleur, en plus foncé ────────────────────────────
- * Et non un blanc ou un noir calculé : un aplat coloré traversé d'un trait blanc
- * se lit comme un pictogramme d'application, alors qu'un camaïeu se lit comme
- * une matière. La teinte reste celle du poste d'un bout à l'autre de la ligne.
+ * C'est l'inverse qui tient : le cercle s'efface (une pointe de la teinte, assez
+ * pour que la vignette existe sur une carte blanche) et la COULEUR passe dans le
+ * glyphe, à pleine force. Une teinte pure sur du blanc se reconnaît au premier
+ * coup d'œil, là où la même teinte diluée dans un aplat se confond avec sa
+ * voisine — et la colonne cesse de crier à côté des logos d'enseignes, qui
+ * gardent leurs aplats de marque.
  *
- * Ça se paie en CONTRASTE, et c'est ce qui décide des deux constantes plus bas.
- * Sur le disque à pleine saturation, un glyphe plus foncé du même ton plafonne
- * à 2,4:1 (mesuré sur les 28 postes) : huit d'entre eux passaient sous le seuil
- * de 3:1 des éléments graphiques, et un trait de 2 px y devenait une ombre. Le
- * disque est donc éclairci d'un cran — 15 %, assez pour que les 28 postes
- * repassent au-dessus de 3:1, trop peu pour qu'il cesse de se lire comme un
- * aplat plein à côté des logos d'enseignes.
- *
- * `DISC_TINT` à 0 rend le disque exactement tel qu'il était, au prix de ces
- * huit postes.
+ * ── Le contraste n'est pas laissé à l'œil ───────────────────────────────────
+ * Sur un disque quasi blanc, un trait de 2 px doit tenir 4,5:1 pour se lire, et
+ * la palette des postes mélange des teintes sombres (bordeaux) et claires (cyan,
+ * mauve, ambre) : à pleine saturation, huit d'entre elles passaient sous le
+ * seuil. `deepen` (cf. `lib/ui/color`) ramène chacune juste au niveau de
+ * profondeur qu'il faut, en mélangeant vers le NOIR et jamais vers le gris — la
+ * teinte est conservée, et les couleurs déjà sombres ne bougent pas.
  *
  * Le choix des icônes est de la PRÉSENTATION, pas du classement : il vit donc
  * ici et non dans `lib/bank/categories`, qui décide des postes et de leurs
@@ -46,13 +45,17 @@ import {
   Sparkles, Ticket, TrainFront, UtensilsCrossed, Wallet, Zap,
 } from "lucide-react";
 import { categoryColor } from "@/lib/bank/categories";
-import { shade, tint } from "@/lib/ui/color";
+import { deepen, tint } from "@/lib/ui/color";
 
 /* Le disque, et le glyphe dessus — tous deux dérivés de la couleur du poste.
    Les valeurs viennent d'une mesure de contraste sur les 28 postes, pas de
-   l'œil : cf. l'en-tête. */
-const DISC_TINT = 0.15;
-const GLYPH_SHADE = 0.65;
+   l'œil : cf. l'en-tête.
+
+   Le disque à 88 % de blanc se lit comme blanc tout en restant visible sur une
+   carte blanche. Le glyphe est ramené sous cette luminance-là, qui est ce que
+   4,5:1 exige contre un fond aussi clair. */
+const DISC_TINT = 0.88;
+const GLYPH_MAX_LUM = 0.13;
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste
    ACHÈTE, pas la famille dans laquelle il est rangé : « carburant » prend la
@@ -107,7 +110,7 @@ export default function CategoryIcon({ category, size = 32 }) {
       style={{
         width: size, height: size, flexShrink: 0, borderRadius: 999,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: tint(color, DISC_TINT), color: shade(color, GLYPH_SHADE),
+        background: tint(color, DISC_TINT), color: deepen(color, GLYPH_MAX_LUM),
       }}
     >
       <Icon size={Math.round(size * 0.52)} strokeWidth={2} />
