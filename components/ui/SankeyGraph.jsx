@@ -289,9 +289,18 @@ export default function SankeyGraph({
        rubans voisins il reste toujours un filet de blanc, et un `onMouseLeave`
        par forme y ferait clignoter la figure à chaque traversée. */
     <div ref={ref} style={{ width: "100%", position: "relative" }} onMouseLeave={leave}>
+      {/* `backwards` et SURTOUT PAS `both` : une animation dont l'état final est
+          retenu (`forwards`, donc `both`) garde la main sur `opacity` une fois
+          finie — elle bat l'attribut du ruban comme le style du libellé, quelle
+          que soit leur spécificité. Les rubans restaient donc à 1 quoi qu'on
+          fasse, et le survol ne se voyait que sur les barres, seules formes non
+          animées : la branche entière ne réagissait pas, son bout seulement.
+          `backwards` garde ce qu'on voulait de `both` — l'élément attend son
+          tour à opacité nulle pendant son délai — et rend `opacity` à la forme
+          dès l'entrée terminée. */}
       <style>{`
         @keyframes tr4de-sankeygraph-in { from { opacity: 0 } to { opacity: 1 } }
-        .tr4de-sankeygraph-part { animation: tr4de-sankeygraph-in 460ms var(--ease-out, ease) both }
+        .tr4de-sankeygraph-part { animation: tr4de-sankeygraph-in 460ms var(--ease-out, ease) backwards }
         @media (prefers-reduced-motion: reduce) {
           .tr4de-sankeygraph-part { animation: none }
         }

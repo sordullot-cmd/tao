@@ -35,7 +35,7 @@
  */
 
 import { findMerchant, type Merchant } from "@/lib/bank/merchants";
-import { HUE, PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
+import { HUE } from "@/lib/ui/palette";
 import type { BankTransaction } from "@/lib/bank/transactions";
 
 export type SpendingCategory =
@@ -85,70 +85,65 @@ export type SpendingSubcategory = string;
  * porter la même couleur des deux côtés, sinon les deux graphiques se
  * contredisent à l'œil.
  *
- * Les teintes viennent de la charte (cf. lib/ui/palette), qui donne huit
- * couleurs principales pour vingt-huit postes. L'ordre de service est celui du
- * module : les huit principales d'abord, puis les huit sombres, puis les huit
- * claires, et les gris pour ce qui n'est pas un poste de vie (assurance, frais,
- * retraits, non-catégorisé). Vingt-huit valeurs, toutes distinctes — c'est ce
- * que vérifie tests/bankCategories. Aucune n'est calculée : les trois crans de
- * chaque famille sont des teintes publiées de la charte.
+ * Les teintes sont prises NOMMÉMENT dans la charte (cf. `HUE` dans
+ * lib/ui/palette) : vingt-huit valeurs, toutes distinctes, aucune calculée.
+ * C'est ce que vérifie tests/bankCategories.
  *
- * Une seule teinte est RÉSERVÉE : le bleu plein va aux revenus (`INCOME_COLORS`
- * plus bas), et aucun poste de dépense ne le prend — sans quoi le salaire et le
- * logement, qui sortent tous deux au palmarès presque tous les mois, arriveraient
- * de la même couleur de part et d'autre de la barre centrale. Le logement garde
- * la famille bleue, en version sombre.
+ * Le partage du dessin en deux : la colonne des ENTRÉES tient tout entière dans
+ * la bande violet/rose (`INCOME_COLORS`, plus bas), les postes de DÉPENSE
+ * prennent tout le reste. Aucune teinte ne traverse — c'est ce qui permet, au
+ * milieu du croisement des rubans, de savoir d'un coup d'œil de quel côté vient
+ * une branche. Les quatre postes qui occupaient les violets (loisirs,
+ * abonnements, éducation, enfants) et les deux qui occupaient les roses (santé,
+ * crédits) sont donc passés sur les bleus que les entrées ont libérés.
  *
  * Un seul partage subsiste : « frais » et la barre centrale sont tous deux au
- * gris foncé. La planche n'a que quatre gris exploitables pour vingt-huit
- * postes, et « frais » est celui qui atteint le moins souvent le palmarès.
+ * gris foncé. La charte n'a que quatre gris exploitables pour vingt-huit postes,
+ * et « frais » est celui qui atteint le moins souvent le palmarès.
  *
  * Le rendu du Sankey délave déjà les rubans (`RIBBON_TINT` dans
- * components/ui/SankeyGraph.jsx). C'est là qu'on compense, pas ici : la valeur
- * y est passée de 0.58 à 0.25 pour que ces teintes arrivent à l'écran avec la
- * densité qu'avait l'ancienne palette.
+ * components/ui/SankeyGraph.jsx). C'est là qu'on compense, pas ici.
  *
  * « Autres » garde le gris, réservé par convention au non-catégorisé : ce n'est
  * pas un poste de dépense, c'est l'aveu que la règle n'a pas tranché.
  */
 export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
-  // Le toit — bleu, mais pas le bleu PLEIN : celui-là est aux revenus
-  { id: "housing", color: PALETTE_DARK.blue },           // bleu sombre — page Budget
-  { id: "utilities", color: PALETTE_LIGHT.blue },        // bleu clair
-  { id: "telecom", color: PALETTE_LIGHT.orange },        // orange clair
-  { id: "insurance", color: GREY.grey300 },              // gris clair : idem
-  // La table — orange
-  { id: "food", color: PALETTE.orange },                 // orange — page Budget
-  // La route — brun, et le jaune pour ce qui n'est pas un trajet
-  { id: "transport", color: PALETTE.brown },             // brun — page Budget
-  { id: "fuel", color: PALETTE_DARK.brown },             // brun sombre
-  { id: "car", color: PALETTE_DARK.orange },             // orange sombre
-  { id: "travel", color: PALETTE.yellow },               // jaune — le voyage n'est pas un trajet
-  // Les achats — rouge
-  { id: "shopping", color: PALETTE.red },                // rouge
-  { id: "tech", color: PALETTE_DARK.red },               // rouge sombre
-  { id: "beauty", color: PALETTE_DARK.pink },            // rose sombre
-  // Le corps — rose et vert
-  { id: "health", color: PALETTE.pink },                 // rose
-  { id: "sport", color: PALETTE_DARK.green },            // vert sombre
-  { id: "pets", color: PALETTE_DARK.yellow },            // jaune sombre
-  // Le temps libre — violet
-  { id: "leisure", color: PALETTE_DARK.purple },         // violet sombre — page Budget
-  { id: "subscriptions", color: PALETTE.purple },        // violet — page Budget
-  { id: "education", color: PALETTE_LIGHT.purple },      // violet clair
-  { id: "kids", color: PALETTE_LIGHT.pink },             // rose clair
+  // Le toit
+  { id: "housing", color: HUE.humpback },      // page Budget
+  { id: "utilities", color: HUE.blueJay },
+  { id: "telecom", color: HUE.lion },
+  { id: "insurance", color: HUE.swan },        // gris : une charge, pas un poste de vie
+  // La table
+  { id: "food", color: HUE.fox },              // page Budget
+  // La route — et le jaune pour ce qui n'est pas un trajet
+  { id: "transport", color: HUE.monkey },      // page Budget
+  { id: "fuel", color: HUE.grizzly },
+  { id: "car", color: HUE.guineaPig },
+  { id: "travel", color: HUE.bee },            // le voyage n'est pas un trajet
+  // Les achats
+  { id: "shopping", color: HUE.cardinal },
+  { id: "tech", color: HUE.fireAnt },
+  { id: "beauty", color: HUE.crab },
+  // Le corps
+  { id: "health", color: HUE.moonJelly },
+  { id: "sport", color: HUE.treeFrog },
+  { id: "pets", color: HUE.camel },
+  // Le temps libre — passé aux bleus, les violets étant aux entrées
+  { id: "leisure", color: HUE.macaw },         // page Budget
+  { id: "subscriptions", color: HUE.whale },   // page Budget
+  { id: "education", color: HUE.narwhal },
+  { id: "kids", color: HUE.beluga },
   // L'argent
-  { id: "trading", color: PALETTE_LIGHT.green },         // vert clair : le poste propre à tr4de
-  { id: "savings", color: PALETTE.green },               // vert — page Budget
-  { id: "credit", color: PALETTE_LIGHT.red },            // rouge clair
-  { id: "taxes", color: PALETTE_LIGHT.brown },           // brun clair
-  { id: "fees", color: GREY.grey900 },                   // gris foncé
-  { id: "cash", color: PALETTE_LIGHT.yellow },           // jaune clair — les billets
-  { id: "transfer", color: GREY.grey500 },               // gris clair : un virement interne
-                                                         // ne dépense rien, il déplace
-  { id: "income", color: PALETTE.blue },                 // le bleu des revenus : ce poste ne paraît
-                                                         // jamais dans l'anneau des dépenses
-  { id: "other", color: GREY.grey700 },                  // gris : le non-catégorisé
+  { id: "trading", color: HUE.turtle },        // le poste propre à tr4de
+  { id: "savings", color: HUE.owl },           // page Budget
+  { id: "credit", color: HUE.anchovy },
+  { id: "taxes", color: HUE.cheetah },
+  { id: "fees", color: HUE.eel },
+  { id: "cash", color: HUE.duck },             // les billets
+  { id: "transfer", color: HUE.hare },         // un virement interne ne dépense rien, il déplace
+  { id: "income", color: HUE.beetle },         // le violet des entrées : ce poste ne paraît
+                                               // jamais dans l'anneau des dépenses
+  { id: "other", color: HUE.wolf },            // le non-catégorisé
 ];
 
 /**
@@ -286,30 +281,31 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
    ne paraît jamais dans un anneau de dépenses —, mais le flux du cashflow part
    de ses sources et il faut les distinguer les unes des autres.
 
-   TOUTE la branche est BLEUE. La charte publie neuf bleus, de l'Iguana presque
-   blanc au Narwhal profond : de quoi séparer les sept sources sans sortir de la
-   famille. Ce qu'on y gagne se voit d'un coup d'œil sur le dessin — la gauche
-   dit « ça entre » d'un seul bloc, la droite garde les teintes variées des
-   postes, et on ne confond plus une source avec une dépense au milieu du
-   croisement des rubans.
+   TOUTE la colonne des entrées tient dans la bande VIOLET / ROSE de la charte,
+   et aucun poste de dépense n'y touche. La gauche dit « ça entre » d'un seul
+   bloc, la droite garde les teintes variées des postes : au milieu, là où les
+   rubans se croisent, on sait de quel côté vient une branche sans lire son nom.
 
-   Les deux bleus déjà pris par des postes de dépense (Humpback au logement,
-   Blue Jay à l'énergie) sont écartés d'office : c'est ce qui permet aux deux
-   côtés d'être bleus sans jamais se répondre. Le salaire prend Macaw, le bleu
-   plein, parce que c'est la source principale ; le « divers » prend Anchovy, un
-   bleu grisé — il reste une entrée, mais il avoue ne pas savoir laquelle.
+   Les trois vrais violets vont aux nœuds qui doivent se lire en premier : le
+   salaire, la retraite, et « Pris sur le solde » (cf. lib/bank/cashflow). Les
+   roses de la même bande prennent le reste, du plus vif au plus sourd. Le
+   « divers » finit sur Squid, un rose grisé : il reste une entrée, mais il avoue
+   ne pas savoir laquelle.
+
+   Les rouges francs (Cardinal, Fire Ant, Crab) restent aux DÉPENSES : ils sont
+   assez éloignés des roses pâles pour qu'aucune confusion ne s'installe.
 
    L'ordre alterne clair et sombre : deux sources voisines dans le dessin
-   tranchent alors par la clarté autant que par la teinte, ce qui est le seul
-   levier qui reste quand on tient dans une famille. */
+   tranchent alors par la clarté autant que par la teinte, seul levier qui reste
+   quand on tient dans une famille. */
 const INCOME_COLORS: Record<string, string> = {
-  "income.salary": HUE.macaw,        // bleu plein — la source principale
-  "income.benefits": HUE.beluga,     // bleu très clair
-  "income.pension": HUE.narwhal,     // bleu profond
-  "income.refund": HUE.moonJelly,    // turquoise clair
-  "income.interest": HUE.whale,      // bleu soutenu
-  "income.sale": HUE.iguana,         // bleu pâle
-  income: HUE.anchovy,               // bleu grisé — le crédit qu'on n'a pas su nommer
+  "income.salary": HUE.beetle,       // violet plein — la source principale
+  "income.benefits": HUE.starfish,   // rose vif
+  "income.pension": HUE.butterfly,   // violet profond
+  "income.refund": HUE.walkingFish,  // rose très pâle
+  "income.interest": HUE.pig,        // rose sourd
+  "income.sale": HUE.flamingo,       // rose clair
+  income: HUE.squid,                 // rose grisé — le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */

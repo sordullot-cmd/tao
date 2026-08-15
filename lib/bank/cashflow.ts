@@ -38,7 +38,7 @@
  * langue et que ce module est testé sans dictionnaire.
  */
 
-import { PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
+import { HUE, GREY } from "@/lib/ui/palette";
 
 import {
   categoryColor, incomeColor, parentOfSub, subcategorizeTransaction,
@@ -188,14 +188,14 @@ export function incomeBySource(txs: CategorizableTransaction[]): {
 /* Teintes des nœuds de synthèse. Ils ne SONT pas des postes, et une couleur de
    poste leur donnerait l'air d'en être un : les deux agrégats restent donc gris.
    « Pris sur le solde » fait exception — c'est une ENTRÉE, il se range donc du
-   côté gauche avec les revenus. Mais ce n'en est PAS un : c'est de l'argent
-   qu'on avait déjà. Toute la branche des revenus étant bleue, il prend le rose
-   vif, seul de sa teinte dans cette colonne. On le repère sans le lire, et on ne
-   le compte pas mentalement comme une rentrée. */
+   côté gauche avec les revenus, et il en prend la famille : Betta, le violet
+   soutenu de la charte. Mais ce n'est PAS un revenu — c'est de l'argent qu'on
+   avait déjà —, et c'est le plus foncé de la colonne : il se repère sans qu'on
+   ait à lire son libellé, sans pour autant sortir du groupe des entrées. */
 const SYNTHETIC_COLORS: Record<FlowSynthetic, string> = {
   more: GREY.grey500,
   left: GREY.grey300,
-  draw: PALETTE_LIGHT.purple,
+  draw: HUE.betta,
 };
 
 export interface CashflowOptions {

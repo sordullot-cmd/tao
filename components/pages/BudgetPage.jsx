@@ -46,7 +46,7 @@ import React from "react";
 import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
-import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
+import { HUE, PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { fmt } from "@/lib/ui/format";
@@ -88,11 +88,11 @@ const CATEGORY_COLORS = [
   PALETTE_DARK.blue,   // logement     — le bleu plein est réservé aux revenus
   PALETTE.orange,      // alimentation
   PALETTE.brown,       // transport
-  PALETTE.purple,      // abonnements
-  PALETTE_DARK.purple, // loisirs      — les huit principales sont prises
+  HUE.whale,           // abonnements  — les violets sont réservés aux entrées
+  HUE.macaw,           // loisirs      — idem
   PALETTE.green,       // épargne
   PALETTE.red,         // shopping
-  PALETTE.pink,        // santé
+  HUE.moonJelly,       // santé
   PALETTE.yellow,      // frais
   GREY.grey700,        // autres       — le slot « non catégorisé »
 ];
