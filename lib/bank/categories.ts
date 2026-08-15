@@ -114,7 +114,7 @@ export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
   // Le toit — bleu, mais pas le bleu PLEIN : celui-là est aux revenus
   { id: "housing", color: PALETTE_DARK.blue },           // bleu sombre — page Budget
   { id: "utilities", color: PALETTE_LIGHT.blue },        // bleu clair
-  { id: "telecom", color: GREY.grey500 },                // gris : une charge, pas un poste de vie
+  { id: "telecom", color: PALETTE_LIGHT.orange },        // orange clair
   { id: "insurance", color: GREY.grey300 },              // gris clair : idem
   // La table — orange
   { id: "food", color: PALETTE.orange },                 // orange — page Budget
@@ -143,7 +143,8 @@ export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
   { id: "taxes", color: PALETTE_LIGHT.brown },           // brun clair
   { id: "fees", color: GREY.grey900 },                   // gris foncé
   { id: "cash", color: PALETTE_LIGHT.yellow },           // jaune clair — les billets
-  { id: "transfer", color: PALETTE_LIGHT.orange },       // orange clair
+  { id: "transfer", color: GREY.grey500 },               // gris clair : un virement interne
+                                                         // ne dépense rien, il déplace
   { id: "income", color: PALETTE.blue },                 // le bleu des revenus : ce poste ne paraît
                                                          // jamais dans l'anneau des dépenses
   { id: "other", color: GREY.grey700 },                  // gris : le non-catégorisé
@@ -283,13 +284,16 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
 /* Teintes des SOURCES de revenus. Le poste « revenus » n'a qu'une couleur — il
    ne paraît jamais dans un anneau de dépenses —, mais le flux du cashflow part
    de ses sources et il faut les distinguer les unes des autres.
-   Le salaire garde le vert du poste parent, pour qu'on lise « ça entre » d'un
-   coup d'œil ; les autres sources s'en écartent sur les couleurs principales
-   restantes, en alternant une claire et une sombre — deux sources voisines
-   tranchent alors par la clarté autant que par la teinte. Elles vivent à GAUCHE
-   du diagramme, les postes de dépense à droite : partager une teinte avec l'un
-   d'eux ne prête pas à confusion. Le « divers » garde le gris — c'est un aveu,
-   pas une source. */
+   Le salaire prend le bleu plein, que les postes de dépense n'utilisent pas :
+   c'est LA teinte réservée aux revenus, et elle doit rester reconnaissable d'un
+   coup d'œil. Les autres sources s'en écartent sur les couleurs principales
+   restantes, aucune en version sombre — de ce côté du diagramme, tout doit
+   rester clair. Elles vivent à GAUCHE, les postes de dépense à droite :
+   partager une teinte avec l'un d'eux ne prête pas à confusion.
+
+   Le « divers » est le seul à ne pas nommer sa source. Il était gris, ce qui le
+   faisait passer pour une erreur d'affichage plutôt que pour une entrée : il
+   prend l'orange, la dernière principale libre du groupe. */
 const INCOME_COLORS: Record<string, string> = {
   "income.salary": PALETTE.blue,           // bleu — la source principale
   "income.benefits": PALETTE_LIGHT.blue,   // bleu clair
@@ -297,7 +301,7 @@ const INCOME_COLORS: Record<string, string> = {
   "income.refund": PALETTE.pink,           // rose
   "income.interest": PALETTE.green,        // vert
   "income.sale": PALETTE.yellow,           // jaune
-  income: GREY.grey500,                    // gris : le crédit qu'on n'a pas su nommer
+  income: PALETTE.orange,                  // orange — le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */
