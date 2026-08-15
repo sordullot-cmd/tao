@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
+import { periodStart } from "@/lib/ui/period";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { parseAccountSize } from "@/lib/propFirms";
 import { Skeleton, SkeletonRows } from "@/components/ui/Skeleton";
@@ -152,12 +153,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // fin de la courbe, pas un filtre de données : « Tout » (par défaut) montre
   // l'historique complet depuis le premier trade déposé.
   const PERIODS = [
-    { id: "1S", days: 7 },
-    { id: "1M", days: 30 },
-    { id: "3M", days: 90 },
-    { id: "6M", days: 180 },
-    { id: "1A", days: 365 },
-    { id: "Tout", days: null },
+    { id: "1S" }, { id: "1M" }, { id: "3M" }, { id: "6M" }, { id: "1A" }, { id: "Tout" },
   ];
   const [period, setPeriod] = React.useState("Tout");
   // Famille de tags affichée dans « Répartition ».
@@ -634,12 +630,13 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // début (on ne recalcule pas à zéro), la pastille est un zoom et non un
   // filtre de données. `days: null` (« Tout ») = historique complet.
   const pnlCurve = (() => {
-    const days = (PERIODS.find(p => p.id === period) || PERIODS[PERIODS.length - 1]).days;
-    if (days == null || pnlCurveFull.length === 0) return pnlCurveFull;
+    if (pnlCurveFull.length === 0) return pnlCurveFull;
     const last = new Date(pnlCurveFull[pnlCurveFull.length - 1].date);
     if (isNaN(last.getTime())) return pnlCurveFull;
-    const from = new Date(last);
-    from.setDate(from.getDate() - days);
+    /* Fenêtre calée sur le calendrier (cf. `lib/ui/period`) : « 1 mois » part du
+       1er du mois du dernier point. « Tout » n'en a pas — la courbe entière. */
+    const from = periodStart(period, last);
+    if (!from) return pnlCurveFull;
     const windowed = pnlCurveFull.filter(p => {
       const d = new Date(p.date);
       return !isNaN(d.getTime()) && d >= from;

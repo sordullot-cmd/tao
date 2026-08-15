@@ -12,6 +12,7 @@ import React from "react";
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
+import { periodStart } from "@/lib/ui/period";
 import Popover from "@/components/ui/Popover";
 
 /** Carte blanche : coins 12, ombre très douce, pas de bordure. */
@@ -584,13 +585,16 @@ export {
   AGGREGATE_CURVE_COLOR,
 } from "@/lib/ui/accountTypes";
 
-/** Fenêtres temporelles de la maquette. */
+/**
+ * Fenêtres temporelles de la maquette.
+ *
+ * Les identifiants seuls : ce qu'ils COUVRENT est calculé par `lib/ui/period`,
+ * qui les cale sur le calendrier — « 1 mois » part du 1er du mois, « 1 an » du
+ * 1er janvier. Une durée en jours écrite ici aurait donné deux règles, l'une
+ * dans le tableau et l'autre dans le module, qui auraient divergé.
+ */
 export const PERIODS = [
-  { id: "1S", days: 7 },
-  { id: "1M", days: 30 },
-  { id: "3M", days: 90 },
-  { id: "6M", days: 180 },
-  { id: "1A", days: 365 },
+  { id: "1S" }, { id: "1M" }, { id: "3M" }, { id: "6M" }, { id: "1A" },
 ];
 
 /** Fenêtre « depuis le début » : `windowSeries` rend alors la série entière.
@@ -648,8 +652,13 @@ export function PeriodPills({ value, onChange, options = PERIODS, track = false,
  * troisième cible sans affordance serait ambiguë. `onLabel` l'active pour les
  * pages qui ouvrent un sélecteur de date dessus — il prend alors un survol, qui
  * est ce qui le signale comme cliquable.
+ *
+ * `prevDisabled` / `nextDisabled` éteignent une flèche qui ne mène nulle part —
+ * le mois prochain sur un budget, par exemple. Éteinte plutôt que retirée : la
+ * pastille garderait sinon deux largeurs différentes selon l'endroit où l'on se
+ * trouve, et le libellé sauterait d'un cran à chaque bout de course.
  */
-export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLabel = "Précédent", nextLabel = "Suivant" }) {
+export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLabel = "Précédent", nextLabel = "Suivant", prevDisabled = false, nextDisabled = false }) {
   // La flèche mesure 16 px comme sur la maquette, mais sa zone cliquable prend
   // toute la hauteur de la pastille (marges négatives) : la cible reste
   // atteignable au pouce sans épaissir le contrôle.
@@ -665,7 +674,10 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
       height:34, padding:"7px 14px", borderRadius:999,
       background:T.white, boxShadow:T.elevPill,
     }}>
-      <button type="button" onClick={onPrev} aria-label={prevLabel} style={arrow}>
+      <button
+        type="button" onClick={onPrev} aria-label={prevLabel} disabled={prevDisabled}
+        style={{...arrow, cursor: prevDisabled ? "default" : "pointer", opacity: prevDisabled ? 0.3 : 1}}
+      >
         <ChevronLeft size={16} strokeWidth={1.75} />
       </button>
       {onLabel ? (
@@ -689,7 +701,10 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
           {label}
         </span>
       )}
-      <button type="button" onClick={onNext} aria-label={nextLabel} style={arrow}>
+      <button
+        type="button" onClick={onNext} aria-label={nextLabel} disabled={nextDisabled}
+        style={{...arrow, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.3 : 1}}
+      >
         <ChevronRight size={16} strokeWidth={1.75} />
       </button>
     </div>
@@ -704,15 +719,17 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
  * `PERIOD_ALL` rend la série entière. La fenêtre se mesure depuis le DERNIER
  * point et non depuis aujourd'hui : une série qui s'arrête il y a un mois doit
  * montrer sa dernière semaine de données, pas un graphique vide.
+ *
+ * Le début est CALÉ SUR LE CALENDRIER (cf. `lib/ui/period`) : « 1 mois » part du
+ * 1er du mois du dernier point, « 1 an » de son 1er janvier. Une courbe et un
+ * total qui portent la même pastille doivent couvrir les mêmes jours.
  */
 export function windowSeries(points, periodId, getDate = p => p.date) {
   if (!points || points.length === 0) return points || [];
   if (periodId === PERIOD_ALL) return points;
-  const days = (PERIODS.find(p => p.id === periodId) || PERIODS[1]).days;
   const last = new Date(getDate(points[points.length - 1]));
   if (isNaN(last.getTime())) return points;
-  const from = new Date(last);
-  from.setDate(from.getDate() - days);
+  const from = periodStart(periodId, last) || periodStart("1M", last);
   const windowed = points.filter(p => {
     const d = new Date(getDate(p));
     return !isNaN(d.getTime()) && d >= from;

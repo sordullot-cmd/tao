@@ -25,6 +25,7 @@ import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import EloquencePage from "@/components/pages/EloquencePage";
 import CashflowPage from "@/components/pages/CashflowPage";
+import BudgetPage from "@/components/pages/BudgetPage";
 import PatrimoinePage from "@/components/pages/PatrimoinePage";
 import PatrimoineAssetPage from "@/components/pages/PatrimoineAssetPage";
 import PatrimoineClassPage from "@/components/pages/PatrimoineClassPage";
@@ -88,6 +89,7 @@ import {
   Mic as LucideMic,
   PiggyBank as LucidePiggyBank,
   Landmark as LucideLandmark,
+  ChartPie as LucideChartPie,
 } from "lucide-react";
 
 /* ─── TOKENS ───────────────────────────────────────────────────────────
@@ -658,16 +660,16 @@ export default function App() {
     /* Finance — l'argent personnel, à distinguer du capital de trading qui vit
        dans « Comptes ». Les pages viennent de l'app patrimoine (cf.
        lib/patrimoine.ts).
-       Ordre : ce qu'on possède (Patrimoine), puis ce qui circule (Cashflow).
-       « Budget » et « Dépenses » ne font plus qu'une entrée : le prévu et le
-       réalisé ne se comparaient jamais tant qu'ils vivaient dans deux pages
-       qu'on n'avait pas sous les yeux en même temps. Le détail se prend depuis
-       la synthèse. */
+       Ordre : ce qu'on possède (Patrimoine), ce qui circule (Cashflow), puis ce
+       qu'on se fixe (Budget) — du constat vers l'intention. L'ancienne page
+       « Dépenses » a bien fondu dans Cashflow ; le Budget, lui, est ressorti :
+       c'est une saisie, on y va exprès, pas en faisant défiler un relevé. */
     {
       label: t("nav.finance"),
       items: [
         { id: "patrimoine", icon: LucideLandmark,  label: t("nav.patrimoine") },
         { id: "cashflow",   icon: LucidePiggyBank, label: t("nav.cashflow") },
+        { id: "budget",     icon: LucideChartPie,  label: t("nav.budget") },
         /* « Compte courant » (patrimoine-bank) et « Crédits » (
            patrimoine-liabilities) ne sont plus dans la navigation. Les deux pages
            restent routées et joignables depuis la synthèse Patrimoine — masquées
@@ -739,10 +741,10 @@ export default function App() {
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,
     cashflow: <CashflowPage setPage={setPage} />,
-    /* Anciennes routes « Budget » et « Dépenses » : elles mènent à la page
-       fusionnée, pour que les liens existants (palette de commandes, renvois de
-       la synthèse Patrimoine) tombent au bon endroit plutôt que dans le vide. */
-    budget: <CashflowPage setPage={setPage} />,
+    budget: <BudgetPage setPage={setPage} />,
+    /* Ancienne route « Dépenses » : le réalisé vit dans Cashflow, et les liens
+       existants (palette de commandes, renvois d'autres pages) doivent tomber
+       là plutôt que dans le vide. */
     spending: <CashflowPage setPage={setPage} />,
     patrimoine: <PatrimoinePage setPage={setPage} setSelectedAssetId={setSelectedAssetId} setSelectedClassSlug={setSelectedClassSlug} />,
     "patrimoine-asset": <PatrimoineAssetPage assetId={selectedAssetId} setPage={setPage} setSelectedHolding={setSelectedHolding} />,

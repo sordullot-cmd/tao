@@ -5,7 +5,8 @@ import { Download, BookOpen } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
-import { CARD, PeriodPills, PERIODS } from "@/components/ui/da";
+import { CARD, PeriodPills } from "@/components/ui/da";
+import { periodStart } from "@/lib/ui/period";
 import TradesList from "@/components/ui/tradesList";
 import { rMultiple, fmtR, getCurrencySymbol } from "@/lib/userPrefs";
 import { computeTradeNote } from "@/lib/tradeNote";
@@ -109,10 +110,13 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
      Les pastilles bornent le journal à une période : un journal se relit par
      tranches, pas d'un bloc depuis le premier trade. */
   const days = React.useMemo(() => {
-    const conf = PERIODS.find((p) => p.id === period);
-    if (!conf?.days || allDays.length === 0) return allDays;
-    const from = new Date(`${allDays[0].date}T00:00:00`);
-    from.setDate(from.getDate() - conf.days);
+    if (allDays.length === 0) return allDays;
+    /* Fenêtre calée sur le calendrier (cf. `lib/ui/period`) : « 1 mois » part du
+       1er du mois, pas de trente jours avant le dernier trade. L'ancre reste le
+       jour le plus récent du journal et non aujourd'hui — un journal qu'on
+       n'alimente plus depuis six semaines doit montrer sa dernière tranche. */
+    const from = periodStart(period, new Date(`${allDays[0].date}T00:00:00`));
+    if (!from) return allDays;
     return allDays.filter((d) => new Date(`${d.date}T00:00:00`) >= from);
   }, [allDays, period]);
 

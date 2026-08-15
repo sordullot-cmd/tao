@@ -28,7 +28,7 @@
  */
 
 import React from "react";
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Crown, Plus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import {
@@ -55,6 +55,8 @@ import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import { depthOf, withinDays, ALL_DAYS } from "@/lib/bank/transactions";
 import { categoryLabelKey, spendingByCategory, spendingPalette } from "@/lib/bank/categories";
 import { reconstructHistory } from "@/lib/patrimoineHistory";
+import { periodDays } from "@/lib/ui/period";
+import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, planTotals, primaryPlan,
@@ -64,12 +66,21 @@ import {
    patrimoine se lit aussi en entier, c'est même sa vue la plus parlante tant
    qu'il ne compte que quelques semaines de points. */
 const HISTORY_PERIODS = [...PERIODS, { id: PERIOD_ALL }];
-const daysOfPeriod = (id) => PERIODS.find((p) => p.id === id)?.days ?? null;
+
+/** « août 2026 » — le mois en cours, dans la langue du système. */
+function monthLabel(today = new Date()) {
+  try {
+    return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(today);
+  } catch {
+    return `${today.getMonth() + 1}/${today.getFullYear()}`;
+  }
+}
 
 export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelectedClassSlug }) {
   useLang();
   const [store, setStore] = usePatrimoine();
   const bank = useBankAccounts();
+  const bp = useBreakpoint();
   // Saisie d'un actif : la page « Actifs » n'existe plus, son formulaire est
   // une modale ouverte depuis les pages qui montrent le patrimoine.
   const [addingAsset, setAddingAsset] = React.useState(false);
@@ -100,6 +111,11 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   // Une valeur venue du cloud n'est pas garantie : tout ce qui n'est pas « brut »
   // retombe sur le net, plutôt que d'afficher un héros vide.
   const view = rawView === "brut" ? "brut" : "net";
+
+  /* Deux colonnes en bas de page, mais seulement s'il y a DEUX blocs : sans
+     banque connectée, le flux réel n'a pas de matière et ne s'affiche pas — le
+     budget resterait alors coincé dans une demi-largeur, à côté d'un vide. */
+  const twoCols = bp === "desktop" && bank.accounts.length > 0;
 
   const nw = React.useMemo(() => netWorth(assets), [assets]);
   const sections = React.useMemo(() => sectionsByClass(assets), [assets]);
@@ -142,7 +158,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
      n'y a rien à demander de plus, c'est le minimum que l'API rend de toute
      façon, et redescendre ne doit jamais coûter une requête. */
   const depth = React.useMemo(() => {
-    const d = daysOfPeriod(period);
+    const d = periodDays(period);
     if (d == null) return ALL_DAYS;             // « Tout » : tout ce que la banque rend
     return depthOf(d) <= 90 ? 90 : d;
   }, [period]);
@@ -171,7 +187,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
     () => toChartPoints(reconstructHistory(assets, {
       txByAssetId,
       measured: store.history,
-      days: daysOfPeriod(period),
+      days: periodDays(period),
       gross: view === "brut",
     })),
     [assets, txByAssetId, store.history, period, view],
@@ -182,7 +198,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   const points = React.useMemo(() => windowSeries(allPoints, period), [allPoints, period]);
   // Variation sur la fenêtre affichée, lue sur les points eux-mêmes.
   const change = React.useMemo(
-    () => historyChange(points, daysOfPeriod(period)),
+    () => historyChange(points, periodDays(period)),
     [points, period],
   );
 
@@ -371,17 +387,31 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
         </div>
       </div>
 
-      {/* Où part l'argent, POUR DE VRAI — juste avant le budget prévisionnel :
-          les deux se lisent l'un contre l'autre, avec le même vocabulaire de
-          postes et les mêmes teintes. */}
-      <SpendingByCategory accounts={bank.accounts} />
+      {/* Le réalisé et le prévu, CÔTE À CÔTE : c'est la seule disposition où on
+          les compare vraiment. L'un sous l'autre, il fallait faire défiler entre
+          les deux, et comparer de mémoire n'est pas comparer.
 
-      {/* Le budget prévisionnel, MONTRÉ — cette section ne portait qu'un renvoi
-          vers la page Budget : on venait chercher un chiffre et on repartait
-          avec un lien. L'original posait ici un Sankey des flux réels du mois,
-          qui n'a pas de source dans tr4de ; la répartition prévue, elle, existe
-          bel et bien. */}
-      <BudgetSummary onOpen={() => setPage?.("cashflow")} />
+          Colonnes ÉGALES, et deux cartes bâties pareil : c'est ce qui fait
+          qu'on lit un anneau après l'autre sans changer de mesure. Une colonne
+          plus large aurait donné du poids à l'un des deux chiffres, alors que
+          tout l'intérêt est de les mettre à égalité. En dessous du bureau, les
+          deux s'empilent — deux demi-colonnes de tablette ne valent pas mieux
+          qu'un défilement. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: twoCols ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)",
+          gap: 20,
+          alignItems: "start",
+        }}
+      >
+        <SpendingByCategory accounts={bank.accounts} />
+
+        {/* Le budget prévisionnel, MONTRÉ — cette section ne portait qu'un renvoi
+            vers la page Budget : on venait chercher un chiffre et on repartait
+            avec un lien. */}
+        <BudgetSummary onOpen={() => setPage?.("budget")} />
+      </div>
 
       {addingAsset && <AssetFormModal onClose={() => setAddingAsset(false)} />}
       {addingBank && <BankFormModal onClose={() => setAddingBank(false)} />}
@@ -439,29 +469,33 @@ function PeriodChange({ change, period }) {
 /**
  * Dépenses par poste, tous comptes agrégés confondus.
  *
- * Le pendant RÉALISÉ du budget prévisionnel affiché juste en dessous : mêmes
- * postes, mêmes teintes (cf. `lib/bank/categories`), pour que le prévu et le
- * réalisé se lisent d'un coup d'œil l'un contre l'autre.
+ * Le pendant RÉALISÉ du budget prévisionnel affiché À CÔTÉ : mêmes postes, mêmes
+ * teintes (cf. `lib/bank/categories`), et la même forme — deux anneaux qui se
+ * lisent l'un contre l'autre, le dépensé en face du prévu. C'est la comparaison
+ * qui commande la forme : un diagramme de flux disait plus de choses, mais plus
+ * rien de commun avec l'anneau d'à côté.
  *
- * La fenêtre est libre — 1S à 1A, ou tout l'historique que les banques rendent.
- * Elle est demandée à la MÊME profondeur que la courbe du patrimoine plus haut,
- * et sert donc le même cache : changer de fenêtre ici ne redemande à la banque
- * que ce qu'elle n'a pas encore donné, et jamais deux fois la même chose.
+ * L'anneau est SEUL dans sa carte, sans légende : les noms des postes se lisent
+ * au survol, au centre. C'est le prix de la demi-largeur, et le détail chiffré
+ * est sur la page Cashflow, à un clic de là.
+ *
+ * La fenêtre est FIXE : le mois en cours, du 1er à aujourd'hui. C'est celle du
+ * budget d'à côté — un plan mensuel en face de trois mois de dépenses n'aurait
+ * rien dit —, et elle se sert dans le cache que la courbe du patrimoine remplit
+ * déjà : ce bloc ne coûte aucune requête de plus.
  *
  * Rien ne s'affiche sans compte agrégé : la répartition des dépenses n'a pas de
  * saisie manuelle derrière elle, un état vide serait un contrôle sans matière.
  */
 function SpendingByCategory({ accounts }) {
-  /* La fenêtre suit le COMPTE, comme celle de la courbe : quelqu'un qui suit
-     son mois en cours ne doit pas retrouver « 3 mois » à chaque visite. Un mois
-     par défaut — c'est le pas auquel un budget se pense. */
-  const [rawPeriod, setPeriod] = useCloudState(
-    "tr4de_patrimoine_spend_period", "patrimoine_spend_period", "1M",
-  );
-  const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : "1M";
-  const days = daysOfPeriod(period) ?? ALL_DAYS;
+  /* Le MOIS EN COURS, et rien d'autre : la carte d'à côté montre un budget
+     mensuel, et deux fenêtres différentes côte à côte donnaient deux chiffres
+     qu'on croyait comparables. Les pastilles qui la réglaient sont donc parties
+     — le reste du relevé se découpe sur la page Cashflow, qui a la place de dire
+     de quelle fenêtre elle parle. */
+  const days = periodDays("1M");
   // Même règle que la courbe : sous 90 jours il n'y a rien de plus à demander.
-  const depth = days === ALL_DAYS ? ALL_DAYS : depthOf(days) <= 90 ? 90 : days;
+  const depth = depthOf(days) <= 90 ? 90 : days;
 
   const uids = React.useMemo(() => accounts.map((a) => a.uid), [accounts]);
   const { byUid, loading } = useBankTransactionsAll(uids, depth);
@@ -504,96 +538,83 @@ function SpendingByCategory({ accounts }) {
     amount: s.amount,
   }));
 
+  /* Les mêmes règles de légende que l'aperçu du budget d'à côté : les quatre
+     plus grosses parts nommées, le reste compté. Ici l'ordre est déjà celui des
+     montants — `spendingByCategory` trie —, alors que le budget garde l'ordre de
+     saisie et doit trier lui-même. */
+  const shown = parts.slice(0, 4);
+  const others = parts.length - shown.length;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <SectionTitle
-        size="sm"
-        action={
-          <PeriodPills
-            value={period}
-            onChange={setPeriod}
-            options={HISTORY_PERIODS.map((p) =>
-              p.id === PERIOD_ALL ? { ...p, label: t("patrimoine.periodAll") } : p,
-            )}
-          />
-        }
-      >
-        {t("patrimoine.spending.title")}
-      </SectionTitle>
+      {/* Sans titre au-dessus : « Dépenses par catégorie » redisait ce que la
+          carte montre — un anneau de postes et leur légende — et volait une
+          ligne à la carte du budget d'à côté, qui n'en a pas non plus. Ce que le
+          titre portait de vraiment utile, le MOIS, est descendu dans la carte.
 
-      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
+          La carte est calquée sur l'aperçu du budget d'à côté : deux chiffres en
+          en-tête, l'anneau de même taille, la légende en dessous. Les deux
+          répondent à la même question à un temps près — ce qu'on a dépensé, ce
+          qu'on avait prévu de dépenser — et deux cartes de formes différentes
+          demandaient de réapprendre à lire en passant de l'une à l'autre. */}
+      <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          {/* Le chiffre de tête est ce que la carte MONTRE — la dépense du mois
+              —, et non plus ce qui est entré : le revenu se lit en face, sur
+              l'aperçu du budget, et deux chiffres d'entrée pour un seul anneau
+              de dépenses laissaient chercher lequel commandait la figure.
+
+              À droite, le MOIS et non un second chiffre : sans pastilles de
+              période, rien d'autre ne dit de quelle fenêtre le total parle — et
+              c'est le titre disparu qui le portait. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 13, color: T.textSub }}>{t("patrimoine.spending.monthly")}</span>
+            <span style={{ fontSize: 24, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+              {fmt(total)}
+            </span>
+          </div>
+          <span style={{ fontSize: 13, color: T.textMut, textTransform: "capitalize" }}>
+            {monthLabel()}
+          </span>
+        </div>
+
         {/* Chargement à vide seulement : dès qu'un relevé est arrivé, on montre
             la répartition et elle se précise compte par compte. */}
         {slices.length === 0 ? (
-          <div style={{ fontSize: 14, color: T.textSub, textAlign: "center", padding: "24px 0" }}>
+          <div style={{ fontSize: 13, color: T.textSub }}>
             {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
           </div>
         ) : (
-          /* Trois colonnes — une cale, l'anneau, la légende : c'est ce qui laisse
-             l'anneau au MILIEU de la carte tout en collant la liste des postes à
-             son BORD DROIT. Les deux colonnes latérales portent la même part
-             (`minmax(0, 1fr)`), donc la colonne centrale tombe pile au centre,
-             quelle que soit la largeur de la légende. Les mettre simplement côte
-             à côte aurait collé la liste contre l'anneau et laissé un vide à
-             droite.
-             Plus de pourcentages : l'anneau EST la proportion, la répéter en
-             chiffres à côté de chaque poste faisait lire deux fois la même
-             chose. Le montant, lui, ne se lit nulle part ailleurs. */
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
-            alignItems: "center", gap: 24,
-          }}>
-            <span aria-hidden="true" />
+          <>
             <AllocationChart
               kind="ring"
               parts={parts}
               scale={100}
               ariaLabel={t("patrimoine.spending.aria")}
-              size={190}
-              thickness={22}
+              size={150}
+              thickness={18}
               centreLabel={t("patrimoine.spending.centre")}
               centreValue={total}
               showPct={false}
               formatValue={(v) => fmt(v)}
             />
 
-            {/* Les postes en COLONNE contre le bord droit de la carte, du plus
-                gros au plus petit : c'est l'ordre des parts, l'œil descend la
-                liste comme il ferait le tour du cercle. Les pastilles restent
-                alignées entre elles à gauche du bloc — une liste alignée à
-                droite ferait danser les points de couleur.
-                Le poste et son total restent collés l'un à l'autre : les étirer
-                d'un bord à l'autre obligeait à traverser la carte pour
-                rapprocher un nom d'un chiffre.
-                Le détail par sous-poste n'est PAS ici : la synthèse répond à
-                « où va mon argent », et une seconde ligne de chiffres sous
-                chaque part la faisait lire deux fois. Le sous-poste se lit là
-                où il sert — sur la ligne du relevé qui le porte. */}
-            <ul style={{
-              listStyle: "none", margin: 0, padding: 0, minWidth: 0, maxWidth: 380,
-              justifySelf: "end",
-              display: "flex", flexDirection: "column", gap: 10,
-            }}>
-              {slices.map((s) => (
-                <li key={s.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, minWidth: 0 }}>
-                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                  <span style={{ color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {t(categoryLabelKey(s.id))}
-                  </span>
-                  <span style={{ fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(s.amount)}
-                  </span>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: "8px 18px" }}>
+              {shown.map((p) => (
+                <li key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: T.textSub }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
+                  <span style={{ color: T.text }}>{p.label}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.amount)}</span>
                 </li>
               ))}
+              {others > 0 && (
+                <li style={{ fontSize: 13, color: T.textMut }}>
+                  {t("patrimoine.budgetOthers").replace("{n}", String(others))}
+                </li>
+              )}
             </ul>
-          </div>
+          </>
         )}
-
-        {/* Ni compte d'opérations ni avertissement sur le classement : la synthèse
-            répond d'un coup d'œil à « où va mon argent », et un paragraphe sous
-            l'anneau se lisait plus longtemps que l'anneau lui-même. Les deux
-            vivent sur la page Dépenses, qui est l'endroit où l'on creuse. */}
       </section>
     </div>
   );
@@ -604,16 +625,30 @@ function SpendingByCategory({ accounts }) {
  * lib/budgetPlans.ts). Le plan actif de la page Budget n'est qu'un état de
  * navigation : la synthèse changerait de budget selon le dernier onglet ouvert.
  */
+/** Le renvoi vers la page Budget, posé au BAS de la carte : en action de titre,
+ *  il partait avec le titre — et c'est de toute façon après avoir lu l'aperçu
+ *  qu'on décide d'aller le modifier. */
+function OpenBudgetButton({ onOpen }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+        alignSelf: "flex-start", minHeight: 36, padding: "0 14px", borderRadius: 999,
+        border: "none", background: T.accentBg, color: T.text,
+        fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+      }}
+    >
+      {t("patrimoine.openBudget")}
+    </button>
+  );
+}
+
 function BudgetSummary({ onOpen }) {
-  const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
+  const [store] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
   const plan = primaryPlan(store);
   const { income, totalPct, rest, over, rows } = planTotals(plan);
-
-  /* Forme du graphique : la MÊME préférence que la page Budget, puisque c'est le
-     même store et la même répartition. Régler ici la change là-bas, et
-     réciproquement — il n'y a qu'un réglage pour cette donnée. */
-  const chartKind = store?.chartKind === "bar" ? "bar" : "ring";
-  const setChartKind = (kind) => setStore((s) => ({ ...(s || {}), chartKind: kind }));
 
   /* Budget jamais ouvert : il n'y a rien à montrer, et un aperçu à zéro
      laisserait croire à un budget vide plutôt qu'à un budget absent. On garde
@@ -621,23 +656,11 @@ function BudgetSummary({ onOpen }) {
   if (!plan) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <SectionTitle size="sm">{t("nav.budget")}</SectionTitle>
-        <section style={{ ...CARD, padding: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontSize: 14, color: T.textSub, maxWidth: 520 }}>
             {t("patrimoine.budgetHint")}
           </div>
-          <button
-            type="button"
-            onClick={onOpen}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-              padding: "0 16px", borderRadius: 999, border: "none",
-              background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
-              cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-            }}
-          >
-            {t("patrimoine.openBudget")}
-          </button>
+          <OpenBudgetButton onOpen={onOpen} />
         </section>
       </div>
     );
@@ -653,33 +676,13 @@ function BudgetSummary({ onOpen }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <SectionTitle
-        size="sm"
-        action={
-          <button
-            type="button"
-            onClick={onOpen}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
-              padding: "0 12px", borderRadius: 999, border: "none",
-              background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
-          >
-            {t("patrimoine.openBudget")}
-          </button>
-        }
-      >
-        {/* Le nom du budget affiché, avec sa couronne : on doit savoir LEQUEL
-            des plans est repris ici sans ouvrir la page Budget. */}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Crown size={14} strokeWidth={2} style={{ color: T.amber, flexShrink: 0 }} />
-          {plan?.name || t("nav.budget")}
-        </span>
-      </SectionTitle>
+      {/* Sans titre : la carte des dépenses d'en face n'en a plus non plus, et
+          deux titres au-dessus de deux anneaux qui se lisent l'un contre l'autre
+          ajoutaient une ligne entre eux.
 
+          Le nom du plan part avec le titre. C'est TOUJOURS le plan principal qui
+          est repris ici (cf. `primaryPlan`) : la question « lequel ? » ne se pose
+          qu'en ouvrant la page Budget, où le bouton du bas mène. */}
       <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -705,24 +708,14 @@ function BudgetSummary({ onOpen }) {
           <div style={{ fontSize: 13, color: T.textSub }}>{t("patrimoine.budgetEmpty")}</div>
         ) : (
           <>
-            {/* Répartition — anneau ou barre, même brique et même choix que la
-                page Budget (components/ui/da.jsx). Les teintes d'identité sont
-                portées par les catégories elles-mêmes.
-                Le sélecteur est en retrait, aligné à droite : sur cette page la
-                répartition est un aperçu, pas le sujet. */}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <PeriodPills
-                value={chartKind}
-                onChange={setChartKind}
-                options={[
-                  { id: "ring", label: t("budget.chartRing") },
-                  { id: "bar", label: t("budget.chartBar") },
-                ]}
-                track
-              />
-            </div>
+            {/* Répartition en anneau, sans choix de forme : la barre servait à
+                comparer des parts à un total, ce que l'anneau fait aussi, et le
+                sélecteur mettait un réglage d'affichage au milieu d'un aperçu
+                qui n'en demandait pas. C'est aussi ce qui permet aux deux cartes
+                du bas de se ressembler — deux anneaux de même taille, côte à
+                côte, le dépensé en face du prévu. */}
             <AllocationChart
-              kind={chartKind}
+              kind="ring"
               parts={rows.map((r) => ({
                 id: r.id,
                 label: r.label,
@@ -734,7 +727,6 @@ function BudgetSummary({ onOpen }) {
               ariaLabel={t("budget.barAria").replace("{pct}", String(Math.round(totalPct * 10) / 10))}
               size={150}
               thickness={18}
-              barHeight={10}
               centreLabel={t("budget.allocated")}
               centreValue={rows.reduce((s, r) => s + r.amount, 0)}
               centreTone={over ? T.pnlNeg : undefined}
@@ -757,6 +749,8 @@ function BudgetSummary({ onOpen }) {
             </ul>
           </>
         )}
+
+        <OpenBudgetButton onOpen={onOpen} />
       </section>
     </div>
   );

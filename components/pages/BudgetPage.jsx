@@ -1,16 +1,22 @@
 "use client";
 
 /**
- * Budget type — plusieurs plans nommés de répartition du revenu mensuel.
+ * Budget — le plan qu'on se donne. Le budget TYPE, et rien d'autre.
  *
- * C'était une page à soi (« Budget »), c'est maintenant le DERNIER bloc de la
- * page Cashflow : le flux réel se lit d'abord, le plan qu'on se donne ensuite.
- * Les deux ne se comparaient pas quand ils vivaient dans deux entrées de
- * navigation — on ne les avait jamais sous les yeux en même temps.
+ * Plusieurs plans nommés de répartition du revenu mensuel, saisis à la main.
  *
- * Le bloc n'a donc plus d'en-tête de page ni de marge haute : c'est la page qui
- * les porte. Tout le reste est inchangé, la persistance comprise (même store,
- * mêmes clés) — un plan saisi avant la fusion se retrouve tel quel.
+ * La page a un temps porté aussi le mois RÉEL, lu sur les relevés : le flux en
+ * diagramme, sa répartition en anneau et les trois chiffres du mois. C'est
+ * reparti. Le réalisé se lit sur la page Cashflow, qui le dit mieux parce
+ * qu'elle le DÉPLIE (opérations d'un poste, enseignes, relevé) là où ce bloc ne
+ * pouvait que le résumer ; le tenir aux deux endroits demandait de garder deux
+ * mises en page d'accord sur la même matière.
+ *
+ * Ce qui reste ici ne dépend donc d'AUCUN compte bancaire : la page s'ouvre et
+ * s'utilise sans banque connectée, et rien n'y attend de relevé.
+ *
+ * La persistance du plan n'a pas bougé (même store, mêmes clés) : un plan saisi
+ * du temps où cette page vivait sous la page Cashflow se retrouve tel quel.
  *
  * Pour chaque plan : un revenu mensuel, puis des catégories qui ont chacune
  * l'un de DEUX modes (voir `pctOf` / `amountOf`) :
@@ -29,13 +35,15 @@
  * plan actif fait partie du même store : il suit donc l'utilisateur d'un
  * appareil à l'autre, comme le reste de ses préférences dans cette app.
  *
- * Adapté d'une page de l'app patrimoine : la version d'origine pré-remplissait
- * le revenu avec la moyenne des salaires réels lus sur le compte bancaire.
- * tr4de n'a pas de connexion bancaire — le revenu se saisit à la main.
+ * Le revenu du plan se SAISIT, alors même que le bloc du dessus connaît les
+ * salaires réels du mois. C'est voulu : un plan se fait sur ce qu'on gagne
+ * d'habitude, pas sur ce qui vient de tomber — un mois à treizième mois
+ * gonflerait tout le plan sans qu'on l'ait demandé. Le chiffre encaissé est
+ * juste au-dessus, à recopier si c'est bien celui qu'on veut.
  */
 
 import React from "react";
-import { Crown, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
+import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
@@ -156,23 +164,6 @@ const fieldSkin = (solid) => ({
   background: solid ? T.white : "transparent",
 });
 
-/** Marque du budget principal — celui que reprend la synthèse Patrimoine.
- *  L'icône est masquée aux lecteurs d'écran : elle vit DANS l'onglet du plan,
- *  et un libellé ici s'ajouterait au nom du bouton (« Budget principalMon
- *  budget »). L'explication passe par l'infobulle, et la page Patrimoine nomme
- *  de toute façon le budget qu'elle affiche. */
-function PrimaryCrown() {
-  return (
-    <span
-      title={t("budget.primaryHint")}
-      aria-hidden="true"
-      style={{ display: "inline-flex", flexShrink: 0, color: T.amber }}
-    >
-      <Crown size={13} strokeWidth={2} />
-    </span>
-  );
-}
-
 /** Pastille d'action discrète (Réinitialiser, Supprimer, Nouveau). */
 function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" }) {
   const base = danger ? T.red : tone === "ink" ? T.text : T.textSub;
@@ -197,7 +188,11 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
   );
 }
 
-export default function BudgetPlanner() {
+/* Pas de `setPage` : la page ne renvoie plus nulle part depuis qu'elle ne lit
+   plus la banque. Le routeur le passe toujours, et l'ignorer ici est sans
+   conséquence — le déclarer pour ne pas s'en servir en aurait une, celle de
+   laisser croire qu'il reste un lien à suivre. */
+export default function BudgetPage() {
   useLang();
   const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -298,14 +293,10 @@ export default function BudgetPlanner() {
   const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {/* En « sm » : le bloc n'est plus une page, c'est une section parmi
-              celles de la page Cashflow, et le 24 px prenait le dessus sur le
-              flux réel qu'on lit au-dessus. */}
           <SectionTitle
-            size="sm"
             action={
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 <GhostButton
@@ -338,7 +329,7 @@ export default function BudgetPlanner() {
           >
             {t("budget.title")}
           </SectionTitle>
-          <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub }}>
+          <div style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, maxWidth: 620 }}>
             {t("budget.subtitle")}
           </div>
         </div>
@@ -346,11 +337,11 @@ export default function BudgetPlanner() {
         {/* Sélecteur de plans : le plan actif porte son nom en champ éditable
             plutôt qu'un bouton « renommer » — le nom se corrige là où il se lit.
 
-            Le PREMIER plan est le budget principal : c'est lui que montre la
-            synthèse Patrimoine, et la couronne le dit là où on choisit ses
-            plans. Elle suit l'ordre de la liste, il n'y a rien à régler. */}
+            Le PREMIER plan est celui que reprend la synthèse Patrimoine. Rien ne
+            le marque ici : la synthèse écrit le nom du plan qu'elle affiche, ce
+            qui répond à la question au moment où elle se pose. */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {plans.map((p, i) =>
+          {plans.map((p) =>
             p.id === plan.id ? (
               <span
                 key={p.id}
@@ -359,7 +350,6 @@ export default function BudgetPlanner() {
                   borderRadius: 999, background: T.white, boxShadow: T.elevPill,
                 }}
               >
-                {i === 0 && <PrimaryCrown />}
                 <input
                   ref={(el) => {
                     if (el && p.id === focusPlanId.current) {
@@ -394,7 +384,6 @@ export default function BudgetPlanner() {
                 onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
               >
-                {i === 0 && <PrimaryCrown />}
                 {p.name}
               </button>
             )
@@ -478,12 +467,18 @@ export default function BudgetPlanner() {
               <span aria-hidden="true" style={{ width: COL_BTN, flexShrink: 0 }} />
             </div>
 
+            {/* Pas de filet entre deux catégories : chaque ligne porte déjà sa
+                gommette de couleur, qui la sépare de la suivante mieux qu'un
+                trait — et dix filets sur une carte font une grille là où on ne
+                voulait qu'une liste. L'interligne suffit à les tenir distinctes.
+                Celui du « Reste », plus bas, reste : ce n'est pas une catégorie
+                de plus, c'est le trait d'un total. */}
             {items.map((it) => (
               <div
                 key={it.id}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
-                  padding: "6px 0", borderTop: `1px solid ${T.border}`,
+                  padding: "5px 0",
                 }}
               >
                 <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
@@ -706,3 +701,4 @@ function PctInput({ value, derived, onValue, ariaLabel }) {
     />
   );
 }
+

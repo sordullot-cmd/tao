@@ -962,8 +962,24 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
  * annulé n'est pas une dépense —, ce qui peut ramener un poste à zéro ou en
  * dessous ; il disparaît alors du graphique plutôt que d'y tenir une part
  * négative, impossible à dessiner.
+ *
+ * `keepSingleSub` lève la règle du sous-poste unique. Par défaut, un poste qui
+ * ne s'est réparti que sur un seul sous-poste rend une liste VIDE : sous
+ * l'anneau des dépenses, « Logement 980 € » suivi de « Loyer 980 € » ne fait que
+ * redire le même chiffre une ligne plus bas. Un diagramme de flux, lui, a une
+ * colonne à remplir avec ce détail, et « Logement → Loyer » y APPREND quelque
+ * chose : que tout le logement est du loyer. C'est à l'appelant de trancher,
+ * parce que la réponse dépend de ce qu'il dessine.
  */
-export function spendingByCategory(txs: CategorizableTransaction[]): {
+export interface SpendingOptions {
+  /** Garder le détail d'un poste même quand il n'a qu'un seul sous-poste. */
+  keepSingleSub?: boolean;
+}
+
+export function spendingByCategory(
+  txs: CategorizableTransaction[],
+  { keepSingleSub = false }: SpendingOptions = {},
+): {
   slices: CategorySlice[];
   total: number;
   count: number;
@@ -1003,8 +1019,9 @@ export function spendingByCategory(txs: CategorizableTransaction[]): {
     }))
     .filter((s) => s.amount > 0)
     // Un seul sous-poste : c'est le poste lui-même, le détailler serait le
-    // redire deux fois de suite avec le même chiffre.
-    .map((s) => ({ ...s, subs: s.subs.length > 1 ? s.subs : [] }));
+    // redire deux fois de suite avec le même chiffre — sauf si l'appelant a une
+    // colonne à remplir avec (cf. `keepSingleSub`).
+    .map((s) => ({ ...s, subs: keepSingleSub || s.subs.length > 1 ? s.subs : [] }));
 
   const total = round2(positive.reduce((s, p) => s + p.amount, 0));
 

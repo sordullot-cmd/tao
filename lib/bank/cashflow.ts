@@ -4,7 +4,10 @@
  * `lib/bank/categories` répond déjà à « où part l'argent » : elle répartit les
  * DÉBITS par poste. Le flux d'un mois demande deux choses de plus, et c'est tout
  * ce que ce module ajoute :
- *   — d'où vient l'argent, source par source ;
+ *   — d'où vient l'argent, source par source — et « source » veut dire QUI paie
+ *     (« Unowhy », « CAF ») quand le libellé le dit, pas seulement de quelle
+ *     nature est l'entrée : « Revenus » en face d'un ruban ne fait que répéter
+ *     le côté du diagramme où il se trouve ;
  *   — la mise en balance des deux côtés, pour qu'un diagramme de flux se
  *     dessine sans mentir.
  *
@@ -40,6 +43,8 @@ import {
   spendingByCategory,
   type CategorizableTransaction, type SpendingSubcategory,
 } from "@/lib/bank/categories";
+import { payerOf } from "@/lib/bank/payer";
+import { tint } from "@/lib/ui/color";
 
 /** Ce qu'un nœud du flux représente — l'appelant en tire son libellé. */
 export type FlowKind =
@@ -67,11 +72,27 @@ export interface FlowNode {
   amount: number;
   /** Nombre d'opérations — de postes pour le nœud « more », 0 pour les autres. */
   count: number;
+  /** Sous-poste de « revenus » — nœuds `income` seulement (cf. `IncomeSlice`). */
+  sub?: SpendingSubcategory;
+  /** Nom du payeur lu sur le libellé — nœuds `income` seulement, `null` sinon. */
+  source?: string | null;
 }
 
 export interface IncomeSlice {
+  /**
+   * Unique DANS LA LISTE : le sous-poste seul quand le payeur n'a pas de nom,
+   * `sous-poste#payeur` sinon. Ce n'est donc plus un identifiant de sous-poste —
+   * c'est `sub` qui le porte, et lui seul qui sert de clé de libellé.
+   */
+  id: string;
   /** Sous-poste de « revenus » : `income.salary`, ou `income` pour le divers. */
-  id: SpendingSubcategory;
+  sub: SpendingSubcategory;
+  /**
+   * Qui paie, lu sur le libellé (« Unowhy », « Martin »), `null` quand le relevé
+   * ne le dit pas. C'est le nom à AFFICHER quand il existe : « Unowhy » répond à
+   * « d'où vient cet argent » là où « Revenus » ne fait que répéter la question.
+   */
+  source: string | null;
   color: string;
   amount: number;
   count: number;
@@ -86,8 +107,25 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
    dans la liste. Ils restent comptés dans les totaux. */
 const CRUMB = 0.5;
 
+/* Écart de teinte entre deux payeurs d'un même sous-poste. Le premier garde la
+   couleur pleine du sous-poste : c'est la source principale, et l'éclaircir la
+   ferait passer pour une variante de quelque chose d'autre. Les suivants
+   s'éclaircissent d'un cran chacun — assez pour les distinguer côte à côte, pas
+   assez pour quitter la famille de couleur du sous-poste. */
+const PAYER_TINT_STEP = 0.16;
+const PAYER_TINT_MAX = 0.56;
+
 /**
  * Entrées d'argent réparties par source, de la plus grosse à la plus petite.
+ *
+ * Une « source » n'est pas seulement une NATURE d'entrée (salaire, aide,
+ * remboursement) : c'est d'abord QUI paie. Deux salaires versés par deux
+ * employeurs sont deux sources, et les fondre sous un unique « Salaire » perd
+ * précisément ce qu'on regarde un flux pour savoir. Le regroupement se fait donc
+ * sur le couple (sous-poste, payeur) — le payeur étant lu sur le libellé par
+ * `lib/bank/payer`, qui rend `null` dès qu'il n'y a pas de nom lisible. Un
+ * relevé avare en libellés retombe alors exactement sur l'ancien comportement :
+ * une ligne par sous-poste.
  *
  * Seules comptent les opérations dont le POSTE est « revenus » (cf. en-tête).
  * Un débit classé là — cas théorique, aucune règle ne le produit — est ignoré
@@ -99,29 +137,47 @@ export function incomeBySource(txs: CategorizableTransaction[]): {
   total: number;
   count: number;
 } {
-  const sums = new Map<string, { amount: number; count: number }>();
+  const sums = new Map<string, {
+    sub: SpendingSubcategory; source: string | null; amount: number; count: number;
+  }>();
   let count = 0;
 
   for (const tx of txs) {
     if (tx.amount <= 0) continue;
     const sub = subcategorizeTransaction(tx);
     if (parentOfSub(sub) !== "income") continue;
-    const bucket = sums.get(sub) ?? { amount: 0, count: 0 };
+    const source = payerOf(tx);
+    const id = source ? `${sub}#${source}` : sub;
+    const bucket = sums.get(id) ?? { sub, source, amount: 0, count: 0 };
     bucket.amount += tx.amount;
     bucket.count += 1;
-    sums.set(sub, bucket);
+    sums.set(id, bucket);
     count += 1;
   }
 
   const rows = [...sums.entries()]
-    .map(([id, b]) => ({ id, color: incomeColor(id), amount: round2(b.amount), count: b.count }))
+    .map(([id, b]) => ({ id, sub: b.sub, source: b.source, amount: round2(b.amount), count: b.count }))
     .filter((r) => r.amount >= CRUMB)
     .sort((a, b) => b.amount - a.amount);
 
+  /* La teinte se décide APRÈS le tri, par rang dans son sous-poste : le plus
+     gros payeur d'un sous-poste garde sa couleur pleine, les suivants
+     s'éclaircissent. Fait avant le tri, l'ordre des teintes serait celui des
+     opérations du relevé, donc arbitraire. */
+  const rank = new Map<SpendingSubcategory, number>();
   const total = round2(rows.reduce((s, r) => s + r.amount, 0));
 
   return {
-    slices: rows.map((r) => ({ ...r, pct: total > 0 ? (r.amount / total) * 100 : 0 })),
+    slices: rows.map((r) => {
+      const i = rank.get(r.sub) ?? 0;
+      rank.set(r.sub, i + 1);
+      const base = incomeColor(r.sub);
+      return {
+        ...r,
+        color: i === 0 ? base : tint(base, Math.min(i * PAYER_TINT_STEP, PAYER_TINT_MAX)),
+        pct: total > 0 ? (r.amount / total) * 100 : 0,
+      };
+    }),
     total,
     count,
   };
@@ -142,6 +198,18 @@ export interface CashflowOptions {
   topOutflows?: number;
   /** Sources de revenus montrées à part. Au-delà, elles sont regroupées aussi. */
   topInflows?: number;
+  /**
+   * Ce qui fait une source : QUI paie (défaut), ou seulement la NATURE de
+   * l'entrée.
+   *
+   * `payer` est ce que veut une liste, qui a la place de nommer chaque employeur
+   * et de les chiffrer un par un. `nature` est ce que veut un diagramme : deux
+   * salaires y font deux rubans dont l'un est souvent un trait, et la colonne
+   * des entrées finit plus détaillée que celle des dépenses — alors qu'un flux
+   * se regarde pour l'inverse. Les payeurs restent lisibles dans la liste sous
+   * le dessin, qui appelle `incomeBySource` directement.
+   */
+  groupIncome?: "payer" | "nature";
 }
 
 export interface Cashflow {
@@ -170,14 +238,20 @@ export interface Cashflow {
  */
 export function buildCashflow(
   txs: CategorizableTransaction[],
-  { topOutflows = 8, topInflows = 5 }: CashflowOptions = {},
+  { topOutflows = 8, topInflows = 5, groupIncome = "payer" }: CashflowOptions = {},
 ): Cashflow {
   const { slices: spending, total: spent } = spendingByCategory(txs);
   const { slices: incomes, total: income } = incomeBySource(txs);
 
+  /* Le regroupement par nature se fait AVANT l'écrêtage : deux salaires fondus
+     en un seul pèsent leur somme, et ce qui n'aurait pas tenu dans les cinq
+     premières sources y tient une fois rassemblé. Après l'écrêtage, ils se
+     seraient d'abord fait couper, puis auraient été refondus à un — ce qui aurait
+     produit un « + N autres » là où il n'y avait plus rien à regrouper. */
   const inflows = clip(
-    incomes.map<FlowNode>((s) => ({
+    (groupIncome === "nature" ? byNature(incomes) : incomes).map<FlowNode>((s) => ({
       id: s.id, kind: "income", color: s.color, amount: s.amount, count: s.count,
+      sub: s.sub, source: s.source,
     })),
     topInflows,
   );
@@ -203,6 +277,34 @@ export function buildCashflow(
   ));
 
   return { inflows, outflows, income, spent, net, total };
+}
+
+/**
+ * Les sources refondues sur leur seule NATURE : un salaire est un salaire, quel
+ * que soit l'employeur qui le verse.
+ *
+ * La teinte redevient celle du sous-poste, pleine : l'éclaircissement par rang
+ * de payeur (cf. `PAYER_TINT_STEP`) n'a plus rien à distinguer, et garder la
+ * couleur du plus gros payeur ferait dépendre la teinte d'un classement qui
+ * n'existe plus. `source` retombe à `null`, ce qui est exact — la ligne ne
+ * désigne plus personne en particulier — et suffit à ce que l'appelant reprenne
+ * le libellé de la nature.
+ */
+function byNature(slices: IncomeSlice[]): IncomeSlice[] {
+  const sums = new Map<SpendingSubcategory, IncomeSlice>();
+  for (const s of slices) {
+    const merged = sums.get(s.sub);
+    if (merged) {
+      merged.amount = round2(merged.amount + s.amount);
+      merged.count += s.count;
+      merged.pct += s.pct;
+    } else {
+      sums.set(s.sub, {
+        ...s, id: s.sub, source: null, color: incomeColor(s.sub),
+      });
+    }
+  }
+  return [...sums.values()].sort((a, b) => b.amount - a.amount);
 }
 
 const synthetic = (id: FlowSynthetic, amount: number, count = 0): FlowNode => ({

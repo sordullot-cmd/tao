@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { JetBrains_Mono, Outfit } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/supabaseAuthProvider";
 import { UndoProvider } from "@/lib/contexts/UndoContext";
@@ -114,16 +113,19 @@ export default function RootLayout({
       className={`${outfit.variable} ${openAISans.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Thème + accent appliqués avant l'hydratation (évite le flash de couleur).
+            Script brut plutôt que next/script : `beforeInteractive` re-rend une balise
+            <script> côté client, que React ignore en émettant un warning. Ici le script
+            part dans le HTML du serveur et s'exécute une seule fois, au bon moment.
+            L'accent vient de Réglages → Apparence (lib/ui/accent.ts). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('tr4de_theme');if(t==='dark')document.documentElement.dataset.theme='dark';var h=/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,r=document.documentElement,a=localStorage.getItem('tr4de_accent'),b=localStorage.getItem('tr4de_accent_2');if(a&&h.test(a))r.style.setProperty('--accent',a);if(b&&h.test(b))r.style.setProperty('--accent-2',b);}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
-        {/* Applique le thème enregistré avant l'hydratation (évite le flash) */}
-        <Script id="tr4de-theme-init" strategy="beforeInteractive">
-          {`try{var t=localStorage.getItem('tr4de_theme');if(t==='dark')document.documentElement.dataset.theme='dark';}catch(e){}`}
-        </Script>
-        {/* Idem pour l'accent choisi dans Réglages → Apparence (lib/ui/accent.ts) :
-            sans ça, la première frame s'affiche avec la couleur par défaut. */}
-        <Script id="tr4de-accent-init" strategy="beforeInteractive">
-          {`try{var h=/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,r=document.documentElement,a=localStorage.getItem('tr4de_accent'),b=localStorage.getItem('tr4de_accent_2');if(a&&h.test(a))r.style.setProperty('--accent',a);if(b&&h.test(b))r.style.setProperty('--accent-2',b);}catch(e){}`}
-        </Script>
         <ErrorBoundary>
           <AuthProvider>
             <UndoProvider>

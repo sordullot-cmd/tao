@@ -4,13 +4,16 @@ import {
   ALL_DAYS,
   balanceSeries,
   classifyTransaction,
+  daysSince,
   depthOf,
   groupByDay,
+  monthWindow,
   normalizeTransaction,
   oldestDate,
   periodStats,
   sortTransactions,
   withinDays,
+  withinRange,
   type BankTransaction,
   type RawTransaction,
 } from "@/lib/bank/transactions";
@@ -208,5 +211,47 @@ describe("agrégats et découpage", () => {
     const groups = groupByDay([booked("2026-08-13", 1), booked("2026-08-13", 2), booked("2026-08-12", 3)]);
     expect(groups.map((g) => g.date)).toEqual(["2026-08-13", "2026-08-12"]);
     expect(groups[0].items).toHaveLength(2);
+  });
+});
+
+/* Le mois calendaire — la fenêtre de la page Budget. Une fenêtre glissante de
+   trente jours attrape tantôt un loyer, tantôt deux ; un budget se raisonne sur
+   le mois, et c'est ce découpage-là qui doit être juste aux deux bouts. */
+describe("le mois calendaire", () => {
+  const août = new Date(2026, 7, 15);
+
+  it("borne le mois courant du 1er au dernier jour", () => {
+    expect(monthWindow(0, août)).toEqual({ from: "2026-08-01", to: "2026-08-31" });
+  });
+
+  it("recule d'un mois, et sait où finit février", () => {
+    expect(monthWindow(-1, août)).toEqual({ from: "2026-07-01", to: "2026-07-31" });
+    // 2028 est bissextile, 2026 ne l'est pas : le dernier jour se calcule, il ne
+    // se lit pas dans une table.
+    expect(monthWindow(-6, août)).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+    expect(monthWindow(-6, new Date(2028, 7, 15))).toEqual({ from: "2028-02-01", to: "2028-02-29" });
+  });
+
+  it("passe l'année sans se tromper de décembre", () => {
+    expect(monthWindow(-8, août)).toEqual({ from: "2025-12-01", to: "2025-12-31" });
+  });
+
+  it("garde les mouvements de l'intervalle, bornes comprises", () => {
+    const list = [
+      booked("2026-09-01", 1), booked("2026-08-31", 2), booked("2026-08-15", 3),
+      booked("2026-08-01", 4), booked("2026-07-31", 5),
+    ];
+    const { from, to } = monthWindow(0, août);
+    expect(withinRange(list, from, to).map((t) => t.date))
+      .toEqual(["2026-08-31", "2026-08-15", "2026-08-01"]);
+  });
+
+  it("dit combien de jours il faut demander à la banque pour couvrir la fenêtre", () => {
+    // Du 1er au 15 août, bornes comprises : quinze jours.
+    expect(daysSince("2026-08-01", août)).toBe(15);
+    // Un mois plus vieux demande d'autant plus de profondeur.
+    expect(daysSince("2026-07-01", août)).toBe(46);
+    // Jamais zéro : une fenêtre qui commence aujourd'hui vaut un jour.
+    expect(daysSince("2026-08-15", août)).toBe(1);
   });
 });

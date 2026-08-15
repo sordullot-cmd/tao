@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/loanUi";
 import { loanStats } from "@/lib/loans";
 import { fmt } from "@/lib/ui/format";
+import { periodDays } from "@/lib/ui/period";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import {
   assetGain,
@@ -594,12 +595,7 @@ function DeleteAssetButton({ name, onClick }) {
    plus ancien mouvement OBTENU, et non la fenêtre demandée.
    ------------------------------------------------------------------------ */
 const MOVEMENT_PERIODS = [
-  { id: "1S", days: 7 },
-  { id: "1M", days: 30 },
-  { id: "3M", days: 90 },
-  { id: "6M", days: 180 },
-  { id: "1A", days: 365 },
-  { id: "ALL", days: ALL_DAYS },
+  { id: "1S" }, { id: "1M" }, { id: "3M" }, { id: "6M" }, { id: "1A" }, { id: "ALL" },
 ];
 
 /** Profondeur à demander à la banque pour une fenêtre d'affichage. En dessous de
@@ -653,7 +649,9 @@ function BankMovements({ asset }) {
   const [period, setPeriod] = React.useState("3M");
   const [expanded, setExpanded] = React.useState(false);
 
-  const days = MOVEMENT_PERIODS.find((p) => p.id === period)?.days ?? 90;
+  /* Fenêtre calée sur le calendrier (cf. `lib/ui/period`) : « 1 mois » part du
+     1er, pas d'il y a trente jours. « Tout » n'en a pas — la banque décide. */
+  const days = periodDays(period) ?? ALL_DAYS;
   const { transactions, loading, revalidating, error } = useBankTransactions(uid, depthFor(days));
   const balance = assetValue(asset);
 
