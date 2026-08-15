@@ -275,18 +275,15 @@ export default function SankeyGraph({
               textAlign: before ? "right" : centre ? "center" : "left",
               /* Le libellé du milieu se pose SUR sa barre : il lui faut un fond,
                  sinon le texte se lit par-dessus le nœud et les rubans. Ceux des
-                 gouttières sont sur du blanc, ils n'en ont pas besoin. */
-              /* Fond PLEIN, et non plus translucide : le libellé du milieu est
-                 posé sur la barre la plus épaisse du dessin, et les rubans qui
-                 passaient dessous en faisaient bouger la couleur d'un rendu à
-                 l'autre. Le texte y perdait le contraste sur lequel il est
-                 pensé. Le cadre suit — un filet à moitié effacé sur un fond
-                 plein se lit comme une bavure. */
+                 gouttières sont sur du blanc, ils n'en ont pas besoin.
+                 Ce fond reste TRANSLUCIDE : le dessin doit continuer de passer
+                 dessous, sans quoi le libellé devient une étiquette collée sur
+                 la figure et coupe la barre en deux. */
               ...(centre ? {
                 padding: "6px 12px",
                 borderRadius: 8,
-                background: "var(--color-card-bg, #FFFFFF)",
-                border: `1px solid var(--color-border, #E5E5E5)`,
+                background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 88%, transparent)",
+                border: `1px solid color-mix(in srgb, var(--color-border, #E5E5E5) 70%, transparent)`,
               } : null),
               pointerEvents: "none",
             }}
