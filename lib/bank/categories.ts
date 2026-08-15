@@ -123,7 +123,7 @@ export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
   // Les achats
   { id: "shopping", color: HUE.cardinal },
   { id: "tech", color: HUE.fireAnt },
-  { id: "beauty", color: HUE.crab },
+  { id: "beauty", color: HUE.iguana },
   // Le corps
   { id: "health", color: HUE.moonJelly },
   { id: "sport", color: HUE.treeFrog },
@@ -286,11 +286,15 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
    bloc, la droite garde les teintes variées des postes : au milieu, là où les
    rubans se croisent, on sait de quel côté vient une branche sans lire son nom.
 
-   Les trois vrais violets vont aux nœuds qui doivent se lire en premier : le
-   salaire, la retraite, et « Pris sur le solde » (cf. lib/bank/cashflow). Les
-   roses de la même bande prennent le reste, du plus vif au plus sourd. Le
-   « divers » finit sur Squid, un rose grisé : il reste une entrée, mais il avoue
-   ne pas savoir laquelle.
+   Les trois vrais violets vont aux nœuds qui se lisent le plus souvent : le
+   salaire, le « divers », et « Pris sur le solde » (cf. lib/bank/cashflow). Les
+   roses de la même bande prennent le reste, du plus vif au plus pâle.
+
+   Le « divers » mérite un violet PLEIN et non un ton d'attente, contrairement à
+   ce que sa place de repli suggère : c'est lui qui porte toute entrée dont le
+   libellé ne nomme pas la source, donc, sur un relevé ordinaire, l'essentiel de
+   ce qui rentre. Il était sur un rose grisé et le ruban principal du diagramme
+   arrivait gris.
 
    Les rouges francs (Cardinal, Fire Ant, Crab) restent aux DÉPENSES : ils sont
    assez éloignés des roses pâles pour qu'aucune confusion ne s'installe.
@@ -300,12 +304,12 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
    quand on tient dans une famille. */
 const INCOME_COLORS: Record<string, string> = {
   "income.salary": HUE.beetle,       // violet plein — la source principale
+  income: HUE.betta,                 // violet soutenu — le crédit qu'on n'a pas su nommer
   "income.benefits": HUE.starfish,   // rose vif
-  "income.pension": HUE.butterfly,   // violet profond
+  "income.pension": HUE.flamingo,    // rose clair
+  "income.interest": HUE.crab,       // rose soutenu
+  "income.sale": HUE.pig,            // rose sourd
   "income.refund": HUE.walkingFish,  // rose très pâle
-  "income.interest": HUE.pig,        // rose sourd
-  "income.sale": HUE.flamingo,       // rose clair
-  income: HUE.squid,                 // rose grisé — le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */

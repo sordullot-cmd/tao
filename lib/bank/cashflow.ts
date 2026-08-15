@@ -188,14 +188,14 @@ export function incomeBySource(txs: CategorizableTransaction[]): {
 /* Teintes des nœuds de synthèse. Ils ne SONT pas des postes, et une couleur de
    poste leur donnerait l'air d'en être un : les deux agrégats restent donc gris.
    « Pris sur le solde » fait exception — c'est une ENTRÉE, il se range donc du
-   côté gauche avec les revenus, et il en prend la famille : Betta, le violet
-   soutenu de la charte. Mais ce n'est PAS un revenu — c'est de l'argent qu'on
-   avait déjà —, et c'est le plus foncé de la colonne : il se repère sans qu'on
-   ait à lire son libellé, sans pour autant sortir du groupe des entrées. */
+   côté gauche avec les revenus, et il en prend la famille : Butterfly, le violet
+   le plus profond de la charte. Mais ce n'est PAS un revenu — c'est de l'argent
+   qu'on avait déjà —, et il est le plus foncé de la colonne : il se repère sans
+   qu'on ait à lire son libellé, sans pour autant sortir du groupe des entrées. */
 const SYNTHETIC_COLORS: Record<FlowSynthetic, string> = {
   more: GREY.grey500,
   left: GREY.grey300,
-  draw: HUE.betta,
+  draw: HUE.butterfly,
 };
 
 export interface CashflowOptions {
