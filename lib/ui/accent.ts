@@ -35,6 +35,9 @@ export const ACCENT_PRESETS: AccentPreset[] = [
   { id: "violet", label: "Violet (d'origine)", primary: "#9C7BFF", secondary: "#7C4DFF" },
   { id: "blue",   label: "Bleu",              primary: "#3B82F6", secondary: "#2563EB" },
   { id: "amber",  label: "Ambre",             primary: "#F59E0B", secondary: "#EA8C00" },
+  // Charbon en principale, doré en secondaire : les éléments actifs restent
+  // sobres, la couleur ne parle que dans les courbes et les séries.
+  { id: "charcoal", label: "Charbon & or",    primary: "#232323", secondary: "#FEC76C" },
 ];
 
 /** `#abc` / `#aabbcc` uniquement : on n'injecte pas une valeur arbitraire dans le DOM. */
