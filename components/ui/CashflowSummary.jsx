@@ -195,7 +195,14 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
         <div
           role="tablist"
           aria-label={t("budget.tabsAria")}
-          style={{ display: "flex", gap: 2, flexWrap: "wrap", borderTop: `1px solid ${T.border}`, margin: "0 -24px", padding: "0 12px" }}
+          style={{
+            display: "flex", gap: 2, flexWrap: "wrap",
+            borderTop: `1px solid ${T.border}`,
+            /* Un peu d'air de part et d'autre du filet : au-dessus pour que la
+               dernière branche du dessin ne vienne pas s'y appuyer, en dessous
+               pour que les chiffres ne touchent pas le bord de la carte. */
+            margin: "6px -24px 0", padding: "4px 12px 6px",
+          }}
         >
           <FlowTab
             active={tab === "in"} onClick={() => setTab("in")}

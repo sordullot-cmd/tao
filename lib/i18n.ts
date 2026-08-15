@@ -1239,6 +1239,7 @@ const FR: Dict = {
   // Répartition des dépenses (synthèse du patrimoine)
   "patrimoine.spending.title": "Dépenses par catégorie",
   "patrimoine.spending.centre": "Dépensé",
+  "patrimoine.spending.monthly": "Dépense mensuelle",
   "patrimoine.spending.aria": "Répartition des dépenses par catégorie",
   "patrimoine.spending.loading": "Récupération des opérations…",
   "patrimoine.spending.empty": "Aucune dépense sur cette période.",
@@ -1282,6 +1283,8 @@ const FR: Dict = {
   "cashflow.recentMore": "Voir la suite ({n})",
   "cashflow.recentCount": "{shown} des {total} opérations de la période.",
   "spending.colCategory": "Poste",
+  "spending.colShare": "Répartition",
+  "spending.colValue": "Valeur",
   "spending.nTxns": "{n} opérations",
   "spending.txMore": "Voir les {n} autres opérations",
   "spending.txLess": "Voir moins",
@@ -2592,6 +2595,7 @@ const EN: Dict = {
   // Spending breakdown (net worth summary)
   "patrimoine.spending.title": "Spending by category",
   "patrimoine.spending.centre": "Spent",
+  "patrimoine.spending.monthly": "Monthly spending",
   "patrimoine.spending.aria": "Spending broken down by category",
   "patrimoine.spending.loading": "Fetching transactions…",
   "patrimoine.spending.empty": "No spending over this period.",
@@ -2633,6 +2637,8 @@ const EN: Dict = {
   "cashflow.recentMore": "Show more ({n})",
   "cashflow.recentCount": "{shown} of the {total} transactions in this period.",
   "spending.colCategory": "Category",
+  "spending.colShare": "Distribution",
+  "spending.colValue": "Value",
   "spending.nTxns": "{n} transactions",
   "spending.txMore": "Show {n} more transactions",
   "spending.txLess": "Show less",

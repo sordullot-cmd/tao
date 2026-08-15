@@ -54,7 +54,6 @@ import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts"
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import { depthOf, withinDays, ALL_DAYS } from "@/lib/bank/transactions";
 import { categoryLabelKey, spendingByCategory, spendingPalette } from "@/lib/bank/categories";
-import { incomeBySource } from "@/lib/bank/cashflow";
 import { reconstructHistory } from "@/lib/patrimoineHistory";
 import { periodDays } from "@/lib/ui/period";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
@@ -513,13 +512,6 @@ function SpendingByCategory({ accounts }) {
   }, [byUid, uids, days]);
 
   const { slices, total } = React.useMemo(() => spendingByCategory(txs), [txs]);
-  /* L'encaissé de la même fenêtre : c'est lui qui donne sa mesure au dépensé, et
-     c'est le pendant exact du « Revenu mensuel » de l'aperçu du budget. Il passe
-     par `incomeBySource` et non par une somme des crédits : un remboursement
-     reconnu reste déduit de son poste de dépense plutôt que compté comme une
-     entrée, sans quoi le même euro gonflerait les deux chiffres. */
-  const { total: income } = React.useMemo(() => incomeBySource(txs), [txs]);
-  const rest = income - total;
 
   /* Les teintes viennent du BUDGET de l'utilisateur, et non d'une copie figée de
      ses couleurs par défaut : les deux anneaux sont voisins sur cette page, et
@@ -555,40 +547,35 @@ function SpendingByCategory({ accounts }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Le mois affiché est ÉCRIT, faute d'être choisi : sans pastilles, rien
-          d'autre ne dit de quelle période le total parle. */}
-      <SectionTitle size="sm" action={<span style={{ fontSize: 13, color: T.textMut }}>{monthLabel()}</span>}>
-        {t("patrimoine.spending.title")}
-      </SectionTitle>
+      {/* Sans titre au-dessus : « Dépenses par catégorie » redisait ce que la
+          carte montre — un anneau de postes et leur légende — et volait une
+          ligne à la carte du budget d'à côté, qui n'en a pas non plus. Ce que le
+          titre portait de vraiment utile, le MOIS, est descendu dans la carte.
 
-      {/* La carte est calquée sur l'aperçu du budget d'à côté : deux chiffres en
+          La carte est calquée sur l'aperçu du budget d'à côté : deux chiffres en
           en-tête, l'anneau de même taille, la légende en dessous. Les deux
           répondent à la même question à un temps près — ce qu'on a dépensé, ce
           qu'on avait prévu de dépenser — et deux cartes de formes différentes
           demandaient de réapprendre à lire en passant de l'une à l'autre. */}
       <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-          {/* Les trois chiffres sont ceux de l'aperçu du budget, à un temps
-              près : ce qui est entré tient la place du revenu, ce qui reste
-              celle du reste à répartir, et le dépensé celle de l'alloué, au
-              centre de l'anneau. Aucun ne se répète d'un endroit à l'autre. */}
+          {/* Le chiffre de tête est ce que la carte MONTRE — la dépense du mois
+              —, et non plus ce qui est entré : le revenu se lit en face, sur
+              l'aperçu du budget, et deux chiffres d'entrée pour un seul anneau
+              de dépenses laissaient chercher lequel commandait la figure.
+
+              À droite, le MOIS et non un second chiffre : sans pastilles de
+              période, rien d'autre ne dit de quelle fenêtre le total parle — et
+              c'est le titre disparu qui le portait. */}
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: 13, color: T.textSub }}>{t("cashflow.in")}</span>
+            <span style={{ fontSize: 13, color: T.textSub }}>{t("patrimoine.spending.monthly")}</span>
             <span style={{ fontSize: 24, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-              {fmt(income)}
+              {fmt(total)}
             </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
-            <span style={{ fontSize: 13, color: T.textSub }}>
-              {t(rest < 0 ? "cashflow.drawn" : "cashflow.left")}
-            </span>
-            <span style={{
-              fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums",
-              color: rest < 0 ? T.pnlNeg : T.text,
-            }}>
-              {fmt(Math.abs(rest))}
-            </span>
-          </div>
+          <span style={{ fontSize: 13, color: T.textMut, textTransform: "capitalize" }}>
+            {monthLabel()}
+          </span>
         </div>
 
         {/* Chargement à vide seulement : dès qu'un relevé est arrivé, on montre
@@ -638,6 +625,26 @@ function SpendingByCategory({ accounts }) {
  * lib/budgetPlans.ts). Le plan actif de la page Budget n'est qu'un état de
  * navigation : la synthèse changerait de budget selon le dernier onglet ouvert.
  */
+/** Le renvoi vers la page Budget, posé au BAS de la carte : en action de titre,
+ *  il partait avec le titre — et c'est de toute façon après avoir lu l'aperçu
+ *  qu'on décide d'aller le modifier. */
+function OpenBudgetButton({ onOpen }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+        alignSelf: "flex-start", minHeight: 36, padding: "0 14px", borderRadius: 999,
+        border: "none", background: T.accentBg, color: T.text,
+        fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+      }}
+    >
+      {t("patrimoine.openBudget")}
+    </button>
+  );
+}
+
 function BudgetSummary({ onOpen }) {
   const [store] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, null);
   const plan = primaryPlan(store);
@@ -649,23 +656,11 @@ function BudgetSummary({ onOpen }) {
   if (!plan) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <SectionTitle size="sm">{t("nav.budget")}</SectionTitle>
-        <section style={{ ...CARD, padding: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontSize: 14, color: T.textSub, maxWidth: 520 }}>
             {t("patrimoine.budgetHint")}
           </div>
-          <button
-            type="button"
-            onClick={onOpen}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-              padding: "0 16px", borderRadius: 999, border: "none",
-              background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
-              cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-            }}
-          >
-            {t("patrimoine.openBudget")}
-          </button>
+          <OpenBudgetButton onOpen={onOpen} />
         </section>
       </div>
     );
@@ -681,30 +676,13 @@ function BudgetSummary({ onOpen }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <SectionTitle
-        size="sm"
-        action={
-          <button
-            type="button"
-            onClick={onOpen}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
-              padding: "0 12px", borderRadius: 999, border: "none",
-              background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
-          >
-            {t("patrimoine.openBudget")}
-          </button>
-        }
-      >
-        {/* Le nom du budget affiché : on doit savoir LEQUEL des plans est repris
-            ici sans ouvrir la page Budget. */}
-        {plan?.name || t("nav.budget")}
-      </SectionTitle>
+      {/* Sans titre : la carte des dépenses d'en face n'en a plus non plus, et
+          deux titres au-dessus de deux anneaux qui se lisent l'un contre l'autre
+          ajoutaient une ligne entre eux.
 
+          Le nom du plan part avec le titre. C'est TOUJOURS le plan principal qui
+          est repris ici (cf. `primaryPlan`) : la question « lequel ? » ne se pose
+          qu'en ouvrant la page Budget, où le bouton du bas mène. */}
       <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -771,6 +749,8 @@ function BudgetSummary({ onOpen }) {
             </ul>
           </>
         )}
+
+        <OpenBudgetButton onOpen={onOpen} />
       </section>
     </div>
   );

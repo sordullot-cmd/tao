@@ -15,17 +15,23 @@
  * logos ronds à couleur pleine. Une pastille pâle à côté d'eux ne se lisait pas
  * comme la même famille d'objet : elle avait l'air d'un état désactivé. D'où le
  * même dessin qu'`AssetAvatar` et `MerchantAvatar` — disque opaque de la couleur
- * du poste, glyphe dans l'encre qui contraste dessus.
+ * du poste.
  *
- * L'encre est CALCULÉE (`inkOn`, la même fonction que les initiales d'un
- * marchand) et non choisie : la palette des postes tient une trentaine de
- * teintes, et un couple couleur/encre à maintenir par poste finirait par
- * comporter un blanc sur jaune. Le seuil est le point d'équilibre des contrastes
- * WCAG, pas l'intuition — un vert vif « paraît » sombre et ne rend pourtant
- * que 2,3:1 en blanc.
+ * ── Le glyphe est la MÊME couleur, en plus foncé ────────────────────────────
+ * Et non un blanc ou un noir calculé : un aplat coloré traversé d'un trait blanc
+ * se lit comme un pictogramme d'application, alors qu'un camaïeu se lit comme
+ * une matière. La teinte reste celle du poste d'un bout à l'autre de la ligne.
  *
- * La couleur pleine, à l'identique dans l'anneau et le diagramme de flux, est ce
- * qui relie la ligne du tableau à sa part dans les graphiques.
+ * Ça se paie en CONTRASTE, et c'est ce qui décide des deux constantes plus bas.
+ * Sur le disque à pleine saturation, un glyphe plus foncé du même ton plafonne
+ * à 2,4:1 (mesuré sur les 28 postes) : huit d'entre eux passaient sous le seuil
+ * de 3:1 des éléments graphiques, et un trait de 2 px y devenait une ombre. Le
+ * disque est donc éclairci d'un cran — 15 %, assez pour que les 28 postes
+ * repassent au-dessus de 3:1, trop peu pour qu'il cesse de se lire comme un
+ * aplat plein à côté des logos d'enseignes.
+ *
+ * `DISC_TINT` à 0 rend le disque exactement tel qu'il était, au prix de ces
+ * huit postes.
  *
  * Le choix des icônes est de la PRÉSENTATION, pas du classement : il vit donc
  * ici et non dans `lib/bank/categories`, qui décide des postes et de leurs
@@ -40,7 +46,13 @@ import {
   Sparkles, Ticket, TrainFront, UtensilsCrossed, Wallet, Zap,
 } from "lucide-react";
 import { categoryColor } from "@/lib/bank/categories";
-import { inkOn } from "@/lib/bank/merchants";
+import { shade, tint } from "@/lib/ui/color";
+
+/* Le disque, et le glyphe dessus — tous deux dérivés de la couleur du poste.
+   Les valeurs viennent d'une mesure de contraste sur les 28 postes, pas de
+   l'œil : cf. l'en-tête. */
+const DISC_TINT = 0.15;
+const GLYPH_SHADE = 0.65;
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste
    ACHÈTE, pas la famille dans laquelle il est rangé : « carburant » prend la
@@ -95,7 +107,7 @@ export default function CategoryIcon({ category, size = 32 }) {
       style={{
         width: size, height: size, flexShrink: 0, borderRadius: 999,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: color, color: inkOn(color),
+        background: tint(color, DISC_TINT), color: shade(color, GLYPH_SHADE),
       }}
     >
       <Icon size={Math.round(size * 0.52)} strokeWidth={2} />

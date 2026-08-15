@@ -95,14 +95,15 @@ describe("Dépenses par catégorie (synthèse du patrimoine)", () => {
     seed();
     render(<PatrimoinePage />);
 
-    expect(screen.getByText("Spending by category")).toBeTruthy();
+    expect(screen.getByText("Monthly spending")).toBeTruthy();
     expect(part("Food & dining", "$60.00")).toBeTruthy();
     expect(part("Transport", "$40.00")).toBeTruthy();
-    // 60 + 40 = 100 dépensés, au centre de l'anneau : le salaire n'en fait pas
-    // partie — il tient l'en-tête, avec ce qu'il en reste une fois dépensé.
-    expect(screen.getByText("$100.00")).toBeTruthy();
-    expect(screen.getByText("$2,400.00")).toBeTruthy();
-    expect(screen.getByText("$2,300.00")).toBeTruthy();
+    /* 60 + 40 = 100 dépensés : le chiffre de tête de la carte, et le centre de
+       son anneau. Le salaire n'en fait pas partie — et il ne s'affiche plus
+       nulle part ici : la carte ne parle que de dépenses, le revenu se lit sur
+       l'aperçu du budget d'en face. */
+    expect(screen.getAllByText("$100.00").length).toBeGreaterThan(0);
+    expect(screen.queryByText("$2,400.00")).toBeNull();
     expect(screen.queryByText(/^Income ·/)).toBeNull();
   });
 
@@ -114,7 +115,7 @@ describe("Dépenses par catégorie (synthèse du patrimoine)", () => {
        plus rien sur la carte ne permet d'aller le chercher — le bloc porte le
        mois du budget qu'il jouxte, pas une fenêtre au choix. */
     expect(screen.queryByText(/^Shopping ·/)).toBeNull();
-    expect(screen.getByText("$100.00")).toBeTruthy();
+    expect(screen.getAllByText("$100.00").length).toBeGreaterThan(0);
 
     /* Un seul jeu de pastilles sur la page, celui de la courbe du patrimoine :
        le bloc des dépenses n'a plus le sien. */

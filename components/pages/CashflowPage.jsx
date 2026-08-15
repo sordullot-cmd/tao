@@ -147,10 +147,24 @@ const COL_BTN = 24;
  * OPACITÉ et non d'une couleur de texte : c'est ce que fait le tableau des
  * comptes, et ça tient sur les deux thèmes sans qu'on ait deux teintes à régler.
  */
-function ListLabel({ children }) {
+function ListHeader({ label, share = false, chevron = false }) {
   return (
-    <div style={{ padding: "0 20px", opacity: 0.4 }}>
-      <span style={TH}>{children}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 20px", opacity: 0.4 }}>
+      <span style={{ ...TH, flex: 1, minWidth: 0 }}>{label}</span>
+      {/* Les enseignes n'ont pas de part : leur classement ne couvre que les
+          marchands RECONNUS, dont la somme ne fait pas le total dépensé. Un
+          pourcentage y serait faux d'autant qu'il manque d'enseignes. */}
+      {share && (
+        <span style={{ ...TH, width: COL_PCT, flexShrink: 0, textAlign: "right", paddingRight: 16 }}>
+          {t("spending.colShare")}
+        </span>
+      )}
+      <span style={{ ...TH, width: COL_AMOUNT, flexShrink: 0, textAlign: "right" }}>
+        {t("spending.colValue")}
+      </span>
+      {/* La colonne du chevron, vide : sans elle, « Valeur » se poserait 36 px à
+          droite des montants qu'elle intitule. */}
+      {chevron && <span aria-hidden="true" style={{ width: COL_BTN, flexShrink: 0 }} />}
     </div>
   );
 }
@@ -393,7 +407,7 @@ export default function CashflowPage({ setPage }) {
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <ListLabel>{t("cashflow.spending")}</ListLabel>
+              <ListHeader label={t("cashflow.spending")} share chevron />
               {/* Sans en-tête de colonnes : les deux listes de ce bloc se lisent
                   l'une à côté de l'autre, et trois intitulés d'un seul côté
                   décalaient la première ligne des postes d'une hauteur de texte
@@ -419,7 +433,7 @@ export default function CashflowPage({ setPage }) {
                 Les sources, elles, se lisent dans la colonne de gauche du
                 diagramme, qui les nomme et les chiffre. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <ListLabel>{t("spending.merchants")}</ListLabel>
+              <ListHeader label={t("spending.merchants")} />
               <section style={{ ...CARD, padding: merchants.length === 0 ? "16px 20px" : "8px 0" }}>
                 {merchants.length === 0 ? (
                   <div style={{ fontSize: 14, lineHeight: 1.5, color: T.textSub }}>
@@ -441,7 +455,11 @@ export default function CashflowPage({ setPage }) {
                             {t("spending.nTxns").replace("{n}", String(m.count))}
                           </span>
                         </span>
-                        <span style={{ flexShrink: 0, fontSize: 14, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                        {/* Même largeur que la colonne des montants des postes,
+                            et alignée à droite : c'est ce qui met le chiffre
+                            sous le « Valeur » qui l'intitule, et les deux listes
+                            d'accord d'une colonne à l'autre. */}
+                        <span style={{ width: COL_AMOUNT, flexShrink: 0, textAlign: "right", fontSize: 14, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
                           {fmt(m.amount)}
                         </span>
                       </li>

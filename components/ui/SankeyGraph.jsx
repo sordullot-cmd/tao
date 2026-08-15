@@ -61,13 +61,17 @@ const H_MIN = 300;
 const H_MAX = 640;
 
 /** Hauteur donnée à une ligne de la colonne la plus peuplée : c'est la place
- *  qu'une pastille demande pour ne pas toucher sa voisine. */
-const ROW = 34;
+ *  qu'un libellé demande pour ne pas toucher son voisin. Un libellé fait deux
+ *  lignes de 16 px ; le reste est le blanc qui les sépare, et il en faut assez
+ *  pour qu'on rattache sans hésiter un montant au nom qui est au-dessus de lui
+ *  plutôt qu'à celui d'en dessous. */
+const ROW = 42;
 
 /** Marges verticales : sans elles, la première et la dernière branche collent
- *  au bord de la carte. */
-const PAD_TOP = 12;
-const PAD_BOTTOM = 12;
+ *  au bord de la carte — et en bas, au texte posé sous le dessin. Elles valent
+ *  une demi-hauteur de libellé, de quoi séparer sans creuser un trou. */
+const PAD_TOP = 20;
+const PAD_BOTTOM = 20;
 
 /** Part de blanc dans un ruban, puis dans une barre (cf. en-tête). */
 const RIBBON_TINT = 0.58;
@@ -272,11 +276,17 @@ export default function SankeyGraph({
               /* Le libellé du milieu se pose SUR sa barre : il lui faut un fond,
                  sinon le texte se lit par-dessus le nœud et les rubans. Ceux des
                  gouttières sont sur du blanc, ils n'en ont pas besoin. */
+              /* Fond PLEIN, et non plus translucide : le libellé du milieu est
+                 posé sur la barre la plus épaisse du dessin, et les rubans qui
+                 passaient dessous en faisaient bouger la couleur d'un rendu à
+                 l'autre. Le texte y perdait le contraste sur lequel il est
+                 pensé. Le cadre suit — un filet à moitié effacé sur un fond
+                 plein se lit comme une bavure. */
               ...(centre ? {
-                padding: "3px 10px",
+                padding: "6px 12px",
                 borderRadius: 8,
-                background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 88%, transparent)",
-                border: `1px solid color-mix(in srgb, var(--color-border, #E5E5E5) 70%, transparent)`,
+                background: "var(--color-card-bg, #FFFFFF)",
+                border: `1px solid var(--color-border, #E5E5E5)`,
               } : null),
               pointerEvents: "none",
             }}
@@ -287,8 +297,11 @@ export default function SankeyGraph({
             }}>
               {labelOf(n.id)}
             </div>
+            {/* Le montant se décolle du nom : collés, les deux lignes d'un
+                libellé forment un pavé qu'on lit comme un seul bloc, et l'œil
+                ne sait plus où finit une branche et où commence sa voisine. */}
             <div style={{
-              fontSize: 12, lineHeight: "16px", color: T.textSub,
+              fontSize: 12, lineHeight: "16px", marginTop: 2, color: T.textSub,
               fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
             }}>
               {formatValue(n.value)}
