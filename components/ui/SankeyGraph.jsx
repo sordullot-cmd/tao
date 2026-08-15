@@ -48,10 +48,18 @@
  *   ne sait pas couper proprement un nom trop long, ne suit pas la taille de
  *   police du système et rend mal les chiffres alignés.
  *
- * • AUCUN SURVOL. Le dessin ne réagit pas au passage de la souris : tout ce
- *   qu'un survol révélait (le nom, le montant) est maintenant écrit à côté de
- *   chaque branche, et une figure qui s'éteint à moitié dès qu'on passe dessus
- *   se lit plus mal qu'une figure fixe.
+ * • UN SURVOL QUI NE TOUCHE QUE SON CÔTÉ. Poser la souris sur une branche allume
+ *   sa chaîne — « Logement » avec « Loyer » et « Charges », ce sont les mêmes
+ *   euros — et atténue les branches VOISINES, celles auxquelles elle se compare.
+ *   Le reste ne bouge pas : d'où vient l'argent n'apprend rien sur le poste
+ *   qu'on regarde, et éteindre la moitié du dessin à chaque passage de souris se
+ *   lisait plus mal qu'une figure fixe (c'est pourquoi il n'y en avait aucun).
+ *   La règle — jusqu'où va la chaîne, quel côté s'atténue — est dans
+ *   `lib/ui/sankeyFocus`, testable sans navigateur.
+ *
+ *   Les libellés portent déjà le nom et le montant : le survol n'a donc rien à
+ *   RÉVÉLER, il ne fait que trier. C'est ce qui permet de l'atténuer franchement
+ *   sans rien perdre.
  *
  * • DEUX RÉGIMES selon la place, et non un seul dessin rétréci. Sous 720 px, les
  *   gouttières mangeraient la figure : on les retire avec les libellés, et le
@@ -63,6 +71,7 @@ import React from "react";
 import { T } from "@/lib/ui/tokens";
 import { tint } from "@/lib/ui/color";
 import { sankeyGraphLayout } from "@/lib/ui/sankeyGraph";
+import { sankeyFocus, inFocusRange, linkInFocusRange } from "@/lib/ui/sankeyFocus";
 
 /** En dessous, la figure se passe de pastilles (cf. en-tête). */
 const COMPACT_AT = 720;
@@ -96,8 +105,18 @@ const PAD_BOTTOM = 20;
 const RIBBON_TINT = 0.25;
 const NODE_TINT = 0.06;
 
-/** Opacité des rubans. Une seule valeur : le dessin ne réagit pas au survol. */
+/** Opacité d'un ruban, puis d'un ruban ATTÉNUÉ par le survol d'un voisin.
+ *  0.14 plutôt que 0.4 : à mi-chemin, la branche éteinte reste assez présente
+ *  pour qu'on la suive du regard, et le survol ne trie plus rien. */
 const RIBBON = 0.92;
+const RIBBON_OFF = 0.14;
+
+/** Les mêmes, pour une barre et pour un libellé. Le texte s'atténue MOINS que
+ *  son ruban : plus fin, il disparaîtrait au même réglage, et la colonne
+ *  deviendrait illisible alors qu'on cherchait justement à y lire quelque
+ *  chose. */
+const NODE_OFF = 0.22;
+const LABEL_OFF = 0.34;
 
 /** Place réservée aux libellés de part et d'autre du dessin. Deux lignes de
  *  texte (le nom, puis le montant) tiennent là-dedans sans coupure pour un nom
@@ -119,9 +138,13 @@ export default function SankeyGraph({
   formatValue = (v) => String(Math.round(v)),
   ariaLabel,
   emptyLabel,
+  /** Prévenu à chaque changement de branche survolée (l'id du nœud, ou `null`).
+   *  C'est ce qui permet à une figure voisine de suivre le même survol. */
+  onHoverNode,
 }) {
   const ref = React.useRef(null);
   const [width, setWidth] = React.useState(0);
+  const [hover, setHover] = React.useState(null);
 
   React.useEffect(() => {
     const el = ref.current;
@@ -200,6 +223,47 @@ export default function SankeyGraph({
   );
   const labelOf = (id) => labels.get(id) ?? id;
 
+  /* Ce que le survol allume, et la zone qu'il atténue (cf. `lib/ui/sankeyFocus`).
+     Calculé sur la sortie de la géométrie : c'est elle qui porte les colonnes,
+     et c'est en colonnes que se dit « son côté ». */
+  const focus = React.useMemo(
+    () => sankeyFocus(layout.nodes, layout.links, hover),
+    [layout, hover],
+  );
+
+  const columnOf = React.useMemo(
+    () => new Map(layout.nodes.map((n) => [n.id, n.column])),
+    [layout],
+  );
+
+  const nodeDimmed = (id) =>
+    !!focus && !focus.nodes.has(id) && inFocusRange(focus, columnOf.get(id) ?? 0);
+
+  const linkDimmed = (band) =>
+    !!focus && !focus.links.has(band.id)
+    && linkInFocusRange(focus, columnOf.get(band.source) ?? 0, columnOf.get(band.target) ?? 0);
+
+  /* Un ruban désigne son bout DISTINCTIF, celui-là même dont il porte la teinte
+     (cf. `color` dans `lib/ui/sankeyGraph`) : survoler « Salaire → budget »
+     parle du salaire, survoler « budget → Logement » parle du logement. La
+     règle est la même des deux côtés — la cible quand elle distingue, la source
+     quand tout s'y rejoint. */
+  const inDegree = React.useMemo(() => {
+    const m = new Map();
+    for (const b of layout.links) m.set(b.target, (m.get(b.target) ?? 0) + 1);
+    return m;
+  }, [layout]);
+  const bandOwner = (band) => ((inDegree.get(band.target) ?? 0) > 1 ? band.source : band.target);
+
+  const enter = (id) => {
+    setHover(id);
+    onHoverNode?.(id);
+  };
+  const leave = () => {
+    setHover(null);
+    onHoverNode?.(null);
+  };
+
   const total = PAD_TOP + height + PAD_BOTTOM;
 
   if (layout.links.length === 0) {
@@ -216,7 +280,10 @@ export default function SankeyGraph({
   }
 
   return (
-    <div ref={ref} style={{ width: "100%", position: "relative" }}>
+    /* Le relâchement est porté par le CADRE et non par chaque forme : entre deux
+       rubans voisins il reste toujours un filet de blanc, et un `onMouseLeave`
+       par forme y ferait clignoter la figure à chaque traversée. */
+    <div ref={ref} style={{ width: "100%", position: "relative" }} onMouseLeave={leave}>
       <style>{`
         @keyframes tr4de-sankeygraph-in { from { opacity: 0 } to { opacity: 1 } }
         .tr4de-sankeygraph-part { animation: tr4de-sankeygraph-in 460ms var(--ease-out, ease) both }
@@ -241,8 +308,12 @@ export default function SankeyGraph({
             className="tr4de-sankeygraph-part"
             d={band.path}
             fill={tint(band.color, RIBBON_TINT)}
-            opacity={RIBBON}
-            style={{ animationDelay: `${Math.min(i, 16) * 28}ms` }}
+            opacity={linkDimmed(band) ? RIBBON_OFF : RIBBON}
+            onMouseEnter={() => enter(bandOwner(band))}
+            style={{
+              animationDelay: `${Math.min(i, 16) * 28}ms`,
+              transition: "opacity 140ms var(--ease-out, ease)",
+            }}
           >
             <title>{`${labelOf(band.source)} → ${labelOf(band.target)} · ${formatValue(band.value)}`}</title>
           </path>
@@ -259,6 +330,9 @@ export default function SankeyGraph({
                une gélule posée là, et son extrémité ne coïncide plus avec le
                bord du ruban qu'elle ferme. */
             fill={tint(n.color, NODE_TINT)}
+            opacity={nodeDimmed(n.id) ? NODE_OFF : 1}
+            onMouseEnter={() => enter(n.id)}
+            style={{ transition: "opacity 140ms var(--ease-out, ease)" }}
           >
             <title>{`${labelOf(n.id)} · ${formatValue(n.value)}`}</title>
           </rect>
@@ -284,7 +358,8 @@ export default function SankeyGraph({
               fill="none"
               stroke={n.color}
               strokeWidth={1}
-              opacity={0.4}
+              opacity={nodeDimmed(n.id) ? 0.4 * NODE_OFF : 0.4}
+              style={{ transition: "opacity 140ms var(--ease-out, ease)" }}
             />
           );
         })}
@@ -312,6 +387,10 @@ export default function SankeyGraph({
           <div
             key={`label-${n.id}`}
             className="tr4de-sankeygraph-part"
+            /* Le nom est une cible de survol au même titre que le ruban : c'est
+               souvent lui qu'on vise, et une branche fine n'offre que 3 px de
+               haut à la souris. */
+            onMouseEnter={() => enter(n.id)}
             style={{
               position: "absolute",
               top: n.labelY,
@@ -341,7 +420,8 @@ export default function SankeyGraph({
                 background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 88%, transparent)",
                 border: `1px solid color-mix(in srgb, var(--color-border, #E5E5E5) 70%, transparent)`,
               } : null),
-              pointerEvents: "none",
+              opacity: nodeDimmed(n.id) ? LABEL_OFF : 1,
+              transition: "opacity 140ms var(--ease-out, ease)",
             }}
           >
             <div style={{

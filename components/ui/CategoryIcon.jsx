@@ -45,17 +45,25 @@ import {
   Sparkles, Ticket, TrainFront, UtensilsCrossed, Wallet, Zap,
 } from "lucide-react";
 import { categoryColor } from "@/lib/bank/categories";
-import { deepen, tint } from "@/lib/ui/color";
+import { inkOn, toLuminance } from "@/lib/ui/color";
 
 /* Le disque, et le glyphe dessus — tous deux dérivés de la couleur du poste.
    Les valeurs viennent d'une mesure de contraste sur les 28 postes, pas de
    l'œil : cf. l'en-tête.
 
-   Le disque à 88 % de blanc se lit comme blanc tout en restant visible sur une
-   carte blanche. Le glyphe est ramené sous cette luminance-là, qui est ce que
-   4,5:1 exige contre un fond aussi clair. */
-const DISC_TINT = 0.88;
-const GLYPH_MAX_LUM = 0.13;
+   Le disque était à 88 % de blanc : il se lisait comme blanc, et c'était bien le
+   problème — une colonne de vingt vignettes dont on ne distinguait plus les
+   teintes ne distingue plus rien du tout. Il est maintenant ramené à une
+   LUMINANCE CONSTANTE, la même pour les vingt-huit postes : chacun garde sa
+   teinte à pleine force, et comme ils sont tous au même niveau de clarté, il ne
+   reste que la teinte pour les séparer. 0,55 est le compromis — assez coloré
+   pour qu'on nomme la couleur, assez clair pour qu'une pastille ne pèse pas à
+   côté d'un logo d'enseigne.
+
+   Le glyphe descend de la MÊME teinte, juste assez pour tenir 4,5:1 sur son
+   disque : un noir neutre casserait la parenté entre le dessin et son fond. */
+const DISC_LUM = 0.55;
+const GLYPH_RATIO = 4.5;
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste
    ACHÈTE, pas la famille dans laquelle il est rangé : « carburant » prend la
@@ -104,13 +112,14 @@ const ICONS = {
 export default function CategoryIcon({ category, size = 32 }) {
   const Icon = ICONS[category] || Shapes;
   const color = categoryColor(category);
+  const disc = toLuminance(color, DISC_LUM);
   return (
     <span
       aria-hidden="true"
       style={{
         width: size, height: size, flexShrink: 0, borderRadius: 999,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: tint(color, DISC_TINT), color: deepen(color, GLYPH_MAX_LUM),
+        background: disc, color: inkOn(color, disc, GLYPH_RATIO),
       }}
     >
       <Icon size={Math.round(size * 0.52)} strokeWidth={2} />

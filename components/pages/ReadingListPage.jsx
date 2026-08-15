@@ -10,7 +10,7 @@ import Popover from "@/components/ui/Popover";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { deepen } from "@/lib/ui/color";
+import { deepen, dotRing } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
 
 const T = { ...BaseT };
@@ -192,7 +192,7 @@ export default function ReadingListPage() {
                           display: "inline-flex", alignItems: "center", gap: 6,
                           transition: "all .12s ease",
                         }}>
-                        <span style={{ width: 7, height: 7, borderRadius: 999, background: deepen(p.color) }} />
+                        <span style={{ width: 7, height: 7, borderRadius: 999, background: p.color, boxShadow: dotRing(p.color) }} />
                         {p.label}
                       </button>
                     );
@@ -291,7 +291,7 @@ export default function ReadingListPage() {
                     <span>{Math.round(pct)}%</span>
                   </div>
                   <div style={{ height: 5, background: T.accentBg, borderRadius: "var(--radius-field)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: deepen(st.color), borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
+                    <div style={{ height: "100%", width: `${pct}%`, background: st.color, boxShadow: dotRing(st.color), borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
                   </div>
                 </div>
 

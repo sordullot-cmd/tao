@@ -83,7 +83,7 @@ import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
 import { CARD, SectionTitle } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { deepen } from "@/lib/ui/color";
+import { deepen, dotRing } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
@@ -1067,7 +1067,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
         <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
           aria-label={`${cat.label} : ${pct} % — ${status.label}`}
           style={{ position: "relative", height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-          <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: deepen(cat.color), borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
+          <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: cat.color, boxShadow: dotRing(cat.color), borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
           {/* Repère du calendrier : position du jour dans l'année. */}
           <div title={`${Math.round(yearPct)} % de l'année écoulée`}
             style={{ position: "absolute", top: -1, bottom: -1, left: `${Math.min(100, Math.max(0, yearPct))}%`, width: 2, background: T.text, opacity: 0.35, borderRadius: 999 }} />
@@ -1391,7 +1391,7 @@ function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
       <div style={{ minHeight: 16, fontSize: 11.5, color: T.textSub }}>
         {hover && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: deepen(hover.cat.color), flexShrink: 0 }} />
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: hover.cat.color, boxShadow: dotRing(hover.cat.color), flexShrink: 0 }} />
             <span style={{ fontWeight: 600, color: T.text }}>{hover.step.label}</span>
             <span style={{ color: T.textMut }}>{hover.cat.label} · {fmtDayShort(hover.step.due)}</span>
           </span>

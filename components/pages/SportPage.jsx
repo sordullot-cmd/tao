@@ -17,7 +17,7 @@ import {
   CARD, SectionTitle, HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow,
 } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { deepen } from "@/lib/ui/color";
+import { dotRing } from "@/lib/ui/color";
 import { PALETTE } from "@/lib/ui/palette";
 
 /* ---------------------------------------------------------------------------
@@ -938,7 +938,7 @@ function FilterPills({ value, onChange, options }) {
               display: "inline-flex", alignItems: "center", gap: 6,
               transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
             }}>
-            {o.color && <span style={{ width: 6, height: 6, borderRadius: "50%", background: deepen(o.color), flexShrink: 0 }} />}
+            {o.color && <span style={{ width: 6, height: 6, borderRadius: "50%", background: o.color, boxShadow: dotRing(o.color), flexShrink: 0 }} />}
             {o.label}
           </button>
         );
@@ -1413,7 +1413,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                             display: "flex", flexDirection: "column", gap: 4,
                           }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: deepen(disc.color), flexShrink: 0 }} />
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: disc.color, boxShadow: dotRing(disc.color), flexShrink: 0 }} />
                             <span style={{ fontSize: 13, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {p.name}
                             </span>

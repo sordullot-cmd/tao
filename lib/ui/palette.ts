@@ -101,20 +101,28 @@ export const GREY = {
 } as const;
 
 /**
- * Pastilles : fond très clair de la teinte + encre lisible dessus.
+ * Pastilles : la teinte ramenée à une clarté constante + son encre.
  *
- * Ce n'est pas une couleur d'identité, c'est du texte : l'encre part de la
- * version sombre et descend encore si besoin, jusqu'à 4,5:1 sur son propre
- * fond. Aucune couleur principale ne tient ce seuil telle quelle.
+ * Les fonds étaient des pastels à 86 % de blanc. Ils se lisaient tous comme du
+ * blanc, et c'était le défaut : dans une liste d'actifs, on ne distinguait plus
+ * un PEA d'un livret. Ils sont maintenant tous à la MÊME luminance (0,55), donc
+ * seule la teinte les sépare — c'est précisément ce qu'on leur demande de dire.
+ * Même échelle que les vignettes de poste (cf. `DISC_LUM` dans
+ * components/ui/CategoryIcon) : les deux familles se croisent dans les listes
+ * de la section Finance et doivent avoir le même poids.
+ *
+ * L'encre n'est pas une couleur d'identité, c'est du texte : elle descend de la
+ * même teinte jusqu'à 4,5:1 sur son propre fond. Un noir neutre casserait la
+ * parenté entre la pastille et ses initiales.
  */
 export const CHIP: Record<PaletteColor | "grey", { bg: string; text: string }> = {
-  green:  { bg: "#EEFBDF", text: "#377E01" },
-  blue:   { bg: "#DFF4FE", text: "#296CC1" },
-  red:    { bg: "#FFE6E6", text: "#CE1827" },
-  yellow: { bg: "#FFF7DB", text: "#896B05" },
-  orange: { bg: "#FFF0DB", text: "#9D5B04" },
-  purple: { bg: "#F8EEFF", text: "#904FB8" },
-  pink:   { bg: "#FFF8FF", text: "#886688" },
-  brown:  { bg: "#F5EBE1", text: "#945204" },
-  grey:   { bg: "#ECECEC", text: "#4B4B4B" },
+  green:  { bg: "#84D918", text: "#35580B" },
+  blue:   { bg: "#74CEF9", text: "#0E5576" },
+  red:    { bg: "#FFAFAF", text: "#872929" },
+  yellow: { bg: "#F1BD00", text: "#634D00" },
+  orange: { bg: "#FFB64D", text: "#6E4100" },
+  purple: { bg: "#E1B1FF", text: "#633E7A" },
+  pink:   { bg: "#E4B4E4", text: "#594659" },
+  brown:  { bg: "#DEBE9F", text: "#6C4117" },
+  grey:   { bg: "#C3C3C3", text: "#4D4D4D" },
 };

@@ -19,7 +19,7 @@ import {
 } from "@/lib/lifeRpgCategories";
 
 import { T as BaseT } from "@/lib/ui/tokens";
-import { deepen } from "@/lib/ui/color";
+import { dotRing } from "@/lib/ui/color";
 import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
@@ -822,13 +822,13 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                   onChange={(v) => setForm({ ...form, level: v })}
                   renderValue={(lv) => (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: 1 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: deepen(lv.color), flexShrink: 0 }} />
+                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: lv.color, boxShadow: dotRing(lv.color), flexShrink: 0 }} />
                       <span style={{ fontSize: 14, fontWeight: 400, color: lv.color }}>{lv.label}</span>
                     </span>
                   )}
                   renderOption={(lv, active) => (
                     <>
-                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: deepen(lv.color), flexShrink: 0 }} />
+                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: lv.color, boxShadow: dotRing(lv.color), flexShrink: 0 }} />
                       <span style={{ flex: 1 }}>{lv.label}</span>
                       {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
                     </>
@@ -2142,7 +2142,8 @@ function RoadmapDot({ item: it, pct, color }) {
       }}>
       <div style={{
         width: 12, height: 12, borderRadius: "50%",
-        background: deepen(color),
+        background: color,
+        boxShadow: dotRing(color),
         border: `2px solid ${T.white}`,
         boxShadow: hover
           ? "0 0 0 3px rgba(59,130,246,0.20), 0 2px 6px rgba(0,0,0,0.18)"

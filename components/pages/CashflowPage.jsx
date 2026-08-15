@@ -53,7 +53,7 @@
 import React from "react";
 import { ArrowDownLeft, ArrowUpRight, ChartPie, ChevronDown, ChevronRight, ChevronUp, Landmark } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
-import { deepen } from "@/lib/ui/color";
+import { dotRing } from "@/lib/ui/color";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, TH, PERIODS } from "@/components/ui/da";
 import { periodRange } from "@/lib/ui/period";
@@ -595,7 +595,7 @@ function RecentRow({ tx }) {
             dit pas : l'absence de classement n'apprend rien. */}
         <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, fontSize: 12, color: T.textSub }}>
           {category !== "other" && (
-            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: deepen(categoryColor(category)), flexShrink: 0 }} />
+            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: categoryColor(category), boxShadow: dotRing(categoryColor(category)), flexShrink: 0 }} />
           )}
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {[shortDay(tx.date), category === "other" ? null : t(subLabelKey(sub))].filter(Boolean).join(" · ")}
