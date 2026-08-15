@@ -37,6 +37,7 @@ import {
 } from "@/lib/bank/categories";
 import { buildCashflow, type CashflowOptions } from "@/lib/bank/cashflow";
 import { tint } from "@/lib/ui/color";
+import { GREY } from "@/lib/ui/palette";
 
 /** Ce qu'un nœud représente — l'appelant en tire son libellé. */
 export type GraphNodeKind =
@@ -160,7 +161,10 @@ export function buildCashflowGraph(
 
   nodes.push({
     id: HUB_ID, kind: "hub", ref: HUB_ID,
-    color: flow.net < 0 ? "#C05A46" : "#2C72C3",
+    /* La barre centrale ne porte pas de sens de catégorie : elle est le total
+       qui transite. Gris foncé dans les deux cas — c'est le nœud « Pris sur le
+       solde », côté entrées, qui dit le découvert, pas cette barre. */
+    color: GREY.grey900,
     amount: flow.total, count: 0,
   });
 

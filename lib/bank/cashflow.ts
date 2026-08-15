@@ -38,6 +38,8 @@
  * langue et que ce module est testé sans dictionnaire.
  */
 
+import { PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
+
 import {
   categoryColor, incomeColor, parentOfSub, subcategorizeTransaction,
   spendingByCategory,
@@ -183,14 +185,16 @@ export function incomeBySource(txs: CategorizableTransaction[]): {
   };
 }
 
-/* Teintes des nœuds de synthèse. Elles ne sortent pas de la palette des postes :
-   ces trois nœuds ne SONT pas des postes, et une couleur de poste leur donnerait
-   l'air d'en être un. Gris pour ce qui est agrégé ou non dépensé, terre cuite
-   pour le découvert — la seule des trois qui mérite d'être vue. */
+/* Teintes des nœuds de synthèse. Ils ne SONT pas des postes, et une couleur de
+   poste leur donnerait l'air d'en être un : les deux agrégats restent donc gris.
+   « Pris sur le solde » fait exception — c'est une ENTRÉE, au même titre qu'un
+   salaire, et il prend le violet clair : la teinte voisine du bleu des revenus,
+   assez proche pour qu'on lise « ça entre », assez distincte pour qu'on voie que
+   ça ne vient pas d'un revenu. */
 const SYNTHETIC_COLORS: Record<FlowSynthetic, string> = {
-  more: "#A8B0B8",
-  left: "#B9C2CB",
-  draw: "#C05A46",
+  more: GREY.grey500,
+  left: GREY.grey300,
+  draw: PALETTE_LIGHT.purple,
 };
 
 export interface CashflowOptions {

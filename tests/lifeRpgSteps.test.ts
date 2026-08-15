@@ -12,9 +12,13 @@ import { describe, it, expect } from "vitest";
 import {
   addStep,
   cardProgress,
+  goalPctsOf,
+  groupGoalPctsByStep,
+  isStepDone,
   readSteps,
   removeStep,
   sortSteps,
+  stepCompletion,
   stepStatus,
   stepsProgress,
   toggleStep,
@@ -105,6 +109,75 @@ describe("état d'une étape", () => {
 
   it("ne divise pas par zéro sur une carte sans étape", () => {
     expect(stepsProgress([], TODAY)).toEqual({ done: 0, total: 0, late: 0, pct: 0 });
+  });
+});
+
+describe("objectifs chiffrés rattachés à une étape", () => {
+  it("range les avancements par étape et ignore les objectifs libres", () => {
+    const byStep = groupGoalPctsByStep([
+      { rpgStep: "s1", pct: 40 },
+      { rpgStep: "s1", pct: 80 },
+      { rpgStep: null, pct: 10 },
+      { pct: 90 },
+    ]);
+    expect(byStep).toEqual({ s1: [40, 80] });
+    expect(goalPctsOf(byStep, "inconnue")).toEqual([]);
+  });
+
+  it("rend libre un objectif dont l'étape a été supprimée", () => {
+    // Sans ce filtre, son avancement pèserait sur un jalon qui n'existe plus :
+    // il disparaîtrait de la carte tout en continuant à la faire progresser.
+    expect(groupGoalPctsByStep([{ rpgStep: "effacee", pct: 100 }], ["s1"])).toEqual({});
+  });
+
+  it("mesure l'étape par ses objectifs au lieu de la case à cocher", () => {
+    const s = step({ id: "s1" });
+    expect(stepCompletion(s)).toBe(0);
+    expect(stepCompletion(s, [40, 80])).toBe(60);
+    // Cochée à la main, elle vaut 100 quoi qu'en disent ses chiffres.
+    expect(stepCompletion(step({ done: true }), [40])).toBe(100);
+  });
+
+  it("franchit l'étape quand TOUS ses objectifs sont atteints", () => {
+    const s = step({ id: "s1" });
+    expect(isStepDone(s, [100, 100])).toBe(true);
+    expect(isStepDone(s, [100, 99])).toBe(false);
+    // Le franchissement est dérivé : un objectif qui redescend rouvre l'étape.
+    expect(isStepDone(s, [])).toBe(false);
+  });
+
+  it("ne déclare pas en retard une étape que ses chiffres ont déjà acquise", () => {
+    const late = step({ due: "2026-08-01" });
+    expect(stepStatus(late, TODAY)).toBe("late");
+    expect(stepStatus(late, TODAY, [100])).toBe("done");
+    expect(stepStatus(late, TODAY, [60])).toBe("late");
+  });
+
+  it("compte une étape à mi-chemin pour une demie", () => {
+    const list = [step({ id: "s1" }), step({ id: "s2", done: true })];
+    // s1 à 50 % via ses objectifs, s2 franchie → (50 + 100) / 2.
+    expect(stepsProgress(list, TODAY, { s1: [30, 70] })).toEqual({ done: 1, total: 2, late: 0, pct: 75 });
+  });
+
+  it("compte franchie, dans l'avancement de la carte, une étape aux objectifs atteints", () => {
+    const list = [step({ id: "s1" }), step({ id: "s2" })];
+    expect(stepsProgress(list, TODAY, { s1: [100] })).toMatchObject({ done: 1, pct: 50 });
+    expect(cardProgress({ steps: list, byStep: { s1: [100] }, today: TODAY }))
+      .toMatchObject({ pct: 50, source: "measured", hasSteps: true, hasGoals: false });
+  });
+
+  it("ne compte pas deux fois un objectif rangé sous une étape", () => {
+    // `goalPcts` ne porte que les objectifs LIBRES : ajouter celui de l'étape
+    // ferait peser 100 % deux fois et afficherait une carte en avance.
+    const list = [step({ id: "s1" }), step({ id: "s2" })];
+    const both = cardProgress({ goalPcts: [], steps: list, byStep: { s1: [100] }, today: TODAY });
+    expect(both.pct).toBe(50);
+  });
+
+  it("montre franchi, sur la frise de l'année, un jalon acquis par ses chiffres", () => {
+    const cats = [{ id: "a", label: "Forme", steps: [step({ id: "s1", due: "2026-04-01" })] }];
+    expect(yearMarkers(cats, 2026)[0].done).toBe(false);
+    expect(yearMarkers(cats, 2026, { s1: [100] })[0].done).toBe(true);
   });
 });
 

@@ -84,7 +84,7 @@ const DEFAULT_INCOME = 2000;
    « Autres » est à part : c'est le slot fourre-tout, et la convention réserve le
    gris au non-catégorisé. Il ne compte pas dans la palette catégorielle. */
 const CATEGORY_COLORS = [
-  PALETTE.blue,        // logement
+  PALETTE_DARK.blue,   // logement     — le bleu plein est réservé aux revenus
   PALETTE.orange,      // alimentation
   PALETTE.brown,       // transport
   PALETTE.purple,      // abonnements

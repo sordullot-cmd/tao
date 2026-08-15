@@ -184,30 +184,32 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
         />
 
         {/* Les chiffres de la fenêtre, en onglets : ils résument ET ils
-            commandent l'anneau. Le filet qui les sépare du dessin va d'un bord à
-            l'autre de la carte — d'où les marges négatives, qui annulent son
-            rembourrage.
+            commandent l'anneau.
 
-            Petits, et c'est le propos : ce sont quatre repères qu'on balaie du
-            regard, pas les chiffres de tête de la page. Gros, ils entraient en
-            concurrence avec le diagramme juste au-dessus, qui dit déjà les
-            proportions. */}
+            SUR UNE PISTE SEGMENTÉE, et non posés à nu sous un filet. Quatre
+            textes alignés dans du blanc, dont seule l'OPACITÉ disait lequel
+            était choisi, ne ressemblaient à rien de cliquable : on lisait une
+            rangée de chiffres à moitié effacés, et le trait de 2 px sous l'actif
+            était le seul indice de leur rôle. La piste est le geste que la DA
+            emploie déjà partout où l'on choisit entre plusieurs vues
+            (`PeriodPills`) : fond gris léger, et l'onglet retenu ressort en
+            carte blanche. Chaque onglet est alors lisible à pleine encre —
+            l'état ne se paie plus en délavant trois chiffres sur quatre.
+
+            Groupés à gauche et non étirés sur toute la largeur : étalés, les
+            quatre chiffres se lisaient comme quatre colonnes d'un tableau, alors
+            que ce sont quatre boutons. */}
         <div
           role="tablist"
           aria-label={t("budget.tabsAria")}
           style={{
-            /* Groupés à gauche, et non étalés sur toute la largeur : étirés, les
-               quatre chiffres se lisaient comme quatre colonnes d'un tableau,
-               alors que ce sont quatre onglets — et le dernier, poussé au bord,
-               n'avait plus l'air d'appartenir à la même rangée. Ils gardent
-               entre eux un écart franc : collés, on ne voyait plus où finissait
-               un chiffre et où commençait le libellé du suivant. */
-            display: "flex", gap: 14, flexWrap: "wrap",
-            borderTop: `1px solid ${T.border}`,
-            /* Un peu d'air de part et d'autre du filet : au-dessus pour que la
-               dernière branche du dessin ne vienne pas s'y appuyer, en dessous
-               pour que les chiffres ne touchent pas le bord de la carte. */
-            margin: "6px -24px 0", padding: "4px 12px 6px",
+            display: "inline-flex", alignSelf: "flex-start", flexWrap: "wrap",
+            gap: 2, padding: 3, borderRadius: 14,
+            background: T.segmentTrack, boxShadow: T.elevCard,
+            /* La carte n'a pas de rembourrage en bas (le dessin va s'y appuyer) :
+               c'est la piste qui pose sa propre marge, sans quoi elle toucherait
+               le bord. Au-dessus, l'écart de la carte suffit. */
+            margin: "0 0 16px",
           }}
         >
           <FlowTab
@@ -254,12 +256,18 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
 }
 
 /**
- * Un des chiffres de la fenêtre, en onglet.
+ * Un des chiffres de la fenêtre, en onglet sur la piste.
  *
- * Petit format assumé : quatre chiffres alignés sous un diagramme ne sont pas
- * quatre titres. Le trait sous l'onglet actif prend la TEINTE du chiffre (vert
- * pour les entrées, rouge pour un découvert) : c'est le même signal que la
- * couleur du montant, et il tient quand l'œil ne regarde que le bas de la carte.
+ * Bâti comme un `MiniKpi` de la DA — le nom de la mesure en 11 px atténué, le
+ * chiffre en 15 px demi-gras dessous —, parce que c'est ce que ces quatre blocs
+ * SONT : des mesures. L'onglet retenu prend la carte blanche des pastilles de
+ * période (`PeriodPills`), fine ombre comprise ; c'est le seul signal d'état, et
+ * il suffit — la teinte du chiffre (vert pour les entrées, rouge pour un
+ * découvert) reste alors disponible pour dire ce qu'elle a à dire, au lieu de
+ * servir aussi de soulignement.
+ *
+ * Les trois autres gardent leur pleine encre : une mesure à demi effacée se lit
+ * moins bien, et on n'a rien gagné à ne pas pouvoir la lire.
  */
 function FlowTab({ active, onClick, label, value, tone }) {
   return (
@@ -269,18 +277,21 @@ function FlowTab({ active, onClick, label, value, tone }) {
       aria-selected={active}
       onClick={onClick}
       style={{
-        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1,
-        minWidth: 0, padding: "9px 12px 8px", border: "none", background: "transparent",
-        borderBottom: `2px solid ${active ? (tone || T.text) : "transparent"}`,
-        opacity: active ? 1 : 0.55, cursor: "pointer", fontFamily: "inherit",
-        transition: "opacity 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease)",
+        display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3,
+        minWidth: 0, padding: "8px 14px 9px", border: "none", borderRadius: 11,
+        background: active ? T.white : "transparent",
+        boxShadow: active ? T.elevPill : "none",
+        cursor: "pointer", fontFamily: "inherit",
+        transition: "background 140ms var(--ease-out, ease), box-shadow 140ms var(--ease-out, ease)",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
-      onMouseLeave={(e) => { e.currentTarget.style.opacity = active ? 1 : 0.55; }}
+      /* Le survol pose la carte sans l'ombre : de quoi désigner la cible sans
+         faire croire qu'elle est déjà choisie. */
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = T.white; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
     >
-      <span style={{ fontSize: 11, lineHeight: "15px", color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ fontSize: 11, lineHeight: 1, color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
       <span style={{
-        fontSize: 15, fontWeight: 600, lineHeight: "20px",
+        fontSize: 15, fontWeight: 600, lineHeight: 1, letterSpacing: -0.15,
         color: tone || T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
       }}>
         {fmt(value)}

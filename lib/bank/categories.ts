@@ -92,9 +92,15 @@ export type SpendingSubcategory = string;
  * (assurance, frais, retraits, non-catégorisé). Vingt-huit valeurs, toutes
  * distinctes — c'est ce que vérifie tests/bankCategories.
  *
- * Les postes que la page Budget fixe (logement, alimentation, transport,
- * abonnements, loisirs, épargne) prennent des principales : ce sont les gros,
- * ils doivent porter la couleur pleine.
+ * Une seule teinte est RÉSERVÉE : le bleu plein va aux revenus (`INCOME_COLORS`
+ * plus bas), et aucun poste de dépense ne le prend — sans quoi le salaire et le
+ * logement, qui sortent tous deux au palmarès presque tous les mois, arriveraient
+ * de la même couleur de part et d'autre de la barre centrale. Le logement garde
+ * la famille bleue, en version sombre.
+ *
+ * Un seul partage subsiste : « frais » et la barre centrale sont tous deux au
+ * gris foncé. La planche n'a que quatre gris exploitables pour vingt-huit
+ * postes, et « frais » est celui qui atteint le moins souvent le palmarès.
  *
  * Le rendu du Sankey délave déjà les rubans (`RIBBON_TINT` dans
  * components/ui/SankeyGraph.jsx). C'est là qu'on compense, pas ici : la valeur
@@ -105,11 +111,11 @@ export type SpendingSubcategory = string;
  * pas un poste de dépense, c'est l'aveu que la règle n'a pas tranché.
  */
 export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
-  // Le toit — bleu
-  { id: "housing", color: PALETTE.blue },                // bleu — page Budget
-  { id: "utilities", color: PALETTE_DARK.blue },         // bleu sombre
-  { id: "telecom", color: PALETTE_LIGHT.blue },          // bleu clair
-  { id: "insurance", color: GREY.grey500 },              // gris : une charge, pas un poste de vie
+  // Le toit — bleu, mais pas le bleu PLEIN : celui-là est aux revenus
+  { id: "housing", color: PALETTE_DARK.blue },           // bleu sombre — page Budget
+  { id: "utilities", color: PALETTE_LIGHT.blue },        // bleu clair
+  { id: "telecom", color: GREY.grey500 },                // gris : une charge, pas un poste de vie
+  { id: "insurance", color: GREY.grey300 },              // gris clair : idem
   // La table — orange
   { id: "food", color: PALETTE.orange },                 // orange — page Budget
   // La route — brun, et le jaune pour ce qui n'est pas un trajet
@@ -130,15 +136,16 @@ export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
   { id: "subscriptions", color: PALETTE.purple },        // violet — page Budget
   { id: "education", color: PALETTE_LIGHT.purple },      // violet clair
   { id: "kids", color: PALETTE_LIGHT.pink },             // rose clair
-  // L'argent — vert, et les gris pour ce qui n'est pas une dépense de vie
-  { id: "trading", color: PALETTE_LIGHT.yellow },        // jaune clair : le poste propre à tr4de
+  // L'argent
+  { id: "trading", color: PALETTE_LIGHT.green },         // vert clair : le poste propre à tr4de
   { id: "savings", color: PALETTE.green },               // vert — page Budget
   { id: "credit", color: PALETTE_LIGHT.red },            // rouge clair
   { id: "taxes", color: PALETTE_LIGHT.brown },           // brun clair
-  { id: "fees", color: GREY.grey900 },                   // gris sombre
-  { id: "cash", color: GREY.grey300 },                   // gris très clair
+  { id: "fees", color: GREY.grey900 },                   // gris foncé
+  { id: "cash", color: PALETTE_LIGHT.yellow },           // jaune clair — les billets
   { id: "transfer", color: PALETTE_LIGHT.orange },       // orange clair
-  { id: "income", color: PALETTE_LIGHT.green },          // vert clair — jamais dans l'anneau des dépenses
+  { id: "income", color: PALETTE.blue },                 // le bleu des revenus : ce poste ne paraît
+                                                         // jamais dans l'anneau des dépenses
   { id: "other", color: GREY.grey700 },                  // gris : le non-catégorisé
 ];
 
@@ -284,13 +291,13 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
    d'eux ne prête pas à confusion. Le « divers » garde le gris — c'est un aveu,
    pas une source. */
 const INCOME_COLORS: Record<string, string> = {
-  "income.salary": PALETTE.green,          // vert — la source principale
-  "income.benefits": PALETTE_DARK.green,   // vert sombre
-  "income.pension": PALETTE.yellow,        // jaune
-  "income.refund": PALETTE_DARK.yellow,    // jaune sombre
-  "income.interest": PALETTE.brown,        // brun
-  "income.sale": PALETTE.orange,           // orange
-  income: GREY.grey700,                    // gris : le crédit qu'on n'a pas su nommer
+  "income.salary": PALETTE.blue,           // bleu — la source principale
+  "income.benefits": PALETTE_LIGHT.blue,   // bleu clair
+  "income.pension": PALETTE.purple,        // violet
+  "income.refund": PALETTE.pink,           // rose
+  "income.interest": PALETTE.green,        // vert
+  "income.sale": PALETTE.yellow,           // jaune
+  income: GREY.grey500,                    // gris : le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */

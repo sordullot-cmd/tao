@@ -61,7 +61,8 @@ import GoalsPage, {
   GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, computeGoalProgress, goalUnitOf, fmtGoalVal,
 } from "@/components/pages/GoalsPage";
 import {
-  addStep, cardProgress, readSteps, removeStep, sortSteps, stepStatus, stepsProgress,
+  addStep, cardProgress, goalPctsOf, groupGoalPctsByStep, isStepDone, readSteps,
+  removeStep, sortSteps, stepCompletion, stepStatus, stepsProgress,
   toggleStep, updateStep, yearMarkers, STEP_XP,
 } from "@/lib/lifeRpgSteps";
 import {
@@ -238,9 +239,13 @@ function computeProgress(habits, history, goals = [], trades = [], accounts = []
   // de l'année qui le porte. Une étape n'est cochée qu'une fois et n'est
   // rattachée qu'à une carte → source indépendante des habitudes, tâches,
   // objectifs et discipline, donc aucun double comptage.
+  // Une étape dont les objectifs rattachés sont tous atteints est franchie sans
+  // avoir été cochée : elle doit rapporter le même XP, sinon le rattachement des
+  // objectifs à une étape coûterait des points à qui s'en sert.
+  const goalPctsByStep = stepGoalPctsOf(categories, goals, trades, accounts);
   for (const cat of (categories || [])) {
     for (const step of readSteps(cat)) {
-      if (!step.done) continue;
+      if (!isStepDone(step, goalPctsOf(goalPctsByStep, step.id))) continue;
       totalXp += STEP_XP;
       attributes[cat.id] = (attributes[cat.id] || 0) + STEP_XP;
       // Sans date connue (ni de complétion, ni d'échéance), l'étape crédite
@@ -267,6 +272,28 @@ function computeProgress(habits, history, goals = [], trades = [], accounts = []
   activityLog.sort((a, b) => (a.ts < b.ts ? 1 : -1));
   return { attributes, totalXp: Math.max(0, totalXp), coinsEarned, totalCompletions, bestStreak, perHabit, activityLog };
 }
+/* Avancement des objectifs chiffrés rattachés à une étape, indexé par étape et
+   toutes cartes confondues (les ids d'étape sont uniques).
+
+   Un objectif ne compte QUE sur une étape de sa propre carte : après un
+   changement de catégorie, son `rpgStep` pointe vers un jalon qui ne le concerne
+   plus, et le laisser peser sur cette étape-là créerait un avancement venu de
+   nulle part. Il redevient alors un objectif libre de sa nouvelle carte. */
+function stepGoalPctsOf(categories, goals, trades, accounts) {
+  const out = {};
+  const flat = flattenGoals(goals);
+  for (const cat of (categories || [])) {
+    const ids = readSteps(cat).map(s => s.id);
+    if (ids.length === 0) continue;
+    const mine = flat.filter(g => g.rpgCategory === cat.id && g.rpgStep);
+    Object.assign(out, groupGoalPctsByStep(
+      mine.map(g => ({ rpgStep: g.rpgStep, pct: computeGoalProgress(g, trades, accounts).pct })),
+      ids,
+    ));
+  }
+  return out;
+}
+
 // Aplatit l'arbre des objectifs (top-level + sous-objectifs imbriqués).
 function flattenGoals(goals) {
   const out = [];
@@ -304,7 +331,7 @@ function detachGoalsNotIn(goals, keptIds) {
     const sub = Array.isArray(g.subtasks) && g.subtasks.length ? detachGoalsNotIn(g.subtasks, keptIds) : g.subtasks;
     const orphan = g.rpgCategory && !keptIds.has(g.rpgCategory);
     if (!orphan && sub === g.subtasks) return g;
-    return { ...g, subtasks: sub, ...(orphan ? { rpgCategory: null, rpgXp: 0 } : {}) };
+    return { ...g, subtasks: sub, ...(orphan ? { rpgCategory: null, rpgXp: 0, rpgStep: null } : {}) };
   });
 }
 
@@ -453,6 +480,9 @@ export default function LifeRpgPage() {
       return {
         id: g.id, label: g.label, pct, rawPct: rawPct != null ? rawPct : pct, current, target, unit: goalUnitOf(g),
         xpGained: Math.round((pct / 100) * xpFull), xpFull,
+        // Étape porteuse, s'il y en a une : la carte range alors cet objectif
+        // sous son jalon plutôt que dans la liste des objectifs libres.
+        rpgStep: g.rpgStep || null,
       };
     };
     for (const g of flattenGoals(goalsList)) {
@@ -464,6 +494,12 @@ export default function LifeRpgPage() {
     }
     return map;
   }, [goalsList, trades, accounts]);
+  // Avancement des objectifs rattachés à une étape — la frise de l'année en a
+  // besoin pour montrer franchis les jalons que leurs chiffres ont acquis.
+  const stepGoalPcts = useMemo(
+    () => stepGoalPctsOf(categories, goalsList, trades, accounts),
+    [categories, goalsList, trades, accounts],
+  );
   // Tâches liées, regroupées par catégorie (pour les afficher sur les cartes).
   // Dérivées de `taskRpg` (titre + état terminé) + `taskTimes` (jour planifié).
   const tasksByCat = useMemo(() => {
@@ -751,12 +787,28 @@ export default function LifeRpgPage() {
       const cur = flattenGoals(prev).find(g => g.id === goalId);
       const linkedHere = cur && cur.rpgCategory === catId;
       return patchGoal(prev, goalId, linkedHere
-        ? { rpgCategory: null, rpgXp: 0 }
+        ? { rpgCategory: null, rpgXp: 0, rpgStep: null }
         : { rpgCategory: catId, rpgXp: DEFAULT_RPG_XP });
     });
   };
+  /* Rattachement d'un objectif chiffré à une ÉTAPE de la carte : c'est ce qui
+     donne à un jalon sa mesure (« à 63 % de la certification ») au lieu d'une
+     case à cocher. Cocher rattache aussi l'objectif à la carte si besoin — on ne
+     va pas demander deux gestes pour une seule intention. Décocher ne le rend
+     qu'à la carte : l'objectif reste piloté, il n'est plus rangé sous ce jalon. */
+  const toggleStepObjective = (catId, stepId, goalId) => {
+    setGoals(prev => {
+      const cur = flattenGoals(prev).find(g => g.id === goalId);
+      if (cur && cur.rpgStep === stepId) return patchGoal(prev, goalId, { rpgStep: null });
+      return patchGoal(prev, goalId, {
+        rpgCategory: catId,
+        rpgXp: cur && cur.rpgCategory === catId ? cur.rpgXp : DEFAULT_RPG_XP,
+        rpgStep: stepId,
+      });
+    });
+  };
   // Détache un objectif (utilisé par le « × » sur la barre de progression).
-  const detachObjective = (goalId) => setGoals(prev => patchGoal(prev, goalId, { rpgCategory: null, rpgXp: 0 }));
+  const detachObjective = (goalId) => setGoals(prev => patchGoal(prev, goalId, { rpgCategory: null, rpgXp: 0, rpgStep: null }));
 
   /* Création d'un objectif : la liste des objectifs vit désormais DANS cette
      page (GoalsPage en mode intégré), qui nous confie l'ouverture de son
@@ -820,7 +872,7 @@ export default function LifeRpgPage() {
           curseur du jour, ce qui arrive devant, et les grappes de fin d'année
           qu'on ne tiendra pas. */}
       <YearTimeline year={YEAR} yearPct={yp.pct} daysLeft={yp.daysLeft}
-        markers={yearMarkers(categories, YEAR)} today={todayKey} />
+        markers={yearMarkers(categories, YEAR, stepGoalPcts)} today={todayKey} />
 
       {/* ─── Les trois objectifs de l'année ───
           Toujours trois emplacements : ceux qui sont définis, puis autant de
@@ -843,6 +895,7 @@ export default function LifeRpgPage() {
                 linkedGoals={goalsByCat[cat.id] || []}
                 allObjectives={flattenGoals(goalsList)}
                 onToggleObjective={(goalId) => toggleObjectiveLink(cat.id, goalId)}
+                onToggleStepObjective={(stepId, goalId) => toggleStepObjective(cat.id, stepId, goalId)}
                 onCreateObjective={openGoalForm}
                 onDetachObjective={detachObjective}
                 tasks={tasksByCat[cat.id] || []}
@@ -891,22 +944,41 @@ export default function LifeRpgPage() {
 // dans cet ordre : où j'en suis (avancement confronté au temps écoulé), ce que
 // je vise (résultat + échéance, identité, modèle) et ce que je fais pour y
 // arriver (objectifs chiffrés, tâches, habitudes).
-function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onSetStepDue, onDeleteStep, onToggleObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
+function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onSetStepDue, onDeleteStep, onToggleObjective, onToggleStepObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
   const cl = categoryLevel(xp);
+  /* Répartition des objectifs chiffrés de la carte : ceux rangés sous une étape
+     (ils la mesurent) et les autres, qui restent des objectifs de la carte.
+     Un objectif dont l'étape a été supprimée revient parmi les seconds plutôt
+     que de disparaître avec elle. */
+  const { goalsByStep, freeGoals, stepPcts } = useMemo(() => {
+    const ids = new Set(steps.map(s => s.id));
+    const byStep = {};
+    const free = [];
+    for (const g of linkedGoals) {
+      if (g.rpgStep && ids.has(g.rpgStep)) (byStep[g.rpgStep] = byStep[g.rpgStep] || []).push(g);
+      else free.push(g);
+    }
+    return {
+      goalsByStep: byStep,
+      freeGoals: free,
+      stepPcts: groupGoalPctsByStep(linkedGoals.map(g => ({ rpgStep: g.rpgStep, pct: g.pct })), ids),
+    };
+  }, [linkedGoals, steps]);
   /* Avancement affiché : les deux mesures honnêtes de la carte, moyennées —
      les objectifs chiffrés rattachés ET les étapes franchies (cf.
      `cardProgress`). N'en compter qu'une affichait 0 % à quelqu'un qui pilote
      son année par jalons plutôt que par chiffres. Sans ni l'un ni l'autre, on
      retombe sur la progression de niveau (habitudes, tâches, discipline). */
   const progress = cardProgress({
-    goalPcts: linkedGoals.map(g => g.pct),
+    goalPcts: freeGoals.map(g => g.pct),
     steps,
+    byStep: stepPcts,
     levelPct: cl.levelPct,
     today,
   });
   const measured = progress.source === "measured";
   const pct = progress.pct;
-  const stepProg = stepsProgress(steps, today);
+  const stepProg = stepsProgress(steps, today, stepPcts);
   const deadline = cat.deadline || yearDeadline(cat.year || year);
   const dLeft = daysUntil(deadline);
   // Comparaison au calendrier : être à 40 % au mois de juin, c'est être en
@@ -1002,7 +1074,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           <span>
             {measured
               ? [
-                  progress.hasGoals ? `${linkedGoals.length} objectif${linkedGoals.length > 1 ? "s" : ""} chiffré${linkedGoals.length > 1 ? "s" : ""}` : null,
+                  progress.hasGoals ? `${freeGoals.length} objectif${freeGoals.length > 1 ? "s" : ""} chiffré${freeGoals.length > 1 ? "s" : ""}` : null,
                   progress.hasSteps ? `${stepProg.done}/${stepProg.total} étape${stepProg.total > 1 ? "s" : ""}` : null,
                 ].filter(Boolean).join(" · ")
               : `Vers le niveau ${cl.level + 1}`}
@@ -1038,18 +1110,24 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           ce qu'on mesure et ce qu'on fait aujourd'hui. */}
       {onAddStep && (
         <StepsBlock cat={cat} steps={steps} today={today}
+          goalsByStep={goalsByStep} stepPcts={stepPcts}
+          allObjectives={allObjectives} onToggleObjective={onToggleStepObjective}
+          onCreateObjective={onCreateObjective}
           onAdd={onAddStep} onToggle={onToggleStep} onRename={onRenameStep}
           onSetDue={onSetStepDue} onDelete={onDeleteStep} />
       )}
 
       {/* Objectifs liés depuis la page « Objectifs » (rpgCategory). La progression
           se gère sur la page Objectifs ; ici elle donne l'XP au prorata. On peut
-          créer un objectif directement (il devient un vrai objectif rattaché). */}
+          créer un objectif directement (il devient un vrai objectif rattaché).
+          Ceux qu'on a rangés sous une étape ne réapparaissent pas ici : ils sont
+          affichés sur leur jalon, et les lister deux fois laisserait croire à
+          deux objectifs distincts. */}
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, marginBottom: 8 }}>Objectifs</div>
-        {linkedGoals.length > 0 && (
+        {freeGoals.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {linkedGoals.map(g => {
+            {freeGoals.map(g => {
               const reached = g.pct >= 100;
               const negative = g.rawPct < 0;
               return (
@@ -1097,7 +1175,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           </div>
         )}
         {onToggleObjective && (
-          <div style={{ marginTop: linkedGoals.length > 0 ? 10 : 0 }}>
+          <div style={{ marginTop: freeGoals.length > 0 ? 10 : 0 }}>
             <ObjectiveMultiSelect objectives={allObjectives} catId={cat.id} color={cat.color}
               onToggle={onToggleObjective} onCreate={onCreateObjective} compact />
           </div>
@@ -1237,8 +1315,8 @@ const MONTH_INITIALS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "
 
 function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
   const [hover, setHover] = useState(null);
-  const late = markers.filter(m => !m.step.done && m.step.due < today).length;
-  const done = markers.filter(m => m.step.done).length;
+  const late = markers.filter(m => !m.done && m.step.due < today).length;
+  const done = markers.filter(m => m.done).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -1273,20 +1351,20 @@ function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
         {/* Un jalon = une pastille à sa date. Le survol nomme l'étape et son
             objectif : douze pastilles sur un rail ne se distinguent pas
             autrement, et un libellé permanent serait illisible. */}
-        {markers.map(({ step, cat, left }) => {
-          const isLate = !step.done && step.due < today;
+        {markers.map(({ step, cat, left, done: stepDone }) => {
+          const isLate = !stepDone && step.due < today;
           return (
             <button key={`${cat.id}_${step.id}`} type="button"
               onMouseEnter={() => setHover({ step, cat, left })}
               onFocus={() => setHover({ step, cat, left })}
               onBlur={() => setHover(null)}
               title={`${cat.label} — ${step.label} · ${fmtDayShort(step.due)}`}
-              aria-label={`${cat.label} — ${step.label}, ${fmtDayShort(step.due)}${step.done ? ", franchie" : isLate ? ", en retard" : ""}`}
+              aria-label={`${cat.label} — ${step.label}, ${fmtDayShort(step.due)}${stepDone ? ", franchie" : isLate ? ", en retard" : ""}`}
               style={{
                 position: "absolute", top: 4, left: `${left}%`, transform: "translateX(-50%)",
                 width: 10, height: 10, borderRadius: "50%", padding: 0, cursor: "pointer",
                 border: `1.5px solid ${isLate ? T.red : cat.color}`,
-                background: step.done ? cat.color : T.white,
+                background: stepDone ? cat.color : T.white,
                 boxShadow: `0 0 0 2px ${T.white}`,
               }} />
           );
@@ -1339,14 +1417,26 @@ function stepTone(status, color) {
 }
 
 // Une étape de la frise : pastille cochable, date modifiable, libellé éditable
-// au clic. Les actions n'apparaissent qu'au survol de la ligne.
-function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDelete }) {
+// au clic, et les objectifs chiffrés qui la mesurent. Les actions n'apparaissent
+// qu'au survol de la ligne.
+function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onSetDue, onDelete }) {
   const [hov, setHov] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(step.label);
   const [dueOpen, setDueOpen] = useState(false);
+  // Le menu des objectifs est portalisé : sans cet état, sortir de la ligne pour
+  // aller le cliquer démonterait le déclencheur — et le menu avec lui.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const dueRef = useRef(null);
   const tone = stepTone(status, cat.color);
+  /* Une étape mesurée par des objectifs ne se coche plus à la main : elle vaut
+     leur avancement, et se franchit quand ils sont tous atteints. Laisser la
+     case cliquable permettrait de déclarer franchi un jalon que ses propres
+     chiffres contredisent — et le clic suivant sur l'objectif l'annulerait. */
+  const pcts = goals.map(g => g.pct);
+  const measured = goals.length > 0;
+  const done = isStepDone(step, pcts);
+  const completion = Math.round(stepCompletion(step, pcts));
 
   const commit = () => {
     setEditing(false);
@@ -1362,18 +1452,37 @@ function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDele
           Le trait s'arrête à la dernière étape — une frise qui continue dans le
           vide laisserait croire à une suite qui n'existe pas. */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", alignSelf: "stretch", flexShrink: 0, paddingTop: 3 }}>
-        <button type="button" onClick={onToggle}
-          role="checkbox" aria-checked={step.done}
-          aria-label={`${step.label} — ${step.done ? "franchie" : "à franchir"}`}
-          title={step.done ? "Marquer à franchir" : "Marquer franchie"}
-          style={{
-            width: 13, height: 13, borderRadius: "50%", flexShrink: 0, padding: 0, cursor: "pointer",
-            border: `1.5px solid ${tone.dot}`, background: step.done ? cat.color : T.white,
-            color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center",
-            transition: "background .12s ease, border-color .12s ease",
-          }}>
-          {step.done && <Check size={8} strokeWidth={3.5} />}
-        </button>
+        {measured ? (
+          /* Pastille de mesure : remplie en camembert à l'avancement de ses
+             objectifs. Elle dit d'un coup d'œil ce qu'une case à cocher ne
+             pouvait pas — « à mi-chemin », et pas seulement « pas encore ». */
+          <span role="img"
+            aria-label={`${step.label} — ${done ? "franchie" : `${completion} %`}`}
+            title={done
+              ? "Franchie : tous ses objectifs sont atteints"
+              : `${completion} % — se franchira quand ses objectifs seront atteints`}
+            style={{
+              width: 13, height: 13, borderRadius: "50%", flexShrink: 0,
+              border: `1.5px solid ${done ? cat.color : tone.dot}`,
+              background: `conic-gradient(${cat.color} ${Math.min(100, completion)}%, ${T.white} 0)`,
+              color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}>
+            {done && <Check size={8} strokeWidth={3.5} />}
+          </span>
+        ) : (
+          <button type="button" onClick={onToggle}
+            role="checkbox" aria-checked={step.done}
+            aria-label={`${step.label} — ${step.done ? "franchie" : "à franchir"}`}
+            title={step.done ? "Marquer à franchir" : "Marquer franchie"}
+            style={{
+              width: 13, height: 13, borderRadius: "50%", flexShrink: 0, padding: 0, cursor: "pointer",
+              border: `1.5px solid ${tone.dot}`, background: step.done ? cat.color : T.white,
+              color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center",
+              transition: "background .12s ease, border-color .12s ease",
+            }}>
+            {step.done && <Check size={8} strokeWidth={3.5} />}
+          </button>
+        )}
         {!last && <div style={{ width: 1.5, flex: 1, minHeight: 12, marginTop: 3, background: T.border, borderRadius: 999 }} />}
       </div>
 
@@ -1394,7 +1503,7 @@ function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDele
               style={{
                 flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent",
                 padding: 0, cursor: "text", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600,
-                color: tone.text, textDecoration: step.done ? "line-through" : "none",
+                color: tone.text, textDecoration: done ? "line-through" : "none",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
               {step.label}
@@ -1437,6 +1546,57 @@ function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDele
             align="left"
           />
         )}
+
+        {/* Objectifs chiffrés qui mesurent ce jalon : ce qu'il faut atteindre
+            pour le franchir, et où l'on en est. Même trame que les objectifs de
+            la carte, en plus discret — ils appartiennent à l'étape, pas à la
+            carte, et ne doivent pas lui voler la lecture. */}
+        {goals.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 7 }}>
+            {goals.map(g => {
+              const reached = g.pct >= 100;
+              const negative = g.rawPct < 0;
+              return (
+                <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ flexShrink: 0, maxWidth: "40%", fontSize: 11.5, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                  <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)} %`}
+                    style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+                    <div style={{ width: `${g.pct}%`, height: "100%", background: negative ? T.red : reached ? T.green : cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
+                  </div>
+                  <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                    {fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}
+                  </span>
+                  {onToggleObjective && (
+                    <button onClick={() => onToggleObjective(g.id)}
+                      title="Retirer de cette étape (l'objectif reste sur la carte)"
+                      aria-label={`Retirer « ${g.label} » de l'étape ${step.label}`}
+                      style={{ ...iconBtnSm(), width: 16, height: 16, flexShrink: 0, opacity: hov ? 1 : 0, transition: "opacity .15s ease" }}>
+                      <X size={10} strokeWidth={2} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Rattacher un objectif chiffré à CE jalon. Ne se montre qu'au survol
+            tant que l'étape n'en a aucun : une frise de dix étapes afficherait
+            sinon dix invitations, et on ne verrait plus le chemin. Il reste
+            monté (opacité seule) — l'apparaître ferait sauter la frise sous le
+            curseur, et démonterait le menu ouvert en sortant de la ligne. */}
+        {onToggleObjective && (
+          <div style={{
+            marginTop: goals.length > 0 ? 4 : 2,
+            opacity: (hov || pickerOpen || goals.length > 0) ? 1 : 0,
+            pointerEvents: (hov || pickerOpen || goals.length > 0) ? "auto" : "none",
+            transition: "opacity .15s ease",
+          }}>
+            <ObjectiveMultiSelect objectives={allObjectives} catId={cat.id} stepId={step.id}
+              color={cat.color} onToggle={onToggleObjective} onCreate={onCreateObjective}
+              onOpenChange={setPickerOpen} compact label="Objectif" />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1449,14 +1609,14 @@ function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDele
  * bouton ouvre une ligne vide au bas de la frise ; Entrée valide et rouvre une
  * ligne (on en pose rarement une seule), Échap ou un champ vide referme.
  */
-function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, onDelete }) {
+function StepsBlock({ cat, steps, today, goalsByStep = {}, stepPcts = {}, allObjectives = [], onToggleObjective, onCreateObjective, onAdd, onToggle, onRename, onSetDue, onDelete }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [addHov, setAddHov] = useState(false);
   const submitted = useRef(false);
 
   const ordered = useMemo(() => sortSteps(steps), [steps]);
-  const prog = stepsProgress(steps, today);
+  const prog = stepsProgress(steps, today, stepPcts);
 
   const submit = (keepOpen) => {
     if (submitted.current) return;
@@ -1490,8 +1650,13 @@ function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, on
       {ordered.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", marginBottom: 8 }}>
           {ordered.map((s, i) => (
-            <StepRow key={s.id} step={s} cat={cat} status={stepStatus(s, today)}
+            <StepRow key={s.id} step={s} cat={cat}
+              status={stepStatus(s, today, goalPctsOf(stepPcts, s.id))}
               last={i === ordered.length - 1 && !adding}
+              goals={goalsByStep[s.id] || []}
+              allObjectives={allObjectives}
+              onToggleObjective={onToggleObjective ? (goalId) => onToggleObjective(s.id, goalId) : null}
+              onCreateObjective={onCreateObjective}
               onToggle={() => onToggle(s.id)}
               onRename={(label) => onRename(s.id, label)}
               onSetDue={(due) => onSetDue(s.id, due)}
@@ -1576,13 +1741,16 @@ function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
 // du formulaire de trade) : un déclencheur, puis une liste cochable de TOUS les
 // objectifs. Cocher rattache à la catégorie, décocher détache. Ferme au clic
 // dehors. Dernière entrée : créer un objectif (redirige vers la page Objectifs).
-function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, compact = false }) {
+function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggle, onCreate, onOpenChange, compact = false, label = "Ajouter" }) {
   const [open, setOpen] = useState(false);
   const [hov, setHov] = useState(false);
   const ref = useRef(null);
   // Fermeture au clic extérieur : déléguée au Popover, dont le panneau est
   // portalisé et n'appartient donc plus à `ref`.
   const close = React.useCallback(() => setOpen(false), []);
+  // Le parent peut avoir besoin de savoir que le menu est ouvert — celui d'une
+  // étape ne s'affiche qu'au survol et se démonterait sous le curseur.
+  useEffect(() => { if (onOpenChange) onOpenChange(open); }, [open, onOpenChange]);
   // En mode compact (des objectifs sont déjà rattachés), le déclencheur s'efface :
   // simple lien discret « + Ajouter », qui ne s'illumine qu'au survol ou à l'ouverture.
   return (
@@ -1592,7 +1760,7 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
           onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
           style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: (open || hov) ? T.textSub : T.textMut, opacity: (open || hov) ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
           <Plus size={13} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
-          Ajouter
+          {label}
         </button>
       ) : (
         <button type="button" onClick={() => setOpen(o => !o)}
@@ -1615,8 +1783,16 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
       >
         <>
           {objectives.map(g => {
-            const here = g.rpgCategory === catId;
-            const elsewhere = !!g.rpgCategory && !here;
+            /* En mode étape, « ici » veut dire « rangé sous CE jalon » : un
+               objectif de la même carte mais posé ailleurs n'est pas coché, il
+               est seulement signalé — sinon on croirait qu'il mesure ce
+               jalon-ci. */
+            const here = stepId ? g.rpgStep === stepId : g.rpgCategory === catId;
+            const note = here ? null
+              : g.rpgCategory && g.rpgCategory !== catId ? "rattaché ailleurs"
+              : stepId && g.rpgStep ? "sur une autre étape"
+              : stepId && g.rpgCategory === catId ? "sur cette carte"
+              : null;
             return (
               <button key={g.id} type="button" onClick={() => onToggle(g.id)}
                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: "var(--radius-card)", background: here ? T.accentBg : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
@@ -1624,7 +1800,7 @@ function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, co
                 onMouseLeave={e => { if (!here) e.currentTarget.style.background = "transparent"; }}>
                 <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${here ? color : T.border}`, background: here ? color : T.white, color: "#fff" }}>{here && <Check size={11} strokeWidth={3} />}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label || "Objectif"}</span>
-                {elsewhere && <span style={{ fontSize: 9, color: T.textMut, flexShrink: 0 }}>rattaché ailleurs</span>}
+                {note && <span style={{ fontSize: 9, color: T.textMut, flexShrink: 0 }}>{note}</span>}
               </button>
             );
           })}

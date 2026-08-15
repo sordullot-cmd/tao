@@ -516,6 +516,9 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
           accountTypeFilter: form.accountTypeFilter,
           accountIdFilter: form.accountIdFilter,
           rpgCategory, rpgXp,
+          // L'étape porteuse (« Quête de soi ») appartient à la carte quittée :
+          // changer de carte, ou se détacher, la laisse pointer dans le vide.
+          rpgStep: rpgCategory && g.rpgCategory === rpgCategory ? (g.rpgStep || null) : null,
         })));
       } else {
         // Créer le nouveau goal et passer immédiatement en mode édition
