@@ -104,13 +104,13 @@ export function CatIcon({ name, ...rest }) {
 // Palette de couleurs proposée pour les catégories. Les huit teintes de la
 // charte Duolingo (cf. lib/ui/duoPalette) viennent en premier, telles quelles :
 // ce sont celles qu'on choisit le plus souvent, et elles doivent se lire comme
-// la marque. Les quatre suivantes sont des marches assombries des mêmes
-// teintes — la charte n'en publie pas douze, et il vaut mieux une gamme
-// reconnaissable qu'une teinte inventée.
+// la marque. Les trois suivantes sont des marches CLAIRES des mêmes teintes —
+// la charte n'en publie pas douze, et il vaut mieux une gamme reconnaissable
+// qu'une teinte inventée. Le gris d'Eel ferme la liste.
 export const CATEGORY_PALETTE = [
   DUO.fox, DUO.macaw, DUO.beetle, DUO.featherGreen,
   DUO.cardinal, DUO.humpback, DUO.bee, DUO.maskGreen,
-  DUO_TONES.beetle.deep, DUO_TONES.fox.deep, DUO_TONES.macaw.deep, DUO.eel,
+  DUO_TONES.beetle.soft, DUO_TONES.fox.soft, DUO_TONES.macaw.soft, DUO.eel,
 ];
 
 // Nombre d'objectifs de l'année. Trois, volontairement : c'est la contrainte

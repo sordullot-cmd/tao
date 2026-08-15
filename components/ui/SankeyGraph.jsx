@@ -84,8 +84,16 @@ const ROW = 42;
 const PAD_TOP = 20;
 const PAD_BOTTOM = 20;
 
-/** Part de blanc dans un ruban, puis dans une barre (cf. en-tête). */
-const RIBBON_TINT = 0.58;
+/** Part de blanc dans un ruban, puis dans une barre (cf. en-tête).
+ *
+ *  Le ruban est passé de 0.58 à 0.25 avec la palette Duolingo : la palette
+ *  d'origine était sombre et supportait d'en perdre 58 %, les teintes de la
+ *  charte sont déjà claires et arrivaient délavées (contraste du ruban rendu
+ *  1,22 à 1,46 sur blanc, contre 1,58 à 1,80 auparavant). À 0.25, les bases
+ *  retombent dans la fourchette d'avant — 1,76 pour Feather Green, 1,97 pour
+ *  Macaw, 3,13 pour Humpback —, ce qui évite d'assombrir la charte à la
+ *  source pour rattraper un délavage introduit ici. */
+const RIBBON_TINT = 0.25;
 const NODE_TINT = 0.06;
 
 /** Opacité des rubans. Une seule valeur : le dessin ne réagit pas au survol. */

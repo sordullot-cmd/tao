@@ -75,11 +75,10 @@ const DEFAULT_INCOME = 2000;
    sont sous 2,2:1 sur blanc) : elles portent bien un secteur d'anneau, moins
    bien une pastille de légende. À reprendre si la lecture ne suit pas.
 
-   Ce qui est conservé : l'alternance clair/sombre entre voisines, pour que deux
-   catégories côte à côte tranchent par la clarté et pas seulement par la
-   teinte — c'est ce qui les tient en vision deutéranope. Les quatre derniers
-   slots, hors défauts, prennent des marches assombries de la charte pour ne pas
-   redoubler une base déjà posée.
+   Ce qui est conservé : la séparation des voisines par la clarté, et pas
+   seulement par la teinte — c'est ce qui les tient en vision deutéranope. Les
+   marches supplémentaires vont vers le CLAIR (`DUO_TONES`), jamais vers le
+   sombre : assombrir reviendrait à corriger la charte.
 
    L'ordre compte : il est repris tel quel par `defaultItems`, et une catégorie
    ajoutée prend la suivante. Toute retouche doit donc conserver l'alternance
@@ -89,16 +88,16 @@ const DEFAULT_INCOME = 2000;
    gris au non-catégorisé. Il est donc volontairement sous le plancher de chroma
    et ne compte pas dans la palette catégorielle. */
 const PALETTE = [
-  DUO.humpback,             // logement     — bleu profond, sombre
-  DUO.fox,                  // alimentation — orange, clair
-  DUO.macaw,                // transport    — bleu ciel, clair
-  DUO.beetle,               // abonnements  — violet, clair
-  DUO_TONES.beetle.deep,    // loisirs      — violet profond, sombre
-  DUO.featherGreen,         // épargne      — vert de la marque, clair
-  DUO.cardinal,             // shopping     — rouge, clair
-  DUO.maskGreen,            // santé        — vert vif, clair
-  DUO_TONES.fox.deep,       // frais        — orange profond, sombre
-  DUO.wolf,                 // autres       — gris neutre : le slot « non catégorisé »
+  DUO.humpback,             // logement     — Humpback
+  DUO.fox,                  // alimentation — Fox
+  DUO.macaw,                // transport    — Macaw
+  DUO_TONES.beetle.light,   // abonnements  — Beetle light
+  DUO.beetle,               // loisirs      — Beetle
+  DUO.featherGreen,         // épargne      — Feather Green
+  DUO.cardinal,             // shopping     — Cardinal
+  DUO.maskGreen,            // santé        — Mask Green
+  DUO_TONES.fox.light,      // frais        — Fox light
+  DUO.wolf,                 // autres       — Wolf : le slot « non catégorisé »
 ];
 
 /* Point de départ : la règle 50/30/20 adaptée. L'utilisateur ajuste ensuite —

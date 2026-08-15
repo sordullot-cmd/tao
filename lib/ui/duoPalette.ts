@@ -15,16 +15,19 @@
  *
  * ── Pourquoi des tons dérivés ─────────────────────────────────────────────
  * La charte ne publie que HUIT teintes chromatiques, là où les palettes de
- * l'app en demandent bien plus (29 postes de dépense, 12 cartes, 9 types
- * d'actif…). `DUO_TONES` décline donc chaque teinte en quatre valeurs de
- * clarté, obtenues par mélange vers le noir (`deep`, `dark`) ou vers le blanc
- * (`light`, `pale`) — jamais par changement de teinte. Une famille de postes
- * partage ainsi une gamme et ses membres s'y séparent par la clarté, ce qui est
+ * l'app en demandent bien plus (28 postes de dépense, 12 cartes, 9 types
+ * d'actif…). `DUO_TONES` décline donc chaque teinte en une ÉCHELLE CLAIRE —
+ * `soft`, `light`, `pale`, `mist` —, obtenue par mélange vers le blanc
+ * uniquement, jamais par changement de teinte. Une famille de postes partage
+ * ainsi une gamme et ses membres s'y séparent par la clarté, ce qui est
  * exactement la logique des palettes d'origine.
  *
- * `pastel` / `ink` forment le couple des pastilles (fond très clair + encre de
- * la même teinte) : l'encre est descendue jusqu'à 4,5:1 sur son propre fond,
- * seuil sans lequel le libellé d'une pastille n'est plus lisible.
+ * L'échelle ne descend PAS vers le noir : assombrir une base reviendrait à
+ * corriger la charte, et on préfère corriger le rendu quand il délave
+ * (cf. `RIBBON_TINT` dans components/ui/SankeyGraph.jsx). Seule exception,
+ * `ink` : le texte d'une pastille posé sur son propre fond pastel doit tenir
+ * 4,5:1, ce qu'aucune base claire ne fait. Ce n'est pas une couleur
+ * d'identité, c'est de l'encre.
  * ------------------------------------------------------------------------- */
 
 /** Les hex publiés par la charte, sans retouche. */
@@ -50,34 +53,37 @@ export const DUO = {
 
 export type DuoHue =
   | "featherGreen" | "maskGreen" | "macaw" | "humpback"
-  | "cardinal" | "bee" | "fox" | "beetle" | "wolf";
+  | "cardinal" | "bee" | "fox" | "beetle"
+  | "eel" | "wolf" | "hare";
 
 export interface DuoTone {
-  /** ~40 % vers le noir — la marche « sombre » d'une gamme. */
-  dark: string;
-  /** ~22 % vers le noir — la marche « profonde ». */
-  deep: string;
-  /** ~42 % vers le blanc — la marche « claire ». */
+  /** 15 % vers le blanc — la marche juste sous la base. */
+  soft: string;
+  /** 32 % vers le blanc. */
   light: string;
-  /** ~66 % vers le blanc — la marche la plus claire encore colorée. */
+  /** 50 % vers le blanc. */
   pale: string;
-  /** Fond de pastille (~86 % vers le blanc). */
+  /** 68 % vers le blanc — la dernière marche encore colorée. */
+  mist: string;
+  /** Fond de pastille (86 % vers le blanc). */
   pastel: string;
-  /** Encre de pastille : ≥ 4,5:1 sur `pastel`. */
+  /** Encre de pastille : ≥ 4,5:1 sur `pastel`. Seul ton assombri du module. */
   ink: string;
 }
 
-/** Déclinaisons de clarté de chaque teinte. Valeurs calculées, pas estimées. */
+/** Échelle claire de chaque teinte. Valeurs calculées, pas estimées. */
 export const DUO_TONES: Record<DuoHue, DuoTone> = {
-  featherGreen: { dark: "#337601", deep: "#459F02", light: "#9EE16C", pale: "#C6EEA9", pastel: "#E8F8DC", ink: "#357A01" },
-  maskGreen:    { dark: "#4F830F", deep: "#6BB014", light: "#BBEE7A", pale: "#D7F5B1", pastel: "#EEFBDF", ink: "#4A7A0D" },
-  macaw:        { dark: "#10668F", deep: "#1689C0", light: "#7BD1FA", pale: "#B2E4FC", pastel: "#DFF4FE", ink: "#12719D" },
-  humpback:     { dark: "#194175", deep: "#22579D", light: "#84ACE0", pale: "#B7CEED", pastel: "#E1EBF7", ink: "#2867B9" },
-  cardinal:     { dark: "#942C2C", deep: "#C73B3B", light: "#FF9797", pale: "#FFC2C2", pastel: "#FFE6E6", ink: "#BD3838" },
-  bee:          { dark: "#947400", deep: "#C79C00", light: "#FFDF6B", pale: "#FFECA8", pastel: "#FFF7DB", ink: "#8A6C00" },
-  fox:          { dark: "#945700", deep: "#C77500", light: "#FFC26B", pale: "#FFDBA8", pastel: "#FFF0DB", ink: "#9E5D00" },
-  beetle:       { dark: "#774B94", deep: "#A165C7", light: "#E3B7FF", pale: "#EED5FF", pastel: "#F8EEFF", ink: "#8856A8" },
-  wolf:         { dark: "#454545", deep: "#5D5D5D", light: "#B0B0B0", pale: "#D1D1D1", pastel: "#ECECEC", ink: "#696969" },
+  featherGreen: { soft: "#71D428", light: "#8DDC53", pale: "#ACE681", mist: "#CAEFAE", pastel: "#E8F8DC", ink: "#357A01" },
+  maskGreen:    { soft: "#9BE63C", light: "#AFEB63", pale: "#C4F18C", mist: "#D9F6B5", pastel: "#EEFBDF", ink: "#4A7A0D" },
+  macaw:        { soft: "#3EBCF7", light: "#65C9F9", pale: "#8ED8FB", mist: "#B6E6FC", pastel: "#DFF4FE", ink: "#12719D" },
+  humpback:     { soft: "#4B85D1", light: "#6F9EDA", pale: "#95B8E4", mist: "#BBD1EE", pastel: "#E1EBF7", ink: "#2867B9" },
+  cardinal:     { soft: "#FF6666", light: "#FF8585", pale: "#FFA5A5", mist: "#FFC5C5", pastel: "#FFE6E6", ink: "#BD3838" },
+  bee:          { soft: "#FFD026", light: "#FFDA52", pale: "#FFE480", mist: "#FFEDAD", pastel: "#FFF7DB", ink: "#8A6C00" },
+  fox:          { soft: "#FFA626", light: "#FFB852", pale: "#FFCB80", mist: "#FFDDAD", pastel: "#FFF0DB", ink: "#9E5D00" },
+  beetle:       { soft: "#D595FF", light: "#DEAAFF", pale: "#E7C1FF", mist: "#EFD7FF", pastel: "#F8EEFF", ink: "#8856A8" },
+  eel:          { soft: "#666666", light: "#858585", pale: "#A5A5A5", mist: "#C5C5C5", pastel: "#E6E6E6", ink: "#4B4B4B" },
+  wolf:         { soft: "#8B8B8B", light: "#A3A3A3", pale: "#BBBBBB", mist: "#D3D3D3", pastel: "#ECECEC", ink: "#696969" },
+  hare:         { soft: "#BBBBBB", light: "#C9C9C9", pale: "#D7D7D7", mist: "#E5E5E5", pastel: "#F4F4F4", ink: "#6C6C6C" },
 };
 
 /** Pastille prête à l'emploi : fond pastel + encre de la même teinte. */
