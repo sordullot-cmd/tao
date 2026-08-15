@@ -196,12 +196,19 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
           role="tablist"
           aria-label={t("budget.tabsAria")}
           style={{
-            display: "flex", gap: 2, flexWrap: "wrap",
+            /* Répartis sur TOUTE la largeur de la carte, à intervalles égaux :
+               le premier commence au bord du contenu, le dernier y finit. Serrés
+               à gauche, les quatre chiffres formaient un bloc de texte sous un
+               dessin qui, lui, occupe toute la largeur — et le vide à droite se
+               lisait comme une colonne manquante. */
+            display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap",
             borderTop: `1px solid ${T.border}`,
             /* Un peu d'air de part et d'autre du filet : au-dessus pour que la
                dernière branche du dessin ne vienne pas s'y appuyer, en dessous
-               pour que les chiffres ne touchent pas le bord de la carte. */
-            margin: "6px -24px 0", padding: "4px 12px 6px",
+               pour que les chiffres ne touchent pas le bord de la carte. Les
+               marges négatives font courir le filet d'un bord à l'autre, le
+               rembourrage ramène les chiffres sur la colonne du contenu. */
+            margin: "6px -24px 0", padding: "4px 24px 6px",
           }}
         >
           <FlowTab
@@ -264,7 +271,7 @@ function FlowTab({ active, onClick, label, value, tone }) {
       onClick={onClick}
       style={{
         display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1,
-        minWidth: 0, padding: "9px 12px 8px", border: "none", background: "transparent",
+        minWidth: 0, padding: "9px 0 8px", border: "none", background: "transparent",
         borderBottom: `2px solid ${active ? (tone || T.text) : "transparent"}`,
         opacity: active ? 1 : 0.55, cursor: "pointer", fontFamily: "inherit",
         transition: "opacity 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease)",
