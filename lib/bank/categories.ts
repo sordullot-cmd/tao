@@ -85,12 +85,13 @@ export type SpendingSubcategory = string;
  * porter la même couleur des deux côtés, sinon les deux graphiques se
  * contredisent à l'œil.
  *
- * Les teintes viennent de la planche des graphiques (cf. lib/ui/palette), qui
- * donne huit couleurs principales pour vingt-huit postes. L'ordre de service
- * est celui du module : les huit principales d'abord, puis les huit sombres,
- * puis les huit claires, et les gris pour ce qui n'est pas un poste de vie
- * (assurance, frais, retraits, non-catégorisé). Vingt-huit valeurs, toutes
- * distinctes — c'est ce que vérifie tests/bankCategories.
+ * Les teintes viennent de la charte (cf. lib/ui/palette), qui donne huit
+ * couleurs principales pour vingt-huit postes. L'ordre de service est celui du
+ * module : les huit principales d'abord, puis les huit sombres, puis les huit
+ * claires, et les gris pour ce qui n'est pas un poste de vie (assurance, frais,
+ * retraits, non-catégorisé). Vingt-huit valeurs, toutes distinctes — c'est ce
+ * que vérifie tests/bankCategories. Aucune n'est calculée : les trois crans de
+ * chaque famille sont des teintes publiées de la charte.
  *
  * Une seule teinte est RÉSERVÉE : le bleu plein va aux revenus (`INCOME_COLORS`
  * plus bas), et aucun poste de dépense ne le prend — sans quoi le salaire et le
@@ -284,24 +285,31 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
 /* Teintes des SOURCES de revenus. Le poste « revenus » n'a qu'une couleur — il
    ne paraît jamais dans un anneau de dépenses —, mais le flux du cashflow part
    de ses sources et il faut les distinguer les unes des autres.
-   Le salaire prend le bleu plein, que les postes de dépense n'utilisent pas :
-   c'est LA teinte réservée aux revenus, et elle doit rester reconnaissable d'un
-   coup d'œil. Les autres sources s'en écartent sur les couleurs principales
-   restantes, aucune en version sombre — de ce côté du diagramme, tout doit
-   rester clair. Elles vivent à GAUCHE, les postes de dépense à droite :
-   partager une teinte avec l'un d'eux ne prête pas à confusion.
+
+   Elles prennent la DEUXIÈME famille de la planche (`PALETTE_DARK`), là où les
+   postes de dépense gardent les principales. Ce n'est pas une nuance de goût :
+   l'entrée d'argent n'est pas le sujet du dessin. Ce qu'on vient y lire, c'est
+   où part le mois, et une colonne de gauche aussi vive que celle de droite tirait
+   l'œil vers la moitié qu'on ne pilote pas. En version sombre, elle se lit tout
+   aussi bien mais passe derrière — et la parenté de teinte reste entière : le
+   salaire est toujours bleu, la vente toujours jaune.
+
+   Le salaire garde donc le bleu, que les postes de dépense n'utilisent pas :
+   c'est LA teinte réservée aux revenus. Les aides restent son bleu CLAIR, seule
+   exception au groupe — elles doivent se distinguer du salaire juste au-dessus,
+   et deux bleus sombres voisins ne s'y prêtaient pas.
 
    Le « divers » est le seul à ne pas nommer sa source. Il était gris, ce qui le
    faisait passer pour une erreur d'affichage plutôt que pour une entrée : il
-   prend l'orange, la dernière principale libre du groupe. */
+   prend l'orange, la dernière teinte libre du groupe. */
 const INCOME_COLORS: Record<string, string> = {
-  "income.salary": PALETTE.blue,           // bleu — la source principale
-  "income.benefits": PALETTE_LIGHT.blue,   // bleu clair
-  "income.pension": PALETTE.purple,        // violet
-  "income.refund": PALETTE.pink,           // rose
-  "income.interest": PALETTE.green,        // vert
-  "income.sale": PALETTE.yellow,           // jaune
-  income: PALETTE.orange,                  // orange — le crédit qu'on n'a pas su nommer
+  "income.salary": PALETTE_DARK.blue,      // bleu — la source principale
+  "income.benefits": PALETTE_LIGHT.blue,   // bleu clair — à distinguer du salaire
+  "income.pension": PALETTE_DARK.purple,   // violet
+  "income.refund": PALETTE_DARK.pink,      // rose
+  "income.interest": PALETTE_DARK.green,   // vert
+  "income.sale": PALETTE_DARK.yellow,      // jaune
+  income: PALETTE_DARK.orange,             // orange — le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */

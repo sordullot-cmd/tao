@@ -151,6 +151,71 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, incomes, spending, recurring, flow, lang]);
 
+  /* ── Les deux figures survolent ensemble ──────────────────────────────────
+     Le diagramme et l'anneau montrent la MÊME matière sous deux angles : passer
+     sur « Logement » à gauche sans que « Logement » s'allume à droite laisse
+     croire à deux dessins étrangers l'un à l'autre, et oblige à rechercher des
+     yeux, dans l'anneau, la part qu'on tient déjà sous la souris.
+
+     La table de correspondance dépend de l'ONGLET, puisque c'est lui qui décide
+     ce que l'anneau détaille :
+       • sorties / récurrent — une part par POSTE. Un sous-poste du diagramme
+         (« Loyer ») désigne donc la part de son poste (« Logement ») ;
+       • entrées — l'anneau sépare les PAYEURS quand le relevé les nomme, là où
+         le diagramme regroupe par nature (cf. `cashflowGraph`). Une branche y
+         éclaire donc PLUSIEURS parts, toutes celles de sa nature ;
+       • disponible — l'anneau n'a que deux parts, « ce qui est couvert » et
+         « ce qui reste » : aucune branche ne leur correspond une à une, et
+         seule la branche de synthèse (« reste », « pris sur le solde ») a un
+         équivalent. Les autres n'allument rien plutôt que d'allumer au hasard.
+
+     Le retour (l'anneau qui désigne une branche) n'existe que là où la part ne
+     vise qu'un nœud — c'est-à-dire partout sauf « disponible ». */
+  const cross = React.useMemo(() => {
+    const partsOfNode = new Map();
+    const nodeOfPart = new Map();
+    const partIds = new Set(ring.parts.map((p) => p.id));
+
+    const add = (nodeId, partId) => {
+      if (!partIds.has(partId)) return;
+      const list = partsOfNode.get(nodeId);
+      if (list) list.push(partId);
+      else partsOfNode.set(nodeId, [partId]);
+      if (!nodeOfPart.has(partId)) nodeOfPart.set(partId, nodeId);
+    };
+
+    const drawn = flow.net < 0;
+    for (const n of flow.nodes) {
+      if (tab === "in") {
+        if (n.kind !== "income") continue;
+        // Toutes les parts de cette nature — un salaire, deux employeurs.
+        for (const s of incomes.slices) if (s.sub === n.ref) add(n.id, s.id);
+      } else if (tab === "left") {
+        if (n.ref === "left" || n.ref === "draw") add(n.id, "edge");
+        else if (n.kind === "income") { if (drawn) add(n.id, "covered"); }
+        else if (n.kind === "category" || n.kind === "sub") { if (!drawn) add(n.id, "covered"); }
+      } else {
+        const cat = n.kind === "category" ? n.ref : n.kind === "sub" ? n.parent : null;
+        if (cat) add(n.id, cat);
+      }
+    }
+    // « disponible » : une part désigne une poignée de branches, pas une seule.
+    if (tab === "left") nodeOfPart.clear();
+    return { partsOfNode, nodeOfPart };
+  }, [flow, incomes, ring, tab]);
+
+  /* Un seul état pour les deux figures — celle qui a la souris le pose, l'autre
+     le suit. Deux états séparés se seraient chassés l'un l'autre. */
+  const [linked, setLinked] = React.useState(null);
+
+  const hoverBranch = React.useCallback((nodeId) => {
+    setLinked(nodeId ? { node: nodeId, parts: cross.partsOfNode.get(nodeId) ?? [] } : null);
+  }, [cross]);
+
+  const hoverPart = React.useCallback((partId) => {
+    setLinked(partId ? { node: cross.nodeOfPart.get(partId) ?? null, parts: [partId] } : null);
+  }, [cross]);
+
   /* Deux colonnes sur grand écran : l'anneau demande sa place et le diagramme ne
      se lit plus en dessous de 640 px de large. Empilés en dessous. */
   const twoCols = bp === "desktop";
@@ -176,6 +241,8 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
         <SankeyGraph
           nodes={flowNodes}
           links={flow.links}
+          onHoverNode={hoverBranch}
+          highlight={linked?.node ?? null}
           formatValue={(v) => fmt(v)}
           ariaLabel={t("cashflow.flowAria")
             .replace("{in}", fmt(flow.income))
@@ -240,6 +307,8 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
         <AllocationChart
           parts={ring.parts}
+          highlight={linked?.parts ?? null}
+          onHover={hoverPart}
           ariaLabel={`${ring.label} : ${fmt(ring.value)}`}
           size={196}
           thickness={24}

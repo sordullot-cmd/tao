@@ -54,15 +54,17 @@ import { inkOn, toLuminance } from "@/lib/ui/color";
    Le disque était à 88 % de blanc : il se lisait comme blanc, et c'était bien le
    problème — une colonne de vingt vignettes dont on ne distinguait plus les
    teintes ne distingue plus rien du tout. Il est maintenant ramené à une
-   LUMINANCE CONSTANTE, la même pour les vingt-huit postes : chacun garde sa
-   teinte à pleine force, et comme ils sont tous au même niveau de clarté, il ne
-   reste que la teinte pour les séparer. 0,55 est le compromis — assez coloré
-   pour qu'on nomme la couleur, assez clair pour qu'une pastille ne pèse pas à
-   côté d'un logo d'enseigne.
+   LUMINANCE CONSTANTE, la même pour les vingt-huit postes : comme ils sont tous
+   au même niveau de clarté, il ne reste que la teinte pour les séparer.
+
+   0,75 est le réglage : la couleur posée à un quart de sa force sur du blanc.
+   Assez pour qu'on la nomme, pas assez pour que la vignette pèse — à 0,55, la
+   colonne criait à côté des logos d'enseignes, qui gardent leurs aplats de
+   marque et doivent rester les seuls à porter de la couleur pleine.
 
    Le glyphe descend de la MÊME teinte, juste assez pour tenir 4,5:1 sur son
    disque : un noir neutre casserait la parenté entre le dessin et son fond. */
-const DISC_LUM = 0.55;
+const DISC_LUM = 0.75;
 const GLYPH_RATIO = 4.5;
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste

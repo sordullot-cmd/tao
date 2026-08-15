@@ -158,6 +158,9 @@ export function AllocationChart({
    * qu'elle désigne l'emporte sur ce qu'on lui souffle d'ailleurs.
    */
   highlight = null,
+  /** Prévenu quand la souris entre sur une part, ou la quitte (`null`). Symétrique
+   *  de `highlight` : c'est par là que l'anneau désigne à son tour. */
+  onHover,
 }) {
   const [hover, setHover] = React.useState(null);
   const live = parts.filter(p => p.pct > 0);
@@ -234,8 +237,8 @@ export function AllocationChart({
                 strokeDasharray={`${len} ${CIRC - len}`}
                 strokeDashoffset={-a.offset * CIRC}
                 strokeLinecap="butt"
-                onMouseEnter={() => setHover(a.id)}
-                onMouseLeave={() => setHover(null)}
+                onMouseEnter={() => { setHover(a.id); onHover?.(a.id); }}
+                onMouseLeave={() => { setHover(null); onHover?.(null); }}
                 style={{
                   opacity: lit == null || lit.has(a.id) ? 1 : 0.45,
                   transition: "opacity 140ms var(--ease-out, ease), stroke-dasharray 200ms var(--ease-out, ease)",

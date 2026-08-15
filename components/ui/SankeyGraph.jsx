@@ -141,10 +141,15 @@ export default function SankeyGraph({
   /** Prévenu à chaque changement de branche survolée (l'id du nœud, ou `null`).
    *  C'est ce qui permet à une figure voisine de suivre le même survol. */
   onHoverNode,
+  /** Branche à mettre en avant depuis l'EXTÉRIEUR — le pendant de `onHoverNode`.
+   *  Le survol local reste prioritaire : la souris est ici, ce qu'elle désigne
+   *  l'emporte sur ce qu'on souffle d'ailleurs. */
+  highlight = null,
 }) {
   const ref = React.useRef(null);
   const [width, setWidth] = React.useState(0);
   const [hover, setHover] = React.useState(null);
+  const focused = hover ?? highlight ?? null;
 
   React.useEffect(() => {
     const el = ref.current;
@@ -227,8 +232,8 @@ export default function SankeyGraph({
      Calculé sur la sortie de la géométrie : c'est elle qui porte les colonnes,
      et c'est en colonnes que se dit « son côté ». */
   const focus = React.useMemo(
-    () => sankeyFocus(layout.nodes, layout.links, hover),
-    [layout, hover],
+    () => sankeyFocus(layout.nodes, layout.links, focused),
+    [layout, focused],
   );
 
   const columnOf = React.useMemo(

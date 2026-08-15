@@ -2,9 +2,9 @@
  * Palette des graphiques — source unique des teintes d'IDENTITÉ des sections
  * « Vie perso » et « Finance ».
  *
- * Reprise de la planche Figma `mqFgieIhnaljGeybhJRY0V`, nœud 590:4381, relevée
- * au pixel : première ligne les huit couleurs principales, deuxième ligne leur
- * version sombre, troisième ligne les gris.
+ * Les trente-huit teintes de la charte, sous leur nom d'origine (`HUE`), puis
+ * les sélections dont l'app se sert. Plus AUCUNE valeur calculée : chaque
+ * couleur posée à l'écran est une couleur publiée.
  *
  * Ces couleurs ne passent PAS par les tokens `--color-*` : ce sont des couleurs
  * de catégorie (classe d'actif, poste de dépense, carte d'objectif), pas des
@@ -16,113 +16,164 @@
  * Elles sont conçues pour les APLATS : secteur d'anneau, ruban de Sankey, barre
  * de graphique. Là, la surface porte la teinte et tout se lit.
  *
- * Elles ne tiennent PAS sur un petit objet : le jaune rend 1,55:1 sur blanc, le
- * rose 1,39:1, le vert 1,62:1 — une puce de 8 px, un trait de progression, un
- * libellé ou une coche blanche posée dessus disparaissent. Ces cas passent donc
- * par `deepen()` (cf. lib/ui/color), qui ramène la teinte au niveau de
- * profondeur du seuil 3:1 en mélangeant vers le NOIR : la teinte est conservée,
- * la puce reste reconnaissable à côté de sa part d'anneau, et les couleurs déjà
- * sombres ne bougent pas. C'est ce que fait déjà `CategoryIcon`.
+ * Elles ne tiennent PAS sur un petit objet : Bee rend 1,55:1 sur blanc, Owl
+ * 2,09:1 — une puce de 8 px, un trait de progression, un libellé ou une coche
+ * blanche posée dessus disparaissent. Ces cas passent donc par `deepen()` ou
+ * `dotRing()` (cf. lib/ui/color), qui gardent la teinte en la cernant ou en la
+ * descendant vers le NOIR : les couleurs déjà sombres ne bougent pas, et une
+ * puce reste reconnaissable à côté de sa part d'anneau.
  *
  * Règle courte : aplat → la couleur brute ; puce, trait, texte, glyphe blanc →
- * `deepen(couleur)`.
- *
- * ── Règle d'emploi ────────────────────────────────────────────────────────
- * On sert d'abord les huit couleurs de `PALETTE`. `PALETTE_DARK` n'intervient
- * QUE lorsque les huit sont prises, et `PALETTE_LIGHT` qu'une fois les seize
- * épuisées. Une palette qui tient dans les huit principales n'a donc aucune
- * couleur dérivée — c'est le cas de tout ce qui compte moins de neuf entrées.
- * Les gris ferment la marche pour ce qui n'est pas une catégorie (le
- * non-catégorisé, les frais, les virements).
- *
- * ── D'où viennent les six sombres non fournies ────────────────────────────
- * La planche ne donne la version sombre que du vert (#89E219 → #58CC02) et du
- * bleu (#1CB0F6 → #2B70C9). Ces deux paires ne suivent pas la même
- * transformation : en OKLCH, la clarté tombe de 9 % pour le vert et de 24 %
- * pour le bleu, le chroma est conservé (×1,02) dans les deux cas. On garde donc
- * les deux valeurs de la planche telles quelles, et les six autres sont
- * assombries d'un même pas — la MOYENNE des deux mesures, soit clarté ×0,836 à
- * chroma et teinte constants. C'est la seule façon d'obtenir une deuxième ligne
- * cohérente à partir de deux références qui ne le sont pas entre elles.
+ * `deepen()` / `dotRing()`.
  * ------------------------------------------------------------------------- */
 
-/** Les huit couleurs principales, relevées sur la planche. */
+/**
+ * Les trente-huit teintes de la charte, sous leur nom d'origine.
+ *
+ * On garde les noms d'animaux ici — c'est le vocabulaire de la charte, et c'est
+ * lui qui permet de vérifier une valeur contre la planche sans la chercher au
+ * jugé. Les sélections plus bas les rebaptisent en noms courants, qui sont ce
+ * que le code manipule au quotidien.
+ */
+export const HUE = {
+  // Gris
+  polar: "#F7F7F7",
+  swan: "#E5E5E5",
+  hare: "#AFAFAF",
+  wolf: "#777777",
+  eel: "#4B4B4B",
+  // Rouges et roses
+  squid: "#EBE3E3",
+  walkingFish: "#FFDFE0",
+  flamingo: "#FFB2B2",
+  pig: "#F5A4A4",
+  crab: "#FF7878",
+  cardinal: "#FF4B4B",
+  fireAnt: "#EA2B2B",
+  // Jaunes, oranges et bruns
+  canary: "#FFF5D3",
+  duck: "#FBE56D",
+  bee: "#FFC800",
+  lion: "#FFB100",
+  fox: "#FF9600",
+  cheetah: "#FFCE8E",
+  monkey: "#E5A259",
+  camel: "#E7A601",
+  guineaPig: "#CD7900",
+  grizzly: "#A56644",
+  // Verts — Owl est le vert de marque
+  seaSponge: "#D7FFB8",
+  turtle: "#A5ED6E",
+  owl: "#58CC02",
+  treeFrog: "#58A700",
+  // Bleus
+  iguana: "#DDF4FF",
+  anchovy: "#D2E4E8",
+  beluga: "#BBF2FF",
+  moonJelly: "#7AF0F2",
+  blueJay: "#84D8FF",
+  macaw: "#1CB0F6",
+  whale: "#1899D6",
+  humpback: "#2B70C9",
+  narwhal: "#1453A3",
+  // Violets et roses vifs
+  starfish: "#FFAADE",
+  beetle: "#CE82FF",
+  betta: "#9069CD",
+  butterfly: "#6F4EA1",
+} as const;
+
+/**
+ * Les huit couleurs principales, sous leur nom courant.
+ *
+ * Ce sont elles qu'on sert EN PREMIER, partout. `PALETTE_DARK` n'intervient que
+ * lorsque les huit sont prises, `PALETTE_LIGHT` qu'une fois les seize épuisées.
+ * Une palette qui tient dans les huit n'a donc aucune variante — c'est le cas
+ * de tout ce qui compte moins de neuf entrées.
+ */
 export const PALETTE = {
-  green: "#89E219",
-  blue: "#1CB0F6",
-  red: "#FF4B4B",
-  yellow: "#FFC800",
-  orange: "#FF9600",
-  purple: "#CE82FF",
-  pink: "#FFCAFF",
-  brown: "#B66E28",
+  green: HUE.owl,
+  blue: HUE.macaw,
+  red: HUE.cardinal,
+  yellow: HUE.bee,
+  orange: HUE.fox,
+  purple: HUE.beetle,
+  pink: HUE.flamingo,
+  brown: HUE.monkey,
 } as const;
 
 export type PaletteColor = keyof typeof PALETTE;
 
-/**
- * Les mêmes en sombre. `green` et `blue` sont les valeurs de la planche ; les
- * six autres sont dérivées (clarté ×0,836 en OKLCH, chroma et teinte gardés).
- */
+/** Le cran plus sombre de chaque principale, pris dans la même famille. */
 export const PALETTE_DARK: Record<PaletteColor, string> = {
-  green: "#58CC02",
-  blue: "#2B70C9",
-  red: "#D71929",
-  yellow: "#C99D07",
-  orange: "#C97505",
-  purple: "#A75CD6",
-  pink: "#CE9BCE",
-  brown: "#945204",
+  green: HUE.treeFrog,
+  blue: HUE.humpback,
+  red: HUE.fireAnt,
+  yellow: HUE.camel,
+  orange: HUE.guineaPig,
+  purple: HUE.betta,
+  pink: HUE.crab,
+  brown: HUE.grizzly,
 };
 
-/**
- * Les mêmes en clair — dernier recours, seulement quand les seize précédentes
- * sont prises. Obtenues en mélangeant la couleur principale à 40 % de blanc.
- */
+/** Le cran plus clair. Dernier recours, quand les seize précédentes sont prises. */
 export const PALETTE_LIGHT: Record<PaletteColor, string> = {
-  green: "#B8EE75",
-  blue: "#77D0FA",
-  red: "#FF9393",
-  yellow: "#FFDE66",
-  orange: "#FFC066",
-  purple: "#E2B4FF",
-  pink: "#FFDFFF",
-  brown: "#D3A87E",
+  green: HUE.turtle,
+  blue: HUE.blueJay,
+  red: HUE.pig,
+  yellow: HUE.duck,
+  orange: HUE.lion,
+  // La charte n'a pas de violet plus clair que Beetle : Starfish est son voisin
+  // immédiat dans la bande « violets et roses vifs », c'est lui qui tient le
+  // rôle.
+  purple: HUE.starfish,
+  pink: HUE.walkingFish,
+  brown: HUE.cheetah,
 };
 
-/** Les gris de la planche, du plus sombre au blanc. */
+/** Les gris de la charte, du plus sombre au blanc. */
 export const GREY = {
-  grey900: "#4B4B4B",
-  grey700: "#777777",
-  grey500: "#AFAFAF",
-  grey300: "#E5E5E5",
-  grey100: "#F7F7F7",
+  grey900: HUE.eel,
+  grey700: HUE.wolf,
+  grey500: HUE.hare,
+  grey300: HUE.swan,
+  grey100: HUE.polar,
   white: "#FFFFFF",
 } as const;
 
 /**
  * Pastilles : la teinte ramenée à une clarté constante + son encre.
  *
- * Les fonds étaient des pastels à 86 % de blanc. Ils se lisaient tous comme du
- * blanc, et c'était le défaut : dans une liste d'actifs, on ne distinguait plus
- * un PEA d'un livret. Ils sont maintenant tous à la MÊME luminance (0,55), donc
- * seule la teinte les sépare — c'est précisément ce qu'on leur demande de dire.
- * Même échelle que les vignettes de poste (cf. `DISC_LUM` dans
- * components/ui/CategoryIcon) : les deux familles se croisent dans les listes
- * de la section Finance et doivent avoir le même poids.
+ * Les fonds étaient des pastels à 86 % de blanc : ils se lisaient tous comme du
+ * blanc, et dans une liste d'actifs on ne distinguait plus un PEA d'un livret.
+ * Ils sont maintenant tous à la MÊME luminance (0,75), donc seule la teinte les
+ * sépare — c'est précisément ce qu'on leur demande de dire. Ça revient à poser
+ * la couleur à un quart de sa force sur du blanc : assez pour qu'on la nomme,
+ * pas assez pour que la pastille pèse. Même échelle que les vignettes de poste
+ * (cf. `DISC_LUM` dans components/ui/CategoryIcon) : les deux familles se
+ * croisent dans les listes de la section Finance et doivent avoir le même poids.
  *
- * L'encre n'est pas une couleur d'identité, c'est du texte : elle descend de la
- * même teinte jusqu'à 4,5:1 sur son propre fond. Un noir neutre casserait la
- * parenté entre la pastille et ses initiales.
+ * C'est le seul endroit du module où les valeurs sont CALCULÉES et non prises
+ * dans la charte : la charte publie des teintes, pas des couples fond/encre, et
+ * un couple doit tenir un ratio de contraste que le choix à l'œil ne garantit
+ * pas.
+ *
+ * L'aplat est OPAQUE, pas une vraie transparence, et c'est voulu : une pastille
+ * en `rgba()` prendrait le fond de la carte, donc du sombre en thème sombre, et
+ * l'encre foncée y disparaîtrait. En restant autonome, la pastille se lit à
+ * l'identique sur les deux thèmes.
+ *
+ * L'encre descend de la même teinte jusqu'à 4,5:1 sur son propre fond. Un noir
+ * neutre casserait la parenté entre la pastille et ses initiales.
  */
 export const CHIP: Record<PaletteColor | "grey", { bg: string; text: string }> = {
-  green:  { bg: "#84D918", text: "#35580B" },
-  blue:   { bg: "#74CEF9", text: "#0E5576" },
-  red:    { bg: "#FFAFAF", text: "#872929" },
-  yellow: { bg: "#F1BD00", text: "#634D00" },
-  orange: { bg: "#FFB64D", text: "#6E4100" },
-  purple: { bg: "#E1B1FF", text: "#633E7A" },
-  pink:   { bg: "#E4B4E4", text: "#594659" },
-  brown:  { bg: "#DEBE9F", text: "#6C4117" },
-  grey:   { bg: "#C3C3C3", text: "#4D4D4D" },
+  green:  { bg: "#C4EDA5", text: "#2F6D02" },
+  blue:   { bg: "#BBE8FC", text: "#116891" },
+  red:    { bg: "#FFD8D8", text: "#A73232" },
+  yellow: { bg: "#FFDE68", text: "#7A5F00" },
+  orange: { bg: "#FFDBA9", text: "#875000" },
+  purple: { bg: "#F0D9FF", text: "#7A4D96" },
+  pink:   { bg: "#FFD7D7", text: "#7A5656" },
+  brown:  { bg: "#F5DDC2", text: "#7A5630" },
+  grey:   { bg: "#E0E0E0", text: "#606060" },
 };
