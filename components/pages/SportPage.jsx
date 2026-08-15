@@ -17,7 +17,7 @@ import {
   CARD, SectionTitle, HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow,
 } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { DUO } from "@/lib/ui/duoPalette";
+import { PALETTE } from "@/lib/ui/palette";
 
 /* ---------------------------------------------------------------------------
    Page « Sport » — portée dans la direction artistique des pages récentes
@@ -47,18 +47,18 @@ const T = { ...BaseT, bg: "var(--color-bg-subtle, #FAFAFA)" };
 /* ─── Constantes ──────────────────────────────────────────────────── */
 
 const DISCIPLINES = [
-  { id: "musculation",  label: "Musculation",  Icon: Dumbbell,      color: DUO.fox },
-  { id: "calisthenics", label: "Callisthénie", Icon: BicepsFlexed,  color: DUO.macaw },
-  { id: "cardio",       label: "Cardio",       Icon: Bike,       color: DUO.featherGreen },
+  { id: "musculation",  label: "Musculation",  Icon: Dumbbell,      color: PALETTE.orange },
+  { id: "calisthenics", label: "Callisthénie", Icon: BicepsFlexed,  color: PALETTE.blue },
+  { id: "cardio",       label: "Cardio",       Icon: Bike,       color: PALETTE.green },
 ];
 
 const CATEGORIES = [
-  { id: "push",      label: "Push",      color: DUO.cardinal },
-  { id: "pull",      label: "Pull",      color: DUO.macaw },
-  { id: "legs",      label: "Legs",      color: DUO.featherGreen },
-  { id: "core",      label: "Core",      color: DUO.bee },
-  { id: "full_body", label: "Full body", color: DUO.beetle },
-  { id: "cardio",    label: "Cardio",    color: DUO.humpback },
+  { id: "push",      label: "Push",      color: PALETTE.red },
+  { id: "pull",      label: "Pull",      color: PALETTE.blue },
+  { id: "legs",      label: "Legs",      color: PALETTE.green },
+  { id: "core",      label: "Core",      color: PALETTE.yellow },
+  { id: "full_body", label: "Full body", color: PALETTE.purple },
+  { id: "cardio",    label: "Cardio",    color: PALETTE.brown },
 ];
 
 /* Bibliothèque d'exercices populaires avec catégorie par défaut. */
@@ -1937,10 +1937,10 @@ function ExerciseNameCombobox({
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     width: 22, height: 22, border: "none", background: "transparent",
                     cursor: "pointer", borderRadius: "var(--radius-field)", flexShrink: 0,
-                    color: isFav ? DUO.bee : T.textSub,
+                    color: isFav ? PALETTE.yellow : T.textSub,
                   }}
                 >
-                  <Star size={12} strokeWidth={1.75} fill={isFav ? DUO.bee : "none"} />
+                  <Star size={12} strokeWidth={1.75} fill={isFav ? PALETTE.yellow : "none"} />
                 </button>
                 {m.custom ? (
                   <button

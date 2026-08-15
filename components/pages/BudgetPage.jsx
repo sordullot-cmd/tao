@@ -45,7 +45,7 @@
 import React from "react";
 import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
-import { DUO, DUO_TONES } from "@/lib/ui/duoPalette";
+import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { fmt } from "@/lib/ui/format";
@@ -64,51 +64,47 @@ const DEFAULT_INCOME = 2000;
    catégories voisines doivent rester distinguables, ce qu'une palette recalculée
    par thème ne garantit pas.
 
-   Chacune reprend une teinte de la charte Duolingo (cf. lib/ui/duoPalette), et
-   les six premières — celles de `defaultItems`, donc celles qu'on voit sans
-   rien toucher — sont des BASES de la charte, sans retouche de clarté.
+   Les dix slots prennent d'abord les HUIT couleurs principales de la planche
+   (cf. lib/ui/palette), telles quelles. Les deux derniers, une fois les huit
+   épuisées, descendent sur une version sombre et sur le gris.
 
    Ce que ce choix coûte, sciemment : la palette d'origine tenait sa clarté
    OKLCH dans [0.48, 0.67], l'intersection des bandes admises en clair et en
-   sombre, avec un contraste ≥ 3:1 sur les deux surfaces. Les bases de la charte
-   sortent de cette fenêtre par le haut (Feather Green, Mask Green, Fox et Bee
+   sombre, avec un contraste ≥ 3:1 sur les deux surfaces. Les principales
+   sortent de cette fenêtre par le haut (le vert, le jaune, l'orange et le rose
    sont sous 2,2:1 sur blanc) : elles portent bien un secteur d'anneau, moins
-   bien une pastille de légende. À reprendre si la lecture ne suit pas.
+   bien une pastille de légende.
 
-   Ce qui est conservé : la séparation des voisines par la clarté, et pas
-   seulement par la teinte — c'est ce qui les tient en vision deutéranope. Les
-   marches supplémentaires vont vers le CLAIR (`DUO_TONES`), jamais vers le
-   sombre : assombrir reviendrait à corriger la charte.
+   Ce qui est conservé : la séparation des voisines par la clarté autant que par
+   la teinte — c'est ce qui les tient en vision deutéranope.
 
    L'ordre compte : il est repris tel quel par `defaultItems`, et une catégorie
-   ajoutée prend la suivante. Toute retouche doit donc conserver l'alternance
-   clair/sombre.
+   ajoutée prend la suivante.
 
    « Autres » est à part : c'est le slot fourre-tout, et la convention réserve le
-   gris au non-catégorisé. Il est donc volontairement sous le plancher de chroma
-   et ne compte pas dans la palette catégorielle. */
-const PALETTE = [
-  DUO.humpback,             // logement     — Humpback
-  DUO.fox,                  // alimentation — Fox
-  DUO.macaw,                // transport    — Macaw
-  DUO_TONES.beetle.light,   // abonnements  — Beetle light
-  DUO.beetle,               // loisirs      — Beetle
-  DUO.featherGreen,         // épargne      — Feather Green
-  DUO.cardinal,             // shopping     — Cardinal
-  DUO.maskGreen,            // santé        — Mask Green
-  DUO_TONES.fox.light,      // frais        — Fox light
-  DUO.wolf,                 // autres       — Wolf : le slot « non catégorisé »
+   gris au non-catégorisé. Il ne compte pas dans la palette catégorielle. */
+const CATEGORY_COLORS = [
+  PALETTE.blue,        // logement
+  PALETTE.orange,      // alimentation
+  PALETTE.brown,       // transport
+  PALETTE.purple,      // abonnements
+  PALETTE_DARK.purple, // loisirs      — les huit principales sont prises
+  PALETTE.green,       // épargne
+  PALETTE.red,         // shopping
+  PALETTE.pink,        // santé
+  PALETTE.yellow,      // frais
+  GREY.grey700,        // autres       — le slot « non catégorisé »
 ];
 
 /* Point de départ : la règle 50/30/20 adaptée. L'utilisateur ajuste ensuite —
    ces valeurs ne sont qu'une amorce, pas une recommandation. */
 const defaultItems = () => [
-  { id: "logement", label: t("budget.cat.housing"), pct: 30, color: PALETTE[0] },
-  { id: "alimentation", label: t("budget.cat.food"), pct: 15, color: PALETTE[1] },
-  { id: "transport", label: t("budget.cat.transport"), pct: 8, color: PALETTE[2] },
-  { id: "abonnements", label: t("budget.cat.subscriptions"), pct: 5, color: PALETTE[3] },
-  { id: "loisirs", label: t("budget.cat.leisure"), pct: 10, color: PALETTE[4] },
-  { id: "epargne", label: t("budget.cat.savings"), pct: 20, color: PALETTE[5] },
+  { id: "logement", label: t("budget.cat.housing"), pct: 30, color: CATEGORY_COLORS[0] },
+  { id: "alimentation", label: t("budget.cat.food"), pct: 15, color: CATEGORY_COLORS[1] },
+  { id: "transport", label: t("budget.cat.transport"), pct: 8, color: CATEGORY_COLORS[2] },
+  { id: "abonnements", label: t("budget.cat.subscriptions"), pct: 5, color: CATEGORY_COLORS[3] },
+  { id: "loisirs", label: t("budget.cat.leisure"), pct: 10, color: CATEGORY_COLORS[4] },
+  { id: "epargne", label: t("budget.cat.savings"), pct: 20, color: CATEGORY_COLORS[5] },
 ];
 
 /* Identifiant FIXE pour le plan initial : l'état de départ doit être le même
@@ -257,7 +253,7 @@ export default function BudgetPage() {
     focusItemId.current = id;
     updateActive((p) => ({
       ...p,
-      items: [...p.items, { id, label: t("budget.newCategory"), pct: 5, color: PALETTE[p.items.length % PALETTE.length] }],
+      items: [...p.items, { id, label: t("budget.newCategory"), pct: 5, color: CATEGORY_COLORS[p.items.length % CATEGORY_COLORS.length] }],
     }));
   };
 

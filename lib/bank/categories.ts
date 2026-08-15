@@ -35,7 +35,7 @@
  */
 
 import { findMerchant, type Merchant } from "@/lib/bank/merchants";
-import { DUO, DUO_TONES } from "@/lib/ui/duoPalette";
+import { PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
 import type { BankTransaction } from "@/lib/bank/transactions";
 
 export type SpendingCategory =
@@ -85,12 +85,16 @@ export type SpendingSubcategory = string;
  * porter la même couleur des deux côtés, sinon les deux graphiques se
  * contredisent à l'œil.
  *
- * Les gammes viennent de la charte Duolingo (cf. lib/ui/duoPalette). Elle ne
- * publie que huit teintes chromatiques pour vingt-huit postes : chaque famille
- * en occupe une, et ses membres s'y séparent par la clarté — toujours vers le
- * CLAIR, jamais en assombrissant la base. Conséquence assumée : le toit et la
- * route sont tous deux bleus (bleu royal contre bleu ciel), là où l'original
- * opposait bleu et cyan.
+ * Les teintes viennent de la planche des graphiques (cf. lib/ui/palette), qui
+ * donne huit couleurs principales pour vingt-huit postes. L'ordre de service
+ * est celui du module : les huit principales d'abord, puis les huit sombres,
+ * puis les huit claires, et les gris pour ce qui n'est pas un poste de vie
+ * (assurance, frais, retraits, non-catégorisé). Vingt-huit valeurs, toutes
+ * distinctes — c'est ce que vérifie tests/bankCategories.
+ *
+ * Les postes que la page Budget fixe (logement, alimentation, transport,
+ * abonnements, loisirs, épargne) prennent des principales : ce sont les gros,
+ * ils doivent porter la couleur pleine.
  *
  * Le rendu du Sankey délave déjà les rubans (`RIBBON_TINT` dans
  * components/ui/SankeyGraph.jsx). C'est là qu'on compense, pas ici : la valeur
@@ -101,42 +105,41 @@ export type SpendingSubcategory = string;
  * pas un poste de dépense, c'est l'aveu que la règle n'a pas tranché.
  */
 export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
-  // Le toit — gamme Humpback (bleu royal)
-  { id: "housing", color: DUO.humpback },               // Humpback — bleu de la page Budget
-  { id: "utilities", color: DUO_TONES.humpback.soft },  // Humpback soft
-  { id: "telecom", color: DUO_TONES.humpback.light },   // Humpback light
-  { id: "insurance", color: DUO_TONES.humpback.pale },  // Humpback pale
-  // La table — gamme Fox (orange)
-  { id: "food", color: DUO.fox },                       // Fox — orange de la page Budget
-  // La route — gamme Macaw (bleu ciel)
-  { id: "transport", color: DUO.macaw },                // Macaw — bleu ciel de la page Budget
-  { id: "fuel", color: DUO_TONES.macaw.light },         // Macaw light
-  { id: "car", color: DUO_TONES.macaw.soft },           // Macaw soft
-  { id: "travel", color: DUO.bee },                     // Bee — le voyage n'est pas un trajet
-  // Les achats — gamme Cardinal (rouge)
-  { id: "shopping", color: DUO.cardinal },              // Cardinal
-  { id: "tech", color: DUO_TONES.cardinal.soft },       // Cardinal soft
-  { id: "beauty", color: DUO_TONES.cardinal.light },    // Cardinal light
-  // Le corps — gammes Mask Green et Bee
-  { id: "health", color: DUO.maskGreen },               // Mask Green — vert de la page Budget
-  { id: "sport", color: DUO_TONES.maskGreen.soft },     // Mask Green soft
-  { id: "pets", color: DUO_TONES.bee.soft },            // Bee soft — l'ocre d'avant
-
-  // Le temps libre — gamme Beetle (violet)
-  { id: "leisure", color: DUO.beetle },                 // Beetle — violet de la page Budget
-  { id: "subscriptions", color: DUO_TONES.beetle.light }, // Beetle light — page Budget
-  { id: "education", color: DUO_TONES.beetle.soft },    // Beetle soft
-  { id: "kids", color: DUO_TONES.beetle.mist },         // Beetle mist
-  // L'argent — gamme Feather Green et neutres
-  { id: "trading", color: DUO_TONES.featherGreen.soft }, // Feather Green soft : le poste propre à tr4de
-  { id: "savings", color: DUO.featherGreen },           // Feather Green — vert de la page Budget
-  { id: "credit", color: DUO_TONES.cardinal.mist },     // Cardinal mist — le bordeaux d'avant
-  { id: "taxes", color: DUO_TONES.fox.light },          // Fox light — page Budget
-  { id: "fees", color: DUO.eel },                       // Eel
-  { id: "cash", color: DUO_TONES.macaw.mist },          // Macaw mist — le bleu ardoise d'avant
-  { id: "transfer", color: DUO_TONES.wolf.light },      // Wolf light — un virement interne est neutre
-  { id: "income", color: DUO_TONES.featherGreen.mist }, // Feather Green mist — jamais dans l'anneau des dépenses
-  { id: "other", color: DUO.wolf },                     // Wolf — le gris du non-catégorisé
+  // Le toit — bleu
+  { id: "housing", color: PALETTE.blue },                // bleu — page Budget
+  { id: "utilities", color: PALETTE_DARK.blue },         // bleu sombre
+  { id: "telecom", color: PALETTE_LIGHT.blue },          // bleu clair
+  { id: "insurance", color: GREY.grey500 },              // gris : une charge, pas un poste de vie
+  // La table — orange
+  { id: "food", color: PALETTE.orange },                 // orange — page Budget
+  // La route — brun, et le jaune pour ce qui n'est pas un trajet
+  { id: "transport", color: PALETTE.brown },             // brun — page Budget
+  { id: "fuel", color: PALETTE_DARK.brown },             // brun sombre
+  { id: "car", color: PALETTE_DARK.orange },             // orange sombre
+  { id: "travel", color: PALETTE.yellow },               // jaune — le voyage n'est pas un trajet
+  // Les achats — rouge
+  { id: "shopping", color: PALETTE.red },                // rouge
+  { id: "tech", color: PALETTE_DARK.red },               // rouge sombre
+  { id: "beauty", color: PALETTE_DARK.pink },            // rose sombre
+  // Le corps — rose et vert
+  { id: "health", color: PALETTE.pink },                 // rose
+  { id: "sport", color: PALETTE_DARK.green },            // vert sombre
+  { id: "pets", color: PALETTE_DARK.yellow },            // jaune sombre
+  // Le temps libre — violet
+  { id: "leisure", color: PALETTE_DARK.purple },         // violet sombre — page Budget
+  { id: "subscriptions", color: PALETTE.purple },        // violet — page Budget
+  { id: "education", color: PALETTE_LIGHT.purple },      // violet clair
+  { id: "kids", color: PALETTE_LIGHT.pink },             // rose clair
+  // L'argent — vert, et les gris pour ce qui n'est pas une dépense de vie
+  { id: "trading", color: PALETTE_LIGHT.yellow },        // jaune clair : le poste propre à tr4de
+  { id: "savings", color: PALETTE.green },               // vert — page Budget
+  { id: "credit", color: PALETTE_LIGHT.red },            // rouge clair
+  { id: "taxes", color: PALETTE_LIGHT.brown },           // brun clair
+  { id: "fees", color: GREY.grey900 },                   // gris sombre
+  { id: "cash", color: GREY.grey300 },                   // gris très clair
+  { id: "transfer", color: PALETTE_LIGHT.orange },       // orange clair
+  { id: "income", color: PALETTE_LIGHT.green },          // vert clair — jamais dans l'anneau des dépenses
+  { id: "other", color: GREY.grey700 },                  // gris : le non-catégorisé
 ];
 
 /**
@@ -273,19 +276,21 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
 /* Teintes des SOURCES de revenus. Le poste « revenus » n'a qu'une couleur — il
    ne paraît jamais dans un anneau de dépenses —, mais le flux du cashflow part
    de ses sources et il faut les distinguer les unes des autres.
-   Toutes dans la gamme verte du poste parent, pour qu'on lise « ça entre » d'un
-   coup d'œil, et alternées clair / sombre comme le reste de la palette : deux
-   sources voisines dans le graphique tranchent alors par la clarté, pas
-   seulement par la teinte. Le « divers » garde un vert grisé — c'est un aveu,
+   Le salaire garde le vert du poste parent, pour qu'on lise « ça entre » d'un
+   coup d'œil ; les autres sources s'en écartent sur les couleurs principales
+   restantes, en alternant une claire et une sombre — deux sources voisines
+   tranchent alors par la clarté autant que par la teinte. Elles vivent à GAUCHE
+   du diagramme, les postes de dépense à droite : partager une teinte avec l'un
+   d'eux ne prête pas à confusion. Le « divers » garde le gris — c'est un aveu,
    pas une source. */
 const INCOME_COLORS: Record<string, string> = {
-  "income.salary": DUO_TONES.featherGreen.light,  // Feather Green light — la source principale
-  "income.benefits": DUO_TONES.bee.mist,          // Bee mist
-  "income.pension": DUO_TONES.featherGreen.pale,  // Feather Green pale
-  "income.refund": DUO_TONES.bee.light,           // Bee light
-  "income.interest": DUO_TONES.maskGreen.light,   // Mask Green light
-  "income.sale": DUO_TONES.maskGreen.mist,        // Mask Green mist
-  income: "#6B9948",                              // vert grisé : le crédit qu'on n'a pas su nommer
+  "income.salary": PALETTE.green,          // vert — la source principale
+  "income.benefits": PALETTE_DARK.green,   // vert sombre
+  "income.pension": PALETTE.yellow,        // jaune
+  "income.refund": PALETTE_DARK.yellow,    // jaune sombre
+  "income.interest": PALETTE.brown,        // brun
+  "income.sale": PALETTE.orange,           // orange
+  income: GREY.grey700,                    // gris : le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */
