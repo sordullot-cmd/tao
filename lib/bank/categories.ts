@@ -35,7 +35,7 @@
  */
 
 import { findMerchant, type Merchant } from "@/lib/bank/merchants";
-import { PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
+import { HUE, PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
 import type { BankTransaction } from "@/lib/bank/transactions";
 
 export type SpendingCategory =
@@ -286,30 +286,30 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
    ne paraît jamais dans un anneau de dépenses —, mais le flux du cashflow part
    de ses sources et il faut les distinguer les unes des autres.
 
-   Elles prennent la DEUXIÈME famille de la planche (`PALETTE_DARK`), là où les
-   postes de dépense gardent les principales. Ce n'est pas une nuance de goût :
-   l'entrée d'argent n'est pas le sujet du dessin. Ce qu'on vient y lire, c'est
-   où part le mois, et une colonne de gauche aussi vive que celle de droite tirait
-   l'œil vers la moitié qu'on ne pilote pas. En version sombre, elle se lit tout
-   aussi bien mais passe derrière — et la parenté de teinte reste entière : le
-   salaire est toujours bleu, la vente toujours jaune.
+   TOUTE la branche est BLEUE. La charte publie neuf bleus, de l'Iguana presque
+   blanc au Narwhal profond : de quoi séparer les sept sources sans sortir de la
+   famille. Ce qu'on y gagne se voit d'un coup d'œil sur le dessin — la gauche
+   dit « ça entre » d'un seul bloc, la droite garde les teintes variées des
+   postes, et on ne confond plus une source avec une dépense au milieu du
+   croisement des rubans.
 
-   Le salaire garde donc le bleu, que les postes de dépense n'utilisent pas :
-   c'est LA teinte réservée aux revenus. Les aides restent son bleu CLAIR, seule
-   exception au groupe — elles doivent se distinguer du salaire juste au-dessus,
-   et deux bleus sombres voisins ne s'y prêtaient pas.
+   Les deux bleus déjà pris par des postes de dépense (Humpback au logement,
+   Blue Jay à l'énergie) sont écartés d'office : c'est ce qui permet aux deux
+   côtés d'être bleus sans jamais se répondre. Le salaire prend Macaw, le bleu
+   plein, parce que c'est la source principale ; le « divers » prend Anchovy, un
+   bleu grisé — il reste une entrée, mais il avoue ne pas savoir laquelle.
 
-   Le « divers » est le seul à ne pas nommer sa source. Il était gris, ce qui le
-   faisait passer pour une erreur d'affichage plutôt que pour une entrée : il
-   prend l'orange, la dernière teinte libre du groupe. */
+   L'ordre alterne clair et sombre : deux sources voisines dans le dessin
+   tranchent alors par la clarté autant que par la teinte, ce qui est le seul
+   levier qui reste quand on tient dans une famille. */
 const INCOME_COLORS: Record<string, string> = {
-  "income.salary": PALETTE_DARK.blue,      // bleu — la source principale
-  "income.benefits": PALETTE_LIGHT.blue,   // bleu clair — à distinguer du salaire
-  "income.pension": PALETTE_DARK.purple,   // violet
-  "income.refund": PALETTE_DARK.pink,      // rose
-  "income.interest": PALETTE_DARK.green,   // vert
-  "income.sale": PALETTE_DARK.yellow,      // jaune
-  income: PALETTE_DARK.orange,             // orange — le crédit qu'on n'a pas su nommer
+  "income.salary": HUE.macaw,        // bleu plein — la source principale
+  "income.benefits": HUE.beluga,     // bleu très clair
+  "income.pension": HUE.narwhal,     // bleu profond
+  "income.refund": HUE.moonJelly,    // turquoise clair
+  "income.interest": HUE.whale,      // bleu soutenu
+  "income.sale": HUE.iguana,         // bleu pâle
+  income: HUE.anchovy,               // bleu grisé — le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */

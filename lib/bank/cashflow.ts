@@ -187,10 +187,11 @@ export function incomeBySource(txs: CategorizableTransaction[]): {
 
 /* Teintes des nœuds de synthèse. Ils ne SONT pas des postes, et une couleur de
    poste leur donnerait l'air d'en être un : les deux agrégats restent donc gris.
-   « Pris sur le solde » fait exception — c'est une ENTRÉE, au même titre qu'un
-   salaire, et il prend le violet clair : la teinte voisine du bleu des revenus,
-   assez proche pour qu'on lise « ça entre », assez distincte pour qu'on voie que
-   ça ne vient pas d'un revenu. */
+   « Pris sur le solde » fait exception — c'est une ENTRÉE, il se range donc du
+   côté gauche avec les revenus. Mais ce n'en est PAS un : c'est de l'argent
+   qu'on avait déjà. Toute la branche des revenus étant bleue, il prend le rose
+   vif, seul de sa teinte dans cette colonne. On le repère sans le lire, et on ne
+   le compte pas mentalement comme une rentrée. */
 const SYNTHETIC_COLORS: Record<FlowSynthetic, string> = {
   more: GREY.grey500,
   left: GREY.grey300,
