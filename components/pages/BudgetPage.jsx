@@ -45,6 +45,7 @@
 import React from "react";
 import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { deepen } from "@/lib/ui/color";
 import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
@@ -472,7 +473,7 @@ export default function BudgetPage() {
                   padding: "5px 0",
                 }}
               >
-                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
+                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: deepen(it.color), flexShrink: 0 }} />
                 <input
                   ref={(el) => {
                     if (el && it.id === focusItemId.current) {

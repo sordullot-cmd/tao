@@ -12,6 +12,21 @@
  * catégories voisines doivent rester distinguables, ce qu'une palette
  * recalculée par thème ne garantit pas.
  *
+ * ── Où ces couleurs vont TELLES QUELLES, et où non ────────────────────────
+ * Elles sont conçues pour les APLATS : secteur d'anneau, ruban de Sankey, barre
+ * de graphique. Là, la surface porte la teinte et tout se lit.
+ *
+ * Elles ne tiennent PAS sur un petit objet : le jaune rend 1,55:1 sur blanc, le
+ * rose 1,39:1, le vert 1,62:1 — une puce de 8 px, un trait de progression, un
+ * libellé ou une coche blanche posée dessus disparaissent. Ces cas passent donc
+ * par `deepen()` (cf. lib/ui/color), qui ramène la teinte au niveau de
+ * profondeur du seuil 3:1 en mélangeant vers le NOIR : la teinte est conservée,
+ * la puce reste reconnaissable à côté de sa part d'anneau, et les couleurs déjà
+ * sombres ne bougent pas. C'est ce que fait déjà `CategoryIcon`.
+ *
+ * Règle courte : aplat → la couleur brute ; puce, trait, texte, glyphe blanc →
+ * `deepen(couleur)`.
+ *
  * ── Règle d'emploi ────────────────────────────────────────────────────────
  * On sert d'abord les huit couleurs de `PALETTE`. `PALETTE_DARK` n'intervient
  * QUE lorsque les huit sont prises, et `PALETTE_LIGHT` qu'une fois les seize

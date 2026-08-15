@@ -79,6 +79,7 @@ import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
 import { CARD, SectionTitle } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { deepen } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
@@ -1062,7 +1063,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
         <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
           aria-label={`${cat.label} : ${pct} % — ${status.label}`}
           style={{ position: "relative", height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-          <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
+          <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: deepen(cat.color), borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
           {/* Repère du calendrier : position du jour dans l'année. */}
           <div title={`${Math.round(yearPct)} % de l'année écoulée`}
             style={{ position: "absolute", top: -1, bottom: -1, left: `${Math.min(100, Math.max(0, yearPct))}%`, width: 2, background: T.text, opacity: 0.35, borderRadius: 999 }} />
@@ -1386,7 +1387,7 @@ function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
       <div style={{ minHeight: 16, fontSize: 11.5, color: T.textSub }}>
         {hover && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: hover.cat.color, flexShrink: 0 }} />
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: deepen(hover.cat.color), flexShrink: 0 }} />
             <span style={{ fontWeight: 600, color: T.text }}>{hover.step.label}</span>
             <span style={{ color: T.textMut }}>{hover.cat.label} · {fmtDayShort(hover.step.due)}</span>
           </span>
@@ -1711,7 +1712,7 @@ function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
       style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
       <button onClick={onToggle} title={tk.done ? "Marquer à faire" : "Marquer terminée"}
         role="checkbox" aria-checked={tk.done} aria-label={`${tk.title} — ${tk.done ? "terminée" : "à faire"}`}
-        style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${tk.done ? cat.color : T.border}`, background: tk.done ? cat.color : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+        style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${tk.done ? deepen(cat.color) : T.border}`, background: tk.done ? deepen(cat.color) : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
         {tk.done && <Check size={10} strokeWidth={3} />}
       </button>
       <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: tk.done ? T.textMut : T.text, textDecoration: tk.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tk.title}</span>
@@ -1798,7 +1799,7 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: "var(--radius-card)", background: here ? T.accentBg : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
                 onMouseEnter={e => { if (!here) e.currentTarget.style.background = T.bg; }}
                 onMouseLeave={e => { if (!here) e.currentTarget.style.background = "transparent"; }}>
-                <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${here ? color : T.border}`, background: here ? color : T.white, color: "#fff" }}>{here && <Check size={11} strokeWidth={3} />}</span>
+                <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${here ? deepen(color) : T.border}`, background: here ? deepen(color) : T.white, color: "#fff" }}>{here && <Check size={11} strokeWidth={3} />}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label || "Objectif"}</span>
                 {note && <span style={{ fontSize: 9, color: T.textMut, flexShrink: 0 }}>{note}</span>}
               </button>

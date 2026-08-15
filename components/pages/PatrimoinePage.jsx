@@ -30,6 +30,7 @@
 import React from "react";
 import { ArrowDownRight, ArrowUpRight, ChevronRight, Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { deepen } from "@/lib/ui/color";
 import { t, useLang } from "@/lib/i18n";
 import {
   AllocationChart, CARD, SectionTitle, HeroAmount, PeriodPills, PnlChart, TH,
@@ -602,7 +603,7 @@ function SpendingByCategory({ accounts }) {
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: "8px 18px" }}>
               {shown.map((p) => (
                 <li key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: T.textSub }}>
-                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: deepen(p.color), flexShrink: 0 }} />
                   <span style={{ color: T.text }}>{p.label}</span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(p.amount)}</span>
                 </li>
@@ -736,7 +737,7 @@ function BudgetSummary({ onOpen }) {
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: "8px 18px" }}>
               {shown.map((r) => (
                 <li key={r.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: T.textSub }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: r.color || T.textMut, flexShrink: 0 }} />
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: deepen(r.color || T.textMut), flexShrink: 0 }} />
                   <span style={{ color: T.text }}>{r.label}</span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(r.amount)}</span>
                 </li>
@@ -798,7 +799,7 @@ function ClassSection({ cls, assets, total, positiveTotal, onOpenClass, onOpenAs
               style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 200ms var(--ease-out, ease)" }}
             />
           </button>
-          <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: cls.color, flexShrink: 0 }} />
+          <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: deepen(cls.color), flexShrink: 0 }} />
           <button
             type="button"
             onClick={onOpenClass}

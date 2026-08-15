@@ -11,6 +11,7 @@
 import React from "react";
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { deepen } from "@/lib/ui/color";
 import { fmt } from "@/lib/ui/format";
 import { periodStart } from "@/lib/ui/period";
 import Popover from "@/components/ui/Popover";
@@ -233,7 +234,7 @@ export function AllocationChart({
           gap: 2, pointerEvents: "none", textAlign: "center",
         }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, lineHeight: 1.1, color: T.textSub, maxWidth: "100%" }}>
-            {shown && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: "50%", background: shown.color, flexShrink: 0 }} />}
+            {shown && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: "50%", background: deepen(shown.color), flexShrink: 0 }} />}
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {shown ? shown.label : centreLabel}
             </span>
