@@ -161,6 +161,21 @@ export function prefetchBankTransactions(
 }
 
 /**
+ * Comptes lus DE FRONT par ce hook. Le préchargement, lui, reste en file (cf.
+ * `prefetchBankTransactions`) : il travaille en fond, il a le temps.
+ *
+ * Ici non — quelqu'un attend l'écran. En file, la page s'ouvrait en la SOMME
+ * des allers-retours : trois comptes à une seconde chacun faisaient trois
+ * secondes, et le seul remède aurait été d'avoir moins de comptes.
+ *
+ * Quatre, et pas plus : un navigateur ne tient que six connexions simultanées
+ * par hôte en HTTP/1.1, et les épuiser ferait attendre le reste de la page
+ * derrière les relevés. Quatre couvre le cas courant (un à cinq comptes) en un
+ * seul aller-retour ou deux, et laisse deux voies libres.
+ */
+const MAX_PARALLEL = 4;
+
+/**
  * Relevés de PLUSIEURS comptes à la fois, indexés par uid.
  *
  * C'est ce qui permet à la synthèse du patrimoine de reconstruire sa courbe : le
@@ -169,9 +184,8 @@ export function prefetchBankTransactions(
  * publié aussitôt, la courbe se précise à mesure plutôt que d'attendre le
  * dernier compte.
  *
- * Même file séquentielle que le préchargement, et même cache : un compte déjà lu
- * assez profondément ne coûte rien, et changer de fenêtre ne redemande que ce
- * qui manque.
+ * Même cache que le préchargement : un compte déjà lu assez profondément ne
+ * coûte rien, et changer de fenêtre ne redemande que ce qui manque.
  */
 export function useBankTransactionsAll(
   uids: (string | null | undefined)[],
@@ -197,18 +211,32 @@ export function useBankTransactionsAll(
     let cancelled = false;
 
     void (async () => {
-      for (const uid of list) {
-        if (cancelled) return;
-        if (covers(uid, days)) continue;
-        // Requête déjà en vol et assez profonde (le préchargement, typiquement) :
-        // on l'attend plutôt que d'en lancer une seconde.
-        const pending = inFlight.get(uid);
-        if (pending && depthOf(pending.days) >= depthOf(days)) await pending.job;
-        else await loadTransactions(uid, days);
-        if (cancelled) return;
-        // Publication au fil de l'eau : la courbe se précise compte par compte.
-        setState({ ...shot(key, days), loading: true });
-      }
+      const todo = list.filter((uid) => !covers(uid, days));
+
+      /* Une file d'attente partagée par quelques ouvriers, plutôt qu'un
+         `Promise.all` sur toute la liste : à vingt comptes, tout lancer d'un
+         coup saturerait le navigateur et l'agrégateur, et les premiers relevés
+         arriveraient PLUS tard qu'en les étalant. */
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        while (!cancelled) {
+          const i = next++;
+          if (i >= todo.length) return;
+          const uid = todo[i];
+          // Requête déjà en vol et assez profonde (le préchargement,
+          // typiquement) : on l'attend plutôt que d'en lancer une seconde.
+          const pending = inFlight.get(uid);
+          if (pending && depthOf(pending.days) >= depthOf(days)) await pending.job;
+          else await loadTransactions(uid, days);
+          if (cancelled) return;
+          // Publication au fil de l'eau : la courbe se précise compte par compte.
+          setState({ ...shot(key, days), loading: true });
+        }
+      };
+
+      await Promise.all(
+        Array.from({ length: Math.min(MAX_PARALLEL, todo.length) }, worker),
+      );
       if (!cancelled) setState(shot(key, days));
     })();
 

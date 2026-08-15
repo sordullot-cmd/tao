@@ -17,6 +17,7 @@ import {
   CARD, SectionTitle, HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow,
 } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { DUO } from "@/lib/ui/duoPalette";
 
 /* ---------------------------------------------------------------------------
    Page « Sport » — portée dans la direction artistique des pages récentes
@@ -46,18 +47,18 @@ const T = { ...BaseT, bg: "var(--color-bg-subtle, #FAFAFA)" };
 /* ─── Constantes ──────────────────────────────────────────────────── */
 
 const DISCIPLINES = [
-  { id: "musculation",  label: "Musculation",  Icon: Dumbbell,      color: "#F97316" },
-  { id: "calisthenics", label: "Callisthénie", Icon: BicepsFlexed,  color: "#3B82F6" },
-  { id: "cardio",       label: "Cardio",       Icon: Bike,       color: "#16A34A" },
+  { id: "musculation",  label: "Musculation",  Icon: Dumbbell,      color: DUO.fox },
+  { id: "calisthenics", label: "Callisthénie", Icon: BicepsFlexed,  color: DUO.macaw },
+  { id: "cardio",       label: "Cardio",       Icon: Bike,       color: DUO.featherGreen },
 ];
 
 const CATEGORIES = [
-  { id: "push",      label: "Push",      color: "#EF4444" },
-  { id: "pull",      label: "Pull",      color: "#3B82F6" },
-  { id: "legs",      label: "Legs",      color: "#16A34A" },
-  { id: "core",      label: "Core",      color: "#F59E0B" },
-  { id: "full_body", label: "Full body", color: "#8B5CF6" },
-  { id: "cardio",    label: "Cardio",    color: "#06B6D4" },
+  { id: "push",      label: "Push",      color: DUO.cardinal },
+  { id: "pull",      label: "Pull",      color: DUO.macaw },
+  { id: "legs",      label: "Legs",      color: DUO.featherGreen },
+  { id: "core",      label: "Core",      color: DUO.bee },
+  { id: "full_body", label: "Full body", color: DUO.beetle },
+  { id: "cardio",    label: "Cardio",    color: DUO.humpback },
 ];
 
 /* Bibliothèque d'exercices populaires avec catégorie par défaut. */
@@ -1936,10 +1937,10 @@ function ExerciseNameCombobox({
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     width: 22, height: 22, border: "none", background: "transparent",
                     cursor: "pointer", borderRadius: "var(--radius-field)", flexShrink: 0,
-                    color: isFav ? "#F59E0B" : T.textSub,
+                    color: isFav ? DUO.bee : T.textSub,
                   }}
                 >
-                  <Star size={12} strokeWidth={1.75} fill={isFav ? "#F59E0B" : "none"} />
+                  <Star size={12} strokeWidth={1.75} fill={isFav ? DUO.bee : "none"} />
                 </button>
                 {m.custom ? (
                   <button

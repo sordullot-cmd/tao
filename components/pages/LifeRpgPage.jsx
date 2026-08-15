@@ -78,15 +78,16 @@ import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
 import { CARD, SectionTitle } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { DUO } from "@/lib/ui/duoPalette";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
 const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
 
 // Difficulté → récompense. Plus c'est dur, plus ça rapporte d'XP et de pièces.
 const DIFFICULTIES = [
-  { id: "easy",   label: "Facile",    xp: 10, coins: 5,  color: "#8E8E8E" },
-  { id: "normal", label: "Normale",   xp: 25, coins: 12, color: "#3B82F6" },
-  { id: "hard",   label: "Difficile", xp: 50, coins: 25, color: "#F59E0B" },
+  { id: "easy",   label: "Facile",    xp: 10, coins: 5,  color: DUO.wolf },
+  { id: "normal", label: "Normale",   xp: 25, coins: 12, color: DUO.macaw },
+  { id: "hard",   label: "Difficile", xp: 50, coins: 25, color: DUO.fox },
 ];
 const DIFF_BY_ID = Object.fromEntries(DIFFICULTIES.map(d => [d.id, d]));
 const DEFAULT_DIFF = DIFF_BY_ID.normal;

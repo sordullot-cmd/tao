@@ -19,6 +19,7 @@ import {
 } from "@/lib/lifeRpgCategories";
 
 import { T as BaseT } from "@/lib/ui/tokens";
+import { DUO, DUO_TONES } from "@/lib/ui/duoPalette";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
 const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
@@ -34,10 +35,10 @@ const HORIZONS = [
 ];
 // Priorités (remplace les anciens niveaux facile/moyen/difficile)
 const LEVELS = [
-  { id: "low",     label: "Basse",    color: "#8E8E8E" },
-  { id: "normal",  label: "Normale",  color: "#3B82F6" },
-  { id: "high",    label: "Haute",    color: "#F59E0B" },
-  { id: "urgent",  label: "Urgente",  color: "#EF4444" },
+  { id: "low",     label: "Basse",    color: DUO.wolf },
+  { id: "normal",  label: "Normale",  color: DUO.macaw },
+  { id: "high",    label: "Haute",    color: DUO.fox },
+  { id: "urgent",  label: "Urgente",  color: DUO.cardinal },
 ];
 
 // Unités de cible pour les objectifs manuels (ignoré pour les sources trading
@@ -56,17 +57,17 @@ const UNITS = [
   { id: "custom",  label: "Autre…",    suffix: "", isCustom: true },
 ];
 const CATEGORIES = [
-  { id: "trading",   label: "Trading",       color: "#16A34A", icon: TrendingUp },
-  { id: "personal",  label: "Personnel",     color: "#EF4444", icon: Heart },
-  { id: "sport",     label: "Sport",         color: "#EF4444", icon: Dumbbell },
-  { id: "reading",   label: "Lecture",       color: "#8B5CF6", icon: BookOpen },
-  { id: "relations", label: "Relations",     color: "#EC4899", icon: Users },
-  { id: "learning",  label: "Apprentissage", color: "#3B82F6", icon: GraduationCap },
-  { id: "health",    label: "Santé",         color: "#06B6D4", icon: Activity },
-  { id: "steps",     label: "Pas journalier", color: "#10B981", icon: Footprints },
-  { id: "finance",   label: "Finances",      color: "#059669", icon: Wallet },
-  { id: "work",      label: "Travail",       color: "#64748B", icon: Briefcase },
-  { id: "code",      label: "Dev",           color: "#6366F1", icon: Code },
+  { id: "trading",   label: "Trading",       color: DUO.bee, icon: TrendingUp },
+  { id: "personal",  label: "Personnel",     color: DUO.cardinal, icon: Heart },
+  { id: "sport",     label: "Sport",         color: DUO.fox, icon: Dumbbell },
+  { id: "reading",   label: "Lecture",       color: DUO_TONES.beetle.deep, icon: BookOpen },
+  { id: "relations", label: "Relations",     color: DUO.beetle, icon: Users },
+  { id: "learning",  label: "Apprentissage", color: DUO.macaw, icon: GraduationCap },
+  { id: "health",    label: "Santé",         color: DUO.maskGreen, icon: Activity },
+  { id: "steps",     label: "Pas journalier", color: DUO.featherGreen, icon: Footprints },
+  { id: "finance",   label: "Finances",      color: DUO_TONES.featherGreen.deep, icon: Wallet },
+  { id: "work",      label: "Travail",       color: DUO.wolf, icon: Briefcase },
+  { id: "code",      label: "Dev",           color: DUO.humpback, icon: Code },
 ];
 // Sources de suivi. `trading: true` = calculé à partir des trades et filtré
 // sur l'horizon de l'objectif. Ces types ne sont proposés qu'en catégorie
@@ -258,11 +259,11 @@ export function computeGoalPace(g, current, target, pct) {
   }
 
   let status, color, label;
-  if (pct >= 100)            { status = "done";    color = "#16A34A"; label = "Atteint"; }
-  else if (timeFrac >= 1)    { status = "ended";   color = "#EF4444"; label = "Échéance passée"; }
-  else if (delta >= 0.05)    { status = "ahead";   color = "#16A34A"; label = "En avance"; }
-  else if (delta <= -0.05)   { status = "behind";  color = "#F59E0B"; label = "En retard"; }
-  else                       { status = "ontrack"; color = "#3B82F6"; label = "Dans les temps"; }
+  if (pct >= 100)            { status = "done";    color = DUO.featherGreen; label = "Atteint"; }
+  else if (timeFrac >= 1)    { status = "ended";   color = DUO.cardinal;     label = "Échéance passée"; }
+  else if (delta >= 0.05)    { status = "ahead";   color = DUO.featherGreen; label = "En avance"; }
+  else if (delta <= -0.05)   { status = "behind";  color = DUO.fox;          label = "En retard"; }
+  else                       { status = "ontrack"; color = DUO.macaw;        label = "Dans les temps"; }
 
   return { status, color, label, expectedPct, timeFrac, progressFrac, requiredRate, rateUnit };
 }

@@ -10,21 +10,22 @@ import Popover from "@/components/ui/Popover";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { DUO } from "@/lib/ui/duoPalette";
 
 const T = { ...BaseT };
 
 const STORAGE_KEY = "tr4de_books";
 
 const STATUSES = [
-  { id: "toRead",  label: "À lire",     color: "#8E8E8E" },
-  { id: "reading", label: "En cours",   color: "#3B82F6" },
-  { id: "done",    label: "Terminé",    color: "#16A34A" },
+  { id: "toRead",  label: "À lire",     color: DUO.wolf },
+  { id: "reading", label: "En cours",   color: DUO.macaw },
+  { id: "done",    label: "Terminé",    color: DUO.featherGreen },
 ];
 const PRIORITIES = [
-  { id: "must_read", label: "À lire absolument", short: "Absolu",   color: "#EF4444" },
-  { id: "important", label: "Important",         short: "Important",color: "#F59E0B" },
-  { id: "normal",    label: "Normal",            short: "Normal",   color: "#3B82F6" },
-  { id: "can_wait",  label: "Peut attendre",     short: "Attend",   color: "#8E8E8E" },
+  { id: "must_read", label: "À lire absolument", short: "Absolu",   color: DUO.cardinal },
+  { id: "important", label: "Important",         short: "Important",color: DUO.fox },
+  { id: "normal",    label: "Normal",            short: "Normal",   color: DUO.macaw },
+  { id: "can_wait",  label: "Peut attendre",     short: "Attend",   color: DUO.hare },
 ];
 const CATEGORIES = [
   { id: "trading",      label: "Trading" },

@@ -87,7 +87,7 @@ import {
   Dumbbell as LucideDumbbell,
   FolderOpen as LucideFolderOpen,
   Mic as LucideMic,
-  Waypoints as LucideWaypoints,
+  ArrowRightLeft as LucideArrowRightLeft,
   Landmark as LucideLandmark,
   ChartPie as LucideChartPie,
 } from "lucide-react";
@@ -668,11 +668,13 @@ export default function App() {
       label: t("nav.finance"),
       items: [
         { id: "patrimoine", icon: LucideLandmark,  label: t("nav.patrimoine") },
-        /* Un réseau de branches, et non la tirelire d'avant : la page ne parle
-           pas d'épargne mais du CHEMIN de l'argent, et c'est un diagramme de
-           flux qu'on y trouve. La tirelire, elle, disait la même chose que le
-           poste « épargne » sans mener au même endroit. */
-        { id: "cashflow",   icon: LucideWaypoints, label: t("nav.cashflow") },
+        /* Deux flèches opposées, et non la tirelire d'avant : la page ne parle
+           pas d'épargne mais de ce qui ENTRE et de ce qui SORT sur la fenêtre
+           qu'on regarde. La tirelire disait la même chose que le poste
+           « épargne » sans mener au même endroit ; le réseau de branches qui l'a
+           remplacée un temps décrivait la FIGURE de la page (le Sankey) plutôt
+           que son propos, et ne se lisait plus à 18 px. */
+        { id: "cashflow",   icon: LucideArrowRightLeft, label: t("nav.cashflow") },
         { id: "budget",     icon: LucideChartPie,  label: t("nav.budget") },
         /* « Compte courant » (patrimoine-bank) et « Crédits » (
            patrimoine-liabilities) ne sont plus dans la navigation. Les deux pages

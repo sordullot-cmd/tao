@@ -45,6 +45,7 @@
 import React from "react";
 import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { DUO, DUO_TONES } from "@/lib/ui/duoPalette";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { fmt } from "@/lib/ui/format";
@@ -63,27 +64,22 @@ const DEFAULT_INCOME = 2000;
    catégories voisines doivent rester distinguables, ce qu'une palette recalculée
    par thème ne garantit pas.
 
-   Chacune reprend la TEINTE d'une couleur du site (bleu, ambre, cyan et violet
-   des tokens sémantiques, vert de l'accent de marque, rouge, teal des tags
-   « long », brun des tags « short », gris du texte secondaire) ; seule leur
-   clarté est ajustée, pour trois raisons mesurées :
+   Chacune reprend une teinte de la charte Duolingo (cf. lib/ui/duoPalette), et
+   les six premières — celles de `defaultItems`, donc celles qu'on voit sans
+   rien toucher — sont des BASES de la charte, sans retouche de clarté.
 
-   • rester lisible sur les DEUX fonds : la clarté OKLCH tient dans [0.48, 0.67],
-     l'intersection des bandes admises en thème clair et en thème sombre, et le
-     contraste reste ≥ 3:1 (seuil des éléments graphiques) sur les deux surfaces.
-     Trop clair, la couleur disparaît sur blanc ; trop sombre, elle s'éteint en
-     thème sombre — la fenêtre est étroite ;
-   • garder assez de CHROMA (≥ 0.1) pour ne pas « lire gris » ;
-   • séparer les VOISINES : la palette alterne une teinte sombre et une claire,
-     si bien que deux catégories côte à côte dans le graphique tranchent toujours
-     par la clarté, et pas seulement par la teinte. C'est ce qui les tient en
-     vision deutéranope, où rouge, vert et teal convergent (pire paire adjacente :
-     ΔE 8.6 en deutan, 18.7 en vision normale).
+   Ce que ce choix coûte, sciemment : la palette d'origine tenait sa clarté
+   OKLCH dans [0.48, 0.67], l'intersection des bandes admises en clair et en
+   sombre, avec un contraste ≥ 3:1 sur les deux surfaces. Les bases de la charte
+   sortent de cette fenêtre par le haut (Feather Green, Mask Green, Fox et Bee
+   sont sous 2,2:1 sur blanc) : elles portent bien un secteur d'anneau, moins
+   bien une pastille de légende. À reprendre si la lecture ne suit pas.
 
-   Ces valeurs ne sont pas estimées à l'œil : elles passent les six contrôles du
-   validateur de palette catégorielle (bande de clarté, plancher de chroma,
-   séparation CVD des paires adjacentes, plancher vision normale, contraste), en
-   clair ET en sombre. Toute retouche doit être repassée au validateur.
+   Ce qui est conservé : l'alternance clair/sombre entre voisines, pour que deux
+   catégories côte à côte tranchent par la clarté et pas seulement par la
+   teinte — c'est ce qui les tient en vision deutéranope. Les quatre derniers
+   slots, hors défauts, prennent des marches assombries de la charte pour ne pas
+   redoubler une base déjà posée.
 
    L'ordre compte : il est repris tel quel par `defaultItems`, et une catégorie
    ajoutée prend la suivante. Toute retouche doit donc conserver l'alternance
@@ -93,16 +89,16 @@ const DEFAULT_INCOME = 2000;
    gris au non-catégorisé. Il est donc volontairement sous le plancher de chroma
    et ne compte pas dans la palette catégorielle. */
 const PALETTE = [
-  "#2C72C3", // logement     — bleu du site, sombre
-  "#DF6C10", // alimentation — ambre, clair
-  "#0F8FAD", // transport    — cyan, sombre
-  "#9D7AEF", // abonnements  — violet, clair
-  "#B92E74", // loisirs      — magenta, sombre
-  "#3EA817", // épargne      — vert de l'accent de marque, clair
-  "#C83131", // shopping     — rouge, sombre
-  "#0E9A8A", // santé        — teal des tags « long », clair
-  "#96590E", // frais        — brun des tags « short », sombre
-  "#8B96A2", // autres       — gris neutre : le slot « non catégorisé »
+  DUO.humpback,             // logement     — bleu profond, sombre
+  DUO.fox,                  // alimentation — orange, clair
+  DUO.macaw,                // transport    — bleu ciel, clair
+  DUO.beetle,               // abonnements  — violet, clair
+  DUO_TONES.beetle.deep,    // loisirs      — violet profond, sombre
+  DUO.featherGreen,         // épargne      — vert de la marque, clair
+  DUO.cardinal,             // shopping     — rouge, clair
+  DUO.maskGreen,            // santé        — vert vif, clair
+  DUO_TONES.fox.deep,       // frais        — orange profond, sombre
+  DUO.wolf,                 // autres       — gris neutre : le slot « non catégorisé »
 ];
 
 /* Point de départ : la règle 50/30/20 adaptée. L'utilisateur ajuste ensuite —

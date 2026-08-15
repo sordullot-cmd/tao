@@ -24,6 +24,7 @@ import {
   Calendar, Heart, Activity, BookOpen, Target, TrendingUp, Briefcase, Code,
   Trophy, Flame,
 } from "lucide-react";
+import { DUO, DUO_TONES } from "@/lib/ui/duoPalette";
 
 // Clés de persistance de l'état Vie RPG (localStorage + Supabase).
 export const RPG_STORAGE_KEY = "tr4de_life_rpg";
@@ -100,10 +101,16 @@ export function CatIcon({ name, ...rest }) {
   return <Ic {...rest} />;
 }
 
-// Palette de couleurs proposée pour les catégories.
+// Palette de couleurs proposée pour les catégories. Les huit teintes de la
+// charte Duolingo (cf. lib/ui/duoPalette) viennent en premier, telles quelles :
+// ce sont celles qu'on choisit le plus souvent, et elles doivent se lire comme
+// la marque. Les quatre suivantes sont des marches assombries des mêmes
+// teintes — la charte n'en publie pas douze, et il vaut mieux une gamme
+// reconnaissable qu'une teinte inventée.
 export const CATEGORY_PALETTE = [
-  "#F97316", "#3B82F6", "#EC4899", "#16A34A", "#06B6D4", "#8B5CF6",
-  "#059669", "#EF4444", "#F59E0B", "#14B8A6", "#6366F1", "#64748B",
+  DUO.fox, DUO.macaw, DUO.beetle, DUO.featherGreen,
+  DUO.cardinal, DUO.humpback, DUO.bee, DUO.maskGreen,
+  DUO_TONES.beetle.deep, DUO_TONES.fox.deep, DUO_TONES.macaw.deep, DUO.eel,
 ];
 
 // Nombre d'objectifs de l'année. Trois, volontairement : c'est la contrainte
@@ -119,12 +126,12 @@ export const DEFAULT_CATEGORIES = [];
 // Modèles proposés dans l'emplacement vide : un point de départ cliquable
 // (nom + couleur + icône + intention), immédiatement modifiable ensuite.
 export const YEAR_GOAL_TEMPLATES = [
-  { label: "Forme physique", color: "#F97316", icon: "dumbbell",   identity: "Je prends soin de mon corps et je m'entraîne régulièrement.",   outcome: "" },
-  { label: "Trading",        color: "#F59E0B", icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
-  { label: "Finances",       color: "#059669", icon: "wallet",     identity: "Je gère mon argent avec sagesse et sérénité.",                  outcome: "" },
-  { label: "Savoir",         color: "#3B82F6", icon: "graduation", identity: "J'apprends quelque chose de nouveau chaque jour.",              outcome: "" },
-  { label: "Relations",      color: "#EC4899", icon: "users",      identity: "Je cultive des relations sincères et profondes.",               outcome: "" },
-  { label: "Sérénité",       color: "#14B8A6", icon: "heart",      identity: "Je cultive le calme, la gratitude et la présence.",             outcome: "" },
+  { label: "Forme physique", color: DUO.fox,          icon: "dumbbell",   identity: "Je prends soin de mon corps et je m'entraîne régulièrement.",   outcome: "" },
+  { label: "Trading",        color: DUO.bee,          icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
+  { label: "Finances",       color: DUO.featherGreen, icon: "wallet",     identity: "Je gère mon argent avec sagesse et sérénité.",                  outcome: "" },
+  { label: "Savoir",         color: DUO.macaw,        icon: "graduation", identity: "J'apprends quelque chose de nouveau chaque jour.",              outcome: "" },
+  { label: "Relations",      color: DUO.beetle,       icon: "users",      identity: "Je cultive des relations sincères et profondes.",               outcome: "" },
+  { label: "Sérénité",       color: DUO.humpback,     icon: "heart",      identity: "Je cultive le calme, la gratitude et la présence.",             outcome: "" },
 ];
 
 // Sélectionne les objectifs à CONSERVER lors de la migration depuis l'ancien

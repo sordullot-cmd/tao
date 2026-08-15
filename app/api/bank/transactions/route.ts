@@ -71,9 +71,17 @@ export async function GET(request: NextRequest) {
     /* Ce que la banque rend AUJOURD'HUI est le passé inaccessible de demain :
        chaque lecture alimente donc l'archive au passage. C'est ce qui fait que
        l'historique s'allonge avec le temps au lieu de reculer avec la fenêtre
-       DSP2 (cf. migration 034). */
-    await archiveTransactions(supabase, auth.user.id, uid, fresh);
-    const archived = await readArchivedTransactions(supabase, auth.user.id, uid, days);
+       DSP2 (cf. migration 034).
+
+       L'écriture et la relecture partent ENSEMBLE, et non l'une après l'autre :
+       relire après avoir écrit ne rapporte que les lignes qu'on vient de poser,
+       or elles sont déjà dans `fresh`, et `mergeTransactions` fait prévaloir le
+       frais sur l'archive. Le résultat est donc le même à un aller-retour de
+       base de données près — celui qu'on économise. */
+    const [, archived] = await Promise.all([
+      archiveTransactions(supabase, auth.user.id, uid, fresh),
+      readArchivedTransactions(supabase, auth.user.id, uid, days),
+    ]);
     const transactions = mergeTransactions(fresh, archived);
 
     return NextResponse.json({

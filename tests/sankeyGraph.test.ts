@@ -146,6 +146,73 @@ describe("Géométrie du diagramme de flux multi-niveaux", () => {
     expect(ys[ys.length - 1]).toBeLessThanOrEqual(OPTS.padTop + OPTS.height + 0.01);
   });
 
+  it("ne déplace pas le libellé d'une branche que rien ne serre", () => {
+    /* Trois sous-postes minces collés en bas de colonne ont besoin de place ; la
+       grosse branche du haut, elle, en a déjà. Écarter les trois ne doit pas la
+       faire bouger d'un pixel — c'est ce qui faisait « remonter » toute la
+       colonne, et un nom qui remonte désigne la branche du dessus. */
+    const { nodes } = sankeyGraphLayout(
+      [node("hub"), node("big"), node("s0"), node("s1"), node("s2")],
+      [
+        link("hub", "big", 900),
+        link("hub", "s0", 4), link("hub", "s1", 3), link("hub", "s2", 2),
+      ],
+      { ...OPTS, labelGap: 34 },
+    );
+    const big = nodes.find((n) => n.id === "big")!;
+    expect(big.labelY).toBeCloseTo(big.centreY, 6);
+  });
+
+  it("partage l'écart de part et d'autre d'une grappe, sans sens privilégié", () => {
+    /* Deux libellés qui se recouvrent s'écartent chacun d'une demi-hauteur : le
+       milieu de la paire ne bouge pas. Pousser les deux vers le bas (ou les deux
+       vers le haut) doublerait la dérive du second pour rien. */
+    const { nodes } = sankeyGraphLayout(
+      [node("hub"), node("A"), node("B"), node("a1"), node("b1"), node("b2")],
+      [
+        link("hub", "A", 700), link("hub", "B", 300),
+        link("A", "a1", 700),
+        link("B", "b1", 6), link("B", "b2", 6),
+      ],
+      { ...OPTS, labelGap: 34 },
+    );
+    const pair = nodes.filter((n) => n.id === "b1" || n.id === "b2");
+    const moved = pair.map((n) => n.labelY - n.centreY);
+
+    expect(moved[0] + moved[1]).toBeCloseTo(0, 1);
+    expect(Math.abs(moved[0])).toBeGreaterThan(1); // les deux ont bien bougé
+    expect(Math.min(...moved)).toBeLessThan(0); // l'un monte, l'autre descend
+    expect(Math.max(...moved)).toBeGreaterThan(0);
+  });
+
+  it("resserre la colonne trop peuplée pour que les noms restent en face", () => {
+    /* Quatorze branches dont douze minces : à deux lignes par libellé (34 px),
+       aucun arrangement ne les garde en face de leur ruban. La colonne repasse
+       alors au pas d'une seule ligne, et le dit par `labelDense`. */
+    const many = Array.from({ length: 14 }, (_, i) => node(`t${i}`));
+    const { nodes } = sankeyGraphLayout(
+      [node("hub"), ...many],
+      many.map((n, i) => link("hub", n.id, i < 2 ? 400 : 6)),
+      { ...OPTS, height: 546, labelGap: 34, labelGapTight: 20 },
+    );
+    const leaves = nodes.filter((n) => n.id !== "hub");
+
+    expect(leaves.every((n) => n.labelDense)).toBe(true);
+    // Le hub, seul dans sa colonne, n'avait aucune raison de se resserrer.
+    expect(nodes.find((n) => n.id === "hub")!.labelDense).toBe(false);
+
+    for (const n of leaves) {
+      expect(Math.abs(n.labelY - n.centreY)).toBeLessThanOrEqual(20);
+    }
+  });
+
+  it("garde les deux lignes quand la colonne a la place", () => {
+    const { nodes } = sankeyGraphLayout(NODES, LINKS, {
+      ...OPTS, labelGap: 34, labelGapTight: 20,
+    });
+    expect(nodes.some((n) => n.labelDense)).toBe(false);
+  });
+
   it("range les libellés dans les gouttières, et centre ceux du milieu", () => {
     /* Les noms sortent du dessin : à gauche pour la colonne d'où part le flux, à
        droite pour celle où il aboutit. Les colonnes du milieu n'ont pas de

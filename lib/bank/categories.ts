@@ -35,6 +35,7 @@
  */
 
 import { findMerchant, type Merchant } from "@/lib/bank/merchants";
+import { DUO, DUO_TONES } from "@/lib/ui/duoPalette";
 import type { BankTransaction } from "@/lib/bank/transactions";
 
 export type SpendingCategory =
@@ -84,45 +85,53 @@ export type SpendingSubcategory = string;
  * porter la même couleur des deux côtés, sinon les deux graphiques se
  * contredisent à l'œil.
  *
+ * Les gammes viennent de la charte Duolingo (cf. lib/ui/duoPalette). Elle ne
+ * publie que huit teintes chromatiques pour vingt-neuf postes : chaque famille
+ * en occupe une, et ses membres s'y séparent par la clarté. Deux conséquences
+ * assumées — le toit et la route sont tous deux bleus (bleu royal contre bleu
+ * ciel), là où l'original opposait bleu et cyan ; et les bases claires de la
+ * charte descendent sous 3:1 sur blanc, ce qui se voit sur les petites parts
+ * plus que sur les grandes.
+ *
  * « Autres » garde le gris, réservé par convention au non-catégorisé : ce n'est
  * pas un poste de dépense, c'est l'aveu que la règle n'a pas tranché.
  */
 export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
-  // Le toit — gamme bleue
-  { id: "housing", color: "#2C72C3" },       // bleu du site, sombre
-  { id: "utilities", color: "#6FA8DC" },     // bleu clair
-  { id: "telecom", color: "#4453B8" },       // indigo, sombre
-  { id: "insurance", color: "#949CE0" },     // indigo clair
-  // La table — gamme ambrée
-  { id: "food", color: "#DF6C10" },          // ambre de la page Budget
-  // La route — gamme cyan
-  { id: "transport", color: "#0F8FAD" },     // cyan de la page Budget
-  { id: "fuel", color: "#63BCD1" },          // cyan clair
-  { id: "car", color: "#2E7D6E" },           // vert-bleu sombre
-  { id: "travel", color: "#E0A21C" },        // ambre doré — le voyage n'est pas un trajet
-  // Les achats — gamme rouge
-  { id: "shopping", color: "#C83131" },      // rouge, sombre
-  { id: "tech", color: "#E8776F" },          // rouge clair
-  { id: "beauty", color: "#D94F9A" },        // rose
-  // Le corps — gammes verte et ocre
-  { id: "health", color: "#0E9A8A" },        // teal, clair
-  { id: "sport", color: "#7CB342" },         // vert clair
-  { id: "pets", color: "#A9791C" },          // ocre
-  // Le temps libre — gamme violette
-  { id: "leisure", color: "#B92E74" },       // magenta de la page Budget
-  { id: "subscriptions", color: "#9D7AEF" }, // violet de la page Budget
-  { id: "education", color: "#6A4FBF" },     // violet sombre
-  { id: "kids", color: "#C79BE3" },          // mauve clair
+  // Le toit — gamme bleu royal (Humpback)
+  { id: "housing", color: DUO.humpback },              // bleu de la page Budget
+  { id: "utilities", color: DUO_TONES.humpback.light }, // bleu clair
+  { id: "telecom", color: DUO_TONES.humpback.deep },   // bleu profond, sombre
+  { id: "insurance", color: DUO_TONES.humpback.pale }, // bleu très clair
+  // La table — gamme orange (Fox)
+  { id: "food", color: DUO.fox },                      // orange de la page Budget
+  // La route — gamme bleu ciel (Macaw)
+  { id: "transport", color: DUO.macaw },               // bleu ciel de la page Budget
+  { id: "fuel", color: DUO_TONES.macaw.light },        // bleu ciel clair
+  { id: "car", color: DUO_TONES.macaw.deep },          // bleu ciel profond, sombre
+  { id: "travel", color: DUO.bee },                    // or — le voyage n'est pas un trajet
+  // Les achats — gamme rouge (Cardinal)
+  { id: "shopping", color: DUO.cardinal },             // rouge de la page Budget
+  { id: "tech", color: DUO_TONES.cardinal.light },     // rouge clair
+  { id: "beauty", color: DUO_TONES.cardinal.deep },    // rouge profond, sombre
+  // Le corps — gammes verte et or
+  { id: "health", color: DUO.maskGreen },              // vert vif de la page Budget
+  { id: "sport", color: DUO_TONES.featherGreen.deep }, // vert profond
+  { id: "pets", color: DUO_TONES.bee.deep },           // ocre
+  // Le temps libre — gamme violette (Beetle)
+  { id: "leisure", color: DUO_TONES.beetle.deep },     // violet profond de la page Budget
+  { id: "subscriptions", color: DUO.beetle },          // violet de la page Budget
+  { id: "education", color: DUO_TONES.beetle.dark },   // violet sombre
+  { id: "kids", color: DUO_TONES.beetle.light },       // mauve clair
   // L'argent — gammes verte et neutres
-  { id: "trading", color: "#147D64" },       // vert profond : le poste propre à tr4de
-  { id: "savings", color: "#3EA817" },       // vert de l'accent de marque
-  { id: "credit", color: "#8C3A56" },        // bordeaux
-  { id: "taxes", color: "#96590E" },         // brun, sombre
-  { id: "fees", color: "#7B6A5D" },          // taupe
-  { id: "cash", color: "#5F7D95" },          // bleu ardoise
-  { id: "transfer", color: "#7C8C1E" },      // olive
-  { id: "income", color: "#4CAF50" },        // vert — jamais dans l'anneau des dépenses
-  { id: "other", color: "#8B96A2" },         // gris neutre : le non-catégorisé
+  { id: "trading", color: DUO_TONES.featherGreen.dark }, // vert sombre : le poste propre à tr4de
+  { id: "savings", color: DUO.featherGreen },          // vert de la page Budget
+  { id: "credit", color: DUO_TONES.cardinal.dark },    // bordeaux
+  { id: "taxes", color: DUO_TONES.fox.deep },          // orange profond de la page Budget
+  { id: "fees", color: DUO.eel },                      // gris très sombre
+  { id: "cash", color: DUO.hare },                     // gris clair
+  { id: "transfer", color: DUO_TONES.maskGreen.dark }, // olive
+  { id: "income", color: DUO_TONES.maskGreen.deep },   // vert — jamais dans l'anneau des dépenses
+  { id: "other", color: DUO.wolf },                    // gris neutre : le non-catégorisé
 ];
 
 /**
@@ -265,13 +274,13 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
    seulement par la teinte. Le « divers » garde un vert grisé — c'est un aveu,
    pas une source. */
 const INCOME_COLORS: Record<string, string> = {
-  "income.salary": "#2E9E4F",   // vert franc, sombre — la source principale
-  "income.benefits": "#8CC63F", // vert-jaune, clair
-  "income.pension": "#1F7A5C",  // vert profond, sombre
-  "income.refund": "#5FC2A6",   // menthe, clair
-  "income.interest": "#0E7C86", // teal, sombre
-  "income.sale": "#A9CE4A",     // lime, clair
-  income: "#86A98F",            // vert grisé : le crédit qu'on n'a pas su nommer
+  "income.salary": "#6BB014",   // vert-jaune profond, sombre — la source principale
+  "income.benefits": "#BBEE7A", // vert-jaune, clair
+  "income.pension": "#235202",  // vert très profond, sombre
+  "income.refund": "#A3E84C",   // lime, clair
+  "income.interest": "#609E12", // olive, sombre
+  "income.sale": "#C6EEA9",     // vert très clair
+  income: "#6B9948",            // vert grisé : le crédit qu'on n'a pas su nommer
 };
 
 /** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */

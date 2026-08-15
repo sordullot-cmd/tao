@@ -33,6 +33,17 @@
  *   net. Les colonnes du milieu n'ont pas de marge où se ranger : leur libellé
  *   se centre sur la barre, qui est étroite et le porte bien.
  *
+ * • UN NOM RESTE EN FACE DE SA BRANCHE, et c'est ce qui commande la mise en
+ *   forme du libellé. Deux lignes demandent 34 px de hauteur ; une colonne d'une
+ *   douzaine de branches dont huit minces, serrées les unes contre les autres,
+ *   n'en a pas autant à donner à chacune — les noms se décalaient alors tous
+ *   vers le haut et chacun désignait la branche du dessus. Une telle colonne
+ *   passe donc à UNE SEULE LIGNE, le montant à la suite du nom : 20 px suffisent,
+ *   et chaque nom retrouve la hauteur de son ruban. Le calcul décide (cf.
+ *   `labelDense` dans `lib/ui/sankeyGraph`), colonne par colonne, et les
+ *   gouttières s'élargissent quand ce régime s'installe — un nom et un montant
+ *   sur la même ligne demandent plus de largeur que l'un sous l'autre.
+ *
  * • EN HTML, posés par-dessus le SVG aux coordonnées du dessin. Un `<text>` SVG
  *   ne sait pas couper proprement un nom trop long, ne suit pas la taille de
  *   police du système et rend mal les chiffres alignés.
@@ -85,6 +96,15 @@ const RIBBON = 0.92;
  *  de poste ordinaire ; au-delà, l'ellipse du navigateur s'en charge. */
 const GUTTER = 132;
 
+/** La même, quand une colonne est passée à la ligne unique : le nom et le
+ *  montant s'y suivent au lieu de s'empiler, et il leur faut la largeur des
+ *  deux. Ce que la gouttière prend, le dessin le perd — d'où le supplément
+ *  mesuré, juste de quoi ne pas rogner un nom de poste courant. */
+const GUTTER_DENSE = 168;
+
+/** Écart entre le nom et le montant, sur une ligne unique. */
+const DENSE_GAP = 8;
+
 export default function SankeyGraph({
   nodes = [],
   links = [],
@@ -129,8 +149,13 @@ export default function SankeyGraph({
 
   const height = Math.min(Math.max(rows * ROW, H_MIN), H_MAX);
 
-  const layout = React.useMemo(
-    () => sankeyGraphLayout(nodes, links, {
+  /* Deux passes quand une colonne se resserre : la largeur des gouttières
+     dépend du régime de libellé, et le régime ne se connaît qu'une fois la
+     colonne calculée. Le calcul ne coûte rien et la seconde passe rend le MÊME
+     régime — la gouttière ne joue que sur les abscisses, jamais sur
+     l'empilement —, il n'y a donc pas de va-et-vient possible. */
+  const { layout, gutterW } = React.useMemo(() => {
+    const opts = (gutter) => ({
       width: width || 960,
       height,
       padTop: PAD_TOP,
@@ -143,12 +168,23 @@ export default function SankeyGraph({
       minBand: compact ? 2 : 3,
       labelPad: 10,
       labelGap: compact ? 0 : 34,
+      /* Le pas serré : une ligne de 16 px et 4 px d'air. En dessous, deux noms
+         voisins se touchent et on ne gagne plus rien à les rapprocher. */
+      labelGapTight: compact ? 0 : 20,
       // Pas de gouttières en régime compact : sans libellés, elles ne feraient
       // que rétrécir le dessin.
-      gutter: compact ? 0 : GUTTER,
-    }),
-    [nodes, links, width, height, compact],
-  );
+      gutter,
+    });
+    const first = sankeyGraphLayout(nodes, links, opts(compact ? 0 : GUTTER));
+    const dense = !compact && first.nodes.some((n) => n.labelDense && n.labelSide !== "centre");
+    if (!dense) return { layout: first, gutterW: GUTTER };
+    /* Le supplément se prend sur le dessin : juste au-dessus du seuil compact,
+       deux gouttières pleines lui laisseraient à peine la moitié de la carte.
+       On le borne donc à une part de la largeur — le nom s'y coupe un peu plus
+       tôt, mais la figure reste une figure. */
+    const gutterW = Math.min(GUTTER_DENSE, Math.max(GUTTER, (width || 960) * 0.22));
+    return { layout: sankeyGraphLayout(nodes, links, opts(gutterW)), gutterW };
+  }, [nodes, links, width, height, compact]);
 
   const labels = React.useMemo(
     () => new Map(nodes.map((n) => [n.id, n.label])),
@@ -253,11 +289,17 @@ export default function SankeyGraph({
           étroite, et c'est le nom qu'on lit en premier. Le montant, lui, s'aligne
           d'une branche à l'autre en chiffres tabulaires.
 
+          Une colonne trop peuplée pour ça les met sur UNE ligne (cf. en-tête) :
+          le nom d'abord, le montant à sa suite. C'est le nom qui cède la largeur
+          en premier — le montant ne se coupe jamais, un montant tronqué ne veut
+          plus rien dire.
+
           Ils ne réagissent plus au survol (cf. en-tête) : ils portent déjà tout
           ce qu'un survol aurait montré. */}
       {!compact && layout.nodes.map((n) => {
         const centre = n.labelSide === "centre";
         const before = n.labelSide === "before";
+        const dense = n.labelDense;
         return (
           <div
             key={`label-${n.id}`}
@@ -271,7 +313,13 @@ export default function SankeyGraph({
                 : centre
                   ? "translate(-50%, -50%)"
                   : "translateY(-50%)",
-              maxWidth: GUTTER - 8,
+              maxWidth: gutterW - 8,
+              ...(dense ? {
+                display: "flex",
+                alignItems: "baseline",
+                gap: DENSE_GAP,
+                justifyContent: before ? "flex-end" : centre ? "center" : "flex-start",
+              } : null),
               textAlign: before ? "right" : centre ? "center" : "left",
               /* Le libellé du milieu se pose SUR sa barre : il lui faut un fond,
                  sinon le texte se lit par-dessus le nœud et les rubans. Ceux des
@@ -291,6 +339,8 @@ export default function SankeyGraph({
             <div style={{
               fontSize: 12, lineHeight: "16px", fontWeight: centre ? 600 : 500, color: T.text,
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              // Sur une ligne, c'est le nom qui rend la largeur au montant.
+              ...(dense ? { minWidth: 0, flexShrink: 1 } : null),
             }}>
               {labelOf(n.id)}
             </div>
@@ -298,8 +348,9 @@ export default function SankeyGraph({
                 libellé forment un pavé qu'on lit comme un seul bloc, et l'œil
                 ne sait plus où finit une branche et où commence sa voisine. */}
             <div style={{
-              fontSize: 12, lineHeight: "16px", marginTop: 2, color: T.textSub,
+              fontSize: 12, lineHeight: "16px", color: T.textSub,
               fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+              ...(dense ? { flexShrink: 0 } : { marginTop: 2 }),
             }}>
               {formatValue(n.value)}
             </div>

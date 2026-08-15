@@ -14,6 +14,7 @@
  */
 
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { DUO, duoChip } from "@/lib/ui/duoPalette";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -108,9 +109,19 @@ export interface PatrimoineStore {
    vignettes d'instruments de `da.jsx` : elles ne passent pas par les tokens `T`
    et ne bougent pas en thème sombre — deux classes voisines doivent rester
    distinguables, ce qu'une palette recalculée par thème ne garantit pas.
-   `color` contraste ≥ 3:1 sur blanc ; `chip` est un couple fond pastel + encre
-   foncée, autonome, donc lisible sur les deux thèmes. Reprises telles quelles de
-   l'app d'origine, où ces contrastes avaient été validés.
+
+   Les teintes viennent désormais de la charte Duolingo (cf. lib/ui/duoPalette),
+   reprises telles quelles : les huit teintes chromatiques couvrent exactement
+   les sept classes plus le gris du fourre-tout, chacune n'étant utilisée qu'une
+   fois. `chip` reste un couple fond pastel + encre foncée de la MÊME teinte
+   (≥ 4,5:1), autonome, donc lisible sur les deux thèmes.
+
+   ATTENTION : `color` ne tient plus le seuil de 3:1 sur blanc que respectait la
+   palette d'origine — les bases claires de la charte (Bee 1,55:1, Mask Green
+   1,62:1, Feather Green 2,09:1, Fox 2,18:1) sont en dessous. C'est assumé pour
+   les APLATS (secteurs de la répartition, cartes), où la surface compense ; ce
+   sont les petites pastilles de légende qui en pâtissent. À reprendre si la
+   lecture ne suit pas.
    ------------------------------------------------------------------------ */
 
 export type AssetClassSlug =
@@ -136,57 +147,56 @@ export const ASSET_CLASSES: AssetClass[] = [
     slug: "investissements",
     labelKey: "patrimoine.class.investments",
     types: ["pea", "securities", "life_insurance"],
-    color: "#0060a1",
-    chip: { bg: "#d8efff", text: "#0060a1" },
+    color: DUO.macaw,
+    chip: duoChip("macaw"),
   },
   {
     slug: "crypto",
     labelKey: "patrimoine.class.crypto",
     types: ["crypto"],
-    color: "#9f5c04",
-    chip: { bg: "#fff9d8", text: "#9f5c04" },
+    color: DUO.bee,
+    chip: duoChip("bee"),
   },
   {
     slug: "immobilier",
     labelKey: "patrimoine.class.realEstate",
     types: ["real_estate"],
-    color: "#046c39",
-    chip: { bg: "#dcf5e5", text: "#046c39" },
+    color: DUO.featherGreen,
+    chip: duoChip("featherGreen"),
   },
   {
     slug: "livrets",
     labelKey: "patrimoine.class.savings",
     types: ["savings"],
-    color: "#5b4bc4",
-    chip: { bg: "#e9e4ff", text: "#5b4bc4" },
+    color: DUO.beetle,
+    chip: duoChip("beetle"),
   },
-  /* Comptes courants : violine profond. C'était un framboise vif sur rose
-     bonbon (#9b0058 / #ffdffa) — la pastille la plus fréquente de la liste, et
-     la plus criarde de la palette. Le violine garde ce que le framboise avait
-     d'utile (un secteur de teinte que personne d'autre n'occupe : 36 d'écart
-     ΔE avec la plus proche des huit autres, là où la palette en tolère 24) et
-     tient mieux sur fond sombre, sans le rose. */
+  /* Comptes courants : l'orange de la charte. C'était un violine profond, seul
+     de son secteur de teinte — la charte Duolingo n'a pas de magenta, et
+     l'orange est la teinte restante la plus éloignée des six autres classes
+     (le jaune de la crypto en est le voisin le plus proche, et s'en sépare
+     encore nettement en clarté). */
   {
     slug: "comptes",
     labelKey: "patrimoine.class.checking",
     types: ["checking"],
-    color: "#8a2f80",
-    chip: { bg: "#f6e4f5", text: "#8a2f80" },
+    color: DUO.fox,
+    chip: duoChip("fox"),
   },
   {
     slug: "autres",
     labelKey: "patrimoine.class.other",
     types: ["other"],
-    color: "#4b5157",
-    chip: { bg: "#eceef0", text: "#4b5157" },
+    color: DUO.wolf,
+    chip: duoChip("wolf"),
   },
   // Les passifs ne sont pas une part de la répartition (montants négatifs).
   {
     slug: "passifs",
     labelKey: "patrimoine.class.liabilities",
     types: ["loan"],
-    color: "#9f2f22",
-    chip: { bg: "#ffe3e0", text: "#9f2f22" },
+    color: DUO.cardinal,
+    chip: duoChip("cardinal"),
   },
 ];
 
@@ -198,10 +208,12 @@ export const ASSET_CLASSES: AssetClass[] = [
 
    Chaque type seul dans sa classe garde la couleur de celle-ci : la pastille
    reste accordée à la puce de légende du même actif. Seuls les types qui
-   partageaient une teinte en reçoivent une propre, choisie dans un secteur de
-   teinte libre pour ne pas se confondre avec les six autres. Mêmes contraintes
-   que les classes ci-dessus : couple pastel autonome, hors tokens `T`, lisible
-   sur les deux thèmes, contraste texte/fond ≥ 4,5:1.
+   partageaient une teinte en reçoivent une propre, prise dans les deux teintes
+   de la charte que les classes n'utilisaient pas — Humpback et Mask Green.
+   Les huit teintes chromatiques de Duolingo sont ainsi employées une fois
+   chacune, sans doublon. Mêmes contraintes que les classes ci-dessus : couple
+   pastel autonome, hors tokens `T`, lisible sur les deux thèmes, contraste
+   texte/fond ≥ 4,5:1.
    ------------------------------------------------------------------------ */
 
 export interface AssetTypeStyle {
@@ -210,20 +222,18 @@ export interface AssetTypeStyle {
 }
 
 export const ASSET_TYPE_STYLES: Record<AssetType, AssetTypeStyle> = {
-  // Classe « investissements » — bleu au PEA, les deux autres se démarquent.
-  pea: { color: "#0060a1", chip: { bg: "#d8efff", text: "#0060a1" } },
-  securities: { color: "#00696d", chip: { bg: "#d2f0f1", text: "#00696d" } },
-  // Pastel de l'assurance-vie adouci (#e6f3c4 → #eef6dd) : c'était le fond le
-  // plus saturé de la palette après le rose des comptes. L'encre y gagne même
-  // un peu de contraste (5,5:1 contre 5,25:1).
-  life_insurance: { color: "#4e6b00", chip: { bg: "#eef6dd", text: "#4e6b00" } },
+  // Classe « investissements » — le bleu ciel au PEA, les deux autres se
+  // démarquent sur les deux teintes laissées libres par les classes.
+  pea: { color: DUO.macaw, chip: duoChip("macaw") },
+  securities: { color: DUO.humpback, chip: duoChip("humpback") },
+  life_insurance: { color: DUO.maskGreen, chip: duoChip("maskGreen") },
   // Types seuls dans leur classe : couleur de la classe, inchangée.
-  crypto: { color: "#9f5c04", chip: { bg: "#fff9d8", text: "#9f5c04" } },
-  real_estate: { color: "#046c39", chip: { bg: "#dcf5e5", text: "#046c39" } },
-  savings: { color: "#5b4bc4", chip: { bg: "#e9e4ff", text: "#5b4bc4" } },
-  checking: { color: "#8a2f80", chip: { bg: "#f6e4f5", text: "#8a2f80" } },
-  loan: { color: "#9f2f22", chip: { bg: "#ffe3e0", text: "#9f2f22" } },
-  other: { color: "#4b5157", chip: { bg: "#eceef0", text: "#4b5157" } },
+  crypto: { color: DUO.bee, chip: duoChip("bee") },
+  real_estate: { color: DUO.featherGreen, chip: duoChip("featherGreen") },
+  savings: { color: DUO.beetle, chip: duoChip("beetle") },
+  checking: { color: DUO.fox, chip: duoChip("fox") },
+  loan: { color: DUO.cardinal, chip: duoChip("cardinal") },
+  other: { color: DUO.wolf, chip: duoChip("wolf") },
 };
 
 /** Teinte d'un type. Repli sur la classe — un type inconnu (donnée plus
