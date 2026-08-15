@@ -68,7 +68,11 @@ import {
 import {
   RPG_STORAGE_KEY as STORAGE_KEY, RPG_CLOUD_KEY as CLOUD_KEY,
   CATEGORY_ICON_KEYS as ICON_KEYS, CatIcon,
-  CATEGORY_PALETTE as PALETTE, DEFAULT_CATEGORIES, habitCategoryIds,
+  /* Sans alias : `PALETTE` tout court désigne la palette de MARQUE dans tout le
+     reste du code (`lib/ui/palette`), que ce fichier importe aussi plus bas. Le
+     raccourci d'ici masquait l'une par l'autre — deux choses différentes, une
+     liste de teintes pour les catégories contre un jeu de couleurs nommées. */
+  CATEGORY_PALETTE, DEFAULT_CATEGORIES, habitCategoryIds,
   TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY, TASK_XP,
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
   DISCIPLINE_RULE_XP, resolveTradingCatId,
@@ -751,7 +755,7 @@ export default function LifeRpgPage() {
     if (isFull) return;
     setCategoryModal({
       id: `cat_${Date.now()}`, isNew: true,
-      label: tpl?.label || "", color: tpl?.color || PALETTE[0], icon: tpl?.icon || "target",
+      label: tpl?.label || "", color: tpl?.color || CATEGORY_PALETTE[0], icon: tpl?.icon || "target",
       outcome: tpl?.outcome || "", deadline: yearDeadline(YEAR), year: YEAR,
       identity: tpl?.identity || "", roleModel: "", roleModelWhy: "",
     });
@@ -1861,7 +1865,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
           <div>
             <div style={objLbl}>Couleur</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {PALETTE.map(c => (
+              {CATEGORY_PALETTE.map(c => (
                 <button key={c} onClick={() => setForm({ ...form, color: c })} title={c}
                   style={{ width: 26, height: 26, borderRadius: "50%", background: c, border: form.color === c ? `2px solid ${T.text}` : `2px solid transparent`, cursor: "pointer", boxShadow: `0 0 0 1px ${T.border}` }} />
               ))}
