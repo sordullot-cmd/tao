@@ -87,7 +87,7 @@ import {
   Dumbbell as LucideDumbbell,
   FolderOpen as LucideFolderOpen,
   Mic as LucideMic,
-  PiggyBank as LucidePiggyBank,
+  Waypoints as LucideWaypoints,
   Landmark as LucideLandmark,
   ChartPie as LucideChartPie,
 } from "lucide-react";
@@ -668,7 +668,11 @@ export default function App() {
       label: t("nav.finance"),
       items: [
         { id: "patrimoine", icon: LucideLandmark,  label: t("nav.patrimoine") },
-        { id: "cashflow",   icon: LucidePiggyBank, label: t("nav.cashflow") },
+        /* Un réseau de branches, et non la tirelire d'avant : la page ne parle
+           pas d'épargne mais du CHEMIN de l'argent, et c'est un diagramme de
+           flux qu'on y trouve. La tirelire, elle, disait la même chose que le
+           poste « épargne » sans mener au même endroit. */
+        { id: "cashflow",   icon: LucideWaypoints, label: t("nav.cashflow") },
         { id: "budget",     icon: LucideChartPie,  label: t("nav.budget") },
         /* « Compte courant » (patrimoine-bank) et « Crédits » (
            patrimoine-liabilities) ne sont plus dans la navigation. Les deux pages

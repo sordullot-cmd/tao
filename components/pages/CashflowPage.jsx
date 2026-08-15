@@ -51,7 +51,7 @@
  */
 
 import React from "react";
-import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, Landmark, PiggyBank } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChartPie, ChevronDown, ChevronRight, ChevronUp, Landmark } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, TH, PERIODS } from "@/components/ui/da";
@@ -546,7 +546,9 @@ export default function CashflowPage({ setPage }) {
             cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          <PiggyBank size={15} strokeWidth={1.75} /> {t("cashflow.openBudget")}
+          {/* L'icône du BUDGET, celle de son entrée de navigation : un bouton
+              qui mène ailleurs doit porter le signe de là où il mène. */}
+          <ChartPie size={15} strokeWidth={1.75} /> {t("cashflow.openBudget")}
         </button>
       </div>
     </div>
