@@ -71,7 +71,8 @@
       "Bash(grep -n \"filled\\\\[hoverIdx\\\\]?\\\\\\\\.value.*>= 0\\\\|s.filled\\\\[hoverIdx\\\\]\" components/pages/AccountDetailPage.jsx)",
       "Bash(grep -E \"\\\\.\\(js|jsx|ts|tsx\\)$\")",
       "Bash(rm components/pages/SpendingPage.jsx)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "PowerShell(git *)"
     ]
   }
 }
