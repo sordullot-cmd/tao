@@ -13,8 +13,7 @@ import {
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import {
-  AreaDotsDefs, areaDotsFill,
-  CARD, SectionTitle, HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow,
+  CARD, SectionTitle, HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow, PeriodPills,
 } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 
@@ -213,6 +212,27 @@ const computeSpeed = (distance, time) => {
   return Math.round((d / (t / 60)) * 10) / 10;
 };
 
+/* ─── Métriques de progression ────────────────────────────────────────
+   Trois façons de mesurer un exercice, dans l'ordre de préférence quand
+   plusieurs sont disponibles : la vitesse pour le cardio, la charge dès qu'on
+   lest, les répétitions au poids du corps (tractions, pompes, dips…) où il n'y
+   a justement pas de charge à saisir. */
+const METRIC_ORDER = ["speed", "weight", "reps"];
+const METRIC_UNIT = { speed: "km/h", weight: "kg", reps: "reps" };
+const METRIC_LABEL = { speed: "km/h", weight: "kg", reps: "Reps" };
+
+/** Valeur d'une métrique en affichage : les répétitions et les charges sont des
+ *  entiers, la vitesse garde sa décimale (virgule française). */
+const fmtMetricValue = (v, metric) =>
+  metric === "speed" ? (Math.round(v * 10) / 10).toFixed(1).replace(".", ",") : Math.round(v);
+
+/** Première métrique de `METRIC_ORDER` présente dans `available`, restreinte
+ *  aux `allowed` quand la liste est fournie (les records ignorent la vitesse). */
+function pickMetric(available, allowed = METRIC_ORDER) {
+  if (!available) return null;
+  return METRIC_ORDER.find(m => allowed.includes(m) && available.has(m)) ?? null;
+}
+
 /* ─── Page ────────────────────────────────────────────────────────── */
 
 export default function SportPage() {
@@ -247,6 +267,8 @@ export default function SportPage() {
   });
   const [form, setForm] = useState(emptyForm());
   const [chartExerciseName, setChartExerciseName] = useState("");
+  // Métrique choisie à la main dans le graphique (null = celle de l'exercice).
+  const [chartMetricChoice, setChartMetricChoice] = useState(null);
 
   const openCreate = () => { setForm(emptyForm()); setEditingId(null); setShowForm(true); };
   const openEdit = (s) => { setForm({ ...s }); setEditingId(s.id); setShowForm(true); };
@@ -358,19 +380,62 @@ export default function SportPage() {
     return { total, sessionsThisWeek, streak, volumeWeek };
   }, [sessions]);
 
-  /* ─── Records personnels ─────────────────────────────────────── */
-  const prs = useMemo(() => {
-    const map = new Map(); // exerciseName → { weight, reps, date }
+  /* ─── Métriques suivies par exercice ─────────────────────────────
+     Un exercice se suit par ce qu'on y a saisi, sans réglage à faire :
+       • vitesse (km/h) pour le cardio,
+       • charge (kg) dès qu'une série a été lestée,
+       • répétitions dès qu'une série n'a QUE des reps — tractions, pompes,
+         dips… : au poids du corps, il n'y a pas de charge à noter, et c'est le
+         nombre de répétitions qui mesure la progression.
+     Un même exercice peut porter les deux dernières (tractions lestées ou non) :
+     `metricsByExercise` liste alors tout ce qui est disponible, et le graphique
+     propose de basculer. */
+  const metricsByExercise = useMemo(() => {
+    const map = new Map(); // exerciseName → Set<"speed" | "weight" | "reps">
     for (const s of (sessions || [])) {
       for (const ex of (s.exercises || [])) {
         const name = ex.name?.trim();
         if (!name) continue;
+        const isCardio = s.discipline === "cardio" || ex.category === "cardio";
+        let found = map.get(name);
+        if (!found) map.set(name, (found = new Set()));
         for (const set of (ex.sets || [])) {
-          if (set.weight && set.reps) {
-            const score = set.weight; // PR par charge max
-            const cur = map.get(name);
-            if (!cur || set.weight > cur.weight || (set.weight === cur.weight && set.reps > cur.reps)) {
-              map.set(name, { weight: set.weight, reps: set.reps, date: s.date });
+          const speed = set.speed != null ? set.speed : computeSpeed(set.distance, set.time);
+          if (isCardio && speed) found.add("speed");
+          else if (set.weight) found.add("weight");
+          else if (set.reps) found.add("reps");
+        }
+      }
+    }
+    return map;
+  }, [sessions]);
+
+  /* ─── Records personnels ─────────────────────────────────────── */
+  const prs = useMemo(() => {
+    const map = new Map(); // exerciseName → { metric, value, reps, date }
+    for (const s of (sessions || [])) {
+      for (const ex of (s.exercises || [])) {
+        const name = ex.name?.trim();
+        if (!name) continue;
+        // Le record d'un exercice se mesure dans SA métrique : charge max s'il
+        // est lesté, sinon répétitions max au poids du corps. Le cardio garde
+        // sa place dans le graphique mais pas ici — une vitesse ne se compare
+        // pas à une charge dans une même liste.
+        const metric = pickMetric(metricsByExercise.get(name), ["weight", "reps"]);
+        if (!metric) continue;
+        for (const set of (ex.sets || [])) {
+          const cur = map.get(name);
+          if (metric === "weight") {
+            if (!set.weight) continue;
+            if (!cur || set.weight > cur.value || (set.weight === cur.value && (set.reps || 0) > (cur.reps || 0))) {
+              map.set(name, { metric, value: set.weight, reps: set.reps || null, date: s.date });
+            }
+          } else {
+            // Séries au poids du corps uniquement : une série lestée légère ne
+            // doit pas venir gonfler le record de répétitions.
+            if (set.weight || !set.reps) continue;
+            if (!cur || set.reps > cur.value) {
+              map.set(name, { metric, value: set.reps, reps: null, date: s.date });
             }
           }
         }
@@ -378,9 +443,11 @@ export default function SportPage() {
     }
     return Array.from(map.entries())
       .map(([name, pr]) => ({ name, ...pr }))
-      .sort((a, b) => b.weight - a.weight)
+      // Les charges en tête (elles portent les plus gros chiffres), puis les
+      // records de répétitions — chaque groupe du plus fort au plus faible.
+      .sort((a, b) => (a.metric === b.metric ? b.value - a.value : a.metric === "weight" ? -1 : 1))
       .slice(0, 6);
-  }, [sessions]);
+  }, [sessions, metricsByExercise]);
 
   /* ─── Liste des exercices (pour le sélecteur de graphique) ──── */
   const allExerciseNames = useMemo(() => {
@@ -397,50 +464,45 @@ export default function SportPage() {
     if (!chartExerciseName && allExerciseNames.length > 0) setChartExerciseName(allExerciseNames[0]);
   }, [allExerciseNames, chartExerciseName]);
 
-  /* L'exercice sélectionné est-il un exo cardio ? (détecté via la discipline
-     de la séance ou la catégorie de l'exercice). Détermine la métrique tracée :
-     vitesse km/h pour le cardio, charge kg pour la muscu/callisthénie. */
-  const chartExerciseIsCardio = useMemo(() => {
-    for (const s of (sessions || [])) {
-      for (const ex of (s.exercises || [])) {
-        if (ex.name?.trim() === chartExerciseName && (s.discipline === "cardio" || ex.category === "cardio")) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }, [sessions, chartExerciseName]);
+  /* Métriques disponibles pour l'exercice affiché, et celle réellement tracée :
+     le choix manuel prime, tant qu'il reste disponible sur cet exercice —
+     sinon on retombe sur la métrique naturelle (vitesse, puis charge, puis
+     répétitions). */
+  const chartMetrics = useMemo(
+    () => METRIC_ORDER.filter(m => metricsByExercise.get(chartExerciseName)?.has(m)),
+    [metricsByExercise, chartExerciseName]
+  );
+  const chartMetric = chartMetrics.includes(chartMetricChoice) ? chartMetricChoice : (chartMetrics[0] ?? null);
 
   /* ─── Données du graphique d'évolution ─────────────────────── */
   const chartData = useMemo(() => {
-    if (!chartExerciseName) return [];
+    if (!chartExerciseName || !chartMetric) return [];
     const points = [];
     for (const s of (sessions || [])) {
       for (const ex of (s.exercises || [])) {
         if (ex.name?.trim() !== chartExerciseName) continue;
-        if (chartExerciseIsCardio) {
-          // Cardio : meilleure vitesse (km/h) de la séance.
-          let bestSpeed = 0;
-          for (const set of (ex.sets || [])) {
+        // Un point par séance : le meilleur de la séance dans la métrique
+        // suivie (vitesse, charge ou répétitions).
+        let best = 0, detail = null;
+        for (const set of (ex.sets || [])) {
+          if (chartMetric === "speed") {
             const sp = set.speed != null ? set.speed : computeSpeed(set.distance, set.time);
-            if (sp && sp > bestSpeed) bestSpeed = sp;
-          }
-          if (bestSpeed > 0) points.push({ date: s.date, value: bestSpeed });
-        } else {
-          // Muscu/callisthénie : charge max (kg) de la séance.
-          let bestWeight = 0, bestReps = 0;
-          for (const set of (ex.sets || [])) {
-            if (set.weight && set.weight > bestWeight) {
-              bestWeight = set.weight;
-              bestReps = set.reps || 0;
+            if (sp && sp > best) best = sp;
+          } else if (chartMetric === "weight") {
+            if (set.weight && set.weight > best) {
+              best = set.weight;
+              detail = set.reps || null;
             }
+          } else if (!set.weight && set.reps && set.reps > best) {
+            // Répétitions : seules les séries au poids du corps comptent.
+            best = set.reps;
           }
-          if (bestWeight > 0) points.push({ date: s.date, value: bestWeight, reps: bestReps });
         }
+        if (best > 0) points.push({ date: s.date, value: best, reps: detail });
       }
     }
     return points.sort((a, b) => a.date.localeCompare(b.date));
-  }, [sessions, chartExerciseName, chartExerciseIsCardio]);
+  }, [sessions, chartExerciseName, chartMetric]);
 
   /* ─── Filtrage ──────────────────────────────────────────────── */
   const filteredSessions = useMemo(() => {
@@ -619,10 +681,10 @@ export default function SportPage() {
             </SectionTitle>
             <ProgressChart
               allExerciseNames={allExerciseNames}
-              selected={chartExerciseName}
-              onChangeSelected={setChartExerciseName}
               data={chartData}
-              unit={chartExerciseIsCardio ? "km/h" : "kg"}
+              metric={chartMetric}
+              metrics={chartMetrics}
+              onChangeMetric={setChartMetricChoice}
             />
           </div>
 
@@ -953,6 +1015,10 @@ function SessionCard({ session: s, onEdit, onDelete }) {
   const totalSets = (s.exercises || []).reduce((sum, e) => sum + (e.sets || []).length, 0);
   const totalVolume = (s.exercises || []).reduce((sum, e) =>
     sum + (e.sets || []).reduce((vs, set) => vs + ((set.weight || 0) * (set.reps || 0)), 0), 0);
+  // Répétitions faites sans charge : c'est le volume d'une séance au poids du
+  // corps, que le tonnage en kg ne sait pas compter.
+  const totalBodyweightReps = (s.exercises || []).reduce((sum, e) =>
+    sum + (e.sets || []).reduce((rs, set) => rs + (!set.weight ? (set.reps || 0) : 0), 0), 0);
 
   // Catégorie de la séance = moyenne pondérée par le nombre de séries.
   // On somme les sets par catégorie d'exo, puis on prend la catégorie dominante.
@@ -1021,6 +1087,12 @@ function SessionCard({ session: s, onEdit, onDelete }) {
                 <span style={{ fontVariantNumeric: "tabular-nums" }}>{Math.round(totalVolume).toLocaleString("fr-FR")} kg</span>
               </>
             )}
+            {totalBodyweightReps > 0 && (
+              <>
+                <span>·</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{totalBodyweightReps} reps</span>
+              </>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
@@ -1067,7 +1139,11 @@ function SessionCard({ session: s, onEdit, onDelete }) {
                       <div key={set.id || si} style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
                         <span style={{ color: T.text, opacity: 0.5, marginRight: 8 }}>Série {si + 1}</span>
                         {set.reps != null && <span>{set.reps} reps</span>}
-                        {set.weight != null && <span> · {set.weight} kg</span>}
+                        {/* Sans charge saisie, la série est au poids du corps :
+                            on l'écrit, sinon la ligne se lit comme incomplète. */}
+                        {set.weight != null
+                          ? <span> · {set.weight} kg</span>
+                          : set.reps != null ? <span style={{ opacity: 0.6 }}> · poids du corps</span> : null}
                       </div>
                     );
                   })}
@@ -1103,7 +1179,7 @@ function PRsCard({ prs }) {
     <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
       {prs.length === 0 ? (
         <div style={{ padding: "16px 2px", textAlign: "center", color: T.textSub, fontSize: 13, lineHeight: 1.5 }}>
-          Aucun record. Enregistre tes séries avec charges pour les voir apparaître.
+          Aucun record. Enregistre tes séries — avec charge ou au poids du corps — pour les voir apparaître.
         </div>
       ) : (
         prs.map((pr) => (
@@ -1114,8 +1190,20 @@ function PRsCard({ prs }) {
               </div>
               <div style={{ fontSize: 12, color: T.text, opacity: 0.5, marginTop: 1 }}>{fmtDate(pr.date)}</div>
             </div>
+            {/* Deux écritures selon la métrique du record : « 100 kg × 5 » pour
+                une charge, « 14 reps » au poids du corps — le détail secondaire
+                reste atténué dans les deux cas. */}
             <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: -0.15, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-              {pr.weight} kg <span style={{ fontWeight: 500, opacity: 0.5, fontSize: 12 }}>× {pr.reps}</span>
+              {pr.metric === "weight" ? (
+                <>
+                  {pr.value} kg
+                  {pr.reps ? <span style={{ fontWeight: 500, opacity: 0.5, fontSize: 12 }}> × {pr.reps}</span> : null}
+                </>
+              ) : (
+                <>
+                  {pr.value} <span style={{ fontWeight: 500, opacity: 0.5, fontSize: 12 }}>reps</span>
+                </>
+              )}
             </div>
           </div>
         ))
@@ -1125,8 +1213,9 @@ function PRsCard({ prs }) {
 }
 
 /* ─── Graphique de progression (simple SVG line) ────────────────── */
-function ProgressChart({ allExerciseNames, selected, onChangeSelected, data, unit = "kg" }) {
-  const VB_W = 600, VB_H = 200, padL = 8, padR = 36, padT = 14, padB = 24;
+function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = [], onChangeMetric }) {
+  const unit = METRIC_UNIT[metric] ?? "";
+  const VB_W = 600, VB_H = 200, padL = 8, padR = 12, padT = 14, padB = 20;
   const chartW = VB_W - padL - padR;
   const chartH = VB_H - padT - padB;
 
@@ -1154,24 +1243,44 @@ function ProgressChart({ allExerciseNames, selected, onChangeSelected, data, uni
             : "Pas encore assez de points pour cet exercice."}
         </div>
       ) : (
-        <div style={{ padding: "12px 12px 12px 0", position: "relative" }}>
+        <div style={{ padding: "12px 12px 12px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* En-tête : la métrique suivie à gauche (basculable quand l'exercice
+              a été fait lesté ET au poids du corps), le meilleur relevé à
+              droite — il tient lieu de graduation haute. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingLeft: 12, minHeight: 26 }}>
+            {metrics.length > 1 ? (
+              <PeriodPills
+                value={metric}
+                onChange={onChangeMetric}
+                options={metrics.map(m => ({ id: m, label: METRIC_LABEL[m] }))}
+                track
+              />
+            ) : (
+              <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>
+                Meilleur par séance · {unit}
+              </span>
+            )}
+            <div style={{ fontSize: 12, color: T.text, opacity: 0.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {fmtMetricValue(maxW, metric)} {unit}
+            </div>
+          </div>
           {/* Pas de padding à gauche : la courbe touche le bord de la carte. À
               droite la marge reste, les libellés de valeur y respirent. */}
           <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
-            style={{ width: "100%", height: 180, display: "block", fontFamily: "var(--font-sans)" }}>
-            {/* Aire tramée — trame commune à tous les graphiques du site, aux
-                couleurs de la courbe. */}
+            style={{ width: "100%", height: 160, display: "block", overflow: "visible", fontFamily: "var(--font-sans)" }}>
+            {/* Aire en dégradé plutôt que tramée : la trame de points chargeait
+                un graphique de cette taille, où l'on ne lit qu'une seule
+                courbe. */}
             <defs>
-              <AreaDotsDefs id="sport" color={T.green} top={padT} bottom={padT + chartH} width={VB_W} height={VB_H} />
+              <linearGradient id="sport-area" x1="0" y1={padT} x2="0" y2={padT + chartH} gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor={T.green} stopOpacity="0.2" />
+                <stop offset="100%" stopColor={T.green} stopOpacity="0" />
+              </linearGradient>
             </defs>
-            <path d={areaD} {...areaDotsFill("sport")} stroke="none" />
-            <path d={pathD} fill="none" stroke={T.green} strokeWidth="1.5"
+            <path d={areaD} fill="url(#sport-area)" stroke="none" />
+            <path d={pathD} fill="none" stroke={T.green} strokeWidth="2.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>
-          {/* Y label max */}
-          <div style={{ position: "absolute", top: 8, right: 6, fontSize: 12, color: T.text, opacity: 0.5, fontVariantNumeric: "tabular-nums" }}>
-            {Math.round(maxW)} {unit}
-          </div>
         </div>
       )}
     </div>
