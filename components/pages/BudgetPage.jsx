@@ -46,6 +46,8 @@
 import React from "react";
 import { Copy, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { dotRing } from "@/lib/ui/color";
+import { HUE, PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { fmt } from "@/lib/ui/format";
@@ -64,57 +66,55 @@ const DEFAULT_INCOME = 2000;
    catégories voisines doivent rester distinguables, ce qu'une palette recalculée
    par thème ne garantit pas.
 
-   Chacune reprend la TEINTE d'une couleur du site (bleu, ambre, cyan et violet
-   des tokens sémantiques, vert de l'accent de marque, rouge, teal des tags
-   « long », brun des tags « short », gris du texte secondaire) ; seule leur
-   clarté est ajustée, pour trois raisons mesurées :
+   Les dix slots prennent d'abord les HUIT couleurs principales de la planche
+   (cf. lib/ui/palette), telles quelles. Les deux derniers, une fois les huit
+   épuisées, descendent sur une version sombre et sur le gris.
 
-   • rester lisible sur les DEUX fonds : la clarté OKLCH tient dans [0.48, 0.67],
-     l'intersection des bandes admises en thème clair et en thème sombre, et le
-     contraste reste ≥ 3:1 (seuil des éléments graphiques) sur les deux surfaces.
-     Trop clair, la couleur disparaît sur blanc ; trop sombre, elle s'éteint en
-     thème sombre — la fenêtre est étroite ;
-   • garder assez de CHROMA (≥ 0.1) pour ne pas « lire gris » ;
-   • séparer les VOISINES : la palette alterne une teinte sombre et une claire,
-     si bien que deux catégories côte à côte dans le graphique tranchent toujours
-     par la clarté, et pas seulement par la teinte. C'est ce qui les tient en
-     vision deutéranope, où rouge, vert et teal convergent (pire paire adjacente :
-     ΔE 8.6 en deutan, 18.7 en vision normale).
+   Ce que ce choix coûte, sciemment : la palette d'origine tenait sa clarté
+   OKLCH dans [0.48, 0.67], l'intersection des bandes admises en clair et en
+   sombre, avec un contraste ≥ 3:1 sur les deux surfaces. Les principales
+   sortent de cette fenêtre par le haut (le vert, le jaune, l'orange et le rose
+   sont sous 2,2:1 sur blanc) : elles portent bien un secteur d'anneau, moins
+   bien une pastille de légende.
 
-   Ces valeurs ne sont pas estimées à l'œil : elles passent les six contrôles du
-   validateur de palette catégorielle (bande de clarté, plancher de chroma,
-   séparation CVD des paires adjacentes, plancher vision normale, contraste), en
-   clair ET en sombre. Toute retouche doit être repassée au validateur.
+   Ce qui est conservé : la séparation des voisines par la clarté autant que par
+   la teinte — c'est ce qui les tient en vision deutéranope.
 
    L'ordre compte : il est repris tel quel par `defaultItems`, et une catégorie
-   ajoutée prend la suivante. Toute retouche doit donc conserver l'alternance
-   clair/sombre.
+   ajoutée prend la suivante.
 
    « Autres » est à part : c'est le slot fourre-tout, et la convention réserve le
-   gris au non-catégorisé. Il est donc volontairement sous le plancher de chroma
-   et ne compte pas dans la palette catégorielle. */
-const PALETTE = [
-  "#2C72C3", // logement     — bleu du site, sombre
-  "#DF6C10", // alimentation — ambre, clair
-  "#0F8FAD", // transport    — cyan, sombre
-  "#9D7AEF", // abonnements  — violet, clair
-  "#B92E74", // loisirs      — magenta, sombre
-  "#3EA817", // épargne      — vert de l'accent de marque, clair
-  "#C83131", // shopping     — rouge, sombre
-  "#0E9A8A", // santé        — teal des tags « long », clair
-  "#96590E", // frais        — brun des tags « short », sombre
-  "#8B96A2", // autres       — gris neutre : le slot « non catégorisé »
+   gris au non-catégorisé. Il ne compte pas dans la palette catégorielle.
+
+   L'orange de l'alimentation et le brun du transport sont les DEUX teintes que la
+   colonne des dépenses garde dans la bande chaude, laquelle est par ailleurs
+   réservée aux entrées du cashflow (cf. l'en-tête de lib/bank/categories). Elles
+   restent ici : un poste doit porter la même couleur sur les deux graphiques, et
+   c'est CE tableau qui fait foi — `spendingPalette` en descend les teintes des
+   postes de dépense. Les changer pour la pureté de la bande recolorerait la
+   moitié de la page Dépenses sans que personne l'ait demandé. */
+const CATEGORY_COLORS = [
+  PALETTE_DARK.blue,   // logement     — la teinte du poste « logement »
+  PALETTE.orange,      // alimentation — idem, et cf. la note sous la liste
+  PALETTE.brown,       // transport    — idem
+  HUE.whale,           // abonnements  — la teinte du poste, restée sur les bleus
+  HUE.macaw,           // loisirs      — idem
+  PALETTE.green,       // épargne
+  PALETTE.red,         // shopping
+  HUE.moonJelly,       // santé
+  PALETTE.yellow,      // frais
+  GREY.grey700,        // autres       — le slot « non catégorisé »
 ];
 
 /* Point de départ : la règle 50/30/20 adaptée. L'utilisateur ajuste ensuite —
    ces valeurs ne sont qu'une amorce, pas une recommandation. */
 const defaultItems = () => [
-  { id: "logement", label: t("budget.cat.housing"), pct: 30, color: PALETTE[0] },
-  { id: "alimentation", label: t("budget.cat.food"), pct: 15, color: PALETTE[1] },
-  { id: "transport", label: t("budget.cat.transport"), pct: 8, color: PALETTE[2] },
-  { id: "abonnements", label: t("budget.cat.subscriptions"), pct: 5, color: PALETTE[3] },
-  { id: "loisirs", label: t("budget.cat.leisure"), pct: 10, color: PALETTE[4] },
-  { id: "epargne", label: t("budget.cat.savings"), pct: 20, color: PALETTE[5] },
+  { id: "logement", label: t("budget.cat.housing"), pct: 30, color: CATEGORY_COLORS[0] },
+  { id: "alimentation", label: t("budget.cat.food"), pct: 15, color: CATEGORY_COLORS[1] },
+  { id: "transport", label: t("budget.cat.transport"), pct: 8, color: CATEGORY_COLORS[2] },
+  { id: "abonnements", label: t("budget.cat.subscriptions"), pct: 5, color: CATEGORY_COLORS[3] },
+  { id: "loisirs", label: t("budget.cat.leisure"), pct: 10, color: CATEGORY_COLORS[4] },
+  { id: "epargne", label: t("budget.cat.savings"), pct: 20, color: CATEGORY_COLORS[5] },
 ];
 
 /* Identifiant FIXE pour le plan initial : l'état de départ doit être le même
@@ -297,7 +297,7 @@ export default function BudgetPage() {
     focusItemId.current = id;
     updateActive((p) => ({
       ...p,
-      items: [...p.items, { id, label: t("budget.newCategory"), pct: 5, color: PALETTE[p.items.length % PALETTE.length] }],
+      items: [...p.items, { id, label: t("budget.newCategory"), pct: 5, color: CATEGORY_COLORS[p.items.length % CATEGORY_COLORS.length] }],
     }));
   };
 
@@ -521,7 +521,7 @@ export default function BudgetPage() {
                   padding: "5px 0",
                 }}
               >
-                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: it.color, flexShrink: 0 }} />
+                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: it.color, boxShadow: dotRing(it.color), flexShrink: 0 }} />
                 <input
                   ref={(el) => {
                     if (el && it.id === focusItemId.current) {

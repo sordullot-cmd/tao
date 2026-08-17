@@ -38,6 +38,8 @@
  * langue et que ce module est testé sans dictionnaire.
  */
 
+import { GREY } from "@/lib/ui/palette";
+
 import {
   categoryColor, incomeColor, parentOfSub, subcategorizeTransaction,
   spendingByCategory,
@@ -183,14 +185,27 @@ export function incomeBySource(txs: CategorizableTransaction[]): {
   };
 }
 
-/* Teintes des nœuds de synthèse. Elles ne sortent pas de la palette des postes :
-   ces trois nœuds ne SONT pas des postes, et une couleur de poste leur donnerait
-   l'air d'en être un. Gris pour ce qui est agrégé ou non dépensé, terre cuite
-   pour le découvert — la seule des trois qui mérite d'être vue. */
+/**
+ * Terre cuite de « Pris sur le solde ».
+ *
+ * La seule couleur de ce module qui ne vient pas de la charte, et c'est voulu :
+ * ce nœud se range du côté gauche avec les entrées, donc dans la bande CHAUDE
+ * (cf. `INCOME_COLORS`), mais ce n'est PAS un revenu — c'est de l'argent qu'on
+ * avait déjà. Il lui faut donc une teinte de la famille sans être une de ses
+ * neuf sources, et assez sombre pour se repérer sans qu'on lise son libellé.
+ *
+ * C'est aussi, exactement, la couleur de la part « découvert » de l'anneau
+ * (`components/ui/CashflowSummary`), qui dit la même chose sur l'autre figure :
+ * elle est publiée ici pour que les deux ne puissent plus diverger.
+ */
+export const DRAW_COLOR = "#C05A46";
+
+/* Teintes des nœuds de synthèse. Ils ne SONT pas des postes, et une couleur de
+   poste leur donnerait l'air d'en être un : les deux agrégats restent donc gris. */
 const SYNTHETIC_COLORS: Record<FlowSynthetic, string> = {
-  more: "#A8B0B8",
-  left: "#B9C2CB",
-  draw: "#C05A46",
+  more: GREY.grey500,
+  left: GREY.grey300,
+  draw: DRAW_COLOR,
 };
 
 export interface CashflowOptions {

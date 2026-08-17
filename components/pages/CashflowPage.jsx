@@ -51,16 +51,17 @@
  */
 
 import React from "react";
-import { ArrowDownLeft, ArrowUpRight, ChevronDown, ChevronRight, ChevronUp, Landmark, PiggyBank } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChartPie, ChevronDown, ChevronRight, ChevronUp, Landmark } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
-import { t, useLang } from "@/lib/i18n";
+import { dotRing } from "@/lib/ui/color";
+import { t, useLang, getLang } from "@/lib/i18n";
 import { CARD, PeriodPills, SectionAction, SectionTitle, StepperPill, TH, PERIODS } from "@/components/ui/da";
 import { periodRange } from "@/lib/ui/period";
 import DateRangePicker from "@/components/ui/DateRangePicker";
 import CashflowSummary from "@/components/ui/CashflowSummary";
 import CategoryIcon from "@/components/ui/CategoryIcon";
 import MerchantAvatar from "@/components/ui/MerchantAvatar";
-import { findMerchant } from "@/lib/bank/merchants";
+import { findMerchant, findTransferBank } from "@/lib/bank/merchants";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import {
@@ -97,22 +98,35 @@ const defaultCustom = () => {
   return { start: dayKey(start), end: dayKey(today) };
 };
 
-/* Six postes et cinq sources au diagramme, pas plus : au-delà, les branches
-   deviennent des traits et leurs noms se marchent dessus. Ce qui est écrêté est
-   rassemblé sous une branche qui dit combien elle en porte, et le détail complet
-   est dans les listes juste en dessous.
+/* Dix-huit postes et huit sources au diagramme. Le regroupement sous « + N
+   autres postes » n'apprend RIEN — c'est un ruban qui ne désigne personne — et
+   il tombait dès le sixième poste, alors qu'un relevé ordinaire en remplit une
+   quinzaine : un mois entier de dépenses partait dans une branche muette. On
+   monte donc l'écrêtage jusqu'à ce que le dessin sait porter, pour qu'il ne reste
+   à regrouper que la queue — les postes à une opération et deux euros.
 
-   Cinq sources et non quatre : depuis qu'une source porte le NOM de qui paie, un
-   même salaire versé par deux employeurs fait deux branches là où il n'en
-   faisait qu'une. À quatre, un relevé ordinaire (deux salaires, une aide, un
-   remboursement, un virement) commençait à regrouper.
+   Dix-huit est un PLAFOND DE DESSIN, pas un choix de goût, et ce n'est pas le
+   libellé qui le fixe : passé une douzaine de branches, la colonne passe d'elle-
+   même en libellés d'une seule ligne (cf. `labelDense` dans lib/ui/sankeyGraph),
+   qui tiennent à 20 px de pas — les 640 px du dessin en logent trente. C'est
+   l'ÉPAISSEUR des rubans qui cède la première : à dix-neuf branches, les jours
+   entre elles mangent déjà 190 px et les plus petites tombent sur leur plancher
+   de 3 px. Au-delà, on dessinerait des traits en prétendant montrer un flux.
+
+   Huit sources pour la même raison, et elles servent : le classement des entrées
+   est plus fin qu'avant (salaire, freelance, aides, retraite, intérêts,
+   dividendes, ventes, remboursements), et à cinq on regroupait des sources qui
+   ont chacune leur teinte et leur nom.
+
+   Ce qui reste écrêté dit COMBIEN de postes il porte, et le détail complet est
+   dans les listes juste en dessous : rien n'est caché, seulement rassemblé.
 
    Pas de `topSubs` : le diagramme s'arrête aux POSTES. Les déplier sur leurs
    sous-postes doublait le nombre de branches pour un détail que le tableau juste
    en dessous donne mieux — chiffré, trié, et dépliable sur les opérations
    elles-mêmes. Posée au niveau du module et non en littéral dans le rendu : un
    objet neuf à chaque passage ferait reconstruire le graphe pour rien. */
-const GRAPH_CLIP = { topOutflows: 6, topInflows: 5 };
+const GRAPH_CLIP = { topOutflows: 18, topInflows: 8 };
 
 /** Marchands montrés dans le classement. Au-delà, ce n'est plus un « top ». */
 const TOP_MERCHANTS = 8;
@@ -169,6 +183,11 @@ function ListHeader({ label, share = false, chevron = false }) {
   );
 }
 
+/* Les dates suivent la LANGUE DE L'APP, pas la locale du système : sans ça, une
+   app réglée en anglais affichait « 1 août » à côté de « Money in » — la machine
+   décidait de la langue d'une moitié de la page. */
+const dateLocale = () => (getLang() === "fr" ? "fr-FR" : "en-US");
+
 /** « 13 août » — l'année n'apparaît que si le jour n'est pas de cette année. */
 function shortDay(iso) {
   if (!iso) return "";
@@ -176,7 +195,7 @@ function shortDay(iso) {
   const date = new Date(y, (m || 1) - 1, d || 1);
   const sameYear = y === new Date().getFullYear();
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(dateLocale(), {
       day: "numeric", month: "short", ...(sameYear ? null : { year: "numeric" }),
     }).format(date);
   } catch {
@@ -253,7 +272,7 @@ export default function CashflowPage({ setPage }) {
     const sameYear = range.from.slice(0, 4) === year && range.to.slice(0, 4) === year;
     const opts = { day: "numeric", month: "short", ...(sameYear ? null : { year: "numeric" }) };
     try {
-      const f = new Intl.DateTimeFormat(undefined, opts);
+      const f = new Intl.DateTimeFormat(dateLocale(), opts);
       return `${f.format(parseDay(range.from))} – ${f.format(parseDay(range.to))}`;
     } catch {
       return `${range.from} – ${range.to}`;
@@ -546,7 +565,9 @@ export default function CashflowPage({ setPage }) {
             cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          <PiggyBank size={15} strokeWidth={1.75} /> {t("cashflow.openBudget")}
+          {/* L'icône du BUDGET, celle de son entrée de navigation : un bouton
+              qui mène ailleurs doit porter le signe de là où il mène. */}
+          <ChartPie size={15} strokeWidth={1.75} /> {t("cashflow.openBudget")}
         </button>
       </div>
     </div>
@@ -557,21 +578,32 @@ export default function CashflowPage({ setPage }) {
  * Une des dernières opérations : d'où elle vient, ce qu'elle est, son montant.
  *
  * Le logo de l'enseigne quand on la reconnaît — le tableau des enseignes est
- * juste en dessous, la même vignette y répond. À défaut, une flèche qui dit le
- * SENS : dans une liste où entrées et sorties se mêlent, le signe du montant
- * seul se rate.
+ * juste en dessous, la même vignette y répond. Sur un VIREMENT, où il n'y a pas
+ * d'enseigne, c'est le logo de la banque d'en face : la question de cette page
+ * est « d'où vient l'argent », et un virement y répond par un nom
+ * d'établissement. À défaut, une flèche qui dit le SENS : dans une liste où
+ * entrées et sorties se mêlent, le signe du montant seul se rate.
  */
 function RecentRow({ tx }) {
   const credit = tx.amount >= 0;
+  /* Les deux recherches portent sur des natures d'opération disjointes
+     (cf. lib/bank/merchants) : l'enseigne sur les achats, la banque sur les
+     virements. L'enseigne passe d'abord — un prélèvement vers une banque est un
+     achat comme un autre, et c'est son nom canonique qu'on veut en titre. */
   const merchant = findMerchant(tx);
+  const transferBank = merchant ? null : findTransferBank(tx);
+  const brand = merchant || transferBank;
   const sub = subcategorizeTransaction(tx);
   const category = parentOfSub(sub);
+  /* Le nom canonique ne remplace le libellé que pour une ENSEIGNE : sur un
+     virement, le libellé nomme la PERSONNE, et sa banque ne doit pas prendre sa
+     place — elle a déjà la vignette. */
   const title = merchant?.name || tx.label || t(kindLabelKey(tx.kind));
 
   return (
     <li style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px" }}>
-      {merchant ? (
-        <MerchantAvatar merchant={merchant} size={32} />
+      {brand ? (
+        <MerchantAvatar merchant={brand} size={32} />
       ) : (
         <span aria-hidden="true" style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -592,7 +624,7 @@ function RecentRow({ tx }) {
             dit pas : l'absence de classement n'apprend rien. */}
         <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, fontSize: 12, color: T.textSub }}>
           {category !== "other" && (
-            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: categoryColor(category), flexShrink: 0 }} />
+            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: categoryColor(category), boxShadow: dotRing(categoryColor(category)), flexShrink: 0 }} />
           )}
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {[shortDay(tx.date), category === "other" ? null : t(subLabelKey(sub))].filter(Boolean).join(" · ")}

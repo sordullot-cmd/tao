@@ -10,21 +10,23 @@ import Popover from "@/components/ui/Popover";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { deepen, dotRing } from "@/lib/ui/color";
+import { PALETTE, GREY } from "@/lib/ui/palette";
 
 const T = { ...BaseT };
 
 const STORAGE_KEY = "tr4de_books";
 
 const STATUSES = [
-  { id: "toRead",  label: "À lire",     color: "#8E8E8E" },
-  { id: "reading", label: "En cours",   color: "#3B82F6" },
-  { id: "done",    label: "Terminé",    color: "#16A34A" },
+  { id: "toRead",  label: "À lire",     color: GREY.grey700 },
+  { id: "reading", label: "En cours",   color: PALETTE.blue },
+  { id: "done",    label: "Terminé",    color: PALETTE.green },
 ];
 const PRIORITIES = [
-  { id: "must_read", label: "À lire absolument", short: "Absolu",   color: "#EF4444" },
-  { id: "important", label: "Important",         short: "Important",color: "#F59E0B" },
-  { id: "normal",    label: "Normal",            short: "Normal",   color: "#3B82F6" },
-  { id: "can_wait",  label: "Peut attendre",     short: "Attend",   color: "#8E8E8E" },
+  { id: "must_read", label: "À lire absolument", short: "Absolu",   color: PALETTE.red },
+  { id: "important", label: "Important",         short: "Important",color: PALETTE.orange },
+  { id: "normal",    label: "Normal",            short: "Normal",   color: PALETTE.blue },
+  { id: "can_wait",  label: "Peut attendre",     short: "Attend",   color: GREY.grey500 },
 ];
 const CATEGORIES = [
   { id: "trading",      label: "Trading" },
@@ -190,7 +192,7 @@ export default function ReadingListPage() {
                           display: "inline-flex", alignItems: "center", gap: 6,
                           transition: "all .12s ease",
                         }}>
-                        <span style={{ width: 7, height: 7, borderRadius: 999, background: p.color }} />
+                        <span style={{ width: 7, height: 7, borderRadius: 999, background: p.color, boxShadow: dotRing(p.color) }} />
                         {p.label}
                       </button>
                     );
@@ -267,7 +269,7 @@ export default function ReadingListPage() {
                     <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title}</div>
                     {b.author && <div style={{ fontSize: 11, color: T.textMut, marginTop: 2, fontStyle: "italic" }}>{b.author}</div>}
                     <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "18", padding: "2px 8px", borderRadius: 999, textTransform: "uppercase", letterSpacing: 0.4 }}>{st.label}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: deepen(st.color), background: st.color + "18", padding: "2px 8px", borderRadius: 999, textTransform: "uppercase", letterSpacing: 0.4 }}>{st.label}</span>
                       {pri && (
                         <span title={pri.label} style={{ fontSize: 10, fontWeight: 600, color: pri.color, background: pri.color + "18", padding: "2px 8px", borderRadius: 999, textTransform: "uppercase", letterSpacing: 0.4, display: "inline-flex", alignItems: "center", gap: 4 }}>
                           <span style={{ width: 6, height: 6, borderRadius: 999, background: pri.color }} />
@@ -289,7 +291,7 @@ export default function ReadingListPage() {
                     <span>{Math.round(pct)}%</span>
                   </div>
                   <div style={{ height: 5, background: T.accentBg, borderRadius: "var(--radius-field)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: st.color, borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
+                    <div style={{ height: "100%", width: `${pct}%`, background: st.color, boxShadow: dotRing(st.color), borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
                   </div>
                 </div>
 

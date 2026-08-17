@@ -34,12 +34,14 @@ import {
   Percent, Plus, Receipt, Repeat, Trash2, X,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { dotRing } from "@/lib/ui/color";
 import { t, useLang } from "@/lib/i18n";
 import {
   BackLink, CARD, HeroAmount, PeriodPills, PnlChart, SectionAction, SectionTitle,
 } from "@/components/ui/da";
 import AssetAvatar from "@/components/ui/AssetAvatar";
-import { findMerchant } from "@/lib/bank/merchants";
+import MerchantAvatar from "@/components/ui/MerchantAvatar";
+import { findMerchant, findTransferBank } from "@/lib/bank/merchants";
 import {
   bankAccountToAsset, bankAssetUid, isBankAsset, useBankAccounts,
 } from "@/lib/bank/useBankAccounts";
@@ -774,11 +776,17 @@ function MovementRow({ tx }) {
      4979 », le libellé brut redescendant en sous-ligne.
 
      Son LOGO, en revanche, ne s'affiche plus ici : la vignette reste l'icône de
-     nature, la même sur toute la colonne. `MerchantAvatar` et la table de logos
-     restent en place — ils sont prêts à être rebranchés ailleurs, et rien dans
-     cette page n'en dépend. */
+     nature, la même sur toute la colonne des achats. */
   const merchant = findMerchant(tx);
   const title = merchant?.name || tx.label || t(kindLabelKey(tx.kind));
+
+  /* Une exception, et une seule : le VIREMENT. Sur ces lignes-là, l'icône de
+     nature ne dit rien que le libellé ne crie déjà (« VIR SEPA RECU DE… »),
+     alors que la banque d'en face — d'où l'argent arrive, ou vers où il part —
+     n'est écrite nulle part ailleurs sous une forme lisible. C'est donc elle qui
+     prend la vignette quand on la reconnaît. Le libellé, lui, ne bouge pas : il
+     nomme la PERSONNE, ce qui vaut mieux que le nom de sa banque. */
+  const transferBank = findTransferBank(tx);
 
   /* La NATURE ne se répète plus sous le libellé : « Opération », « Carte » ou
      « Virement » n'apprennent rien que l'icône ne dise déjà, et sur les lignes
@@ -797,13 +805,17 @@ function MovementRow({ tx }) {
 
   return (
     <li style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px" }}>
-      <span aria-hidden="true" style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 32, height: 32, flexShrink: 0, borderRadius: 999,
-        background: T.accentBg, color: T.textSub,
-      }}>
-        <Icon size={15} strokeWidth={1.75} />
-      </span>
+      {transferBank ? (
+        <MerchantAvatar merchant={transferBank} size={32} />
+      ) : (
+        <span aria-hidden="true" style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 32, height: 32, flexShrink: 0, borderRadius: 999,
+          background: T.accentBg, color: T.textSub,
+        }}>
+          <Icon size={15} strokeWidth={1.75} />
+        </span>
+      )}
 
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -816,7 +828,7 @@ function MovementRow({ tx }) {
         {(category !== "other" || detail) && (
           <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, fontSize: 12, color: T.textSub }}>
             {category !== "other" && (
-              <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: categoryColor(category), flexShrink: 0 }} />
+              <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: categoryColor(category), boxShadow: dotRing(categoryColor(category)), flexShrink: 0 }} />
             )}
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {[category === "other" ? null : t(subLabelKey(sub)), detail].filter(Boolean).join(" · ")}

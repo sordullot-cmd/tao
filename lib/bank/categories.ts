@@ -35,6 +35,7 @@
  */
 
 import { findMerchant, type Merchant } from "@/lib/bank/merchants";
+import { HUE } from "@/lib/ui/palette";
 import type { BankTransaction } from "@/lib/bank/transactions";
 
 export type SpendingCategory =
@@ -84,45 +85,79 @@ export type SpendingSubcategory = string;
  * porter la même couleur des deux côtés, sinon les deux graphiques se
  * contredisent à l'œil.
  *
+ * Les teintes sont prises NOMMÉMENT dans la charte (cf. `HUE` dans
+ * lib/ui/palette) : vingt-huit valeurs, toutes distinctes, aucune calculée.
+ * C'est ce que vérifie tests/bankCategories.
+ *
+ * Le partage du dessin en deux : la colonne des ENTRÉES tient tout entière dans
+ * la bande CHAUDE de la charte (`INCOME_COLORS`, plus bas — or, ambre, orange
+ * brûlé, brun, corail, saumon, pêche), les postes de DÉPENSE prennent tout le
+ * reste. C'est ce qui permet, au milieu du croisement des rubans, de savoir d'un
+ * coup d'œil de quel côté vient une branche.
+ *
+ * Les entrées étaient sur les VIOLETS, et la colonne de gauche se lisait comme
+ * un seul bloc mauve : sept sources y tenaient dans deux violets et cinq roses,
+ * dont deux arrivaient presque blancs sous le délavage des rubans. La bande
+ * chaude en offre neuf franches, séparées par la teinte ET par la clarté. Les
+ * postes qui l'occupaient (voyage, voiture, carburant, télécom, animaux, impôts,
+ * retraits) sont passés sur les violets et les roses que les entrées ont
+ * libérés, plus le vert pâle pour les retraits — le liquide rejoint la famille
+ * de l'argent, avec l'épargne et le trading.
+ *
+ * Deux partages subsistent, tous deux assumés :
+ *   — l'ALIMENTATION (Fox) et le TRANSPORT (Monkey) restent dans les oranges.
+ *     Ces deux teintes sont celles de la page Budget, et un poste doit porter la
+ *     même couleur des deux côtés (cf. `spendingPalette`) : les déplacer pour la
+ *     pureté de la bande aurait fait mentir l'autre accord, celui qui se lit à
+ *     deux graphiques côte à côte. Elles restent à distance des ors de la
+ *     colonne d'en face, qui sont plus jaunes ;
+ *   — « frais » et la barre centrale sont tous deux au gris foncé. La charte n'a
+ *     que quatre gris exploitables pour vingt-huit postes, et « frais » est celui
+ *     qui atteint le moins souvent le palmarès.
+ *
+ * Le rendu du Sankey délave déjà les rubans (`RIBBON_TINT` dans
+ * components/ui/SankeyGraph.jsx). C'est là qu'on compense, pas ici.
+ *
  * « Autres » garde le gris, réservé par convention au non-catégorisé : ce n'est
  * pas un poste de dépense, c'est l'aveu que la règle n'a pas tranché.
  */
 export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
-  // Le toit — gamme bleue
-  { id: "housing", color: "#2C72C3" },       // bleu du site, sombre
-  { id: "utilities", color: "#6FA8DC" },     // bleu clair
-  { id: "telecom", color: "#4453B8" },       // indigo, sombre
-  { id: "insurance", color: "#949CE0" },     // indigo clair
-  // La table — gamme ambrée
-  { id: "food", color: "#DF6C10" },          // ambre de la page Budget
-  // La route — gamme cyan
-  { id: "transport", color: "#0F8FAD" },     // cyan de la page Budget
-  { id: "fuel", color: "#63BCD1" },          // cyan clair
-  { id: "car", color: "#2E7D6E" },           // vert-bleu sombre
-  { id: "travel", color: "#E0A21C" },        // ambre doré — le voyage n'est pas un trajet
-  // Les achats — gamme rouge
-  { id: "shopping", color: "#C83131" },      // rouge, sombre
-  { id: "tech", color: "#E8776F" },          // rouge clair
-  { id: "beauty", color: "#D94F9A" },        // rose
-  // Le corps — gammes verte et ocre
-  { id: "health", color: "#0E9A8A" },        // teal, clair
-  { id: "sport", color: "#7CB342" },         // vert clair
-  { id: "pets", color: "#A9791C" },          // ocre
-  // Le temps libre — gamme violette
-  { id: "leisure", color: "#B92E74" },       // magenta de la page Budget
-  { id: "subscriptions", color: "#9D7AEF" }, // violet de la page Budget
-  { id: "education", color: "#6A4FBF" },     // violet sombre
-  { id: "kids", color: "#C79BE3" },          // mauve clair
-  // L'argent — gammes verte et neutres
-  { id: "trading", color: "#147D64" },       // vert profond : le poste propre à tr4de
-  { id: "savings", color: "#3EA817" },       // vert de l'accent de marque
-  { id: "credit", color: "#8C3A56" },        // bordeaux
-  { id: "taxes", color: "#96590E" },         // brun, sombre
-  { id: "fees", color: "#7B6A5D" },          // taupe
-  { id: "cash", color: "#5F7D95" },          // bleu ardoise
-  { id: "transfer", color: "#7C8C1E" },      // olive
-  { id: "income", color: "#4CAF50" },        // vert — jamais dans l'anneau des dépenses
-  { id: "other", color: "#8B96A2" },         // gris neutre : le non-catégorisé
+  // Le toit
+  { id: "housing", color: HUE.humpback },      // page Budget
+  { id: "utilities", color: HUE.blueJay },
+  { id: "telecom", color: HUE.starfish },      // rose vif : les bleus du toit sont pris
+  { id: "insurance", color: HUE.swan },        // gris : une charge, pas un poste de vie
+  // La table
+  { id: "food", color: HUE.fox },              // page Budget
+  // La route — passée aux violets, la bande chaude étant aux entrées
+  { id: "transport", color: HUE.monkey },      // page Budget
+  { id: "fuel", color: HUE.butterfly },
+  { id: "car", color: HUE.betta },
+  { id: "travel", color: HUE.beetle },         // le voyage n'est pas un trajet
+  // Les achats
+  { id: "shopping", color: HUE.cardinal },
+  { id: "tech", color: HUE.fireAnt },
+  { id: "beauty", color: HUE.iguana },
+  // Le corps
+  { id: "health", color: HUE.moonJelly },
+  { id: "sport", color: HUE.treeFrog },
+  { id: "pets", color: HUE.walkingFish },      // rose très pâle : un petit poste
+  // Le temps libre — sur les bleus, la route ayant pris les violets
+  { id: "leisure", color: HUE.macaw },         // page Budget
+  { id: "subscriptions", color: HUE.whale },   // page Budget
+  { id: "education", color: HUE.narwhal },
+  { id: "kids", color: HUE.beluga },
+  // L'argent
+  { id: "trading", color: HUE.turtle },        // le poste propre à tr4de
+  { id: "savings", color: HUE.owl },           // page Budget
+  { id: "credit", color: HUE.anchovy },
+  { id: "taxes", color: HUE.pig },             // rose sourd
+  { id: "fees", color: HUE.eel },
+  { id: "cash", color: HUE.seaSponge },        // les billets, dans la famille de l'argent
+  { id: "transfer", color: HUE.hare },         // un virement interne ne dépense rien, il déplace
+  { id: "income", color: HUE.bee },            // l'or des entrées : ce poste ne paraît
+                                               // jamais dans l'anneau des dépenses
+  { id: "other", color: HUE.wolf },            // le non-catégorisé
 ];
 
 /**
@@ -238,10 +273,12 @@ export const SUBCATEGORIES: { id: SpendingSubcategory; category: SpendingCategor
      aides, remboursements » dit d'où vient le mois. Leurs règles sont à part
      (`INCOME_RULES`) et ne s'appliquent qu'aux CRÉDITS. */
   { id: "income.salary", category: "income" },
+  { id: "income.freelance", category: "income" },
   { id: "income.benefits", category: "income" },
   { id: "income.pension", category: "income" },
   { id: "income.refund", category: "income" },
   { id: "income.interest", category: "income" },
+  { id: "income.dividends", category: "income" },
   { id: "income.sale", category: "income" },
 ];
 
@@ -259,22 +296,52 @@ export const categoryColor = (id: SpendingCategory): string => COLORS[id] ?? COL
 /* Teintes des SOURCES de revenus. Le poste « revenus » n'a qu'une couleur — il
    ne paraît jamais dans un anneau de dépenses —, mais le flux du cashflow part
    de ses sources et il faut les distinguer les unes des autres.
-   Toutes dans la gamme verte du poste parent, pour qu'on lise « ça entre » d'un
-   coup d'œil, et alternées clair / sombre comme le reste de la palette : deux
-   sources voisines dans le graphique tranchent alors par la clarté, pas
-   seulement par la teinte. Le « divers » garde un vert grisé — c'est un aveu,
-   pas une source. */
+
+   TOUTE la colonne des entrées tient dans la bande CHAUDE de la charte, et
+   aucun poste de dépense n'y touche à deux exceptions près, nommées dans
+   l'en-tête du module (l'alimentation et le transport, qui portent les couleurs
+   de la page Budget). La gauche dit « ça entre » d'un seul geste, la droite garde
+   les teintes froides des postes : au milieu, là où les rubans se croisent, on
+   sait de quel côté vient une branche sans lire son nom.
+
+   Neuf teintes pour neuf sources, et c'est le POINT de ce choix : la bande
+   violet/rose n'en offrait que deux franches et cinq roses, dont deux arrivaient
+   presque blancs une fois les rubans délavés (cf. `RIBBON_TINT` dans
+   components/ui/SankeyGraph) — la colonne se lisait alors comme un seul bloc
+   mauve. Ici chaque source a sa teinte, et deux voisines tranchent par la
+   clarté autant que par la couleur : c'est ce qui reste comme levier quand on
+   tient dans une famille.
+
+   Les trois ORS vont ensemble, et c'est délibéré : ce sont les trois sources dont
+   les euros ont la même origine probable — le salaire, le freelance, et le crédit
+   qu'on n'a pas su nommer, qui est le plus souvent une paie dont le libellé ne
+   dit rien. Ces trois-là sont aussi les teintes les plus proches de la bande
+   (Bee, Lion et Camel se tiennent à un cheveu) : les mettre sur une même famille
+   est le seul endroit où cette proximité ne coûte rien, puisqu'on ne se demande
+   pas laquelle est laquelle. Partout ailleurs, deux sources voisines dans le
+   dessin tranchent franchement.
+
+   Le « divers » mérite d'ailleurs une couleur PLEINE et non un ton d'attente,
+   contrairement à ce que sa place de repli suggère : sur un relevé ordinaire,
+   c'est lui qui porte l'essentiel de ce qui rentre. Il était sur un rose grisé,
+   et le ruban principal du diagramme arrivait délavé.
+
+   Les rouges francs (Cardinal, Fire Ant) restent aux DÉPENSES : le corail des
+   aides est plus clair et plus rose qu'eux, et les deux ne se rencontrent jamais
+   du même côté du dessin. */
 const INCOME_COLORS: Record<string, string> = {
-  "income.salary": "#2E9E4F",   // vert franc, sombre — la source principale
-  "income.benefits": "#8CC63F", // vert-jaune, clair
-  "income.pension": "#1F7A5C",  // vert profond, sombre
-  "income.refund": "#5FC2A6",   // menthe, clair
-  "income.interest": "#0E7C86", // teal, sombre
-  "income.sale": "#A9CE4A",     // lime, clair
-  income: "#86A98F",            // vert grisé : le crédit qu'on n'a pas su nommer
+  "income.salary": HUE.bee,          // or plein — la source principale
+  "income.freelance": HUE.lion,      // ambre — l'activité, comme le salaire
+  income: HUE.camel,                 // or sombre — le crédit qu'on n'a pas su nommer
+  "income.benefits": HUE.crab,       // corail
+  "income.pension": HUE.grizzly,     // brun
+  "income.interest": HUE.guineaPig,  // orange brûlé
+  "income.dividends": HUE.cheetah,   // pêche
+  "income.sale": HUE.flamingo,       // saumon clair
+  "income.refund": HUE.duck,         // jaune pâle
 };
 
-/** Teinte d'une source de revenus. Un sous-poste inconnu prend le vert du poste. */
+/** Teinte d'une source de revenus. Un sous-poste inconnu prend l'or du poste. */
 export const incomeColor = (sub: SpendingSubcategory): string =>
   INCOME_COLORS[sub] ?? COLORS.income;
 
@@ -797,10 +864,19 @@ const INCOME_RULES: [sub: SpendingSubcategory, re: RegExp][] = [
     "pole ?emploi", "france ?travail", "\\bassedic\\b", "allocation", "\\bapl\\b",
     "prime ?activite", "\\brsa\\b", "aide ?logement", "indemnite ?journaliere",
   ])],
+  /* Le travail INDÉPENDANT avant le salariat, et pour la même raison que les
+     aides avant les salaires : « facture client » et « honoraires » ne sont pas
+     un salaire, mais un versement de plateforme porte souvent les deux mots.
+     Deux sources plutôt qu'une parce que ce ne sont pas les mêmes euros — l'un
+     tombe tous les mois, l'autre à la facture —, et un flux qui les fond sous
+     « Salaire » ne dit plus de quoi le mois est fait. */
+  ["income.freelance", rule([
+    "honoraires", "\\bfacture ?client", "\\bfreelance\\b", "\\bmalt\\b", "\\bupwork\\b",
+    "\\bfiverr\\b", "stripe", "\\bmicro ?entreprise", "auto ?entrepreneur",
+  ])],
   ["income.salary", rule([
     "salaire", "\\bpaie\\b", "\\bpaye\\b", "remuneration", "traitement", "\\bsolde ?mensuel",
     "bulletin ?de ?paie", "acompte ?salaire", "\\bprime\\b", "interessement", "participation",
-    "honoraires", "\\bfacture ?client", "\\bfreelance\\b", "\\bmalt\\b", "\\bupwork\\b", "stripe",
   ])],
   ["income.pension", rule([
     "retraite", "\\bpension\\b", "\\bcarsat\\b", "\\bagirc\\b", "\\barrco\\b", "\\bcnav\\b",
@@ -810,9 +886,16 @@ const INCOME_RULES: [sub: SpendingSubcategory, re: RegExp][] = [
     "remboursement", "\\bavoir\\b", "\\bretrocession", "\\bindemnisation", "sinistre",
     "\\btrop ?percu", "\\bdedommagement",
   ])],
-  ["income.interest", rule([
-    "interets", "dividende", "\\bcoupon\\b", "\\bplus ?value", "\\bfermage\\b",
+  /* Ce que le CAPITAL rapporte, en deux sources : les intérêts d'un livret sont
+     un filet régulier, un dividende ou une plus-value un versement qui tombe
+     quand il tombe. Les fondre effaçait la seule question qu'on pose à cette
+     ligne dans une app de trading — « est-ce que ça vient de mon travail ou de
+     mes placements, et lequel ? ». Le fermage reste avec les intérêts : c'est
+     un revenu qui revient à date, pas un gain de cession. */
+  ["income.dividends", rule([
+    "dividende", "\\bcoupon\\b", "\\bplus ?value", "\\bdistribution\\b", "\\bpayout\\b",
   ])],
+  ["income.interest", rule(["interets", "\\bfermage\\b", "\\brente\\b"])],
   ["income.sale", rule(["\\bvente\\b", "\\bcession\\b", "\\brevente\\b"])],
 ];
 

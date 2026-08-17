@@ -95,3 +95,63 @@ export function deepen(color: string, max = WHITE_SAFE): string {
   for (let i = 0; i < 6 && luminance(out) > max; i++) out = shade(out, 0.12);
   return out;
 }
+
+/** Contraste WCAG entre deux couleurs, de 1 (identiques) à 21 (noir sur blanc). */
+export function contrast(a: string, b: string): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * La couleur amenée à une luminance donnée, en l'éclaircissant OU en
+ * l'assombrissant selon d'où elle part.
+ *
+ * Sert aux VIGNETTES. Une palette d'identité étale ses teintes sur toute
+ * l'échelle de clarté — le rose rend 0,72 de luminance, le bleu profond 0,16 —
+ * et posées telles quelles dans une colonne de pastilles, les unes brûlent
+ * pendant que les autres s'éteignent. En les ramenant TOUTES au même niveau, la
+ * famille se lit comme une famille et il ne reste que la teinte pour les
+ * distinguer, ce qui est exactement le travail qu'on leur demande.
+ *
+ * Recherche par dichotomie sur la part de blanc (positive) ou de noir
+ * (négative) : c'est monotone, vingt itérations suffisent largement.
+ */
+export function toLuminance(color: string, target: number): string {
+  if (!HEX.test(color)) return color;
+  let lo = -1;
+  let hi = 1;
+  let out = color;
+  for (let i = 0; i < 20; i++) {
+    const m = (lo + hi) / 2;
+    out = m >= 0 ? tint(color, m) : shade(color, -m);
+    if (luminance(out) > target) hi = m;
+    else lo = m;
+  }
+  return out;
+}
+
+/**
+ * De l'encre lisible sur `bg` : la MÊME teinte, assombrie juste assez.
+ *
+ * On ne choisit pas une encre neutre — un glyphe noir sur une vignette colorée
+ * casse la parenté entre le disque et son dessin. On descend la teinte jusqu'au
+ * ratio demandé, et pas plus loin.
+ */
+export function inkOn(color: string, bg: string, ratio = 4.5): string {
+  let out = color;
+  for (let i = 0; i < 20 && contrast(out, bg) < ratio; i++) out = shade(out, 0.1);
+  return out;
+}
+
+/**
+ * Anneau de lisibilité d'une pastille, à poser en `boxShadow`.
+ *
+ * Une puce de 8 px doit tenir 3:1 pour exister sur une carte blanche, et les
+ * teintes claires de la palette sont loin du compte (le jaune rend 1,55:1, le
+ * rose 1,39:1). Les assombrir marcherait, mais le jaune vire olive et le rose
+ * gris : on perd ce que la puce est censée dire. On garde donc la teinte PLEINE
+ * au centre et on cerne la puce d'un liseré de la même teinte, assez foncé pour
+ * la détacher du fond. `inset` : le liseré ne change pas l'encombrement.
+ */
+export const dotRing = (color: string): string => `inset 0 0 0 1px ${deepen(color)}`;

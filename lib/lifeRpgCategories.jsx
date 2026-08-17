@@ -24,6 +24,7 @@ import {
   Calendar, Heart, Activity, BookOpen, Target, TrendingUp, Briefcase, Code,
   Trophy, Flame,
 } from "lucide-react";
+import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 
 // Clés de persistance de l'état Vie RPG (localStorage + Supabase).
 export const RPG_STORAGE_KEY = "tr4de_life_rpg";
@@ -100,10 +101,14 @@ export function CatIcon({ name, ...rest }) {
   return <Ic {...rest} />;
 }
 
-// Palette de couleurs proposée pour les catégories.
+// Palette proposée pour les catégories. Les huit couleurs principales de la
+// planche (cf. lib/ui/palette) viennent en premier, telles quelles : ce sont
+// celles qu'on choisit le plus souvent. Les trois suivantes ne sortent qu'une
+// fois les huit prises, et le gris ferme la liste.
 export const CATEGORY_PALETTE = [
-  "#F97316", "#3B82F6", "#EC4899", "#16A34A", "#06B6D4", "#8B5CF6",
-  "#059669", "#EF4444", "#F59E0B", "#14B8A6", "#6366F1", "#64748B",
+  PALETTE.orange, PALETTE.blue, PALETTE.purple, PALETTE.green,
+  PALETTE.red, PALETTE.yellow, PALETTE.pink, PALETTE.brown,
+  PALETTE_DARK.purple, PALETTE_DARK.blue, PALETTE_DARK.red, GREY.grey700,
 ];
 
 // Nombre d'objectifs de l'année. Trois, volontairement : c'est la contrainte
@@ -119,14 +124,12 @@ export const DEFAULT_CATEGORIES = [];
 // Modèles proposés dans l'emplacement vide : un point de départ cliquable
 // (nom + couleur + icône + intention), immédiatement modifiable ensuite.
 export const YEAR_GOAL_TEMPLATES = [
-  { label: "Forme physique", color: "#F97316", icon: "dumbbell",   identity: "Je prends soin de mon corps et je m'entraîne régulièrement.",   outcome: "" },
-  // Vert, comme la catégorie « Trading » de la page Objectifs : la même chose
-  // portait deux couleurs selon la page où on la regardait.
-  { label: "Trading",        color: "#16A34A", icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
-  { label: "Finances",       color: "#059669", icon: "wallet",     identity: "Je gère mon argent avec sagesse et sérénité.",                  outcome: "" },
-  { label: "Savoir",         color: "#3B82F6", icon: "graduation", identity: "J'apprends quelque chose de nouveau chaque jour.",              outcome: "" },
-  { label: "Relations",      color: "#EC4899", icon: "users",      identity: "Je cultive des relations sincères et profondes.",               outcome: "" },
-  { label: "Sérénité",       color: "#14B8A6", icon: "heart",      identity: "Je cultive le calme, la gratitude et la présence.",             outcome: "" },
+  { label: "Forme physique", color: PALETTE.orange,   icon: "dumbbell",   identity: "Je prends soin de mon corps et je m'entraîne régulièrement.",   outcome: "" },
+  { label: "Trading",        color: PALETTE.yellow,   icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
+  { label: "Finances",       color: PALETTE.green,    icon: "wallet",     identity: "Je gère mon argent avec sagesse et sérénité.",                  outcome: "" },
+  { label: "Savoir",         color: PALETTE.blue,     icon: "graduation", identity: "J'apprends quelque chose de nouveau chaque jour.",              outcome: "" },
+  { label: "Relations",      color: PALETTE.purple,   icon: "users",      identity: "Je cultive des relations sincères et profondes.",               outcome: "" },
+  { label: "Sérénité",       color: PALETTE.pink,     icon: "heart",      identity: "Je cultive le calme, la gratitude et la présence.",             outcome: "" },
 ];
 
 // Sélectionne les objectifs à CONSERVER lors de la migration depuis l'ancien

@@ -22,6 +22,8 @@ import {
 } from "@/lib/lifeRpgCategories";
 
 import { T as BaseT } from "@/lib/ui/tokens";
+import { dotRing } from "@/lib/ui/color";
+import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
 const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
@@ -37,10 +39,10 @@ const HORIZONS = [
 ];
 // Priorités (remplace les anciens niveaux facile/moyen/difficile)
 const LEVELS = [
-  { id: "low",     label: "Basse",    color: "#8E8E8E" },
-  { id: "normal",  label: "Normale",  color: "#3B82F6" },
-  { id: "high",    label: "Haute",    color: "#F59E0B" },
-  { id: "urgent",  label: "Urgente",  color: "#EF4444" },
+  { id: "low",     label: "Basse",    color: GREY.grey700 },
+  { id: "normal",  label: "Normale",  color: PALETTE.blue },
+  { id: "high",    label: "Haute",    color: PALETTE.orange },
+  { id: "urgent",  label: "Urgente",  color: PALETTE.red },
 ];
 
 // Unités de cible pour les objectifs manuels (ignoré pour les sources trading
@@ -59,17 +61,17 @@ const UNITS = [
   { id: "custom",  label: "Autre…",    suffix: "", isCustom: true },
 ];
 const CATEGORIES = [
-  { id: "trading",   label: "Trading",       color: "#16A34A", icon: TrendingUp },
-  { id: "personal",  label: "Personnel",     color: "#EF4444", icon: Heart },
-  { id: "sport",     label: "Sport",         color: "#EF4444", icon: Dumbbell },
-  { id: "reading",   label: "Lecture",       color: "#8B5CF6", icon: BookOpen },
-  { id: "relations", label: "Relations",     color: "#EC4899", icon: Users },
-  { id: "learning",  label: "Apprentissage", color: "#3B82F6", icon: GraduationCap },
-  { id: "health",    label: "Santé",         color: "#06B6D4", icon: Activity },
-  { id: "steps",     label: "Pas journalier", color: "#10B981", icon: Footprints },
-  { id: "finance",   label: "Finances",      color: "#059669", icon: Wallet },
-  { id: "work",      label: "Travail",       color: "#64748B", icon: Briefcase },
-  { id: "code",      label: "Dev",           color: "#6366F1", icon: Code },
+  { id: "trading",   label: "Trading",       color: PALETTE.yellow, icon: TrendingUp },
+  { id: "personal",  label: "Personnel",     color: PALETTE.red, icon: Heart },
+  { id: "sport",     label: "Sport",         color: PALETTE.orange, icon: Dumbbell },
+  { id: "reading",   label: "Lecture",       color: PALETTE_DARK.purple, icon: BookOpen },
+  { id: "relations", label: "Relations",     color: PALETTE.purple, icon: Users },
+  { id: "learning",  label: "Apprentissage", color: PALETTE.blue, icon: GraduationCap },
+  { id: "health",    label: "Santé",         color: PALETTE.pink, icon: Activity },
+  { id: "steps",     label: "Pas journalier", color: PALETTE.green, icon: Footprints },
+  { id: "finance",   label: "Finances",      color: PALETTE_DARK.green, icon: Wallet },
+  { id: "work",      label: "Travail",       color: PALETTE.brown, icon: Briefcase },
+  { id: "code",      label: "Dev",           color: PALETTE_DARK.blue, icon: Code },
 ];
 // Sources de suivi. `trading: true` = calculé à partir des trades et filtré
 // sur l'horizon de l'objectif. Ces types ne sont proposés qu'en catégorie
@@ -261,11 +263,11 @@ export function computeGoalPace(g, current, target, pct) {
   }
 
   let status, color, label;
-  if (pct >= 100)            { status = "done";    color = "#16A34A"; label = "Atteint"; }
-  else if (timeFrac >= 1)    { status = "ended";   color = "#EF4444"; label = "Échéance passée"; }
-  else if (delta >= 0.05)    { status = "ahead";   color = "#16A34A"; label = "En avance"; }
-  else if (delta <= -0.05)   { status = "behind";  color = "#F59E0B"; label = "En retard"; }
-  else                       { status = "ontrack"; color = "#3B82F6"; label = "Dans les temps"; }
+  if (pct >= 100)            { status = "done";    color = PALETTE.green; label = "Atteint"; }
+  else if (timeFrac >= 1)    { status = "ended";   color = PALETTE.red;      label = "Échéance passée"; }
+  else if (delta >= 0.05)    { status = "ahead";   color = PALETTE.green; label = "En avance"; }
+  else if (delta <= -0.05)   { status = "behind";  color = PALETTE.orange;   label = "En retard"; }
+  else                       { status = "ontrack"; color = PALETTE.blue;     label = "Dans les temps"; }
 
   return { status, color, label, expectedPct, timeFrac, progressFrac, requiredRate, rateUnit };
 }
@@ -518,6 +520,9 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
           accountTypeFilter: form.accountTypeFilter,
           accountIdFilter: form.accountIdFilter,
           rpgCategory, rpgXp,
+          // L'étape porteuse (« Quête de soi ») appartient à la carte quittée :
+          // changer de carte, ou se détacher, la laisse pointer dans le vide.
+          rpgStep: rpgCategory && g.rpgCategory === rpgCategory ? (g.rpgStep || null) : null,
         })));
       } else {
         // Créer le nouveau goal et passer immédiatement en mode édition
@@ -815,7 +820,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                     fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                     transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
                   }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: lv.color, flexShrink: 0 }} />
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: lv.color, boxShadow: dotRing(lv.color), flexShrink: 0 }} />
                   {lv.label}
                 </button>
               );
@@ -2166,6 +2171,7 @@ function RoadmapDot({ item: it, pct, color }) {
       <div style={{
         width: 12, height: 12, borderRadius: "50%",
         background: color,
+        boxShadow: dotRing(color),
         border: `2px solid ${T.white}`,
         boxShadow: hover
           ? "0 0 0 3px rgba(59,130,246,0.20), 0 2px 6px rgba(0,0,0,0.18)"

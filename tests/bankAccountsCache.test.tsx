@@ -234,6 +234,60 @@ describe("échecs et fin de session", () => {
     expect(screen.getByTestId("a-loading")).toHaveTextContent("true");
   });
 
+  /* ── L'amorçage à l'ouverture de l'application ────────────────────────────
+     `primeBankAccounts` est appelé par le fournisseur d'authentification dès
+     qu'une session existe, bien avant qu'une page affiche des comptes. Ce qui
+     est tenu ici : il PART sans rien monter, il ne repart pas pour rien, et deux
+     appels rapprochés ne font qu'une requête. */
+
+  it("part sans qu'aucune page ne soit montée", async () => {
+    const fetchMock = vi.fn(async () => okResponse([account("a")]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const mod = await import("@/lib/bank/useBankAccounts");
+    await act(async () => { mod.primeBankAccounts(); });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/bank/accounts");
+
+    /* Et la page montée ensuite trouve les comptes DÉJÀ là : c'est tout l'objet
+       de l'amorçage — plus d'attente au moment où l'on arrive sur l'écran. */
+    const Probe = probe(mod.useBankAccounts);
+    render(<Probe />);
+    expect(screen.getByTestId("a-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("a-loading")).toHaveTextContent("false");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ne repart pas quand le cache est encore frais", async () => {
+    seedCache([account("a")], 5_000);
+    const fetchMock = vi.fn(async () => okResponse([account("a")]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const mod = await import("@/lib/bank/useBankAccounts");
+    await act(async () => { mod.primeBankAccounts(); });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("deux amorçages rapprochés ne font qu'une requête", async () => {
+    // Le fournisseur d'authentification amorce à la lecture de la session PUIS
+    // sur l'événement de connexion : les deux peuvent tomber coup sur coup.
+    const fetchMock = vi.fn(() => new Promise(() => {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const mod = await import("@/lib/bank/useBankAccounts");
+    await act(async () => {
+      mod.primeBankAccounts();
+      mod.primeBankAccounts();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("clearBankAccountsCache vide le disque et l'affichage", async () => {
     seedCache([account("a")], 10 * 60_000);
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));

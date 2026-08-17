@@ -111,6 +111,73 @@ describe("relevés de plusieurs comptes", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("demande les comptes DE FRONT, et non l'un après l'autre", async () => {
+    /* C'est la propriété qui décide du temps d'ouverture de la page : en file,
+       cinq comptes coûtaient la SOMME des allers-retours. On observe le nombre
+       de requêtes simultanées plutôt que le temps écoulé — une horloge sous
+       jsdom mesurerait surtout la charge de la machine. */
+    let live = 0;
+    let peak = 0;
+    const release: (() => void)[] = [];
+
+    const fetchMock = vi.fn(async (url: string) => {
+      live += 1;
+      peak = Math.max(peak, live);
+      await new Promise<void>((r) => release.push(r));
+      live -= 1;
+      return response([tx(url.match(/uid=(c\d)/)?.[1] ?? "?", -10)]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { useBankTransactionsAll } = await loadModule();
+    const Probe = probe(useBankTransactionsAll);
+    render(<Probe uids={["c1", "c2", "c3"]} />);
+
+    // Les trois partent ensemble : le plafond est à quatre, elles tiennent toutes.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(peak).toBe(3);
+
+    release.forEach((r) => r());
+    await waitFor(() =>
+      expect(screen.getByTestId("summary").textContent).toBe("c1:c1 c2:c2 c3:c3"),
+    );
+  });
+
+  it("plafonne le nombre de requêtes simultanées", async () => {
+    /* Vingt comptes lancés d'un coup saturent le navigateur (six connexions par
+       hôte en HTTP/1.1) et l'agrégateur : les premiers relevés arriveraient plus
+       tard qu'en les étalant. */
+    let live = 0;
+    let peak = 0;
+    const release: (() => void)[] = [];
+
+    const fetchMock = vi.fn(async () => {
+      live += 1;
+      peak = Math.max(peak, live);
+      await new Promise<void>((r) => release.push(r));
+      live -= 1;
+      return response([tx("a", -10)]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const uids = Array.from({ length: 12 }, (_, i) => `c${i}`);
+    const { useBankTransactionsAll } = await loadModule();
+    const Probe = probe(useBankTransactionsAll);
+    render(<Probe uids={uids} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(peak).toBe(4);
+    // Et la file avance : libérer les quatre premières en lance quatre autres.
+    release.splice(0).forEach((r) => r());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(8));
+    expect(peak).toBe(4);
+
+    release.splice(0).forEach((r) => r());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(12));
+    release.splice(0).forEach((r) => r());
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
+  });
+
   it("sans aucun compte, ne requête rien et ne charge pas", async () => {
     const fetchMock = vi.fn(async () => response([]));
     vi.stubGlobal("fetch", fetchMock);

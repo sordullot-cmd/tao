@@ -14,6 +14,12 @@
  * ce choix est une couverture manuelle, et il est assumé : les enseignes
  * inconnues gardent l'icône de nature, qui reste juste.
  *
+ * Deux entrées, parce qu'une ligne de relevé n'a pas la même contrepartie selon
+ * sa nature : `findMerchant` cherche l'ENSEIGNE d'un achat, `findTransferBank`
+ * la BANQUE d'où vient un virement. La seconde ne consulte que les entrées
+ * marquées `bank` — c'est ce qui lui permet de travailler sur des libellés où
+ * `findMerchant` refuse de chercher, parce qu'ils portent des noms de personnes.
+ *
  * Ajouter un marchand : déposer l'image dans `public/marchands/` (carrée, le
  * disque de `RoundLogo` la détoure en `cover`), ajouter une ligne dans
  * `MERCHANTS` avec son `logo`. Sans fichier, la pastille prend la couleur de la
@@ -48,6 +54,17 @@ export interface Merchant {
   color: string;
   /** Fichier livré avec l'application, quand on l'a. */
   logo?: string;
+  /**
+   * Établissement bancaire ou service de paiement.
+   *
+   * Ces entrées-là, et elles seules, sont cherchées sur un VIREMENT
+   * (cf. `findTransferBank`). La garde de `findMerchant` écarte les virements
+   * parce qu'ils portent des noms de PERSONNES, et qu'un homonyme d'enseigne y
+   * est fréquent (« Virement de Camille Orange »). Un nom de BANQUE sur un
+   * virement, lui, ne désigne presque jamais quelqu'un : il dit d'où l'argent
+   * arrive, ce que rien d'autre sur la ligne ne dit.
+   */
+  bank?: true;
 }
 
 /**
@@ -190,17 +207,20 @@ const MERCHANTS: Array<{ match: RegExp; merchant: Merchant }> = [
   /* ── Finance ──────────────────────────────────────────────────────────────
      Les trois premières réutilisent les images déjà livrées pour les COMPTES
      (`public/banque/`) : quand elles apparaissent en contrepartie d'un
-     virement, c'est bien la même marque. */
-  { match: /\brevolut\b/, merchant: { slug: "revolut", name: "Revolut", color: "#1A1A1A", logo: "/banque/revolut.webp" } },
-  { match: /\bbourso/, merchant: { slug: "boursorama", name: "BoursoBank", color: "#E5007D", logo: "/banque/boursorama.jpg" } },
-  { match: /\bcredit agricole\b/, merchant: { slug: "credit-agricole", name: "Crédit Agricole", color: "#00895E", logo: "/banque/credit-agricole.jpg" } },
-  { match: /\bpaypal\b/, merchant: { slug: "paypal", name: "PayPal", color: "#003087", logo: "/marchands/paypal.png" } },
-  { match: /\bstripe\b/, merchant: { slug: "stripe", name: "Stripe", color: "#5433FF", logo: "/marchands/stripe.svg" } },
-  { match: /\blydia\b/, merchant: { slug: "lydia", name: "Lydia", color: "#0B79F7", logo: "/marchands/lydia.png" } },
-  { match: /\bn26\b/, merchant: { slug: "n26", name: "N26", color: "#1A1A1A", logo: "/marchands/n26.png" } },
-  { match: /\bbinance\b/, merchant: { slug: "binance", name: "Binance", color: "#B58200", logo: "/marchands/binance.png" } },
-  { match: /\bcoinbase\b/, merchant: { slug: "coinbase", name: "Coinbase", color: "#0052FF", logo: "/marchands/coinbase.png" } },
-  { match: /\btrade republic\b/, merchant: { slug: "trade-republic", name: "Trade Republic", color: "#1A1A1A", logo: "/marchands/trade-republic.svg" } },
+     virement, c'est bien la même marque.
+
+     `bank: true` sur ces entrées : ce sont elles, et elles seules, qu'on cherche
+     sur un VIREMENT pour dire d'où il vient (cf. `findTransferBank`). */
+  { match: /\brevolut\b/, merchant: { slug: "revolut", name: "Revolut", color: "#1A1A1A", logo: "/banque/revolut.webp", bank: true } },
+  { match: /\bbourso/, merchant: { slug: "boursorama", name: "BoursoBank", color: "#E5007D", logo: "/banque/boursorama.jpg", bank: true } },
+  { match: /\bcredit agricole\b/, merchant: { slug: "credit-agricole", name: "Crédit Agricole", color: "#00895E", logo: "/banque/credit-agricole.jpg", bank: true } },
+  { match: /\bpaypal\b/, merchant: { slug: "paypal", name: "PayPal", color: "#003087", logo: "/marchands/paypal.png", bank: true } },
+  { match: /\bstripe\b/, merchant: { slug: "stripe", name: "Stripe", color: "#5433FF", logo: "/marchands/stripe.svg", bank: true } },
+  { match: /\blydia\b/, merchant: { slug: "lydia", name: "Lydia", color: "#0B79F7", logo: "/marchands/lydia.png", bank: true } },
+  { match: /\bn26\b/, merchant: { slug: "n26", name: "N26", color: "#1A1A1A", logo: "/marchands/n26.png", bank: true } },
+  { match: /\bbinance\b/, merchant: { slug: "binance", name: "Binance", color: "#B58200", logo: "/marchands/binance.png", bank: true } },
+  { match: /\bcoinbase\b/, merchant: { slug: "coinbase", name: "Coinbase", color: "#0052FF", logo: "/marchands/coinbase.png", bank: true } },
+  { match: /\btrade republic\b/, merchant: { slug: "trade-republic", name: "Trade Republic", color: "#1A1A1A", logo: "/marchands/trade-republic.svg", bank: true } },
   /* ── Extension : enseignes courantes d'un relevé français ─────────────
      Ajoutées après le premier lot, qui ne couvrait que les plus grosses
      marques. Placées EN FIN de table : les motifs ci-dessus sont plus
@@ -369,17 +389,17 @@ const MERCHANTS: Array<{ match: RegExp; merchant: Merchant }> = [
   { match: /\bgmf\b/, merchant: { slug: "gmf", name: "GMF", color: "#0F5A8C", logo: "/marchands/gmf.ico" } },
   { match: /\bgroupama\b/, merchant: { slug: "groupama", name: "Groupama", color: "#0F6B3C", logo: "/marchands/groupama.png" } },
   { match: /\bdirect assurance\b/, merchant: { slug: "direct-assurance", name: "Direct Assurance", color: "#C8402E", logo: "/marchands/direct-assurance.png" } },
-  { match: /\bcredit mutuel\b|\bcic\b/, merchant: { slug: "credit-mutuel", name: "Crédit Mutuel", color: "#0F5AA0", logo: "/marchands/credit-mutuel.png" } },
-  { match: /\bcaisse d epargne\b|\bcaisse epargne\b/, merchant: { slug: "caisse-epargne", name: "Caisse d'Épargne", color: "#8C1A6B", logo: "/marchands/caisse-epargne.png" } },
-  { match: /\blcl\b/, merchant: { slug: "lcl", name: "LCL", color: "#0F3A8C", logo: "/marchands/lcl.png" } },
-  { match: /\bsociete generale\b|\bsocgen\b/, merchant: { slug: "societe-generale", name: "Société Générale", color: "#C8102E", logo: "/marchands/societe-generale.png" } },
-  { match: /\bbnp\b|\bparibas\b/, merchant: { slug: "bnp", name: "BNP Paribas", color: "#0F6B5A", logo: "/marchands/bnp.png" } },
-  { match: /\bbanque postale\b/, merchant: { slug: "banque-postale", name: "La Banque Postale", color: "#0F3A6B", logo: "/marchands/banque-postale.png" } },
-  { match: /\bfortuneo\b/, merchant: { slug: "fortuneo", name: "Fortuneo", color: "#0F6B8C", logo: "/marchands/fortuneo.png" } },
-  { match: /\bcompte nickel\b|\bnickel sas\b/, merchant: { slug: "nickel", name: "Nickel", color: "#C8A006", logo: "/marchands/nickel.ico" } },
-  { match: /\bqonto\b/, merchant: { slug: "qonto", name: "Qonto", color: "#4A2F8C", logo: "/marchands/qonto.png" } },
-  { match: /\bwise\b|\btransferwise\b/, merchant: { slug: "wise", name: "Wise", color: "#4A8C0F", logo: "/marchands/wise.png" } },
-  { match: /\bkraken\b/, merchant: { slug: "kraken", name: "Kraken", color: "#4A2F8C", logo: "/marchands/kraken.png" } },
+  { match: /\bcredit mutuel\b|\bcic\b/, merchant: { slug: "credit-mutuel", name: "Crédit Mutuel", color: "#0F5AA0", logo: "/marchands/credit-mutuel.png", bank: true } },
+  { match: /\bcaisse d epargne\b|\bcaisse epargne\b/, merchant: { slug: "caisse-epargne", name: "Caisse d'Épargne", color: "#8C1A6B", logo: "/marchands/caisse-epargne.png", bank: true } },
+  { match: /\blcl\b/, merchant: { slug: "lcl", name: "LCL", color: "#0F3A8C", logo: "/marchands/lcl.png", bank: true } },
+  { match: /\bsociete generale\b|\bsocgen\b/, merchant: { slug: "societe-generale", name: "Société Générale", color: "#C8102E", logo: "/marchands/societe-generale.png", bank: true } },
+  { match: /\bbnp\b|\bparibas\b/, merchant: { slug: "bnp", name: "BNP Paribas", color: "#0F6B5A", logo: "/marchands/bnp.png", bank: true } },
+  { match: /\bbanque postale\b/, merchant: { slug: "banque-postale", name: "La Banque Postale", color: "#0F3A6B", logo: "/marchands/banque-postale.png", bank: true } },
+  { match: /\bfortuneo\b/, merchant: { slug: "fortuneo", name: "Fortuneo", color: "#0F6B8C", logo: "/marchands/fortuneo.png", bank: true } },
+  { match: /\bcompte nickel\b|\bnickel sas\b/, merchant: { slug: "nickel", name: "Nickel", color: "#C8A006", logo: "/marchands/nickel.ico", bank: true } },
+  { match: /\bqonto\b/, merchant: { slug: "qonto", name: "Qonto", color: "#4A2F8C", logo: "/marchands/qonto.png", bank: true } },
+  { match: /\bwise\b|\btransferwise\b/, merchant: { slug: "wise", name: "Wise", color: "#4A8C0F", logo: "/marchands/wise.png", bank: true } },
+  { match: /\bkraken\b/, merchant: { slug: "kraken", name: "Kraken", color: "#4A2F8C", logo: "/marchands/kraken.png", bank: true } },
   { match: /\bledger\b/, merchant: { slug: "ledger", name: "Ledger", color: "#1A1A1A", logo: "/marchands/ledger.png" } },
   { match: /\bswile\b/, merchant: { slug: "swile", name: "Swile", color: "#C8402E", logo: "/marchands/swile.png" } },
   { match: /\bedenred\b|\bticket restaurant\b/, merchant: { slug: "edenred", name: "Edenred", color: "#0F5AA0", logo: "/marchands/edenred.svg" } },
@@ -442,21 +462,27 @@ const MERCHANT_KINDS: BankTransaction["kind"][] = ["card", "direct_debit"];
  * Le crédit reste exclu, ainsi que les virements, retraits et frais : c'est là
  * que se trouvent les noms de PERSONNES, donc le risque d'homonyme d'enseigne.
  * Un débit non qualifié, lui, est un achat dans l'immense majorité des cas.
+ *
+ * Ces lignes-là ne restent pas nues pour autant : `findTransferBank` y cherche
+ * les seuls noms d'ÉTABLISSEMENTS, où l'homonymie ne joue quasiment pas.
  */
 const peutPorterUnMarchand = (tx: BankTransaction): boolean =>
   MERCHANT_KINDS.includes(tx.kind) || (tx.kind === "other" && tx.amount < 0);
 
 /**
- * Marchand d'une opération, `null` s'il n'est pas reconnu — l'appelant garde
- * alors l'icône de nature.
+ * Le libellé réduit à ce qui peut porter un nom de marque, et l'intermédiaire de
+ * paiement qu'on en a retiré.
+ *
+ * Partagé par les deux recherches — enseigne d'un achat et banque d'un virement.
+ * Ce n'est pas une commodité : les deux doivent nettoyer EXACTEMENT pareil,
+ * sinon un motif écrit pour l'une (« caisse d epargne », qui suppose l'apostrophe
+ * déjà éclatée) cesse silencieusement de matcher pour l'autre.
  */
-export function findMerchant(tx: BankTransaction | null | undefined): Merchant | null {
-  if (!tx || !peutPorterUnMarchand(tx)) return null;
-
-  // Le complément porte souvent le vrai nom du commerçant quand le libellé
+function brandKey(tx: BankTransaction): { key: string; intermediary: string | null } {
+  // Le complément porte souvent le vrai nom de la contrepartie quand le libellé
   // principal se réduit au code de l'opération.
   let key = merchantSearchKey(`${tx.label || ""} ${tx.detail || ""}`);
-  if (!key) return null;
+  if (!key) return { key: "", intermediary: null };
 
   /* `replace` et non `test` : les motifs ci-dessous sont globaux et partagés
      entre tous les appels, et `test()` sur une regex `/g/` avance son
@@ -471,11 +497,93 @@ export function findMerchant(tx: BankTransaction | null | undefined): Merchant |
     }
   }
   for (const n of NOISE) key = key.replace(n, " ");
-  key = key.replace(/\s+/g, " ").trim();
+  return { key: key.replace(/\s+/g, " ").trim(), intermediary };
+}
 
-  const hit = MERCHANTS.find((m) => m.match.test(key));
+/**
+ * Marchand d'une opération, `null` s'il n'est pas reconnu — l'appelant garde
+ * alors l'icône de nature.
+ */
+export function findMerchant(tx: BankTransaction | null | undefined): Merchant | null {
+  if (!tx || !peutPorterUnMarchand(tx)) return null;
+
+  /* `key` peut être VIDE alors que la ligne dit quelque chose : « PAYPAL » à lui
+     seul part entièrement dans les intermédiaires. Le repli sur l'intermédiaire
+     doit donc rester atteignable — sortir sur une clé vide ferait disparaître le
+     logo de PayPal et de Stripe. */
+  const { key, intermediary } = brandKey(tx);
+  const hit = key ? MERCHANTS.find((m) => m.match.test(key)) : null;
   if (hit) return hit.merchant;
   return intermediary ? bySlug(intermediary) : null;
+}
+
+/**
+ * Natures d'opération où la contrepartie est un ÉTABLISSEMENT, pas un
+ * commerçant : le virement, et le crédit que la banque n'a pas qualifié.
+ *
+ * Le second n'est pas un raffinement : beaucoup de banques ne codent rien, et
+ * `classifyTransaction` retombe alors sur `other`. Un virement reçu de Revolut y
+ * arrive avec pour seul libellé « REVOLUT LTD » — sans le préfixe « VIR » qui
+ * l'aurait fait classer. L'exclure reviendrait à n'afficher aucun logo chez ces
+ * banques, exactement le défaut que `peutPorterUnMarchand` avait déjà corrigé au
+ * débit.
+ *
+ * Le débit non qualifié, lui, reste du ressort de `findMerchant` : c'est un
+ * achat dans l'immense majorité des cas, et les entrées bancaires de la table
+ * sont de toute façon atteignables par cette voie.
+ */
+const peutPorterUneBanque = (tx: BankTransaction): boolean =>
+  tx.kind === "transfer" || (tx.kind === "other" && tx.amount > 0);
+
+/* Marques dont le nom est aussi un PRÉNOM. C'est le piège propre au virement :
+   « VIR RECU DE LYDIA MARTIN » ne vient pas de l'application de paiement, et le
+   logo se lirait comme une information vérifiée. Un prénom porte presque
+   toujours son nom de famille derrière lui, une marque presque jamais : on
+   écarte donc le logo dès qu'un autre mot suit le nom. Le prix est un faux
+   négatif (« LYDIA SOLUTIONS » perd son logo), et c'est le bon sens de l'erreur.
+
+   Clé = `slug`, qui vaut ici le nom en minuscules ; une marque dont le slug
+   s'écarterait du nom demanderait d'écrire le mot à chercher à côté. */
+const FIRST_NAME_BRANDS = new Set(["lydia"]);
+
+const suivieDunAutreMot = (word: string, key: string): boolean =>
+  new RegExp(`\\b${word}\\b\\s+\\p{L}`, "u").test(key);
+
+/**
+ * D'où vient un VIREMENT : la banque ou le service de paiement lu sur son
+ * libellé, `null` quand il n'en porte pas — l'appelant garde alors son icône de
+ * nature.
+ *
+ * Cette recherche est le pendant de `findMerchant`, sur les natures que celle-ci
+ * refuse (cf. `peutPorterUneBanque`), et elle ne consulte que les entrées
+ * `bank` de la table. La restriction EST la garde : sur un virement, le libellé
+ * porte souvent un nom de personne, et y chercher les 268 enseignes produirait
+ * des logos faux — un « VIR DE CAMILLE ORANGE » décoré du logo de l'opérateur.
+ * Un nom de banque, lui, ne désigne presque jamais quelqu'un ; les rares
+ * exceptions sont des prénoms, traités ci-dessus.
+ *
+ * Le nom lu n'est PAS proposé en remplacement du libellé : celui d'un virement
+ * dit qui a envoyé l'argent, ce qui vaut mieux que le nom de sa banque. Le logo
+ * ajoute, il ne remplace pas.
+ */
+export function findTransferBank(tx: BankTransaction | null | undefined): Merchant | null {
+  if (!tx || !peutPorterUneBanque(tx)) return null;
+
+  const { key, intermediary } = brandKey(tx);
+  const hit = key ? MERCHANTS.find((m) => m.merchant.bank && m.match.test(key)) : null;
+  if (hit) {
+    return FIRST_NAME_BRANDS.has(hit.merchant.slug) && suivieDunAutreMot(hit.merchant.slug, key)
+      ? null
+      : hit.merchant;
+  }
+
+  /* L'intermédiaire retiré du libellé compte ici comme ORIGINE : un virement
+     reçu de PayPal ou de Stripe vient bien de PayPal ou de Stripe, alors que sur
+     un achat le même mot ne faisait que masquer le commerçant. Les
+     intermédiaires qui ne sont pas des établissements (Apple Pay, Google Pay)
+     sont écartés par le drapeau. */
+  const via = intermediary ? bySlug(intermediary) : null;
+  return via?.bank ? via : null;
 }
 
 /**

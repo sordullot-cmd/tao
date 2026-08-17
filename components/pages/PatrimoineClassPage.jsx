@@ -13,6 +13,7 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { dotRing } from "@/lib/ui/color";
 import { t, useLang } from "@/lib/i18n";
 import { BackLink, CARD, HeroAmount, TH } from "@/components/ui/da";
 import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
@@ -79,7 +80,7 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
       <header style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: T.textSub }}>
-            <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: cls.color, flexShrink: 0 }} />
+            <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: cls.color, boxShadow: dotRing(cls.color), flexShrink: 0 }} />
             {t(cls.labelKey)}
           </div>
           <HeroAmount value={total} size={32} />

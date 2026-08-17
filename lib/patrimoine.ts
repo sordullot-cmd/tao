@@ -14,6 +14,7 @@
  */
 
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { PALETTE, PALETTE_DARK, GREY, CHIP } from "@/lib/ui/palette";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -108,9 +109,18 @@ export interface PatrimoineStore {
    vignettes d'instruments de `da.jsx` : elles ne passent pas par les tokens `T`
    et ne bougent pas en thème sombre — deux classes voisines doivent rester
    distinguables, ce qu'une palette recalculée par thème ne garantit pas.
-   `color` contraste ≥ 3:1 sur blanc ; `chip` est un couple fond pastel + encre
-   foncée, autonome, donc lisible sur les deux thèmes. Reprises telles quelles de
-   l'app d'origine, où ces contrastes avaient été validés.
+
+   Les teintes viennent de la planche des graphiques (cf. lib/ui/palette). Les
+   sept classes prennent sept des huit couleurs principales ; le sombre et le
+   gris ne servent qu'aux deux types supplémentaires, une fois les principales
+   épuisées. `chip` reste un couple fond pastel + encre foncée de la MÊME teinte
+   (≥ 4,5:1), autonome, donc lisible sur les deux thèmes.
+
+   ATTENTION : `color` ne tient plus le seuil de 3:1 sur blanc que respectait la
+   palette d'origine — les couleurs principales claires (jaune 1,55:1, vert
+   2,09:1, rose 1,32:1, orange 2,18:1) sont en dessous. C'est assumé pour les
+   APLATS (secteurs de la répartition, cartes), où la surface compense ; ce sont
+   les petites pastilles de légende qui en pâtissent.
    ------------------------------------------------------------------------ */
 
 export type AssetClassSlug =
@@ -136,57 +146,55 @@ export const ASSET_CLASSES: AssetClass[] = [
     slug: "investissements",
     labelKey: "patrimoine.class.investments",
     types: ["pea", "securities", "life_insurance"],
-    color: "#0060a1",
-    chip: { bg: "#d8efff", text: "#0060a1" },
+    color: PALETTE.blue,
+    chip: CHIP.blue,
   },
   {
     slug: "crypto",
     labelKey: "patrimoine.class.crypto",
     types: ["crypto"],
-    color: "#9f5c04",
-    chip: { bg: "#fff9d8", text: "#9f5c04" },
+    color: PALETTE.yellow,
+    chip: CHIP.yellow,
   },
   {
     slug: "immobilier",
     labelKey: "patrimoine.class.realEstate",
     types: ["real_estate"],
-    color: "#046c39",
-    chip: { bg: "#dcf5e5", text: "#046c39" },
+    color: PALETTE.green,
+    chip: CHIP.green,
   },
   {
     slug: "livrets",
     labelKey: "patrimoine.class.savings",
     types: ["savings"],
-    color: "#5b4bc4",
-    chip: { bg: "#e9e4ff", text: "#5b4bc4" },
+    color: PALETTE.purple,
+    chip: CHIP.purple,
   },
-  /* Comptes courants : violine profond. C'était un framboise vif sur rose
-     bonbon (#9b0058 / #ffdffa) — la pastille la plus fréquente de la liste, et
-     la plus criarde de la palette. Le violine garde ce que le framboise avait
-     d'utile (un secteur de teinte que personne d'autre n'occupe : 36 d'écart
-     ΔE avec la plus proche des huit autres, là où la palette en tolère 24) et
-     tient mieux sur fond sombre, sans le rose. */
+  /* Comptes courants : l'orange. C'était un violine profond, seul de son secteur
+     de teinte — la planche n'a pas de magenta, et l'orange est la couleur
+     principale restante la plus éloignée des six autres classes (le jaune de la
+     crypto en est le voisin le plus proche, et s'en sépare en clarté). */
   {
     slug: "comptes",
     labelKey: "patrimoine.class.checking",
     types: ["checking"],
-    color: "#8a2f80",
-    chip: { bg: "#f6e4f5", text: "#8a2f80" },
+    color: PALETTE.orange,
+    chip: CHIP.orange,
   },
   {
     slug: "autres",
     labelKey: "patrimoine.class.other",
     types: ["other"],
-    color: "#4b5157",
-    chip: { bg: "#eceef0", text: "#4b5157" },
+    color: GREY.grey700,
+    chip: CHIP.grey,
   },
   // Les passifs ne sont pas une part de la répartition (montants négatifs).
   {
     slug: "passifs",
     labelKey: "patrimoine.class.liabilities",
     types: ["loan"],
-    color: "#9f2f22",
-    chip: { bg: "#ffe3e0", text: "#9f2f22" },
+    color: PALETTE.red,
+    chip: CHIP.red,
   },
 ];
 
@@ -198,10 +206,11 @@ export const ASSET_CLASSES: AssetClass[] = [
 
    Chaque type seul dans sa classe garde la couleur de celle-ci : la pastille
    reste accordée à la puce de légende du même actif. Seuls les types qui
-   partageaient une teinte en reçoivent une propre, choisie dans un secteur de
-   teinte libre pour ne pas se confondre avec les six autres. Mêmes contraintes
-   que les classes ci-dessus : couple pastel autonome, hors tokens `T`, lisible
-   sur les deux thèmes, contraste texte/fond ≥ 4,5:1.
+   partageaient une teinte en reçoivent une propre : le rose, dernière couleur
+   principale libre, puis le bleu sombre — les huit principales étant alors
+   toutes prises. Mêmes contraintes que les classes ci-dessus : couple pastel
+   autonome, hors tokens `T`, lisible sur les deux thèmes, contraste texte/fond
+   ≥ 4,5:1.
    ------------------------------------------------------------------------ */
 
 export interface AssetTypeStyle {
@@ -210,20 +219,18 @@ export interface AssetTypeStyle {
 }
 
 export const ASSET_TYPE_STYLES: Record<AssetType, AssetTypeStyle> = {
-  // Classe « investissements » — bleu au PEA, les deux autres se démarquent.
-  pea: { color: "#0060a1", chip: { bg: "#d8efff", text: "#0060a1" } },
-  securities: { color: "#00696d", chip: { bg: "#d2f0f1", text: "#00696d" } },
-  // Pastel de l'assurance-vie adouci (#e6f3c4 → #eef6dd) : c'était le fond le
-  // plus saturé de la palette après le rose des comptes. L'encre y gagne même
-  // un peu de contraste (5,5:1 contre 5,25:1).
-  life_insurance: { color: "#4e6b00", chip: { bg: "#eef6dd", text: "#4e6b00" } },
+  // Classe « investissements » — le bleu au PEA, les deux autres se démarquent
+  // sur la dernière principale libre puis, faute de mieux, sur le bleu sombre.
+  pea: { color: PALETTE.blue, chip: CHIP.blue },
+  life_insurance: { color: PALETTE.pink, chip: CHIP.pink },
+  securities: { color: PALETTE_DARK.blue, chip: CHIP.blue },
   // Types seuls dans leur classe : couleur de la classe, inchangée.
-  crypto: { color: "#9f5c04", chip: { bg: "#fff9d8", text: "#9f5c04" } },
-  real_estate: { color: "#046c39", chip: { bg: "#dcf5e5", text: "#046c39" } },
-  savings: { color: "#5b4bc4", chip: { bg: "#e9e4ff", text: "#5b4bc4" } },
-  checking: { color: "#8a2f80", chip: { bg: "#f6e4f5", text: "#8a2f80" } },
-  loan: { color: "#9f2f22", chip: { bg: "#ffe3e0", text: "#9f2f22" } },
-  other: { color: "#4b5157", chip: { bg: "#eceef0", text: "#4b5157" } },
+  crypto: { color: PALETTE.yellow, chip: CHIP.yellow },
+  real_estate: { color: PALETTE.green, chip: CHIP.green },
+  savings: { color: PALETTE.purple, chip: CHIP.purple },
+  checking: { color: PALETTE.orange, chip: CHIP.orange },
+  loan: { color: PALETTE.red, chip: CHIP.red },
+  other: { color: GREY.grey700, chip: CHIP.grey },
 };
 
 /** Teinte d'un type. Repli sur la classe — un type inconnu (donnée plus

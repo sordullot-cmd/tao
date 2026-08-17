@@ -6,14 +6,22 @@
  * entre les deux. C'est ce qui manquait : un objectif d'un an sans point de
  * passage ne se pilote pas, il se subit.
  *
- * Une étape est volontairement BINAIRE et DATÉE — « passé la certification »,
- * « couru mon premier semi » — là où un objectif chiffré, lui, mesure une
- * quantité (page Objectifs) et où une tâche d'agenda vit à l'échelle de la
- * journée. Les trois cohabitent sur la carte sans se recouvrir :
+ * Une étape est DATÉE et se solde en franchie / à franchir — « passé la
+ * certification », « couru mon premier semi » — là où un objectif chiffré, lui,
+ * mesure une quantité (page Objectifs) et où une tâche d'agenda vit à l'échelle
+ * de la journée. Les trois cohabitent sur la carte sans se recouvrir :
  *
  *   étape    → un jalon du parcours, avec une date, franchi ou non ;
  *   objectif → une mesure continue (500 km, 10 000 €) ;
  *   tâche    → une action du quotidien.
+ *
+ * Un objectif chiffré peut être RATTACHÉ à une étape (`goal.rpgStep`). L'étape
+ * cesse alors d'être binaire : elle vaut l'avancement moyen de ses objectifs, et
+ * se franchit d'elle-même quand ils sont tous atteints — c'est là tout l'intérêt
+ * du rattachement, sinon on cocherait à la main un jalon que les chiffres ont
+ * déjà déclaré acquis. Ces avancements arrivent ici sous la forme d'un simple
+ * dictionnaire `{ idÉtape: [pct, …] }` (`StepGoalPcts`) : le module reste pur et
+ * ignore tout de la forme d'un objectif.
  *
  * Module PUR : aucune dépendance à React ni aux pages, pour que la page
  * « Quête de soi » et ses tests partagent exactement les mêmes règles.
@@ -57,6 +65,63 @@ export function readSteps(cat: { steps?: unknown } | null | undefined): LifeStep
     }));
 }
 
+/* ── Objectifs chiffrés rattachés aux étapes ───────────────────────────── */
+
+/** Avancements (0–100) des objectifs chiffrés, groupés par id d'étape. */
+export type StepGoalPcts = Record<string, number[]>;
+
+/**
+ * Range les avancements par étape. Un objectif sans `rpgStep` — le cas normal,
+ * rattaché à la carte mais à aucun jalon — n'entre pas dans le dictionnaire.
+ *
+ * `known` restreint aux étapes qui existent encore : un objectif qui pointe vers
+ * une étape supprimée redevient un objectif libre de la carte, sans quoi son
+ * avancement disparaîtrait de tous les calculs sans que rien ne l'affiche.
+ */
+export function groupGoalPctsByStep(
+  goals: { rpgStep?: string | null; pct?: number }[],
+  known?: Iterable<string>,
+): StepGoalPcts {
+  const allowed = known ? new Set(known) : null;
+  const out: StepGoalPcts = {};
+  for (const g of goals || []) {
+    const sid = g?.rpgStep ? String(g.rpgStep) : null;
+    if (!sid || (allowed && !allowed.has(sid))) continue;
+    (out[sid] = out[sid] || []).push(Math.max(0, Math.min(100, Number(g.pct) || 0)));
+  }
+  return out;
+}
+
+/** Les objectifs de `step` dans un dictionnaire d'avancements. */
+export function goalPctsOf(byStep: StepGoalPcts | undefined, stepId: string): number[] {
+  return (byStep && byStep[stepId]) || [];
+}
+
+/**
+ * Avancement d'une étape, en pourcentage.
+ *
+ * Sans objectif rattaché, une étape ne connaît que 0 ou 100 : c'est un jalon, il
+ * est franchi ou il ne l'est pas. Avec des objectifs, elle vaut leur moyenne —
+ * « à mi-chemin de la certification » est une information que la case à cocher
+ * ne pouvait pas porter.
+ */
+export function stepCompletion(step: LifeStep, goalPcts: number[] = []): number {
+  if (step.done) return 100;
+  if (goalPcts.length === 0) return 0;
+  return goalPcts.reduce((s, p) => s + p, 0) / goalPcts.length;
+}
+
+/**
+ * Étape franchie — à la main, ou parce que ses objectifs sont tous atteints.
+ *
+ * Le second cas est DÉRIVÉ, jamais écrit dans le store : si un objectif
+ * redescend sous sa cible (une moyenne, un capital), l'étape se rouvre d'
+ * elle-même. Un `done` figé aurait menti dès le lendemain.
+ */
+export function isStepDone(step: LifeStep, goalPcts: number[] = []): boolean {
+  return step.done || (goalPcts.length > 0 && goalPcts.every((p) => p >= 100));
+}
+
 /* ── Ordre et état ─────────────────────────────────────────────────────── */
 
 /**
@@ -81,8 +146,8 @@ export function sortSteps(steps: LifeStep[]): LifeStep[] {
 export type StepStatus = "done" | "late" | "today" | "upcoming" | "undated";
 
 /** État d'une étape vis-à-vis du calendrier. `today` au format `AAAA-MM-JJ`. */
-export function stepStatus(step: LifeStep, today: string): StepStatus {
-  if (step.done) return "done";
+export function stepStatus(step: LifeStep, today: string, goalPcts: number[] = []): StepStatus {
+  if (isStepDone(step, goalPcts)) return "done";
   if (!step.due) return "undated";
   if (step.due < today) return "late";
   if (step.due === today) return "today";
@@ -98,11 +163,21 @@ export interface StepsProgress {
   late: number;
 }
 
-export function stepsProgress(steps: LifeStep[], today: string): StepsProgress {
+/**
+ * `pct` est la moyenne des avancements d'étape, et non la part de cases cochées :
+ * une étape à mi-chemin de ses objectifs compte pour une demie. Sans objectif
+ * rattaché, les deux formules donnent le même chiffre.
+ */
+export function stepsProgress(steps: LifeStep[], today: string, byStep: StepGoalPcts = {}): StepsProgress {
   const total = steps.length;
-  const done = steps.filter((s) => s.done).length;
-  const late = steps.filter((s) => stepStatus(s, today) === "late").length;
-  return { done, total, late, pct: total === 0 ? 0 : Math.round((done / total) * 100) };
+  let done = 0, late = 0, sum = 0;
+  for (const s of steps) {
+    const pcts = goalPctsOf(byStep, s.id);
+    if (isStepDone(s, pcts)) done += 1;
+    if (stepStatus(s, today, pcts) === "late") late += 1;
+    sum += stepCompletion(s, pcts);
+  }
+  return { done, total, late, pct: total === 0 ? 0 : Math.round(sum / total) };
 }
 
 /* ── Avancement d'une carte ────────────────────────────────────────────────
@@ -112,6 +187,10 @@ export function stepsProgress(steps: LifeStep[], today: string): StepsProgress {
    ses chiffres, et ne compter que les seconds affichait 0 % à quelqu'un qui
    avance vraiment. Sans ni l'un ni l'autre, repli sur la progression de niveau
    (habitudes, tâches, discipline), comme avant.
+
+   `goalPcts` ne porte que les objectifs LIBRES de la carte : ceux rattachés à
+   une étape comptent déjà dans la mesure des étapes, et les additionner des deux
+   côtés donnerait un double poids aux objectifs les mieux rangés.
    ------------------------------------------------------------------------ */
 
 export interface CardProgress {
@@ -125,6 +204,7 @@ export interface CardProgress {
 export function cardProgress(input: {
   goalPcts?: number[];
   steps?: LifeStep[];
+  byStep?: StepGoalPcts;
   levelPct?: number;
   today: string;
 }): CardProgress {
@@ -136,7 +216,7 @@ export function cardProgress(input: {
     measures.push(goalPcts.reduce((s, p) => s + p, 0) / goalPcts.length);
   }
   if (steps.length > 0) {
-    measures.push(stepsProgress(steps, input.today).pct);
+    measures.push(stepsProgress(steps, input.today, input.byStep).pct);
   }
 
   const pct = measures.length > 0
@@ -206,11 +286,12 @@ export function upcomingSteps<C extends { steps?: unknown }>(
   cats: C[],
   today: string,
   limit = 5,
+  byStep: StepGoalPcts = {},
 ): UpcomingStep<C>[] {
   const all: UpcomingStep<C>[] = [];
   for (const cat of cats) {
     for (const step of readSteps(cat)) {
-      if (step.done || !step.due) continue;
+      if (isStepDone(step, goalPctsOf(byStep, step.id)) || !step.due) continue;
       all.push({ step, cat });
     }
   }
@@ -235,17 +316,22 @@ export function yearPosition(due: string | null, year: number): number | null {
   return ((at - start) / (end - start)) * 100;
 }
 
-/** Jalons de toutes les cartes, placés sur le rail de l'année. */
+/** Jalons de toutes les cartes, placés sur le rail de l'année.
+ *
+ *  `done` est calculé ici — les objectifs atteints d'une étape la franchissent
+ *  sans que `step.done` bouge, et la frise doit montrer la même chose que la
+ *  carte. */
 export function yearMarkers<C extends { id?: string; color?: string; label?: string; steps?: unknown }>(
   cats: C[],
   year: number,
-): { step: LifeStep; cat: C; left: number }[] {
-  const out: { step: LifeStep; cat: C; left: number }[] = [];
+  byStep: StepGoalPcts = {},
+): { step: LifeStep; cat: C; left: number; done: boolean }[] {
+  const out: { step: LifeStep; cat: C; left: number; done: boolean }[] = [];
   for (const cat of cats) {
     for (const step of readSteps(cat)) {
       const left = yearPosition(step.due, year);
       if (left === null) continue;
-      out.push({ step, cat, left });
+      out.push({ step, cat, left, done: isStepDone(step, goalPctsOf(byStep, step.id)) });
     }
   }
   return out.sort((a, b) => a.left - b.left);

@@ -78,6 +78,13 @@ export interface SankeyGraphNodeBox {
   labelY: number;
   /** Milieu du nœud. Diffère de `labelY` quand l'écartement a déplacé la pastille. */
   centreY: number;
+  /**
+   * Colonne SERRÉE : les libellés y sont trop nombreux pour tenir sur deux
+   * lignes chacun sans quitter leur branche. Le dessin les met alors sur une
+   * seule ligne (cf. `labelGapTight`) — c'est un choix de COLONNE, pas de nœud :
+   * tous les libellés d'une même colonne le portent ou aucun.
+   */
+  labelDense: boolean;
 }
 
 export interface SankeyGraphLinkBand {
@@ -139,11 +146,30 @@ export interface SankeyGraphOptions {
    * pas plus que ça. 0 = pas d'écartement, chaque pastille reste sur son nœud.
    */
   labelGap?: number;
+  /**
+   * Hauteur d'une pastille SERRÉE — sur une seule ligne. Une colonne qui ne peut
+   * pas tenir à `labelGap` sans que ses noms quittent leur branche repasse à
+   * celle-ci ; le calcul le dit par `labelDense`. 0 = jamais (la colonne garde
+   * alors `labelGap`, et ses noms dérivent).
+   */
+  labelGapTight?: number;
 }
 
 /* ── Outils ─────────────────────────────────────────────────────────────── */
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * Écart toléré entre un libellé et le milieu de sa branche, en part de la
+ * hauteur du libellé.
+ *
+ * C'est la question « ce nom est-il encore EN FACE de son ruban ? ». À une
+ * demi-hauteur, le libellé chevauche encore la ligne de sa branche et le trait
+ * de rappel finit de lever le doute ; au-delà, il se lit en face du voisin, et
+ * la colonne devient un texte qu'on ne peut plus rattacher au dessin. Une
+ * colonne qui dépasse ce seuil se resserre plutôt que de dériver.
+ */
+const LABEL_DRIFT_OK = 0.5;
 
 /** Allers-retours de relaxation, et amortissement entre deux (cf. plus bas). */
 const RELAX_PASSES = 3;
@@ -200,25 +226,63 @@ function resolveColumn(col: Work[], gap: number, top: number, bottom: number): v
  *
  * Un ruban fin porte une pastille de la même hauteur qu'un ruban épais : trois
  * petits sous-postes voisins suffisent à empiler trois libellés au même endroit.
- * On les pousse donc vers le bas, puis on rattrape le débordement vers le haut.
- * Le nom finit à quelques pixels du milieu de son nœud, ce qui se lit encore
- * (les deux sont côte à côte) là où deux textes superposés ne se lisent plus —
- * et le dessin trace un trait de rappel quand l'écart devient trop grand.
+ * Il faut donc les écarter — mais le NOM DOIT RESTER EN FACE DE SA BRANCHE : un
+ * libellé qu'on lit à 80 px au-dessus du ruban qu'il désigne ne le désigne plus,
+ * il désigne le voisin du dessus, et la colonne entière devient illisible.
+ *
+ * On écarte donc en DÉPLAÇANT LE MOINS POSSIBLE : les pastilles trop proches se
+ * regroupent en GRAPPE, et la grappe se répartit autour de SON PROPRE milieu.
+ * Une branche isolée ne bouge alors pas d'un pixel, et dans une grappe l'écart
+ * se partage — la moitié vers le haut, la moitié vers le bas. C'est l'arrangement
+ * qui minimise la somme des déplacements, et il n'a pas de sens privilégié.
+ *
+ * (L'ancienne version poussait tout le monde vers le bas depuis le haut, puis
+ * rattrapait le débordement en remontant : trois petits postes en bas de colonne
+ * suffisaient à faire remonter TOUS les libellés au-dessus d'eux, y compris ceux
+ * des grosses branches qui, elles, avaient la place de rester en face.)
  *
  * `centres` est supposé CROISSANT : c'est l'ordre d'empilement de la colonne.
  */
 function spreadLabels(centres: number[], minGap: number, top: number, bottom: number): number[] {
-  if (minGap <= 0 || centres.length === 0) return centres.slice();
-  const ys = centres.slice();
-  for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] + minGap);
+  const n = centres.length;
+  if (minGap <= 0 || n === 0) return centres.slice();
 
-  if (ys[ys.length - 1] > bottom) {
-    ys[ys.length - 1] = bottom;
-    for (let i = ys.length - 2; i >= 0; i--) ys[i] = Math.min(ys[i], ys[i + 1] - minGap);
-    // Plus de place du tout (beaucoup de nœuds, peu de hauteur) : on repart du
-    // haut, les pastilles se serrent alors à `minGap`, régulièrement.
-    if (ys[0] < top) for (let i = 0; i < ys.length; i++) ys[i] = top + i * minGap;
+  // Plus de place du tout (beaucoup de nœuds, peu de hauteur) : aucune position
+  // ne peut être « en face », on répartit alors régulièrement sur la hauteur.
+  if ((n - 1) * minGap >= bottom - top) {
+    const step = n > 1 ? (bottom - top) / (n - 1) : 0;
+    return centres.map((_, i) => top + i * step);
   }
+
+  /* Une grappe : `count` pastilles consécutives collées à `minGap`, dont la
+     première est en `y`. `sum` retient les hauteurs VOULUES pour pouvoir la
+     recentrer à chaque fusion. */
+  interface Cluster { count: number; sum: number; y: number }
+  const place = (c: Cluster): void => {
+    const span = (c.count - 1) * minGap;
+    c.y = Math.min(Math.max(c.sum / c.count - span / 2, top), bottom - span);
+  };
+
+  const clusters: Cluster[] = [];
+  for (const centre of centres) {
+    const next: Cluster = { count: 1, sum: centre, y: centre };
+    place(next);
+    clusters.push(next);
+    // Tant que la dernière grappe mord sur celle d'avant, les deux n'en font
+    // qu'une — et la fusion peut en déclencher une autre, d'où la boucle.
+    while (clusters.length > 1) {
+      const b = clusters[clusters.length - 1];
+      const a = clusters[clusters.length - 2];
+      if (a.y + a.count * minGap <= b.y + 0.01) break;
+      clusters.pop();
+      a.count += b.count;
+      a.sum += b.sum;
+      place(a);
+    }
+  }
+
+  const ys: number[] = [];
+  for (const c of clusters) for (let i = 0; i < c.count; i++) ys.push(c.y + i * minGap);
   return ys;
 }
 
@@ -273,7 +337,7 @@ export function sankeyGraphLayout(
   links: SankeyGraphLink[],
   {
     width, height, nodeW = 10, nodeGap = 14, minBand = 3,
-    padTop = 0, labelPad = 10, labelGap = 0, gutter = 0,
+    padTop = 0, labelPad = 10, labelGap = 0, labelGapTight = 0, gutter = 0,
   }: SankeyGraphOptions,
 ): SankeyGraphLayout {
   const byId = new Map<string, Work>();
@@ -476,17 +540,42 @@ export function sankeyGraphLayout(
 
   /* Les pastilles sont écartées PAR COLONNE : deux libellés de colonnes
      différentes sont loin l'un de l'autre horizontalement, les faire s'éviter
-     verticalement les déplacerait sans raison. */
+     verticalement les déplacerait sans raison.
+
+     Et le PAS se choisit colonne par colonne. Treize branches dont dix minces
+     serrées en bas : à deux lignes par libellé, aucun arrangement ne les garde
+     en face de leur ruban — la colonne entière se décale alors vers le haut, et
+     chaque nom désigne la branche du dessus. On mesure donc l'écart que le pas
+     large impose, et s'il passe le seuil, cette colonne-là repasse au pas serré
+     (une ligne par libellé). Les autres colonnes gardent leurs deux lignes. */
   const boxes: SankeyGraphNodeBox[] = [];
   for (const col of columns) {
     const live = col.filter((n) => n.value > 0).sort((a, b) => a.y - b.y);
     if (live.length === 0) continue;
-    const ys = spreadLabels(
-      live.map((n) => n.y + n.h / 2),
-      labelGap,
-      padTop + labelGap / 2,
-      padTop + height - labelGap / 2,
-    );
+
+    const centres = live.map((n) => n.y + n.h / 2);
+    const spread = (gap: number) => {
+      const ys = spreadLabels(centres, gap, padTop + gap / 2, padTop + height - gap / 2);
+      const drift = ys.reduce((m, y, i) => Math.max(m, Math.abs(y - centres[i])), 0);
+      return { ys, drift };
+    };
+
+    const loose = spread(labelGap);
+    let ys = loose.ys;
+    let dense = false;
+    if (labelGap > 0 && labelGapTight > 0 && labelGapTight < labelGap) {
+      if (loose.drift > labelGap * LABEL_DRIFT_OK) {
+        const tight = spread(labelGapTight);
+        // Le pas serré ne s'impose que s'il RAPPROCHE vraiment les noms de leur
+        // branche : sur une colonne saturée, il ne changerait rien et coûterait
+        // une ligne de lecture pour rien.
+        if (tight.drift < loose.drift) {
+          ys = tight.ys;
+          dense = true;
+        }
+      }
+    }
+
     live.forEach((n, i) => {
       const side = n.column === 0 ? "before" : n.column === maxCol ? "after" : "centre";
       const labelX = side === "before"
@@ -507,6 +596,7 @@ export function sankeyGraphLayout(
         labelX: round2(labelX),
         labelY: round2(ys[i]),
         centreY: round2(n.y + n.h / 2),
+        labelDense: dense,
       });
     });
   }

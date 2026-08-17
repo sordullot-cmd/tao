@@ -238,21 +238,43 @@ function refresh(): Promise<void> {
 }
 
 /**
+ * Lance l'agrégation si elle n'est pas déjà fraîche — sans rien monter.
+ *
+ * C'est ce qui permet de la démarrer À L'OUVERTURE DE L'APPLICATION plutôt qu'au
+ * montage de la première page qui affiche des comptes. L'agrégation traverse
+ * Enable Banking puis la banque : la lancer pendant que l'utilisateur regarde
+ * son tableau de bord, c'est du temps qui ne se voit pas, là où la lancer en
+ * arrivant sur la page Patrimoine se voit entièrement.
+ *
+ * À n'appeler QUE lorsqu'une session existe : sans elle la route répond 401, et
+ * la réponse à un 401 est de purger le cache (une session finie ne doit pas
+ * laisser de soldes derrière elle). Amorcer trop tôt effacerait donc justement
+ * ce qu'on cherche à montrer tout de suite.
+ *
+ * Idempotent : deux appels rapprochés ne font qu'une requête (fenêtre de
+ * fraîcheur, puis requête en vol partagée).
+ */
+export function primeBankAccounts(): void {
+  if (!isFresh()) void refresh();
+}
+
+/**
  * Comptes bancaires agrégés.
  *
  * Au montage : rien à faire si la donnée a moins d'une minute, sinon relecture
- * en tâche de fond. Également relu au retour sur l'onglet, comme
- * `useCloudState` — c'est le moment où un solde a le plus de chances d'avoir
- * bougé.
+ * en tâche de fond — et le plus souvent il n'y a rien à faire, l'amorçage à
+ * l'ouverture de l'application (`primeBankAccounts`) ayant déjà servi. Également
+ * relu au retour sur l'onglet, comme `useCloudState` — c'est le moment où un
+ * solde a le plus de chances d'avoir bougé.
  */
 export function useBankAccounts(): State & { reload: () => void } {
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
-    if (!isFresh()) void refresh();
+    primeBankAccounts();
 
     const onFocus = () => {
-      if (!isFresh()) void refresh();
+      primeBankAccounts();
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);

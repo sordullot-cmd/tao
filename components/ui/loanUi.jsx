@@ -22,6 +22,7 @@
 import React from "react";
 import { Check, Pencil, RefreshCw, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { dotRing } from "@/lib/ui/color";
 import { t } from "@/lib/i18n";
 import { TH } from "@/components/ui/da";
 import { fmt, fmtDay, fmtMonthYear } from "@/lib/ui/format";
@@ -84,6 +85,7 @@ export function LoanBar({ pct, color, ariaLabel, height = 8 }) {
           width: `${safe}%`,
           height: "100%",
           background: color || T.text,
+          boxShadow: color ? dotRing(color) : "none",
           borderRadius: 999,
           transition: "width 240ms var(--ease-out, ease)",
         }}

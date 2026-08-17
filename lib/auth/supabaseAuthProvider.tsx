@@ -6,7 +6,7 @@ import {
   clearStaleSession,
   isRefreshTokenError,
 } from "@/lib/supabase/client";
-import { clearBankAccountsCache } from "@/lib/bank/useBankAccounts";
+import { clearBankAccountsCache, primeBankAccounts } from "@/lib/bank/useBankAccounts";
 import { clearBankTransactionsCache } from "@/lib/bank/useBankTransactions";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -55,6 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setSession(session);
         setUser(session?.user ?? null);
+        /* L'agrégation bancaire démarre ICI, au premier instant où l'on sait
+           qu'il y a une session — et non au montage de la première page qui
+           affiche des comptes. Elle traverse Enable Banking puis la banque :
+           lancée pendant que l'écran d'accueil se dessine, elle est terminée
+           avant qu'on arrive sur Patrimoine ou Cashflow. Pas avant la session :
+           la route répondrait 401, et un 401 purge le cache. */
+        if (session) primeBankAccounts();
       } catch (error) {
         if (isRefreshTokenError(error)) {
           await clearStaleSession();
@@ -77,6 +84,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        /* Connexion depuis l'écran de login : il n'y avait pas de session au
+           chargement, c'est donc ici qu'on amorce. Un simple rafraîchissement de
+           jeton passe aussi par là et n'en déclenche pas pour autant —
+           `primeBankAccounts` ne fait rien tant que la donnée est fraîche. */
+        if (session) primeBankAccounts();
       }
     );
 

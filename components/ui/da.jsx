@@ -11,6 +11,7 @@
 import React from "react";
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { dotRing } from "@/lib/ui/color";
 import { fmt } from "@/lib/ui/format";
 import { periodStart } from "@/lib/ui/period";
 import Popover from "@/components/ui/Popover";
@@ -146,10 +147,35 @@ export function AllocationChart({
      n'apprend rien et fait un troisième étage au centre de l'anneau. */
   showPct = true,
   formatValue = (v) => String(Math.round(v)),
+  /**
+   * Parts à mettre en avant depuis L'EXTÉRIEUR — un id, une liste d'ids, ou
+   * rien. C'est ce qui permet à une figure voisine (le diagramme de flux, à
+   * gauche) de désigner ici la même matière : survoler « Logement » dans le flux
+   * doit éclairer « Logement » dans l'anneau, sinon les deux dessins de la même
+   * carte parlent chacun dans leur coin.
+   *
+   * Le survol de l'anneau lui-même reste PRIORITAIRE : la souris est dessus, ce
+   * qu'elle désigne l'emporte sur ce qu'on lui souffle d'ailleurs.
+   */
+  highlight = null,
+  /** Prévenu quand la souris entre sur une part, ou la quitte (`null`). Symétrique
+   *  de `highlight` : c'est par là que l'anneau désigne à son tour. */
+  onHover,
 }) {
   const [hover, setHover] = React.useState(null);
   const live = parts.filter(p => p.pct > 0);
-  const shown = hover != null ? live.find(p => p.id === hover) : null;
+
+  const external = React.useMemo(() => {
+    const ids = highlight == null ? [] : (Array.isArray(highlight) ? highlight : [highlight]);
+    return ids.length > 0 ? new Set(ids) : null;
+  }, [highlight]);
+
+  const lit = hover != null ? new Set([hover]) : external;
+  /* Le centre ne montre une part que s'il n'y en a qu'UNE de désignée : deux
+     parts éclairées d'un coup n'ont pas de montant commun à afficher, et le
+     libellé de la carte reste alors la bonne réponse. */
+  const single = lit && lit.size === 1 ? live.find(p => lit.has(p.id)) : null;
+  const shown = single ?? null;
 
   /* Infobulle native : la valeur exacte reste accessible sur chaque part sans
      construire un calque flottant, les pages portant déjà leurs chiffres en
@@ -211,10 +237,10 @@ export function AllocationChart({
                 strokeDasharray={`${len} ${CIRC - len}`}
                 strokeDashoffset={-a.offset * CIRC}
                 strokeLinecap="butt"
-                onMouseEnter={() => setHover(a.id)}
-                onMouseLeave={() => setHover(null)}
+                onMouseEnter={() => { setHover(a.id); onHover?.(a.id); }}
+                onMouseLeave={() => { setHover(null); onHover?.(null); }}
                 style={{
-                  opacity: hover == null || hover === a.id ? 1 : 0.45,
+                  opacity: lit == null || lit.has(a.id) ? 1 : 0.45,
                   transition: "opacity 140ms var(--ease-out, ease), stroke-dasharray 200ms var(--ease-out, ease)",
                 }}
               >
@@ -233,7 +259,7 @@ export function AllocationChart({
           gap: 2, pointerEvents: "none", textAlign: "center",
         }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, lineHeight: 1.1, color: T.textSub, maxWidth: "100%" }}>
-            {shown && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: "50%", background: shown.color, flexShrink: 0 }} />}
+            {shown && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: "50%", background: shown.color, boxShadow: dotRing(shown.color), flexShrink: 0 }} />}
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {shown ? shown.label : centreLabel}
             </span>
