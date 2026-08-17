@@ -9,7 +9,6 @@ import { t, useLang } from "@/lib/i18n";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { TimeField } from "./AgendaDateFields";
 import MiniCalendar from "@/components/ui/MiniCalendar";
-import { AreaDotsDefs, areaDotsFill } from "@/components/ui/da";
 import { RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon, habitCategoryIds, CATEGORY_PALETTE } from "@/lib/lifeRpgCategories";
 import {
   Plus, Check, Trash2,
@@ -779,12 +778,15 @@ export default function DailyPlannerPage() {
                       const ed = e.currentTarget.querySelector("[data-habit-edit]"); if (ed) ed.style.opacity = 0;
                     }}
                   >
-                    {/* Pastille d'icône — teintée de la couleur de la carte Vie RPG rattachée */}
+                    {/* Pastille d'icône — même traitement que les lignes de la page
+                        Objectifs : fond PLEIN à la couleur de la carte Vie RPG
+                        rattachée, icône en blanc. Une fois l'habitude cochée, la
+                        pastille retombe sur le gris neutre. */}
                     <div style={{
                       width: 34, height: 34, borderRadius: "50%",
-                      background: done ? SURFACE : (color ? `color-mix(in srgb, ${color} 10%, transparent)` : SURFACE),
+                      background: done ? T.accentBg : (color ? `color-mix(in srgb, ${color} 80%, transparent)` : T.accentBg),
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      flexShrink: 0, color: done ? T.textMut : (color || T.text),
+                      flexShrink: 0, color: done ? T.textMut : (color ? "#FFFFFF" : T.text),
                       transition: "background .15s ease, color .15s ease",
                     }}>
                       <Ico size={15} strokeWidth={2} />
@@ -906,10 +908,6 @@ function HabitsChart({ habits, history }) {
     const pct = total > 0 ? (done / total) * 100 : 0;
     days.push({ iso, day: d.getDate(), date: d, done, pct, isToday: i === span - 1 });
   }
-  const avg = total > 0 ? Math.round(days.reduce((s, x) => s + x.pct, 0) / days.length) : 0;
-  let streak = 0;
-  for (let i = days.length - 1; i >= 0; i--) { if (days[i].done > 0) streak++; else break; }
-
   // Courbe SVG — style harmonisé avec les charts du Dashboard (Y labels à droite, lignes droites)
   const VB_W = 1000;
   const VB_H = 180;
@@ -933,24 +931,14 @@ function HabitsChart({ habits, history }) {
   const xTicks = points.filter((_, i) => i === 0 || i === points.length - 1 || i % 5 === 0);
 
   return (
-    <div style={CARD}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Complétion des habitudes</div>
-          <div style={{ fontSize: 12, color: T.textMut, marginTop: 2 }}>30 derniers jours</div>
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-          {streak >= 2 && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: T.amber, fontSize: 12, fontWeight: 700 }}>
-              <Flame size={12} strokeWidth={2} /> {streak} j
-            </span>
-          )}
-          <span style={{ fontSize: 12, color: avg >= 70 ? T.green : T.textSub, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-            Moyenne · {avg}%
-          </span>
-        </div>
+    /* Le titre vit AU-DESSUS de la carte, sur le gris du shell — comme les
+       sections de la page Objectifs. La carte blanche ne porte plus que le
+       tracé. */
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1, padding: "0 4px" }}>
+        Complétion des habitudes
       </div>
-
+      <div style={CARD}>
       {total === 0 ? (
         <div style={{ padding: "40px 0", textAlign: "center", color: T.textMut, fontSize: 13 }}>
           Ajoute des habitudes pour voir ton graphique
@@ -973,15 +961,18 @@ function HabitsChart({ habits, history }) {
         >
           <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
             style={{ width: "100%", height: 240, display: "block", fontFamily: "var(--font-sans)" }}>
-            {/* Aire tramée — trame commune à tous les graphiques du site, aux
-                couleurs de la courbe. */}
+            {/* Aire pleine, estompée vers le bas — plus de trame de points : le
+                dégradé accompagne la courbe sans texture. */}
             <defs>
-              <AreaDotsDefs id="habits" color={T.green} top={padT} bottom={padT + chartH} width={VB_W} height={VB_H} />
+              <linearGradient id="habits-area" x1="0" y1={padT} x2="0" y2={padT + chartH} gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor={T.green} stopOpacity="0.18" />
+                <stop offset="100%" stopColor={T.green} stopOpacity="0" />
+              </linearGradient>
             </defs>
-            <path d={areaD} {...areaDotsFill("habits")} stroke="none" />
-            <path d={pathD} fill="none" stroke={T.green} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={areaD} fill="url(#habits-area)" stroke="none" />
+            <path d={pathD} fill="none" stroke={T.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             {hoverIdx !== null && points[hoverIdx] && (
-              <line x1={points[hoverIdx].x} y1={padT} x2={points[hoverIdx].x} y2={padT + chartH} stroke={T.textMut} strokeWidth="0.5" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              <line x1={points[hoverIdx].x} y1={padT} x2={points[hoverIdx].x} y2={padT + chartH} stroke={T.textMut} strokeWidth="1" strokeOpacity="0.5" vectorEffect="non-scaling-stroke" pointerEvents="none" />
             )}
           </svg>
 
@@ -1074,6 +1065,7 @@ function HabitsChart({ habits, history }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
