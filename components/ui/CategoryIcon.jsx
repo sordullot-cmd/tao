@@ -20,21 +20,18 @@
  * cette taille : c'est ce que l'aplat coûte, des teintes voisines s'y confondent
  * plus vite. Le gain, lui, est la parenté d'un bout à l'autre de l'app.
  *
- * ── La teinte telle quelle, et c'est l'ENCRE qui s'adapte ───────────────────
- * Le disque porte la couleur du poste SANS correction, à 80 % comme les deux
- * autres pages : elle reste franche, jamais rabattue vers le brun pour arranger
- * un calcul. Une version antérieure descendait chaque teinte claire jusqu'à ce
- * que le blanc du glyphe tienne son rapport ; la mesure était juste, mais elle
- * ternissait l'ambre et le cyan, et la colonne perdait ce qu'elle devait gagner.
+ * ── La couleur du poste, telle qu'elle est dans le diagramme ────────────────
+ * Le disque porte la couleur du poste SANS aucune correction — la même que sa
+ * barre dans le Sankey et sa part dans l'anneau —, et le glyphe est blanc. Une
+ * seule règle, sur les trois pages qui posent ce genre de vignette (Cashflow,
+ * Habitudes, Quête de soi) : fond = la couleur du sujet, dessin = blanc.
  *
- * C'est donc le GLYPHE qui cède, pas la couleur. La palette des postes est en
- * bonne partie PASTEL (vert d'eau, rose pâle, cyan) là où les cartes d'habitudes
- * tirent sur des teintes saturées : sur 28 postes, 22 rendraient une icône
- * blanche illisible — un blanc sur #D7FFB8 plafonne à 1,1:1, autant ne rien
- * dessiner. Le glyphe est donc blanc quand l'aplat est assez profond pour le
- * porter (bleus, violets, gris foncés — le rendu des autres pages), et prend
- * sinon la MÊME teinte assombrie juste ce qu'il faut. Deux encres, une seule
- * règle : le dessin doit se voir.
+ * Deux réglages plus prudents ont été essayés et écartés : assombrir le disque
+ * pour que le blanc tienne 3:1 (il ternissait l'ambre et le cyan), puis noircir
+ * le GLYPHE sur les teintes trop claires (deux encres au lieu d'une, et la
+ * parenté avec les autres pages se perdait). La palette des postes est en bonne
+ * partie pastel, donc le blanc s'y lit inégalement — c'est assumé : la vignette
+ * colore et situe, le NOM du poste est juste à côté et porte l'information.
  *
  * Le choix des icônes est de la PRÉSENTATION, pas du classement : il vit donc
  * ici et non dans `lib/bank/categories`, qui décide des postes et de leurs
@@ -49,21 +46,8 @@ import {
   Sparkles, Ticket, TrainFront, UtensilsCrossed, Wallet, Zap,
 } from "lucide-react";
 import { categoryColor } from "@/lib/bank/categories";
-import { contrast, inkOn, tint } from "@/lib/ui/color";
 import { T } from "@/lib/ui/tokens";
 
-/* Force de l'aplat, la même que les pastilles des pages Habitudes et Quête de
-   soi : la teinte à 80 %. Elle reste franchement colorée — c'est tout l'objet —
-   et perd juste l'agressivité du 100 %.
-
-   Le mélange est calculé EN JS et non laissé à `color-mix` : il faut mesurer le
-   contraste de l'aplat obtenu pour choisir l'encre du glyphe, et une fonction
-   CSS ne se mesure pas. Composé sur du blanc, celui des cartes.
-
-   3:1, le seuil des éléments graphiques : un trait de 2 px n'est pas du texte de
-   lecture. */
-const DISC_MIX = 0.2;
-const INK_RATIO = 3;
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste
    ACHÈTE, pas la famille dans laquelle il est rangé : « carburant » prend la
@@ -112,15 +96,13 @@ const ICONS = {
 export default function CategoryIcon({ category, size = 32 }) {
   const Icon = ICONS[category] || Shapes;
   const color = categoryColor(category);
-  const disc = tint(color, DISC_MIX);
-  const ink = contrast("#FFFFFF", disc) >= INK_RATIO ? T.onSolid : inkOn(color, disc, INK_RATIO);
   return (
     <span
       aria-hidden="true"
       style={{
         width: size, height: size, flexShrink: 0, borderRadius: 999,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: disc, color: ink,
+        background: color, color: T.onSolid,
       }}
     >
       <Icon size={Math.round(size * 0.52)} strokeWidth={2} />

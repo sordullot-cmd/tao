@@ -778,13 +778,14 @@ export default function DailyPlannerPage() {
                       const ed = e.currentTarget.querySelector("[data-habit-edit]"); if (ed) ed.style.opacity = 0;
                     }}
                   >
-                    {/* Pastille d'icône — même traitement que les lignes de la page
-                        Objectifs : fond PLEIN à la couleur de la carte Vie RPG
-                        rattachée, icône en blanc. Une fois l'habitude cochée, la
-                        pastille retombe sur le gris neutre. */}
+                    {/* Pastille d'icône — la règle commune aux trois pages qui
+                        posent ce genre de vignette (Cashflow, Habitudes, Quête
+                        de soi) : fond à la couleur du sujet, telle quelle, et
+                        glyphe blanc. Une fois l'habitude cochée, la pastille
+                        retombe sur le gris neutre. */}
                     <div style={{
                       width: 34, height: 34, borderRadius: "50%",
-                      background: done ? T.accentBg : (color ? `color-mix(in srgb, ${color} 80%, transparent)` : T.accentBg),
+                      background: done ? T.accentBg : (color || T.accentBg),
                       display: "flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0, color: done ? T.textMut : (color ? "#FFFFFF" : T.text),
                       transition: "background .15s ease, color .15s ease",

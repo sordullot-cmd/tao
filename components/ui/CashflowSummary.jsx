@@ -267,18 +267,13 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
            quatre chiffres, et un libellé de deux mots suivi d'un montant ne tient
            pas sur une ligne en dessous.
 
-           1,8 et non 2,1 à gauche : le diagramme s'étalait plus que sa matière ne
-           le demande — un ruban tiré en longueur ne se lit pas mieux, il traverse
-           juste plus de vide.
-
-           Ce que ça déplace : le diagramme perd ses libellés sous 720 px de
-           dessin (cf. `COMPACT_AT`), soit une colonne de 768 px une fois le
-           rembourrage de la carte retiré. Avec 2,1 le régime nommé démarrait
-           vers 1450 px de fenêtre, avec 1,8 vers 1510 — les écrans entre les
-           deux passent donc en figure de proportions, où les noms se lisent dans
-           les listes en dessous. En dessous de 1450, rien ne change : ils y
-           étaient déjà. */
-        gridTemplateColumns: twoCols ? "minmax(0, 1.8fr) minmax(280px, 1fr)" : "minmax(0, 1fr)",
+           2,1 à gauche : c'est le REMBOURRAGE de la carte du diagramme, et non
+           cette proportion, qui le tient à distance de ses bords (cf. plus bas).
+           Rétrécir aussi la colonne cumulait les deux, et le dessin passait sous
+           les 720 px où il abandonne ses libellés (cf. `COMPACT_AT`) dès 1560 px
+           de fenêtre, au lieu de 1450 auparavant. Avec la marge seule, le régime
+           nommé reprend vers 1495 — les écrans courants le gardent. */
+        gridTemplateColumns: twoCols ? "minmax(0, 2.1fr) minmax(280px, 1fr)" : "minmax(0, 1fr)",
         gap: 20,
         /* Étirées et non calées en haut : les deux cartes descendent jusqu'au
            bas de la plus haute, et chacune centre son contenu dans la hauteur
@@ -293,7 +288,12 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
           c'est l'autre carte qui fixe désormais celle de la rangée, et un dessin
           calé en haut laissait un vide sous lui d'autant plus visible qu'il est
           large. */}
-      <section style={{ ...CARD, padding: "16px 24px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+      {/* 40 px de rembourrage horizontal et non 24 : le dessin s'étirait d'un
+          bord à l'autre de sa carte, et un ruban tiré sur toute la largeur se
+          lit moins bien qu'un ruban ramassé — il traverse du vide. La marge le
+          resserre sans le comprimer : elle lui prend 32 px, soit ~3 % de sa
+          largeur sur un grand écran. */}
+      <section style={{ ...CARD, padding: "16px 40px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
         <SankeyGraph
           nodes={flowNodes}
           links={flow.links}
