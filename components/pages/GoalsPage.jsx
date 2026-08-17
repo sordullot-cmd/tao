@@ -657,7 +657,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
       {!embedded && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <button onClick={openCreate}
-            style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.brand, border: "none", color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <Plus size={14} strokeWidth={2} /> Nouvel objectif
           </button>
         </div>
@@ -1031,7 +1031,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                 <button type="button" onClick={() => adjustManual(g.id, -1)} aria-label="Retirer 1"
                   style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: `1px solid ${T.border}`, background: T.white, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>−</button>
                 <button type="button" onClick={() => adjustManual(g.id, 1)} aria-label="Ajouter 1"
-                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: `1px solid ${T.text}`, background: T.text, color: T.white, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>+</button>
+                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: "none", background: T.brand, color: T.onSolid, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>+</button>
               </div>
             </GoalField>
           );
@@ -1045,7 +1045,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
           hint={form.rpgCategory ? "L'XP est versée au prorata de l'avancement de cet objectif." : undefined}>
           {rpgCategories.length === 0 ? (
             <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.5 }}>
-              {"Aucun objectif d'année défini — rends-toi sur la page « Quête de soi » pour en créer un."}
+              {"Aucun objectif d'année défini — rends-toi sur la page « Objectifs » pour en créer un."}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1668,7 +1668,7 @@ function EmptyState({ onClick }) {
       <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>Pas d&apos;objectif pour le moment</div>
       <div style={{ fontSize: 13, color: T.textSub, marginBottom: 16, maxWidth: 380, margin: "0 auto 16px" }}>Crée ton premier objectif pour commencer à suivre ta progression.</div>
       <button onClick={onClick}
-        style={{ padding: "8px 20px", borderRadius: 999, background: T.white, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${T.text}`, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        style={{ padding: "8px 20px", borderRadius: 999, background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
         <Plus size={13} strokeWidth={2} /> Créer un objectif
       </button>
     </div>
@@ -1762,9 +1762,9 @@ function DeadlineField({ value, onChange }) {
             <button key={p.id} type="button" onClick={() => onChange(p.id)}
               style={{
                 padding: "5px 11px", borderRadius: 999,
-                border: `1px solid ${active ? T.text : T.border}`,
-                background: active ? T.text : T.white,
-                color: active ? T.white : T.textSub,
+                border: `1px solid ${active ? T.brand : T.border}`,
+                background: active ? T.brand : T.white,
+                color: active ? T.onSolid : T.textSub,
                 fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
               }}>
@@ -1840,8 +1840,8 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
                 width: "100%", aspectRatio: "1 / 1",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 12, fontWeight: isSel ? 600 : 500,
-                color: isSel ? T.white : T.text,
-                background: isSel ? T.text : "transparent",
+                color: isSel ? T.onSolid : T.text,
+                background: isSel ? T.brand : "transparent",
                 border: isToday && !isSel ? `1px solid ${T.border2 || T.border}` : "none",
                 borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
                 transition: "background .1s ease",
@@ -2266,14 +2266,14 @@ function RoadmapStrip({ subtasks, deadline, createdAt }) {
         {/* Rail de fond */}
         <div style={{ position: "absolute", top: 10, left: 0, right: 0, height: 2, background: T.accentBg, borderRadius: "var(--radius-field)" }} />
         {/* Portion écoulée (de la création à aujourd'hui) */}
-        <div style={{ position: "absolute", top: 10, left: 0, width: `${todayPct}%`, height: 2, background: T.text, borderRadius: "var(--radius-field)" }} />
-        {/* Curseur "Aujourd'hui" : pastille noire qui se déplace */}
+        <div style={{ position: "absolute", top: 10, left: 0, width: `${todayPct}%`, height: 2, background: T.brand, borderRadius: "var(--radius-field)" }} />
+        {/* Curseur "Aujourd'hui" : pastille à l'accent qui se déplace */}
         {todayPct >= 0 && todayPct <= 100 && (
           <div title="Aujourd'hui"
             style={{
               position: "absolute", top: 5, left: `${todayPct}%`, transform: "translateX(-50%)",
               width: 12, height: 12, borderRadius: "50%",
-              background: T.text,
+              background: T.brand,
               border: `2px solid ${T.white}`,
               boxShadow: "0 0 0 1px rgba(0,0,0,0.06)",
               zIndex: 2,

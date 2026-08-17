@@ -28,6 +28,13 @@ interface SearchableSelectProps {
   onOpen?: () => void;
   separated?: boolean;   // Lignes fines entre items du dropdown
   small?: boolean;       // Typo + icone reduites (trigger + items)
+  /** Surcharge l'habillage du déclencheur (pages sans cadre : pastille sur aplat). */
+  triggerStyle?: React.CSSProperties;
+  /** Bord d'alignement du menu sur le déclencheur (`end` pour un menu posé à droite). */
+  align?: "start" | "end";
+  /** Menu plus large que son déclencheur : largeur minimale au lieu de la
+   *  largeur de l'ancre (un libellé long ne tient pas dans une pastille). */
+  menuMinWidth?: number;
 }
 
 export default function SearchableSelect({
@@ -44,6 +51,9 @@ export default function SearchableSelect({
   onOpen,
   separated = false,
   small = false,
+  triggerStyle,
+  align = "start",
+  menuMinWidth,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -118,6 +128,7 @@ export default function SearchableSelect({
           fontFamily: "inherit",
           textAlign: "left",
           transition: "border-color 120ms ease",
+          ...triggerStyle,
         }}
       >
         {renderSelected ? (
@@ -142,7 +153,10 @@ export default function SearchableSelect({
         open={open}
         onClose={close}
         gap={4}
-        matchAnchorWidth
+        align={align}
+        matchAnchorWidth={menuMinWidth == null}
+        minWidth={menuMinWidth}
+        atLeastAnchorWidth={menuMinWidth != null}
         scroll={false}
         maxHeight={maxMenuHeight + 44}
         /* Le champ de recherche vit maintenant dans le portail : sans ce

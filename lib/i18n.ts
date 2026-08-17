@@ -69,7 +69,10 @@ const FR: Dict = {
   "nav.notes": "Notes",
   "nav.drive": "Drive",
   "nav.reading": "Liste de lecture",
-  "nav.lifeRpg": "Quête de soi",
+  // La page « Quête de soi » a absorbé l'ancienne page Objectifs : c'est là que
+  // vivent les trois objectifs de l'année et les objectifs chiffrés qui les
+  // mesurent — elle porte donc ce nom dans la navigation.
+  "nav.lifeRpg": "Objectifs",
   "nav.blueprint": "Plan de réussite",
   "nav.eloquence": "Éloquence",
 
@@ -1457,7 +1460,7 @@ const EN: Dict = {
   "nav.notes": "Notes",
   "nav.drive": "Drive",
   "nav.reading": "Reading List",
-  "nav.lifeRpg": "Quest for Self",
+  "nav.lifeRpg": "Goals",
   "nav.blueprint": "Success Blueprint",
   "nav.eloquence": "Eloquence",
 

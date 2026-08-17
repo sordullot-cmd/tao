@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * LifeRpgPage — « Quête de soi ».
+ * LifeRpgPage — « Objectifs » dans la navigation (anciennement « Quête de soi »,
+ * nom conservé dans les clés de stockage `tr4de_life_rpg*` et le nom du fichier).
  *
  * TROIS OBJECTIFS DE L'ANNÉE, pas un de plus. La page ne présente plus une
  * dizaine de catégories de vie mais exactement trois cartes : les trois combats
@@ -850,7 +851,7 @@ export default function LifeRpgPage() {
             intoLevel={lvl.intoLevel}
             neededForNext={lvl.neededForNext}
             totalXp={progress.totalXp}
-            fillColor={T.text}
+            fillColor={T.brand}
             trackColor={T.accentBg}
             textColor={T.text}
             mutedColor={T.textMut}
@@ -1350,7 +1351,7 @@ function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
         onMouseLeave={() => setHover(null)}>
         <div role="progressbar" aria-valuenow={Math.round(yearPct)} aria-valuemin={0} aria-valuemax={100} aria-label={`Année ${year} écoulée`}
           style={{ position: "absolute", top: 7, left: 0, right: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-          <div style={{ width: `${yearPct}%`, height: "100%", background: T.textMut, borderRadius: 999 }} />
+          <div style={{ width: `${yearPct}%`, height: "100%", background: T.brand, borderRadius: 999 }} />
         </div>
 
         {/* Séparateurs de mois, discrets : ils donnent l'échelle sans meubler. */}
@@ -1857,7 +1858,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
   useEffect(() => () => onSaveRef.current(formRef.current), []);
   return (
     <Overlay onClose={onClose} title={initial.isNew ? "Objectif de l'année" : "Modifier l'objectif de l'année"}>
-      <Field label="Nom de l'objectif">
+      <Field label="Objectif">
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={() => setShowStyle(v => !v)} title="Changer l'icône et la couleur"
             style={{ width: 40, height: 40, borderRadius: 10, background: `color-mix(in srgb, ${form.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: showStyle ? `1.5px solid ${form.color}` : "1.5px solid transparent", padding: 0, cursor: "pointer" }}>
@@ -1956,7 +1957,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textMut }}>
           <Check size={12} strokeWidth={2.5} color={T.green} /> Enregistré automatiquement
         </span>
-        <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 999, border: `1px solid ${T.text}`, background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
+        <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
       </div>
     </Overlay>
   );
@@ -2047,7 +2048,7 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button onClick={onClose} style={btnGhost()}>Annuler</button>
-            <button onClick={onGoToAgenda} style={btnDark()}>
+            <button onClick={onGoToAgenda} style={btnPrimaryLg()}>
               <CalendarClock size={14} strokeWidth={2} /> {"Aller à l'Agenda"}
             </button>
           </div>
@@ -2124,7 +2125,7 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button onClick={onClose} disabled={saving} style={btnGhost()}>Annuler</button>
             <button onClick={save} disabled={saving || !title.trim()}
-              style={{ ...btnDark(), opacity: (saving || !title.trim()) ? 0.55 : 1, cursor: (saving || !title.trim()) ? "default" : "pointer" }}>
+              style={{ ...btnPrimaryLg(), opacity: (saving || !title.trim()) ? 0.55 : 1, cursor: (saving || !title.trim()) ? "default" : "pointer" }}>
               {saving ? "Enregistrement…" : (isEdit ? "Enregistrer" : "Créer la tâche")}
             </button>
           </div>
@@ -2220,11 +2221,12 @@ function AutoTextarea({ value, onChange, placeholder, minRows = 3, style }) {
    Comptes et Calendrier) : 12 px, pas de bordure, l'action principale en aplat
    d'encre, les secondaires en blanc posé sur l'ombre de pilule. */
 function btnPrimary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
-// Bouton d'action principal d'une modale (fond sombre, cible plus généreuse).
-function btnDark() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
+// Bouton d'action principal d'une modale : même aplat d'accent, cible plus
+// généreuse. (S'appelait `btnDark` du temps où l'action principale était noire.)
+function btnPrimaryLg() {
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
 }
 /* Pendant clair de btnPrimary : mêmes métriques (32 px, 12 px, gap 6) pour que
    les deux actions de l'en-tête forment une paire. btnGhost est réservé aux

@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import ReactDOM from "react-dom";
 import Popover from "@/components/ui/Popover";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import {
@@ -443,12 +444,24 @@ export default function SportPage() {
         }
       }
     }
-    return Array.from(map.entries())
-      .map(([name, pr]) => ({ name, ...pr }))
-      // Les charges en tête (elles portent les plus gros chiffres), puis les
-      // records de répétitions — chaque groupe du plus fort au plus faible.
-      .sort((a, b) => (a.metric === b.metric ? b.value - a.value : a.metric === "weight" ? -1 : 1))
-      .slice(0, 6);
+    const all = Array.from(map.entries()).map(([name, pr]) => ({ name, ...pr }));
+    const strongest = (a, b) => b.value - a.value;
+    const loaded = all.filter(p => p.metric === "weight").sort(strongest);
+    const bodyweight = all.filter(p => p.metric === "reps").sort(strongest);
+
+    // Un record de tractions (14) ne se compare pas à un développé couché (100) :
+    // en les classant sur la même valeur, les kilos rafleraient toutes les
+    // places et les exercices au poids du corps — tractions, pompes, dips —
+    // disparaîtraient de la liste. Chaque famille garde donc sa part, et celle
+    // qui n'a pas de quoi la remplir rend ses places à l'autre.
+    const MAX = 6;
+    const bodyweightSlots = Math.min(bodyweight.length, Math.floor(MAX / 2));
+    const kept = [...loaded.slice(0, MAX - bodyweightSlots), ...bodyweight.slice(0, bodyweightSlots)];
+    if (kept.length < MAX) kept.push(...bodyweight.slice(bodyweightSlots, bodyweightSlots + (MAX - kept.length)));
+
+    // Les charges en tête (elles portent les plus gros chiffres), puis les
+    // records de répétitions — chaque groupe du plus fort au plus faible.
+    return kept.sort((a, b) => (a.metric === b.metric ? b.value - a.value : a.metric === "weight" ? -1 : 1));
   }, [sessions, metricsByExercise]);
 
   /* ─── Liste des exercices (pour le sélecteur de graphique) ──── */
@@ -465,6 +478,39 @@ export default function SportPage() {
   useEffect(() => {
     if (!chartExerciseName && allExerciseNames.length > 0) setChartExerciseName(allExerciseNames[0]);
   }, [allExerciseNames, chartExerciseName]);
+
+  /* Options du sélecteur d'exercice du graphique : les plus travaillés d'abord
+     (c'est là qu'il y a une progression à lire), avec la pastille de catégorie
+     et le nombre de séances — de quoi choisir sans deviner. */
+  const exerciseOptions = useMemo(() => {
+    const map = new Map(); // name → { count, category, last }
+    for (const s of (sessions || [])) {
+      for (const ex of (s.exercises || [])) {
+        const name = ex.name?.trim();
+        if (!name) continue;
+        const cur = map.get(name) || { count: 0, category: ex.category, last: s.date };
+        cur.count += 1;
+        // La catégorie retenue est celle de la séance la plus récente : c'est
+        // celle que l'utilisateur a corrigée en dernier.
+        if (s.date >= cur.last) { cur.last = s.date; cur.category = ex.category || cur.category; }
+        map.set(name, cur);
+      }
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => (b[1].count - a[1].count) || a[0].localeCompare(b[0], "fr"))
+      .map(([name, info]) => {
+        const cat = CATEGORIES.find(c => c.id === info.category);
+        const color = cat?.color || T.textSub;
+        return {
+          id: name,
+          label: name,
+          sublabel: `${info.count} séance${info.count > 1 ? "s" : ""}`,
+          iconNode: (
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, boxShadow: cat ? dotRing(color) : "none", display: "block", flexShrink: 0 }} />
+          ),
+        };
+      });
+  }, [sessions]);
 
   /* Métriques disponibles pour l'exercice affiché, et celle réellement tracée :
      le choix manuel prime, tant qu'il reste disponible sur cet exercice —
@@ -664,19 +710,38 @@ export default function SportPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <SectionTitle
               size="sm"
-              action={allExerciseNames.length > 0 ? (
-                <select
+              /* Sélecteur d'exercice : plus le menu natif du système (police et
+                 hauteur imposées, liste illisible passé une dizaine d'entrées),
+                 mais la pastille commune du site — recherche au clavier,
+                 pastille de catégorie et nombre de séances par exercice. */
+              action={exerciseOptions.length > 0 ? (
+                <SearchableSelect
+                  small
+                  width={186}
+                  align="end"
+                  menuMinWidth={268}
+                  maxMenuHeight={300}
                   value={chartExerciseName}
-                  onChange={(e) => setChartExerciseName(e.target.value)}
-                  style={{
-                    padding: "5px 12px", borderRadius: 999,
-                    border: "none", background: FIELD_BG,
-                    fontSize: 12, color: T.text, fontFamily: "inherit", cursor: "pointer",
-                    maxWidth: 170, outline: "none",
+                  options={exerciseOptions}
+                  onChange={setChartExerciseName}
+                  placeholder="Choisir un exercice"
+                  searchPlaceholder="Chercher un exercice…"
+                  emptyLabel="Aucun exercice"
+                  triggerStyle={{
+                    border: "none", background: FIELD_BG, borderRadius: 999,
+                    padding: "5px 10px 5px 12px",
                   }}
-                >
-                  {allExerciseNames.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
+                  /* Dans la pastille, le nom seul : le nombre de séances reste
+                     dans la liste, où il aide à choisir. */
+                  renderSelected={(opt) => (
+                    <>
+                      {opt?.iconNode}
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {opt?.label ?? "Choisir un exercice"}
+                      </span>
+                    </>
+                  )}
+                />
               ) : null}
             >
               Progression
@@ -2076,23 +2141,30 @@ function ExerciseNameCombobox({
             );
           })}
           {showAddRow && (
-            <button
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); addCustom(value, defaultCategory); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                width: "100%", padding: "6px 10px", marginTop: matches.length > 0 ? 4 : 0,
-                borderTop: matches.length > 0 ? `1px solid ${HAIRLINE}` : "none",
-                border: matches.length > 0 ? "none" : "none",
-                background: "transparent", cursor: "pointer", borderRadius: 8,
-                color: T.text, fontSize: 12, fontFamily: "inherit", textAlign: "left",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-            >
-              <Plus size={12} strokeWidth={2} />
-              Ajouter « {value} » comme nouvel exercice
-            </button>
+            <>
+              {/* Le filet qui sépare la liste de l'ajout est un élément à part,
+                  et non un `borderTop` posé sur le bouton : le bouton porte déjà
+                  `border: none`, et React refuse qu'un raccourci et sa forme
+                  longue changent ensemble d'un rendu à l'autre. */}
+              {matches.length > 0 && (
+                <div style={{ height: 1, background: HAIRLINE, margin: "4px 0" }} />
+              )}
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); addCustom(value, defaultCategory); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", padding: "6px 10px", border: "none",
+                  background: "transparent", cursor: "pointer", borderRadius: 8,
+                  color: T.text, fontSize: 12, fontFamily: "inherit", textAlign: "left",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <Plus size={12} strokeWidth={2} />
+                Ajouter « {value} » comme nouvel exercice
+              </button>
+            </>
           )}
           {(hiddenExercises || []).length > 0 && (
             <div style={{ borderTop: `1px solid ${HAIRLINE}`, marginTop: 4, padding: "8px 10px 4px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: T.textSub }}>

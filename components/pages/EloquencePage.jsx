@@ -185,15 +185,18 @@ async function runVoiceAnalysis(audioBuffer, mode, topic) {
 
 /* Rappel des consignes, affiché en permanence sous l'en-tête. Ce n'est pas de la
    décoration : ce sont exactement les quatre critères mesurés sur chaque prise,
-   donc les lire avant de parler suffit à savoir ce qui sera jugé. */
+   donc les lire avant de parler suffit à savoir ce qui sera jugé.
+
+   Deux lignes par repère au lieu de trois : le « pourquoi » se lit une fois, pas
+   à chaque visite — il passe en infobulle et rend la barre deux fois plus
+   courte, ce qui laisse l'exercice arriver plus haut dans l'écran. */
 function SpeechRulesBar() {
   return (
     <div style={{ ...card, padding: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "stretch" }}>
       {SPEECH_RULES.map((r) => (
-        <div key={r.id} style={{ flex: "1 1 190px", minWidth: 180, display: "flex", flexDirection: "column", gap: 3 }}>
+        <div key={r.id} title={r.why} style={{ flex: "1 1 190px", minWidth: 180, display: "flex", flexDirection: "column", gap: 3 }}>
           <div style={{ fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 }}>{r.label}</div>
           <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text, lineHeight: 1.3 }}>{r.rule}</div>
-          <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.4 }}>{r.why}</div>
         </div>
       ))}
     </div>
@@ -684,11 +687,17 @@ function ForbiddenVerdict({ word, count }) {
   );
 }
 
-/* ─────────────── Sélecteur de niveau ─────────────── */
-function LevelFilter({ value, onChange }) {
+// Niveau d'entrée des virelangues : le dernier de l'échelle, « Expert ».
+const DEFAULT_TWISTER_LEVEL = LEVELS[LEVELS.length - 1].id;
+
+/* ─────────────── Sélecteur de niveau ───────────────
+   `showAll` : le « Tous » n'a de sens que là où le catalogue est court. Sur les
+   virelangues il affichait les vingt-neuf cartes d'un coup — on ne choisit plus
+   rien devant un mur. Un seul niveau à la fois, et l'expert par défaut. */
+function LevelFilter({ value, onChange, showAll = true }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <button type="button" style={pill(value === 0)} onClick={() => onChange(0)}>Tous</button>
+      {showAll && <button type="button" style={pill(value === 0)} onClick={() => onChange(0)}>Tous</button>}
       {LEVELS.map((l) => (
         <button
           key={l.id}
@@ -800,7 +809,9 @@ function ConsonantSection({ reps, incRep, resetRep }) {
    netteté ensuite — sur le même virelangue. L'enregistrement est facultatif :
    c'est un exercice de bouche, pas un examen. */
 function TwisterSection({ reps, incRep, resetRep, onSession }) {
-  const [level, setLevel] = useState(0);
+  // Expert par défaut : c'est le niveau qu'on vient chercher ici, et démarrer
+  // au plus dur évite d'avoir à balayer le catalogue avant de commencer.
+  const [level, setLevel] = useState(DEFAULT_TWISTER_LEVEL);
   const [selectedId, setSelectedId] = useState(null);
   const [serieId, setSerieId] = useState(TWISTER_SERIES[0].id);
   const [result, setResult] = useState(null);
@@ -826,28 +837,43 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
         </p>
       </div>
 
-      <LevelFilter value={level} onChange={setLevel} />
+      {/* Le catalogue disparaît dès qu'un virelangue est choisi : on garde
+          l'exercice en cours seul à l'écran, avec un retour explicite vers la
+          liste. Tout afficher en même temps rendait la page illisible. */}
+      {!selected && (
+        <>
+          <LevelFilter value={level} onChange={setLevel} showAll={false} />
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {list.map((tw) => {
-          const active = tw.id === selectedId;
-          return (
-            <button
-              key={tw.id}
-              type="button"
-              onClick={() => { setSelectedId(active ? null : tw.id); setResult(null); }}
-              style={{ ...selectable(active), width: 300 }}
-            >
-              <div style={{ marginBottom: 6 }}><LevelBadge level={tw.level} /></div>
-              <div style={{ fontSize: 14, color: T.text, lineHeight: 1.4 }}>{tw.text}</div>
-            </button>
-          );
-        })}
-      </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {list.map((tw) => (
+              <button
+                key={tw.id}
+                type="button"
+                onClick={() => { setSelectedId(tw.id); setResult(null); }}
+                style={{ ...selectable(false), width: 300, padding: 16 }}
+              >
+                {/* Pas de pastille de niveau : un seul niveau est affiché à la
+                    fois, le filtre le dit déjà au-dessus. */}
+                <div style={{ fontSize: 14, color: T.text, lineHeight: 1.4 }}>{tw.text}</div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {selected && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
           <div style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <LevelBadge level={selected.level} />
+              <button
+                type="button"
+                style={{ ...ghost(false), padding: "5px 12px", minHeight: 28 }}
+                onClick={() => { setSelectedId(null); setResult(null); }}
+              >
+                <RotateCcw size={12} /> Changer de virelangue
+              </button>
+            </div>
             <p style={{ fontSize: 22, lineHeight: 1.5, color: T.text, margin: 0, fontWeight: 600 }}>{selected.text}</p>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

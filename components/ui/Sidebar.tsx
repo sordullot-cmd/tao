@@ -169,22 +169,32 @@ export default function Sidebar(props: SidebarProps) {
         fontFamily: "var(--font-sans)",
       }}
     >
-      {/* HEADER : brand — le logo seul, sans nom écrit à côté.
+      {/* HEADER : brand — le logo, carré (aucun rognage rond), suivi du nom de
+          l'application. Le nom disparaît quand la barre est repliée, le logo
+          reste seul et centré.
           Retrait bas volontairement court : le titre de la première section
           apporte déjà sa propre respiration (padding du bouton + de la nav), et
           la somme des trois éloignait le logo du reste de la barre. */}
       <div style={{
-        display: "flex", alignItems: "center",
+        display: "flex", alignItems: "center", gap: collapsed ? 0 : 8,
         justifyContent: collapsed ? "center" : "flex-start",
         padding: collapsed ? "18px 0 4px" : "18px 12px 4px",
       }}>
         <img
           src="/logo.svg"
-          alt="tao trade"
+          alt="tao"
           width={32}
           height={32}
-          style={{ flexShrink: 0, display: "block", borderRadius: "50%", objectFit: "cover" }}
+          style={{ flexShrink: 0, display: "block", objectFit: "contain" }}
         />
+        {!collapsed && (
+          <span style={{
+            fontSize: 18, fontWeight: 600, letterSpacing: -0.2,
+            color: "var(--color-text)", whiteSpace: "nowrap", lineHeight: 1,
+          }}>
+            tao
+          </span>
+        )}
       </div>
 
       {/* NAV */}

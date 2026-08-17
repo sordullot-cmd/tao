@@ -1991,7 +1991,7 @@ export default function AgendaPage() {
                       {"Objectifs de l'année"}
                     </div>
                     {rpgCategories.length === 0 ? (
-                      <div style={{ fontSize: 12, color: T.textMut }}>{"Définis tes objectifs de l'année sur la page « Quête de soi » pour les lier ici."}</div>
+                      <div style={{ fontSize: 12, color: T.textMut }}>{"Définis tes objectifs de l'année sur la page « Objectifs » pour les lier ici."}</div>
                     ) : (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {rpgCategories.map((c) => {

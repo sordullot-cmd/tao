@@ -41,6 +41,14 @@ export const T = {
   // les hex ici ne servent que de repli si la feuille n'est pas chargée.
   kraken:   "var(--color-kraken, #4CC72C)",
   krakenBg: "var(--color-kraken-bg, #EEFBEA)",
+  // Couleur PRINCIPALE de l'app (`--accent`, réglable dans Réglages →
+  // Apparence) : aplats d'action, éléments actifs, remplissages de jauge. Là où
+  // l'interface posait un aplat d'encre noire pour dire « action principale »,
+  // c'est `brand` qu'il faut. L'encre lisible dessus est `onSolid` (blanc dans
+  // les deux thèmes) — PAS `textInverted`, qui s'inverse en sombre alors que
+  // l'accent, lui, ne change pas. `brandSoft` est son voile (fonds discrets).
+  brand:     "var(--accent, #64D741)",
+  brandSoft: "var(--accent-soft, rgba(100,215,65,0.10))",
 
   // === Nouvelle DA (maquette Figma « Tableau de bord ») ===
   // Navigation

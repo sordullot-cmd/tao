@@ -65,14 +65,30 @@ describe("Page Éloquence", () => {
     expect(screen.getByRole("button", { name: /Consonne T — compter une répétition \(20 sur 20\)/ })).toBeInTheDocument();
   });
 
+  it("ouvre les virelangues sur le niveau expert, sans « Tous »", () => {
+    render(<EloquencePage />);
+
+    // Un seul niveau à la fois : le catalogue s'ouvre sur l'expert, et les
+    // virelangues faciles ne sont pas listés tant qu'on ne descend pas.
+    expect(screen.getByText("Si six scies scient six cyprès, six cent six scies scient six cent six cyprès.")).toBeInTheDocument();
+    expect(screen.queryByText("Un chasseur sachant chasser sait chasser sans son chien.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tous" })).toBeNull();
+
+    fireEvent.click(tab("Facile"));
+    expect(screen.getByText("Un chasseur sachant chasser sait chasser sans son chien.")).toBeInTheDocument();
+  });
+
   it("propose le protocole en deux séries de dix sur un virelangue", () => {
     render(<EloquencePage />);
 
-    fireEvent.click(screen.getByText("Un chasseur sachant chasser sait chasser sans son chien."));
+    fireEvent.click(screen.getByText("Si six scies scient six cyprès, six cent six scies scient six cent six cyprès."));
     expect(tab("10 fois en accélérant")).toBeInTheDocument();
     expect(tab("10 fois en articulant à fond")).toBeInTheDocument();
     // Chaque série a son propre compteur, remis à zéro en changeant de série.
     expect(screen.getByRole("button", { name: /Vitesse — compter une répétition \(0 sur 10\)/ })).toBeInTheDocument();
+    // Le catalogue s'efface : seul l'exercice en cours reste à l'écran.
+    expect(screen.queryByRole("button", { name: "Expert" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Changer de virelangue/ })).toBeInTheDocument();
   });
 
   it("ouvre la lecture sur la lente et exagérée, avec sa cible de débit propre", () => {

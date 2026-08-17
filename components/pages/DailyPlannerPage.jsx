@@ -706,8 +706,8 @@ export default function DailyPlannerPage() {
                     </div>
                     <div style={{ fontSize: 10.5, color: T.textMut, marginTop: 6, lineHeight: 1.4 }}>
                       {rpgCategories.length === 0
-                        ? "Définis d'abord tes objectifs de l'année sur la page « Quête de soi » pour y rattacher cette habitude."
-                        : "Rattache cette habitude à un ou plusieurs objectifs de l'année (page « Quête de soi ») : la cocher les fait progresser."}
+                        ? "Définis d'abord tes objectifs de l'année sur la page « Objectifs » pour y rattacher cette habitude."
+                        : "Rattache cette habitude à un ou plusieurs objectifs de l'année (page « Objectifs ») : la cocher les fait progresser."}
                     </div>
                   </div>
                 </div>
