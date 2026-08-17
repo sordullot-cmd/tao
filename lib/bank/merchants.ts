@@ -26,7 +26,7 @@
  * marque et les initiales du nom : reconnaissable dans une liste, et déjà mieux
  * qu'une icône grise identique sur quinze lignes.
  *
- * 265 des 268 entrées portent leur image. Les trois exceptions sont les entrées
+ * 268 des 271 entrées portent leur image. Les trois exceptions sont les entrées
  * GÉNÉRIQUES, qui n'ont pas de logo par nature : « Station-service »,
  * « Autoroutes » et « Pharmacie » couvrent chacune des dizaines d'enseignes.
  *
@@ -378,6 +378,10 @@ const MERCHANTS: Array<{ match: RegExp; merchant: Merchant }> = [
   { match: /\bvattenfall\b/, merchant: { slug: "vattenfall", name: "Vattenfall", color: "#0F7B9B", logo: "/marchands/vattenfall.png" } },
   { match: /\bekwateur\b/, merchant: { slug: "ekwateur", name: "ekWateur", color: "#0F7B6C", logo: "/marchands/ekwateur.png" } },
   { match: /\bmint energie\b/, merchant: { slug: "mint-energie", name: "Mint Énergie", color: "#0F7B6C", logo: "/marchands/mint-energie.png" } },
+  /* Le libellé arrive sous la forme du site (« WWW.OHM-ENERGIE.COM ») : la clé
+     de recherche le rend en « www ohm energie com ». Le nom canonique est
+     « Ohm » — c'est ainsi que la ligne doit se lire, pas comme une URL. */
+  { match: /\bohm ?energies?\b|\bohm\b/, merchant: { slug: "ohm-energie", name: "Ohm", color: "#0F7A4E", logo: "/marchands/ohm-energie.svg" } },
   { match: /\bsuez\b/, merchant: { slug: "suez", name: "Suez", color: "#0F6B9B", logo: "/marchands/suez.svg" } },
   { match: /\bsaur\b/, merchant: { slug: "saur", name: "Saur", color: "#0F5A8C", logo: "/marchands/saur.png" } },
   { match: /\baxa\b/, merchant: { slug: "axa", name: "AXA", color: "#0F3A8C", logo: "/marchands/axa.jpg" } },

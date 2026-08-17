@@ -22,7 +22,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Mic, Square, Volume2, Loader2, Check, ChevronRight, Sparkles, RefreshCw,
-  Lightbulb, Video, VideoOff, Clock, Ban, Eye, Plus, RotateCcw,
+  Lightbulb, Video, VideoOff, Clock, Ban, Eye, RotateCcw,
   AlertTriangle, Minus,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -112,14 +112,21 @@ const sectionTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBotto
 const metricBox = { flex: 1, minWidth: 120, borderRadius: 8, padding: "10px 12px", background: SURFACE };
 const metricLabel = { fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 };
 const metricVal = { fontSize: 18, fontWeight: 600, color: T.text, marginTop: 2, fontVariantNumeric: "tabular-nums" };
-// Carte sélectionnable (texte, virelangue, format…) : l'état actif est un
-// liseré d'encre en `boxShadow` plutôt qu'une bordure, qui décalerait le contenu.
+/* Carte sélectionnable (texte, virelangue, format…). Plate, posée sur le fond de
+   champ plutôt qu'en relief : la page en aligne parfois une dizaine à la suite, et
+   dix cartes qui flottent chacune sur leur ombre font un damier que l'œil ne trie
+   plus. L'état actif est un liseré d'encre en `boxShadow` plutôt qu'une bordure,
+   qui décalerait le contenu. */
 const selectable = (active) => ({
-  ...card, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
-  background: active ? T.accentBg : T.white,
-  boxShadow: active ? `inset 0 0 0 1.5px ${T.text}` : T.elevCard,
+  textAlign: "left", cursor: "pointer", fontFamily: "inherit", boxSizing: "border-box",
+  border: "none", borderRadius: 12, padding: 14,
+  background: active ? T.accentBg : SURFACE,
+  boxShadow: active ? `inset 0 0 0 1.5px ${T.text}` : "none",
   transition: "background 120ms ease, box-shadow 120ms ease",
 });
+// Filet de séparation entre deux blocs d'un même onglet : moins bruyant qu'une
+// carte de plus, et suffisant pour dire « autre exercice ».
+const divider = { height: 1, background: HAIRLINE, border: "none", margin: 0 };
 
 /* ─────────────── Synthèse vocale (modèle à écouter) ─────────────── */
 function useSpeech() {
@@ -729,17 +736,21 @@ function LevelBadge({ level }) {
 /* Compteur de répétitions. Toute la tuile est la cible de frappe : on compte en
    tapant, sans viser un petit bouton, ce qui est indispensable quand on répète
    vingt fois de suite. Le « remettre à zéro » est donc en dehors — deux boutons
-   imbriqués et la zone parente avale les clics du bord. */
+   imbriqués et la zone parente avale les clics du bord.
+
+   Une seule surface visible : la tuile de frappe. Le geste de la consonne passe
+   en infobulle et la remise à zéro n'apparaît qu'une fois qu'on a compté —
+   quatre compteurs côte à côte, chacun avec son titre, sa consigne et son
+   bouton, faisaient un mur avant même le premier « TA ». */
 function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onReset }) {
   const done = count >= total;
   const pct = Math.min(100, Math.round((count / total) * 100));
   return (
-    <div style={{ ...card, flex: "1 1 220px", minWidth: 200, display: "flex", flexDirection: "column", gap: 10 }}>
+    <div title={hint || undefined} style={{ flex: "1 1 200px", minWidth: 180, display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: T.text, lineHeight: 1 }}>{title}</div>
-        {subtitle && <div style={{ fontSize: 11, color: T.textMut, textAlign: "right" }}>{subtitle}</div>}
+        <div style={{ fontSize: 15, fontWeight: 600, color: T.text, lineHeight: 1.2 }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 11, color: T.textMut, textAlign: "right", flexShrink: 0 }}>{subtitle}</div>}
       </div>
-      {hint && <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.45 }}>{hint}</div>}
 
       <button
         type="button"
@@ -747,28 +758,34 @@ function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onRese
         disabled={done}
         aria-label={`${srName || title} — compter une répétition (${count} sur ${total})`}
         style={{
-          border: "none", borderRadius: 10, padding: "14px 12px", cursor: done ? "default" : "pointer",
+          border: "none", borderRadius: 12, padding: "20px 12px", cursor: done ? "default" : "pointer",
           fontFamily: "inherit", background: done ? T.greenBg : SURFACE, color: T.text,
           display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
           transition: "background 150ms ease",
         }}
       >
-        <span style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: done ? T.green : T.text, lineHeight: 1 }}>
-          {count}<span style={{ fontSize: 14, color: T.textMut, fontWeight: 500 }}> / {total}</span>
+        <span style={{ fontSize: 28, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: done ? T.green : T.text, lineHeight: 1 }}>
+          {count}<span style={{ fontSize: 14, color: T.numMuted, fontWeight: 500 }}> / {total}</span>
         </span>
         <span style={{ fontSize: 11, color: done ? T.green : T.textMut, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          {done ? <><Check size={12} /> Série bouclée</> : <><Plus size={12} /> Tape à chaque répétition</>}
+          {done ? <><Check size={12} /> Série bouclée</> : "Tape à chaque répétition"}
         </span>
       </button>
 
-      <div style={{ height: 5, borderRadius: 999, background: HAIRLINE, overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: done ? T.green : T.text, transition: "width 200ms ease" }} />
-      </div>
-
       {count > 0 && (
-        <button type="button" onClick={onReset} style={{ ...ghost(false), alignSelf: "flex-start", padding: "5px 10px", minHeight: 26 }}>
-          <RotateCcw size={12} /> Remettre à zéro
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, height: 4, borderRadius: 999, background: HAIRLINE, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: done ? T.green : T.text, transition: "width 200ms ease" }} />
+          </div>
+          <button
+            type="button"
+            onClick={onReset}
+            aria-label={`${srName || title} — remettre à zéro`}
+            style={{ border: "none", background: "transparent", padding: 2, cursor: "pointer", color: T.textMut, display: "inline-flex", lineHeight: 0 }}
+          >
+            <RotateCcw size={13} />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -778,15 +795,19 @@ function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onRese
 function ConsonantSection({ reps, incRep, resetRep }) {
   const done = CONSONANT_DRILLS.filter((c) => (reps[`cons-${c.id}`] || 0) >= CONSONANT_REPS).length;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Le décompte du jour tient sur la ligne du titre : c'est un état, pas une
+          consigne — il n'a pas besoin d'une ligne à lui. */}
       <div>
-        <div style={blockTitle}>Occlusives T · D · B · P</div>
-        <p style={lead}>{CONSONANT_DRILL_INSTRUCTION}</p>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ ...blockTitle, marginBottom: 0 }}>Occlusives T · D · B · P</div>
+          <div style={{ fontSize: 12, color: done === CONSONANT_DRILLS.length ? T.green : T.textMut, fontWeight: 500 }}>
+            {done} / {CONSONANT_DRILLS.length} consonnes bouclées aujourd&apos;hui
+          </div>
+        </div>
+        <p style={{ ...lead, marginTop: 6 }}>{CONSONANT_DRILL_INSTRUCTION}</p>
       </div>
-      <div style={{ fontSize: 12, color: done === CONSONANT_DRILLS.length ? T.green : T.textMut, fontWeight: 600 }}>
-        {done} / {CONSONANT_DRILLS.length} consonnes bouclées aujourd&apos;hui
-      </div>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {CONSONANT_DRILLS.map((c) => (
           <RepCounter
             key={c.id}
@@ -828,52 +849,39 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
-        <div style={blockTitle}>Virelangues</div>
+        <div style={{ ...blockTitle, marginBottom: 6 }}>Virelangues</div>
         <p style={lead}>
-          Un virelangue, deux séries de {TWISTER_REPS}. D&apos;abord en accélérant jusqu&apos;à ta limite,
-          puis en articulant à fond. La première trouve la faille, la seconde la répare.
+          Un virelangue, deux séries de {TWISTER_REPS} : en accélérant, puis en articulant à fond.
         </p>
       </div>
 
-      {/* Le catalogue disparaît dès qu'un virelangue est choisi : on garde
-          l'exercice en cours seul à l'écran, avec un retour explicite vers la
-          liste. Tout afficher en même temps rendait la page illisible. */}
-      {!selected && (
-        <>
-          <LevelFilter value={level} onChange={setLevel} showAll={false} />
+      <LevelFilter value={level} onChange={setLevel} showAll={false} />
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {list.map((tw) => (
-              <button
-                key={tw.id}
-                type="button"
-                onClick={() => { setSelectedId(tw.id); setResult(null); }}
-                style={{ ...selectable(false), width: 300, padding: 16 }}
-              >
-                {/* Pas de pastille de niveau : un seul niveau est affiché à la
-                    fois, le filtre le dit déjà au-dessus. */}
-                <div style={{ fontSize: 14, color: T.text, lineHeight: 1.4 }}>{tw.text}</div>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {/* Le catalogue reste affiché pendant l'exercice — on change de virelangue
+          en tapant sur un autre, sans revenir en arrière. Pas de pastille de
+          niveau sur les cartes : un seul niveau est listé à la fois, le filtre
+          juste au-dessus le dit déjà. */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {list.map((tw) => {
+          const active = tw.id === selectedId;
+          return (
+            <button
+              key={tw.id}
+              type="button"
+              onClick={() => { setSelectedId(active ? null : tw.id); setResult(null); }}
+              style={{ ...selectable(active), width: 300 }}
+            >
+              <div style={{ fontSize: 14, color: T.text, lineHeight: 1.45 }}>{tw.text}</div>
+            </button>
+          );
+        })}
+      </div>
 
       {selected && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
-          <div style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <LevelBadge level={selected.level} />
-              <button
-                type="button"
-                style={{ ...ghost(false), padding: "5px 12px", minHeight: 28 }}
-                onClick={() => { setSelectedId(null); setResult(null); }}
-              >
-                <RotateCcw size={12} /> Changer de virelangue
-              </button>
-            </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 4 }}>
+          <div style={{ ...card, display: "flex", flexDirection: "column", gap: 16 }}>
             <p style={{ fontSize: 22, lineHeight: 1.5, color: T.text, margin: 0, fontWeight: 600 }}>{selected.text}</p>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -885,18 +893,17 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
               <ListenButton text={selected.text} rate={serie.id === "articulate" ? 0.6 : 1} label="Écouter au tempo" />
             </div>
 
+            {/* La consigne et ses rappels, en un seul bloc de texte calme : trois
+                ampoules jaunes empilées attiraient l'œil plus que le virelangue. */}
             <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.55 }}>{serie.instruction}</div>
-            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+            <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
               {serie.tips.map((t, i) => (
-                <li key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, color: T.textSub, lineHeight: 1.45 }}>
-                  <Lightbulb size={13} color={T.amber} style={{ marginTop: 2, flexShrink: 0 }} />
-                  <span>{t}</span>
-                </li>
+                <li key={i} style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
               ))}
             </ul>
           </div>
 
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <RepCounter
               title={serie.short}
               subtitle={serie.title}
@@ -906,9 +913,8 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
               onReset={() => repKey && resetRep(repKey)}
             />
             <div style={{ flex: "2 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.45 }}>
-                Facultatif : enregistre une répétition de la série pour faire noter ton articulation
-                et ta fidélité au texte.
+              <div style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>
+                Facultatif : enregistre une série pour faire noter ton articulation.
               </div>
               <RecorderPanel
                 key={`${selected.id}-${serie.id}`}
@@ -964,11 +970,15 @@ function WarmupSection() {
   );
 }
 
+/* Deux exercices, séparés par du vide et un filet plutôt que par des cadres :
+   l'œil sait où finit l'un et où commence l'autre sans qu'on empile une carte
+   de plus autour de chaque. */
 function ArticulationTab({ reps, incRep, resetRep, onSession }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
       <WarmupSection />
       <ConsonantSection reps={reps} incRep={incRep} resetRep={resetRep} />
+      <hr style={divider} />
       <TwisterSection reps={reps} incRep={incRep} resetRep={resetRep} onSession={onSession} />
     </div>
   );
@@ -1007,7 +1017,7 @@ function ReadingTab({ onSession }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Intention de lecture */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         {READING_INTENTIONS.map((i) => {
@@ -1021,15 +1031,13 @@ function ReadingTab({ onSession }) {
         })}
       </div>
 
-      {/* Consigne de l'intention choisie */}
+      {/* Consigne de l'intention choisie — même traitement calme que les
+          virelangues : du texte, pas une guirlande d'ampoules. */}
       <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
         <p style={{ ...lead, color: T.text }}>{intention.description}</p>
-        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+        <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
           {intention.tips.map((t, i) => (
-            <li key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: T.textSub, lineHeight: 1.45 }}>
-              <Lightbulb size={14} color={T.amber} style={{ marginTop: 2, flexShrink: 0 }} />
-              <span>{t}</span>
-            </li>
+            <li key={i} style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
           ))}
         </ul>
         {paceTarget && (
@@ -1290,7 +1298,7 @@ function SpeakingTab({ onSession }) {
   const ready = (!format.needsTopic || topic.trim().length > 0) && countdown === 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Format de prise de parole */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {SPEAKING_FORMATS.map((f) => {
@@ -1307,12 +1315,9 @@ function SpeakingTab({ onSession }) {
       {/* Consigne du format */}
       <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
         <p style={{ ...lead, color: T.text }}>{format.description}</p>
-        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+        <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
           {format.tips.map((t, i) => (
-            <li key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: T.textSub, lineHeight: 1.45 }}>
-              <Lightbulb size={14} color={T.amber} style={{ marginTop: 2, flexShrink: 0 }} />
-              <span>{t}</span>
-            </li>
+            <li key={i} style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
           ))}
         </ul>
         {format.target && (
@@ -1953,7 +1958,7 @@ export default function EloquencePage() {
   };
 
   return (
-    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 20, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
+    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
       {/* ═══ 1. EN-TÊTE ═══ Ni titre ni sous-titre : la barre latérale dit déjà
           où l'on est. Ne reste que le slot d'en-tête, que toutes les pages rendent. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Ohm">
+  <!-- Vignette maison : le fournisseur ne publie pas d'image utilisable ici, et
+       la table des marchands ne sert que des fichiers locaux (cf. lib/bank/merchants).
+       L'oméga est l'unité de résistance électrique — le signe le plus lisible
+       pour un fournisseur d'électricité, à 32 px comme à 64. Remplacer ce
+       fichier par le vrai logo suffit : le chemin ne change pas. -->
+  <rect width="64" height="64" rx="14" fill="#0F7A4E"/>
+  <path d="M20 46v-5h6.2c-3.9-2.6-6.2-6.9-6.2-11.8C20 21.1 25.3 16 32 16s12 5.1 12 13.2c0 4.9-2.3 9.2-6.2 11.8H44v5H34.6v-5.6c4-1.3 6.2-4.8 6.2-9.1 0-5.6-3.6-9.4-8.8-9.4s-8.8 3.8-8.8 9.4c0 4.3 2.2 7.8 6.2 9.1V46H20z" fill="#FFFFFF"/>
+</svg>

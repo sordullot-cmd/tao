@@ -86,9 +86,9 @@ describe("Page Éloquence", () => {
     expect(tab("10 fois en articulant à fond")).toBeInTheDocument();
     // Chaque série a son propre compteur, remis à zéro en changeant de série.
     expect(screen.getByRole("button", { name: /Vitesse — compter une répétition \(0 sur 10\)/ })).toBeInTheDocument();
-    // Le catalogue s'efface : seul l'exercice en cours reste à l'écran.
-    expect(screen.queryByRole("button", { name: "Expert" })).toBeNull();
-    expect(screen.getByRole("button", { name: /Changer de virelangue/ })).toBeInTheDocument();
+    // Le catalogue reste affiché : on change de virelangue en tapant un autre.
+    expect(screen.getByRole("button", { name: "Expert" })).toBeInTheDocument();
+    expect(screen.getByText("Ces six saucisses-ci sont si sèches qu'on ne sait si c'en sont.")).toBeInTheDocument();
   });
 
   it("ouvre la lecture sur la lente et exagérée, avec sa cible de débit propre", () => {

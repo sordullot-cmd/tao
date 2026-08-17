@@ -294,17 +294,29 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
           resserre sans le comprimer : elle lui prend 32 px, soit ~3 % de sa
           largeur sur un grand écran. */}
       <section style={{ ...CARD, padding: "16px 40px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-        <SankeyGraph
-          nodes={flowNodes}
-          links={flow.links}
-          onHoverNode={hoverBranch}
-          highlight={linked?.node ?? null}
-          formatValue={(v) => fmt(v)}
-          ariaLabel={t("cashflow.flowAria")
-            .replace("{in}", fmt(flow.income))
-            .replace("{out}", fmt(flow.spent))}
-          emptyLabel={t("cashflow.flowEmpty")}
-        />
+        {/* Le dessin est PLAFONNÉ, et centré dans ce qui reste. Un Sankey n'a
+            aucune raison de grandir indéfiniment avec l'écran : passé une
+            certaine largeur, les branches s'allongent sans rien montrer de plus
+            — le même flux, tiré. 860 px est la limite au-delà de laquelle elles
+            traversent du vide.
+
+            Un PLAFOND et non une proportion plus petite : il ne mord que sur les
+            grands écrans. En dessous, la largeur disponible reste inférieure à la
+            borne, donc rien ne bouge — et surtout, le seuil où le diagramme perd
+            ses libellés (720 px, cf. `COMPACT_AT`) n'est pas déplacé d'un pixel. */}
+        <div style={{ width: "100%", maxWidth: 860, margin: "0 auto" }}>
+          <SankeyGraph
+            nodes={flowNodes}
+            links={flow.links}
+            onHoverNode={hoverBranch}
+            highlight={linked?.node ?? null}
+            formatValue={(v) => fmt(v)}
+            ariaLabel={t("cashflow.flowAria")
+              .replace("{in}", fmt(flow.income))
+              .replace("{out}", fmt(flow.spent))}
+            emptyLabel={t("cashflow.flowEmpty")}
+          />
+        </div>
       </section>
 
       <section style={{ ...CARD, padding: "20px 20px 10px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0, height: "100%" }}>
