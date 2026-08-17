@@ -379,9 +379,9 @@ const MERCHANTS: Array<{ match: RegExp; merchant: Merchant }> = [
   { match: /\bekwateur\b/, merchant: { slug: "ekwateur", name: "ekWateur", color: "#0F7B6C", logo: "/marchands/ekwateur.png" } },
   { match: /\bmint energie\b/, merchant: { slug: "mint-energie", name: "Mint Énergie", color: "#0F7B6C", logo: "/marchands/mint-energie.png" } },
   /* Le libellé arrive sous la forme du site (« WWW.OHM-ENERGIE.COM ») : la clé
-     de recherche le rend en « www ohm energie com ». Le nom canonique est
-     « Ohm » — c'est ainsi que la ligne doit se lire, pas comme une URL. */
-  { match: /\bohm ?energies?\b|\bohm\b/, merchant: { slug: "ohm-energie", name: "Ohm", color: "#0F7A4E", logo: "/marchands/ohm-energie.svg" } },
+     de recherche le rend en « www ohm energie com ». C'est le nom de l'enseigne
+     qui doit se lire sur la ligne, pas une URL. */
+  { match: /\bohm ?energies?\b|\bohm\b/, merchant: { slug: "ohm-energie", name: "Ohm Énergie", color: "#1478B0", logo: "/marchands/ohm-energie.png" } },
   { match: /\bsuez\b/, merchant: { slug: "suez", name: "Suez", color: "#0F6B9B", logo: "/marchands/suez.svg" } },
   { match: /\bsaur\b/, merchant: { slug: "saur", name: "Saur", color: "#0F5A8C", logo: "/marchands/saur.png" } },
   { match: /\baxa\b/, merchant: { slug: "axa", name: "AXA", color: "#0F3A8C", logo: "/marchands/axa.jpg" } },

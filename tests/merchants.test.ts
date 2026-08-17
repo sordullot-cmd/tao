@@ -72,8 +72,8 @@ describe("couverture élargie", () => {
     ["CARTE BACK MARKET", "card", "Back Market"],
     // Fournisseur d'énergie facturé sous l'adresse de son site : c'est le nom
     // canonique qui doit s'afficher, pas l'URL.
-    ["PRLV SEPA WWW.OHM-ENERGIE.COM", "direct_debit", "Ohm"],
-    ["PRELEVEMENT OHM ENERGIE", "direct_debit", "Ohm"],
+    ["PRLV SEPA WWW.OHM-ENERGIE.COM", "direct_debit", "Ohm Énergie"],
+    ["PRELEVEMENT OHM ENERGIE", "direct_debit", "Ohm Énergie"],
     // Prop firms : l'évaluation payée par carte, la dépense la plus parlante ici.
     ["CARTE 05/09 APEX TRADER FUNDING", "card", "Apex Trader Funding"],
     ["ACHAT CB APEXTRADERFUNDING.COM", "card", "Apex Trader Funding"],

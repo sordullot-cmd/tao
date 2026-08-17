@@ -26,9 +26,9 @@
  * • L'ANNEAU CHANGE DE PROPOS avec l'onglet : les postes de dépense, les sources
  *   d'entrée, ou — sur « reste » — la place de ce reste dans le mois. C'est le
  *   seul des quatre qui n'a pas de répartition propre : ce qu'on veut voir de lui
- *   est sa part, d'où deux parts plutôt qu'une liste. Une ligne sous l'anneau dit
- *   ce qu'on regarde : « Dépenses » et « Charges fixes » sont deux totaux de la
- *   même matière, et le nom seul ne dit pas ce qui les sépare.
+ *   est sa part, d'où deux parts plutôt qu'une liste. Une ligne AU-DESSUS de
+ *   l'anneau dit ce qu'on regarde : « Dépenses » et « Charges fixes » sont deux
+ *   totaux de la même matière, et le nom seul ne dit pas ce qui les sépare.
  *
  * • LE DÉCOUPAGE N'EST PAS FAIT ICI. Le composant reçoit des opérations DÉJÀ
  *   recadrées : c'est la page qui sait de quelle fenêtre elle parle, et deux
@@ -267,12 +267,9 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
            quatre chiffres, et un libellé de deux mots suivi d'un montant ne tient
            pas sur une ligne en dessous.
 
-           2,1 à gauche : c'est le REMBOURRAGE de la carte du diagramme, et non
-           cette proportion, qui le tient à distance de ses bords (cf. plus bas).
-           Rétrécir aussi la colonne cumulait les deux, et le dessin passait sous
-           les 720 px où il abandonne ses libellés (cf. `COMPACT_AT`) dès 1560 px
-           de fenêtre, au lieu de 1450 auparavant. Avec la marge seule, le régime
-           nommé reprend vers 1495 — les écrans courants le gardent. */
+           Rétrécir cette colonne a été essayé, et défait : le diagramme perd ses
+           libellés sous 720 px de dessin (cf. `COMPACT_AT`), et chaque pixel
+           qu'on lui reprend rapproche ce seuil des écrans courants. */
         gridTemplateColumns: twoCols ? "minmax(0, 2.1fr) minmax(280px, 1fr)" : "minmax(0, 1fr)",
         gap: 20,
         /* Étirées et non calées en haut : les deux cartes descendent jusqu'au
@@ -288,35 +285,18 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
           c'est l'autre carte qui fixe désormais celle de la rangée, et un dessin
           calé en haut laissait un vide sous lui d'autant plus visible qu'il est
           large. */}
-      {/* 40 px de rembourrage horizontal et non 24 : le dessin s'étirait d'un
-          bord à l'autre de sa carte, et un ruban tiré sur toute la largeur se
-          lit moins bien qu'un ruban ramassé — il traverse du vide. La marge le
-          resserre sans le comprimer : elle lui prend 32 px, soit ~3 % de sa
-          largeur sur un grand écran. */}
-      <section style={{ ...CARD, padding: "16px 40px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-        {/* Le dessin est PLAFONNÉ, et centré dans ce qui reste. Un Sankey n'a
-            aucune raison de grandir indéfiniment avec l'écran : passé une
-            certaine largeur, les branches s'allongent sans rien montrer de plus
-            — le même flux, tiré. 860 px est la limite au-delà de laquelle elles
-            traversent du vide.
-
-            Un PLAFOND et non une proportion plus petite : il ne mord que sur les
-            grands écrans. En dessous, la largeur disponible reste inférieure à la
-            borne, donc rien ne bouge — et surtout, le seuil où le diagramme perd
-            ses libellés (720 px, cf. `COMPACT_AT`) n'est pas déplacé d'un pixel. */}
-        <div style={{ width: "100%", maxWidth: 860, margin: "0 auto" }}>
-          <SankeyGraph
-            nodes={flowNodes}
-            links={flow.links}
-            onHoverNode={hoverBranch}
-            highlight={linked?.node ?? null}
-            formatValue={(v) => fmt(v)}
-            ariaLabel={t("cashflow.flowAria")
-              .replace("{in}", fmt(flow.income))
-              .replace("{out}", fmt(flow.spent))}
-            emptyLabel={t("cashflow.flowEmpty")}
-          />
-        </div>
+      <section style={{ ...CARD, padding: "16px 24px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+        <SankeyGraph
+          nodes={flowNodes}
+          links={flow.links}
+          onHoverNode={hoverBranch}
+          highlight={linked?.node ?? null}
+          formatValue={(v) => fmt(v)}
+          ariaLabel={t("cashflow.flowAria")
+            .replace("{in}", fmt(flow.income))
+            .replace("{out}", fmt(flow.spent))}
+          emptyLabel={t("cashflow.flowEmpty")}
+        />
       </section>
 
       <section style={{ ...CARD, padding: "20px 20px 10px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0, height: "100%" }}>
@@ -330,9 +310,24 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
           aria-labelledby={`${TAB_ID}-${tab}`}
           style={{
             flex: 1, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center", gap: 6, minHeight: 0,
+            alignItems: "center", justifyContent: "center", gap: 10, minHeight: 0,
           }}
         >
+          {/* Ce que le chiffre veut dire, AU-DESSUS de l'anneau : la phrase
+              annonce ce qu'on va regarder, elle ne le commente pas après coup.
+
+              Sa hauteur est figée à DEUX lignes, qu'elle en occupe une ou deux.
+              Les cinq phrases n'ont pas la même longueur : sans cette réserve,
+              changer d'onglet faisait sauter l'anneau d'une quinzaine de pixels
+              et respirer toute la carte. La place est prise une fois pour
+              toutes, et c'est la taille de base du bloc. */}
+          <p style={{
+            margin: 0, maxWidth: 232, minHeight: "2.9em",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            textAlign: "center", fontSize: 12, lineHeight: 1.45, color: T.textMut,
+          }}>
+            {ring.hint}
+          </p>
           {/* Survol lié au diagramme de flux : la branche pointée d'un côté
               allume sa part de l'autre. */}
           <AllocationChart
@@ -348,19 +343,6 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
             showPct={false}
             formatValue={(v) => fmt(v)}
           />
-          {/* Ce que le chiffre veut dire, en une ligne. Le centre de l'anneau ne
-              porte qu'un nom, et « Dépenses » comme « Charges fixes » sont deux
-              totaux de la même matière : sans cette ligne, rien ne dit ce qui
-              les sépare. Muette en gris clair — elle se lit une fois, pas à
-              chaque coup d'œil. */}
-          {ring.hint && (
-            <p style={{
-              margin: 0, maxWidth: 232, textAlign: "center",
-              fontSize: 12, lineHeight: 1.45, color: T.textMut,
-            }}>
-              {ring.hint}
-            </p>
-          )}
         </div>
 
         {/* Les quatre chiffres de la fenêtre, en onglets : ils résument ET ils
