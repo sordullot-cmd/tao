@@ -62,6 +62,12 @@ export async function POST(request: NextRequest) {
               " projection, la stabilité de la voix, l'intonation et la" +
               " mélodie, l'expressivité et la chaleur. Tu ne juges JAMAIS le" +
               " fond, le vocabulaire, la grammaire ni le contenu des propos." +
+              " Deux points doivent être signalés dès qu'ils s'entendent, et" +
+              " faire baisser la note correspondante : les BRUITS PARASITES" +
+              " (bruit de fond, souffle dans le micro, bruits de bouche," +
+              " claquements de langue) dans `feedback.voice`, et les FINS DE" +
+              " PHRASE qui remontent ou restent plates au lieu de descendre" +
+              " dans `feedback.melody`." +
               " Tu restes objectif, précis et bienveillant mais sans" +
               " complaisance.",
           },

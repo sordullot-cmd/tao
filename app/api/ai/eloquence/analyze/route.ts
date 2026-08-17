@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       fillerCount,
       fillers,
       audioMetrics,
+      paceTarget,
     }: {
       mode: "reading" | "freeSpeech" | "diction" | "structure";
       transcript: string;
@@ -82,7 +83,17 @@ export async function POST(request: NextRequest) {
         pauseCount?: number | null;
         pauseRatio?: number | null;
         longestPauseSec?: number | null;
+        snrDb?: number | null;
+        phraseCount?: number | null;
+        endingsAnalyzed?: number | null;
+        fallingEndings?: number | null;
+        risingEndings?: number | null;
+        fallingEndRatio?: number | null;
       } | null;
+      /* Fourchette de débit propre à l'exercice. La lecture lente et le format
+         « débit maîtrisé » cherchent VOLONTAIREMENT un débit bas : les juger sur
+         la fourchette de conversation reviendrait à sanctionner la consigne. */
+      paceTarget?: { wpmMin?: number; wpmMax?: number; wpmTooFast?: number } | null;
     } = body;
 
     if (!transcript || !transcript.trim()) {
@@ -92,11 +103,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Cible de débit : celle de l'exercice, sinon la fourchette de travail par défaut.
+    const paceMin = paceTarget?.wpmMin ?? 110;
+    const paceMax = paceTarget?.wpmMax ?? 130;
+    const paceTooFast = paceTarget?.wpmTooFast ?? 150;
+
     const system =
       "Tu es un coach professionnel en éloquence, prise de parole et communication, exigeant et rigoureux. " +
       "Tu analyses une transcription de prise de parole et donnes un retour critique, technique, précis et actionnable, en français. " +
       "Sois honnête et exigeant : ne survends pas, ne distribue pas de notes flatteuses. Une note élevée (80+) doit être méritée ; " +
-      "une prestation moyenne se situe autour de 50-65. Appuie chaque jugement sur des éléments concrets de la transcription (cite des mots, des tournures, des passages).";
+      "une prestation moyenne se situe autour de 50-65. Appuie chaque jugement sur des éléments concrets de la transcription (cite des mots, des tournures, des passages).\n" +
+      "QUATRE REPÈRES priment sur tout le reste, et doivent apparaître explicitement dans ton retour dès qu'ils ne sont pas tenus :\n" +
+      `1) Débit : cible ${paceMin}–${paceMax} mots/minute ; au-delà de ${paceTooFast}, c'est trop rapide.\n` +
+      "2) Silences : de vraies pauses entre les idées, jamais de tic de langage pour les combler.\n" +
+      "3) Bruits parasites : pas de bruit de fond, de souffle dans le micro ni de bruit de bouche.\n" +
+      "4) Fins de phrase : l'intonation doit DESCENDRE en fin de phrase affirmative — une fin qui remonte ou reste plate fait douter du propos.";
 
     let modeInstructions = "";
     switch (mode) {
@@ -206,13 +227,26 @@ export async function POST(request: NextRequest) {
         );
       if (num(a.longestPauseSec) != null)
         acousticLines.push(`- Pause la plus longue : ${num(a.longestPauseSec)!.toFixed(1)} s`);
+      if (num(a.snrDb) != null)
+        acousticLines.push(
+          `- Voix au-dessus du bruit de fond : ${Math.round(num(a.snrDb)!)} dB ` +
+            "(≥ 25 = prise propre, < 15 = bruits parasites très audibles)"
+        );
+      if (num(a.endingsAnalyzed) != null && num(a.endingsAnalyzed)! > 0)
+        acousticLines.push(
+          `- Fins de phrase : ${num(a.fallingEndings) ?? 0} descendantes et ${num(a.risingEndings) ?? 0} montantes ` +
+            `sur ${num(a.endingsAnalyzed)} phrases mesurées ` +
+            "(une fin qui remonte sonne comme une question et affaiblit l'affirmation)"
+        );
       if (acousticLines.length > 0) {
         promptParts.push(
           "Mesures acoustiques réelles (issues du signal audio, à intégrer au jugement) :\n" +
             acousticLines.join("\n") +
             "\nAppuie les notes de `rhythm` (cadence, pauses, débit), `diction` et `confidence` sur ces mesures : " +
             "une intonation monotone (faible variation de hauteur) doit être signalée dans le feedback ; " +
-            "un temps de pause hors de la fourchette 12-30 % ou une pause très longue doit faire baisser `rhythm`."
+            "un temps de pause hors de la fourchette 12-35 % ou une pause très longue doit faire baisser `rhythm` ; " +
+            "un bruit de fond audible ou une majorité de fins de phrase non descendantes doivent être nommés " +
+            "explicitement dans `improvements` avec la correction à appliquer."
         );
       }
     }
@@ -222,7 +256,10 @@ export async function POST(request: NextRequest) {
       promptParts.push(
         "Métriques mesurées (à prendre en compte) :\n" +
           metricsLines.join("\n") +
-          "\nUn débit hors de la fourchette 110-160 mots/minute doit faire baisser le score de rythme (rhythm) ; de nombreux tics de langage doivent faire baisser la confiance (confidence) et le rythme. Le score `rhythm` reflète la cadence, la régularité du débit et la gestion des pauses."
+          `\nLa cible de débit de CET exercice est ${paceMin}-${paceMax} mots/minute. Un débit hors de cette fourchette doit faire ` +
+          `baisser le score de rythme (rhythm), et un débit supérieur à ${paceTooFast} mots/minute doit le faire baisser fortement ; ` +
+          "de nombreux tics de langage doivent faire baisser la confiance (confidence) et le rythme. " +
+          "Le score `rhythm` reflète la cadence, la régularité du débit et la gestion des pauses."
       );
     }
     promptParts.push(

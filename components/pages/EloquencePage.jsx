@@ -1,9 +1,29 @@
 "use client";
 
+/* ════════════════════════════════════════════════════════════════════════════
+   Page « Éloquence » — trois temps d'entraînement, quatre repères.
+
+   Organisation : les six onglets d'avant (Lecture · Discours libre · Sujets ·
+   Diction · Structure · Défis) mélangeaient un exercice, un tiroir de sujets, un
+   aide-mémoire et un catalogue qui rejouait les deux premiers sous un autre nom.
+   Il en reste trois, dans l'ordre où on les enchaîne :
+
+     1. Articulation — la mécanique, à la répétition : T·D·B·P, virelangues,
+        échauffement. Des compteurs, pas des notes.
+     2. Lecture      — le texte d'un autre, avec une intention : lente et
+        exagérée, théâtrale, ou imitation d'un modèle.
+     3. Parole       — ses propres mots, sous contrainte : sujet, cadre, format.
+
+   Au-dessus des trois, les MÊMES quatre repères, mesurés sur chaque prise :
+   débit 110–130, vrais silences, pas de bruit parasite, fins de phrase qui
+   descendent. C'est le fil de la page — le score IA vient après, pas avant.
+   ════════════════════════════════════════════════════════════════════════════ */
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Mic, Square, Volume2, Loader2, Check, ChevronRight,
-  Sparkles, RefreshCw, Lightbulb, Video, VideoOff, Clock, Ban, Eye, X,
+  Mic, Square, Volume2, Loader2, Check, ChevronRight, Sparkles, RefreshCw,
+  Lightbulb, Video, VideoOff, Clock, Ban, Eye, Plus, RotateCcw,
+  AlertTriangle, Minus,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useAudioRecorder } from "@/lib/hooks/useAudioRecorder";
@@ -11,15 +31,15 @@ import { useEloquenceAudio } from "@/lib/hooks/useEloquenceAudio";
 import { decodeAudioBlob, analyzeAudioBuffer, deriveAudioScores, encodeWav } from "@/lib/eloquenceAudioAnalysis";
 import {
   ELOQ_STORAGE_KEY, ELOQ_CLOUD_KEY, LEVELS, LEVEL_BY_ID, SCORE_AXES, FIDELITY_AXIS, AUDIO_AXES,
-  READING_TEXTS, TONGUE_TWISTERS, WARMUPS, TOPIC_THEMES, STRUCTURE_FRAMEWORKS,
-  DRILLS, FRAMEWORK_BY_ID,
+  READING_TEXTS, TONGUE_TWISTERS, WARMUPS, TOPIC_THEMES, STRUCTURE_FRAMEWORKS, FRAMEWORK_BY_ID,
+  CONSONANT_DRILLS, CONSONANT_REPS, CONSONANT_DRILL_INSTRUCTION, TWISTER_REPS, TWISTER_SERIES,
+  READING_INTENTIONS, SPEAKING_FORMATS,
+  SPEECH_RULES, buildCoachChecks, coachChecksScore,
   EXERCISE_MODES, countWords, countFillers, countWordOccurrences, computeWpm, describeWpm, overallScore,
-  getTopicsFromBank, pickRandomTopic, todayKey, buildDailyAggregate,
+  getTopicsFromBank, pickRandomTopic, todayKey, buildDailyAggregate, migrateEloquenceStore,
 } from "@/lib/eloquenceData";
 import { T } from "@/lib/ui/tokens";
-import {
-  CARD, MiniKpi, PeriodPills, FIELD_BG,
-} from "@/components/ui/da";
+import { CARD, MiniKpi, PeriodPills, FIELD_BG, HAIRLINE } from "@/components/ui/da";
 
 /* ─────────────── Helpers génériques ─────────────── */
 // Couleur d'un score 0–100.
@@ -30,27 +50,32 @@ function scoreColor(v) {
   if (v >= 50) return T.amber;
   return T.red;
 }
-// Couleur d'un "tone" renvoyé par describeWpm.
-function toneColor(tone) {
-  return { green: T.green, blue: T.blue, amber: T.amber, red: T.red, mut: T.textMut }[tone] || T.textMut;
+// Couleur du verdict d'un repère.
+function statusColor(status) {
+  return { ok: T.green, warn: T.amber, bad: T.red }[status] || T.textMut;
 }
 // Format mm:ss.
 function fmtTime(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
+// Format d'une durée en secondes → « 1 min » / « 30 s ».
+function fmtDuration(s) {
+  return s >= 60 ? `${s % 60 === 0 ? s / 60 : (s / 60).toFixed(1)} min` : `${s} s`;
+}
+function fmtDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch { return ""; }
+}
 // Identifiant unique côté client.
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-/* Styles partagés ───────────────────────────────────────────────────────────
-   Portés à la nouvelle DA : la carte perd sa bordure au profit de l'ombre très
-   douce `elevCard`, les boutons prennent la métrique 12 px / Medium des autres
-   pages, et plus aucun blanc n'est écrit en dur — `#fff` sur un aplat `T.text`
-   devenait invisible en thème sombre, où cet aplat s'éclaircit.
-   `SURFACE` remplace l'ancien `T.bg` gris : la page est désormais POSÉE sur le
-   gris du shell, un second gris opaque par-dessus ferait un bloc dans le bloc. */
+/* Styles partagés : carte sans bordure posée sur l'ombre douce `elevCard`,
+   boutons à la métrique 12 px / Medium des autres pages, et aucune couleur en
+   dur — `#fff` sur un aplat `T.text` devient invisible en thème sombre. */
 const card = { ...CARD, padding: 20, boxSizing: "border-box" };
 const SURFACE = FIELD_BG;
 const pill = (active) => ({
@@ -76,17 +101,36 @@ const primary = (disabled) => ({
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
   transition: "opacity 120ms ease",
 });
+const field = {
+  width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`,
+  borderRadius: 10, padding: "10px 12px", fontSize: 15, fontFamily: "inherit",
+  color: T.text, background: T.white, outline: "none",
+};
+const lead = { fontSize: 14, color: T.textSub, lineHeight: 1.5, margin: 0 };
+const blockTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 6 };
+const sectionTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 8 };
+const metricBox = { flex: 1, minWidth: 120, borderRadius: 8, padding: "10px 12px", background: SURFACE };
+const metricLabel = { fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 };
+const metricVal = { fontSize: 18, fontWeight: 600, color: T.text, marginTop: 2, fontVariantNumeric: "tabular-nums" };
+// Carte sélectionnable (texte, virelangue, format…) : l'état actif est un
+// liseré d'encre en `boxShadow` plutôt qu'une bordure, qui décalerait le contenu.
+const selectable = (active) => ({
+  ...card, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+  background: active ? T.accentBg : T.white,
+  boxShadow: active ? `inset 0 0 0 1.5px ${T.text}` : T.elevCard,
+  transition: "background 120ms ease, box-shadow 120ms ease",
+});
 
 /* ─────────────── Synthèse vocale (modèle à écouter) ─────────────── */
 function useSpeech() {
   const [speaking, setSpeaking] = useState(false);
-  const speak = (text) => {
+  const speak = (text, rate = 0.95) => {
     try {
       if (typeof window === "undefined" || !window.speechSynthesis) return;
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = "fr-FR";
-      u.rate = 0.95;
+      u.rate = rate;
       u.onend = () => setSpeaking(false);
       u.onerror = () => setSpeaking(false);
       setSpeaking(true);
@@ -103,18 +147,15 @@ function useSpeech() {
   return { speaking, speak, stop, supported };
 }
 
-// Bouton « Écouter le modèle » réutilisable.
-function ListenButton({ text }) {
+/* Bouton « Écouter le modèle ». `rate` permet d'entendre le texte au tempo de
+   l'exercice — une lecture lente ne s'écoute pas à la vitesse normale. */
+function ListenButton({ text, rate = 0.95, label = "Écouter le modèle" }) {
   const { speaking, speak, stop, supported } = useSpeech();
   if (!supported || !text) return null;
   return (
-    <button
-      type="button"
-      style={ghost(false)}
-      onClick={() => (speaking ? stop() : speak(text))}
-    >
+    <button type="button" style={ghost(false)} onClick={() => (speaking ? stop() : speak(text, rate))}>
       {speaking ? <Square size={15} /> : <Volume2 size={15} />}
-      {speaking ? "Arrêter" : "Écouter le modèle"}
+      {speaking ? "Arrêter" : label}
     </button>
   );
 }
@@ -138,9 +179,142 @@ async function runVoiceAnalysis(audioBuffer, mode, topic) {
   }
 }
 
-/* ─────────────── Panneau d'enregistrement + analyse IA ─────────────── */
-function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, onResult }) {
-  const { recording, durationSec, error, supported, start, stop, reset } = useAudioRecorder();
+/* ═══════════════════════════════════════════════════════════
+   LES QUATRE REPÈRES
+   ═══════════════════════════════════════════════════════════ */
+
+/* Rappel des consignes, affiché en permanence sous l'en-tête. Ce n'est pas de la
+   décoration : ce sont exactement les quatre critères mesurés sur chaque prise,
+   donc les lire avant de parler suffit à savoir ce qui sera jugé. */
+function SpeechRulesBar() {
+  return (
+    <div style={{ ...card, padding: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "stretch" }}>
+      {SPEECH_RULES.map((r) => (
+        <div key={r.id} style={{ flex: "1 1 190px", minWidth: 180, display: "flex", flexDirection: "column", gap: 3 }}>
+          <div style={{ fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 }}>{r.label}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text, lineHeight: 1.3 }}>{r.rule}</div>
+          <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.4 }}>{r.why}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Verdict d'un repère après une prise.
+function CheckTile({ check }) {
+  const color = statusColor(check.status);
+  const Icon = check.status === "ok" ? Check : check.status === "bad" ? AlertTriangle : check.status === "warn" ? Minus : Clock;
+  return (
+    <div style={{ flex: "1 1 200px", minWidth: 180, borderRadius: 10, padding: "12px 14px", background: SURFACE, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon size={14} color={color} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{check.label}</span>
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 600, color, fontVariantNumeric: "tabular-nums" }}>{check.value}</div>
+      <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4 }}>{check.detail}</div>
+    </div>
+  );
+}
+
+function CoachChecks({ checks }) {
+  if (!checks || checks.length === 0) return null;
+  const score = coachChecksScore(checks);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <div style={sectionTitle}>Les quatre repères</div>
+        {score != null && (
+          <span style={{ fontSize: 13, fontWeight: 600, color: scoreColor(score), fontVariantNumeric: "tabular-nums" }}>
+            {score} / 100
+          </span>
+        )}
+        <span style={{ fontSize: 11, color: T.textMut }}>mesurés sur ton enregistrement, sans IA</span>
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {checks.map((c) => <CheckTile key={c.id} check={c} />)}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ENREGISTREMENT + ANALYSE
+   ═══════════════════════════════════════════════════════════ */
+
+// Miroir : la webcam retournée, sans enregistrement ni envoi. Affiché pendant la
+// prise pour ceux qui veulent aussi travailler le regard et le visage.
+function MirrorView() {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (typeof navigator === "undefined" || !navigator.mediaDevices) throw new Error("no-media");
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      } catch {
+        if (!cancelled) setErr("Caméra indisponible — fais l'exercice devant un vrai miroir.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  if (err) return <div style={{ fontSize: 12.5, color: T.textMut, textAlign: "center" }}>{err}</div>;
+  return (
+    <div style={{ position: "relative", width: "100%", maxWidth: 420, aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden", background: T.scrim }}>
+      <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} />
+      <div style={{ position: "absolute", bottom: 8, left: 0, right: 0, textAlign: "center", color: T.onSolid, fontSize: 12, textShadow: "0 1px 3px rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <Eye size={13} /> Regarde tes yeux, uniquement.
+      </div>
+    </div>
+  );
+}
+
+/* VU-mètre : le niveau d'entrée du micro pendant la prise. Il sert au repère
+   « bruits parasites » — on voit tout de suite un souffle qui sature ou un fond
+   qui ne redescend jamais entre deux phrases. */
+function LevelMeter({ level, recording }) {
+  const pct = Math.min(100, Math.round(Math.sqrt(Math.max(0, level)) * 140));
+  const hot = pct > 92;
+  return (
+    <div style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ height: 6, borderRadius: 999, background: HAIRLINE, overflow: "hidden" }}>
+        <div style={{
+          width: `${recording ? pct : 0}%`, height: "100%", borderRadius: 999,
+          background: hot ? T.red : T.green, transition: "width 100ms linear, background 150ms ease",
+        }} />
+      </div>
+      <div style={{ fontSize: 11, color: hot ? T.red : T.textMut, textAlign: "center" }}>
+        {hot ? "Trop fort — éloigne-toi du micro." : recording ? "Niveau du micro" : "Le niveau s'affiche pendant la prise."}
+      </div>
+    </div>
+  );
+}
+
+/* Panneau d'enregistrement : capture, transcription, mesures acoustiques,
+ * analyse IA du texte et écoute par le modèle audio.
+ *
+ * `mode` est la GRILLE D'ANALYSE demandée à l'IA ("reading" | "diction" |
+ * "freeSpeech" | "structure"), pas l'onglet : un virelangue est un exercice
+ * d'articulation pour la page, mais s'analyse comme de la diction, et une prise
+ * de parole avec cadre s'analyse comme de la structure. Les trois onglets, eux,
+ * ne servent qu'au rangement et au suivi (`EXERCISE_MODES`).
+ *
+ * `paceTarget` porte la cible de débit de l'exercice : les quatre repères et
+ * l'IA jugent sur CETTE fourchette, pas sur celle de la conversation. */
+function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, paceTarget, mirror, onResult }) {
+  const { recording, durationSec, level, error, supported, start, stop, reset } = useAudioRecorder();
   const { uploadAudio } = useEloquenceAudio();
   const [phase, setPhase] = useState("idle"); // idle | analyzing | error
   const [netError, setNetError] = useState(null);
@@ -183,15 +357,18 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, onRes
       const audioBuffer = await audioBufferP;
       const audioMetrics = audioBuffer ? analyzeAudioBuffer(audioBuffer) : null;
       const audioScores = deriveAudioScores(audioMetrics);
+      // 4) Les quatre repères : disponibles immédiatement, même si l'IA échoue.
+      const checks = buildCoachChecks(audioMetrics, wpm, paceTarget);
 
-      // 4) Analyse IA du texte (nourrie par les mesures) + 5) écoute réelle par le
-      // modèle audio, en parallèle. L'analyse vocale est best effort (jamais bloquante).
+      // 5) Analyse IA du texte (nourrie par les mesures) + 6) écoute réelle par
+      // le modèle audio, en parallèle. L'analyse vocale est best effort.
       const analysisP = fetch("/api/ai/eloquence/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode, transcript: text, referenceText, topic, framework, drillGoal,
           durationSec: dur, wpm, fillerCount, fillers, audioMetrics,
+          paceTarget: paceTarget || null,
         }),
       });
       const voiceP = audioBuffer ? runVoiceAnalysis(audioBuffer, mode, topic) : Promise.resolve(null);
@@ -205,7 +382,8 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, onRes
 
       onResult({
         transcript: text, durationSec: dur, wpm, fillerCount, fillers, analysis,
-        audioUrl, audioPath, audioMetrics, audioScores, voiceAnalysis,
+        audioUrl, audioPath, audioMetrics, audioScores, voiceAnalysis, checks,
+        paceTarget: paceTarget || null,
       });
       setPhase("idle");
       reset();
@@ -218,7 +396,7 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, onRes
   if (!supported) {
     return (
       <div style={{ ...card, color: T.red, fontSize: 14 }}>
-        L'enregistrement audio n'est pas pris en charge par ce navigateur.
+        L&apos;enregistrement audio n&apos;est pas pris en charge par ce navigateur.
       </div>
     );
   }
@@ -226,17 +404,17 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, onRes
   return (
     <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
       {/* Animation de pulsation pour le micro */}
-      <style>{`@keyframes eloqPulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}`}</style>
+      <style>{`@keyframes eloqPulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {phase === "analyzing" ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "16px 0" }}>
           <Loader2 size={34} color={T.text} style={{ animation: "spin 1s linear infinite" }} />
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           <div style={{ fontSize: 14, color: T.textSub, fontWeight: 600 }}>Analyse en cours…</div>
-          <div style={{ fontSize: 12, color: T.textMut }}>Transcription puis évaluation par l'IA.</div>
+          <div style={{ fontSize: 12, color: T.textMut }}>Transcription, mesures acoustiques, puis évaluation.</div>
         </div>
       ) : (
         <>
+          {mirror && recording && <MirrorView />}
           <button
             type="button"
             onClick={recording ? handleStop : handleStart}
@@ -260,14 +438,12 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, onRes
           <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: recording ? T.red : T.textMut }}>
             {fmtTime(durationSec)}
           </div>
-          <div style={{ fontSize: 12, color: T.textMut, textAlign: "center" }}>
-            {recording ? "Parle clairement, puis appuie sur Arrêter." : "Appuie pour démarrer l'enregistrement."}
-          </div>
+          <LevelMeter level={level} recording={recording} />
         </>
       )}
 
       {(error || netError) && (
-        <div style={{ color: T.red, fontSize: 13, textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ color: T.red, fontSize: 13, textAlign: "center", display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
           <span>{netError || error}</span>
           {phase === "error" && (
             <button type="button" style={ghost(false)} onClick={() => { setPhase("idle"); setNetError(null); }}>
@@ -304,172 +480,26 @@ function buildAudioRows(voiceAnalysis, audioScores) {
   return rows;
 }
 
-/* ─────────────── Carte de résultats d'analyse ─────────────── */
-function ResultCard({ result, showFidelity }) {
-  const audioUrl = result && result.audioUrl;
-  // Libère l'URL objet quand la carte disparaît ou quand l'enregistrement change.
-  useEffect(() => {
-    if (!audioUrl) return;
-    return () => URL.revokeObjectURL(audioUrl);
-  }, [audioUrl]);
-
-  if (!result || !result.analysis) return null;
-  const { analysis, wpm, fillerCount, fillers, durationSec, transcript } = result;
-  const audioRows = buildAudioRows(result.voiceAnalysis, result.audioScores);
-  const heardByAI = !!result.voiceAnalysis;
-  const overall = analysis.overall != null ? analysis.overall : overallScore(analysis.scores);
-  const wpmInfo = describeWpm(wpm);
-
-  // Axes à afficher (+ fidélité si pertinent et présent)
-  const axes = [...SCORE_AXES];
-  if (showFidelity && analysis.scores && analysis.scores.fidelity != null) axes.push(FIDELITY_AXIS);
-
-  const topFillers = Object.entries(fillers || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
-
+// Barre d'un axe noté, avec la justification de la note en dessous.
+function AxisBar({ label, desc, value, feedback }) {
+  const val = typeof value === "number" ? value : 0;
   return (
-    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 20, marginTop: 16 }}>
-      {/* Score global */}
-      <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-        <div style={{
-          width: 92, height: 92, borderRadius: "50%", flexShrink: 0,
-          background: scoreColor(overall), color: T.onSolid,
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        }}>
-          <span style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{overall}</span>
-          <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>/ 100</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 96, fontSize: 13, color: T.textSub, fontWeight: 600 }} title={desc}>{label}</div>
+        <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
+          <div style={{ width: `${val}%`, height: "100%", background: scoreColor(val), borderRadius: 999, transition: "width 400ms ease" }} />
         </div>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>Score global</div>
-          {analysis.summary && (
-            <div style={{ fontSize: 13, color: T.textSub, marginTop: 4, fontStyle: "italic" }}>{analysis.summary}</div>
-          )}
-        </div>
+        <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: scoreColor(val) }}>{val}</div>
       </div>
-
-      {/* Barres par axe + retour critique justifiant chaque note */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {axes.map((ax) => {
-          const v = analysis.scores ? analysis.scores[ax.id] : null;
-          const val = typeof v === "number" ? v : 0;
-          const fb = analysis.axisFeedback ? analysis.axisFeedback[ax.id] : null;
-          return (
-            <div key={ax.id} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 96, fontSize: 13, color: T.textSub, fontWeight: 600 }} title={ax.desc}>{ax.label}</div>
-                <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
-                  <div style={{ width: `${val}%`, height: "100%", background: scoreColor(val), borderRadius: 999, transition: "width 400ms ease" }} />
-                </div>
-                <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: scoreColor(val) }}>{val}</div>
-              </div>
-              {fb && (
-                <div style={{ paddingLeft: 108, fontSize: 12.5, color: T.textSub, lineHeight: 1.5, borderLeft: `2px solid ${scoreColor(val)}`, marginLeft: 2, paddingTop: 1, paddingBottom: 1 }}>
-                  {fb}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Analyse du son (voix, mélodie, +expressivité/chaleur si écoutée par l'IA) */}
-      {audioRows.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={sectionTitle}>Analyse du son</div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: heardByAI ? T.blue : T.textMut }}>
-              {heardByAI ? "🎧 écoutée par l'IA" : "mesurée sur le signal"}
-            </span>
-          </div>
-          {audioRows.map((ax) => (
-            <div key={ax.id} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 96, fontSize: 13, color: T.textSub, fontWeight: 600 }}>{ax.label}</div>
-                <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
-                  <div style={{ width: `${ax.score}%`, height: "100%", background: scoreColor(ax.score), borderRadius: 999, transition: "width 400ms ease" }} />
-                </div>
-                <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: scoreColor(ax.score) }}>{ax.score}</div>
-              </div>
-              {ax.fb && (
-                <div style={{ paddingLeft: 108, fontSize: 12.5, color: T.textSub, lineHeight: 1.5, borderLeft: `2px solid ${scoreColor(ax.score)}`, marginLeft: 2, paddingTop: 1, paddingBottom: 1 }}>
-                  {ax.fb}
-                </div>
-              )}
-            </div>
-          ))}
+      {feedback && (
+        <div style={{ paddingLeft: 108, fontSize: 12.5, color: T.textSub, lineHeight: 1.5, borderLeft: `2px solid ${scoreColor(val)}`, marginLeft: 2 }}>
+          {feedback}
         </div>
-      )}
-
-      {/* Métriques rapides */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <div style={metricBox}>
-          <div style={metricLabel}>Débit</div>
-          <div style={{ ...metricVal, color: toneColor(wpmInfo.tone) }}>{wpm || 0} mpm</div>
-          <div style={{ fontSize: 11, color: toneColor(wpmInfo.tone), fontWeight: 600 }}>{wpmInfo.label}</div>
-        </div>
-        <div style={metricBox}>
-          <div style={metricLabel}>Durée</div>
-          <div style={metricVal}>{fmtTime(durationSec)}</div>
-        </div>
-        <div style={metricBox}>
-          <div style={metricLabel}>Mots de remplissage</div>
-          <div style={{ ...metricVal, color: fillerCount > 5 ? T.amber : T.text }}>{fillerCount || 0}</div>
-          {topFillers.length > 0 && (
-            <div style={{ fontSize: 11, color: T.textMut }} title={topFillers.map(([w, n]) => `${w} ×${n}`).join(", ")}>
-              {topFillers.map(([w, n]) => `${w} ×${n}`).join(" · ")}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Points forts / À améliorer / Conseils */}
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        <FeedbackList title="Points forts" icon={<Check size={15} color={T.green} />} color={T.green} items={analysis.strengths} />
-        <FeedbackList title="À améliorer" icon={<ChevronRight size={15} color={T.amber} />} color={T.amber} items={analysis.improvements} />
-        <FeedbackList title="Conseils" icon={<Lightbulb size={15} color={T.blue} />} color={T.blue} items={analysis.tips} />
-      </div>
-
-      {/* Suggestions de vocabulaire */}
-      {Array.isArray(analysis.vocabSuggestions) && analysis.vocabSuggestions.length > 0 && (
-        <div>
-          <div style={sectionTitle}>Dis plutôt</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {analysis.vocabSuggestions.map((s, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                <span style={{ color: T.textMut, textDecoration: "line-through" }}>{s.original}</span>
-                <ChevronRight size={14} color={T.textMut} />
-                <span style={{ color: T.green, fontWeight: 600 }}>{s.better}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Réécoute de l'enregistrement (disponible pour la session en cours) */}
-      {audioUrl && (
-        <div>
-          <div style={sectionTitle}>Réécoute-toi</div>
-          <audio controls src={audioUrl} style={{ width: "100%", height: 40 }} />
-        </div>
-      )}
-
-      {/* Transcription repliable */}
-      {transcript && (
-        <details style={{ fontSize: 13 }}>
-          <summary style={{ cursor: "pointer", color: T.textSub, fontWeight: 600 }}>Voir la transcription</summary>
-          <p style={{ marginTop: 8, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{transcript}</p>
-        </details>
       )}
     </div>
   );
 }
-
-/* Bloc de mesure : aplat d'encre sans bordure, libellé en minuscules atténuées
-   et valeur en chiffres tabulaires — la métrique de `StatRow`/`MiniKpi`. Les
-   capitales espacées et le 700 gras appartenaient à l'ancienne DA. */
-const metricBox = { flex: 1, minWidth: 120, borderRadius: 8, padding: "10px 12px", background: SURFACE };
-const metricLabel = { fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 };
-const metricVal = { fontSize: 18, fontWeight: 600, color: T.text, marginTop: 2, fontVariantNumeric: "tabular-nums" };
-const sectionTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 8 };
 
 function FeedbackList({ title, icon, color, items }) {
   if (!Array.isArray(items) || items.length === 0) return null;
@@ -488,11 +518,177 @@ function FeedbackList({ title, icon, color, items }) {
   );
 }
 
-/* ─────────────── Pastilles de sélection de niveau ─────────────── */
-function LevelFilter({ value, onChange, allLabel = "Tous" }) {
+function VocabSuggestions({ items }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return (
+    <div>
+      <div style={sectionTitle}>Dis plutôt</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {items.map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+            <span style={{ color: T.textMut, textDecoration: "line-through" }}>{s.original}</span>
+            <ChevronRight size={14} color={T.textMut} />
+            <span style={{ color: T.green, fontWeight: 600 }}>{s.better}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Carte de résultats ───────────────
+ * Les quatre repères d'abord (mesurés, immédiats, actionnables), le jugement de
+ * l'IA ensuite, le détail acoustique replié. L'ordre inverse faisait chercher le
+ * débit et les silences sous six barres de notes. */
+function ResultCard({ result, showFidelity }) {
+  const audioUrl = result && result.audioUrl;
+  // Libère l'URL objet quand la carte disparaît ou quand l'enregistrement change.
+  useEffect(() => {
+    if (!audioUrl) return;
+    return () => URL.revokeObjectURL(audioUrl);
+  }, [audioUrl]);
+
+  if (!result || !result.analysis) return null;
+  const { analysis, fillerCount, fillers, durationSec, transcript, checks } = result;
+  const audioRows = buildAudioRows(result.voiceAnalysis, result.audioScores);
+  const heardByAI = !!result.voiceAnalysis;
+  const overall = analysis.overall != null ? analysis.overall : overallScore(analysis.scores);
+
+  const axes = [...SCORE_AXES];
+  if (showFidelity && analysis.scores && analysis.scores.fidelity != null) axes.push(FIDELITY_AXIS);
+  const topFillers = Object.entries(fillers || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+
+  return (
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 20, marginTop: 16 }}>
+      <CoachChecks checks={checks} />
+
+      {result.forbiddenWord && (
+        <ForbiddenVerdict word={result.forbiddenWord} count={result.forbiddenCount || 0} />
+      )}
+
+      {/* Score global de l'IA */}
+      <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", paddingTop: 4, borderTop: `1px solid ${HAIRLINE}` }}>
+        <div style={{
+          width: 84, height: 84, borderRadius: "50%", flexShrink: 0, marginTop: 12,
+          background: scoreColor(overall), color: T.onSolid,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{overall}</span>
+          <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>/ 100</span>
+        </div>
+        <div style={{ flex: 1, minWidth: 200, marginTop: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Jugement du coach</div>
+          {analysis.summary && (
+            <div style={{ fontSize: 13, color: T.textSub, marginTop: 4, fontStyle: "italic" }}>{analysis.summary}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Barres par axe + justification */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {axes.map((ax) => (
+          <AxisBar
+            key={ax.id}
+            label={ax.label}
+            desc={ax.desc}
+            value={analysis.scores ? analysis.scores[ax.id] : null}
+            feedback={analysis.axisFeedback ? analysis.axisFeedback[ax.id] : null}
+          />
+        ))}
+      </div>
+
+      {/* Points forts / À améliorer / Conseils */}
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <FeedbackList title="Points forts" icon={<Check size={15} color={T.green} />} color={T.green} items={analysis.strengths} />
+        <FeedbackList title="À améliorer" icon={<ChevronRight size={15} color={T.amber} />} color={T.amber} items={analysis.improvements} />
+        <FeedbackList title="Conseils" icon={<Lightbulb size={15} color={T.blue} />} color={T.blue} items={analysis.tips} />
+      </div>
+
+      <VocabSuggestions items={analysis.vocabSuggestions} />
+
+      {/* Réécoute de l'enregistrement (disponible pour la session en cours) */}
+      {audioUrl && (
+        <div>
+          <div style={sectionTitle}>Réécoute-toi</div>
+          <audio controls src={audioUrl} style={{ width: "100%", height: 40 }} />
+        </div>
+      )}
+
+      {/* Détail : son, mesures, transcription — replié, on n'y va que si on cherche. */}
+      <details style={{ fontSize: 13 }}>
+        <summary style={{ cursor: "pointer", color: T.textSub, fontWeight: 600 }}>Détail de la prise</summary>
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 18 }}>
+          {audioRows.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ ...sectionTitle, marginBottom: 0 }}>Analyse du son</div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: heardByAI ? T.blue : T.textMut }}>
+                  {heardByAI ? "écoutée par l'IA" : "mesurée sur le signal"}
+                </span>
+              </div>
+              {audioRows.map((ax) => (
+                <AxisBar key={ax.id} label={ax.label} value={ax.score} feedback={ax.fb} />
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={metricBox}>
+              <div style={metricLabel}>Durée</div>
+              <div style={metricVal}>{fmtTime(durationSec)}</div>
+            </div>
+            <div style={metricBox}>
+              <div style={metricLabel}>Tics de langage</div>
+              <div style={{ ...metricVal, color: fillerCount > 5 ? T.amber : T.text }}>{fillerCount || 0}</div>
+              {topFillers.length > 0 && (
+                <div style={{ fontSize: 11, color: T.textMut }}>
+                  {topFillers.map(([w, n]) => `${w} ×${n}`).join(" · ")}
+                </div>
+              )}
+            </div>
+            {result.audioMetrics && result.audioMetrics.phraseCount != null && (
+              <div style={metricBox}>
+                <div style={metricLabel}>Groupes de souffle</div>
+                <div style={metricVal}>{result.audioMetrics.phraseCount}</div>
+                <div style={{ fontSize: 11, color: T.textMut }}>phrases séparées par un silence</div>
+              </div>
+            )}
+          </div>
+
+          {transcript && (
+            <div>
+              <div style={sectionTitle}>Transcription</div>
+              <p style={{ margin: 0, color: T.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{transcript}</p>
+            </div>
+          )}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+// Verdict du format « mot interdit » : comptage local sur la transcription.
+function ForbiddenVerdict({ word, count }) {
+  const ok = count === 0;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: 10, padding: "12px 14px", background: ok ? T.greenBg : T.redBg }}>
+      {ok ? <Check size={18} color={T.green} /> : <Ban size={18} color={T.red} />}
+      <div style={{ fontSize: 13.5, color: T.text }}>
+        {ok ? (
+          <>Le mot « <strong>{word}</strong> » n&apos;est jamais sorti.</>
+        ) : (
+          <>Le mot interdit « <strong>{word}</strong> » est apparu <strong>{count}</strong> fois.</>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Sélecteur de niveau ─────────────── */
+function LevelFilter({ value, onChange }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <button type="button" style={pill(value === 0)} onClick={() => onChange(0)}>{allLabel}</button>
+      <button type="button" style={pill(value === 0)} onClick={() => onChange(0)}>Tous</button>
       {LEVELS.map((l) => (
         <button
           key={l.id}
@@ -507,7 +703,6 @@ function LevelFilter({ value, onChange, allLabel = "Tous" }) {
   );
 }
 
-// Badge de niveau (coloré).
 function LevelBadge({ level }) {
   const l = LEVEL_BY_ID[level];
   if (!l) return null;
@@ -519,65 +714,366 @@ function LevelBadge({ level }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   ONGLET — Lecture
+   ONGLET 1 — ARTICULATION
    ═══════════════════════════════════════════════════════════ */
-function ReadingTab({ onSession }) {
+
+/* Compteur de répétitions. Toute la tuile est la cible de frappe : on compte en
+   tapant, sans viser un petit bouton, ce qui est indispensable quand on répète
+   vingt fois de suite. Le « remettre à zéro » est donc en dehors — deux boutons
+   imbriqués et la zone parente avale les clics du bord. */
+function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onReset }) {
+  const done = count >= total;
+  const pct = Math.min(100, Math.round((count / total) * 100));
+  return (
+    <div style={{ ...card, flex: "1 1 220px", minWidth: 200, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: T.text, lineHeight: 1 }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 11, color: T.textMut, textAlign: "right" }}>{subtitle}</div>}
+      </div>
+      {hint && <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.45 }}>{hint}</div>}
+
+      <button
+        type="button"
+        onClick={onInc}
+        disabled={done}
+        aria-label={`${srName || title} — compter une répétition (${count} sur ${total})`}
+        style={{
+          border: "none", borderRadius: 10, padding: "14px 12px", cursor: done ? "default" : "pointer",
+          fontFamily: "inherit", background: done ? T.greenBg : SURFACE, color: T.text,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+          transition: "background 150ms ease",
+        }}
+      >
+        <span style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: done ? T.green : T.text, lineHeight: 1 }}>
+          {count}<span style={{ fontSize: 14, color: T.textMut, fontWeight: 500 }}> / {total}</span>
+        </span>
+        <span style={{ fontSize: 11, color: done ? T.green : T.textMut, display: "inline-flex", alignItems: "center", gap: 4 }}>
+          {done ? <><Check size={12} /> Série bouclée</> : <><Plus size={12} /> Tape à chaque répétition</>}
+        </span>
+      </button>
+
+      <div style={{ height: 5, borderRadius: 999, background: HAIRLINE, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: done ? T.green : T.text, transition: "width 200ms ease" }} />
+      </div>
+
+      {count > 0 && (
+        <button type="button" onClick={onReset} style={{ ...ghost(false), alignSelf: "flex-start", padding: "5px 10px", minHeight: 26 }}>
+          <RotateCcw size={12} /> Remettre à zéro
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Occlusives T · D · B · P : vingt répétitions chacune, en exagérant.
+function ConsonantSection({ reps, incRep, resetRep }) {
+  const done = CONSONANT_DRILLS.filter((c) => (reps[`cons-${c.id}`] || 0) >= CONSONANT_REPS).length;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div>
+        <div style={blockTitle}>Occlusives T · D · B · P</div>
+        <p style={lead}>{CONSONANT_DRILL_INSTRUCTION}</p>
+      </div>
+      <div style={{ fontSize: 12, color: done === CONSONANT_DRILLS.length ? T.green : T.textMut, fontWeight: 600 }}>
+        {done} / {CONSONANT_DRILLS.length} consonnes bouclées aujourd&apos;hui
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {CONSONANT_DRILLS.map((c) => (
+          <RepCounter
+            key={c.id}
+            title={`${c.letter} — ${c.syllables.join(" · ")}`}
+            srName={`Consonne ${c.letter}`}
+            subtitle={c.pair}
+            hint={c.cue}
+            total={CONSONANT_REPS}
+            count={reps[`cons-${c.id}`] || 0}
+            onInc={() => incRep(`cons-${c.id}`, CONSONANT_REPS)}
+            onReset={() => resetRep(`cons-${c.id}`)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Virelangues : le protocole en deux séries de dix — la vitesse d'abord, la
+   netteté ensuite — sur le même virelangue. L'enregistrement est facultatif :
+   c'est un exercice de bouche, pas un examen. */
+function TwisterSection({ reps, incRep, resetRep, onSession }) {
   const [level, setLevel] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
+  const [serieId, setSerieId] = useState(TWISTER_SERIES[0].id);
   const [result, setResult] = useState(null);
 
-  const list = useMemo(
-    () => READING_TEXTS.filter((tx) => level === 0 || tx.level === level),
-    [level]
-  );
-  const selected = READING_TEXTS.find((tx) => tx.id === selectedId) || null;
+  const list = useMemo(() => TONGUE_TWISTERS.filter((tw) => level === 0 || tw.level === level), [level]);
+  const selected = TONGUE_TWISTERS.find((tw) => tw.id === selectedId) || null;
+  const serie = TWISTER_SERIES.find((s) => s.id === serieId) || TWISTER_SERIES[0];
+  const repKey = selected ? `tw-${selected.id}-${serie.id}` : null;
+  const count = repKey ? (reps[repKey] || 0) : 0;
 
   const handleResult = (r) => {
     setResult(r);
-    onSession({ mode: "reading", r });
+    onSession({ mode: EXERCISE_MODES.articulation, r });
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <p style={lead}>Lis un texte à voix haute. L'IA évalue ta diction, ta clarté et ta fidélité au texte.</p>
-      <LevelFilter value={level} onChange={(v) => { setLevel(v); }} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div>
+        <div style={blockTitle}>Virelangues</div>
+        <p style={lead}>
+          Un virelangue, deux séries de {TWISTER_REPS}. D&apos;abord en accélérant jusqu&apos;à ta limite,
+          puis en articulant à fond. La première trouve la faille, la seconde la répare.
+        </p>
+      </div>
 
-      {/* Cartes de textes */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {list.map((tx) => {
-          const active = tx.id === selectedId;
+      <LevelFilter value={level} onChange={setLevel} />
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {list.map((tw) => {
+          const active = tw.id === selectedId;
           return (
             <button
-              key={tx.id}
+              key={tw.id}
               type="button"
-              onClick={() => { setSelectedId(active ? null : tx.id); setResult(null); }}
-              style={{
-                ...card, textAlign: "left", cursor: "pointer", width: 240, fontFamily: "inherit",
-                borderColor: active ? T.text : T.border, borderWidth: active ? 2 : 1,
-                background: active ? T.accentBg : T.white,
-              }}
+              onClick={() => { setSelectedId(active ? null : tw.id); setResult(null); }}
+              style={{ ...selectable(active), width: 300 }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 11, color: T.textMut, fontWeight: 600 }}>{tx.genre}</span>
-                <LevelBadge level={tx.level} />
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{tx.title}</div>
+              <div style={{ marginBottom: 6 }}><LevelBadge level={tw.level} /></div>
+              <div style={{ fontSize: 14, color: T.text, lineHeight: 1.4 }}>{tw.text}</div>
             </button>
           );
         })}
       </div>
 
-      {/* Texte sélectionné */}
       {selected && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ ...card }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{selected.title}</div>
-              <ListenButton text={selected.text} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
+          <div style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ fontSize: 22, lineHeight: 1.5, color: T.text, margin: 0, fontWeight: 600 }}>{selected.text}</p>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {TWISTER_SERIES.map((s) => (
+                <button key={s.id} type="button" style={pill(serieId === s.id)} onClick={() => { setSerieId(s.id); setResult(null); }}>
+                  {s.title}
+                </button>
+              ))}
+              <ListenButton text={selected.text} rate={serie.id === "articulate" ? 0.6 : 1} label="Écouter au tempo" />
             </div>
-            <p style={{ fontSize: 18, lineHeight: 1.8, color: T.text, margin: 0 }}>{selected.text}</p>
+
+            <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.55 }}>{serie.instruction}</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+              {serie.tips.map((t, i) => (
+                <li key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, color: T.textSub, lineHeight: 1.45 }}>
+                  <Lightbulb size={13} color={T.amber} style={{ marginTop: 2, flexShrink: 0 }} />
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <RecorderPanel mode="reading" referenceText={selected.text} onResult={handleResult} />
+
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <RepCounter
+              title={serie.short}
+              subtitle={serie.title}
+              total={TWISTER_REPS}
+              count={count}
+              onInc={() => repKey && incRep(repKey, TWISTER_REPS)}
+              onReset={() => repKey && resetRep(repKey)}
+            />
+            <div style={{ flex: "2 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.45 }}>
+                Facultatif : enregistre une répétition de la série pour faire noter ton articulation
+                et ta fidélité au texte.
+              </div>
+              <RecorderPanel
+                key={`${selected.id}-${serie.id}`}
+                mode="diction"
+                referenceText={selected.text}
+                drillGoal={serie.goal}
+                onResult={handleResult}
+              />
+            </div>
+          </div>
+
+          {result && <ResultCard result={result} showFidelity />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Échauffement : la routine avant tout le reste, repliée par défaut.
+function WarmupSection() {
+  const [openId, setOpenId] = useState(null);
+  return (
+    <details style={{ ...card, padding: 0, overflow: "hidden" }}>
+      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.text }}>
+        <Sparkles size={15} color={T.amber} />
+        Échauffement de la voix
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: T.textMut }}>
+          3 minutes avant de commencer
+        </span>
+      </summary>
+      <div style={{ padding: "0 18px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+        {WARMUPS.map((w) => {
+          const open = openId === w.id;
+          return (
+            <div key={w.id} style={{ borderRadius: 8, background: open ? SURFACE : "transparent" }}>
+              <button
+                type="button"
+                onClick={() => setOpenId(open ? null : w.id)}
+                style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <ChevronRight size={15} color={T.textMut} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }} />
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>{w.title}</span>
+                </span>
+                <span style={{ fontSize: 12, color: T.textMut }}>{w.duration}s</span>
+              </button>
+              {open && <div style={{ padding: "0 12px 12px 37px", fontSize: 13, color: T.textSub, lineHeight: 1.6 }}>{w.instruction}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
+function ArticulationTab({ reps, incRep, resetRep, onSession }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <WarmupSection />
+      <ConsonantSection reps={reps} incRep={incRep} resetRep={resetRep} />
+      <TwisterSection reps={reps} incRep={incRep} resetRep={resetRep} onSession={onSession} />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ONGLET 2 — LECTURE
+   ═══════════════════════════════════════════════════════════ */
+function ReadingTab({ onSession }) {
+  const [intentionId, setIntentionId] = useState(READING_INTENTIONS[0].id);
+  const [level, setLevel] = useState(0);
+  const [selectedId, setSelectedId] = useState(null);
+  const [ownText, setOwnText] = useState("");
+  const [result, setResult] = useState(null);
+
+  const intention = READING_INTENTIONS.find((i) => i.id === intentionId) || READING_INTENTIONS[0];
+  const list = useMemo(() => READING_TEXTS.filter((tx) => level === 0 || tx.level === level), [level]);
+  const libraryText = READING_TEXTS.find((tx) => tx.id === selectedId) || null;
+
+  // Le texte réellement lu : la bibliothèque, ou celui que l'utilisateur a collé.
+  const useOwn = intention.source === "own" || (intention.source === "both" && ownText.trim().length > 0);
+  const reference = useOwn ? ownText.trim() : (libraryText ? libraryText.text : "");
+  const paceTarget = intention.target || null;
+
+  const switchIntention = (id) => {
+    setIntentionId(id);
+    setResult(null);
+    // Un texte de bibliothèque n'a pas de sens pour l'imitation : elle exige le
+    // modèle exact que l'utilisateur veut copier.
+    if ((READING_INTENTIONS.find((i) => i.id === id) || {}).source === "own") setSelectedId(null);
+  };
+
+  const handleResult = (r) => {
+    setResult(r);
+    onSession({ mode: EXERCISE_MODES.reading, r });
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Intention de lecture */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {READING_INTENTIONS.map((i) => {
+          const active = i.id === intentionId;
+          return (
+            <button key={i.id} type="button" onClick={() => switchIntention(i.id)} style={{ ...selectable(active), width: 260, display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{i.label}</div>
+              <div style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.4 }}>{i.tagline}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Consigne de l'intention choisie */}
+      <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+        <p style={{ ...lead, color: T.text }}>{intention.description}</p>
+        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+          {intention.tips.map((t, i) => (
+            <li key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: T.textSub, lineHeight: 1.45 }}>
+              <Lightbulb size={14} color={T.amber} style={{ marginTop: 2, flexShrink: 0 }} />
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+        {paceTarget && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textSub, fontWeight: 600 }}>
+            <Clock size={14} /> Débit cible de cet exercice : {paceTarget.wpmMin}–{paceTarget.wpmMax} mots/minute.
+          </div>
+        )}
+      </div>
+
+      {/* Texte à lire — bibliothèque et/ou texte collé selon l'intention */}
+      {intention.source !== "own" && (
+        <>
+          <LevelFilter value={level} onChange={setLevel} />
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {list.map((tx) => {
+              const active = tx.id === selectedId && !useOwn;
+              return (
+                <button
+                  key={tx.id}
+                  type="button"
+                  onClick={() => { setSelectedId(active ? null : tx.id); setOwnText(""); setResult(null); }}
+                  style={{ ...selectable(active), width: 240 }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
+                    <span style={{ fontSize: 11, color: T.textMut, fontWeight: 600 }}>{tx.genre}</span>
+                    <LevelBadge level={tx.level} />
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{tx.title}</div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {intention.source !== "library" && (
+        <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>
+            {intention.source === "own" ? "Le texte de ton modèle" : "…ou colle ton propre texte"}
+          </div>
+          <textarea
+            value={ownText}
+            onChange={(e) => { setOwnText(e.target.value); setResult(null); }}
+            placeholder={intention.placeholder || "Colle ici un extrait de roman, de pièce ou de poème…"}
+            rows={5}
+            style={{ ...field, resize: "vertical", lineHeight: 1.5 }}
+          />
+        </div>
+      )}
+
+      {/* Le texte, en grand, prêt à être lu */}
+      {reference && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>
+                {useOwn ? "Ton texte" : libraryText.title}
+              </div>
+              <ListenButton text={reference} rate={intention.id === "slow" ? 0.6 : 0.95} />
+            </div>
+            <p style={{ fontSize: intention.id === "slow" ? 20 : 18, lineHeight: 1.85, color: T.text, margin: 0 }}>{reference}</p>
+          </div>
+          <RecorderPanel
+            key={`${intention.id}-${useOwn ? "own" : selectedId}`}
+            mode="reading"
+            referenceText={reference}
+            drillGoal={intention.goal}
+            paceTarget={paceTarget}
+            onResult={handleResult}
+          />
           {result && <ResultCard result={result} showFidelity />}
         </div>
       )}
@@ -586,144 +1082,60 @@ function ReadingTab({ onSession }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   ONGLET — Discours libre
+   ONGLET 3 — PAROLE
    ═══════════════════════════════════════════════════════════ */
-/* Aide-mémoire repliable des cadres de discours, à consulter pendant l'impro.
- * Réutilise STRUCTURE_FRAMEWORKS (les mêmes cadres que l'onglet « Structure »). */
-function StructureCheatSheet() {
+
+// Aide-mémoire des cadres de discours, à garder sous les yeux pendant l'impro.
+function FrameworkPicker({ value, onChange }) {
   return (
-    <details style={{ ...card, padding: 0, overflow: "hidden" }}>
-      <summary
-        style={{
-          listStyle: "none", cursor: "pointer", padding: "12px 16px",
-          display: "flex", alignItems: "center", gap: 8,
-          fontSize: 14, fontWeight: 700, color: T.text,
-        }}
-      >
-        <Lightbulb size={15} style={{ color: T.amber }} />
-        Aide-mémoire : structures de discours
-        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: T.textMut }}>
-          Garde-en une sous les yeux
+    <details style={{ ...card, padding: 0, overflow: "hidden" }} open={!!value}>
+      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.text }}>
+        <Lightbulb size={15} color={T.amber} />
+        Cadre de discours
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: value ? T.text : T.textMut }}>
+          {value ? FRAMEWORK_BY_ID[value].name : "facultatif — pour être jugé sur la structure"}
         </span>
       </summary>
-      <div style={{ padding: "0 16px 16px", display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {STRUCTURE_FRAMEWORKS.map((f) => (
-          <div
-            key={f.id}
-            style={{ flex: "1 1 280px", minWidth: 260, borderRadius: 8, padding: 14, background: SURFACE }}
-          >
-            <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{f.name}</div>
-            <div style={{ fontSize: 12, color: T.textMut, fontWeight: 600, marginBottom: 8 }}>{f.short}</div>
-            <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
-              {f.steps.map((s, i) => (
-                <li key={i} style={{ fontSize: 12, color: T.textSub }}>
-                  <span style={{ fontWeight: 700, color: T.text }}>{s.label}</span>{s.hint ? ` — ${s.hint}` : ""}
-                </li>
-              ))}
-            </ol>
-          </div>
-        ))}
+      <div style={{ padding: "0 18px 18px", display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {STRUCTURE_FRAMEWORKS.map((f) => {
+          const active = f.id === value;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onChange(active ? null : f.id)}
+              style={{
+                flex: "1 1 260px", minWidth: 240, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+                border: "none", borderRadius: 10, padding: 14,
+                background: active ? T.accentBg : SURFACE,
+                boxShadow: active ? `inset 0 0 0 1.5px ${T.text}` : "none",
+              }}
+            >
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: T.text }}>{f.name}</div>
+              <div style={{ fontSize: 12, color: T.textMut, fontWeight: 600, marginBottom: 8 }}>{f.short}</div>
+              <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                {f.steps.map((s, i) => (
+                  <li key={i} style={{ fontSize: 12, color: T.textSub }}>
+                    <span style={{ fontWeight: 700, color: T.text }}>{s.label}</span>{s.hint ? ` — ${s.hint}` : ""}
+                  </li>
+                ))}
+              </ol>
+            </button>
+          );
+        })}
       </div>
     </details>
   );
 }
 
-function FreeSpeechTab({ onSession, presetTopic, clearPreset }) {
-  const [topic, setTopic] = useState("");
-  const [prep, setPrep] = useState(0); // 0 / 30 / 60
-  const [countdown, setCountdown] = useState(0);
-  const [result, setResult] = useState(null);
-
-  // Pré-remplissage depuis l'onglet « Sujets ».
-  useEffect(() => {
-    if (presetTopic) { setTopic(presetTopic); setResult(null); clearPreset && clearPreset(); }
-  }, [presetTopic, clearPreset]);
-
-  // Compte à rebours de préparation.
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const id = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [countdown]);
-
-  // Tirage instantané depuis la banque locale (pas d'attente réseau).
-  const drawTopic = () => {
-    const tp = pickRandomTopic("surprise");
-    if (tp) { setTopic(tp.title); setResult(null); }
-  };
-
-  const handleResult = (r) => {
-    setResult(r);
-    onSession({ mode: "freeSpeech", r });
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <p style={lead}>Choisis ou tire un sujet, prépare-toi, puis improvise. L'IA juge ta structure et ton vocabulaire.</p>
-
-      <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
-        <input
-          value={topic}
-          onChange={(e) => { setTopic(e.target.value); setResult(null); }}
-          placeholder="Écris ton sujet, ou tire-en un au hasard…"
-          style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 15, fontFamily: "inherit", color: T.text, outline: "none" }}
-        />
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button type="button" style={ghost(false)} onClick={drawTopic}>
-            <Sparkles size={14} /> Tirer un sujet
-          </button>
-          <span style={{ fontSize: 12, color: T.textMut }}>Préparation :</span>
-          {[0, 30, 60].map((s) => (
-            <button key={s} type="button" style={pill(prep === s)} onClick={() => setPrep(s)}>
-              {s === 0 ? "Aucune" : `${s}s`}
-            </button>
-          ))}
-          {prep > 0 && (
-            <button type="button" style={primary(countdown > 0)} disabled={countdown > 0} onClick={() => setCountdown(prep)}>
-              {countdown > 0 ? `${countdown}s…` : "Démarrer la prépa"}
-            </button>
-          )}
-        </div>
-        {countdown > 0 && (
-          <div style={{ textAlign: "center", fontSize: 40, fontWeight: 800, color: T.amber }}>{countdown}</div>
-        )}
-      </div>
-
-      {/* Aide-mémoire : structures de discours à garder sous les yeux pendant l'impro. */}
-      <StructureCheatSheet />
-
-      {topic.trim() && countdown === 0 && (
-        <>
-          <RecorderPanel mode="freeSpeech" topic={topic.trim()} onResult={handleResult} />
-          {result && <ResultCard result={result} />}
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ONGLET — Sujets (générateur)
-   ═══════════════════════════════════════════════════════════ */
-// Retrouve le framework de structure correspondant au libellé suggéré d'un sujet.
-function findFramework(label) {
-  if (!label) return null;
-  const norm = (s) => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
-  const t = norm(label);
-  if (!t) return null;
-  return (
-    STRUCTURE_FRAMEWORKS.find((f) => norm(f.name) === t) ||
-    STRUCTURE_FRAMEWORKS.find((f) => t.includes(norm(f.name)) || norm(f.name).includes(t)) ||
-    null
-  );
-}
-
-function TopicsTab({ onPractice }) {
+/* Tiroir de sujets : la banque locale (instantanée) et le générateur IA. C'était
+   un onglet à part, qui obligeait à faire l'aller-retour pour choisir un sujet
+   puis revenir parler. Il est maintenant là où le sujet sert. */
+function TopicDrawer({ onPick }) {
   const [theme, setTheme] = useState(TOPIC_THEMES[0].key);
-  const [topics, setTopics] = useState([]);
+  const [topics, setTopics] = useState(() => getTopicsFromBank(TOPIC_THEMES[0].key, 4));
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
-  const [openStructure, setOpenStructure] = useState(null); // index de la carte dont la structure est déroulée
 
   const generate = async () => {
     setLoading(true);
@@ -743,444 +1155,188 @@ function TopicsTab({ onPractice }) {
     }
   };
 
-  // Pioche instantanée depuis la banque locale (sans IA).
-  const pickFromBank = () => { setErr(null); setTopics(getTopicsFromBank(theme, 4)); };
-
-  // Préchargement : on affiche d'emblée des sujets de la banque.
-  useEffect(() => { setTopics(getTopicsFromBank(TOPIC_THEMES[0].key, 4)); }, []);
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <p style={lead}>Pioche dans la banque (instantané) ou génère des sujets sur mesure avec l'IA, puis lance-toi en discours libre.</p>
-
-      {/* Grille de thèmes */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {TOPIC_THEMES.map((th) => (
-          <button
-            key={th.key}
-            type="button"
-            onClick={() => setTheme(th.key)}
-            style={{ ...pill(theme === th.key), padding: "8px 14px", fontSize: 14 }}
-          >
-            <span>{th.emoji}</span> {th.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" style={ghost(false)} onClick={pickFromBank}>
-          <RefreshCw size={14} /> Piocher dans la banque
-        </button>
-        <button type="button" style={primary(loading)} disabled={loading} onClick={generate}>
-          {loading ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={15} />}
-          Générer avec l'IA
-        </button>
-      </div>
-
-      {err && <div style={{ color: T.red, fontSize: 13 }}>{err}</div>}
-
-      {/* Cartes de sujets */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {topics.map((tp, i) => {
-          const fw = findFramework(tp.suggestedStructure);
-          const open = openStructure === i;
-          return (
-            <div key={i} style={{ ...card, width: 280, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{tp.title}</div>
-              {tp.angle && <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.4 }}>{tp.angle}</div>}
-
-              {tp.suggestedStructure && (fw ? (
-                <button
-                  type="button"
-                  onClick={() => setOpenStructure(open ? null : i)}
-                  title="Voir le déroulé de la structure"
-                  style={{
-                    alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 4,
-                    fontSize: 11, fontWeight: 700, color: T.blue, background: T.blueBg,
-                    padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "inherit",
-                  }}
-                >
-                  <ChevronRight size={12} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }} />
-                  {tp.suggestedStructure}
-                </button>
-              ) : (
-                <span style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 700, color: T.blue, background: T.blueBg, padding: "2px 8px", borderRadius: 999 }}>
-                  {tp.suggestedStructure}
-                </span>
-              ))}
-
-              {/* Déroulé complet de la structure conseillée */}
-              {fw && open && (
-                <div style={{ background: SURFACE, borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4 }}>{fw.description}</div>
-                  <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
-                    {fw.steps.map((s, k) => (
-                      <li key={k} style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.4 }}>
-                        <span style={{ fontWeight: 700, color: T.text }}>{s.label}</span>{s.hint ? ` — ${s.hint}` : ""}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-
-              <button type="button" style={{ ...ghost(false), marginTop: 4, alignSelf: "flex-start" }} onClick={() => onPractice(tp.title)}>
-                <Mic size={14} /> S'entraîner sur ce sujet
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ONGLET — Diction
-   ═══════════════════════════════════════════════════════════ */
-function DictionTab({ onSession }) {
-  const [openWarmup, setOpenWarmup] = useState(null);
-  const [level, setLevel] = useState(0);
-  const [selectedId, setSelectedId] = useState(null);
-  const [result, setResult] = useState(null);
-
-  const twisters = useMemo(
-    () => TONGUE_TWISTERS.filter((tw) => level === 0 || tw.level === level),
-    [level]
-  );
-  const selected = TONGUE_TWISTERS.find((tw) => tw.id === selectedId) || null;
-
-  const handleResult = (r) => {
-    setResult(r);
-    onSession({ mode: "diction", r });
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Échauffements */}
-      <div>
-        <div style={blockTitle}>Échauffement</div>
-        <p style={lead}>Prépare ta voix avant de t'entraîner. Pas d'enregistrement, juste à suivre.</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {WARMUPS.map((w) => {
-            const open = openWarmup === w.id;
-            return (
-              <div key={w.id} style={{ ...card, padding: 0, overflow: "hidden" }}>
-                <button
-                  type="button"
-                  onClick={() => setOpenWarmup(open ? null : w.id)}
-                  style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}
-                >
-                  <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <ChevronRight size={16} color={T.textMut} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }} />
-                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{w.title}</span>
-                  </span>
-                  <span style={{ fontSize: 12, color: T.textMut }}>{w.duration}s</span>
-                </button>
-                {open && <div style={{ padding: "0 16px 14px 42px", fontSize: 13, color: T.textSub, lineHeight: 1.6 }}>{w.instruction}</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Virelangues */}
-      <div>
-        <div style={blockTitle}>Virelangues</div>
-        <p style={lead}>Articule un virelangue le plus nettement possible. L'IA évalue ta diction et ta fidélité.</p>
-        <div style={{ marginBottom: 12 }}>
-          <LevelFilter value={level} onChange={setLevel} />
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {twisters.map((tw) => {
-            const active = tw.id === selectedId;
-            return (
-              <button
-                key={tw.id}
-                type="button"
-                onClick={() => { setSelectedId(active ? null : tw.id); setResult(null); }}
-                style={{ ...card, width: 300, textAlign: "left", cursor: "pointer", fontFamily: "inherit", borderColor: active ? T.text : T.border, borderWidth: active ? 2 : 1, background: active ? T.accentBg : T.white }}
-              >
-                <div style={{ marginBottom: 6 }}><LevelBadge level={tw.level} /></div>
-                <div style={{ fontSize: 14, color: T.text, lineHeight: 1.4 }}>{tw.text}</div>
-              </button>
-            );
-          })}
-        </div>
-
-        {selected && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
-            <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-              <p style={{ fontSize: 22, lineHeight: 1.6, color: T.text, margin: 0, fontWeight: 600 }}>{selected.text}</p>
-              <ListenButton text={selected.text} />
-            </div>
-            <RecorderPanel mode="diction" referenceText={selected.text} onResult={handleResult} />
-            {result && <ResultCard result={result} showFidelity />}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ONGLET — Structure
-   ═══════════════════════════════════════════════════════════ */
-function StructureTab({ onSession }) {
-  const [selectedId, setSelectedId] = useState(null);
-  const [exercise, setExercise] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState(null);
-  const [result, setResult] = useState(null);
-
-  const selected = STRUCTURE_FRAMEWORKS.find((f) => f.id === selectedId) || null;
-
-  const genExercise = async () => {
-    setLoading(true);
-    setErr(null);
-    try {
-      const r = await fetch("/api/ai/eloquence/generate", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "exercise" }),
-      });
-      if (!r.ok) throw new Error();
-      const { exercise: ex } = await r.json();
-      setExercise(ex || null);
-      setResult(null);
-    } catch {
-      setErr("La génération a échoué. Réessaie.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResult = (r) => {
-    setResult(r);
-    onSession({ mode: "structure", r });
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <p style={lead}>Choisis un cadre, reçois un exercice, puis structure ton propos. L'IA juge le respect du plan.</p>
-
-      {/* Cartes de frameworks */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {STRUCTURE_FRAMEWORKS.map((f) => {
-          const active = f.id === selectedId;
-          return (
+    <details style={{ ...card, padding: 0, overflow: "hidden" }}>
+      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.text }}>
+        <Sparkles size={15} color={T.blue} />
+        Trouver un sujet
+        <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: T.textMut }}>banque ou génération IA</span>
+      </summary>
+      <div style={{ padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {TOPIC_THEMES.map((th) => (
             <button
-              key={f.id}
+              key={th.key}
               type="button"
-              onClick={() => { setSelectedId(active ? null : f.id); setResult(null); }}
-              style={{ ...card, width: 300, textAlign: "left", cursor: "pointer", fontFamily: "inherit", borderColor: active ? T.text : T.border, borderWidth: active ? 2 : 1, background: active ? T.accentBg : T.white }}
+              onClick={() => { setTheme(th.key); setTopics(getTopicsFromBank(th.key, 4)); setErr(null); }}
+              style={pill(theme === th.key)}
             >
-              <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{f.name}</div>
-              <div style={{ fontSize: 12, color: T.textMut, fontWeight: 600, marginBottom: 6 }}>{f.short}</div>
-              <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.4, marginBottom: 10 }}>{f.description}</div>
-              <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
-                {f.steps.map((s, i) => (
-                  <li key={i} style={{ fontSize: 12, color: T.textSub }}>
-                    <span style={{ fontWeight: 700, color: T.text }}>{s.label}</span>
-                    {s.hint ? ` — ${s.hint}` : ""}
-                  </li>
-                ))}
-              </ol>
+              <span>{th.emoji}</span> {th.label}
             </button>
-          );
-        })}
-      </div>
-
-      <div>
-        <button type="button" style={primary(loading)} disabled={loading} onClick={genExercise}>
-          {loading ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={15} />}
-          Générer un exercice
-        </button>
-      </div>
-      {err && <div style={{ color: T.red, fontSize: 13 }}>{err}</div>}
-
-      {/* Exercice généré */}
-      {exercise && (
-        <div style={{ ...card, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4 }}>Exercice</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{exercise.prompt}</div>
-          {exercise.framework && <div style={{ fontSize: 13, color: T.blue, fontWeight: 600 }}>Cadre conseillé : {exercise.framework}</div>}
-          {Array.isArray(exercise.tips) && exercise.tips.length > 0 && (
-            <ul style={{ margin: "4px 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
-              {exercise.tips.map((tp, i) => <li key={i} style={{ fontSize: 13, color: T.textSub }}>{tp}</li>)}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {/* Enregistrement guidé par le framework choisi */}
-      {selected && (
-        <>
-          <div style={{ ...card }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Ton guide : {selected.name}</div>
-            <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
-              {selected.steps.map((s, i) => (
-                <li key={i} style={{ fontSize: 13, color: T.textSub }}>
-                  <span style={{ fontWeight: 700, color: T.text }}>{s.label}</span>{s.hint ? ` — ${s.hint}` : ""}
-                </li>
-              ))}
-            </ol>
-          </div>
-          <RecorderPanel
-            mode="structure"
-            framework={{ name: selected.name, steps: selected.steps }}
-            topic={exercise ? exercise.prompt : undefined}
-            onResult={handleResult}
-          />
-          {result && <ResultCard result={result} />}
-        </>
-      )}
-    </div>
-  );
-}
-
-const lead = { fontSize: 14, color: T.textSub, lineHeight: 1.5, margin: 0 };
-const blockTitle = { fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6 };
-
-/* ═══════════════════════════════════════════════════════════
-   ONGLET — Défis (ateliers guidés)
-   ═══════════════════════════════════════════════════════════ */
-const drillInput = {
-  width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`,
-  borderRadius: 10, padding: "10px 12px", fontSize: 15, fontFamily: "inherit",
-  color: T.text, outline: "none",
-};
-const drillInfoLine = {
-  display: "flex", alignItems: "center", gap: 8, fontSize: 13,
-  color: T.textSub, fontWeight: 600,
-};
-// Format d'une durée en secondes → « 1 min » / « 30 s ».
-function fmtDuration(s) {
-  return s >= 60 ? `${s % 60 === 0 ? s / 60 : (s / 60).toFixed(1)} min` : `${s} s`;
-}
-
-// Consigne d'un défi : accroche, description détaillée, conseils, structure conseillée.
-function DrillBrief({ drill }) {
-  const fw = drill.frameworkId ? FRAMEWORK_BY_ID[drill.frameworkId] : null;
-  return (
-    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ fontSize: 28, lineHeight: 1 }}>{drill.emoji}</span>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{drill.title}</div>
-          <div style={{ fontSize: 12.5, color: T.textMut }}>{drill.tagline}</div>
-        </div>
-      </div>
-      <p style={{ fontSize: 14, color: T.textSub, lineHeight: 1.6, margin: 0 }}>{drill.description}</p>
-      {Array.isArray(drill.tips) && drill.tips.length > 0 && (
-        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-          {drill.tips.map((t, i) => (
-            <li key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: T.textSub, lineHeight: 1.45 }}>
-              <Lightbulb size={14} color={T.amber} style={{ marginTop: 2, flexShrink: 0 }} />
-              <span>{t}</span>
-            </li>
           ))}
-        </ul>
-      )}
-      {fw && (
-        <div style={{ background: SURFACE, borderRadius: 8, padding: "10px 12px" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 2 }}>Structure conseillée · {fw.name}</div>
-          <div style={{ fontSize: 12, color: T.textMut }}>{fw.short}</div>
         </div>
-      )}
-    </div>
-  );
-}
 
-// Bilan immédiat du défi « mot interdit » (comptage local sur la transcription).
-function ForbiddenBadge({ word, count }) {
-  const ok = count === 0;
-  return (
-    <div style={{ ...card, display: "flex", alignItems: "center", gap: 12, borderColor: ok ? T.green : T.red, background: ok ? T.greenBg : T.redBg }}>
-      {ok ? <Check size={20} color={T.green} /> : <Ban size={20} color={T.red} />}
-      <div style={{ fontSize: 13.5, color: T.text }}>
-        {ok ? (
-          <>Bravo : le mot « <strong>{word}</strong> » n’est jamais sorti. 🎉</>
-        ) : (
-          <>Le mot interdit « <strong>{word}</strong> » est apparu <strong>{count}</strong> fois. Retente en le traquant.</>
-        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" style={ghost(false)} onClick={() => { setErr(null); setTopics(getTopicsFromBank(theme, 4)); }}>
+            <RefreshCw size={14} /> Repiocher
+          </button>
+          <button type="button" style={primary(loading)} disabled={loading} onClick={generate}>
+            {loading ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={15} />}
+            Générer avec l&apos;IA
+          </button>
+        </div>
+
+        {err && <div style={{ color: T.red, fontSize: 13 }}>{err}</div>}
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {topics.map((tp, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onPick(tp.title)}
+              style={{
+                flex: "1 1 240px", minWidth: 220, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+                border: "none", borderRadius: 10, padding: 14, background: SURFACE,
+                display: "flex", flexDirection: "column", gap: 6,
+              }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.35 }}>{tp.title}</div>
+              {tp.angle && <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.4 }}>{tp.angle}</div>}
+              <div style={{ fontSize: 11.5, color: T.blue, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <Mic size={12} /> Prendre ce sujet
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+    </details>
   );
 }
 
-// Défi de type « record » : enregistrement + analyse IA, avec paramètres selon le défi.
-function DrillRecord({ drill, onSession }) {
+function SpeakingTab({ onSession }) {
+  const [formatId, setFormatId] = useState(SPEAKING_FORMATS[0].id);
   const [topic, setTopic] = useState("");
-  const [reference, setReference] = useState("");
+  const [frameworkId, setFrameworkId] = useState(null);
   const [durationIdx, setDurationIdx] = useState(0);
-  const [forbiddenWord, setForbiddenWord] = useState(drill.forbidden ? drill.forbiddenChoices[0] : "");
-  const [customForbidden, setCustomForbidden] = useState("");
+  const [forbiddenWord, setForbiddenWord] = useState("");
+  const [prep, setPrep] = useState(0); // 0 / 30 / 60 secondes
+  const [countdown, setCountdown] = useState(0);
+  const [mirror, setMirror] = useState(false);
   const [result, setResult] = useState(null);
 
-  const activeForbidden = drill.forbidden ? (customForbidden.trim() || forbiddenWord) : "";
-  const targetSec = drill.durations ? drill.durations[durationIdx] : (drill.timerTargetSec || null);
+  const format = SPEAKING_FORMATS.find((f) => f.id === formatId) || SPEAKING_FORMATS[0];
+  const targetSec = format.durations ? format.durations[durationIdx] : (format.timerTargetSec || null);
+  const activeForbidden = format.forbidden ? (forbiddenWord.trim() || format.forbiddenChoices[0]) : "";
+  const framework = frameworkId ? FRAMEWORK_BY_ID[frameworkId] : null;
 
-  // Consigne finale envoyée à l'IA : base du défi + contraintes dynamiques.
-  const goal = useMemo(() => {
-    let g = drill.drillGoal || "";
-    if (drill.durations && targetSec) g += ` Durée cible STRICTE : ${targetSec} secondes maximum.`;
-    if (activeForbidden) g += ` Le mot précisément interdit est : « ${activeForbidden} ».`;
-    return g;
-  }, [drill, targetSec, activeForbidden]);
+  // Compte à rebours de préparation.
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const id = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [countdown]);
 
-  const ready = drill.input === "topic" ? topic.trim().length > 0
-    : drill.input === "reference" ? reference.trim().length > 0
-    : true;
-
-  const drawTopic = () => {
-    const tp = pickRandomTopic("surprise");
-    if (tp) { setTopic(tp.title); setResult(null); }
+  // Un format suggère parfois son cadre (le storytelling appelle « Raconter »).
+  const switchFormat = (id) => {
+    const f = SPEAKING_FORMATS.find((x) => x.id === id);
+    setFormatId(id);
+    setResult(null);
+    setDurationIdx(0);
+    if (f && f.frameworkId) setFrameworkId(f.frameworkId);
   };
+
+  // Consigne finale envoyée à l'IA : base du format + contraintes dynamiques.
+  const goal = useMemo(() => {
+    let g = format.goal || "";
+    if (format.durations && targetSec) g += ` Durée cible STRICTE : ${targetSec} secondes maximum.`;
+    if (activeForbidden) g += ` Le mot précisément interdit est : « ${activeForbidden} ».`;
+    return g.trim();
+  }, [format, targetSec, activeForbidden]);
 
   const handleResult = (r) => {
     const merged = activeForbidden
       ? { ...r, forbiddenWord: activeForbidden, forbiddenCount: countWordOccurrences(r.transcript, activeForbidden) }
       : r;
     setResult(merged);
-    onSession({ mode: EXERCISE_MODES.drills, r: merged });
+    onSession({ mode: EXERCISE_MODES.speaking, r: merged });
   };
 
+  const ready = (!format.needsTopic || topic.trim().length > 0) && countdown === 0;
+
   return (
-    <>
-      <DrillBrief drill={drill} />
-
-      {/* Paramètres du défi */}
-      <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
-        {drill.input === "topic" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <input
-              value={topic}
-              onChange={(e) => { setTopic(e.target.value); setResult(null); }}
-              placeholder={drill.topicPlaceholder}
-              style={drillInput}
-            />
-            <button type="button" style={{ ...ghost(false), alignSelf: "flex-start" }} onClick={drawTopic}>
-              <Sparkles size={14} /> Tirer un sujet
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Format de prise de parole */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {SPEAKING_FORMATS.map((f) => {
+          const active = f.id === formatId;
+          return (
+            <button key={f.id} type="button" onClick={() => switchFormat(f.id)} style={{ ...selectable(active), flex: "1 1 200px", minWidth: 190, padding: 16 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 600, color: T.text }}>{f.label}</div>
+              <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.4, marginTop: 3 }}>{f.tagline}</div>
             </button>
+          );
+        })}
+      </div>
+
+      {/* Consigne du format */}
+      <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
+        <p style={{ ...lead, color: T.text }}>{format.description}</p>
+        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+          {format.tips.map((t, i) => (
+            <li key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: T.textSub, lineHeight: 1.45 }}>
+              <Lightbulb size={14} color={T.amber} style={{ marginTop: 2, flexShrink: 0 }} />
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+        {format.target && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textSub, fontWeight: 600 }}>
+            <Clock size={14} /> Débit cible de ce format : {format.target.wpmMin}–{format.target.wpmMax} mots/minute.
           </div>
         )}
-
-        {drill.input === "reference" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <textarea
-              value={reference}
-              onChange={(e) => { setReference(e.target.value); setResult(null); }}
-              placeholder={drill.referencePlaceholder}
-              rows={5}
-              style={{ ...drillInput, resize: "vertical", lineHeight: 1.5 }}
-            />
-            {reference.trim() && <ListenButton text={reference.trim()} />}
+        {format.timerTargetSec && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textSub, fontWeight: 600 }}>
+            <Clock size={14} /> Objectif : tenir {fmtTime(format.timerTargetSec)} sans jamais t&apos;arrêter.
           </div>
         )}
+      </div>
 
-        {drill.durations && (
+      {/* Sujet + contraintes */}
+      <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
+        <input
+          value={topic}
+          onChange={(e) => { setTopic(e.target.value); setResult(null); }}
+          placeholder={format.topicPlaceholder || "Écris ton sujet, ou tire-en un au hasard…"}
+          style={field}
+        />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button type="button" style={ghost(false)} onClick={() => {
+            const tp = pickRandomTopic("surprise");
+            if (tp) { setTopic(tp.title); setResult(null); }
+          }}>
+            <Sparkles size={14} /> Tirer un sujet
+          </button>
+          <span style={{ fontSize: 12, color: T.textMut, marginLeft: 4 }}>Préparation :</span>
+          {[0, 30, 60].map((s) => (
+            <button key={s} type="button" style={pill(prep === s)} onClick={() => setPrep(s)}>
+              {s === 0 ? "Aucune" : `${s}s`}
+            </button>
+          ))}
+          {prep > 0 && (
+            <button type="button" style={primary(countdown > 0)} disabled={countdown > 0} onClick={() => setCountdown(prep)}>
+              {countdown > 0 ? `${countdown}s…` : "Démarrer la prépa"}
+            </button>
+          )}
+        </div>
+
+        {countdown > 0 && (
+          <div style={{ textAlign: "center", fontSize: 40, fontWeight: 800, color: T.amber, fontVariantNumeric: "tabular-nums" }}>{countdown}</div>
+        )}
+
+        {format.durations && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, color: T.textMut }}>Contrainte de temps :</span>
-            {drill.durations.map((s, i) => (
+            <span style={{ fontSize: 12, color: T.textMut }}>Temps imposé :</span>
+            {format.durations.map((s, i) => (
               <button key={s} type="button" style={pill(durationIdx === i)} onClick={() => { setDurationIdx(i); setResult(null); }}>
                 {fmtDuration(s)}
               </button>
@@ -1188,223 +1344,80 @@ function DrillRecord({ drill, onSession }) {
           </div>
         )}
 
-        {drill.forbidden && (
+        {format.forbidden && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <span style={{ fontSize: 12, color: T.textMut }}>Mot interdit :</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {drill.forbiddenChoices.map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  style={pill(!customForbidden.trim() && forbiddenWord === w)}
-                  onClick={() => { setForbiddenWord(w); setCustomForbidden(""); setResult(null); }}
-                >
+              {format.forbiddenChoices.map((w) => (
+                <button key={w} type="button" style={pill(activeForbidden === w)} onClick={() => { setForbiddenWord(w); setResult(null); }}>
                   {w}
                 </button>
               ))}
             </div>
             <input
-              value={customForbidden}
-              onChange={(e) => { setCustomForbidden(e.target.value); setResult(null); }}
+              value={forbiddenWord}
+              onChange={(e) => { setForbiddenWord(e.target.value); setResult(null); }}
               placeholder="…ou saisis ton propre mot à bannir"
-              style={drillInput}
+              style={field}
             />
           </div>
         )}
 
-        {/* Repères d'objectif */}
-        {drill.targetWpmMax && (
-          <div style={drillInfoLine}><Clock size={14} /> Débit cible : moins de {drill.targetWpmMax} mots/minute.</div>
-        )}
-        {drill.timerTargetSec && (
-          <div style={drillInfoLine}><Clock size={14} /> Objectif : tiens {fmtTime(drill.timerTargetSec)} sans jamais t’arrêter.</div>
-        )}
-        {drill.durations && targetSec && (
-          <div style={drillInfoLine}><Clock size={14} /> Vise {fmtDuration(targetSec)} maximum pour ce passage.</div>
-        )}
-        {activeForbidden && (
-          <div style={drillInfoLine}><Ban size={14} color={T.red} /> Interdit d’urgence : « {activeForbidden} ».</div>
-        )}
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textSub, cursor: "pointer" }}>
+          <input type="checkbox" checked={mirror} onChange={(e) => setMirror(e.target.checked)} style={{ accentColor: T.text }} />
+          {mirror ? <Video size={14} /> : <VideoOff size={14} />}
+          Me voir pendant que je parle (caméra en miroir, rien n&apos;est enregistré)
+        </label>
       </div>
 
-      {ready && (
+      <TopicDrawer onPick={(title) => { setTopic(title); setResult(null); }} />
+      <FrameworkPicker value={frameworkId} onChange={(id) => { setFrameworkId(id); setResult(null); }} />
+
+      {framework && (
+        <div style={card}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Ton guide : {framework.name}</div>
+          <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+            {framework.steps.map((s, i) => (
+              <li key={i} style={{ fontSize: 13, color: T.textSub }}>
+                <span style={{ fontWeight: 700, color: T.text }}>{s.label}</span>{s.hint ? ` — ${s.hint}` : ""}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {ready ? (
         <>
           <RecorderPanel
-            mode={drill.analysisMode}
-            topic={drill.input === "topic" ? topic.trim() : undefined}
-            referenceText={drill.input === "reference" ? reference.trim() : undefined}
+            key={`${format.id}-${frameworkId || "none"}`}
+            mode={framework ? "structure" : "freeSpeech"}
+            topic={topic.trim()}
+            framework={framework ? { name: framework.name, steps: framework.steps } : undefined}
             drillGoal={goal}
+            paceTarget={format.target || null}
+            mirror={mirror}
             onResult={handleResult}
           />
-          {result && drill.forbidden && result.forbiddenWord && (
-            <ForbiddenBadge word={result.forbiddenWord} count={result.forbiddenCount || 0} />
-          )}
-          {result && <ResultCard result={result} showFidelity={drill.analysisMode === "reading"} />}
-        </>
-      )}
-    </>
-  );
-}
-
-// Défi « miroir » : webcam en mode miroir + minuteur, sans enregistrement ni analyse.
-function MirrorDrill({ drill }) {
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const [active, setActive] = useState(false);
-  const [err, setErr] = useState(null);
-  const [remaining, setRemaining] = useState(drill.timerSec);
-
-  const stop = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setActive(false);
-  };
-
-  const start = async () => {
-    setErr(null);
-    try {
-      if (typeof navigator === "undefined" || !navigator.mediaDevices) throw new Error("no-media");
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      streamRef.current = stream;
-      setRemaining(drill.timerSec);
-      setActive(true);
-    } catch {
-      setErr("Impossible d'accéder à la caméra. Autorise l'accès, ou fais l'exercice devant un vrai miroir.");
-    }
-  };
-
-  // Branche le flux sur l'élément vidéo une fois celui-ci monté.
-  useEffect(() => {
-    if (active && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-    }
-  }, [active]);
-
-  // Minuteur décroissant (non bloquant : la vidéo continue après 0).
-  useEffect(() => {
-    if (!active || remaining <= 0) return;
-    const id = setTimeout(() => setRemaining((r) => r - 1), 1000);
-    return () => clearTimeout(id);
-  }, [active, remaining]);
-
-  // Coupe la caméra au démontage.
-  useEffect(() => () => stop(), []);
-
-  const done = active && remaining <= 0;
-
-  return (
-    <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-      {active ? (
-        <>
-          <div style={{ position: "relative", width: "100%", maxWidth: 460, aspectRatio: "4 / 3", borderRadius: 14, overflow: "hidden", background: "#000" }}>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }}
-            />
-            <div style={{ position: "absolute", top: 10, right: 10, background: T.scrim, color: T.onSolid, padding: "4px 10px", borderRadius: 999, fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-              {fmtTime(remaining)}
-            </div>
-            <div style={{ position: "absolute", bottom: 10, left: 0, right: 0, textAlign: "center", color: T.onSolid, fontSize: 13, textShadow: "0 1px 3px rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <Eye size={14} /> Regarde tes yeux, uniquement.
-            </div>
-          </div>
-          {done && (
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.green }}>Temps écoulé — bravo, tu as tenu 2 minutes.</div>
-          )}
-          <button type="button" style={ghost(false)} onClick={stop}>
-            <VideoOff size={15} /> Arrêter la caméra
-          </button>
+          {result && <ResultCard result={result} />}
         </>
       ) : (
-        <>
-          <button
-            type="button"
-            onClick={start}
-            style={{
-              width: 96, height: 96, borderRadius: "50%", cursor: "pointer",
-              border: "none", fontFamily: "inherit", background: T.text, color: T.textInverted,
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-            }}
-          >
-            <Video size={28} />
-            <span style={{ fontSize: 11, fontWeight: 600 }}>Démarrer</span>
-          </button>
-          <div style={{ fontSize: 12.5, color: T.textMut, textAlign: "center" }}>
-            La caméra reste sur ton appareil : rien n’est enregistré ni envoyé.
-          </div>
-          {err && <div style={{ color: T.red, fontSize: 13, textAlign: "center" }}>{err}</div>}
-        </>
-      )}
-    </div>
-  );
-}
-
-function DrillsTab({ onSession }) {
-  const [selectedId, setSelectedId] = useState(null);
-  const selected = DRILLS.find((d) => d.id === selectedId) || null;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <p style={lead}>
-        Des ateliers ciblés pour progresser vite : storytelling, débit, fluidité, synthèse, imitation… Choisis un défi et lance-toi.
-      </p>
-
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {DRILLS.map((d) => {
-          const active = d.id === selectedId;
-          return (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => setSelectedId(active ? null : d.id)}
-              style={{
-                ...card, width: 240, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
-                borderColor: active ? T.text : T.border, borderWidth: active ? 2 : 1,
-                background: active ? T.accentBg : T.white,
-                display: "flex", flexDirection: "column", gap: 6,
-              }}
-            >
-              <div style={{ fontSize: 24, lineHeight: 1 }}>{d.emoji}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{d.title}</div>
-              <div style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.4 }}>{d.tagline}</div>
-            </button>
-          );
-        })}
-      </div>
-
-      {selected && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {selected.kind === "mirror" ? (
-            <>
-              <DrillBrief drill={selected} />
-              <MirrorDrill drill={selected} />
-            </>
-          ) : (
-            <DrillRecord key={selected.id} drill={selected} onSession={onSession} />
-          )}
+        <div style={{ ...card, fontSize: 13, color: T.textMut, textAlign: "center", padding: 28 }}>
+          {countdown > 0 ? "Prépare ton propos…" : "Choisis ou écris un sujet pour débloquer l'enregistrement."}
         </div>
       )}
     </div>
   );
 }
 
-/* ─────────────── Types d'exercice suivis ───────────────
- * Le score global est propre à chaque type (et au cumul global). Les sessions
- * sont déjà persistées avec leur `mode`, donc rien à stocker en plus — on
- * ventile simplement l'historique par catégorie. */
+/* ═══════════════════════════════════════════════════════════
+   SUIVI
+   ═══════════════════════════════════════════════════════════ */
 const SESSION_MODES = [
-  { id: EXERCISE_MODES.reading,    label: "Lecture" },
-  { id: EXERCISE_MODES.freeSpeech, label: "Discours libre" },
-  { id: EXERCISE_MODES.diction,    label: "Diction" },
-  { id: EXERCISE_MODES.structure,  label: "Structure" },
-  { id: EXERCISE_MODES.drills,     label: "Défis" },
+  { id: EXERCISE_MODES.articulation, label: "Articulation" },
+  { id: EXERCISE_MODES.reading,      label: "Lecture" },
+  { id: EXERCISE_MODES.speaking,     label: "Parole" },
 ];
+const modeLabel = (m) => (SESSION_MODES.find((x) => x.id === m) || {}).label;
 
 // Tendance d'une série : moyenne de la 2nde moitié (récent) moins la 1re (ancien).
 function seriesTrend(vals) {
@@ -1414,187 +1427,13 @@ function seriesTrend(vals) {
   return Math.round(mean(vals.slice(mid)) - mean(vals.slice(0, mid)));
 }
 
-/* ─────────────── Progression détaillée par critère ───────────────
- * Bloc de suivi du type d'exercice actuellement affiché (pas de sélecteur : il
- * suit l'onglet actif). On montre le score global propre à ce type (moyenne,
- * dernier, record, tendance + courbe) puis la moyenne et la tendance de chaque
- * critère. */
-function ProgressByAxis({ sessions, mode }) {
-  // Seuls les types d'exercice notés ont un suivi (« Sujets » n'enregistre rien).
-  const catLabel = SESSION_MODES.find((m) => m.id === mode)?.label;
-  if (!catLabel) return null;
-
-  if (!sessions || sessions.length === 0) {
-    return (
-      <div style={{ ...card, fontSize: 13, color: T.textMut, textAlign: "center", padding: 32 }}>
-        Commence ta première session pour suivre ta progression sur « {catLabel} ».
-      </div>
-    );
-  }
-
-  // Sessions de ce type d'exercice, remises en ordre chronologique
-  // (l'historique est stocké du plus récent au plus ancien).
-  const filtered = sessions.filter((s) => s.mode === mode);
-  const chrono = [...filtered].reverse();
-  const n = filtered.length;
-
-  const mean = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
-
-  // Score global unique de la catégorie.
-  const overalls = chrono.map((s) => s.overall || 0);
-  const avg = mean(overalls);
-  const best = n ? Math.max(...overalls) : null;
-  const last = n ? overalls[overalls.length - 1] : null;
-  const delta = seriesTrend(overalls);
-
-  // Moyenne + tendance par critère, calculées sur cette même catégorie.
-  const allAxes = [...SCORE_AXES, FIDELITY_AXIS];
-  const rows = allAxes
-    .map((ax) => {
-      const vals = chrono
-        .map((s) => (s.scores ? s.scores[ax.id] : null))
-        .filter((v) => typeof v === "number");
-      if (vals.length < 1) return null;
-      return { ax, avg: mean(vals), delta: seriesTrend(vals) };
-    })
-    .filter(Boolean);
-
-  return (
-    /* Carte, comme les blocs de statistiques des fiches de compte : ce suivi
-       était posé à nu sous un filet, ce qui le faisait lire comme un pied de
-       page alors que c'est la mesure des progrès. */
-    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={sectionTitle}>Progression · {catLabel}</div>
-      {n === 0 ? (
-        <div style={{ fontSize: 13, color: T.textMut }}>Pas encore de session pour « {catLabel} ».</div>
-      ) : (
-        <>
-          {/* Score global unique de la catégorie sélectionnée */}
-          <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <div style={{
-              width: 84, height: 84, borderRadius: "50%", flexShrink: 0,
-              background: scoreColor(avg), color: T.onSolid,
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            }}>
-              <span style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{avg}</span>
-              <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>moyenne</span>
-            </div>
-            <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 13, color: T.textSub, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
-                <span>{n} session{n > 1 ? "s" : ""}</span>
-                <span>Dernier <strong style={{ color: scoreColor(last) }}>{last}</strong></span>
-                <span>Record <strong style={{ color: scoreColor(best) }}>{best}</strong></span>
-                {delta != null && (
-                  delta > 0 ? <span style={{ color: T.green, fontWeight: 700 }}>▲ +{delta}</span>
-                  : delta < 0 ? <span style={{ color: T.red, fontWeight: 700 }}>▼ {delta}</span>
-                  : <span style={{ color: T.textMut, fontWeight: 700 }}>= 0</span>
-                )}
-              </div>
-              <Sparkline values={overalls} />
-            </div>
-          </div>
-
-          {/* Tendance par critère */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {rows.map(({ ax, avg: a, delta: d }) => (
-              <div key={ax.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 96, fontSize: 13, color: T.textSub, fontWeight: 600 }} title={ax.desc}>{ax.label}</div>
-                <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
-                  <div style={{ width: `${a}%`, height: "100%", background: scoreColor(a), borderRadius: 999 }} />
-                </div>
-                <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: scoreColor(a) }}>{a}</div>
-                <div style={{ width: 52, textAlign: "right", fontSize: 12, fontWeight: 700 }}>
-                  {d == null ? (
-                    <span style={{ color: T.textMut }}>—</span>
-                  ) : d > 0 ? (
-                    <span style={{ color: T.green }}>▲ +{d}</span>
-                  ) : d < 0 ? (
-                    <span style={{ color: T.red }}>▼ {d}</span>
-                  ) : (
-                    <span style={{ color: T.textMut }}>= 0</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 11, color: T.textMut }}>
-            Moyenne sur les sessions de « {catLabel} » · tendance = écart entre tes sessions récentes et plus anciennes.
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ─────────────── Conseils de la dernière séance ───────────────
- * Rappelle, pour le type d'exercice affiché, les remarques du coach IA lors de
- * la dernière séance (résumé, points forts, axes d'amélioration, conseils,
- * suggestions de vocabulaire) pour les garder en tête avant de recommencer. */
-function LastSessionAdvice({ sessions, mode }) {
-  // Seuls les onglets notés ont un historique (« Sujets » n'enregistre rien).
-  const catLabel = SESSION_MODES.find((m) => m.id === mode)?.label;
-  if (!catLabel) return null;
-
-  // L'historique est stocké du plus récent au plus ancien → find = dernière séance.
-  const last = sessions.find((s) => s.mode === mode);
-  if (!last) return null;
-
-  const hasContent =
-    !!last.summary ||
-    (last.strengths && last.strengths.length > 0) ||
-    (last.improvements && last.improvements.length > 0) ||
-    (last.tips && last.tips.length > 0) ||
-    (last.vocabSuggestions && last.vocabSuggestions.length > 0);
-  if (!hasContent) return null;
-
-  let when = "";
-  try {
-    when = new Date(last.date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  } catch { /* ignore */ }
-
-  return (
-    <details style={card}>
-      <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 700, color: T.text, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <Lightbulb size={16} color={T.blue} />
-        Conseils de ta dernière séance « {catLabel} »
-        {when && <span style={{ fontSize: 12, color: T.textMut, fontWeight: 500 }}>· {when}</span>}
-      </summary>
-      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 16 }}>
-        {last.summary && (
-          <div style={{ fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{last.summary}</div>
-        )}
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <FeedbackList title="Points forts" icon={<Check size={15} color={T.green} />} color={T.green} items={last.strengths} />
-          <FeedbackList title="À améliorer" icon={<ChevronRight size={15} color={T.amber} />} color={T.amber} items={last.improvements} />
-          <FeedbackList title="Conseils" icon={<Lightbulb size={15} color={T.blue} />} color={T.blue} items={last.tips} />
-        </div>
-        {Array.isArray(last.vocabSuggestions) && last.vocabSuggestions.length > 0 && (
-          <div>
-            <div style={sectionTitle}>Dis plutôt</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {last.vocabSuggestions.map((s, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                  <span style={{ color: T.textMut, textDecoration: "line-through" }}>{s.original}</span>
-                  <ChevronRight size={14} color={T.textMut} />
-                  <span style={{ color: T.green, fontWeight: 600 }}>{s.better}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </details>
-  );
-}
-
 // Mini-courbe SVG (sparkline) d'une série de valeurs 0–100.
 function Sparkline({ values }) {
   if (!values || values.length < 2) return null;
   const W = 100, H = 28, pad = 2;
-  const max = 100, min = 0;
   const pts = values.map((v, i) => {
     const x = pad + (i * (W - 2 * pad)) / (values.length - 1);
-    const y = pad + (1 - (v - min) / (max - min)) * (H - 2 * pad);
+    const y = pad + (1 - v / 100) * (H - 2 * pad);
     return [x, y];
   });
   const path = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
@@ -1602,88 +1441,131 @@ function Sparkline({ values }) {
   const [lx, ly] = pts[pts.length - 1];
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 40, display: "block" }}>
-      <polyline points={`${pad},${H - pad} ${pts.map((p) => p.join(",")).join(" ")} ${W - pad},${H - pad}`} fill="rgba(13,13,13,0.04)" stroke="none" />
       <path d={path} fill="none" stroke={scoreColor(last)} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       <circle cx={lx} cy={ly} r={2.2} fill={scoreColor(last)} />
     </svg>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════
-   PAGE
-   ═══════════════════════════════════════════════════════════ */
-const TABS = [
-  { id: EXERCISE_MODES.reading,    label: "Lecture" },
-  { id: EXERCISE_MODES.freeSpeech, label: "Discours libre" },
-  { id: EXERCISE_MODES.topics,     label: "Sujets" },
-  { id: EXERCISE_MODES.diction,    label: "Diction" },
-  { id: EXERCISE_MODES.structure,  label: "Structure" },
-  { id: EXERCISE_MODES.drills,     label: "Défis" },
-];
-
-/* ─────────────── Réécoute des enregistrements passés ───────────────
- * Liste les sessions de l'onglet courant qui ont un enregistrement cloud
- * (audioPath). L'URL signée n'est demandée qu'au clic sur « Écouter ». */
-function fmtDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString("fr-FR", {
-      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return ""; }
+function TrendTag({ delta }) {
+  if (delta == null) return <span style={{ color: T.textMut }}>—</span>;
+  if (delta > 0) return <span style={{ color: T.pnlPos, fontWeight: 600 }}>▲ +{delta}</span>;
+  if (delta < 0) return <span style={{ color: T.pnlNeg, fontWeight: 600 }}>▼ {delta}</span>;
+  return <span style={{ color: T.textMut, fontWeight: 600 }}>= 0</span>;
 }
 
-function RecordingsHistory({ sessions, mode }) {
-  const { getAudioUrl } = useEloquenceAudio();
-  const [urls, setUrls] = useState({});       // sessionId -> URL signée
-  const [loadingId, setLoadingId] = useState(null);
+/* Progression de l'exercice affiché : le score moyen de la catégorie, sa courbe,
+ * puis la moyenne et la tendance de chaque critère. */
+function ProgressPanel({ sessions, mode }) {
+  const catLabel = modeLabel(mode);
+  const filtered = (sessions || []).filter((s) => s.mode === mode);
+  const chrono = [...filtered].reverse();
+  const n = filtered.length;
+  const mean = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
 
-  const items = (sessions || []).filter((s) => s.mode === mode && s.audioPath).slice(0, 10);
-  if (items.length === 0) return null;
+  if (n === 0) {
+    return (
+      <div style={{ ...card, fontSize: 13, color: T.textMut, textAlign: "center", padding: 32 }}>
+        Fais une prise enregistrée en « {catLabel} » pour lancer le suivi.
+      </div>
+    );
+  }
 
-  const listen = async (s) => {
-    if (urls[s.id]) return;
-    setLoadingId(s.id);
-    const url = await getAudioUrl(s.audioPath);
-    setLoadingId(null);
-    if (url) setUrls((prev) => ({ ...prev, [s.id]: url }));
-  };
+  const overalls = chrono.map((s) => s.overall || 0);
+  const avg = mean(overalls);
+  const best = Math.max(...overalls);
+  const last = overalls[overalls.length - 1];
+  const delta = seriesTrend(overalls);
+
+  const rows = [...SCORE_AXES, FIDELITY_AXIS]
+    .map((ax) => {
+      const vals = chrono.map((s) => (s.scores ? s.scores[ax.id] : null)).filter((v) => typeof v === "number");
+      if (vals.length < 1) return null;
+      return { ax, avg: mean(vals), delta: seriesTrend(vals) };
+    })
+    .filter(Boolean);
+
+  // Les quatre repères, moyennés sur la catégorie : c'est le suivi qui compte le
+  // plus, puisque c'est sur eux que chaque prise est jugée en premier.
+  const checkRows = ["pace", "silences", "noise", "endings"]
+    .map((id) => {
+      const vals = chrono
+        .map((s) => (s.checkStatus ? s.checkStatus[id] : null))
+        .filter((v) => v === "ok" || v === "warn" || v === "bad");
+      if (!vals.length) return null;
+      const label = (SPEECH_RULES.find((r) => r.id === id) || {}).label;
+      const okCount = vals.filter((v) => v === "ok").length;
+      return { id, label, okCount, total: vals.length, ratio: okCount / vals.length };
+    })
+    .filter(Boolean);
 
   return (
-    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={blockTitle}>Tes enregistrements</div>
-      {items.map((s) => (
-        <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, background: scoreColor(s.overall), color: T.onSolid, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-              {s.overall}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{fmtDate(s.date)}</div>
-              {s.summary && (
-                <div style={{ fontSize: 12, color: T.textMut, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.summary}</div>
-              )}
-            </div>
-            {!urls[s.id] && (
-              <button type="button" style={ghost(false)} onClick={() => listen(s)} disabled={loadingId === s.id}>
-                {loadingId === s.id
-                  ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
-                  : <Volume2 size={14} />}
-                Écouter
-              </button>
-            )}
-          </div>
-          {urls[s.id] && <audio controls autoPlay src={urls[s.id]} style={{ width: "100%", height: 38 }} />}
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={sectionTitle}>Progression · {catLabel}</div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+        <div style={{
+          width: 84, height: 84, borderRadius: "50%", flexShrink: 0,
+          background: scoreColor(avg), color: T.onSolid,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ fontSize: 28, fontWeight: 800, lineHeight: 1 }}>{avg}</span>
+          <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>moyenne</span>
         </div>
-      ))}
+        <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 13, color: T.textSub, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+            <span>{n} prise{n > 1 ? "s" : ""}</span>
+            <span>Dernière <strong style={{ color: scoreColor(last) }}>{last}</strong></span>
+            <span>Record <strong style={{ color: scoreColor(best) }}>{best}</strong></span>
+            <TrendTag delta={delta} />
+          </div>
+          <Sparkline values={overalls} />
+        </div>
+      </div>
+
+      {checkRows.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 12, color: T.text, opacity: 0.5, fontWeight: 500 }}>Repères tenus</div>
+          {checkRows.map((r) => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 104, fontSize: 13, color: T.textSub, fontWeight: 600 }}>{r.label}</div>
+              <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ width: `${Math.round(r.ratio * 100)}%`, height: "100%", background: r.ratio >= 0.7 ? T.green : r.ratio >= 0.4 ? T.amber : T.red, borderRadius: 999 }} />
+              </div>
+              <div style={{ width: 46, textAlign: "right", fontSize: 12.5, fontWeight: 600, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+                {r.okCount}/{r.total}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 12, color: T.text, opacity: 0.5, fontWeight: 500 }}>Notes du coach par critère</div>
+        {rows.map(({ ax, avg: a, delta: d }) => (
+          <div key={ax.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 104, fontSize: 13, color: T.textSub, fontWeight: 600 }} title={ax.desc}>{ax.label}</div>
+            <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
+              <div style={{ width: `${a}%`, height: "100%", background: scoreColor(a), borderRadius: 999 }} />
+            </div>
+            <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: scoreColor(a) }}>{a}</div>
+            <div style={{ width: 52, textAlign: "right", fontSize: 12 }}><TrendTag delta={d} /></div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: T.textMut }}>
+        Tendance = écart entre tes prises récentes et les plus anciennes.
+      </div>
     </div>
   );
 }
 
-/* ─────────────── Bilan de séance quotidien + plan (jour & semaine) ───────────────
- * Regroupe automatiquement les exercices de la journée, génère (une fois par
- * état) un bilan et un plan via /api/ai/eloquence/plan, et met le résultat en
- * cache dans le store (useCloudState) pour ne pas le régénérer à chaque rendu. */
-function DailyReview({ sessions, store, setStore, onOpenTab }) {
+/* ─────────────── Le coach : bilan du jour + dernière séance ───────────────
+ * Deux blocs affichaient le même contenu (résumé, points forts, axes, conseils),
+ * l'un pour la journée, l'autre pour la dernière prise. Ils n'en font plus qu'un :
+ * le plan du jour en haut, le détail de la dernière prise replié en dessous. */
+function CoachPanel({ sessions, store, setStore, mode, onOpenTab }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const genGuard = useRef(null);
@@ -1693,16 +1575,6 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
   const reviews = (store && store.dailyReviews) || {};
   const review = reviews[dateKey] || null;
   const stale = !!review && review.sessionCount < aggregate.sessionCount;
-
-  // Fermeture du bilan, mémorisée par jour : une fois masqué il ne réapparaît
-  // pas au rechargement. Réversible via la barre compacte « Afficher le bilan ».
-  const dismissed = !!((store && store.dismissedReviews) || {})[dateKey];
-  const setDismissed = (val) => setStore((prev) => ({
-    ...(prev || {}),
-    dismissedReviews: { ...((prev && prev.dismissedReviews) || {}), [dateKey]: val },
-  }));
-
-  const modeLabel = (m) => (SESSION_MODES.find((x) => x.id === m) || {}).label;
 
   const generate = async () => {
     if (aggregate.sessionCount < 1) return;
@@ -1730,8 +1602,8 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
     }
   };
 
-  // Auto-génération « bilan quotidien » : une seule fois par (jour + nb d'exercices).
-  // Déclenchée hors du corps synchrone de l'effet (microtask) pour ne pas setState pendant le rendu.
+  // Auto-génération : une seule fois par (jour + nombre de prises). Déclenchée
+  // hors du corps synchrone de l'effet pour ne pas setState pendant le rendu.
   useEffect(() => {
     if (aggregate.sessionCount < 1) return;
     if (review && !stale) return;
@@ -1742,35 +1614,41 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateKey, aggregate.sessionCount, review, stale]);
 
-  if (aggregate.sessionCount < 1 && !review) return null;
+  // L'historique est stocké du plus récent au plus ancien → find = dernière prise.
+  const last = (sessions || []).find((s) => s.mode === mode);
+  const lastHasContent = !!last && (
+    !!last.summary ||
+    (last.strengths && last.strengths.length) ||
+    (last.improvements && last.improvements.length) ||
+    (last.tips && last.tips.length) ||
+    (last.vocabSuggestions && last.vocabSuggestions.length)
+  );
 
-  // Bilan fermé : barre compacte discrète pour le rouvrir.
-  if (dismissed) {
+  if (aggregate.sessionCount < 1 && !review && !lastHasContent) {
     return (
-      <button type="button" onClick={() => setDismissed(false)}
-        style={{ display: "inline-flex", alignItems: "center", gap: 8, alignSelf: "flex-start", padding: "8px 14px", border: `1px solid ${T.border}`, borderRadius: 999, background: T.white, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: T.textSub }}>
-        <Eye size={14} /> Afficher le bilan du jour
-      </button>
+      <div style={{ ...card, fontSize: 13, color: T.textMut, textAlign: "center", padding: 32 }}>
+        Le coach t&apos;écrira ici son bilan dès ta première prise enregistrée.
+      </div>
     );
   }
 
   const axisDefs = [...SCORE_AXES, ...AUDIO_AXES];
 
   return (
-    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 14, borderColor: T.text }}>
+    <div style={{ ...card, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>Bilan du jour &amp; plan</div>
-        <span style={{ fontSize: 12, color: T.textMut }}>
-          {aggregate.sessionCount} exercice{aggregate.sessionCount > 1 ? "s" : ""} aujourd&apos;hui
-        </span>
-        <button type="button" style={{ ...ghost(false), marginLeft: "auto" }} onClick={generate} disabled={loading}>
-          {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={14} />}
-          {review ? "Régénérer" : "Générer"}
-        </button>
-        <button type="button" title="Fermer le bilan" aria-label="Fermer le bilan" onClick={() => setDismissed(true)}
-          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, border: `1px solid ${T.border}`, borderRadius: 999, background: T.white, cursor: "pointer", color: T.textMut, padding: 0 }}>
-          <X size={16} />
-        </button>
+        <div style={sectionTitle}>Ton coach</div>
+        {aggregate.sessionCount > 0 && (
+          <span style={{ fontSize: 12, color: T.textMut }}>
+            {aggregate.sessionCount} prise{aggregate.sessionCount > 1 ? "s" : ""} aujourd&apos;hui
+          </span>
+        )}
+        {aggregate.sessionCount > 0 && (
+          <button type="button" style={{ ...ghost(loading), marginLeft: "auto" }} onClick={generate} disabled={loading}>
+            {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={14} />}
+            {review ? "Régénérer" : "Générer le bilan"}
+          </button>
+        )}
       </div>
 
       {err && <div style={{ color: T.red, fontSize: 13 }}>{err}</div>}
@@ -1780,13 +1658,13 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
         <>
           {stale && (
             <div style={{ fontSize: 12, color: T.amber }}>
-              De nouveaux exercices ont été faits depuis ce bilan — clique sur « Régénérer ».
+              De nouvelles prises depuis ce bilan — clique sur « Régénérer ».
             </div>
           )}
           {review.summary && <div style={{ fontSize: 14, color: T.text, lineHeight: 1.55 }}>{review.summary}</div>}
 
           {review.priority && (
-            <div style={{ background: FIELD_BG, borderRadius: 8, padding: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ background: SURFACE, borderRadius: 8, padding: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
               <Sparkles size={16} color={T.text} style={{ flexShrink: 0, marginTop: 1 }} />
               <div style={{ fontSize: 13.5, color: T.text }}>
                 <span style={{ fontWeight: 700 }}>Priorité n°1 : </span>{review.priority}
@@ -1796,12 +1674,12 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
 
           {Array.isArray(review.dayPlan) && review.dayPlan.length > 0 && (
             <div>
-              <div style={sectionTitle}>À travailler à la prochaine séance</div>
+              <div style={{ fontSize: 12, color: T.text, opacity: 0.5, fontWeight: 500, marginBottom: 8 }}>À travailler maintenant</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {review.dayPlan.map((t, i) => (
-                  <div key={i} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div key={i} style={{ background: SURFACE, borderRadius: 10, padding: 12, display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 180 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{t.title}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>{t.title}</div>
                       {t.why && <div style={{ fontSize: 12.5, color: T.textSub, marginTop: 2 }}>{t.why}</div>}
                     </div>
                     {t.mode && modeLabel(t.mode) && (
@@ -1817,7 +1695,7 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
 
           {Array.isArray(review.weekPlan) && review.weekPlan.length > 0 && (
             <div>
-              <div style={sectionTitle}>Objectifs de la semaine</div>
+              <div style={{ fontSize: 12, color: T.text, opacity: 0.5, fontWeight: 500, marginBottom: 8 }}>Cette semaine</div>
               <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
                 {review.weekPlan.map((t, i) => (
                   <li key={i} style={{ fontSize: 13, color: T.textSub }}>
@@ -1846,43 +1724,147 @@ function DailyReview({ sessions, store, setStore, onOpenTab }) {
           )}
         </>
       )}
+
+      {lastHasContent && (
+        <details style={{ fontSize: 13, borderTop: `1px solid ${HAIRLINE}`, paddingTop: 12 }}>
+          <summary style={{ cursor: "pointer", color: T.textSub, fontWeight: 600 }}>
+            Retour de ta dernière prise « {modeLabel(mode)} »
+            {last.date && <span style={{ color: T.textMut, fontWeight: 500 }}> · {fmtDate(last.date)}</span>}
+          </summary>
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 16 }}>
+            {last.summary && <div style={{ fontSize: 13, color: T.textSub, fontStyle: "italic" }}>{last.summary}</div>}
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <FeedbackList title="Points forts" icon={<Check size={15} color={T.green} />} color={T.green} items={last.strengths} />
+              <FeedbackList title="À améliorer" icon={<ChevronRight size={15} color={T.amber} />} color={T.amber} items={last.improvements} />
+              <FeedbackList title="Conseils" icon={<Lightbulb size={15} color={T.blue} />} color={T.blue} items={last.tips} />
+            </div>
+            <VocabSuggestions items={last.vocabSuggestions} />
+          </div>
+        </details>
+      )}
     </div>
   );
 }
 
+/* Réécoute des prises passées de l'exercice courant (enregistrements cloud).
+ * L'URL signée n'est demandée qu'au clic sur « Écouter ». */
+function RecordingsPanel({ sessions, mode }) {
+  const { getAudioUrl } = useEloquenceAudio();
+  const [urls, setUrls] = useState({});
+  const [loadingId, setLoadingId] = useState(null);
+
+  const items = (sessions || []).filter((s) => s.mode === mode && s.audioPath).slice(0, 10);
+  if (items.length === 0) return null;
+
+  const listen = async (s) => {
+    if (urls[s.id]) return;
+    setLoadingId(s.id);
+    const url = await getAudioUrl(s.audioPath);
+    setLoadingId(null);
+    if (url) setUrls((prev) => ({ ...prev, [s.id]: url }));
+  };
+
+  return (
+    <details style={card}>
+      <summary style={{ cursor: "pointer", fontSize: 15, fontWeight: 600, color: T.text }}>
+        Tes enregistrements ({items.length})
+      </summary>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+        {items.map((s) => (
+          <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, background: scoreColor(s.overall), color: T.onSolid, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                {s.overall}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{fmtDate(s.date)}</div>
+                {s.summary && (
+                  <div style={{ fontSize: 12, color: T.textMut, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.summary}</div>
+                )}
+              </div>
+              {!urls[s.id] && (
+                <button type="button" style={ghost(false)} onClick={() => listen(s)} disabled={loadingId === s.id}>
+                  {loadingId === s.id
+                    ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                    : <Volume2 size={14} />}
+                  Écouter
+                </button>
+              )}
+            </div>
+            {urls[s.id] && <audio controls autoPlay src={urls[s.id]} style={{ width: "100%", height: 38 }} />}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE
+   ═══════════════════════════════════════════════════════════ */
+const TABS = [
+  { id: EXERCISE_MODES.articulation, label: "Articulation" },
+  { id: EXERCISE_MODES.reading,      label: "Lecture" },
+  { id: EXERCISE_MODES.speaking,     label: "Parole" },
+];
+
+// Ne conserve que les quatorze derniers jours de compteurs de répétitions : au-delà
+// ils ne servent plus à rien et alourdiraient le state synchronisé.
+function trimReps(reps) {
+  return Object.fromEntries(
+    Object.entries(reps).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 14)
+  );
+}
+
 export default function EloquencePage() {
-  const [tab, setTab] = useState(EXERCISE_MODES.reading);
-  const [store, setStore] = useCloudState(ELOQ_STORAGE_KEY, ELOQ_CLOUD_KEY, { sessions: [] });
-  const [presetTopic, setPresetTopic] = useState(null);
+  const [tab, setTab] = useState(EXERCISE_MODES.articulation);
+  const [store, setStore, hydrated] = useCloudState(ELOQ_STORAGE_KEY, ELOQ_CLOUD_KEY, { sessions: [] });
 
-  const sessions = (store && store.sessions) || [];
+  // Mémoïsé : `(store && store.sessions) || []` recrée un tableau vide à chaque
+  // rendu tant qu'aucune prise n'existe, ce qui relancerait tous les calculs.
+  const sessions = useMemo(() => (store && store.sessions) || [], [store]);
+  const dateKey = todayKey();
+  const reps = useMemo(() => ((store && store.reps) || {})[dateKey] || {}, [store, dateKey]);
 
-  /* ── Chiffre héros + mini-KPI ──────────────────────────────────────────────
-     Même lecture que les fiches de compte : un chiffre qui résume, quatre
-     mesures secondaires sous lui, et le sélecteur à droite. Le périmètre suit
-     l'exercice choisi — comme le P&L suit le compte affiché. « Sujets »
-     n'enregistre aucune séance : ce périmètre-là retombe sur toutes catégories. */
+  /* Migration : les prises enregistrées sous les six anciens onglets sont
+     réétiquetées vers les trois nouveaux modes, sinon leur historique
+     disparaîtrait des courbes. Après hydratation seulement — avant, on
+     réécrirait la valeur par défaut par-dessus les données du cloud. */
+  useEffect(() => {
+    if (!hydrated) return;
+    const migrated = migrateEloquenceStore(store);
+    // Référence identique = rien à réétiqueter : on n'écrit pas, sinon chaque
+    // montage de la page déclencherait un upsert Supabase pour rien.
+    if (migrated && migrated !== store) setStore(migrated);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  // Compteurs de répétitions du jour (articulation).
+  const setRep = (id, next) => setStore((prev) => {
+    const all = (prev && prev.reps) || {};
+    const day = all[dateKey] || {};
+    return { ...(prev || {}), reps: trimReps({ ...all, [dateKey]: { ...day, [id]: next(day[id] || 0) } }) };
+  });
+  const incRep = (id, max) => setRep(id, (n) => Math.min(max, n + 1));
+  const resetRep = (id) => setRep(id, () => 0);
+
+  /* ── Chiffre héros + mini-KPI ──
+     Le périmètre suit l'exercice choisi, comme le P&L suit le compte affiché. */
   const scoped = useMemo(() => {
-    const noted = SESSION_MODES.some((m) => m.id === tab);
-    const list = noted ? sessions.filter((s) => s.mode === tab) : sessions;
-    const label = noted ? (SESSION_MODES.find((m) => m.id === tab) || {}).label : "Toutes catégories";
-    return { list, label, noted };
+    const list = sessions.filter((s) => s.mode === tab);
+    return { list, label: modeLabel(tab) };
   }, [sessions, tab]);
 
   const hero = useMemo(() => {
     const list = scoped.list;
-    if (list.length === 0) return { score: null, delta: null, count: 0, wpm: null, fillers: null, streak: 0 };
-    // L'historique est stocké du plus récent au plus ancien.
-    const overalls = [...list].reverse().map((s) => s.overall || 0);
-    const last = overalls[overalls.length - 1];
-    const mean = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
-    const wpms = list.map((s) => s.wpm).filter((v) => typeof v === "number" && v > 0);
-    const fillers = list.map((s) => s.fillerCount).filter((v) => typeof v === "number");
-
-    /* Régularité : jours consécutifs travaillés en remontant depuis aujourd'hui.
-       On compte des JOURS distincts, pas des séances — trois exercices le même
-       jour ne font pas trois jours de suite. */
-    const days = new Set(list.map((s) => String(s.date || "").slice(0, 10)));
+    // Régularité : jours consécutifs travaillés en remontant depuis aujourd'hui.
+    // On compte des JOURS distincts, pas des prises — trois prises le même jour
+    // ne font pas trois jours de suite. Les compteurs d'articulation comptent
+    // aussi : une séance de virelangues sans enregistrement reste une séance.
+    const days = new Set(sessions.map((s) => String(s.date || "").slice(0, 10)));
+    for (const [day, counts] of Object.entries((store && store.reps) || {})) {
+      if (Object.values(counts || {}).some((n) => n > 0)) days.add(day);
+    }
     let streak = 0;
     const cur = new Date();
     for (;;) {
@@ -1892,17 +1874,26 @@ export default function EloquencePage() {
       cur.setDate(cur.getDate() - 1);
     }
 
+    if (list.length === 0) return { score: null, delta: null, count: 0, wpm: null, fillers: null, streak };
+
+    const overalls = [...list].reverse().map((s) => s.overall || 0);
+    const mean = (a) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+    const wpms = list.map((s) => s.wpm).filter((v) => typeof v === "number" && v > 0);
+    const fillers = list.map((s) => s.fillerCount).filter((v) => typeof v === "number");
+
     return {
-      score: last,
+      score: overalls[overalls.length - 1],
       delta: seriesTrend(overalls),
       count: list.length,
       wpm: wpms.length ? mean(wpms) : null,
       fillers: fillers.length ? mean(fillers) : null,
       streak,
     };
-  }, [scoped.list]);
+  }, [scoped.list, sessions, store]);
 
-  // Enregistre une session dans l'historique (en tête, limité à 100).
+  const wpmTone = hero.wpm == null ? undefined : describeWpm(hero.wpm).tone === "green" ? "pos" : describeWpm(hero.wpm).tone === "red" ? "neg" : undefined;
+
+  // Enregistre une prise dans l'historique (en tête, limité à 100).
   const recordSession = ({ mode, r }) => {
     if (!r || !r.analysis) return;
     const entry = {
@@ -1913,7 +1904,10 @@ export default function EloquencePage() {
       scores: r.analysis.scores,
       wpm: r.wpm,
       fillerCount: r.fillerCount,
-      // Conseils et remarques du coach IA, conservés pour être revus avant la prochaine séance.
+      // Verdict des quatre repères, réduit à son statut : c'est ce qui sert au
+      // suivi « repères tenus », et ça pèse quatre chaînes au lieu de quatre objets.
+      checkStatus: Object.fromEntries((r.checks || []).map((c) => [c.id, c.status])),
+      // Conseils et remarques du coach, conservés pour être revus avant la prochaine prise.
       summary: r.analysis.summary || "",
       strengths: Array.isArray(r.analysis.strengths) ? r.analysis.strengths : [],
       improvements: Array.isArray(r.analysis.improvements) ? r.analysis.improvements : [],
@@ -1932,26 +1926,15 @@ export default function EloquencePage() {
     });
   };
 
-  // Bascule vers « Discours libre » avec un sujet pré-rempli.
-  const practiceTopic = (title) => {
-    setPresetTopic(title);
-    setTab(EXERCISE_MODES.freeSpeech);
-  };
-
   return (
-    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
+    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 20, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
       {/* ═══ 1. EN-TÊTE ═══ Ni titre ni sous-titre : la barre latérale dit déjà
-          où l'on est, et le chiffre héros juste en dessous porte l'attention.
-          Ne reste que le slot d'en-tête, que toutes les pages rendent. */}
+          où l'on est. Ne reste que le slot d'en-tête, que toutes les pages rendent. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
 
-      {/* ═══ 2. CHIFFRE HÉROS + MINI-KPI + SÉLECTEUR D'EXERCICE ═══
-          Les six exercices étaient un ruban d'onglets posé seul sous le titre, et
-          le suivi vivait tout en bas de page. Ils partagent maintenant la même
-          barre : on lit où on en est, et on choisit quoi travailler, au même
-          endroit — c'est le bloc d'en-tête des fiches de compte. */}
+      {/* ═══ 2. CHIFFRE HÉROS + MINI-KPI + SÉLECTEUR D'EXERCICE ═══ */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -1965,12 +1948,8 @@ export default function EloquencePage() {
             </div>
             {hero.delta != null && hero.delta !== 0 && (
               <span
-                title="Écart entre tes séances récentes et les plus anciennes"
-                style={{
-                  fontSize: 13, fontWeight: 500, lineHeight: 1, whiteSpace: "nowrap",
-                  fontVariantNumeric: "tabular-nums",
-                  color: hero.delta > 0 ? T.pnlPos : T.pnlNeg,
-                }}
+                title="Écart entre tes prises récentes et les plus anciennes"
+                style={{ fontSize: 13, fontWeight: 500, lineHeight: 1, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", color: hero.delta > 0 ? T.pnlPos : T.pnlNeg }}
               >
                 {hero.delta > 0 ? `▲ +${hero.delta}` : `▼ ${hero.delta}`}
               </span>
@@ -1979,13 +1958,9 @@ export default function EloquencePage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
-            <MiniKpi label="Séances" value={String(hero.count)} />
-            <MiniKpi
-              label="Régularité"
-              value={hero.streak > 0 ? `${hero.streak} j` : "—"}
-              tone={hero.streak >= 3 ? "pos" : undefined}
-            />
-            <MiniKpi label="Débit" value={hero.wpm != null ? `${hero.wpm} mots/min` : "—"} />
+            <MiniKpi label="Prises" value={String(hero.count)} />
+            <MiniKpi label="Régularité" value={hero.streak > 0 ? `${hero.streak} j` : "—"} tone={hero.streak >= 3 ? "pos" : undefined} />
+            <MiniKpi label="Débit moyen" value={hero.wpm != null ? `${hero.wpm} mots/min` : "—"} tone={wpmTone} />
             <MiniKpi
               label="Tics de langage"
               value={hero.fillers != null ? String(hero.fillers) : "—"}
@@ -1994,46 +1969,35 @@ export default function EloquencePage() {
           </div>
         </div>
 
-        {/* Sélecteur d'exercice : la brique des autres pages, sur sa piste
-            arrondie. Il défile horizontalement en dessous de sa largeur — six
-            entrées ne tiennent pas sur un écran de téléphone. */}
+        {/* Sélecteur d'exercice : la brique des autres pages, sur sa piste arrondie. */}
         <div className="scroll-thin" style={{ maxWidth: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <PeriodPills value={tab} onChange={setTab} options={TABS} track size={14} />
         </div>
       </div>
 
-      {/* ═══ 3. CE QU'IL FAUT TRAVAILLER AUJOURD'HUI ═══
-          Le bilan du jour reste AVANT l'exercice : il dit quoi faire, l'exercice
-          en dessous est le faire. */}
-      <DailyReview sessions={sessions} store={store} setStore={setStore} onOpenTab={setTab} />
+      {/* ═══ 3. LES QUATRE REPÈRES ═══ toujours visibles : c'est la consigne
+          permanente, et exactement ce qui sera mesuré sur la prise suivante. */}
+      <SpeechRulesBar />
 
       {/* ═══ 4. L'EXERCICE ═══ le cœur de la page */}
+      {tab === EXERCISE_MODES.articulation && (
+        <ArticulationTab reps={reps} incRep={incRep} resetRep={resetRep} onSession={recordSession} />
+      )}
       {tab === EXERCISE_MODES.reading && <ReadingTab onSession={recordSession} />}
-      {tab === EXERCISE_MODES.freeSpeech && (
-        <FreeSpeechTab onSession={recordSession} presetTopic={presetTopic} clearPreset={() => setPresetTopic(null)} />
-      )}
-      {tab === EXERCISE_MODES.topics && <TopicsTab onPractice={practiceTopic} />}
-      {tab === EXERCISE_MODES.diction && <DictionTab onSession={recordSession} />}
-      {tab === EXERCISE_MODES.structure && <StructureTab onSession={recordSession} />}
-      {tab === EXERCISE_MODES.drills && <DrillsTab onSession={recordSession} />}
+      {tab === EXERCISE_MODES.speaking && <SpeakingTab onSession={recordSession} />}
 
-      {/* ═══ 5. LE SUIVI ═══
-          Progression, conseils de la dernière séance et réécoute formaient trois
-          bandeaux pleine largeur empilés sous l'exercice, qu'il fallait traverser
-          l'un après l'autre. Deux colonnes : la mesure à gauche, ce qui se lit à
-          droite. `tr4de-eloq-follow` porte le repli en une colonne (globals.css). */}
-      {tab !== EXERCISE_MODES.topics && (
-        <div className="tr4de-eloq-follow" style={{
-          display: "grid", gridTemplateColumns: "minmax(330px, 400px) minmax(0, 1fr)",
-          gap: 12, alignItems: "start",
-        }}>
-          <ProgressByAxis sessions={sessions} mode={tab} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
-            <LastSessionAdvice sessions={sessions} mode={tab} />
-            <RecordingsHistory sessions={sessions} mode={tab} />
-          </div>
+      {/* ═══ 5. LE SUIVI ═══ la mesure à gauche, ce qui se lit à droite.
+          `tr4de-eloq-follow` porte le repli en une colonne (globals.css). */}
+      <div className="tr4de-eloq-follow" style={{
+        display: "grid", gridTemplateColumns: "minmax(330px, 400px) minmax(0, 1fr)",
+        gap: 12, alignItems: "start",
+      }}>
+        <ProgressPanel sessions={sessions} mode={tab} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+          <CoachPanel sessions={sessions} store={store} setStore={setStore} mode={tab} onOpenTab={setTab} />
+          <RecordingsPanel sessions={sessions} mode={tab} />
         </div>
-      )}
+      </div>
     </div>
   );
 }

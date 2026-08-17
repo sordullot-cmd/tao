@@ -16,14 +16,6 @@ const TopicsSchema = z.object({
   ),
 });
 
-const ExerciseSchema = z.object({
-  exercise: z.object({
-    prompt: z.string(), // le sujet à traiter
-    framework: z.string(), // le cadre conseillé (PREP, STAR, règle de 3...)
-    tips: z.array(z.string()).max(3),
-  }),
-});
-
 export async function POST(request: NextRequest) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -40,7 +32,7 @@ export async function POST(request: NextRequest) {
       difficulty,
       count,
     }: {
-      kind: "topics" | "exercise";
+      kind: "topics";
       theme?: string;
       difficulty?: number;
       count?: number;
@@ -80,33 +72,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(object);
     }
 
-    if (kind === "exercise") {
-      const themeLine =
-        !theme || theme === "surprise"
-          ? "Thème : libre — choisis un sujet stimulant."
-          : `Thème : ${theme}.`;
-
-      const prompt = [
-        "Génère UN exercice de structuration du discours.",
-        themeLine,
-        difficultyLine,
-        "Fournis : le sujet à traiter (prompt), le cadre conseillé (framework : PREP, STAR, règle de 3...), et jusqu'à 3 conseils concrets (tips).",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      const { object } = await generateObject({
-        model: openai("gpt-4o"),
-        schema: ExerciseSchema,
-        system,
-        prompt,
-      });
-
-      return NextResponse.json(object);
-    }
-
     return NextResponse.json(
-      { error: "Paramètre 'kind' invalide (attendu : 'topics' ou 'exercise')" },
+      { error: "Paramètre 'kind' invalide (attendu : 'topics')" },
       { status: 400 }
     );
   } catch (err: any) {

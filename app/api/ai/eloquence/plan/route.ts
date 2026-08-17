@@ -26,7 +26,7 @@ const Schema = z.object({
       z.object({
         title: z.string(), // tâche concrète pour la prochaine séance
         why: z.string(), // pourquoi (lié à une faiblesse mesurée)
-        mode: z.enum(["reading", "freeSpeech", "diction", "structure", "drills"]), // onglet d'exercice à ouvrir
+        mode: z.enum(["articulation", "reading", "speaking"]), // onglet d'exercice à ouvrir
       })
     )
     .min(2)
@@ -61,11 +61,9 @@ type PlanBody = {
   date: string;
   sessionCount: number;
   byMode: {
+    articulation: number;
     reading: number;
-    freeSpeech: number;
-    diction: number;
-    structure: number;
-    drills?: number;
+    speaking: number;
   };
   axisAverages: AxisAverages;
   audioAverages: {
@@ -73,6 +71,8 @@ type PlanBody = {
     loudnessVar: number | null;
     pauseRatio: number | null;
     longestPauseSec: number | null;
+    snrDb: number | null;
+    fallingEndRatio: number | null;
     wpm: number | null;
   };
   derivedAudio: {
@@ -143,9 +143,12 @@ export async function POST(request: NextRequest) {
       "Interprète les mesures acoustiques ainsi : " +
       "la MÉLODIE reflète la variation de hauteur (intonation) — une faible variation (peu de demi-tons) = intonation monotone, à corriger par plus de relief mélodique ; " +
       "la VOIX reflète la stabilité et le volume (variation de force) — une voix instable ou trop plate manque de présence ; " +
-      "le RYTHME reflète les pauses et le débit — un pauseRatio trop bas = l'orateur ne respire pas / n'aère pas son propos, un débit (wpm) hors de la fourchette 110-160 mots/minute est à corriger (trop lent en dessous, précipité au-dessus), une pause la plus longue excessive trahit une hésitation. " +
-      "Les tâches du plan du jour (dayPlan) doivent viser les axes les plus faibles et pointer le BON mode d'exercice : " +
-      "reading = lecture à voix haute (travail de la diction et de la fluidité), diction = articulation (virelangues), freeSpeech = prise de parole libre (structure, aisance, confiance), structure = plan/architecture du discours, drills = défis ciblés (storytelling, débit lent, fluidité sans hésitation, synthèse, mot interdit, imitation, lecture théâtrale, miroir). " +
+      "le RYTHME reflète les pauses et le débit — un pauseRatio trop bas = l'orateur ne respire pas / n'aère pas son propos, un débit (wpm) hors de la fourchette 110-130 mots/minute est à corriger (trop lent en dessous, précipité au-dessus, franchement trop rapide au-delà de 150), une pause la plus longue excessive trahit une hésitation. " +
+      "Deux mesures supplémentaires sont prioritaires : le RAPPORT VOIX/BRUIT en dB (sous 15 dB, des bruits parasites gâchent la prise : il faut d'abord corriger les conditions d'enregistrement) et la PART DE FINS DE PHRASE DESCENDANTES (sous 0,6, l'orateur laisse ses phrases remonter ou rester plates, ce qui affaiblit ses affirmations : il doit laisser la voix retomber sur les derniers mots). " +
+      "Les tâches du plan du jour (dayPlan) doivent viser les axes les plus faibles et pointer le BON mode d'exercice, parmi trois seulement : " +
+      "articulation = mécanique de la bouche (occlusives T·D·B·P répétées 20 fois chacune, virelangues répétés 10 fois en accélérant puis 10 fois en surarticulant, échauffement) ; " +
+      "reading = lecture d'un texte à voix haute avec une intention (lente et exagérée, théâtrale, ou imitation d'un orateur modèle) ; " +
+      "speaking = prise de parole sur un sujet, avec cadre de discours et contraintes (storytelling, débit maîtrisé, non-stop, résumé express, mot interdit). " +
       "Sois concret et actionnable : des tâches faisables dès la prochaine séance, et des objectifs de fond pour la semaine.";
 
     // Sérialisation lisible de l'agrégat reçu pour le prompt utilisateur.
@@ -154,11 +157,9 @@ export async function POST(request: NextRequest) {
     parts.push(`Nombre d'exercices réalisés aujourd'hui : ${sessionCount}`);
     parts.push(
       "Répartition par type d'exercice :\n" +
-        `- Lecture (reading) : ${byMode.reading}\n` +
-        `- Prise de parole libre (freeSpeech) : ${byMode.freeSpeech}\n` +
-        `- Diction / articulation (diction) : ${byMode.diction}\n` +
-        `- Structure du discours (structure) : ${byMode.structure}\n` +
-        `- Défis / ateliers ciblés (drills) : ${byMode.drills ?? 0}`
+        `- Articulation (articulation) : ${byMode.articulation ?? 0}\n` +
+        `- Lecture (reading) : ${byMode.reading ?? 0}\n` +
+        `- Prise de parole (speaking) : ${byMode.speaking ?? 0}`
     );
 
     parts.push(
@@ -177,6 +178,8 @@ export async function POST(request: NextRequest) {
         `- Variation de volume : ${fmt(audioAverages.loudnessVar, "", 2)}\n` +
         `- Ratio de pauses : ${fmt(audioAverages.pauseRatio, "", 2)}\n` +
         `- Pause la plus longue : ${fmt(audioAverages.longestPauseSec, " s", 1)}\n` +
+        `- Voix au-dessus du bruit de fond : ${fmt(audioAverages.snrDb, " dB", 0)}\n` +
+        `- Part de fins de phrase descendantes : ${fmt(audioAverages.fallingEndRatio, "", 2)}\n` +
         `- Débit : ${fmt(audioAverages.wpm, " mots/minute", 0)}`
     );
 
@@ -225,7 +228,7 @@ export async function POST(request: NextRequest) {
         "- `summary` : bilan honnête et concret de la séance du jour, en 3 à 5 phrases, appuyé sur les chiffres.\n" +
         "- `axisReview` : pour CHAQUE axe (structure, vocabulary, clarity, confidence, diction, rhythm, voice, melody), 1 à 2 phrases critiques et précises. Si un axe n'a pas été travaillé aujourd'hui, appuie-toi sur la tendance de la semaine ou indique qu'il n'a pas été mesuré, mais rédige toujours du texte.\n" +
         "- `priority` : LE point n°1 à travailler en priorité (l'axe ou la mesure la plus faible / la plus limitante).\n" +
-        "- `dayPlan` (2 à 4 tâches) : chaque tâche vise un axe faible mesuré, avec un `mode` d'exercice cohérent (reading / diction / freeSpeech / structure) et un `why` reliant la tâche à une faiblesse chiffrée.\n" +
+        "- `dayPlan` (2 à 4 tâches) : chaque tâche vise un axe faible mesuré, avec un `mode` d'exercice cohérent (articulation / reading / speaking) et un `why` reliant la tâche à une faiblesse chiffrée.\n" +
         "- `weekPlan` (2 à 3 objectifs de fond) : objectifs plus larges pour la semaine, justifiés par la tendance."
     );
 

@@ -31,6 +31,8 @@ function pickMimeType(): string {
 export function useAudioRecorder(): {
   recording: boolean;
   durationSec: number;
+  /** Niveau d'entrée du micro (RMS 0–1), rafraîchi 10 fois par seconde. */
+  level: number;
   error: string | null;
   supported: boolean;
   start: () => Promise<void>;
@@ -39,6 +41,7 @@ export function useAudioRecorder(): {
 } {
   const [recording, setRecording] = useState(false);
   const [durationSec, setDurationSec] = useState(0);
+  const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [supported, setSupported] = useState(false);
 
@@ -49,6 +52,12 @@ export function useAudioRecorder(): {
   const startTimestampRef = useRef<number>(0);
   const mimeTypeRef = useRef<string>("");
   const stopResolveRef = useRef<((blob: Blob | null) => void) | null>(null);
+
+  /* Chaîne d'écoute du niveau, indépendante du MediaRecorder : elle sert au
+     VU-mètre affiché pendant la prise (saturation, souffle, bruit de fond). */
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sampleBufRef = useRef<Float32Array | null>(null);
 
   useEffect(() => {
     const ok =
@@ -74,11 +83,61 @@ export function useAudioRecorder(): {
     }
   }, []);
 
+  // Démonte la chaîne d'analyse et remet le niveau à zéro.
+  const closeMeter = useCallback(() => {
+    analyserRef.current = null;
+    sampleBufRef.current = null;
+    const ctx = audioCtxRef.current;
+    audioCtxRef.current = null;
+    if (ctx && ctx.state !== "closed") {
+      try {
+        void ctx.close();
+      } catch {
+        /* fermeture best effort */
+      }
+    }
+    setLevel(0);
+  }, []);
+
+  // Niveau instantané (RMS) de la dernière fenêtre lue par l'analyseur.
+  const readLevel = useCallback((): number => {
+    const analyser = analyserRef.current;
+    const buf = sampleBufRef.current;
+    if (!analyser || !buf) return 0;
+    try {
+      analyser.getFloatTimeDomainData(buf as Float32Array<ArrayBuffer>);
+    } catch {
+      return 0;
+    }
+    let acc = 0;
+    for (let i = 0; i < buf.length; i++) acc += buf[i] * buf[i];
+    const rms = Math.sqrt(acc / buf.length);
+    return Number.isFinite(rms) ? Math.min(1, rms) : 0;
+  }, []);
+
   const start = useCallback(async (): Promise<void> => {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+
+      // Branchement du VU-mètre : best effort, une absence d'AudioContext ne
+      // doit jamais empêcher d'enregistrer.
+      try {
+        const Ctor =
+          window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (Ctor) {
+          const ctx = new Ctor();
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 1024;
+          ctx.createMediaStreamSource(stream).connect(analyser);
+          audioCtxRef.current = ctx;
+          analyserRef.current = analyser;
+          sampleBufRef.current = new Float32Array(analyser.fftSize);
+        }
+      } catch {
+        closeMeter();
+      }
 
       const mimeType = pickMimeType();
       mimeTypeRef.current = mimeType;
@@ -98,6 +157,7 @@ export function useAudioRecorder(): {
         const type = mimeTypeRef.current || "audio/webm";
         const blob = new Blob(chunksRef.current, { type });
         clearTimer();
+        closeMeter();
         stopTracks();
         mediaRecorderRef.current = null;
         setRecording(false);
@@ -113,22 +173,25 @@ export function useAudioRecorder(): {
       clearTimer();
       timerRef.current = setInterval(() => {
         setDurationSec((Date.now() - startTimestampRef.current) / 1000);
+        setLevel(readLevel());
       }, 100);
 
       setRecording(true);
     } catch (err: any) {
       stopTracks();
       clearTimer();
+      closeMeter();
       setRecording(false);
       setError(mapGetUserMediaError(err));
     }
-  }, [clearTimer, stopTracks]);
+  }, [clearTimer, closeMeter, readLevel, stopTracks]);
 
   const stop = useCallback((): Promise<Blob | null> => {
     return new Promise<Blob | null>((resolve) => {
       const recorder = mediaRecorderRef.current;
       if (!recorder || recorder.state === "inactive") {
         clearTimer();
+        closeMeter();
         stopTracks();
         setRecording(false);
         resolve(null);
@@ -139,16 +202,18 @@ export function useAudioRecorder(): {
         recorder.stop();
       } catch {
         clearTimer();
+        closeMeter();
         stopTracks();
         setRecording(false);
         stopResolveRef.current = null;
         resolve(null);
       }
     });
-  }, [clearTimer, stopTracks]);
+  }, [clearTimer, closeMeter, stopTracks]);
 
   const reset = useCallback(() => {
     setDurationSec(0);
+    setLevel(0);
     setError(null);
     chunksRef.current = [];
     startTimestampRef.current = 0;
@@ -164,8 +229,19 @@ export function useAudioRecorder(): {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
+      const ctx = audioCtxRef.current;
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+      sampleBufRef.current = null;
+      if (ctx && ctx.state !== "closed") {
+        try {
+          void ctx.close();
+        } catch {
+          /* fermeture best effort */
+        }
+      }
     };
   }, []);
 
-  return { recording, durationSec, error, supported, start, stop, reset };
+  return { recording, durationSec, level, error, supported, start, stop, reset };
 }
