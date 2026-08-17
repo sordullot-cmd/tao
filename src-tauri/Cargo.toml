@@ -29,6 +29,11 @@ tauri-plugin-autostart = "2"
 # système (opener) et on récupère le code via un deep link (deep-link).
 tauri-plugin-opener = "2"
 tauri-plugin-deep-link = "2"
+# Notes en .md dans un vault Obsidian : choix du dossier (dialog) puis
+# lecture/écriture des fichiers (fs). La File System Access API du navigateur
+# n'est pas disponible dans la WebView, d'où le passage par les plugins natifs.
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 # Sur Windows/Linux, le deep link arrive en argument d'un 2e process : on le

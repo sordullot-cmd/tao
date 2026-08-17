@@ -4,6 +4,23 @@ use tauri::{
   Manager, WindowEvent,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_fs::FsExt;
+
+/// Autorise la lecture/écriture dans le dossier de vault Obsidian choisi par
+/// l'utilisateur.
+///
+/// Le plugin `fs` n'accepte que les chemins déclarés dans les capabilities, or un
+/// vault vit n'importe où sur le disque : son chemin n'est connu qu'au moment du
+/// choix. On étend donc le scope au runtime. L'ajout ne survit pas au
+/// redémarrage de l'app, d'où l'appel systématique côté front à la reprise du
+/// dossier mémorisé (cf. lib/notes/vaultFsTauri.ts).
+#[tauri::command]
+fn allow_vault_dir(app: tauri::AppHandle, path: String) -> Result<(), String> {
+  app
+    .fs_scope()
+    .allow_directory(std::path::Path::new(&path), true)
+    .map_err(|e| e.to_string())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,6 +49,10 @@ pub fn run() {
     .plugin(tauri_plugin_notification::init())
     // Démarrage automatique au login.
     .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+    // Notes en .md dans un vault Obsidian : sélection du dossier + accès disque.
+    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_fs::init())
+    .invoke_handler(tauri::generate_handler![allow_vault_dir])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime
       // (nécessaire notamment en dev où l'OS ne connaît pas encore l'app).

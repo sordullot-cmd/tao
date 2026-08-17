@@ -19,6 +19,17 @@
     "autostart:allow-is-enabled",
     "deep-link:default",
     "opener:default",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    "dialog:default",
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-read-dir",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-write-file",
+    "fs:allow-remove",
+    "fs:allow-mkdir",
+    "fs:allow-stat",
+    "fs:allow-exists"
   ]
 }

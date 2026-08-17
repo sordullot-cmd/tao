@@ -11,7 +11,9 @@ import { T as BaseT } from "@/lib/ui/tokens";
 import { CARD, HAIRLINE, FIELD_BG } from "@/components/ui/da";
 import DrawingCanvas, { strokeMaxY } from "@/components/notes/DrawingCanvas";
 import DrawingToolbar from "@/components/notes/DrawingToolbar";
+import ObsidianVaultPanel from "@/components/notes/ObsidianVaultPanel";
 import { htmlToMarkdown, htmlHasStructure } from "@/lib/ui/clipboardMarkdown";
+import { useObsidianVault } from "@/lib/hooks/useObsidianVault";
 
 // KaTeX (~280 ko) n'est téléchargé qu'à la première ouverture de l'aperçu.
 const NotePreview = dynamic(() => import("@/components/notes/NotePreview"), {
@@ -98,8 +100,12 @@ function renderHighlighted(text) {
 
 export default function NotesPage() {
   useLang();
-  const [notes, setNotes] = useCloudState(STORAGE_KEY, "notes", []);
+  const [notes, setNotes, notesHydrated] = useCloudState(STORAGE_KEY, "notes", []);
   const { pushUndo } = useUndo();
+  // Miroir des notes en fichiers .md dans un dossier de vault Obsidian.
+  // `notesHydrated` est indispensable : synchroniser avant l'hydratation
+  // travaillerait sur un tableau vide et viderait le vault.
+  const vault = useObsidianVault({ notes, setNotes, hydrated: notesHydrated });
   const [query, setQuery] = useState("");
   const [activeTag, setActiveTag] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -178,6 +184,26 @@ export default function NotesPage() {
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
+
+  /* Reprise du texte quand la note sélectionnée change SANS passer par
+     l'éditeur : synchro Obsidian, ou même note ouverte sur un autre appareil.
+     Le brouillon n'est repris que si l'on n'a pas tapé dans les dernières
+     secondes — sinon la frappe en cours serait remplacée sous les doigts, et le
+     `flushSave` différé la réécrirait de toute façon juste après. */
+  const localEditAt = useRef(0);
+  const editDraft = useCallback((next) => {
+    localEditAt.current = Date.now();
+    setDraft(next);
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    const content = selected.content || "";
+    if (content === draftRef.current) return;
+    if (Date.now() - localEditAt.current < 3000) return;
+    setDraft(content);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.content]);
 
   // Flush on unmount (page change / reload close)
   useEffect(() => {
@@ -266,7 +292,7 @@ export default function NotesPage() {
     const after = draft.slice(caret);
     const insertion = `#${tag} `;
     const next = before + insertion + after;
-    setDraft(next);
+    editDraft(next);
     const pos = (before + insertion).length;
     requestAnimationFrame(() => {
       if (textareaRef.current) {
@@ -531,7 +557,7 @@ export default function NotesPage() {
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
       const next = draft.slice(0, start) + insertion + draft.slice(end);
-      setDraft(next);
+      editDraft(next);
       const pos = start + insertion.length;
       requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = pos; });
     }
@@ -565,11 +591,12 @@ export default function NotesPage() {
       {/* En-tête sans titre de page : la barre latérale dit déjà où l'on est.
           Ne restent que l'action et le slot d'en-tête, alignés à droite. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <ObsidianVaultPanel vault={vault} />
         <button
           type="button"
           onClick={createNote}
           style={{
-            marginLeft: "auto",
             display: "inline-flex", alignItems: "center", gap: 6,
             padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none",
             background: T.text, color: T.textInverted,
@@ -579,6 +606,7 @@ export default function NotesPage() {
           <Plus size={13} strokeWidth={1.75} />
           <span className="tr4de-notes-newbtn-label">Nouvelle note</span>
         </button>
+        </div>
         <div id="tr4de-page-header-slot" />
       </div>
 
@@ -792,7 +820,7 @@ export default function NotesPage() {
                 autoFocus
                 value={draft}
                 onChange={(e) => {
-                  setDraft(e.target.value);
+                  editDraft(e.target.value);
                   // Recalcule les suggestions de tag après cette frappe.
                   // selectionStart de target n'est pas fiable dans onChange selon
                   // le browser ; on utilise requestAnimationFrame pour lire après.
@@ -847,7 +875,7 @@ export default function NotesPage() {
                         const remove = n % 8 === 0 ? 8 : n % 8;
                         e.preventDefault();
                         const next = draft.slice(0, start - remove) + draft.slice(start);
-                        setDraft(next);
+                        editDraft(next);
                         const pos = start - remove;
                         requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = pos; });
                         return;
@@ -874,13 +902,13 @@ export default function NotesPage() {
                       }
                       if (removed > 0) {
                         const next = before + stripped;
-                        setDraft(next);
+                        editDraft(next);
                         const pos = Math.max(lineStart, start - removed);
                         requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = pos; });
                       }
                     } else {
                       const next = draft.slice(0, start) + indent + draft.slice(end);
-                      setDraft(next);
+                      editDraft(next);
                       const pos = start + indent.length;
                       requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = pos; });
                     }
@@ -930,7 +958,7 @@ export default function NotesPage() {
                         const after = draft.slice(caret);
                         const insertion = `#${tag} `;
                         const next = before + insertion + after;
-                        setDraft(next);
+                        editDraft(next);
                         const pos = (before + insertion).length;
                         requestAnimationFrame(() => {
                           if (textareaRef.current) {
