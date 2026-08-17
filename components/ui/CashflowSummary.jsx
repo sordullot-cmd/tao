@@ -35,7 +35,7 @@ import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD } from "@/components/ui/da";
 import SankeyGraph from "@/components/ui/SankeyGraph";
 import { categoryLabelKey, spendingByCategory, subLabelKey } from "@/lib/bank/categories";
-import { incomeBySource } from "@/lib/bank/cashflow";
+import { DRAW_COLOR, incomeBySource } from "@/lib/bank/cashflow";
 import { buildCashflowGraph } from "@/lib/bank/cashflowGraph";
 import { recurringOf } from "@/lib/bank/recurring";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
@@ -46,15 +46,19 @@ import { fmt } from "@/lib/ui/format";
  *  palette des postes : ces parts n'en SONT pas, et une couleur de poste leur
  *  donnerait l'air d'en être un. Bleu du nœud central pour ce qui est couvert,
  *  gris pour ce qui n'a pas été dépensé, terre cuite pour le découvert — la
- *  seule des trois qui mérite d'être vue. */
+ *  seule des trois qui mérite d'être vue.
+ *
+ *  La terre cuite vient de `lib/bank/cashflow` : c'est la couleur du nœud « Pris
+ *  sur le solde » du diagramme, et les deux figures disent ici la même chose. */
 const COVERED_COLOR = "#2C72C3";
 const LEFT_COLOR = "#B9C2CB";
-const DRAW_COLOR = "#C05A46";
 
-/** Six postes, cinq sources et trois sous-postes au diagramme : au-delà, les
- *  branches deviennent des traits et leurs noms se marchent dessus. Ce qui est
- *  écrêté est rassemblé sous une branche qui dit combien elle en porte. */
-const GRAPH_CLIP = { topOutflows: 6, topInflows: 5, topSubs: 3 };
+/** Écrêtage de REPLI, pour l'appelant qui n'en passe pas : dix-huit postes et
+ *  huit sources, soit ce que l'épaisseur des rubans sait encore porter (le
+ *  raisonnement est chez l'appelant, cf. `GRAPH_CLIP` dans CashflowPage). Pas de
+ *  `topSubs` : le diagramme s'arrête aux postes, et les déplier double le nombre
+ *  de branches pour un détail que les listes de la page donnent mieux. */
+const GRAPH_CLIP = { topOutflows: 18, topInflows: 8 };
 
 export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }) {
   // La langue sert de dépendance aux libellés du diagramme : sans elle, changer

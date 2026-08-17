@@ -1,7 +1,10 @@
 "use client";
 
 /**
- * Vignette d'une opération de relevé.
+ * Vignette d'une opération de relevé — la marque en face, quelle qu'elle soit :
+ * l'enseigne d'un achat (`findMerchant`) comme la banque d'où vient un virement
+ * (`findTransferBank`). Les deux sont des entrées de la même table, et une même
+ * marque doit s'afficher pareil des deux côtés.
  *
  * Trois états, du plus informatif au plus prudent :
  *   — le logo du marchand quand il est livré dans `public/marchands/` ;

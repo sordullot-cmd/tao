@@ -83,12 +83,20 @@ const DEFAULT_INCOME = 2000;
    ajoutée prend la suivante.
 
    « Autres » est à part : c'est le slot fourre-tout, et la convention réserve le
-   gris au non-catégorisé. Il ne compte pas dans la palette catégorielle. */
+   gris au non-catégorisé. Il ne compte pas dans la palette catégorielle.
+
+   L'orange de l'alimentation et le brun du transport sont les DEUX teintes que la
+   colonne des dépenses garde dans la bande chaude, laquelle est par ailleurs
+   réservée aux entrées du cashflow (cf. l'en-tête de lib/bank/categories). Elles
+   restent ici : un poste doit porter la même couleur sur les deux graphiques, et
+   c'est CE tableau qui fait foi — `spendingPalette` en descend les teintes des
+   postes de dépense. Les changer pour la pureté de la bande recolorerait la
+   moitié de la page Dépenses sans que personne l'ait demandé. */
 const CATEGORY_COLORS = [
-  PALETTE_DARK.blue,   // logement     — le bleu plein est réservé aux revenus
-  PALETTE.orange,      // alimentation
-  PALETTE.brown,       // transport
-  HUE.whale,           // abonnements  — les violets sont réservés aux entrées
+  PALETTE_DARK.blue,   // logement     — la teinte du poste « logement »
+  PALETTE.orange,      // alimentation — idem, et cf. la note sous la liste
+  PALETTE.brown,       // transport    — idem
+  HUE.whale,           // abonnements  — la teinte du poste, restée sur les bleus
   HUE.macaw,           // loisirs      — idem
   PALETTE.green,       // épargne
   PALETTE.red,         // shopping

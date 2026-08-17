@@ -12,7 +12,8 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { BankTransaction } from "@/lib/bank/transactions";
 import {
-  allMerchants, findMerchant, inkOn, merchantInitials, merchantSearchKey,
+  allMerchants, findMerchant, findTransferBank, inkOn, merchantInitials,
+  merchantSearchKey,
 } from "@/lib/bank/merchants";
 
 const tx = (over: Partial<BankTransaction> = {}): BankTransaction => ({
@@ -141,6 +142,68 @@ describe("prudence", () => {
     expect(findMerchant(t)?.slug).toBe("spotify");
     expect(findMerchant(t)?.slug).toBe("spotify");
     expect(findMerchant(t)?.slug).toBe("spotify");
+  });
+});
+
+/**
+ * La banque d'où vient un virement.
+ *
+ * C'est la MÊME table, réduite à ses établissements — et cette réduction est
+ * toute la garde : elle autorise à chercher là où `findMerchant` refuse, parce
+ * qu'un nom de banque dans un libellé de virement ne désigne presque jamais
+ * quelqu'un, là où un nom d'enseigne y désigne souvent un homonyme.
+ */
+describe("banque d'un virement", () => {
+  const vir = (label: string, amount = 800) =>
+    findTransferBank(tx({ kind: "transfer", amount, label }));
+
+  it("reconnaît l'établissement en face, dans les deux sens", () => {
+    expect(vir("VIR SEPA RECU DE REVOLUT LTD")?.slug).toBe("revolut");
+    expect(vir("VIR INST BOURSORAMA BANQUE")?.slug).toBe("boursorama");
+    expect(vir("VIR SEPA RECU DE CREDIT AGRICOLE ALPES PROVENCE")?.slug).toBe("credit-agricole");
+    // Un virement ÉMIS porte le nom de la banque d'arrivée : même lecture.
+    expect(vir("VIREMENT VERS N26 BANK", -250)?.slug).toBe("n26");
+  });
+
+  it("réutilise les logos déjà livrés pour les comptes", () => {
+    expect(vir("VIR RECU REVOLUT")?.logo).toBe("/banque/revolut.webp");
+  });
+
+  /* Beaucoup de banques ne codent pas leurs opérations : le libellé se réduit au
+     nom de la contrepartie, sans le « VIR » qui l'aurait fait classer. Ce sont
+     précisément les relevés où la contrepartie est la mieux renseignée. */
+  it("cherche aussi sur un CRÉDIT que la banque n'a pas qualifié", () => {
+    expect(findTransferBank(tx({ kind: "other", amount: 500, label: "QONTO" }))?.slug).toBe("qonto");
+    // Au débit, c'est un achat : `findMerchant` s'en charge, pas celle-ci.
+    expect(findTransferBank(tx({ kind: "other", amount: -30, label: "QONTO" }))).toBeNull();
+  });
+
+  it("ne cherche AUCUNE enseigne — seuls les établissements comptent", () => {
+    expect(vir("VIR RECU DE CAMILLE ORANGE")).toBeNull();
+    expect(vir("VIREMENT M TOTAL")).toBeNull();
+    expect(vir("VIR SEPA RECU DE CARREFOUR CITY")).toBeNull();
+  });
+
+  it("écarte le prénom homonyme d'une marque", () => {
+    expect(vir("VIR RECU DE LYDIA MARTIN")).toBeNull();
+    expect(vir("VIR SEPA LYDIA")?.slug).toBe("lydia");
+  });
+
+  it("compte l'intermédiaire comme origine, mais pas le moyen de paiement", () => {
+    expect(vir("VIR SEPA STRIPE PAYOUT")?.slug).toBe("stripe");
+    expect(vir("VIR PAYPAL EUROPE")?.slug).toBe("paypal");
+    // Apple Pay est un moyen de paiement : l'argent ne vient pas de chez Apple.
+    expect(vir("APPLE PAY MARTIN", 20)).toBeNull();
+  });
+
+  it("ne cherche rien sur un retrait, des frais ou une carte", () => {
+    expect(findTransferBank(tx({ kind: "withdrawal", label: "RETRAIT DAB LCL" }))).toBeNull();
+    expect(findTransferBank(tx({ kind: "fee", label: "FRAIS VIR BNP" }))).toBeNull();
+    expect(findTransferBank(tx({ kind: "card", label: "CARTE REVOLUT" }))).toBeNull();
+  });
+
+  it("rend null sur une banque inconnue — la ligne garde son icône de nature", () => {
+    expect(vir("VIR SEPA RECU DE BANQUE DE MON VILLAGE")).toBeNull();
   });
 });
 

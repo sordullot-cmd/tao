@@ -61,7 +61,7 @@ import DateRangePicker from "@/components/ui/DateRangePicker";
 import CashflowSummary from "@/components/ui/CashflowSummary";
 import CategoryIcon from "@/components/ui/CategoryIcon";
 import MerchantAvatar from "@/components/ui/MerchantAvatar";
-import { findMerchant } from "@/lib/bank/merchants";
+import { findMerchant, findTransferBank } from "@/lib/bank/merchants";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import {
@@ -98,22 +98,35 @@ const defaultCustom = () => {
   return { start: dayKey(start), end: dayKey(today) };
 };
 
-/* Six postes et cinq sources au diagramme, pas plus : au-delà, les branches
-   deviennent des traits et leurs noms se marchent dessus. Ce qui est écrêté est
-   rassemblé sous une branche qui dit combien elle en porte, et le détail complet
-   est dans les listes juste en dessous.
+/* Dix-huit postes et huit sources au diagramme. Le regroupement sous « + N
+   autres postes » n'apprend RIEN — c'est un ruban qui ne désigne personne — et
+   il tombait dès le sixième poste, alors qu'un relevé ordinaire en remplit une
+   quinzaine : un mois entier de dépenses partait dans une branche muette. On
+   monte donc l'écrêtage jusqu'à ce que le dessin sait porter, pour qu'il ne reste
+   à regrouper que la queue — les postes à une opération et deux euros.
 
-   Cinq sources et non quatre : depuis qu'une source porte le NOM de qui paie, un
-   même salaire versé par deux employeurs fait deux branches là où il n'en
-   faisait qu'une. À quatre, un relevé ordinaire (deux salaires, une aide, un
-   remboursement, un virement) commençait à regrouper.
+   Dix-huit est un PLAFOND DE DESSIN, pas un choix de goût, et ce n'est pas le
+   libellé qui le fixe : passé une douzaine de branches, la colonne passe d'elle-
+   même en libellés d'une seule ligne (cf. `labelDense` dans lib/ui/sankeyGraph),
+   qui tiennent à 20 px de pas — les 640 px du dessin en logent trente. C'est
+   l'ÉPAISSEUR des rubans qui cède la première : à dix-neuf branches, les jours
+   entre elles mangent déjà 190 px et les plus petites tombent sur leur plancher
+   de 3 px. Au-delà, on dessinerait des traits en prétendant montrer un flux.
+
+   Huit sources pour la même raison, et elles servent : le classement des entrées
+   est plus fin qu'avant (salaire, freelance, aides, retraite, intérêts,
+   dividendes, ventes, remboursements), et à cinq on regroupait des sources qui
+   ont chacune leur teinte et leur nom.
+
+   Ce qui reste écrêté dit COMBIEN de postes il porte, et le détail complet est
+   dans les listes juste en dessous : rien n'est caché, seulement rassemblé.
 
    Pas de `topSubs` : le diagramme s'arrête aux POSTES. Les déplier sur leurs
    sous-postes doublait le nombre de branches pour un détail que le tableau juste
    en dessous donne mieux — chiffré, trié, et dépliable sur les opérations
    elles-mêmes. Posée au niveau du module et non en littéral dans le rendu : un
    objet neuf à chaque passage ferait reconstruire le graphe pour rien. */
-const GRAPH_CLIP = { topOutflows: 6, topInflows: 5 };
+const GRAPH_CLIP = { topOutflows: 18, topInflows: 8 };
 
 /** Marchands montrés dans le classement. Au-delà, ce n'est plus un « top ». */
 const TOP_MERCHANTS = 8;
@@ -560,21 +573,32 @@ export default function CashflowPage({ setPage }) {
  * Une des dernières opérations : d'où elle vient, ce qu'elle est, son montant.
  *
  * Le logo de l'enseigne quand on la reconnaît — le tableau des enseignes est
- * juste en dessous, la même vignette y répond. À défaut, une flèche qui dit le
- * SENS : dans une liste où entrées et sorties se mêlent, le signe du montant
- * seul se rate.
+ * juste en dessous, la même vignette y répond. Sur un VIREMENT, où il n'y a pas
+ * d'enseigne, c'est le logo de la banque d'en face : la question de cette page
+ * est « d'où vient l'argent », et un virement y répond par un nom
+ * d'établissement. À défaut, une flèche qui dit le SENS : dans une liste où
+ * entrées et sorties se mêlent, le signe du montant seul se rate.
  */
 function RecentRow({ tx }) {
   const credit = tx.amount >= 0;
+  /* Les deux recherches portent sur des natures d'opération disjointes
+     (cf. lib/bank/merchants) : l'enseigne sur les achats, la banque sur les
+     virements. L'enseigne passe d'abord — un prélèvement vers une banque est un
+     achat comme un autre, et c'est son nom canonique qu'on veut en titre. */
   const merchant = findMerchant(tx);
+  const transferBank = merchant ? null : findTransferBank(tx);
+  const brand = merchant || transferBank;
   const sub = subcategorizeTransaction(tx);
   const category = parentOfSub(sub);
+  /* Le nom canonique ne remplace le libellé que pour une ENSEIGNE : sur un
+     virement, le libellé nomme la PERSONNE, et sa banque ne doit pas prendre sa
+     place — elle a déjà la vignette. */
   const title = merchant?.name || tx.label || t(kindLabelKey(tx.kind));
 
   return (
     <li style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px" }}>
-      {merchant ? (
-        <MerchantAvatar merchant={merchant} size={32} />
+      {brand ? (
+        <MerchantAvatar merchant={brand} size={32} />
       ) : (
         <span aria-hidden="true" style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
