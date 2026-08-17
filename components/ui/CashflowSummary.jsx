@@ -265,8 +265,20 @@ export default function CashflowSummary({ txs = [], history, clip = GRAPH_CLIP }
         display: "grid",
         /* 280 px et non 260 pour la colonne de droite : elle porte maintenant les
            quatre chiffres, et un libellé de deux mots suivi d'un montant ne tient
-           pas sur une ligne en dessous. */
-        gridTemplateColumns: twoCols ? "minmax(0, 2.1fr) minmax(280px, 1fr)" : "minmax(0, 1fr)",
+           pas sur une ligne en dessous.
+
+           1,8 et non 2,1 à gauche : le diagramme s'étalait plus que sa matière ne
+           le demande — un ruban tiré en longueur ne se lit pas mieux, il traverse
+           juste plus de vide.
+
+           Ce que ça déplace : le diagramme perd ses libellés sous 720 px de
+           dessin (cf. `COMPACT_AT`), soit une colonne de 768 px une fois le
+           rembourrage de la carte retiré. Avec 2,1 le régime nommé démarrait
+           vers 1450 px de fenêtre, avec 1,8 vers 1510 — les écrans entre les
+           deux passent donc en figure de proportions, où les noms se lisent dans
+           les listes en dessous. En dessous de 1450, rien ne change : ils y
+           étaient déjà. */
+        gridTemplateColumns: twoCols ? "minmax(0, 1.8fr) minmax(280px, 1fr)" : "minmax(0, 1fr)",
         gap: 20,
         /* Étirées et non calées en haut : les deux cartes descendent jusqu'au
            bas de la plus haute, et chacune centre son contenu dans la hauteur
