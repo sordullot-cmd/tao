@@ -120,7 +120,9 @@ export const DEFAULT_CATEGORIES = [];
 // (nom + couleur + icône + intention), immédiatement modifiable ensuite.
 export const YEAR_GOAL_TEMPLATES = [
   { label: "Forme physique", color: "#F97316", icon: "dumbbell",   identity: "Je prends soin de mon corps et je m'entraîne régulièrement.",   outcome: "" },
-  { label: "Trading",        color: "#F59E0B", icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
+  // Vert, comme la catégorie « Trading » de la page Objectifs : la même chose
+  // portait deux couleurs selon la page où on la regardait.
+  { label: "Trading",        color: "#16A34A", icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
   { label: "Finances",       color: "#059669", icon: "wallet",     identity: "Je gère mon argent avec sagesse et sérénité.",                  outcome: "" },
   { label: "Savoir",         color: "#3B82F6", icon: "graduation", identity: "J'apprends quelque chose de nouveau chaque jour.",              outcome: "" },
   { label: "Relations",      color: "#EC4899", icon: "users",      identity: "Je cultive des relations sincères et profondes.",               outcome: "" },

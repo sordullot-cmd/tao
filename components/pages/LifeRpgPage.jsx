@@ -38,7 +38,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import {
   Plus, X, Trash2, Pencil, Target, UserRound, Check,
-  CalendarPlus, CalendarClock, Flag, Milestone,
+  CalendarClock, Flag, Milestone,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
@@ -667,7 +667,6 @@ export default function LifeRpgPage() {
   const addStepTo = (catId, label) => patchSteps(catId, steps => addStep(steps, { label }));
   const toggleStepOf = (catId, stepId) => patchSteps(catId, steps => toggleStep(steps, stepId));
   const renameStepOf = (catId, stepId, label) => patchSteps(catId, steps => updateStep(steps, stepId, { label }));
-  const setStepDueOf = (catId, stepId, due) => patchSteps(catId, steps => updateStep(steps, stepId, { due }));
   // Suppression annulable, comme celle d'un objectif de l'année : une étape
   // effacée d'un clic emporte une intention qu'on a mis du temps à formuler.
   const deleteStepOf = (catId, stepId) => {
@@ -837,7 +836,6 @@ export default function LifeRpgPage() {
                 onAddStep={(label) => addStepTo(cat.id, label)}
                 onToggleStep={(stepId) => toggleStepOf(cat.id, stepId)}
                 onRenameStep={(stepId, label) => renameStepOf(cat.id, stepId, label)}
-                onSetStepDue={(stepId, due) => setStepDueOf(cat.id, stepId, due)}
                 onDeleteStep={(stepId) => deleteStepOf(cat.id, stepId)}
                 linkedGoals={goalsByCat[cat.id] || []}
                 allObjectives={flattenGoals(goalsList)}
@@ -890,7 +888,7 @@ export default function LifeRpgPage() {
 // dans cet ordre : où j'en suis (avancement confronté au temps écoulé), ce que
 // je vise (résultat + échéance, identité, modèle) et ce que je fais pour y
 // arriver (objectifs chiffrés, tâches, habitudes).
-function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onSetStepDue, onDeleteStep, onToggleObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
+function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onDeleteStep, onToggleObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
   const cl = categoryLevel(xp);
   /* Avancement affiché : les deux mesures honnêtes de la carte, moyennées —
      les objectifs chiffrés rattachés ET les étapes franchies (cf.
@@ -918,6 +916,12 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
     : { label: "Dans les temps", color: T.textMut };
   const [hover, setHover] = useState(false);
   const [taskAddHov, setTaskAddHov] = useState(false);
+  // Survol des blocs d'exécution : chaque bloc ne révèle son bouton d'ajout que
+  // lorsque la souris est SUR LUI (de son titre à sa dernière ligne), et non au
+  // survol de la carte entière — trois boutons visibles en permanence par carte
+  // pesaient plus que les objectifs eux-mêmes.
+  const [goalsHov, setGoalsHov] = useState(false);
+  const [tasksHov, setTasksHov] = useState(false);
   // Ajout de tâche INLINE : le bouton fait apparaître une ligne éditable vide
   // dans la carte (pas de modale). Enter/clic ailleurs → crée ; vide → annule.
   const [adding, setAdding] = useState(false);
@@ -1038,13 +1042,13 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
       {onAddStep && (
         <StepsBlock cat={cat} steps={steps} today={today}
           onAdd={onAddStep} onToggle={onToggleStep} onRename={onRenameStep}
-          onSetDue={onSetStepDue} onDelete={onDeleteStep} />
+          onDelete={onDeleteStep} />
       )}
 
       {/* Objectifs liés depuis la page « Objectifs » (rpgCategory). La progression
           se gère sur la page Objectifs ; ici elle donne l'XP au prorata. On peut
           créer un objectif directement (il devient un vrai objectif rattaché). */}
-      <div>
+      <div onMouseEnter={() => setGoalsHov(true)} onMouseLeave={() => setGoalsHov(false)}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, marginBottom: 8 }}>Objectifs</div>
         {linkedGoals.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1097,8 +1101,11 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
         )}
         {onToggleObjective && (
           <div style={{ marginTop: linkedGoals.length > 0 ? 10 : 0 }}>
+            {/* Style échangé avec celui des tâches : l'objectif chiffré est ce
+                qui MESURE la carte, il porte donc l'invitation pleine largeur ;
+                la tâche du quotidien se contente d'un « + Ajouter » discret. */}
             <ObjectiveMultiSelect objectives={allObjectives} catId={cat.id} color={cat.color}
-              onToggle={onToggleObjective} onCreate={onCreateObjective} compact />
+              onToggle={onToggleObjective} onCreate={onCreateObjective} revealed={goalsHov} />
           </div>
         )}
       </div>
@@ -1106,13 +1113,13 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
 
       {/* Tâches liées au calendrier : créées ici, ce sont de vraies tâches de
           l'Agenda dont la complétion crédite l'XP de la carte. Cochables ici.
-          La liste s'affiche dès qu'il y a des tâches ; le bouton d'ajout pleine
-          largeur reste toujours présent en dessous. */}
+          Le titre reste affiché même sans tâche : c'est lui qui donne au bloc
+          une zone à survoler pour faire apparaître son bouton d'ajout. */}
       {onCreateTask && (
-        <div>
+        <div onMouseEnter={() => setTasksHov(true)} onMouseLeave={() => setTasksHov(false)}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, marginBottom: 8 }}>Tâches</div>
           {(tasks.length > 0 || adding) && (
             <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, marginBottom: 8 }}>Tâches</div>
               <div style={{ display: "flex", flexDirection: "column", marginBottom: 10 }}>
                 {tasks.map((tk) => (
                   <TaskRow key={tk.id} tk={tk} cat={cat}
@@ -1140,24 +1147,19 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
             </>
           )}
           {taskErr && <div style={{ fontSize: 11, color: T.red, marginBottom: 8, lineHeight: 1.4 }}>{taskErr}</div>}
-          {/* Dès qu'une tâche existe, l'ajout devient un lien discret « + Ajouter »
-              (même style que celui des objectifs) ; sinon un bouton pleine largeur.
-              Masqué pendant la saisie inline. */}
-          {!adding && (tasks.length > 0 ? (
+          {/* Lien discret « + Ajouter » dans tous les cas (le bouton pleine
+              largeur est passé aux objectifs), révélé au survol du bloc et
+              masqué pendant la saisie inline. Le focus clavier le révèle comme
+              le survol : sans cela, il serait inatteignable au clavier. */}
+          {!adding && (
             <button type="button" onClick={openAdd}
               onMouseEnter={() => setTaskAddHov(true)} onMouseLeave={() => setTaskAddHov(false)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: taskAddHov ? T.textSub : T.textMut, opacity: taskAddHov ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
+              onFocus={() => setTasksHov(true)} onBlur={() => setTasksHov(false)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: taskAddHov ? T.textSub : T.textMut, opacity: tasksHov ? (taskAddHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
               <Plus size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
               Ajouter
             </button>
-          ) : (
-            <button onClick={openAdd}
-              style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-              onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 10%, transparent)`; }}
-              onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 5%, transparent)`; }}>
-              <CalendarPlus size={14} strokeWidth={2} /> Ajouter une tâche
-            </button>
-          ))}
+          )}
         </div>
       )}
 
@@ -1337,14 +1339,16 @@ function stepTone(status, color) {
   return { dot: T.border, text: T.text, label: T.textMut };
 }
 
-// Une étape de la frise : pastille cochable, date modifiable, libellé éditable
-// au clic. Les actions n'apparaissent qu'au survol de la ligne.
-function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDelete }) {
+// Une étape de la frise : pastille cochable et libellé éditable au clic. Les
+// actions n'apparaissent qu'au survol de la ligne.
+//
+// Pas de datation : une étape se note et se coche, point. Le calendrier vit
+// ailleurs (tâches d'agenda, échéance de l'objectif) ; le demander ici faisait
+// d'un jalon de trois mots une saisie à deux temps.
+function StepRow({ step, cat, status, last, onToggle, onRename, onDelete }) {
   const [hov, setHov] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(step.label);
-  const [dueOpen, setDueOpen] = useState(false);
-  const dueRef = useRef(null);
   const tone = stepTone(status, cat.color);
 
   const commit = () => {
@@ -1408,33 +1412,15 @@ function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDele
           )}
         </div>
 
-        {/* La date EST l'information de la frise : elle reste visible, et
-            s'ouvre au clic sur le mini-calendrier. Sans date, un « Dater »
-            discret n'apparaît qu'au survol — une étape non située est
-            légitime, mais elle ne trouve pas sa place sur l'axe. */}
-        <button type="button" ref={dueRef} onClick={() => setDueOpen(o => !o)}
-          title={step.due ? "Modifier l'échéance" : "Situer cette étape dans l'année"}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2, padding: "1px 4px",
-            marginLeft: -4, borderRadius: 6, border: "none", background: "transparent",
-            cursor: "pointer", fontFamily: "inherit", fontSize: 10.5, fontWeight: 600,
-            fontVariantNumeric: "tabular-nums", color: step.due ? (tone.label ?? T.textMut) : T.blue,
-            opacity: step.due ? 1 : (hov || dueOpen ? 1 : 0), transition: "opacity .15s ease, background .12s ease",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = T.accentBg; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
-          <CalendarClock size={10} strokeWidth={2} />
-          {step.due ? fmtDayShort(step.due) : "Dater"}
-          {status === "late" && " · en retard"}
-        </button>
-        {dueOpen && (
-          <MiniCalendar
-            anchorRef={dueRef}
-            value={step.due ? new Date(`${step.due}T00:00:00`) : new Date()}
-            onSelect={(d) => { onSetDue(getLocalDateString(d)); setDueOpen(false); }}
-            onClose={() => setDueOpen(false)}
-            align="left"
-          />
+        {/* Une étape héritée de l'ancien système peut porter une date : on la
+            rappelle en lecture seule (et on signale son retard), sans jamais
+            proposer d'en poser une nouvelle. */}
+        {step.due && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 10.5, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone.label ?? T.textMut }}>
+            <CalendarClock size={10} strokeWidth={2} />
+            {fmtDayShort(step.due)}
+            {status === "late" && " · en retard"}
+          </div>
         )}
       </div>
     </div>
@@ -1447,11 +1433,16 @@ function StepRow({ step, cat, status, last, onToggle, onRename, onSetDue, onDele
  * Aucune modale : une étape se note en trois secondes ou ne se note pas. Le
  * bouton ouvre une ligne vide au bas de la frise ; Entrée valide et rouvre une
  * ligne (on en pose rarement une seule), Échap ou un champ vide referme.
+ *
+ * Le bouton d'ajout ne s'affiche qu'au survol du bloc (de son titre au bas de
+ * la frise) : trois cartes × trois blocs d'ajout, c'était neuf invitations
+ * permanentes pour trois objectifs.
  */
-function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, onDelete }) {
+function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onDelete }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [addHov, setAddHov] = useState(false);
+  const [blockHov, setBlockHov] = useState(false);
   const submitted = useRef(false);
 
   const ordered = useMemo(() => sortSteps(steps), [steps]);
@@ -1468,8 +1459,10 @@ function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, on
     if (!keepOpen) setAdding(false);
   };
 
+  const revealed = blockHov || adding;
+
   return (
-    <div>
+    <div onMouseEnter={() => setBlockHov(true)} onMouseLeave={() => setBlockHov(false)}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: T.textMut }}>Étapes</span>
         {prog.total > 0 && (
@@ -1493,7 +1486,6 @@ function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, on
               last={i === ordered.length - 1 && !adding}
               onToggle={() => onToggle(s.id)}
               onRename={(label) => onRename(s.id, label)}
-              onSetDue={(due) => onSetDue(s.id, due)}
               onDelete={() => onDelete(s.id)} />
           ))}
         </div>
@@ -1517,7 +1509,8 @@ function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, on
       {!adding && (ordered.length > 0 ? (
         <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
           onMouseEnter={() => setAddHov(true)} onMouseLeave={() => setAddHov(false)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: addHov ? T.textSub : T.textMut, opacity: addHov ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
+          onFocus={() => setBlockHov(true)} onBlur={() => setBlockHov(false)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: addHov ? T.textSub : T.textMut, opacity: revealed ? (addHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
           <Plus size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
           Ajouter
         </button>
@@ -1526,7 +1519,8 @@ function StepsBlock({ cat, steps, today, onAdd, onToggle, onRename, onSetDue, on
            C'est le manque que la page vient combler — un objectif d'un an sans
            point de passage ne se pilote pas. */
         <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          onFocus={() => setBlockHov(true)} onBlur={() => setBlockHov(false)}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: revealed ? 1 : 0, transition: "opacity .15s ease" }}
           onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 10%, transparent)`; }}
           onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 5%, transparent)`; }}>
           <Milestone size={14} strokeWidth={2} /> Par où passer ?
@@ -1575,39 +1569,36 @@ function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
 // du formulaire de trade) : un déclencheur, puis une liste cochable de TOUS les
 // objectifs. Cocher rattache à la catégorie, décocher détache. Ferme au clic
 // dehors. Dernière entrée : créer un objectif (redirige vers la page Objectifs).
-function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, compact = false }) {
+function ObjectiveMultiSelect({ objectives, catId, color, onToggle, onCreate, revealed = true }) {
   const [open, setOpen] = useState(false);
-  const [hov, setHov] = useState(false);
+  // Focus clavier : il révèle le déclencheur comme le survol du bloc le fait,
+  // sinon un bouton masqué serait inatteignable au clavier.
+  const [focused, setFocused] = useState(false);
   const ref = useRef(null);
   // Fermeture au clic extérieur : déléguée au Popover, dont le panneau est
   // portalisé et n'appartient donc plus à `ref`.
   const close = React.useCallback(() => setOpen(false), []);
-  // En mode compact (des objectifs sont déjà rattachés), le déclencheur s'efface :
-  // simple lien discret « + Ajouter », qui ne s'illumine qu'au survol ou à l'ouverture.
+  // Déclencheur pleine largeur en pointillé de la couleur de l'objectif : c'est
+  // désormais lui qui porte l'invitation forte de la carte. Il reste en place
+  // (opacité seule) pour que révéler le bouton ne fasse pas sauter la carte, et
+  // ne s'efface pas tant que la liste est ouverte.
+  const show = revealed || open || focused;
   return (
     <div ref={ref} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
-      {compact ? (
-        <button type="button" onClick={() => setOpen(o => !o)}
-          onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: (open || hov) ? T.textSub : T.textMut, opacity: (open || hov) ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
-          <Plus size={13} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
-          Ajouter
-        </button>
-      ) : (
-        <button type="button" onClick={() => setOpen(o => !o)}
-          style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", border: `1px solid ${T.border}`, borderRadius: 999, background: T.white, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-          <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: T.textSub }}>Ajouter un objectif</span>
-          <Plus size={14} strokeWidth={2} color={T.textMut} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
-        </button>
-      )}
+      <button type="button" onClick={() => setOpen(o => !o)}
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${color} 40%, transparent)`, background: `color-mix(in srgb, ${color} 5%, transparent)`, color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
+        onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} 10%, transparent)`; }}
+        onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} 5%, transparent)`; }}>
+        <Plus size={14} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
+        Ajouter un objectif
+      </button>
       <Popover
         anchorRef={ref}
         open={open}
         onClose={close}
         gap={4}
-        /* En mode compact le déclencheur est un simple lien « + Ajouter » :
-           caler la liste sur sa largeur la rendrait illisible. */
-        matchAnchorWidth={!compact}
+        matchAnchorWidth
         minWidth={220}
         maxHeight={260}
         style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}
