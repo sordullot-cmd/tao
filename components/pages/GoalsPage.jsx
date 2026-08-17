@@ -9,6 +9,9 @@ import {
   Clock, Trophy, Footprints,
 } from "lucide-react";
 import { getCurrencySymbol } from "@/lib/userPrefs";
+// Coquille de modale et boutons de la nouvelle DA (pages Comptes / Calendrier) :
+// le formulaire d'objectif s'y range plutôt que d'inventer sa propre fenêtre.
+import { ModalShell, PrimaryBtn } from "@/components/modals/AccountModals";
 import { useTrades, useTradingAccounts } from "@/lib/hooks/useTradeData";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useUndo } from "@/lib/contexts/UndoContext";
@@ -644,8 +647,8 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className={embedded ? undefined : "anim-1"}>
-      {/* Header : pleine largeur au-dessus du drawer. Intégré, l'hôte porte
-          l'action — la rendre deux fois donnerait deux boutons identiques. */}
+      {/* Header : l'action de la page. Intégré, l'hôte la porte — la rendre
+          deux fois donnerait deux boutons identiques. */}
       {!embedded && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <button onClick={openCreate}
@@ -655,9 +658,9 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
         </div>
       )}
 
-      {/* À partir d'ici : le drawer occupe la colonne de droite */}
-      <div className="tr4de-goals-layout" style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* La liste occupe toute la largeur : le formulaire n'est plus un panneau
+          latéral qui la comprimait, mais une modale centrée (cf. plus bas). */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Bande de KPI + son séparateur : masqués en mode intégré. */}
       {!embedded && (
         <>
@@ -712,7 +715,6 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                     onSetManual={setManual}
                     onSubtasksChange={setSubtasksFor}
                     drag={drag} setDrag={setDrag} onDrop={reorderOrNest}
-                    drawerOpen={showForm}
                   />
                 )}
                 {done.length > 0 && (
@@ -743,7 +745,6 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                         onSetManual={setManual}
                         onSubtasksChange={setSubtasksFor}
                         drag={drag} setDrag={setDrag} onDrop={reorderOrNest}
-                        drawerOpen={showForm}
                         doneSection
                       />
                     )}
@@ -756,332 +757,324 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
       )}
 
     </div>
-    {/* Drawer inline : s'étire pleine hauteur, aligné avec le contenu */}
+
+    {/* ─── Formulaire : une MODALE, plus un panneau latéral ───
+        Le drawer volait 360 px à la liste et se retrouvait à l'étroit dès qu'un
+        champ conditionnel s'ouvrait. La modale reprend la coquille des pages
+        Comptes / Calendrier (titre, corps défilant, pied d'action) et laisse la
+        liste intacte derrière elle. L'enregistrement reste automatique. */}
     {showForm && (
-        <div
-          className="tr4de-drawer"
-          style={{
-            width: 360, flexShrink: 0,
-            background: T.white,
-            border: `1px solid ${T.border}`,
-            borderRadius: "var(--radius-card)",
-            display: "flex", flexDirection: "column",
-            alignSelf: "stretch",
-            minHeight: "100%",
-            overflow: "hidden",
-            animation: "goalDrawerIn .28s var(--ease-drawer) both",
-            fontFamily: "var(--font-sans)",
-          }}>
-            <style>{`
-              @keyframes goalDrawerIn { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-              .no-spin::-webkit-outer-spin-button,
-              .no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-              .no-spin { -moz-appearance: textfield; }
-              .fancy-date::-webkit-calendar-picker-indicator {
-                opacity: 0; position: absolute; right: 0; top: 0; bottom: 0; width: 100%; cursor: pointer;
-              }
-              .fancy-date { position: relative; }
-            `}</style>
+      <ModalShell
+        title={editingId ? "Détail de l'objectif" : "Nouvel objectif"}
+        subtitle={editingId
+          ? "Les modifications sont enregistrées au fil de la saisie."
+          : "Nomme l'objectif et donne-lui une cible : il apparaîtra dès qu'il sera mesurable."}
+        onClose={close}
+        width={560}
+        footer={
+          <>
+            <span style={{ marginRight: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.textMut }}>
+              <Check size={13} strokeWidth={2.5} color={T.green} /> Enregistré automatiquement
+            </span>
+            <PrimaryBtn onClick={close}>Terminé</PrimaryBtn>
+          </>
+        }
+      >
+        <style>{`
+          .no-spin::-webkit-outer-spin-button,
+          .no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+          .no-spin { -moz-appearance: textfield; }
+        `}</style>
 
-            {/* Header : titre + close */}
-            <div style={{ padding: "16px 18px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${T.border}` }}>
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {editingId ? "Détail de l'objectif" : "Nouvel objectif"}
-              </h3>
-              <button onClick={close} aria-label="Fermer"
-                style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                <X size={15} strokeWidth={1.75} />
-              </button>
-            </div>
+        {/* Nom */}
+        <GoalField label="Nom de l'objectif">
+          <input type="text" autoFocus value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })}
+            placeholder={"ex : P&L du mois"}
+            style={goalInput()}
+            onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+        </GoalField>
 
-            {/* Body : style stacked (label au-dessus, valeur en gros), séparé par fines lignes */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "4px 18px 16px" }}>
-              {/* Nom */}
-              <StackField label="Nom de l'objectif" icon={Pencil}>
-                <input type="text" autoFocus value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })}
-                  placeholder="Nom de l'objectif..."
-                  style={stackInput()} />
-              </StackField>
+        {/* Deadline : pilules de raccourci + champ date */}
+        <DeadlineField value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
 
-              {/* Deadline (full width) avec presets + calendrier custom */}
-              <DeadlineField value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
+        {/* Priorité : quatre valeurs, donc des pilules plutôt qu'une liste
+            déroulante — tout se voit et se choisit d'un clic. */}
+        <GoalField label="Priorité">
+          <div role="radiogroup" aria-label="Priorité" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {LEVELS.map((lv) => {
+              const active = form.level === lv.id;
+              return (
+                <button key={lv.id} type="button" role="radio" aria-checked={active}
+                  onClick={() => setForm({ ...form, level: lv.id })}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 999,
+                    border: `1px solid ${active ? lv.color : T.border}`,
+                    background: active ? `color-mix(in srgb, ${lv.color} 10%, transparent)` : T.white,
+                    color: active ? lv.color : T.text,
+                    fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                    transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
+                  }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: lv.color, flexShrink: 0 }} />
+                  {lv.label}
+                </button>
+              );
+            })}
+          </div>
+        </GoalField>
 
-
-              {/* Priorité (full width, sous la deadline) */}
-              <StackField label="Priorité">
+        {/* Cible + son unité (ou l'unité imposée par la source de suivi) */}
+        <GoalField label="Cible">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="number" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })}
+              placeholder="1000" className="no-spin"
+              style={{ ...goalInput(), flex: 1, minWidth: 0, MozAppearance: "textfield", appearance: "textfield" }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+            {form.autoType === "manual" ? (
+              <div style={{ width: 150, flexShrink: 0 }}>
                 <FancyDropdown
-                  value={form.level}
-                  options={LEVELS}
-                  onChange={(v) => setForm({ ...form, level: v })}
-                  renderValue={(lv) => (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: 1 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: lv.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 14, fontWeight: 400, color: lv.color }}>{lv.label}</span>
-                    </span>
+                  variant="field"
+                  value={form.unit}
+                  options={UNITS}
+                  onChange={(v) => setForm({ ...form, unit: v })}
+                  renderValue={(u) => (
+                    <span style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{u.label}</span>
                   )}
-                  renderOption={(lv, active) => (
+                  renderOption={(u, active) => (
                     <>
-                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: lv.color, flexShrink: 0 }} />
-                      <span style={{ flex: 1 }}>{lv.label}</span>
+                      <span style={{ flex: 1 }}>{u.label}</span>
                       {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
                     </>
                   )}
                 />
-              </StackField>
-
-              {/* Cible (full width, sous la priorité) avec sélecteur d'unité à droite */}
-              <StackField label="Cible">
-                <input type="number" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })}
-                  placeholder="1000"
-                  className="no-spin"
-                  style={{ ...stackInput(), MozAppearance: "textfield", appearance: "textfield" }} />
-                {form.autoType === "manual" ? (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
-                    <div style={{ padding: "4px 10px 4px 12px", background: T.bg, borderRadius: 999, border: `1px solid ${T.border}` }}>
-                      <FancyDropdown
-                        value={form.unit}
-                        options={UNITS}
-                        onChange={(v) => setForm({ ...form, unit: v })}
-                        renderValue={(u) => (
-                          <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{u.label}</span>
-                        )}
-                        renderOption={(u, active) => (
-                          <>
-                            <span style={{ flex: 1 }}>{u.label}</span>
-                            {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
-                          </>
-                        )}
-                      />
-                    </div>
-                    {form.unit === "custom" && (
-                      <input
-                        type="text"
-                        value={form.customUnit}
-                        onChange={(e) => setForm({ ...form, customUnit: e.target.value })}
-                        placeholder="ex: séances"
-                        style={{ width: 120, padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 999, background: T.bg, fontSize: 12, fontWeight: 500, color: T.text, fontFamily: "inherit", outline: "none" }}
-                      />
-                    )}
-                  </div>
-                ) : form.autoType === "account_type" ? (
-                  <div style={{ flexShrink: 0, marginLeft: 8, padding: "4px 10px 4px 12px", background: T.bg, borderRadius: 999, border: `1px solid ${T.border}` }}>
-                    <FancyDropdown
-                      value={form.accountTypeFilter || "live"}
-                      options={[
-                        { id: "live",   label: "Live" },
-                        { id: "eval",   label: "Eval" },
-                        { id: "funded", label: "Funded" },
-                      ]}
-                      onChange={(v) => setForm({ ...form, accountTypeFilter: v })}
-                      renderValue={(o) => (
-                        <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{o.label}</span>
-                      )}
-                      renderOption={(o, active) => (
-                        <>
-                          <span style={{ flex: 1 }}>{o.label}</span>
-                          {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
-                        </>
-                      )}
-                    />
-                  </div>
-                ) : (() => {
-                  const a = AUTO_TYPES.find(x => x.id === form.autoType);
-                  const label = a?.unit === "$" ? getCurrencySymbol() : a?.unit === "%" ? "%" : "trades";
-                  return (
-                    <span style={{ flexShrink: 0, marginLeft: 8, padding: "6px 12px", borderRadius: 999, background: T.bg, border: `1px solid ${T.border}`, color: T.textSub, fontSize: 12, fontWeight: 600 }}>
-                      {label}
-                    </span>
-                  );
-                })()}
-              </StackField>
-
-              {/* Catégorie — grille compacte (2 lignes de 5) */}
-              <div style={{ padding: "12px 0", borderBottom: form.category === "trading" ? `1px solid ${T.border}` : "none" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Catégorie</div>
-                  {(() => {
-                    const cat = CATEGORIES.find(c => c.id === form.category) || CATEGORIES[0];
-                    return (
-                      <span style={{ fontSize: 11, fontWeight: 600, color: cat.color }}>{cat.label}</span>
-                    );
-                  })()}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
-                  {CATEGORIES.map(c => {
-                    const Icon = c.icon;
-                    const active = form.category === c.id;
-                    return (
-                      <button key={c.id} type="button"
-                        onClick={() => setForm(prev => {
-                          const next = { ...prev, category: c.id };
-                          if (c.id !== "trading" && AUTO_TYPES.find(a => a.id === prev.autoType)?.trading) next.autoType = "manual";
-                          return next;
-                        })}
-                        title={c.label}
-                        style={{
-                          background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
-                          padding: 0,
-                          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-                          minWidth: 0, overflow: "hidden",
-                        }}>
-                        <div style={{
-                          width: 32, height: 32, borderRadius: "50%",
-                          background: active ? c.color : T.bg,
-                          color: active ? "#fff" : T.textSub,
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          transition: "all .15s ease",
-                          boxShadow: active ? `0 2px 8px color-mix(in srgb, ${c.color} 25%, transparent)` : "none",
-                        }}>
-                          <Icon size={14} strokeWidth={1.75} />
-                        </div>
-                        <span style={{
-                          fontSize: 9, fontWeight: 600,
-                          color: active ? c.color : T.textMut,
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
-                          transition: "color .15s ease",
-                        }}>{c.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
-
-              {/* Source de suivi — visible uniquement pour Trading */}
-              {form.category === "trading" && (
-                <StackField label="Source de suivi" last={form.autoType !== "manual" && !["pnl","pnl_day","pnl_week","pnl_month","pnl_year","winrate","trades","max_dd"].includes(form.autoType)}>
-                  <FancyDropdown
-                    value={form.autoType}
-                    options={AUTO_TYPES}
-                    onChange={(v) => setForm({ ...form, autoType: v })}
-                    renderOption={(a, active) => (
-                      <>
-                        <span style={{ flex: 1 }}>{a.label}</span>
-                        {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
-                      </>
-                    )}
-                  />
-                </StackField>
-              )}
-
-              {/* Compte ciblé — pour les sources de perf (PnL / WR / Nb trades / DD) */}
-              {form.category === "trading" && ["pnl","pnl_day","pnl_week","pnl_month","pnl_year","winrate","trades","max_dd"].includes(form.autoType) && (
-                <StackField label="Compte ciblé" last={form.autoType !== "manual"}>
-                  <FancyDropdown
-                    value={form.accountIdFilter || "all"}
-                    options={(() => {
-                      // Groupes par type : n'affiche « Tous les comptes <type> » que
-                      // pour les types réellement présents parmi les comptes.
-                      const TYPE_LABELS = { live: "Live", funded: "Funded" };
-                      const presentTypes = ["live", "funded"].filter(ty =>
-                        (accounts || []).some(a => (a.account_type || "live") === ty)
-                      );
-                      return [
-                        { id: "all", label: "Tous mes comptes" },
-                        ...presentTypes.map(ty => ({
-                          id: `type:${ty}`,
-                          label: `Tous les comptes ${TYPE_LABELS[ty]}`,
-                        })),
-                        ...((accounts || []).map(a => ({
-                          id: String(a.id),
-                          label: `${a.name || "Compte"}${a.account_type ? ` · ${a.account_type}` : ""}`,
-                        }))),
-                      ];
-                    })()}
-                    onChange={(v) => setForm({ ...form, accountIdFilter: v })}
-                    renderValue={(o) => (
-                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{o.label}</span>
-                    )}
-                    renderOption={(o, active) => (
-                      <>
-                        <span style={{ flex: 1 }}>{o.label}</span>
-                        {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
-                      </>
-                    )}
-                  />
-                </StackField>
-              )}
-
-{/* Sous-objectifs — visibles uniquement après création */}
-              {editingId && (() => {
-                const g = goals.find(gg => gg.id === editingId);
-                if (!g) return null;
-                return (
-                  <SubtasksField
-                    subtasks={g.subtasks || []}
-                    onChange={(next) => setSubtasksFor(g.id, next)}
-                  />
-                );
-              })()}
-
-              {/* Progression actuelle — visible uniquement pour les objectifs manuels */}
-              {form.autoType === "manual" && editingId && (() => {
-                const g = goals.find(gg => gg.id === editingId);
-                if (!g) return null;
-                const unit = UNITS.find(u => u.id === (form.unit || "count")) || UNITS[0];
-                const suffix = unit.isMoney ? getCurrencySymbol() : (unit.isCustom ? (form.customUnit ? ` ${form.customUnit}` : "") : unit.suffix);
-                return (
-                  <StackField label="Progression actuelle">
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-                      <input type="number" value={g.manual || 0}
-                        className="no-spin"
-                        onChange={(e) => setGoals(prev => prev.map(x => x.id === g.id ? { ...x, manual: parseFloat(e.target.value) || 0 } : x))}
-                        style={{ ...stackInput(), MozAppearance: "textfield", appearance: "textfield" }} />
-                      {suffix && <span style={{ fontSize: 12, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>{suffix.trim()}</span>}
-                    </div>
-                    <div style={{ display: "flex", gap: 4, marginLeft: 8 }}>
-                      <button onClick={() => adjustManual(g.id, -1)}
-                        style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${T.border}`, background: T.white, color: T.text, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>−</button>
-                      <button onClick={() => adjustManual(g.id, 1)}
-                        style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${T.text}`, background: T.text, color: T.white, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>+</button>
-                    </div>
-                  </StackField>
-                );
-              })()}
-
-              {/* Lien « Quête de soi » (tout en bas) — pills comme la page
-                  Habitudes. Rattache l'objectif à l'un des trois objectifs de
-                  l'année : sa progression le fait avancer, et donne de l'XP au
-                  prorata. */}
-              <StackField label="Objectif de l'année (XP)" last>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 0 }}>
-                  {rpgCategories.length === 0 && (
-                    <div style={{ fontSize: 11.5, color: T.textMut, lineHeight: 1.45 }}>
-                      {"Aucun objectif d'année défini — rends-toi sur la page « Quête de soi » pour en créer un."}
-                    </div>
+            ) : form.autoType === "account_type" ? (
+              <div style={{ width: 150, flexShrink: 0 }}>
+                <FancyDropdown
+                  variant="field"
+                  value={form.accountTypeFilter || "live"}
+                  options={[
+                    { id: "live",   label: "Live" },
+                    { id: "eval",   label: "Eval" },
+                    { id: "funded", label: "Funded" },
+                  ]}
+                  onChange={(v) => setForm({ ...form, accountTypeFilter: v })}
+                  renderValue={(o) => (
+                    <span style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{o.label}</span>
                   )}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {rpgCategories.map((c) => {
-                      const active = form.rpgCategory === c.id;
-                      return (
-                        <button key={c.id} type="button"
-                          onClick={() => setForm({ ...form, rpgCategory: active ? "" : c.id })}
-                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                          {active
-                            ? <Check size={13} strokeWidth={2.5} color={c.color} />
-                            : <RpgCatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
-                          {c.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {form.rpgCategory && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <input type="number" min={0} value={form.rpgXp}
-                        onChange={(e) => setForm({ ...form, rpgXp: e.target.value })}
-                        placeholder="500" className="no-spin"
-                        style={{ width: 80, padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 999, background: T.bg, fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", outline: "none", textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }} />
-                      <span style={{ fontSize: 12, color: T.textMut, fontWeight: 500 }}>XP à 100 %</span>
-                    </div>
+                  renderOption={(o, active) => (
+                    <>
+                      <span style={{ flex: 1 }}>{o.label}</span>
+                      {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
+                    </>
                   )}
-                </div>
-              </StackField>
-            </div>
-
+                />
+              </div>
+            ) : (() => {
+              const a = AUTO_TYPES.find(x => x.id === form.autoType);
+              const label = a?.unit === "$" ? getCurrencySymbol() : a?.unit === "%" ? "%" : "trades";
+              return (
+                <span style={{ flexShrink: 0, padding: "9px 14px", borderRadius: 8, background: T.accentBg, color: T.textSub, fontSize: 13, fontWeight: 500 }}>
+                  {label}
+                </span>
+              );
+            })()}
           </div>
-      )}
-      </div>
+          {form.autoType === "manual" && form.unit === "custom" && (
+            <input type="text" value={form.customUnit}
+              onChange={(e) => setForm({ ...form, customUnit: e.target.value })}
+              placeholder="ex : séances"
+              style={{ ...goalInput(), marginTop: 8 }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+          )}
+        </GoalField>
+
+        {/* Catégorie — grille d'icônes (deux lignes) */}
+        <GoalField label="Catégorie"
+          aside={(() => {
+            const cat = CATEGORIES.find(c => c.id === form.category) || CATEGORIES[0];
+            return <span style={{ fontSize: 11.5, fontWeight: 600, color: cat.color }}>{cat.label}</span>;
+          })()}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+            {CATEGORIES.map(c => {
+              const Icon = c.icon;
+              const active = form.category === c.id;
+              return (
+                <button key={c.id} type="button"
+                  onClick={() => setForm(prev => {
+                    const next = { ...prev, category: c.id };
+                    if (c.id !== "trading" && AUTO_TYPES.find(a => a.id === prev.autoType)?.trading) next.autoType = "manual";
+                    return next;
+                  })}
+                  title={c.label}
+                  style={{
+                    background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit",
+                    padding: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+                    minWidth: 0, overflow: "hidden",
+                  }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: "50%",
+                    background: active ? c.color : T.accentBg,
+                    color: active ? "#fff" : T.textSub,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    transition: "background .15s ease, color .15s ease",
+                  }}>
+                    <Icon size={15} strokeWidth={1.75} />
+                  </div>
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 600,
+                    color: active ? c.color : T.textMut,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
+                    transition: "color .15s ease",
+                  }}>{c.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </GoalField>
+
+        {/* Source de suivi — visible uniquement pour Trading */}
+        {form.category === "trading" && (
+          <GoalField label="Source de suivi"
+            hint={form.autoType === "manual" ? "Manuel : c'est toi qui fais avancer le compteur." : "Calculée automatiquement à partir de tes trades."}>
+            <FancyDropdown
+              variant="field"
+              value={form.autoType}
+              options={AUTO_TYPES}
+              onChange={(v) => setForm({ ...form, autoType: v })}
+              renderValue={(a) => (
+                <span style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{a?.label}</span>
+              )}
+              renderOption={(a, active) => (
+                <>
+                  <span style={{ flex: 1 }}>{a.label}</span>
+                  {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
+                </>
+              )}
+            />
+          </GoalField>
+        )}
+
+        {/* Compte ciblé — pour les sources de perf (PnL / WR / Nb trades / DD) */}
+        {form.category === "trading" && ["pnl","pnl_day","pnl_week","pnl_month","pnl_year","winrate","trades","max_dd"].includes(form.autoType) && (
+          <GoalField label="Compte ciblé">
+            <FancyDropdown
+              variant="field"
+              value={form.accountIdFilter || "all"}
+              options={(() => {
+                // Groupes par type : n'affiche « Tous les comptes <type> » que
+                // pour les types réellement présents parmi les comptes.
+                const TYPE_LABELS = { live: "Live", funded: "Funded" };
+                const presentTypes = ["live", "funded"].filter(ty =>
+                  (accounts || []).some(a => (a.account_type || "live") === ty)
+                );
+                return [
+                  { id: "all", label: "Tous mes comptes" },
+                  ...presentTypes.map(ty => ({
+                    id: `type:${ty}`,
+                    label: `Tous les comptes ${TYPE_LABELS[ty]}`,
+                  })),
+                  ...((accounts || []).map(a => ({
+                    id: String(a.id),
+                    label: `${a.name || "Compte"}${a.account_type ? ` · ${a.account_type}` : ""}`,
+                  }))),
+                ];
+              })()}
+              onChange={(v) => setForm({ ...form, accountIdFilter: v })}
+              renderValue={(o) => (
+                <span style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{o?.label}</span>
+              )}
+              renderOption={(o, active) => (
+                <>
+                  <span style={{ flex: 1 }}>{o.label}</span>
+                  {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
+                </>
+              )}
+            />
+          </GoalField>
+        )}
+
+        {/* Sous-objectifs — visibles uniquement après création */}
+        {editingId && (() => {
+          const g = goals.find(gg => gg.id === editingId);
+          if (!g) return null;
+          return (
+            <SubtasksField
+              subtasks={g.subtasks || []}
+              onChange={(next) => setSubtasksFor(g.id, next)}
+            />
+          );
+        })()}
+
+        {/* Progression actuelle — visible uniquement pour les objectifs manuels */}
+        {form.autoType === "manual" && editingId && (() => {
+          const g = goals.find(gg => gg.id === editingId);
+          if (!g) return null;
+          const unit = UNITS.find(u => u.id === (form.unit || "count")) || UNITS[0];
+          const suffix = unit.isMoney ? getCurrencySymbol() : (unit.isCustom ? (form.customUnit ? ` ${form.customUnit}` : "") : unit.suffix);
+          return (
+            <GoalField label="Progression actuelle">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="number" value={g.manual || 0} className="no-spin"
+                  onChange={(e) => setGoals(prev => prev.map(x => x.id === g.id ? { ...x, manual: parseFloat(e.target.value) || 0 } : x))}
+                  style={{ ...goalInput(), flex: 1, minWidth: 0, MozAppearance: "textfield", appearance: "textfield" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+                {suffix && <span style={{ fontSize: 12.5, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>{suffix.trim()}</span>}
+                <button type="button" onClick={() => adjustManual(g.id, -1)} aria-label="Retirer 1"
+                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: `1px solid ${T.border}`, background: T.white, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>−</button>
+                <button type="button" onClick={() => adjustManual(g.id, 1)} aria-label="Ajouter 1"
+                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: `1px solid ${T.text}`, background: T.text, color: T.white, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>+</button>
+              </div>
+            </GoalField>
+          );
+        })()}
+
+        {/* Lien « Quête de soi » (tout en bas) — pilules comme la page
+            Habitudes. Rattache l'objectif à l'un des trois objectifs de
+            l'année : sa progression le fait avancer, et donne de l'XP au
+            prorata. */}
+        <GoalField label="Objectif de l'année (XP)"
+          hint={form.rpgCategory ? "L'XP est versée au prorata de l'avancement de cet objectif." : undefined}>
+          {rpgCategories.length === 0 ? (
+            <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.5 }}>
+              {"Aucun objectif d'année défini — rends-toi sur la page « Quête de soi » pour en créer un."}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {rpgCategories.map((c) => {
+                  const active = form.rpgCategory === c.id;
+                  return (
+                    <button key={c.id} type="button"
+                      onClick={() => setForm({ ...form, rpgCategory: active ? "" : c.id })}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                      {active
+                        ? <Check size={13} strokeWidth={2.5} color={c.color} />
+                        : <RpgCatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.rpgCategory && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <input type="number" min={0} value={form.rpgXp}
+                    onChange={(e) => setForm({ ...form, rpgXp: e.target.value })}
+                    placeholder="500" className="no-spin"
+                    style={{ ...goalInput(), width: 96, textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+                  <span style={{ fontSize: 12.5, color: T.textMut, fontWeight: 500 }}>XP à 100 %</span>
+                </div>
+              )}
+            </div>
+          )}
+        </GoalField>
+      </ModalShell>
+    )}
     </div>
   );
 }
@@ -1182,7 +1175,7 @@ function StatCell({ icon: Icon, label, subLabel, value, isLast }) {
   );
 }
 
-function TimelineSection({ title, rows, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, drawerOpen }) {
+function TimelineSection({ title, rows, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop }) {
   return (
     /* 12 px entre les lignes : ce sont désormais des cartes, elles ont besoin
        d'un intervalle pour se lire comme des blocs distincts (2 px les
@@ -1202,14 +1195,13 @@ function TimelineSection({ title, rows, compute, unitOf, fmtVal, onEdit, onDelet
           onSubtasksChange={onSubtasksChange}
           doneSection={doneSection}
           drag={drag} setDrag={setDrag} onDrop={onDrop}
-          drawerOpen={drawerOpen}
         />
       ))}
     </div>
   );
 }
 
-function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, nested, drawerOpen }) {
+function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, nested }) {
   const cat = CATEGORIES.find(c => c.id === g.category) || CATEGORIES[0];
   const Ic = cat.icon;
   const { current, target, pct, rawPct } = compute(g);
@@ -1362,8 +1354,6 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           if (armed || drag?.sourceId) { e.preventDefault(); return; }
           // Toggle l'expansion (persisté si épinglé, transient sinon).
           setOpen(v => !v);
-          // Si le drawer d'édition est ouvert, on bascule l'objectif édité.
-          if (drawerOpen) onEdit(g);
         }}
         style={{
           display: "grid",
@@ -1637,7 +1627,6 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
                       onSetManual={onSetManual}
                       onSubtasksChange={onSubtasksChange}
                       drag={drag} setDrag={setDrag} onDrop={onDrop}
-                      drawerOpen={drawerOpen}
                       nested
                     />
                   </div>
@@ -1713,41 +1702,39 @@ function DeadlineField({ value, onChange }) {
     return isNaN(d.getTime()) ? new Date() : d;
   });
 
+  /* Style de la modale : un champ bordé qui porte la date choisie et ouvre le
+     calendrier, puis une rangée de raccourcis. Les presets étaient enfermés
+     dans une liste déroulante alors qu'ils sont là pour être choisis d'un clic. */
   return (
-    <StackField label="Deadline">
-      {/* Dropdown de presets (colé à gauche) */}
-      <div style={{ flex: "0 0 auto" }}>
-        <FancyDropdown
-          value={activePreset ? activePreset.id : "__custom"}
-          options={[...presets, { id: "__custom", label: value && !activePreset
-            ? new Date(value + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
-            : "Personnalisée…" }]}
-          onChange={(v) => { if (v !== "__custom") onChange(v); }}
-          align="left"
-          renderValue={(opt) => (
-            <span style={{ fontSize: 14, fontWeight: 400, color: value ? T.text : T.textMut }}>
-              {value ? (activePreset ? activePreset.label : new Date(value + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })) : "Choisir…"}
+    <GoalField label="Deadline">
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button ref={calBtnRef} type="button" onClick={() => setCalOpen(v => !v)}
+          style={{
+            ...goalInput(), flex: 1, minWidth: 0, cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 8, minHeight: 38,
+            borderColor: calOpen ? T.border2 : T.border,
+            color: value ? T.text : T.textMut,
+          }}>
+          <Calendar size={14} strokeWidth={1.75} color={T.textMut} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {value
+              ? new Date(value + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
+              : "Choisir une date…"}
+          </span>
+          {value && (
+            <span role="button" tabIndex={0} aria-label="Retirer la deadline"
+              onClick={(e) => { e.stopPropagation(); onChange(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); onChange(""); } }}
+              style={{ display: "inline-flex", alignItems: "center", color: T.textMut, flexShrink: 0 }}>
+              <X size={13} strokeWidth={2} />
             </span>
           )}
-          renderOption={(opt, active) => (
-            <>
-              <span style={{ flex: 1 }}>{opt.label}</span>
-              {active && <Check size={12} strokeWidth={2.5} color={T.green} />}
-            </>
-          )}
-        />
-      </div>
-      {/* Bouton calendrier : poussé à droite */}
-      <div style={{ position: "relative", flexShrink: 0, marginLeft: "auto" }}>
-        <button ref={calBtnRef} type="button" title="Choisir une date" onClick={() => setCalOpen(v => !v)}
-          style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${T.border}`, background: calOpen ? T.accentBg : T.white, color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-          <Calendar size={13} strokeWidth={1.75} />
         </button>
         <Popover
           anchorRef={calBtnRef}
           open={calOpen}
           onClose={() => setCalOpen(false)}
-          align="end"
+          align="start"
           maxHeight={360}
           style={{
             width: 280, background: T.white, border: `1px solid ${T.border}`,
@@ -1762,7 +1749,26 @@ function DeadlineField({ value, onChange }) {
           />
         </Popover>
       </div>
-    </StackField>
+      {/* Raccourcis : les échéances qu'on pose neuf fois sur dix. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
+        {presets.map((p) => {
+          const active = activePreset?.id === p.id;
+          return (
+            <button key={p.id} type="button" onClick={() => onChange(p.id)}
+              style={{
+                padding: "5px 11px", borderRadius: 999,
+                border: `1px solid ${active ? T.text : T.border}`,
+                background: active ? T.text : T.white,
+                color: active ? T.white : T.textSub,
+                fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
+              }}>
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+    </GoalField>
   );
 }
 
@@ -1956,7 +1962,13 @@ function DropdownItem({ option: o, active, onSelect, renderOption }) {
   );
 }
 
-function FancyDropdown({ value, options, onChange, renderValue, renderOption, align = "right" }) {
+/**
+ * @param {"bare"|"field"} [variant]  `bare` = déclencheur nu (texte + chevron),
+ *   posé dans une ligne de type « valeur à droite ». `field` = déclencheur
+ *   bordé pleine largeur, à la manière d'un champ de la nouvelle DA — c'est
+ *   celui qu'utilise le formulaire d'objectif en modale.
+ */
+function FancyDropdown({ value, options, onChange, renderValue, renderOption, align = "right", variant = "bare" }) {
   const [open, setOpen] = useState(false);
   const btnRef = React.useRef(null);
   // Placement, suivi du défilement, bascule vers le haut et bornage à l'écran :
@@ -1965,16 +1977,32 @@ function FancyDropdown({ value, options, onChange, renderValue, renderOption, al
   // la fin de la liste sortait sous la fenêtre.
   const close = React.useCallback(() => setOpen(false), []);
   const selected = options.find(o => o.id === value) || options[0];
+  const field = variant === "field";
   return (
     <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
       <button ref={btnRef} type="button" onClick={() => setOpen(v => !v)}
-        style={{
+        style={field ? {
+          width: "100%", padding: "9px 12px", borderRadius: 8,
+          border: `1px solid ${open ? T.border2 : T.border}`, background: T.white,
+          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          color: T.text, minHeight: 38, boxSizing: "border-box",
+          transition: "border-color 140ms ease",
+        } : {
           width: "100%", padding: 0, border: "none", background: "transparent",
           cursor: "pointer", fontFamily: "inherit",
           display: "flex", alignItems: "center", justifyContent: align === "left" ? "flex-start" : "flex-end", gap: 6,
           color: T.text,
         }}>
-        {renderValue ? renderValue(selected) : (
+        {/* En champ bordé, la valeur peut être longue (« Tous les comptes
+            Funded ») : elle doit s'élider au lieu de pousser le chevron dehors. */}
+        {field ? (
+          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {renderValue ? renderValue(selected) : (
+              <span style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{selected?.label}</span>
+            )}
+          </span>
+        ) : renderValue ? renderValue(selected) : (
           <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{selected?.label}</span>
         )}
         <ChevronDown size={14} strokeWidth={1.75} color={T.textMut}
@@ -1984,7 +2012,7 @@ function FancyDropdown({ value, options, onChange, renderValue, renderOption, al
         anchorRef={btnRef}
         open={open}
         onClose={close}
-        align={align === "left" ? "start" : "end"}
+        align={field || align === "left" ? "start" : "end"}
         minWidth={200}
         atLeastAnchorWidth
         maxHeight={320}
@@ -2394,16 +2422,12 @@ function SubtasksField({ subtasks, onChange }) {
   };
   const add = (label) => onChange([...subtasks, { id: Date.now(), label, done: false, subtasks: [] }]);
   return (
-    <div style={{ padding: "14px 0", borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>Sous-objectifs</div>
-        {total > 0 && (
-          <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{done}/{total}</div>
-        )}
-      </div>
-
+    <GoalField label="Sous-objectifs"
+      aside={total > 0
+        ? <span style={{ fontSize: 11.5, color: T.textMut, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{done}/{total}</span>
+        : null}>
       {subtasks.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 6 }}>
           {sortByDeadline(subtasks).map((s) => (
             <SubtaskNode
               key={s.id}
@@ -2416,29 +2440,34 @@ function SubtasksField({ subtasks, onChange }) {
       )}
 
       <SubtaskAdder onAdd={add} />
-    </div>
+    </GoalField>
   );
 }
 
-function StackField({ label, icon: Icon, valueColor, last, children }) {
+/* ---------- Champs du formulaire d'objectif (modale) ----------
+   Même grammaire que les modales des pages Comptes / Calendrier : libellé
+   discret au-dessus, contrôle bordé en dessous, aide facultative sous le
+   contrôle. `aside` sert au rappel de valeur aligné à droite du libellé
+   (la catégorie choisie, par exemple).
+   ------------------------------------------------------------------------ */
+function GoalField({ label, hint, aside, children }) {
   return (
-    <div style={{
-      padding: "14px 0",
-      borderBottom: last ? "none" : `1px solid ${T.border}`,
-    }}>
-      <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500, marginBottom: 6 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", color: valueColor || T.text }}>
-        {children}
-        {Icon && <Icon size={14} strokeWidth={1.75} color={T.textMut} style={{ flexShrink: 0, marginLeft: 10 }} />}
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label style={{ fontSize: 12, fontWeight: 500, color: T.textSub }}>{label}</label>
+        {aside && <span style={{ marginLeft: "auto" }}>{aside}</span>}
       </div>
+      {children}
+      {hint && <div style={{ fontSize: 11, color: T.textMut, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 }
-function stackInput() {
+function goalInput() {
   return {
-    flex: 1, background: "transparent", border: "none", outline: "none",
-    fontSize: 14, fontWeight: 400, color: T.text, padding: 0,
-    fontFamily: "inherit", letterSpacing: -0.05, minWidth: 0,
+    width: "100%", padding: "9px 12px", borderRadius: 8,
+    border: `1px solid ${T.border}`, background: T.white,
+    fontSize: 13, color: T.text, fontFamily: "inherit", outline: "none",
+    boxSizing: "border-box",
   };
 }
 

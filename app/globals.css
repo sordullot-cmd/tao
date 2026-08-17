@@ -1322,10 +1322,6 @@ button img,
   /* Boutons pleine largeur sur mobile quand ils sont seuls dans un flex */
   .tr4de-mobile-fullwidth { width: 100% !important; }
 
-  /* Goals page : drawer stack sous la timeline + pleine largeur */
-  .tr4de-goals-layout { flex-direction: column !important; }
-  .tr4de-drawer { width: 100% !important; min-height: 0 !important; }
-
   /* Panneaux latéraux 360px (TradesPage detail, etc.) → pleine largeur */
   [style*="width: 360px"], [style*="width:360px"] {
     width: 100% !important; max-width: 100% !important;
