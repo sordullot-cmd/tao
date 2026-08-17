@@ -124,13 +124,17 @@ describe("Page Budget", () => {
   });
 
   /* L'effet du cadenas est différé — il ne se voit qu'au changement de revenu.
-     La page doit donc l'annoncer avant, sinon la commande reste invisible. */
-  it("nomme la colonne du cadenas et explique son effet dès l'arrivée", () => {
+     La colonne le nomme donc, et chaque cadenas porte son infobulle : le
+     paragraphe d'aide qui disait la même chose sous le tableau a été retiré. */
+  it("nomme la colonne du cadenas et son effet, sans paragraphe d'aide", () => {
     cloudStore.clear();
     render(<BudgetPage />);
 
     expect(screen.getByText("Lock")).toBeTruthy();
-    expect(screen.getByText(/Close its padlock/)).toBeTruthy();
+    expect(
+      screen.getByLabelText("Lock Leisure & going out's amount (it will stop following income)")
+    ).toBeTruthy();
+    expect(screen.queryByText(/Close its padlock/)).toBeNull();
   });
 
   it("crée un budget supplémentaire et bascule dessus", () => {
@@ -143,5 +147,37 @@ describe("Page Budget", () => {
     expect(nameField.value).toBe("New budget");
     // L'ancien budget reste accessible d'un clic.
     expect(screen.getByRole("button", { name: "My budget" })).toBeTruthy();
+  });
+
+  /* Dupliquer sert à comparer deux variantes du même budget : la copie doit
+     partir des chiffres saisis, pas du 50/30/20 par défaut. */
+  it("duplique le budget actif avec ses chiffres, et bascule dessus", () => {
+    cloudStore.clear();
+    render(<BudgetPage />);
+
+    fireEvent.change(incomeField(), { target: { value: "3000" } });
+    fireEvent.change(pctField("Housing & bills"), { target: { value: "40" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+
+    const nameField = screen.getByLabelText("Budget name (editable)") as HTMLInputElement;
+    expect(nameField.value).toBe("My budget (copy)");
+    expect(incomeField().value).toBe("3000");
+    expect(pctField("Housing & bills").value).toBe("40");
+    // L'original est intact, et toujours à un clic.
+    expect(screen.getByRole("button", { name: "My budget" })).toBeTruthy();
+  });
+
+  /* Les deux plans partagent les mêmes id de catégories : modifier la copie ne
+     doit pas toucher l'original. */
+  it("laisse l'original intact quand la copie est modifiée", () => {
+    cloudStore.clear();
+    render(<BudgetPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
+    fireEvent.change(pctField("Savings & investing"), { target: { value: "35" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "My budget" }));
+    expect(pctField("Savings & investing").value).toBe("20");
   });
 });

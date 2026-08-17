@@ -24,10 +24,11 @@
  *   — montant figé : la somme ne bouge plus quand le revenu change, et c'est la
  *     part en % qui se recalcule.
  * Ce choix est MANUEL, ligne par ligne (le cadenas) : c'est l'utilisateur qui
- * sait quelles catégories correspondent à une dépense réelle. La page le dit de
- * trois façons, parce que l'effet ne se voit qu'au moment où le revenu change :
- * la colonne du cadenas est nommée, l'aide sous le tableau décrit l'état
- * courant, et le champ qui ne fait pas foi s'efface (voir `AmountInput`).
+ * sait quelles catégories correspondent à une dépense réelle. La page le dit
+ * dans le tableau lui-même — la colonne du cadenas est nommée, chaque cadenas
+ * porte son infobulle, et le champ qui ne fait pas foi s'efface (voir
+ * `AmountInput`) ; le paragraphe d'aide qui reprenait tout ça sous le tableau a
+ * été retiré.
  * Le « Reste » non alloué se calcule tout seul ; au-delà de 100 %, la barre se
  * normalise sur le total pour rester lisible et le dépassement est annoncé.
  *
@@ -43,7 +44,7 @@
  */
 
 import React from "react";
-import { Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
+import { Copy, Lock, Plus, RotateCcw, Trash2, Unlock, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
@@ -226,6 +227,40 @@ export default function BudgetPage() {
     }));
   };
 
+  /* Dupliquer : repartir d'un plan existant plutôt que du 50/30/20, pour
+     comparer deux variantes du même budget (avec et sans le crédit, revenu
+     actuel contre revenu visé) sans ressaisir dix catégories.
+
+     Les catégories sont recopiées une à une, avec un id NEUF chacune : le
+     nouveau plan doit pouvoir être modifié sans toucher l'original, et un `map`
+     d'objets partagés laisserait les deux plans sur les mêmes références.
+     L'id sert de clé React pour la ligne, et le brouillon de saisie de
+     `PctInput` / `AmountInput` vit dans le composant : garder l'id d'origine
+     ferait suivre à la copie le champ en cours de frappe de l'original.
+
+     Le nom est tronqué à la même longueur que le champ qui le porte, sinon un
+     nom déjà long ressortirait plus long que ce que l'utilisateur peut ressaisir. */
+  const duplicatePlan = () => {
+    const id = newId();
+    focusPlanId.current = id;
+    setConfirmDelete(false);
+    setStore((s) => {
+      const src = s.plans.find((p) => p.id === plan.id) || plan;
+      const copy = {
+        id,
+        name: t("budget.copyName").replace("{name}", src.name || "").slice(0, 30),
+        income: src.income,
+        items: (Array.isArray(src.items) ? src.items : []).map((it) => ({ ...it, id: newId() })),
+      };
+      /* Juste APRÈS l'original, pas en fin de liste : les deux variantes se
+         lisent alors côte à côte dans le sélecteur. */
+      const at = s.plans.findIndex((p) => p.id === plan.id);
+      const next = [...s.plans];
+      next.splice(at < 0 ? next.length : at + 1, 0, copy);
+      return { ...s, plans: next, activeId: id };
+    });
+  };
+
   const deletePlan = () => {
     setConfirmDelete(false);
     setStore((s) => {
@@ -276,7 +311,6 @@ export default function BudgetPage() {
   const totalPct = items.reduce((s, it) => s + pctOf(it, plan.income), 0);
   const rest = plan.income * (1 - totalPct / 100);
   const over = totalPct > 100;
-  const hasFixed = items.some((it) => it.fixed);
   // Au-delà de 100 %, la barre se normalise sur le total : elle reste pleine et
   // les proportions restent comparables entre elles.
   const barScale = Math.max(totalPct, 100);
@@ -304,6 +338,12 @@ export default function BudgetPage() {
                   onClick={() => updateActive((p) => ({ ...p, income: DEFAULT_INCOME, items: defaultItems() }))}
                 >
                   {t("budget.reset")}
+                </GhostButton>
+                <GhostButton
+                  icon={<Copy size={14} strokeWidth={1.75} />}
+                  onClick={duplicatePlan}
+                >
+                  {t("budget.duplicate")}
                 </GhostButton>
                 {/* La suppression demande confirmation SUR PLACE : un plan
                     entier disparaît, et il n'y a pas d'annulation. Le bouton
@@ -580,17 +620,6 @@ export default function BudgetPage() {
               <span style={{ width: COL_BTN, flexShrink: 0 }} aria-hidden="true" />
               <span style={{ width: COL_BTN, flexShrink: 0 }} aria-hidden="true" />
             </div>
-          </div>
-
-          {/* Le cadenas est la seule commande de la page dont l'effet est différé :
-              il ne se voit qu'au moment où le revenu change. On l'explique donc
-              toujours — avant, pour dire qu'il existe ; après, pour dire ce qu'il
-              fait maintenant que des sommes sont figées. */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.5, color: T.textSub }}>
-            {hasFixed
-              ? <Lock size={13} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 3 }} aria-hidden="true" />
-              : <Unlock size={13} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 3 }} aria-hidden="true" />}
-            <span>{t(hasFixed ? "budget.fixedHint" : "budget.lockHint")}</span>
           </div>
 
           {over && (

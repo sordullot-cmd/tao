@@ -125,11 +125,11 @@ describe("Page Cashflow", () => {
     render(<CashflowPage setPage={() => {}} />);
 
     /* La fenêtre d'un mois commence le 1er août : rien de juillet n'y entre. */
-    /* Chaque chiffre paraît plusieurs fois, et c'est voulu : comme onglet sous le
-       diagramme, comme centre de l'anneau quand c'est lui qu'il détaille, et
-       « Reste » aussi comme dernière branche du flux — c'est là qu'on voit qu'il
-       en fait partie. */
-    expect(screen.getAllByText("Money out").length).toBeGreaterThan(0);
+    /* Chaque chiffre paraît plusieurs fois, et c'est voulu : comme onglet dans la
+       carte de l'anneau, comme centre de cet anneau quand c'est lui qu'il
+       détaille, et « Reste » aussi comme dernière branche du flux — c'est là
+       qu'on voit qu'il en fait partie. */
+    expect(screen.getAllByText("Spending").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Left over/).length).toBeGreaterThan(0);
     expect(pageText()).toMatch(/170\.00/);   // dépensé
     expect(pageText()).toMatch(/1,840\.00/); // encaissé
@@ -218,21 +218,23 @@ describe("Page Cashflow", () => {
     expect(edfDansLaListe()).toBe(false);
   });
 
-  /* Les quatre chiffres de la fenêtre, et ce qu'ils commandent. « Disponible »
-     et « Dépenses récurrentes » ne se lisent nulle part ailleurs sur la page :
-     le premier est le solde de la fenêtre, le second ce qui repartira le mois
-     prochain quoi qu'il arrive. */
-  it("donne quatre chiffres, dont le disponible et le récurrent", () => {
+  /* Les quatre chiffres de la fenêtre, et ce qu'ils commandent. Le reste et les
+     charges fixes ne se lisent nulle part ailleurs sur la page : le premier est
+     le solde de la fenêtre, le second ce qui repartira le mois prochain quoi
+     qu'il arrive. Ils vivent dans la carte de l'anneau, qu'ils commandent —
+     `aria-controls` le dit, et c'est ce qui les rend joignables par leur rôle
+     d'onglet. */
+  it("donne quatre chiffres, dont le reste et les charges fixes", () => {
     render(<CashflowPage setPage={() => {}} />);
 
     expect(screen.getByRole("tab", { name: /Money in/ }).textContent).toContain("1,840.00");
-    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("170.00");
-    expect(screen.getByRole("tab", { name: /Available/ }).textContent).toContain("1,670.00");
+    expect(screen.getByRole("tab", { name: /Spending/ }).textContent).toContain("170.00");
+    expect(screen.getByRole("tab", { name: /Left over/ }).textContent).toContain("1,670.00");
     /* Carrefour revient en juillet ET en août pour 100 € : c'est la seule
        contrepartie de ce relevé dont le montant tienne d'un mois sur l'autre.
        Les 50 € du 1er août sont bien du même marchand, mais la récurrence se
        détecte par contrepartie, pas par opération : ils comptent donc aussi. */
-    expect(screen.getByRole("tab", { name: /Recurring/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Fixed costs/ })).toBeTruthy();
   });
 
   it("déplace la fenêtre sans changer sa longueur", () => {
@@ -249,7 +251,7 @@ describe("Page Cashflow", () => {
        laisser de trou. Entrent le prélèvement du 20 (80 €) et les courses du
        1er (100 €) ; tout ce qui était compté au-dessus sort. */
     expect(screen.getByText("Jul 1 – Jul 31")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /Money out/ }).textContent).toContain("180.00");
+    expect(screen.getByRole("tab", { name: /Spending/ }).textContent).toContain("180.00");
     expect((screen.getByLabelText("Next window") as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -307,7 +309,7 @@ describe("Page Cashflow", () => {
 
     expect(pageText()).toContain("Connect a bank");
     // Ni chiffres de tête, ni postes : il n'y a rien à répartir.
-    expect(screen.queryAllByText("Money out")).toHaveLength(0);
+    expect(screen.queryAllByText("Spending")).toHaveLength(0);
     expect(screen.queryByText(cat("food"))).toBeNull();
     /* Le renvoi vers le budget, lui, ne dépend d'aucune banque : le plan reste
        joignable là où il n'y a pas encore de relevé. */

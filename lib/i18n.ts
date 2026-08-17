@@ -973,6 +973,9 @@ const FR: Dict = {
   "patrimoine.budgetEmpty": "Aucune catégorie dans ce budget.",
   "patrimoine.budgetOthers": "{n} autre(s)",
   "budget.reset": "Réinitialiser",
+  "budget.duplicate": "Dupliquer",
+  /* Nom du duplicata. Tronqué à 30 caractères à l'usage, comme le champ. */
+  "budget.copyName": "{name} (copie)",
   "budget.confirmDelete": "Confirmer ?",
   "budget.income": "Revenu mensuel (environ)",
   "budget.barAria": "Répartition du budget : {pct} % alloués",
@@ -985,8 +988,6 @@ const FR: Dict = {
   "budget.shareAmountAria": "Montant de {name}",
   "budget.fixAmount": "Figer le montant de {name} (il ne suivra plus le revenu)",
   "budget.unfixAmount": "Montant de {name} figé — le rendre proportionnel au revenu",
-  "budget.lockHint": "Une catégorie correspond à une somme déjà engagée (loyer, abonnement, crédit) ? Ferme son cadenas : elle gardera exactement ce montant quand tu modifieras ton revenu, et c'est sa part en % qui s'ajustera.",
-  "budget.fixedHint": "Les montants figés ne bougent pas quand tu modifies le revenu : c'est leur part en % qui s'ajuste. Le cadenas fige ou libère une catégorie.",
   "budget.removeCategory": "Supprimer {name}",
   "budget.addCategory": "Ajouter une catégorie",
   "budget.newCategory": "Nouvelle catégorie",
@@ -1255,10 +1256,27 @@ const FR: Dict = {
   "cashflow.title": "Cashflow",
   "cashflow.subtitle": "Ce qui entre, ce qui sort, ce qu'il reste — d'après le relevé de tes comptes agrégés.",
   "cashflow.openBudget": "Voir mon budget type",
+  /* Les quatre chiffres du bloc de flux, et ce que chacun veut dire.
+     « Sorties » et « Disponible » sont partis : le premier disait le sens du
+     mouvement là où on veut savoir de quoi il s'agit (des dépenses), le second
+     promettait un solde utilisable alors que le chiffre n'est que la différence
+     de la fenêtre — ce qui restait, pas ce qui reste. « Charges fixes » plutôt
+     que « Dépenses récurrentes » : deux libellés commençant par « Dépenses » se
+     lisaient comme deux tranches du même total, et la règle de détection ne
+     retient que ce qui revient à montant stable (abonnements, loyers,
+     mensualités), ce qu'un nom de charge dit mieux.
+
+     Chaque chiffre porte une phrase (`cashflow.hint.*`) : le nom seul ne
+     distingue pas deux totaux de la même matière, et l'anneau la donne sous
+     lui. */
   "cashflow.moneyIn": "Entrées",
-  "cashflow.moneyOut": "Sorties",
-  "cashflow.available": "Disponible",
-  "cashflow.recurring": "Dépenses récurrentes",
+  "cashflow.moneyOut": "Dépenses",
+  "cashflow.recurring": "Charges fixes",
+  "cashflow.hint.in": "Tout ce qui est arrivé sur tes comptes, et d'où ça vient.",
+  "cashflow.hint.out": "Où l'argent est parti, poste par poste.",
+  "cashflow.hint.left": "Ce qui restait des entrées une fois tout payé.",
+  "cashflow.hint.drawn": "Ce qu'il a fallu prendre sur ton solde pour tenir la période.",
+  "cashflow.hint.recurring": "Ce qui repartira le mois prochain quoi qu'il arrive.",
   "cashflow.range": "Période affichée",
   "cashflow.custom": "Personnalisé",
   "cashflow.prevRange": "Période précédente",
@@ -2334,6 +2352,8 @@ const EN: Dict = {
   "patrimoine.budgetEmpty": "This budget has no categories yet.",
   "patrimoine.budgetOthers": "{n} more",
   "budget.reset": "Reset",
+  "budget.duplicate": "Duplicate",
+  "budget.copyName": "{name} (copy)",
   "budget.confirmDelete": "Confirm?",
   "budget.income": "Monthly income (approx.)",
   "budget.barAria": "Budget split: {pct}% allocated",
@@ -2346,8 +2366,6 @@ const EN: Dict = {
   "budget.shareAmountAria": "{name} amount",
   "budget.fixAmount": "Lock {name}'s amount (it will stop following income)",
   "budget.unfixAmount": "{name}'s amount is locked — make it follow income again",
-  "budget.lockHint": "Is a category already committed to a set amount (rent, a subscription, a loan)? Close its padlock: it will keep exactly that amount when you change your income, and its share in % will adjust instead.",
-  "budget.fixedHint": "Locked amounts stay put when you change your income: their share in % adjusts instead. The padlock locks or releases a category.",
   "budget.removeCategory": "Remove {name}",
   "budget.addCategory": "Add a category",
   "budget.newCategory": "New category",
@@ -2609,10 +2627,20 @@ const EN: Dict = {
   "cashflow.title": "Cashflow",
   "cashflow.subtitle": "What comes in, what goes out, what is left — from the statements of your connected accounts.",
   "cashflow.openBudget": "See my target budget",
+  // The four figures of the flow block, and what each one means. "Money out" and
+  // "Available" are gone: the first named a direction where the reader wants the
+  // subject (spending), the second promised a usable balance when the figure is
+  // only the window's difference. "Fixed costs" rather than "Recurring spend":
+  // two labels both about spending read as two slices of one total, and the rule
+  // only keeps what comes back at a stable amount.
   "cashflow.moneyIn": "Money in",
-  "cashflow.moneyOut": "Money out",
-  "cashflow.available": "Available",
-  "cashflow.recurring": "Recurring spend",
+  "cashflow.moneyOut": "Spending",
+  "cashflow.recurring": "Fixed costs",
+  "cashflow.hint.in": "Everything that landed in your accounts, and where it came from.",
+  "cashflow.hint.out": "Where the money went, category by category.",
+  "cashflow.hint.left": "What was left of the money in once everything was paid.",
+  "cashflow.hint.drawn": "What you had to take out of your balance to get through the period.",
+  "cashflow.hint.recurring": "What will go out again next month no matter what.",
   "cashflow.range": "Window shown",
   "cashflow.custom": "Custom",
   "cashflow.prevRange": "Previous window",

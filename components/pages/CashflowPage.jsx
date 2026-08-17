@@ -392,9 +392,9 @@ export default function CashflowPage({ setPage }) {
       ) : (
         <>
           {/* ── 1. Le flux ─────────────────────────────────────────────────
-              Le diagramme, ses trois chiffres et sa répartition : le même bloc
-              que la page Budget, qui pose la question sur un mois calendaire là
-              où celle-ci la pose sur la fenêtre choisie. */}
+              Le diagramme à gauche, l'anneau et ses quatre chiffres à droite :
+              le même bloc que la page Budget, qui pose la question sur un mois
+              calendaire là où celle-ci la pose sur la fenêtre choisie. */}
           <CashflowSummary txs={txs} history={all} clip={GRAPH_CLIP} />
 
           {/* ── 2. Le détail : les postes, puis les entrées ─────────────────── */}
