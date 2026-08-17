@@ -10,27 +10,23 @@
  * est la même que dans l'anneau et le diagramme de flux, est conservée : c'est
  * elle qui relie la ligne du tableau à sa part dans les graphiques.
  *
- * ── Un cercle BLANC, la couleur dans le glyphe ──────────────────────────────
- * Le disque a d'abord été plein — la couleur du poste en aplat, le glyphe par
- * dessus. Deux essais, deux impasses : en blanc, le trait donnait un pictogramme
- * d'application ; du même ton en plus foncé, un camaïeu qui empâtait la couleur
- * et rendait les vingt-huit postes difficiles à distinguer les uns des autres à
- * cette taille.
+ * ── Un disque PLEIN, le glyphe en blanc ─────────────────────────────────────
+ * Même traitement que les pastilles d'habitudes : la couleur du poste en aplat,
+ * le dessin en blanc par dessus. Les deux pages posent la même vignette ronde
+ * devant un libellé, elles ne doivent pas la peindre chacune à sa façon.
  *
- * C'est l'inverse qui tient : le cercle s'efface (une pointe de la teinte, assez
- * pour que la vignette existe sur une carte blanche) et la COULEUR passe dans le
- * glyphe, à pleine force. Une teinte pure sur du blanc se reconnaît au premier
- * coup d'œil, là où la même teinte diluée dans un aplat se confond avec sa
- * voisine — et la colonne cesse de crier à côté des logos d'enseignes, qui
- * gardent leurs aplats de marque.
+ * Un état antérieur faisait l'inverse — cercle quasi blanc, teinte pure dans le
+ * glyphe — pour que vingt-huit postes restent distinguables les uns des autres à
+ * cette taille : c'est ce que l'aplat coûte, des teintes voisines s'y confondent
+ * plus vite. Le gain, lui, est la parenté d'un bout à l'autre de l'app.
  *
  * ── Le contraste n'est pas laissé à l'œil ───────────────────────────────────
- * Sur un disque quasi blanc, un trait de 2 px doit tenir 4,5:1 pour se lire, et
- * la palette des postes mélange des teintes sombres (bordeaux) et claires (cyan,
- * mauve, ambre) : à pleine saturation, huit d'entre elles passaient sous le
- * seuil. `deepen` (cf. `lib/ui/color`) ramène chacune juste au niveau de
- * profondeur qu'il faut, en mélangeant vers le NOIR et jamais vers le gris — la
- * teinte est conservée, et les couleurs déjà sombres ne bougent pas.
+ * Un glyphe blanc ne tient pas sur n'importe quelle teinte : la palette des
+ * postes mélange des couleurs sombres (bordeaux) et claires (cyan, mauve,
+ * ambre), et sur ces dernières le trait s'évanouit. Le DISQUE est donc descendu
+ * juste assez pour que le blanc tienne son rapport — `inkOn` mélange vers le
+ * noir et jamais vers le gris, la teinte est conservée, et les couleurs déjà
+ * assez profondes ne bougent pas d'un cran.
  *
  * Le choix des icônes est de la PRÉSENTATION, pas du classement : il vit donc
  * ici et non dans `lib/bank/categories`, qui décide des postes et de leurs
@@ -45,27 +41,14 @@ import {
   Sparkles, Ticket, TrainFront, UtensilsCrossed, Wallet, Zap,
 } from "lucide-react";
 import { categoryColor } from "@/lib/bank/categories";
-import { inkOn, toLuminance } from "@/lib/ui/color";
+import { inkOn } from "@/lib/ui/color";
+import { T } from "@/lib/ui/tokens";
 
-/* Le disque, et le glyphe dessus — tous deux dérivés de la couleur du poste.
-   Les valeurs viennent d'une mesure de contraste sur les 28 postes, pas de
-   l'œil : cf. l'en-tête.
-
-   Le disque était à 88 % de blanc : il se lisait comme blanc, et c'était bien le
-   problème — une colonne de vingt vignettes dont on ne distinguait plus les
-   teintes ne distingue plus rien du tout. Il est maintenant ramené à une
-   LUMINANCE CONSTANTE, la même pour les vingt-huit postes : comme ils sont tous
-   au même niveau de clarté, il ne reste que la teinte pour les séparer.
-
-   0,75 est le réglage : la couleur posée à un quart de sa force sur du blanc.
-   Assez pour qu'on la nomme, pas assez pour que la vignette pèse — à 0,55, la
-   colonne criait à côté des logos d'enseignes, qui gardent leurs aplats de
-   marque et doivent rester les seuls à porter de la couleur pleine.
-
-   Le glyphe descend de la MÊME teinte, juste assez pour tenir 4,5:1 sur son
-   disque : un noir neutre casserait la parenté entre le dessin et son fond. */
-const DISC_LUM = 0.75;
-const GLYPH_RATIO = 4.5;
+/* Rapport minimal du disque avec le BLANC du glyphe. 3:1, le seuil des éléments
+   graphiques : un trait de 2 px n'est pas du texte de lecture, et exiger 4,5:1
+   noircirait l'ambre et le cyan au point de leur ôter leur teinte. Les couleurs
+   qui l'atteignent déjà sont posées telles quelles. */
+const DISC_RATIO = 3;
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste
    ACHÈTE, pas la famille dans laquelle il est rangé : « carburant » prend la
@@ -114,14 +97,16 @@ const ICONS = {
 export default function CategoryIcon({ category, size = 32 }) {
   const Icon = ICONS[category] || Shapes;
   const color = categoryColor(category);
-  const disc = toLuminance(color, DISC_LUM);
+  /* Le blanc littéral, et non `T.white` : c'est le rapport avec le GLYPHE qu'on
+     mesure, et `contrast` lit des couleurs, pas des variables CSS. */
+  const disc = inkOn(color, "#FFFFFF", DISC_RATIO);
   return (
     <span
       aria-hidden="true"
       style={{
         width: size, height: size, flexShrink: 0, borderRadius: 999,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: disc, color: inkOn(color, disc, GLYPH_RATIO),
+        background: disc, color: T.onSolid,
       }}
     >
       <Icon size={Math.round(size * 0.52)} strokeWidth={2} />

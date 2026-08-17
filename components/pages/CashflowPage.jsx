@@ -105,13 +105,16 @@ const defaultCustom = () => {
    monte donc l'écrêtage jusqu'à ce que le dessin sait porter, pour qu'il ne reste
    à regrouper que la queue — les postes à une opération et deux euros.
 
-   Dix-huit est un PLAFOND DE DESSIN, pas un choix de goût, et ce n'est pas le
-   libellé qui le fixe : passé une douzaine de branches, la colonne passe d'elle-
-   même en libellés d'une seule ligne (cf. `labelDense` dans lib/ui/sankeyGraph),
-   qui tiennent à 20 px de pas — les 640 px du dessin en logent trente. C'est
-   l'ÉPAISSEUR des rubans qui cède la première : à dix-neuf branches, les jours
-   entre elles mangent déjà 190 px et les plus petites tombent sur leur plancher
-   de 3 px. Au-delà, on dessinerait des traits en prétendant montrer un flux.
+   Dix-huit est un PLAFOND DE DESSIN, pas un choix de goût : le dessin s'allonge
+   pour donner à chaque nom la place de tenir en face de sa branche (cf.
+   `heightNeeded` dans lib/ui/sankeyGraph), mais c'est l'ÉPAISSEUR des rubans qui
+   cède — à dix-neuf branches, les jours entre elles mangent déjà 190 px et les
+   plus petites tombent sur leur plancher de 3 px. Au-delà, on dessinerait des
+   traits en prétendant montrer un flux.
+
+   Le RANG n'est d'ailleurs plus le seul motif de regroupement : `MIN_BRANCH`
+   ci-dessous écarte les branches trop petites pour se voir, quel que soit leur
+   rang — c'est ce qui limite vraiment le nombre de rubans en pratique.
 
    Huit sources pour la même raison, et elles servent : le classement des entrées
    est plus fin qu'avant (salaire, freelance, aides, retraite, intérêts,
@@ -127,6 +130,19 @@ const defaultCustom = () => {
    elles-mêmes. Posée au niveau du module et non en littéral dans le rendu : un
    objet neuf à chaque passage ferait reconstruire le graphe pour rien. */
 const GRAPH_CLIP = { topOutflows: 18, topInflows: 8 };
+
+/* Montant en dessous duquel une branche rejoint le « + N autres », par fenêtre.
+   Un même montant ne pèse pas pareil selon la profondeur regardée : 20 € de
+   frais bancaires sur un mois, c'est une ligne du budget ; sur un an, c'est un
+   trait de trois pixels qui traîne un nom en face de lui et repousse d'autant les
+   branches voisines. Le seuil suit donc la fenêtre — cinq euros au mois,
+   vingt-cinq au trimestre et à l'année.
+
+   La fenêtre LIBRE prend le seuil de la profondeur qu'elle couvre : au-delà de
+   six semaines, elle se lit comme un trimestre. */
+const MIN_BRANCH = { "1M": 5, "3M": 25, "1A": 25 };
+const MIN_BRANCH_LONG = 25;
+const CUSTOM_SHORT_DAYS = 45;
 
 /** Marchands montrés dans le classement. Au-delà, ce n'est plus un « top ». */
 const TOP_MERCHANTS = 8;
@@ -248,6 +264,15 @@ export default function CashflowPage({ setPage }) {
   }, [period, custom, offset]);
 
   const depth = Math.max(daysSince(range.from), 90);
+
+  /* L'écrêtage du diagramme, seuil compris. Mémoïsé : un objet neuf à chaque
+     rendu ferait reconstruire le graphe pour rien (cf. `GRAPH_CLIP`). */
+  const graphClip = React.useMemo(() => {
+    const span = daysSince(range.from, parseDay(range.to)); // bornes incluses
+    const minAmount = MIN_BRANCH[period]
+      ?? (span <= CUSTOM_SHORT_DAYS ? MIN_BRANCH["1M"] : MIN_BRANCH_LONG);
+    return { ...GRAPH_CLIP, minAmount };
+  }, [period, range]);
 
   const uids = React.useMemo(() => bank.accounts.map((a) => a.uid), [bank.accounts]);
   const { byUid, loading } = useBankTransactionsAll(uids, depth);
@@ -414,7 +439,7 @@ export default function CashflowPage({ setPage }) {
               Le diagramme à gauche, l'anneau et ses quatre chiffres à droite :
               le même bloc que la page Budget, qui pose la question sur un mois
               calendaire là où celle-ci la pose sur la fenêtre choisie. */}
-          <CashflowSummary txs={txs} history={all} clip={GRAPH_CLIP} />
+          <CashflowSummary txs={txs} history={all} clip={graphClip} />
 
           {/* ── 2. Le détail : les postes, puis les entrées ─────────────────── */}
           <div

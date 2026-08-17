@@ -151,6 +151,43 @@ describe("Flux mis en balance", () => {
       .toEqual(["housing", "food"]);
   });
 
+  it("écarte les branches trop petites pour se voir, quel que soit leur rang", () => {
+    /* `minAmount` est un seuil de LISIBILITÉ : sur un an, un poste à 15 € est un
+       trait de trois pixels qui traîne un nom en face de lui. Il rejoint le
+       « + N autres » sans que le total bouge d'un centime. */
+    const txs = [
+      tx("VIR SEPA SALAIRE", 5000, "transfer"),
+      tx("PRLV SEPA FONCIA SYNDIC", -900, "direct_debit"),
+      tx("CARTE 10/08 CARREFOUR", -400),
+      tx("PRLV SEPA NETFLIX.COM", -20, "direct_debit"),
+      tx("CARTE 10/08 UGC CINE CITE", -15),
+      tx("CARTE 10/08 DECATHLON", -8),
+    ];
+
+    const large = buildCashflow(txs, { topOutflows: 18, minAmount: 25 });
+    expect(large.outflows.filter((n) => n.kind === "category").map((n) => n.id))
+      .toEqual(["housing", "food"]);
+    // Les trois petits sont rassemblés, et le total dépensé ne bouge pas.
+    expect(large.outflows.find((n) => n.id === "more")).toMatchObject({ count: 3 });
+    expect(large.spent).toBeCloseTo(1343, 2);
+    expect(large.outflows.reduce((s, n) => s + n.amount, 0)).toBeCloseTo(large.total, 2);
+
+    // Le même relevé sur un mois : le seuil est plus bas, tout garde son nom.
+    const small = buildCashflow(txs, { topOutflows: 18, minAmount: 5 });
+    expect(small.outflows.some((n) => n.id === "more")).toBe(false);
+    expect(small.outflows.filter((n) => n.kind === "category")).toHaveLength(5);
+  });
+
+  it("garde son nom au seul poste qui reste, même sous le seuil", () => {
+    /* Tout écarter laisserait un diagramme qui ne nomme plus rien : un « + 1
+       autre poste » seul en face du budget n'apprend rien de plus qu'un nom. */
+    const flow = buildCashflow(
+      [tx("VIR SEPA SALAIRE", 100, "transfer"), tx("CARTE 10/08 CARREFOUR", -12)],
+      { minAmount: 25 },
+    );
+    expect(flow.outflows.filter((n) => n.kind === "category").map((n) => n.id)).toEqual(["food"]);
+  });
+
   it("rend un flux vide quand le relevé ne porte rien", () => {
     const flow = buildCashflow([]);
     expect(flow).toMatchObject({ income: 0, spent: 0, net: 0, total: 0 });

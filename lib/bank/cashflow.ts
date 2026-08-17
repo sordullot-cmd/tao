@@ -214,6 +214,20 @@ export interface CashflowOptions {
   /** Sources de revenus montrées à part. Au-delà, elles sont regroupées aussi. */
   topInflows?: number;
   /**
+   * Montant en dessous duquel un poste (ou une source) n'a plus sa propre
+   * branche : il rejoint le regroupement « + N autres », comme s'il était au-delà
+   * du rang `topOutflows`.
+   *
+   * C'est un seuil de LISIBILITÉ, et il dépend de la fenêtre regardée : sur un
+   * an, un poste à 12 € est un trait de deux pixels qui traîne un nom en face de
+   * lui, alors que sur un mois le même montant se voit encore. L'appelant le
+   * règle donc en fonction de la profondeur affichée (cf. `CashflowPage`).
+   *
+   * Défaut : le seuil des miettes (`CRUMB`), soit le comportement d'avant —
+   * seuls les arrondis à quelques centimes disparaissent.
+   */
+  minAmount?: number;
+  /**
    * Ce qui fait une source : QUI paie (défaut), ou seulement la NATURE de
    * l'entrée.
    *
@@ -253,7 +267,7 @@ export interface Cashflow {
  */
 export function buildCashflow(
   txs: CategorizableTransaction[],
-  { topOutflows = 8, topInflows = 5, groupIncome = "payer" }: CashflowOptions = {},
+  { topOutflows = 8, topInflows = 5, groupIncome = "payer", minAmount = CRUMB }: CashflowOptions = {},
 ): Cashflow {
   const { slices: spending, total: spent } = spendingByCategory(txs);
   const { slices: incomes, total: income } = incomeBySource(txs);
@@ -263,14 +277,19 @@ export function buildCashflow(
      premières sources y tient une fois rassemblé. Après l'écrêtage, ils se
      seraient d'abord fait couper, puis auraient été refondus à un — ce qui aurait
      produit un « + N autres » là où il n'y avait plus rien à regrouper. */
+  const floor = Math.max(minAmount, CRUMB);
+
   const inflows = clip(
     (groupIncome === "nature" ? byNature(incomes) : incomes).map<FlowNode>((s) => ({
       id: s.id, kind: "income", color: s.color, amount: s.amount, count: s.count,
       sub: s.sub, source: s.source,
     })),
     topInflows,
+    floor,
   );
 
+  /* Les miettes sont toujours ÉCARTÉES, elles, et non regroupées : deux centimes
+     de régularisation n'ont pas à faire monter le compte du « + N autres ». */
   const outflows = clip(
     spending
       .filter((s) => s.amount >= CRUMB)
@@ -278,6 +297,7 @@ export function buildCashflow(
         id: s.id, kind: "category", color: categoryColor(s.id), amount: s.amount, count: s.count,
       })),
     topOutflows,
+    floor,
   );
 
   /* La fermeture du bilan. Sous le seuil des miettes on ne l'ajoute pas : un
@@ -326,13 +346,23 @@ const synthetic = (id: FlowSynthetic, amount: number, count = 0): FlowNode => ({
   id, kind: "synthetic", color: SYNTHETIC_COLORS[id], amount: round2(amount), count,
 });
 
-/** Les `top` premiers nœuds, la queue regroupée sous « more » quand il y en a
- *  plus d'un à regrouper — sinon le nœud « more » remplacerait un poste nommé
- *  par un « + 1 autre poste », ce qui ne fait que perdre son nom. */
-function clip(nodes: FlowNode[], top: number): FlowNode[] {
-  if (nodes.length <= top + 1) return nodes;
-  const head = nodes.slice(0, top);
-  const tail = nodes.slice(top);
+/**
+ * Les nœuds qui gardent leur propre branche, la queue regroupée sous « more ».
+ *
+ * Deux raisons de rejoindre le regroupement, et la liste étant triée du plus gros
+ * au plus petit, les deux découpent le même préfixe : être au-delà du rang `top`,
+ * ou peser moins que `min`. Le second est ce qui fait disparaître les branches
+ * qu'on ne peut plus ni voir ni nommer (cf. `minAmount`).
+ *
+ * Le regroupement n'est fabriqué que s'il y a plus d'un nœud à regrouper : sinon
+ * il remplacerait un poste nommé par un « + 1 autre poste », ce qui ne fait que
+ * perdre son nom.
+ */
+function clip(nodes: FlowNode[], top: number, min = 0): FlowNode[] {
+  const keep = nodes.findIndex((n, i) => i >= top || n.amount < min);
+  if (keep < 0 || nodes.length - keep < 2) return nodes;
+  const head = nodes.slice(0, keep);
+  const tail = nodes.slice(keep);
   const amount = tail.reduce((s, n) => s + n.amount, 0);
   head.push(synthetic("more", amount, tail.length));
   return head;

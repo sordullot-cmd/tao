@@ -67,8 +67,14 @@ const LEFT_COLOR = "#B9C2CB";
  *  huit sources, soit ce que l'épaisseur des rubans sait encore porter (le
  *  raisonnement est chez l'appelant, cf. `GRAPH_CLIP` dans CashflowPage). Pas de
  *  `topSubs` : le diagramme s'arrête aux postes, et les déplier double le nombre
- *  de branches pour un détail que les listes de la page donnent mieux. */
-const GRAPH_CLIP = { topOutflows: 18, topInflows: 8 };
+ *  de branches pour un détail que les listes de la page donnent mieux.
+ *
+ *  `minAmount` à cinq euros : c'est le seuil d'un MOIS, la fenêtre de l'appelant
+ *  qui ne précise rien (la page Budget travaille sur un mois calendaire). En
+ *  dessous, une branche est un trait de trois pixels qui traîne un nom en face de
+ *  lui ; elle rejoint le « + N autres postes », et reste chiffrée dans les listes
+ *  sous le dessin. La page Cashflow, qui change de profondeur, passe le sien. */
+const GRAPH_CLIP = { topOutflows: 18, topInflows: 8, minAmount: 5 };
 
 /** Les onglets et l'anneau se DÉSIGNENT l'un l'autre (`aria-controls`,
  *  `aria-labelledby`) : sans ce lien, un lecteur d'écran annonce quatre boutons

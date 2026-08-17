@@ -921,11 +921,6 @@ function HabitsChart({ habits, history }) {
   });
   // Lignes droites entre points (pas de Bezier)
   const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  // Aire fermée vers le bas du chart pour le dégradé
-  const baselineY = padT + chartH;
-  const areaD = points.length === 0
-    ? ""
-    : `${pathD} L ${points[points.length - 1].x} ${baselineY} L ${points[0].x} ${baselineY} Z`;
 
   const yTicks = [0, 50, 100];
   const xTicks = points.filter((_, i) => i === 0 || i === points.length - 1 || i % 5 === 0);
@@ -961,16 +956,10 @@ function HabitsChart({ habits, history }) {
         >
           <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
             style={{ width: "100%", height: 240, display: "block", fontFamily: "var(--font-sans)" }}>
-            {/* Aire pleine, estompée vers le bas — plus de trame de points : le
-                dégradé accompagne la courbe sans texture. */}
-            <defs>
-              <linearGradient id="habits-area" x1="0" y1={padT} x2="0" y2={padT + chartH} gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor={T.green} stopOpacity="0.18" />
-                <stop offset="100%" stopColor={T.green} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path d={areaD} fill="url(#habits-area)" stroke="none" />
-            <path d={pathD} fill="none" stroke={T.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            {/* Rien sous la courbe : ni trame ni dégradé. Le tracé seul, à
+                l'accent de marque (`T.kraken`, la couleur des courbes du site,
+                qui suit le préréglage d'accent choisi dans les Réglages). */}
+            <path d={pathD} fill="none" stroke={T.kraken} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             {hoverIdx !== null && points[hoverIdx] && (
               <line x1={points[hoverIdx].x} y1={padT} x2={points[hoverIdx].x} y2={padT + chartH} stroke={T.textMut} strokeWidth="1" strokeOpacity="0.5" vectorEffect="non-scaling-stroke" pointerEvents="none" />
             )}

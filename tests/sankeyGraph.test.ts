@@ -124,93 +124,98 @@ describe("Géométrie du diagramme de flux multi-niveaux", () => {
     expect(leaves).toEqual(["a1", "a2", "b1", "b2"]);
   });
 
-  it("écarte les pastilles qui se recouvriraient, sans quitter le dessin", () => {
-    /* Dix sous-postes fins ont dix libellés de la même hauteur : sans
-       écartement, ils s'empilent tous au même endroit. */
+  it("ne déplace JAMAIS un libellé : il reste au milieu de sa branche", () => {
+    /* Le contrat de la nouvelle géométrie. Dix branches dont neuf minces
+       tiendraient sans écartement à condition de décaler leurs noms — c'est
+       exactement ce qu'on refuse : un nom décalé désigne la branche du dessus. */
     const tiny = Array.from({ length: 10 }, (_, i) => node(`t${i}`));
-    const gap = 26;
     const { nodes } = sankeyGraphLayout(
       [node("hub"), ...tiny],
       tiny.map((n, i) => link("hub", n.id, i === 0 ? 991 : 1)),
-      { ...OPTS, labelGap: gap },
+      { ...OPTS, height: 480, labelSlot: 34 },
     );
-    const ys = nodes
-      .filter((n) => n.id !== "hub")
-      .map((n) => n.labelY)
-      .sort((a, b) => a - b);
+    for (const n of nodes) expect(n.labelY).toBeCloseTo(n.y + n.h / 2, 6);
+  });
 
-    for (let i = 1; i < ys.length; i++) {
-      expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(gap - 0.01);
+  it("écarte les branches fines pour que leurs noms tiennent", () => {
+    /* Ce sont les NŒUDS qui s'écartent, et l'écart se mesure entre leurs
+       milieux : c'est là que se posent les libellés. */
+    const slot = 34;
+    const tiny = Array.from({ length: 8 }, (_, i) => node(`t${i}`));
+    const { nodes } = sankeyGraphLayout(
+      [node("hub"), ...tiny],
+      tiny.map((n, i) => link("hub", n.id, i === 0 ? 993 : 1)),
+      { ...OPTS, height: 480, labelSlot: slot },
+    );
+    const leaves = nodes.filter((n) => n.id !== "hub").sort((a, b) => a.y - b.y);
+    for (let i = 1; i < leaves.length; i++) {
+      expect(leaves[i].labelY - leaves[i - 1].labelY).toBeGreaterThanOrEqual(slot - 0.01);
     }
-    expect(ys[0]).toBeGreaterThanOrEqual(OPTS.padTop - 0.01);
-    expect(ys[ys.length - 1]).toBeLessThanOrEqual(OPTS.padTop + OPTS.height + 0.01);
+    // Et personne ne sort du dessin pour autant.
+    expect(leaves[0].y).toBeGreaterThanOrEqual(OPTS.padTop - 0.01);
+    const last = leaves[leaves.length - 1];
+    expect(last.y + last.h).toBeLessThanOrEqual(OPTS.padTop + 480 + 0.01);
   });
 
-  it("ne déplace pas le libellé d'une branche que rien ne serre", () => {
-    /* Trois sous-postes minces collés en bas de colonne ont besoin de place ; la
-       grosse branche du haut, elle, en a déjà. Écarter les trois ne doit pas la
-       faire bouger d'un pixel — c'est ce qui faisait « remonter » toute la
-       colonne, et un nom qui remonte désigne la branche du dessus. */
+  it("garde le jour minimal entre deux grosses branches, qui ont déjà la place", () => {
+    /* L'écartement n'est pas un pas fixe : deux bandes épaisses satisfont déjà la
+       contrainte par leur seule épaisseur, les écarter davantage ne ferait que
+       manger la hauteur du dessin. */
     const { nodes } = sankeyGraphLayout(
-      [node("hub"), node("big"), node("s0"), node("s1"), node("s2")],
-      [
-        link("hub", "big", 900),
-        link("hub", "s0", 4), link("hub", "s1", 3), link("hub", "s2", 2),
-      ],
-      { ...OPTS, labelGap: 34 },
+      [node("hub"), node("A"), node("B")],
+      [link("hub", "A", 500), link("hub", "B", 500)],
+      { ...OPTS, labelSlot: 34 },
     );
-    const big = nodes.find((n) => n.id === "big")!;
-    expect(big.labelY).toBeCloseTo(big.centreY, 6);
+    const [a, b] = nodes.filter((n) => n.id !== "hub").sort((p, q) => p.y - q.y);
+    expect(b.y - (a.y + a.h)).toBeCloseTo(OPTS.nodeGap, 1);
   });
 
-  it("partage l'écart de part et d'autre d'une grappe, sans sens privilégié", () => {
-    /* Deux libellés qui se recouvrent s'écartent chacun d'une demi-hauteur : le
-       milieu de la paire ne bouge pas. Pousser les deux vers le bas (ou les deux
-       vers le haut) doublerait la dérive du second pour rien. */
-    const { nodes } = sankeyGraphLayout(
-      [node("hub"), node("A"), node("B"), node("a1"), node("b1"), node("b2")],
-      [
-        link("hub", "A", 700), link("hub", "B", 300),
-        link("A", "a1", 700),
-        link("B", "b1", 6), link("B", "b2", 6),
-      ],
-      { ...OPTS, labelGap: 34 },
+  it("dit la hauteur qu'il faudrait pour que tous les noms tiennent", () => {
+    /* `heightNeeded` ne dépend que du graphe : l'appelant la lit sur un premier
+       calcul et redonne cette hauteur au suivant — c'est ce qui fait GRANDIR le
+       bloc plutôt que tasser les noms. */
+    const many = Array.from({ length: 12 }, (_, i) => node(`t${i}`));
+    const slot = 34;
+    const first = sankeyGraphLayout(
+      [node("hub"), ...many],
+      many.map((n, i) => link("hub", n.id, i < 2 ? 400 : 6)),
+      { ...OPTS, labelSlot: slot },
     );
-    const pair = nodes.filter((n) => n.id === "b1" || n.id === "b2");
-    const moved = pair.map((n) => n.labelY - n.centreY);
+    expect(first.heightNeeded).toBe(12 * slot + OPTS.nodeGap * 11);
 
-    expect(moved[0] + moved[1]).toBeCloseTo(0, 1);
-    expect(Math.abs(moved[0])).toBeGreaterThan(1); // les deux ont bien bougé
-    expect(Math.min(...moved)).toBeLessThan(0); // l'un monte, l'autre descend
-    expect(Math.max(...moved)).toBeGreaterThan(0);
+    // La même hauteur redonnée : les noms tiennent, et le calcul ne la révise pas.
+    const second = sankeyGraphLayout(
+      [node("hub"), ...many],
+      many.map((n, i) => link("hub", n.id, i < 2 ? 400 : 6)),
+      { ...OPTS, height: first.heightNeeded, labelSlot: slot },
+    );
+    expect(second.heightNeeded).toBe(first.heightNeeded);
+    const leaves = second.nodes.filter((n) => n.id !== "hub").sort((a, b) => a.y - b.y);
+    for (let i = 1; i < leaves.length; i++) {
+      expect(leaves[i].labelY - leaves[i - 1].labelY).toBeGreaterThanOrEqual(slot - 0.01);
+    }
   });
 
-  it("resserre la colonne trop peuplée pour que les noms restent en face", () => {
-    /* Quatorze branches dont douze minces : à deux lignes par libellé (34 px),
-       aucun arrangement ne les garde en face de leur ruban. La colonne repasse
-       alors au pas d'une seule ligne, et le dit par `labelDense`. */
-    const many = Array.from({ length: 14 }, (_, i) => node(`t${i}`));
+  it("comprime les écarts plutôt que le dessin quand la hauteur ne suffit pas", () => {
+    /* Vingt branches dans 300 px : aucun arrangement ne donne 34 px à chacune.
+       Les noms se rapprochent — ils restent en face de leur branche —, et rien
+       ne déborde du cadre. */
+    const many = Array.from({ length: 20 }, (_, i) => node(`t${i}`));
     const { nodes } = sankeyGraphLayout(
       [node("hub"), ...many],
       many.map((n, i) => link("hub", n.id, i < 2 ? 400 : 6)),
-      { ...OPTS, height: 546, labelGap: 34, labelGapTight: 20 },
+      { ...OPTS, height: 300, labelSlot: 34 },
     );
     const leaves = nodes.filter((n) => n.id !== "hub");
-
-    expect(leaves.every((n) => n.labelDense)).toBe(true);
-    // Le hub, seul dans sa colonne, n'avait aucune raison de se resserrer.
-    expect(nodes.find((n) => n.id === "hub")!.labelDense).toBe(false);
-
+    expect(leaves).toHaveLength(20);
     for (const n of leaves) {
-      expect(Math.abs(n.labelY - n.centreY)).toBeLessThanOrEqual(20);
+      // À 1 décimale : les trois valeurs sont arrondies au centième chacune.
+      expect(n.labelY).toBeCloseTo(n.y + n.h / 2, 1);
+      expect(n.y).toBeGreaterThanOrEqual(OPTS.padTop - 0.01);
+      expect(n.y + n.h).toBeLessThanOrEqual(OPTS.padTop + 300 + 0.01);
+      // Les bandes passent alors sous leur plancher : c'est le prix du cadre.
+      expect(n.h).toBeGreaterThan(0);
     }
-  });
-
-  it("garde les deux lignes quand la colonne a la place", () => {
-    const { nodes } = sankeyGraphLayout(NODES, LINKS, {
-      ...OPTS, labelGap: 34, labelGapTight: 20,
-    });
-    expect(nodes.some((n) => n.labelDense)).toBe(false);
   });
 
   it("range les libellés dans les gouttières, et centre ceux du milieu", () => {

@@ -1231,10 +1231,6 @@ function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = []
     return { x, y, ...d };
   });
   const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  const baselineY = padT + chartH;
-  const areaD = points.length > 0
-    ? `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${baselineY} L ${points[0].x.toFixed(1)} ${baselineY} Z`
-    : "";
 
   return (
     <div style={{ ...CARD, padding: 0 }}>
@@ -1270,17 +1266,10 @@ function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = []
               droite la marge reste, les libellés de valeur y respirent. */}
           <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
             style={{ width: "100%", height: 160, display: "block", overflow: "visible", fontFamily: "var(--font-sans)" }}>
-            {/* Aire en dégradé plutôt que tramée : la trame de points chargeait
-                un graphique de cette taille, où l'on ne lit qu'une seule
-                courbe. */}
-            <defs>
-              <linearGradient id="sport-area" x1="0" y1={padT} x2="0" y2={padT + chartH} gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor={T.green} stopOpacity="0.2" />
-                <stop offset="100%" stopColor={T.green} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path d={areaD} fill="url(#sport-area)" stroke="none" />
-            <path d={pathD} fill="none" stroke={T.green} strokeWidth="2.5"
+            {/* Rien sous la courbe : ni trame ni dégradé. Le tracé seul, à
+                l'accent de marque (`T.kraken`, la couleur des courbes du site,
+                qui suit le préréglage d'accent choisi dans les Réglages). */}
+            <path d={pathD} fill="none" stroke={T.kraken} strokeWidth="2.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>
         </div>

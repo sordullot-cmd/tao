@@ -36,6 +36,29 @@
  *
  * • L'ANCRE DES PASTILLES de libellé. Le dessin, lui, est dans
  *   `components/ui/SankeyGraph`.
+ *
+ * ── UN NOM NE QUITTE JAMAIS SA BRANCHE ──────────────────────────────────────
+ *
+ * Un ruban de 3 px porte un libellé de 34 px : trois petites branches voisines
+ * suffisent à faire se recouvrir trois noms. Deux réponses existent, et une seule
+ * est honnête.
+ *
+ * L'ancienne DÉPLAÇAIT les libellés — grappes recentrées, traits de rappel pour
+ * dire lequel allait avec lequel, et repli sur une ligne quand la colonne était
+ * trop serrée. Un nom lu 30 px au-dessus de son ruban désigne quand même le
+ * voisin du dessus, trait ou pas : la colonne devenait un texte qu'on ne pouvait
+ * plus rattacher au dessin.
+ *
+ * Celle-ci ÉCARTE LES NŒUDS. `labelSlot` est la place qu'un nom réclame, et
+ * l'écart entre deux nœuds voisins s'élargit juste assez pour que leurs milieux
+ * soient distants d'autant — un écart n'est donc pas constant dans une colonne :
+ * il grandit là où les deux branches sont fines, et reste au minimum entre deux
+ * grosses, qui ont déjà la place. `labelY` vaut TOUJOURS le milieu du nœud.
+ *
+ * Quand la hauteur donnée n'y suffit pas, c'est au DESSIN de grandir : le calcul
+ * publie `heightNeeded`, la place que les noms réclament, et l'appelant redonne
+ * cette hauteur (cf. `SankeyGraph`). Comprimer n'arrive qu'en dernier recours,
+ * et se paie d'abord sur les écarts, jamais sur la position des noms.
  */
 
 export interface SankeyGraphNode {
@@ -74,17 +97,15 @@ export interface SankeyGraphNodeBox {
   /** Ancre horizontale du libellé : le bord d'où il part, ou le milieu de la
    *  barre pour un libellé centré. */
   labelX: number;
-  /** Hauteur de la pastille, une fois les voisines écartées (cf. `labelGap`). */
-  labelY: number;
-  /** Milieu du nœud. Diffère de `labelY` quand l'écartement a déplacé la pastille. */
-  centreY: number;
   /**
-   * Colonne SERRÉE : les libellés y sont trop nombreux pour tenir sur deux
-   * lignes chacun sans quitter leur branche. Le dessin les met alors sur une
-   * seule ligne (cf. `labelGapTight`) — c'est un choix de COLONNE, pas de nœud :
-   * tous les libellés d'une même colonne le portent ou aucun.
+   * Hauteur du libellé — TOUJOURS le milieu du nœud.
+   *
+   * C'est ce que garantit `labelSlot` : ce sont les nœuds qui s'écartent pour
+   * faire de la place aux noms, jamais les noms qui s'écartent de leur nœud
+   * (cf. l'en-tête). Le champ reste distinct de `y + h / 2` pour l'appelant,
+   * qui pose ses libellés sans refaire le calcul.
    */
-  labelDense: boolean;
+  labelY: number;
 }
 
 export interface SankeyGraphLinkBand {
@@ -123,6 +144,16 @@ export interface SankeyGraphLayout {
   columns: number;
   nodes: SankeyGraphNodeBox[];
   links: SankeyGraphLinkBand[];
+  /**
+   * Hauteur que réclament les LIBELLÉS de la colonne la plus peuplée : de quoi
+   * donner à chaque nœud la place d'un nom, plus le jour minimal entre voisins.
+   *
+   * Ne dépend que du graphe, pas de la hauteur reçue — l'appelant peut donc la
+   * lire sur un premier calcul et redonner cette hauteur au suivant. C'est ce
+   * qui fait GRANDIR le dessin quand une colonne se remplit, au lieu de tasser
+   * les noms les uns sur les autres. Vaut 0 sans libellés (`labelSlot` à 0).
+   */
+  heightNeeded: number;
 }
 
 export interface SankeyGraphOptions {
@@ -142,38 +173,90 @@ export interface SankeyGraphOptions {
    *  le dessin prend toute la largeur (régime compact). */
   gutter?: number;
   /**
-   * Hauteur d'une pastille : deux voisines d'une même colonne ne s'approchent
-   * pas plus que ça. 0 = pas d'écartement, chaque pastille reste sur son nœud.
+   * Hauteur qu'un libellé réclame, donc l'écart minimal entre les MILIEUX de deux
+   * nœuds voisins d'une même colonne (cf. l'en-tête).
+   *
+   * 0 = aucune contrainte : les nœuds ne se séparent que de `nodeGap`. C'est le
+   * régime compact, qui n'affiche aucun nom.
    */
-  labelGap?: number;
-  /**
-   * Hauteur d'une pastille SERRÉE — sur une seule ligne. Une colonne qui ne peut
-   * pas tenir à `labelGap` sans que ses noms quittent leur branche repasse à
-   * celle-ci ; le calcul le dit par `labelDense`. 0 = jamais (la colonne garde
-   * alors `labelGap`, et ses noms dérivent).
-   */
-  labelGapTight?: number;
+  labelSlot?: number;
 }
 
 /* ── Outils ─────────────────────────────────────────────────────────────── */
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-/**
- * Écart toléré entre un libellé et le milieu de sa branche, en part de la
- * hauteur du libellé.
- *
- * C'est la question « ce nom est-il encore EN FACE de son ruban ? ». À une
- * demi-hauteur, le libellé chevauche encore la ligne de sa branche et le trait
- * de rappel finit de lever le doute ; au-delà, il se lit en face du voisin, et
- * la colonne devient un texte qu'on ne peut plus rattacher au dessin. Une
- * colonne qui dépasse ce seuil se resserre plutôt que de dériver.
- */
-const LABEL_DRIFT_OK = 0.5;
-
 /** Allers-retours de relaxation, et amortissement entre deux (cf. plus bas). */
 const RELAX_PASSES = 3;
 const RELAX_DAMPING = 0.7;
+
+/** Pas de la recherche d'échelle par dichotomie. Vingt-quatre passes ramènent
+ *  l'incertitude sous le millième de pixel sur une colonne de 1000 px. */
+const SCALE_PASSES = 24;
+
+/**
+ * Jour à laisser entre deux nœuds voisins pour que leurs NOMS ne se touchent pas.
+ *
+ * La contrainte porte sur les milieux : `(ha + hb) / 2 + gap >= labelSlot`. Deux
+ * grosses branches la satisfont déjà par leur seule épaisseur et gardent le jour
+ * minimal ; deux branches fines paient la différence. C'est la seule règle
+ * d'écartement du module — les libellés, eux, ne bougent pas.
+ */
+const gapBetween = (ha: number, hb: number, nodeGap: number, labelSlot: number): number =>
+  Math.max(nodeGap, labelSlot - (ha + hb) / 2);
+
+/**
+ * Écart entre centres réellement obtenu dans une colonne, borné par `labelSlot`.
+ *
+ * Vaut `labelSlot` quand la hauteur a suffi. Sur une colonne saturée, dont les
+ * jours ont été rognés, il vaut le plus petit écart obtenu : c'est la contrainte
+ * que la relaxation peut encore garantir sans pousser un nœud hors du dessin.
+ */
+function effectiveSlot(hs: number[], gaps: number[], labelSlot: number): number {
+  if (labelSlot <= 0 || gaps.length === 0) return labelSlot;
+  let min = labelSlot;
+  for (let i = 0; i < gaps.length; i++) min = Math.min(min, (hs[i] + hs[i + 1]) / 2 + gaps[i]);
+  return min;
+}
+
+/** Hauteur occupée par une colonne : ses bandes, plus les jours entre elles. */
+function columnSpan(hs: number[], nodeGap: number, labelSlot: number): number {
+  let span = hs.reduce((s, h) => s + h, 0);
+  for (let i = 1; i < hs.length; i++) span += gapBetween(hs[i - 1], hs[i], nodeGap, labelSlot);
+  return span;
+}
+
+/**
+ * La plus grande échelle à laquelle une colonne tient dans `height`.
+ *
+ * `columnSpan` croît avec l'échelle — les bandes grossissent plus vite que les
+ * jours ne se resserrent —, ce qui autorise une simple dichotomie. Une formule
+ * fermée n'existe pas : chaque jour dépend de l'épaisseur de ses deux voisines,
+ * qui dépend elle-même du plancher `minBand`.
+ *
+ * Renvoie 0 quand la colonne ne tient pas même à bandes minimales : l'appelant
+ * comprime alors les jours (cf. `stack`).
+ */
+function columnScale(
+  values: number[], height: number, minBand: number, nodeGap: number, labelSlot: number,
+): number {
+  const total = values.reduce((s, v) => s + v, 0);
+  if (total <= 0) return Infinity;
+  const spanAt = (scale: number): number =>
+    columnSpan(values.map((v) => Math.max(v * scale, minBand)), nodeGap, labelSlot);
+
+  // Borne haute : à cette échelle les bandes seules remplissent la hauteur.
+  let hi = height / total;
+  if (spanAt(hi) <= height) return hi;
+  let lo = 0;
+  if (spanAt(0) > height) return 0;
+  for (let i = 0; i < SCALE_PASSES; i++) {
+    const mid = (lo + hi) / 2;
+    if (spanAt(mid) <= height) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
 
 /**
  * Épaisseurs d'une colonne, à l'échelle donnée puis relevées au minimum.
@@ -203,87 +286,25 @@ function fitColumn(values: number[], scale: number, minBand: number, usable: num
  * rattrape en remontant. Sans elle, un nœud déborderait du dessin à chaque
  * itération de la relaxation, et l'erreur s'accumulerait.
  */
-function resolveColumn(col: Work[], gap: number, top: number, bottom: number): void {
+function resolveColumn(
+  col: Work[], gapOf: (a: Work, b: Work) => number, top: number, bottom: number,
+): void {
   if (col.length === 0) return;
   col.sort((a, b) => a.y - b.y);
 
   let y = top;
-  for (const n of col) {
+  for (let i = 0; i < col.length; i++) {
+    const n = col[i];
     if (n.y < y) n.y = y;
-    y = n.y + n.h + gap;
+    y = n.y + n.h + (i + 1 < col.length ? gapOf(n, col[i + 1]) : 0);
   }
 
   let z = bottom;
   for (let i = col.length - 1; i >= 0; i--) {
     const n = col[i];
     if (n.y + n.h > z) n.y = z - n.h;
-    z = n.y - gap;
+    z = n.y - (i > 0 ? gapOf(col[i - 1], n) : 0);
   }
-}
-
-/**
- * Pastilles d'une colonne écartées d'au moins `minGap`, sans quitter le dessin.
- *
- * Un ruban fin porte une pastille de la même hauteur qu'un ruban épais : trois
- * petits sous-postes voisins suffisent à empiler trois libellés au même endroit.
- * Il faut donc les écarter — mais le NOM DOIT RESTER EN FACE DE SA BRANCHE : un
- * libellé qu'on lit à 80 px au-dessus du ruban qu'il désigne ne le désigne plus,
- * il désigne le voisin du dessus, et la colonne entière devient illisible.
- *
- * On écarte donc en DÉPLAÇANT LE MOINS POSSIBLE : les pastilles trop proches se
- * regroupent en GRAPPE, et la grappe se répartit autour de SON PROPRE milieu.
- * Une branche isolée ne bouge alors pas d'un pixel, et dans une grappe l'écart
- * se partage — la moitié vers le haut, la moitié vers le bas. C'est l'arrangement
- * qui minimise la somme des déplacements, et il n'a pas de sens privilégié.
- *
- * (L'ancienne version poussait tout le monde vers le bas depuis le haut, puis
- * rattrapait le débordement en remontant : trois petits postes en bas de colonne
- * suffisaient à faire remonter TOUS les libellés au-dessus d'eux, y compris ceux
- * des grosses branches qui, elles, avaient la place de rester en face.)
- *
- * `centres` est supposé CROISSANT : c'est l'ordre d'empilement de la colonne.
- */
-function spreadLabels(centres: number[], minGap: number, top: number, bottom: number): number[] {
-  const n = centres.length;
-  if (minGap <= 0 || n === 0) return centres.slice();
-
-  // Plus de place du tout (beaucoup de nœuds, peu de hauteur) : aucune position
-  // ne peut être « en face », on répartit alors régulièrement sur la hauteur.
-  if ((n - 1) * minGap >= bottom - top) {
-    const step = n > 1 ? (bottom - top) / (n - 1) : 0;
-    return centres.map((_, i) => top + i * step);
-  }
-
-  /* Une grappe : `count` pastilles consécutives collées à `minGap`, dont la
-     première est en `y`. `sum` retient les hauteurs VOULUES pour pouvoir la
-     recentrer à chaque fusion. */
-  interface Cluster { count: number; sum: number; y: number }
-  const place = (c: Cluster): void => {
-    const span = (c.count - 1) * minGap;
-    c.y = Math.min(Math.max(c.sum / c.count - span / 2, top), bottom - span);
-  };
-
-  const clusters: Cluster[] = [];
-  for (const centre of centres) {
-    const next: Cluster = { count: 1, sum: centre, y: centre };
-    place(next);
-    clusters.push(next);
-    // Tant que la dernière grappe mord sur celle d'avant, les deux n'en font
-    // qu'une — et la fusion peut en déclencher une autre, d'où la boucle.
-    while (clusters.length > 1) {
-      const b = clusters[clusters.length - 1];
-      const a = clusters[clusters.length - 2];
-      if (a.y + a.count * minGap <= b.y + 0.01) break;
-      clusters.pop();
-      a.count += b.count;
-      a.sum += b.sum;
-      place(a);
-    }
-  }
-
-  const ys: number[] = [];
-  for (const c of clusters) for (let i = 0; i < c.count; i++) ys.push(c.y + i * minGap);
-  return ys;
 }
 
 /**
@@ -337,7 +358,7 @@ export function sankeyGraphLayout(
   links: SankeyGraphLink[],
   {
     width, height, nodeW = 10, nodeGap = 14, minBand = 3,
-    padTop = 0, labelPad = 10, labelGap = 0, labelGapTight = 0, gutter = 0,
+    padTop = 0, labelPad = 10, labelSlot = 0, gutter = 0,
   }: SankeyGraphOptions,
 ): SankeyGraphLayout {
   const byId = new Map<string, Work>();
@@ -353,7 +374,7 @@ export function sankeyGraphLayout(
     (l) => l.value > 0 && byId.has(l.source) && byId.has(l.target) && l.source !== l.target,
   );
 
-  const empty: SankeyGraphLayout = { width, height, columns: 0, nodes: [], links: [] };
+  const empty: SankeyGraphLayout = { width, height, columns: 0, nodes: [], links: [], heightNeeded: 0 };
   if (byId.size === 0 || edges.length === 0 || width <= nodeW || height <= 0) return empty;
 
   const valueOf = new Map<string, number>();
@@ -406,11 +427,26 @@ export function sankeyGraphLayout(
   const live = columns.filter((c) => c.length > 0);
   if (live.length === 0) return empty;
 
+  /* La place que réclament les NOMS de la colonne la plus peuplée. Publiée telle
+     quelle : c'est à cette hauteur que le dessin donne à chaque nom la place de
+     tenir en face de sa branche (cf. `heightNeeded`). */
+  const heightNeeded = labelSlot > 0
+    ? Math.max(...live.map((col) => col.length * labelSlot + nodeGap * (col.length - 1)))
+    : 0;
+
   /* L'ÉCHELLE, commune à toutes les colonnes : la plus serrée gagne. Une échelle
      par colonne rendrait chaque colonne « pleine » et ferait mentir le dessin —
-     c'est précisément ce qu'un Sankey ne doit pas faire. */
+     c'est précisément ce qu'un Sankey ne doit pas faire.
+     Les jours entre nœuds entrent dans le calcul, et ils dépendent eux-mêmes des
+     épaisseurs quand une colonne porte des noms : d'où la dichotomie. */
   const scale = Math.min(
     ...live.map((col) => {
+      const fitted = columnScale(col.map((n) => n.value), height, minBand, nodeGap, labelSlot);
+      if (fitted > 0) return fitted;
+      /* Saturation : même à bandes minimales, les noms ne tiennent pas dans la
+         hauteur reçue. On revient à l'échelle des bandes seules et l'empilement
+         rendra la dette sur les jours — un nom qui frôle son voisin reste
+         lisible, un dessin absent ne l'est pas. */
       const total = col.reduce((s, n) => s + n.value, 0);
       const usable = Math.max(height - nodeGap * (col.length - 1), 1);
       return total > 0 ? usable / total : Infinity;
@@ -422,6 +458,13 @@ export function sankeyGraphLayout(
      retirées : le dessin rétrécit, les noms ne débordent plus. */
   const span = Math.max(width - 2 * gutter - nodeW, 1);
   const colX = (k: number): number => (maxCol === 0 ? gutter : gutter + (k * span) / maxCol);
+
+  /* Place réellement accordée aux noms, colonne par colonne : `labelSlot` tant
+     que la hauteur suffit, moins que ça sur une colonne saturée. La relaxation
+     ci-dessous s'en sert pour ne jamais exiger plus d'écart que l'empilement
+     n'en a donné — sans quoi elle ferait déborder la colonne du dessin. */
+  const slotOf: number[] = Array.from({ length: maxCol + 1 }, () => labelSlot);
+  const gapOf: number[] = Array.from({ length: maxCol + 1 }, () => nodeGap);
 
   /* Balayage GAUCHE→DROITE : on ordonne chaque colonne d'après la hauteur déjà
      fixée de la précédente, puis on l'empile. Sur un arbre, ça suffit à ne
@@ -441,15 +484,52 @@ export function sankeyGraphLayout(
       });
     }
 
-    const usable = Math.max(height - nodeGap * (col.length - 1), 1);
-    const hs = fitColumn(col.map((n) => n.value), scale, minBand, usable);
-    const span = hs.reduce((s, h) => s + h, 0) + nodeGap * (col.length - 1);
+    /* Les bandes d'abord, à l'échelle commune ; les jours ensuite, puisqu'ils
+       dépendent de l'épaisseur de leurs deux voisines. `fitColumn` reprend la
+       dette du plancher `minBand` sur les bandes qui peuvent la payer. */
+    const gapsOf = (hs: number[]): number[] =>
+      hs.slice(1).map((h, i) => gapBetween(hs[i], h, nodeGap, labelSlot));
+
+    let hs = col.map((n) => Math.max(n.value * scale, minBand));
+    const usable = Math.max(height - gapsOf(hs).reduce((s, g) => s + g, 0), 1);
+    hs = fitColumn(col.map((n) => n.value), scale, minBand, usable);
+    let gaps = gapsOf(hs);
+    let span = hs.reduce((s, h) => s + h, 0) + gaps.reduce((s, g) => s + g, 0);
+
+    /* Il reste de la dette : les bandes sont au plancher, on la prend sur les
+       jours — au prorata de ce que chacun a AU-DESSUS du minimum, et jamais en
+       dessous. Les noms se rapprochent, ils restent en face de leur branche. */
+    if (span > height + 0.01 && gaps.length > 0) {
+      const slack = gaps.reduce((s, g) => s + Math.max(g - nodeGap, 0), 0);
+      if (slack > 0) {
+        const ratio = Math.min((span - height) / slack, 1);
+        gaps = gaps.map((g) => g - Math.max(g - nodeGap, 0) * ratio);
+        span = hs.reduce((s, h) => s + h, 0) + gaps.reduce((s, g) => s + g, 0);
+      }
+    }
+
+    /* Dette résiduelle : même à jour minimal et bandes au plancher, la colonne ne
+       tient pas dans la hauteur reçue (vingt branches dans 300 px). On rétrécit
+       tout au prorata plutôt que de laisser le dessin sortir de sa carte — et
+       c'est à l'appelant de lui donner la hauteur que réclame `heightNeeded`. */
+    if (span > height + 0.01) {
+      const shrink = height / span;
+      hs = hs.map((h) => h * shrink);
+      gaps = gaps.map((g) => g * shrink);
+      span = height;
+    }
+
+    slotOf[k] = effectiveSlot(hs, gaps, labelSlot);
+    // Jour effectif : la relaxation ne doit pas réclamer plus que ce que
+    // l'empilement a pu donner, sinon elle repousse un nœud hors du cadre.
+    gapOf[k] = gaps.length > 0 ? Math.min(nodeGap, ...gaps) : nodeGap;
+
     let y = padTop + (height - span) / 2;
     col.forEach((n, i) => {
       n.h = hs[i];
       n.y = y;
       n.x = colX(k);
-      y += hs[i] + nodeGap;
+      y += hs[i] + (gaps[i] ?? 0);
     });
   }
 
@@ -474,20 +554,27 @@ export function sankeyGraphLayout(
     return weight > 0 ? sum / weight : null;
   };
 
-  const drift = (col: Work[], dir: "in" | "out", alpha: number): void => {
+  const drift = (col: Work[], k: number, dir: "in" | "out", alpha: number): void => {
     for (const n of col) {
       const target = barycentre(n, dir === "in" ? n.in : n.out, dir);
       if (target != null) n.y += (target - (n.y + n.h / 2)) * alpha;
     }
-    resolveColumn(col, nodeGap, padTop, padTop + height);
+    const slot = slotOf[k] ?? labelSlot;
+    const gap = gapOf[k] ?? nodeGap;
+    resolveColumn(
+      col,
+      (a, b) => gapBetween(a.h, b.h, gap, slot),
+      padTop,
+      padTop + height,
+    );
   };
 
   for (let pass = 0; pass < RELAX_PASSES; pass++) {
     const alpha = RELAX_DAMPING ** pass;
     // Droite→gauche d'abord : ce sont les colonnes de gauche, moins peuplées,
     // qui ont de la place pour bouger. L'inverse les figerait tout de suite.
-    for (let k = maxCol - 1; k >= 0; k--) drift(columns[k], "out", alpha);
-    for (let k = 1; k <= maxCol; k++) drift(columns[k], "in", alpha);
+    for (let k = maxCol - 1; k >= 0; k--) drift(columns[k], k, "out", alpha);
+    for (let k = 1; k <= maxCol; k++) drift(columns[k], k, "in", alpha);
   }
 
   /* L'EMPILEMENT DES LIENS contre chaque nœud. Trié par la hauteur du nœud d'en
@@ -538,45 +625,13 @@ export function sankeyGraphLayout(
     }
   }
 
-  /* Les pastilles sont écartées PAR COLONNE : deux libellés de colonnes
-     différentes sont loin l'un de l'autre horizontalement, les faire s'éviter
-     verticalement les déplacerait sans raison.
-
-     Et le PAS se choisit colonne par colonne. Treize branches dont dix minces
-     serrées en bas : à deux lignes par libellé, aucun arrangement ne les garde
-     en face de leur ruban — la colonne entière se décale alors vers le haut, et
-     chaque nom désigne la branche du dessus. On mesure donc l'écart que le pas
-     large impose, et s'il passe le seuil, cette colonne-là repasse au pas serré
-     (une ligne par libellé). Les autres colonnes gardent leurs deux lignes. */
+  /* Les libellés, chacun au MILIEU de son nœud. Il n'y a plus rien à arbitrer
+     ici : la place dont ils ont besoin a été prise en compte par l'empilement,
+     qui a écarté les branches fines en conséquence (cf. l'en-tête). */
   const boxes: SankeyGraphNodeBox[] = [];
   for (const col of columns) {
-    const live = col.filter((n) => n.value > 0).sort((a, b) => a.y - b.y);
-    if (live.length === 0) continue;
-
-    const centres = live.map((n) => n.y + n.h / 2);
-    const spread = (gap: number) => {
-      const ys = spreadLabels(centres, gap, padTop + gap / 2, padTop + height - gap / 2);
-      const drift = ys.reduce((m, y, i) => Math.max(m, Math.abs(y - centres[i])), 0);
-      return { ys, drift };
-    };
-
-    const loose = spread(labelGap);
-    let ys = loose.ys;
-    let dense = false;
-    if (labelGap > 0 && labelGapTight > 0 && labelGapTight < labelGap) {
-      if (loose.drift > labelGap * LABEL_DRIFT_OK) {
-        const tight = spread(labelGapTight);
-        // Le pas serré ne s'impose que s'il RAPPROCHE vraiment les noms de leur
-        // branche : sur une colonne saturée, il ne changerait rien et coûterait
-        // une ligne de lecture pour rien.
-        if (tight.drift < loose.drift) {
-          ys = tight.ys;
-          dense = true;
-        }
-      }
-    }
-
-    live.forEach((n, i) => {
+    for (const n of col) {
+      if (n.value <= 0) continue;
       const side = n.column === 0 ? "before" : n.column === maxCol ? "after" : "centre";
       const labelX = side === "before"
         ? n.x - labelPad
@@ -594,14 +649,12 @@ export function sankeyGraphLayout(
         h: round2(n.h),
         labelSide: side,
         labelX: round2(labelX),
-        labelY: round2(ys[i]),
-        centreY: round2(n.y + n.h / 2),
-        labelDense: dense,
+        labelY: round2(n.y + n.h / 2),
       });
-    });
+    }
   }
 
-  return { width, height, columns: maxCol + 1, nodes: boxes, links: bands };
+  return { width, height, columns: maxCol + 1, nodes: boxes, links: bands, heightNeeded };
 }
 
 /** Milieu du premier parent d'un nœud — sa place de rangement dans sa colonne. */

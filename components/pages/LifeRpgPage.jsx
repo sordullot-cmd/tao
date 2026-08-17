@@ -1034,9 +1034,13 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
          seules marges sont internes. Un gap les sépare franchement. */
       style={{ ...CARD, overflow: "visible", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {/* Vignette ronde, comme le logo d'un compte sur les pages Comptes. */}
-        <div style={{ width: 34, height: 34, borderRadius: "50%", background: `color-mix(in srgb, ${cat.color} 12%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <CatIcon name={cat.icon} size={17} strokeWidth={1.75} color={cat.color} />
+        {/* Vignette ronde à fond PLEIN, glyphe en blanc — le traitement des
+            lignes de la page Objectifs et des pastilles d'habitudes. Ces trois
+            pages montrent les mêmes objets sous trois angles ; leur vignette ne
+            doit pas se peindre différemment à chaque fois. Le trait est épaissi
+            d'un cran : sur un aplat, un 1,75 se dissout. */}
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: `color-mix(in srgb, ${cat.color} 80%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <CatIcon name={cat.icon} size={17} strokeWidth={2} color="#FFFFFF" />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Rang de l'objectif : il y en a trois, et celui-ci est le n°X. */}
