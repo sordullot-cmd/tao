@@ -107,7 +107,7 @@ describe("renderRichText — blocs markdown", () => {
 
   it("imbrique les sous-listes dans leur item parent", () => {
     // Une <ul> imbriquée doit apparaître avant la fermeture du <li> parent.
-    expect(html).toMatch(/<li class="rt-li">niveau 1<ul/);
+    expect(html).toMatch(/<li class="rt-li"[^>]*>niveau 1<ul/);
   });
 
   it("applique gras et italique hors formules", () => {
@@ -187,5 +187,90 @@ describe("htmlToMarkdown — collage depuis un assistant", () => {
   it("renvoie null sur un HTML vide", () => {
     expect(htmlToMarkdown("")).toBe(null);
     expect(htmlToMarkdown("<div>   </div>")).toBe(null);
+  });
+});
+
+describe("renderRichText — cases à cocher", () => {
+  it("rend une case vide et une case cochée", () => {
+    const html = renderRichText("- [ ] à faire\n- [x] fait");
+    expect(html).toContain('class="rt-li rt-task"');
+    expect(html).toContain('class="rt-li rt-task rt-task-done"');
+    expect(html).toContain('aria-checked="true"');
+    expect(isWellFormed(html)).toBe(true);
+  });
+
+  it("désigne la ligne du markdown, pas le rang de la tâche", () => {
+    const html = renderRichText("# Titre\n\n- [ ] a\n- [ ] b");
+    expect(html).toContain('data-line="2"');
+    expect(html).toContain('data-line="3"');
+  });
+
+  it("laisse les puces ordinaires sans case", () => {
+    const html = renderRichText("- simple puce");
+    expect(html).not.toContain("rt-task");
+  });
+
+  it("garde les cases des listes numérotées", () => {
+    const html = renderRichText("1. [x] fait");
+    expect(html).toContain("rt-task-done");
+    expect(html).toContain("<ol");
+  });
+});
+
+describe("renderRichText — encadrés et blocs repliables", () => {
+  it("rend un encadré à sa couleur", () => {
+    const html = renderRichText("> [!warning] Attention\n> le corps");
+    expect(html).toContain("rt-callout rt-callout-warning");
+    expect(html).toContain("Attention");
+    expect(html).toContain("le corps");
+    expect(isWellFormed(html)).toBe(true);
+  });
+
+  it("replie un bloc suffixé d'un tiret et déplie celui suffixé d'un plus", () => {
+    expect(renderRichText("> [!note]- Caché\n> corps")).not.toContain("<details class=\"rt-callout rt-callout-note rt-callout-fold\" open>");
+    expect(renderRichText("> [!tip]+ Ouvert\n> corps")).toContain(" open>");
+  });
+
+  it("rend le corps d'un encadré comme du markdown complet", () => {
+    const html = renderRichText("> [!info] Liste\n> - un\n> - deux");
+    expect(html).toContain("<ul");
+  });
+
+  it("ne rend pas cliquables les cases d'un encadré", () => {
+    const html = renderRichText("> [!info] T\n> - [ ] a");
+    expect(html).toContain("rt-task");
+    // L'encadré porte sa ligne, mais la case qu'il contient n'en a pas : une
+    // fois le « > » retiré, on ne saurait plus quelle ligne réécrire.
+    expect(html).not.toMatch(/rt-box[^>]*data-line/);
+  });
+
+  it("laisse une citation ordinaire en blockquote", () => {
+    const html = renderRichText("> juste une citation");
+    expect(html).toContain("rt-quote");
+    expect(html).not.toContain("rt-callout");
+  });
+
+  it("sépare deux encadrés consécutifs", () => {
+    const html = renderRichText("> [!info] Un\n> a\n> [!tip] Deux\n> b");
+    expect(html).toContain("rt-callout-info");
+    expect(html).toContain("rt-callout-tip");
+  });
+});
+
+describe("renderRichText — liens entre notes", () => {
+  it("rend un [[lien]] avec sa cible", () => {
+    const html = renderRichText("voir [[Plan 2026]]");
+    expect(html).toContain('data-note="Plan 2026"');
+    expect(html).toContain(">Plan 2026</a>");
+  });
+
+  it("respecte l'alias [[cible|libellé]]", () => {
+    const html = renderRichText("voir [[Plan|mon plan]]");
+    expect(html).toContain('data-note="Plan"');
+    expect(html).toContain(">mon plan</a>");
+  });
+
+  it("n'invente pas de lien pour un simple crochet", () => {
+    expect(renderRichText("un [tableau] ordinaire")).not.toContain("rt-wiki");
   });
 });

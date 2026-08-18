@@ -165,7 +165,7 @@ export default function LoginPage() {
     <div
       style={{
         minHeight: "100dvh",
-        background: "var(--color-bg, #FFFFFF)",
+        background: "var(--color-bg-subtle, #F9FAFA)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

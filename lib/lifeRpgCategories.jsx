@@ -125,7 +125,9 @@ export const DEFAULT_CATEGORIES = [];
 // (nom + couleur + icône + intention), immédiatement modifiable ensuite.
 export const YEAR_GOAL_TEMPLATES = [
   { label: "Forme physique", color: PALETTE.orange,   icon: "dumbbell",   identity: "Je prends soin de mon corps et je m'entraîne régulièrement.",   outcome: "" },
-  { label: "Trading",        color: PALETTE.yellow,   icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
+  // Vert comme la catégorie « Trading » de la page Objectifs : une carte créée
+  // depuis ce modèle doit s'accorder aux objectifs chiffrés qu'on y rattachera.
+  { label: "Trading",        color: PALETTE.green,    icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
   { label: "Finances",       color: PALETTE.green,    icon: "wallet",     identity: "Je gère mon argent avec sagesse et sérénité.",                  outcome: "" },
   { label: "Savoir",         color: PALETTE.blue,     icon: "graduation", identity: "J'apprends quelque chose de nouveau chaque jour.",              outcome: "" },
   { label: "Relations",      color: PALETTE.purple,   icon: "users",      identity: "Je cultive des relations sincères et profondes.",               outcome: "" },

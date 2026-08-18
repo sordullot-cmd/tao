@@ -2,7 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Plus, Search, Trash2, Tag as TagIcon, Sparkles, X, ImagePlus, Pin, PinOff, PenLine, Eye, Pencil } from "lucide-react";
+import {
+  Plus, Search, Trash2, Tag as TagIcon, Sparkles, X, ImagePlus, Pin, PinOff,
+  PenLine, Eye, Pencil,
+  Type as TypeIcon, Heading1, Heading2, Heading3, SquareCheck, List, ListOrdered,
+  Quote, Link2, Minus, Code, Table, Sigma, ChevronRight, Info, Lightbulb,
+  TriangleAlert, OctagonAlert,
+} from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
@@ -14,6 +20,21 @@ import DrawingToolbar from "@/components/notes/DrawingToolbar";
 import ObsidianVaultPanel from "@/components/notes/ObsidianVaultPanel";
 import { htmlToMarkdown, htmlHasStructure } from "@/lib/ui/clipboardMarkdown";
 import { useObsidianVault } from "@/lib/hooks/useObsidianVault";
+import {
+  applySlashBlock,
+  applyWikiLink,
+  continueList,
+  detectSlashAtCursor,
+  detectWikiLinkAtCursor,
+  indentLines,
+  isOnCheckbox,
+  matchSlashBlocks,
+  toggleTaskAt,
+  wikiLinkAt,
+} from "@/lib/notes/blocks";
+// Le titre vient du module du vault : c'est lui qui nomme les fichiers .md, et
+// un lien [[…]] doit viser exactement ce nom pour rester valide dans Obsidian.
+import { noteTitle } from "@/lib/notes/markdown";
 
 // KaTeX (~280 ko) n'est téléchargé qu'à la première ouverture de l'aperçu.
 const NotePreview = dynamic(() => import("@/components/notes/NotePreview"), {
@@ -37,6 +58,15 @@ const ICON_BTN = {
   width: 32, height: 32, borderRadius: 999, border: "none",
   cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
   transition: "background 120ms ease, color 120ms ease",
+};
+
+/* Icônes du menu « / ». La clé vient du catalogue (lib/notes/blocks). */
+const BLOCK_ICONS = {
+  text: TypeIcon, h1: Heading1, h2: Heading2, h3: Heading3,
+  check: SquareCheck, bullet: List, ordered: ListOrdered, quote: Quote,
+  link: Link2, divider: Minus, code: Code, table: Table, math: Sigma,
+  toggle: ChevronRight, info: Info, tip: Lightbulb,
+  warning: TriangleAlert, danger: OctagonAlert, image: ImagePlus,
 };
 
 const TAG_RE = /#([a-zA-Z][a-zA-Z0-9_-]*)/g;
@@ -80,22 +110,74 @@ async function fileToCompressedDataUrl(file) {
   return canvas.toDataURL(isPng ? "image/png" : "image/jpeg", 0.85);
 }
 
-function renderHighlighted(text) {
+/* Encres du calque de coloration. Ce sont des tokens et non des hex : le calque
+   doit suivre le thème sombre comme le reste du texte. */
+const HL_MUTED = "var(--color-text-muted, #6B6B6B)";
+const HL_ACCENT = "var(--color-blue, #1CB0F6)";
+const HL_DONE = "var(--color-green, #58CC02)";
+
+/* Le calque est superposé au textarea au caractère près : il ne peut donc
+   porter que des COULEURS. Changer la graisse, la taille ou masquer un
+   caractère décalerait le texte affiché du texte réellement saisi. */
+function highlightInline(s) {
   let html = "";
   let last = 0;
-  const re = /#([a-zA-Z][a-zA-Z0-9_-]*)/g;
+  const re = /#[a-zA-Z][a-zA-Z0-9_-]*|\[\[[^[\]]*\]\]?/g;
   let m;
-  while ((m = re.exec(text)) !== null) {
-    html += escapeHtml(text.slice(last, m.index));
-    // Encre du tag : le token, pas un hex — le calque de coloration doit suivre
-    // le thème sombre comme le reste du texte.
-    html += `<span style="color:var(--color-blue, #3B82F6)">${escapeHtml(m[0])}</span>`;
+  while ((m = re.exec(s)) !== null) {
+    html += escapeHtml(s.slice(last, m.index));
+    // Un lien refermé est cliquable dans l'éditeur : on le souligne pour le
+    // dire. Souligner ne déplace aucun caractère, contrairement au gras.
+    const live = m[0].startsWith("[[") && m[0].endsWith("]]");
+    html += `<span style="color:${HL_ACCENT}${live ? ";text-decoration:underline;text-underline-offset:2px" : ""}">${escapeHtml(m[0])}</span>`;
     last = m.index + m[0].length;
   }
-  html += escapeHtml(text.slice(last));
-  // ensure trailing newline keeps height
-  if (html.endsWith("\n")) html += " ";
-  return html;
+  return html + escapeHtml(s.slice(last));
+}
+
+function highlightLine(line) {
+  const dim = (s) => `<span style="color:${HL_MUTED}">${escapeHtml(s)}</span>`;
+
+  const heading = line.match(/^(#{1,6}[ \t]+)(.*)$/);
+  if (heading) return dim(heading[1]) + highlightInline(heading[2]);
+
+  const list = line.match(/^([ \t]*(?:[-*+]|\d{1,3}[.)])[ \t]+)(\[[ xX]\][ \t]+)?(.*)$/);
+  if (list) {
+    const done = list[2] && /[xX]/.test(list[2]);
+    const box = list[2]
+      ? `<span style="color:${done ? HL_DONE : HL_MUTED}">${escapeHtml(list[2])}</span>`
+      : "";
+    const body = done
+      ? `<span style="color:${HL_MUTED};text-decoration:line-through">${highlightInline(list[3])}</span>`
+      : highlightInline(list[3]);
+    return dim(list[1]) + box + body;
+  }
+
+  const quote = line.match(/^([ \t]*>[ \t]*)(\[![a-zA-Z-]+\][-+]?[ \t]*)?(.*)$/);
+  if (quote) {
+    const tag = quote[2] ? `<span style="color:${HL_ACCENT}">${escapeHtml(quote[2])}</span>` : "";
+    return dim(quote[1]) + tag + highlightInline(quote[3]);
+  }
+
+  if (/^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/.test(line) || /^[ \t]*```/.test(line)) return dim(line);
+
+  return highlightInline(line);
+}
+
+/**
+ * Colore le texte de l'éditeur. `anchorLine` reçoit un repère invisible : c'est
+ * lui qui donne au menu « / » la ligne sous laquelle s'ouvrir — mesurer un
+ * caret dans un textarea n'est pas possible autrement.
+ */
+function renderHighlighted(text, anchorLine) {
+  const html = text.split("\n").map((line, i) =>
+    // Le repère est en `absolute` : il garde la position statique de sa ligne
+    // sans jamais peser sur le flux, donc sans décaler le texte du textarea.
+    (i === anchorLine ? '<span data-caret-anchor="1" style="position:absolute"></span>' : "")
+    + highlightLine(line),
+  ).join("\n");
+  // Une dernière ligne vide ne compte pas dans la hauteur sans ce caractère.
+  return html.endsWith("\n") ? html + " " : html;
 }
 
 export default function NotesPage() {
@@ -174,6 +256,11 @@ export default function NotesPage() {
     selectedIdRef.current = selectedId;
     const cur = notes.find(n => n.id === selectedId);
     setDraft(cur ? cur.content : "");
+    /* Une note déjà écrite s'ouvre sur son rendu : c'est là qu'on voit des
+       titres, des cases et des liens plutôt que leur syntaxe. Un clic dans le
+       texte rouvre l'édition à l'endroit visé. Une note vide, elle, n'a rien à
+       montrer — autant y poser le curseur tout de suite. */
+    setPreview(!!(cur && cur.content && cur.content.trim()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
@@ -264,45 +351,168 @@ export default function NotesPage() {
     return null;
   };
 
-  const [tagSuggest, setTagSuggest] = useState(null); // { prefix, start, candidates: [tag] }
   const textareaRef = useRef(null);
 
-  const updateTagSuggest = (text, caret) => {
-    const det = detectTagAtCursor(text, caret);
-    if (!det) { setTagSuggest(null); return; }
-    const lower = det.prefix.toLowerCase();
-    // candidates : tags existants commençant par le préfixe (insensible à la casse),
-    // triés par nb d'usage desc puis alpha. On exclut le tag exactement égal au
-    // préfixe (rien à compléter).
-    const cand = allTags
-      .filter(tag => tag.startsWith(lower) && tag !== lower)
-      .sort((a, b) => (tagCounts[b] || 0) - (tagCounts[a] || 0) || a.localeCompare(b))
-      .slice(0, 5);
-    if (cand.length === 0) { setTagSuggest(null); return; }
-    setTagSuggest({ prefix: det.prefix, start: det.start, candidates: cand });
-  };
+  /* Les trois autocomplétions de l'éditeur — `#tag`, menu « / » et lien
+     `[[note]]` — partagent un seul état : elles se disputeraient sinon les
+     mêmes touches (flèches, Entrée, Échap). `kind` dit laquelle est ouverte,
+     `items` porte déjà de quoi l'afficher et l'appliquer. */
+  const [suggest, setSuggest] = useState(null);
+  // { kind: "tag"|"slash"|"link", start, query, items, index, line }
 
-  const acceptTagSuggestion = () => {
-    if (!tagSuggest || tagSuggest.candidates.length === 0) return false;
-    const ta = textareaRef.current;
-    if (!ta) return false;
-    const tag = tagSuggest.candidates[0];
-    const caret = ta.selectionStart;
-    const before = draft.slice(0, tagSuggest.start);
-    const after = draft.slice(caret);
-    const insertion = `#${tag} `;
-    const next = before + insertion + after;
-    editDraft(next);
-    const pos = (before + insertion).length;
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.selectionStart = pos;
-        textareaRef.current.selectionEnd = pos;
+  /* Position du menu. Un textarea ne sait pas dire où est son caret : on lit
+     donc le repère invisible que le calque de coloration pose au début de la
+     ligne courante. Le menu s'aligne sur la marge du texte, comme dans Notion —
+     inutile de suivre le caret au pixel près, et ça évite de mesurer des
+     largeurs de glyphes. */
+  const layerRef = useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+
+  /** Titres des autres notes, pour compléter un `[[…]]`. */
+  const noteTitles = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const n of notes) {
+      const title = noteTitle(n.content);
+      if (!title || seen.has(title.toLowerCase())) continue;
+      seen.add(title.toLowerCase());
+      out.push({ id: n.id, title });
+    }
+    return out;
+  }, [notes]);
+
+  const noteTitlesRef = useRef(noteTitles);
+  noteTitlesRef.current = noteTitles;
+
+  const refreshSuggest = useCallback((text, caret) => {
+    if (caret == null) { setSuggest(null); return; }
+    const line = text.slice(0, caret).split("\n").length - 1;
+
+    // 1) menu « / » : il prime, c'est un geste explicite.
+    const slash = detectSlashAtCursor(text, caret);
+    if (slash) {
+      const blocks = matchSlashBlocks(slash.query);
+      if (blocks.length) {
+        setSuggest({
+          kind: "slash", start: slash.start, query: slash.query, index: 0, line,
+          items: blocks.map(b => ({ key: b.id, label: b.label, hint: b.hint, icon: b.icon, block: b })),
+        });
+        return;
       }
+      // Aucun bloc ne correspond : on ferme plutôt que d'afficher un menu vide.
+      setSuggest(null);
+      return;
+    }
+
+    // 2) lien vers une autre note.
+    const link = detectWikiLinkAtCursor(text, caret);
+    if (link) {
+      const q = link.query.trim().toLowerCase();
+      const items = noteTitlesRef.current
+        .filter(n => n.id !== selectedIdRef.current && (!q || n.title.toLowerCase().includes(q)))
+        .slice(0, 6)
+        .map(n => ({ key: String(n.id), label: n.title, title: n.title }));
+      // Rien ne correspond : on propose quand même de créer la note visée.
+      if (!items.length && link.query.trim()) {
+        items.push({ key: "new", label: link.query.trim(), title: link.query.trim(), isNew: true });
+      }
+      if (items.length) {
+        setSuggest({ kind: "link", start: link.start, query: link.query, index: 0, line, items });
+        return;
+      }
+    }
+
+    // 3) tag existant.
+    const det = detectTagAtCursor(text, caret);
+    if (det) {
+      const lower = det.prefix.toLowerCase();
+      const cand = allTags
+        .filter(tag => tag.startsWith(lower) && tag !== lower)
+        .sort((a, b) => (tagCounts[b] || 0) - (tagCounts[a] || 0) || a.localeCompare(b))
+        .slice(0, 5);
+      if (cand.length) {
+        setSuggest({
+          kind: "tag", start: det.start, query: det.prefix, index: 0, line,
+          items: cand.map(tag => ({ key: tag, label: `#${tag}`, tag, count: tagCounts[tag] || 0 })),
+        });
+        return;
+      }
+    }
+    setSuggest(null);
+  }, [allTags, tagCounts]);
+
+  /** Replace le caret puis rend la main au textarea. */
+  const setCaret = useCallback((pos, end) => {
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.selectionStart = pos;
+      ta.selectionEnd = end == null ? pos : end;
+      refreshSuggest(ta.value, ta.selectionStart);
     });
-    setTagSuggest(null);
+  }, [refreshSuggest]);
+
+  /** Applique l'item choisi dans la liste ouverte. */
+  const applySuggestion = useCallback((item) => {
+    const ta = textareaRef.current;
+    if (!ta || !suggest || !item) return false;
+    const caret = ta.selectionStart;
+
+    if (suggest.kind === "tag") {
+      const insertion = `#${item.tag} `;
+      const next = draft.slice(0, suggest.start) + insertion + draft.slice(caret);
+      editDraft(next);
+      setCaret(suggest.start + insertion.length);
+    } else if (suggest.kind === "link") {
+      const r = applyWikiLink(draft, item.title, { start: suggest.start }, caret);
+      editDraft(r.text);
+      setCaret(r.caret);
+    } else {
+      const r = applySlashBlock(draft, item.block, { start: suggest.start }, caret);
+      editDraft(r.text);
+      setCaret(r.caret);
+      if (r.action === "image") fileInputRef.current?.click();
+    }
+    setSuggest(null);
     return true;
-  };
+  }, [suggest, draft, editDraft, setCaret]);
+
+  useEffect(() => {
+    if (!suggest) { setMenuPos(null); return; }
+    const anchor = layerRef.current?.querySelector("[data-caret-anchor]");
+    const sc = scrollRef.current;
+    if (!anchor || !sc) { setMenuPos(null); return; }
+    const LINE_H = 22.4;                       // 14 px × 1.6, la ligne du texte
+    const height = suggest.items.length * 34 + 16;
+    const below = anchor.offsetTop + LINE_H + 6;
+    // Pas la place en dessous : on retourne le menu au-dessus de la ligne.
+    const flip = below + height > sc.scrollTop + sc.clientHeight && anchor.offsetTop - height > sc.scrollTop;
+    setMenuPos({ top: flip ? anchor.offsetTop - height - 2 : below });
+  }, [suggest, draft]);
+
+  /** Ouvre la note portant ce titre, ou la crée si elle n'existe pas. */
+  const openNoteByTitle = useCallback((title) => {
+    const want = String(title || "").trim().toLowerCase();
+    if (!want) return;
+    const hit = notes.find(n => noteTitle(n.content).toLowerCase() === want);
+    if (hit) {
+      if (selectedIdRef.current) flushSave(selectedIdRef.current, draftRef.current);
+      setSelectedId(hit.id);
+      return;
+    }
+    if (selectedIdRef.current) flushSave(selectedIdRef.current, draftRef.current);
+    const note = {
+      id: Date.now() + Math.random(),
+      content: `# ${String(title).trim()}\n`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setNotes(prev => [note, ...prev]);
+    setSelectedId(note.id);
+    setPreview(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes]);
 
   // ------------------------------------------------------------- dessin
   // Le dessin est stocké dans la note : { strokes: [...], h } où `h` est la
@@ -451,7 +661,7 @@ export default function NotesPage() {
   }, [drawMode, undoStack, redoStack, strokes]);
 
   const enterDrawMode = () => {
-    setTagSuggest(null);
+    setSuggest(null);
     // Le dessin est calé sur le texte source : il n'a de sens qu'en édition.
     setPreview(false);
     textareaRef.current?.blur();
@@ -472,7 +682,7 @@ export default function NotesPage() {
       if (next) {
         // On quitte l'édition : on fige le texte tout de suite (le debounce de
         // 400 ms pourrait sinon rendre un aperçu en retard d'une frappe).
-        setTagSuggest(null);
+        setSuggest(null);
         setDrawMode(false);
         if (selectedIdRef.current) flushSave(selectedIdRef.current, draftRef.current);
       } else {
@@ -481,6 +691,26 @@ export default function NotesPage() {
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Repasse en édition sur la ligne cliquée dans le rendu. Sans ce report, on
+   * retomberait au début de la note et il faudrait retrouver son passage à la
+   * main — ce qui rend le mode rendu pénible dès qu'une note s'allonge.
+   */
+  const editAtLine = useCallback((line) => {
+    setPreview(false);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      if (line == null) return;
+      const lines = draftRef.current.split("\n");
+      const at = lines.slice(0, Math.min(line, lines.length)).reduce((n, l) => n + l.length + 1, 0);
+      // Fin de la ligne visée : on écrit derrière ce qu'on vient de lire.
+      const end = at + (lines[line] ? lines[line].length : 0);
+      ta.selectionStart = ta.selectionEnd = Math.min(end, draftRef.current.length);
+    });
   }, []);
 
   // Ctrl/⌘+E bascule aperçu ↔ édition, y compris depuis le textarea.
@@ -802,10 +1032,16 @@ export default function NotesPage() {
                   non le textarea), pour que le canvas reste aligné au texte. */}
               <div ref={scrollRef} style={{ position: "relative", flex: 1, minHeight: 0, overflow: "auto" }}>
               {preview ? (
-                <NotePreview content={draft} onDoubleClick={togglePreview} />
+                <NotePreview
+                  content={draft}
+                  onChange={editDraft}
+                  onOpenNote={openNoteByTitle}
+                  onEditAt={editAtLine}
+                />
               ) : (
               <div style={{ position: "relative", minHeight: drawH ? `max(100%, ${drawH}px)` : "100%" }}>
                 <div
+                  ref={layerRef}
                   aria-hidden
                   style={{
                     padding: 20,
@@ -813,7 +1049,7 @@ export default function NotesPage() {
                     color: T.text, whiteSpace: "pre-wrap", wordWrap: "break-word",
                     pointerEvents: "none",
                   }}
-                  dangerouslySetInnerHTML={{ __html: draft ? renderHighlighted(draft) : `<span style="color:${T.textMut}">Commence à écrire... utilise #tag pour catégoriser.</span>` }}
+                  dangerouslySetInnerHTML={{ __html: draft ? renderHighlighted(draft, suggest?.line) : `<span style="color:${T.textMut}">Commence à écrire… tape <b>/</b> pour un bloc, <b>#tag</b> pour trier, <b>[[</b> pour lier une note.</span>` }}
                 />
               <textarea
                 ref={textareaRef}
@@ -821,17 +1057,33 @@ export default function NotesPage() {
                 value={draft}
                 onChange={(e) => {
                   editDraft(e.target.value);
-                  // Recalcule les suggestions de tag après cette frappe.
+                  // Recalcule les suggestions après cette frappe.
                   // selectionStart de target n'est pas fiable dans onChange selon
                   // le browser ; on utilise requestAnimationFrame pour lire après.
                   const next = e.target.value;
                   requestAnimationFrame(() => {
                     const ta = textareaRef.current;
-                    if (ta) updateTagSuggest(next, ta.selectionStart);
+                    if (ta) refreshSuggest(next, ta.selectionStart);
                   });
                 }}
-                onSelect={(e) => updateTagSuggest(e.currentTarget.value, e.currentTarget.selectionStart)}
-                onBlur={() => setTimeout(() => setTagSuggest(null), 100)}
+                onSelect={(e) => refreshSuggest(e.currentTarget.value, e.currentTarget.selectionStart)}
+                onBlur={() => setTimeout(() => setSuggest(null), 120)}
+                onClick={(e) => {
+                  /* Un textarea n'a pas de zones cliquables : on regarde donc où
+                     le clic vient de poser le caret. Cocher une case et ouvrir
+                     un lien marchent ainsi dans l'éditeur, sans passer par
+                     l'aperçu. Les crochets restent neutres — les cliquer laisse
+                     poser le caret dans le lien pour le corriger. */
+                  const ta = e.currentTarget;
+                  const pos = ta.selectionStart;
+                  if (pos !== ta.selectionEnd) return; // un glissé sélectionne, il ne clique pas
+                  if (isOnCheckbox(draft, pos)) {
+                    const r = toggleTaskAt(draft, pos);
+                    if (r) { editDraft(r.text); setCaret(r.caret); return; }
+                  }
+                  const link = wikiLinkAt(draft, pos);
+                  if (link) openNoteByTitle(link.target);
+                }}
                 onPaste={handlePaste}
                 onScroll={(e) => {
                   // Le textarea ne scrolle pas lui-même (overflow hidden), mais
@@ -845,20 +1097,79 @@ export default function NotesPage() {
                   if (ta.scrollLeft !== 0) { sc.scrollLeft += ta.scrollLeft; ta.scrollLeft = 0; }
                 }}
                 onKeyDown={(e) => {
-                  // Autocomplete de tag : Entrée ou Tab insère la suggestion
-                  // courante. Échap masque les suggestions.
-                  if (tagSuggest && tagSuggest.candidates.length > 0) {
+                  // Une liste ouverte (menu « / », lien, tag) prend la main sur
+                  // les flèches, Entrée, Tab et Échap.
+                  if (suggest && suggest.items.length > 0) {
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      e.preventDefault();
+                      const step = e.key === "ArrowDown" ? 1 : -1;
+                      setSuggest(s => s && ({
+                        ...s,
+                        index: (s.index + step + s.items.length) % s.items.length,
+                      }));
+                      return;
+                    }
                     if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
                       e.preventDefault();
-                      acceptTagSuggestion();
+                      applySuggestion(suggest.items[suggest.index]);
                       return;
                     }
                     if (e.key === "Escape") {
                       e.preventDefault();
-                      setTagSuggest(null);
+                      setSuggest(null);
                       return;
                     }
                   }
+
+                  // Échap referme l'édition sur le rendu : c'est le pendant du
+                  // clic dans le texte qui l'a ouverte.
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setSuggest(null);
+                    if (selectedIdRef.current) flushSave(selectedIdRef.current, draftRef.current);
+                    setPreview(true);
+                    return;
+                  }
+
+                  // Ctrl/⌘+Entrée coche ou décoche la tâche de la ligne — et
+                  // transforme une puce ordinaire en tâche si elle n'en est pas
+                  // encore une.
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    const r = toggleTaskAt(draft, e.currentTarget.selectionStart);
+                    if (r) {
+                      e.preventDefault();
+                      editDraft(r.text);
+                      setCaret(r.caret);
+                      return;
+                    }
+                  }
+
+                  // Entrée dans une liste : ouvre l'item suivant, ou en sort si
+                  // l'item courant est vide.
+                  if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                    const ta = e.currentTarget;
+                    const r = continueList(draft, ta.selectionStart, ta.selectionEnd);
+                    if (r) {
+                      e.preventDefault();
+                      editDraft(r.text);
+                      setCaret(r.caret);
+                      return;
+                    }
+                  }
+
+                  // Tab dans une liste : un niveau d'imbrication, pas huit
+                  // espaces — c'est ce que relit Obsidian.
+                  if (e.key === "Tab") {
+                    const ta = e.currentTarget;
+                    const r = indentLines(draft, ta.selectionStart, ta.selectionEnd, e.shiftKey);
+                    if (r) {
+                      e.preventDefault();
+                      editDraft(r.text);
+                      setCaret(r.caret, r.selectionEnd);
+                      return;
+                    }
+                  }
+
                   // Backspace : supprimer un bloc d'indentation (jusqu'à 8
                   // espaces) d'un seul coup, comme s'il s'agissait d'une
                   // tabulation, au lieu d'espace par espace.
@@ -933,58 +1244,70 @@ export default function NotesPage() {
                 onEraseStrokes={eraseStrokes}
                 scrollRef={scrollRef}
               />
-              </div>
-              )}
-              </div>
-              {tagSuggest && tagSuggest.candidates.length > 0 && (
-                <div className="anim-pop" style={{
-                  position: "absolute", left: 12, right: 12, bottom: 10,
-                  background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
-                  boxShadow: "var(--elev-overlay)",
-                  padding: "8px 10px",
-                  display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
-                  fontSize: 12, fontFamily: "inherit", zIndex: 5,
-                }}
-                onMouseDown={(e) => e.preventDefault()}>
-                  <span style={{ color: T.textMut, fontSize: 11, marginRight: 2 }}>↩ pour compléter</span>
-                  {tagSuggest.candidates.map((tag, i) => (
-                    <button key={tag} type="button"
-                      onClick={() => {
-                        // Permet aussi de cliquer une suggestion (pas que la 1ʳᵉ).
-                        const ta = textareaRef.current;
-                        if (!ta) return;
-                        const caret = ta.selectionStart;
-                        const before = draft.slice(0, tagSuggest.start);
-                        const after = draft.slice(caret);
-                        const insertion = `#${tag} `;
-                        const next = before + insertion + after;
-                        editDraft(next);
-                        const pos = (before + insertion).length;
-                        requestAnimationFrame(() => {
-                          if (textareaRef.current) {
-                            textareaRef.current.focus();
-                            textareaRef.current.selectionStart = pos;
-                            textareaRef.current.selectionEnd = pos;
-                          }
-                        });
-                        setTagSuggest(null);
-                      }}
-                      style={{
-                        padding: "4px 10px", borderRadius: 999, border: "none",
-                        background: i === 0 ? T.text : FIELD_BG,
-                        color: i === 0 ? T.textInverted : T.blue,
-                        fontWeight: 500, fontSize: 11, cursor: "pointer",
-                        fontFamily: "inherit",
-                        display: "inline-flex", alignItems: "center", gap: 4,
-                      }}>
-                      #{tag}
-                      <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 500 }}>
-                        {tagCounts[tag] || 0}
-                      </span>
-                    </button>
-                  ))}
+              {/* Menu de blocs, de liens ou de tags. Il vit dans la zone qui
+                  défile pour rester accroché à sa ligne, et `onMouseDown`
+                  bloque le blur du textarea — sinon le clic fermerait le menu
+                  avant de l'appliquer. */}
+              {suggest && menuPos && suggest.items.length > 0 && (
+                <div
+                  className="anim-pop"
+                  role="listbox"
+                  onMouseDown={(e) => e.preventDefault()}
+                  style={{
+                    position: "absolute", top: menuPos.top, left: 20,
+                    width: "min(300px, calc(100% - 40px))",
+                    background: T.white, border: "none", borderRadius: 12,
+                    boxShadow: "var(--elev-overlay)",
+                    padding: 6, zIndex: 6, fontFamily: "inherit",
+                  }}
+                >
+                  {suggest.items.map((item, i) => {
+                    const Icon = suggest.kind === "slash" ? (BLOCK_ICONS[item.icon] || TypeIcon)
+                      : suggest.kind === "link" ? Link2 : TagIcon;
+                    const on = i === suggest.index;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="option"
+                        aria-selected={on}
+                        onMouseEnter={() => setSuggest(s => s && { ...s, index: i })}
+                        onClick={() => applySuggestion(item)}
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", gap: 10,
+                          padding: "7px 8px", borderRadius: 8, border: "none",
+                          background: on ? FIELD_BG : "transparent",
+                          color: T.text, cursor: "pointer", textAlign: "left",
+                          fontFamily: "inherit", fontSize: 13,
+                          transition: "var(--tr-ui)",
+                        }}
+                      >
+                        <span style={{
+                          flex: "none", width: 24, height: 24, borderRadius: 6,
+                          background: on ? T.white : FIELD_BG,
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          color: T.textSub,
+                        }}>
+                          <Icon size={13} strokeWidth={1.75} />
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {item.label}
+                        </span>
+                        {/* Repère de droite : la syntaxe du bloc, le nombre
+                            d'usages du tag, ou le fait que la note sera créée. */}
+                        <span style={{ flex: "none", fontSize: 11, color: T.textMut }}>
+                          {suggest.kind === "slash" ? item.hint
+                            : suggest.kind === "tag" ? item.count
+                            : item.isNew ? "nouvelle" : ""}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
+              </div>
+              )}
+              </div>
             </>
           ) : (
             /* État vide calé sur celui du dashboard : vignette 48 px à coins 12,

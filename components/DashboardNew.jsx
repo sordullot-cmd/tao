@@ -21,6 +21,7 @@ import DailyPlannerPage from "@/components/pages/DailyPlannerPage";
 import SportPage from "@/components/pages/SportPage";
 import ReadingListPage from "@/components/pages/ReadingListPage";
 import NotesPage from "@/components/pages/NotesPage";
+import RevisionsPage from "@/components/pages/RevisionsPage";
 import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import EloquencePage from "@/components/pages/EloquencePage";
@@ -90,6 +91,7 @@ import {
   ArrowRightLeft as LucideArrowRightLeft,
   Landmark as LucideLandmark,
   ChartPie as LucideChartPie,
+  Brain as LucideBrain,
 } from "lucide-react";
 
 /* ─── TOKENS ───────────────────────────────────────────────────────────
@@ -654,6 +656,9 @@ export default function App() {
         { id: "life-rpg",      icon: Mountain,           label: t("nav.lifeRpg") },
         { id: "sport",         icon: LucideDumbbell,     label: "Sport" },
         { id: "notes",         icon: LucideFileText,     label: t("nav.notes") },
+        /* « Révisions » suit « Notes » : c'est là qu'on écrit ce qu'on veut
+           retenir, et l'atelier des révisions part précisément de ces notes. */
+        { id: "revisions",     icon: LucideBrain,        label: t("nav.revisions") },
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
       ],
     },
@@ -743,6 +748,7 @@ export default function App() {
     sport: <SportPage />,
     reading: <ReadingListPage />,
     notes: <NotesPage />,
+    revisions: <RevisionsPage />,
     drive: <DrivePage />,
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,

@@ -67,6 +67,7 @@ const FR: Dict = {
   "nav.habits": "Habitudes",
   "nav.focus": "Minuteur Focus",
   "nav.notes": "Notes",
+  "nav.revisions": "Révisions",
   "nav.drive": "Drive",
   "nav.reading": "Liste de lecture",
   // La page « Quête de soi » a absorbé l'ancienne page Objectifs : c'est là que
@@ -1458,6 +1459,7 @@ const EN: Dict = {
   "nav.habits": "Habits",
   "nav.focus": "Focus Timer",
   "nav.notes": "Notes",
+  "nav.revisions": "Revisions",
   "nav.drive": "Drive",
   "nav.reading": "Reading List",
   "nav.lifeRpg": "Goals",

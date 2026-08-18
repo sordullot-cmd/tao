@@ -36,14 +36,13 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import ReactDOM from "react-dom";
 import {
   Plus, X, Trash2, Pencil, Target, UserRound, Check,
   CalendarClock, Flag, Milestone,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
-import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+
 import MiniCalendar from "@/components/ui/MiniCalendar";
 import Popover from "@/components/ui/Popover";
 import { XpBar } from "@/components/ui/XpBar";
@@ -86,6 +85,7 @@ import { CARD, SectionTitle } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
 import { deepen, dotRing } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
+import { Field as DAField, Modal as DAModal, FIELD as DA_FIELD, FIELD_AREA as DA_FIELD_AREA } from "@/components/ui/form";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
 const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
@@ -934,10 +934,18 @@ export default function LifeRpgPage() {
       )}
 
       {/* Repli mobile / tablette : les trois cartes sont denses, elles passent
-          à deux colonnes puis à une seule plutôt que de se comprimer. */}
+          à deux colonnes puis à une seule plutôt que de se comprimer.
+          Et la croix qui retire un objectif de sa carte : révélée au survol de
+          l'objectif concerné (ou au focus clavier, sinon elle serait
+          inatteignable sans souris). Le pointeur fin n'a pas de survol : là,
+          elle reste visible. */}
       <style>{`
         @media (max-width: 1180px) { .tr4de-rpg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
         @media (max-width: 760px)  { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } }
+        .tr4de-linked-goal-x { opacity: 0; transition: opacity var(--dur-fast, .12s) var(--ease-out, ease); }
+        .tr4de-linked-goal:hover .tr4de-linked-goal-x,
+        .tr4de-linked-goal-x:focus-visible { opacity: 1; }
+        @media (hover: none) { .tr4de-linked-goal-x { opacity: 1; } }
       `}</style>
     </div>
   );
@@ -1075,7 +1083,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
         <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
           aria-label={`${cat.label} : ${pct} % — ${status.label}`}
           style={{ position: "relative", height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-          <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: cat.color, boxShadow: dotRing(cat.color), borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
+          <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
           {/* Repère du calendrier : position du jour dans l'année. */}
           <div title={`${Math.round(yearPct)} % de l'année écoulée`}
             style={{ position: "absolute", top: -1, bottom: -1, left: `${Math.min(100, Math.max(0, yearPct))}%`, width: 2, background: T.text, opacity: 0.35, borderRadius: 999 }} />
@@ -1144,13 +1152,18 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
               const reached = g.pct >= 100;
               const negative = g.rawPct < 0;
               return (
-                <div key={g.id}>
+                <div key={g.id} className="tr4de-linked-goal">
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                     <span style={{ fontSize: 11.5, fontWeight: 700, color: reached ? T.green : T.textSub, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</span>
                     {onDetachObjective && (
+                      /* Retrait : la croix ne se montre qu'au survol de SON
+                         objectif (CSS ci-dessous). Une croix par objectif,
+                         affichée en permanence, faisait de la liste un
+                         formulaire de suppression. */
                       <button onClick={() => onDetachObjective(g.id)} title="Retirer de cette catégorie" aria-label={`Retirer « ${g.label} » de cette catégorie`}
-                        style={{ ...iconBtnSm(), width: 18, height: 18, opacity: hover ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
+                        className="tr4de-linked-goal-x"
+                        style={{ ...iconBtnSm(), width: 18, height: 18, pointerEvents: "auto" }}>
                         <X size={12} strokeWidth={2} />
                       </button>
                     )}
@@ -1158,7 +1171,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }} title={`+${g.xpGained} / ${g.xpFull} XP`}>
                     <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)}%`}
                       style={{ flex: 1, height: 6, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                      <div style={{ width: `${g.pct}%`, height: "100%", background: negative ? T.red : reached ? T.green : cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
+                      <div style={{ width: `${g.pct}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 600, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 32, textAlign: "right" }}>{reached ? "100%" : `${Math.round(g.rawPct)}%`}</span>
                   </div>
@@ -1174,7 +1187,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                             <span style={{ flexShrink: 0, maxWidth: "42%", fontSize: 11.5, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sg.label}</span>
                             <div role="progressbar" aria-valuenow={Math.round(sg.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${sg.label} : ${Math.round(sg.rawPct)}%`}
                               style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                              <div style={{ width: `${sg.pct}%`, height: "100%", background: sgNegative ? T.red : sgReached ? T.green : cat.color, borderRadius: 999, opacity: 0.75, transition: "width var(--dur-slow) var(--ease-out)" }} />
+                              <div style={{ width: `${sg.pct}%`, height: "100%", background: cat.color, borderRadius: 999, opacity: 0.75, transition: "width var(--dur-slow) var(--ease-out)" }} />
                             </div>
                             <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: sgNegative ? T.red : sgReached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtGoalVal(sg.current, sg.unit)} / {fmtGoalVal(sg.target, sg.unit)}</span>
                           </div>
@@ -1193,7 +1206,8 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                 qui MESURE la carte, il porte donc l'invitation pleine largeur ;
                 la tâche du quotidien se contente d'un « + Ajouter » discret. */}
             <ObjectiveMultiSelect objectives={allObjectives} catId={cat.id} color={cat.color}
-              onToggle={onToggleObjective} onCreate={onCreateObjective} revealed={goalsHov} />
+              onToggle={onToggleObjective} onCreate={onCreateObjective} revealed={goalsHov}
+              filled={freeGoals.length === 0} />
           </div>
         )}
       </div>
@@ -1556,7 +1570,7 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
                   <span style={{ flexShrink: 0, maxWidth: "40%", fontSize: 11.5, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                   <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)} %`}
                     style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                    <div style={{ width: `${g.pct}%`, height: "100%", background: negative ? T.red : reached ? T.green : cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
+                    <div style={{ width: `${g.pct}%`, height: "100%", background: cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
                   </div>
                   <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
                     {fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}
@@ -1744,7 +1758,7 @@ function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
 // du formulaire de trade) : un déclencheur, puis une liste cochable de TOUS les
 // objectifs. Cocher rattache à la catégorie, décocher détache. Ferme au clic
 // dehors. Dernière entrée : créer un objectif (redirige vers la page Objectifs).
-function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggle, onCreate, onOpenChange, compact = false, label = "Ajouter", revealed = true }) {
+function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggle, onCreate, onOpenChange, compact = false, label = "Ajouter", revealed = true, filled = true }) {
   const [open, setOpen] = useState(false);
   const [hov, setHov] = useState(false);
   // Focus clavier : il révèle le déclencheur comme le survol du bloc le fait,
@@ -1763,7 +1777,11 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
      • pleine largeur (sur la carte) — pointillé à la couleur de l'objectif,
        c'est lui qui porte l'invitation forte. Il reste en place (opacité seule)
        pour que le révéler ne fasse pas sauter la carte, et ne s'efface pas tant
-       que la liste est ouverte. */
+       que la liste est ouverte.
+     Dès que la carte compte au moins un objectif (`filled` à faux), ce même
+     bouton perd son pointillé et son aplat : l'invitation a été entendue, il
+     n'a plus à crier. Il garde sa pleine largeur, son texte centré et sa
+     couleur — c'est le même bouton, en retrait. */
   const show = revealed || open || focused;
   return (
     <div ref={ref} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
@@ -1777,9 +1795,9 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
       ) : (
         <button type="button" onClick={() => setOpen(o => !o)}
           onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${color} 40%, transparent)`, background: `color-mix(in srgb, ${color} 5%, transparent)`, color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
-          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} 10%, transparent)`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} 5%, transparent)`; }}>
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: filled ? `1px dashed color-mix(in srgb, ${color} 40%, transparent)` : "1px solid transparent", background: filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent", color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
+          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} ${filled ? 10 : 8}%, transparent)`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent"; }}>
           <Plus size={14} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
           Ajouter un objectif
         </button>
@@ -1792,7 +1810,7 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
         matchAnchorWidth
         minWidth={220}
         maxHeight={260}
-        style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}
+        style={{ background: T.white, border: "none", borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}
       >
         <>
           {objectives.map(g => {
@@ -1941,7 +1959,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
       <Field label="Ce que j'admire chez cette personne (optionnel)">
         <textarea value={form.roleModelWhy} onChange={e => setForm({ ...form, roleModelWhy: e.target.value })}
           placeholder="ex : sa rigueur, sa bienveillance, sa constance au quotidien…"
-          rows={2} style={{ ...input(), resize: "vertical", lineHeight: 1.4 }} />
+          rows={2} style={{ ...writing(), minHeight: 0, lineHeight: 1.4 }} />
       </Field>
 
       <Field label="Objectifs chiffrés (ils mesurent l'avancement)">
@@ -2135,64 +2153,29 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
 }
 
 /* ---------- Primitifs UI ---------- */
+/**
+ * Coque des fenêtres de la page : délègue à la modale de la DA.
+ *
+ * Elle réimplémentait déjà le bon langage — voile transparent, poignée de
+ * déplacement, fenêtre glissable — mais dans son coin : sa propre gestion du
+ * drag, son propre bouton de fermeture, son propre portail. Tout cela vit
+ * désormais dans `components/ui/form.jsx`, et le titre redescend dans le corps
+ * comme partout ailleurs.
+ */
 function Overlay({ title, children, onClose }) {
-  // Rendu via un portail sur document.body : la div racine de la page est
-  // animée (transform), ce qui ferait d'elle le bloc conteneur d'un élément
-  // `position: fixed` et décalerait la modale. Le portail l'en sort.
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const dragRef = useRef(null);
-  if (typeof document === "undefined") return null;
-
-  // Déplacement de la fenêtre par l'en-tête (exactement comme la page Sport).
-  const startWindowDrag = (e) => {
-    if (e.target.closest("button")) return; // pas de drag en cliquant un bouton
-    e.preventDefault();
-    setDragging(true);
-    dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y };
-    const onMove = (ev) => {
-      const d = dragRef.current; if (!d) return;
-      setPos({ x: d.baseX + (ev.clientX - d.startX), y: d.baseY + (ev.clientY - d.startY) });
-    };
-    const onUp = () => {
-      dragRef.current = null;
-      setDragging(false);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
-  return ReactDOM.createPortal(
-    // `backdropDismiss` : ne ferme QUE si le clic commence ET finit sur le fond
-    // (plus de fermeture quand on relâche la souris hors du formulaire / drag).
-    <div {...backdropDismiss(onClose)}
-      style={{ position: "fixed", inset: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-      {/* Pas d'animation `transform` sur le modal : elle écraserait le translate du drag. */}
-      <div onClick={e => e.stopPropagation()} role="dialog" aria-modal="true"
-        style={{ width: 440, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto", background: T.white, borderRadius: 14, padding: 20, fontFamily: "var(--font-sans)", border: `1px solid ${T.border}`, boxShadow: "var(--elev-overlay)", transform: `translate(${pos.x}px, ${pos.y}px)` }}>
-        {/* En-tête = poignée de déplacement (barre grise centrée), façon Sport. */}
-        <div onMouseDown={startWindowDrag} title="Glisser pour déplacer la fenêtre"
-          style={{ position: "relative", display: "flex", alignItems: "center", marginBottom: 16, paddingTop: 8, cursor: "move", userSelect: "none" }}>
-          <div style={{ position: "absolute", left: "50%", top: 0, transform: "translateX(-50%)", width: 40, height: 4, borderRadius: 999, background: dragging ? T.textMut : T.border, transition: "background-color 120ms ease" }} />
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0 }}>{title}</h3>
-          <button onMouseDown={e => e.stopPropagation()} onClick={onClose} style={{ ...iconBtn(), marginLeft: "auto" }}><X size={16} strokeWidth={1.75} /></button>
-        </div>
-        {children}
-      </div>
-    </div>,
-    document.body
+  return (
+    <DAModal title={title} onClose={onClose} width={440} maxHeight="90vh" bodyStyle={{ padding: 20 }}>
+      {title && <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>}
+      {children}
+    </DAModal>
   );
 }
 
 function Field({ label, children }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500, marginBottom: 6 }}>{label}</div>
-      {children}
-    </div>
-  );
+  /* Delegue a la brique commune (components/ui/form.jsx) : le site comptait
+     quatorze definitions locales de champ, chacune avec sa taille de libelle,
+     sa hauteur et son rayon. Le style vit la-bas, une seule fois. */
+  return <DAField label={label} style={{ marginBottom: 14 }}>{children}</DAField>;
 }
 
 // Zone de texte qui s'agrandit automatiquement avec son contenu (pas de scroll
@@ -2210,7 +2193,7 @@ function AutoTextarea({ value, onChange, placeholder, minRows = 3, style }) {
   return (
     <textarea ref={ref} value={value} onChange={onChange} placeholder={placeholder}
       rows={minRows} onInput={resize}
-      style={{ ...input(), resize: "none", overflow: "hidden", lineHeight: 1.5, ...style }} />
+      style={{ ...writing(), minHeight: 0, resize: "none", overflow: "hidden", lineHeight: 1.5, ...style }} />
   );
 }
 
@@ -2247,6 +2230,15 @@ function iconBtnSm() {
 }
 // Petit libellé au-dessus des champs de la modale de catégorie.
 const objLbl = { fontSize: 11, color: T.textSub, fontWeight: 500, marginBottom: 4 };
+/* Delegue a la brique commune (components/ui/form.jsx) : aplat en pilule, pas de
+   cadre. Le 14 px est conserve — la modale de categorie n'a que trois champs et
+   ils portent des phrases, pas des valeurs. */
 function input() {
-  return { width: "100%", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.white, fontSize: 14, color: T.text, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
+  return { ...DA_FIELD, fontSize: 14 };
+}
+/* Zone d'ecriture : rayon de zone et aplat dilue. Une pilule de cent pixels de
+   haut n'est plus une pilule, et l'aplat des champs d'une ligne se lit comme un
+   pave gris sur cette hauteur. */
+function writing() {
+  return { ...DA_FIELD_AREA, fontSize: 14 };
 }

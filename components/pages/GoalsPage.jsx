@@ -24,6 +24,9 @@ import {
 import { T as BaseT } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
 import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
+import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
+import { FIELD_BG as DA_FIELD_BG, WRITING_BG as DA_WRITING_BG } from "@/lib/ui/tokens";
+import { FIELD_FOCUS_RING as DA_FOCUS_RING } from "@/components/ui/form";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
 const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
@@ -61,18 +64,30 @@ const UNITS = [
   { id: "custom",  label: "Autre…",    suffix: "", isCustom: true },
 ];
 const CATEGORIES = [
-  { id: "trading",   label: "Trading",       color: PALETTE.yellow, icon: TrendingUp },
+  /* Trading porte le vert de marque — c'est la catégorie phare de l'app, et le
+     jaune qu'elle avait ne tenait pas sur une barre de 3 px. Le jaune passe à
+     « Pas journalier », qui lui cède ce vert : les onze couleurs restent donc
+     toutes distinctes, aucune autre catégorie ne bouge. */
+  { id: "trading",   label: "Trading",       color: PALETTE.green, icon: TrendingUp },
   { id: "personal",  label: "Personnel",     color: PALETTE.red, icon: Heart },
   { id: "sport",     label: "Sport",         color: PALETTE.orange, icon: Dumbbell },
   { id: "reading",   label: "Lecture",       color: PALETTE_DARK.purple, icon: BookOpen },
   { id: "relations", label: "Relations",     color: PALETTE.purple, icon: Users },
   { id: "learning",  label: "Apprentissage", color: PALETTE.blue, icon: GraduationCap },
   { id: "health",    label: "Santé",         color: PALETTE.pink, icon: Activity },
-  { id: "steps",     label: "Pas journalier", color: PALETTE.green, icon: Footprints },
+  { id: "steps",     label: "Pas journalier", color: PALETTE.yellow, icon: Footprints },
   { id: "finance",   label: "Finances",      color: PALETTE_DARK.green, icon: Wallet },
   { id: "work",      label: "Travail",       color: PALETTE.brown, icon: Briefcase },
   { id: "code",      label: "Dev",           color: PALETTE_DARK.blue, icon: Code },
 ];
+/* Catégorie d'un objectif — c'est elle qui porte son icône et sa couleur, et
+   qui teinte sa barre de progression dans la liste.
+   À l'INTÉRIEUR d'une carte de la Quête de soi, en revanche, toutes les barres
+   prennent la couleur de la carte : là-bas, l'unité de lecture est l'objectif
+   de l'année, pas la catégorie de chaque mesure qui le compose. */
+export function goalCategoryOf(g) {
+  return CATEGORIES.find(c => c.id === g?.category) || CATEGORIES[0];
+}
 // Sources de suivi. `trading: true` = calculé à partir des trades et filtré
 // sur l'horizon de l'objectif. Ces types ne sont proposés qu'en catégorie
 // "Trading".
@@ -796,8 +811,8 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
           <input type="text" autoFocus value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })}
             placeholder={"ex : P&L du mois"}
             style={goalInput()}
-            onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+            onFocus={(e) => { e.currentTarget.style.boxShadow = DA_FOCUS_RING; }}
+            onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
         </GoalField>
 
         {/* Deadline : pilules de raccourci + champ date */}
@@ -834,8 +849,8 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
             <input type="number" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })}
               placeholder="1000" className="no-spin"
               style={{ ...goalInput(), flex: 1, minWidth: 0, MozAppearance: "textfield", appearance: "textfield" }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+              onFocus={(e) => { e.currentTarget.style.boxShadow = DA_FOCUS_RING; }}
+              onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
             {form.autoType === "manual" ? (
               <div style={{ width: 150, flexShrink: 0 }}>
                 <FancyDropdown
@@ -891,8 +906,8 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
               onChange={(e) => setForm({ ...form, customUnit: e.target.value })}
               placeholder="ex : séances"
               style={{ ...goalInput(), marginTop: 8 }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+              onFocus={(e) => { e.currentTarget.style.boxShadow = DA_FOCUS_RING; }}
+              onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
           )}
         </GoalField>
 
@@ -1025,13 +1040,13 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                 <input type="number" value={g.manual || 0} className="no-spin"
                   onChange={(e) => setGoals(prev => prev.map(x => x.id === g.id ? { ...x, manual: parseFloat(e.target.value) || 0 } : x))}
                   style={{ ...goalInput(), flex: 1, minWidth: 0, MozAppearance: "textfield", appearance: "textfield" }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+                  onFocus={(e) => { e.currentTarget.style.boxShadow = DA_FOCUS_RING; }}
+                  onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
                 {suffix && <span style={{ fontSize: 12.5, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>{suffix.trim()}</span>}
                 <button type="button" onClick={() => adjustManual(g.id, -1)} aria-label="Retirer 1"
-                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: `1px solid ${T.border}`, background: T.white, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>−</button>
+                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>−</button>
                 <button type="button" onClick={() => adjustManual(g.id, 1)} aria-label="Ajouter 1"
-                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, border: "none", background: T.brand, color: T.onSolid, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>+</button>
+                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>+</button>
               </div>
             </GoalField>
           );
@@ -1070,8 +1085,8 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                     onChange={(e) => setForm({ ...form, rpgXp: e.target.value })}
                     placeholder="500" className="no-spin"
                     style={{ ...goalInput(), width: 96, textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = T.border2; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = T.border; }} />
+                    onFocus={(e) => { e.currentTarget.style.boxShadow = DA_FOCUS_RING; }}
+                    onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
                   <span style={{ fontSize: 12.5, color: T.textMut, fontWeight: 500 }}>XP à 100 %</span>
                 </div>
               )}
@@ -1207,7 +1222,7 @@ function TimelineSection({ title, rows, compute, unitOf, fmtVal, onEdit, onDelet
 }
 
 function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, nested }) {
-  const cat = CATEGORIES.find(c => c.id === g.category) || CATEGORIES[0];
+  const cat = goalCategoryOf(g);
   const Ic = cat.icon;
   const { current, target, pct, rawPct } = compute(g);
   const unit = unitOf(g);
@@ -1491,7 +1506,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
                   else if (e.key === "Escape") setEditing(false);
                 }}
                 onBlur={commitEdit}
-                style={{ width: 52, padding: "1px 4px", border: `1px solid ${T.text}`, borderRadius: "var(--radius-field)", background: T.white, fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", outline: "none", textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }}
+                style={{ width: 52, padding: "1px 4px", border: "none", borderRadius: 999, background: DA_FIELD_BG, boxShadow: DA_FOCUS_RING, fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", outline: "none", textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }}
               />
             ) : (
               <span
@@ -1517,7 +1532,13 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
               )}
               <div role="progressbar" aria-valuenow={Math.max(0, Math.min(100, Math.round(pct)))} aria-valuemin={0} aria-valuemax={100} aria-label={`Progression : ${Math.round(displayPct)}%`}
                 style={{ height: 3, background: T.accentBg, borderRadius: "var(--radius-field)", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${pct}%`, background: isNegative ? T.red : isAchieved ? T.green : pct >= 50 ? T.blue : T.amber, borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
+                {/* La barre porte la couleur de la CATÉGORIE de l'objectif — la
+                    teinte exacte de son icône, pas une version assombrie — et
+                    non plus son état : c'est elle qui dit de quoi on parle d'un
+                    coup d'œil dans une liste qui en empile vingt. L'état reste
+                    lu par le pourcentage à droite, qui garde son rouge et son
+                    vert. */}
+                <div style={{ height: "100%", width: `${pct}%`, background: goalCategoryOf(g).color, borderRadius: "var(--radius-field)", transition: "width .4s ease" }} />
               </div>
             </div>
             {/* Pourcentage d'avancement à droite de la barre (négatif si dans le rouge). */}
@@ -1606,7 +1627,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           borderTop: `1px solid ${T.border}`,
           marginTop: -2,
         }}>
-          {!nested && <RoadmapStrip subtasks={subtasks} deadline={g.deadline} createdAt={g.createdAt || g.id} />}
+          {!nested && <RoadmapStrip subtasks={subtasks} deadline={g.deadline} createdAt={g.createdAt || g.id} color={cat.color} />}
           {subtasks.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
               {(() => {
@@ -1717,7 +1738,9 @@ function DeadlineField({ value, onChange }) {
           style={{
             ...goalInput(), flex: 1, minWidth: 0, cursor: "pointer", textAlign: "left",
             display: "flex", alignItems: "center", gap: 8, minHeight: 38,
-            borderColor: calOpen ? T.border2 : T.border,
+            /* Ouvert = l'anneau de focus, pas une bordure assombrie : le champ
+               n'en a plus. */
+            boxShadow: calOpen ? DA_FOCUS_RING : "none",
             color: value ? T.text : T.textMut,
           }}>
           <Calendar size={14} strokeWidth={1.75} color={T.textMut} style={{ flexShrink: 0 }} />
@@ -1742,7 +1765,7 @@ function DeadlineField({ value, onChange }) {
           align="start"
           maxHeight={360}
           style={{
-            width: 280, background: T.white, border: `1px solid ${T.border}`,
+            width: 280, background: T.white, border: "none",
             borderRadius: "var(--radius-card)", boxShadow: "var(--elev-overlay)", padding: 12,
           }}
         >
@@ -1987,19 +2010,21 @@ function FancyDropdown({ value, options, onChange, renderValue, renderOption, al
     <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
       <button ref={btnRef} type="button" onClick={() => setOpen(v => !v)}
         style={field ? {
-          width: "100%", padding: "9px 12px", borderRadius: 8,
-          border: `1px solid ${open ? T.border2 : T.border}`, background: T.white,
-          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          ...DA_FIELD,
+          /* Ouvert = l'anneau de focus : le champ n'a plus de bordure a
+             assombrir, et rien ne bouge d'un pixel a l'ouverture. */
+          boxShadow: open ? DA_FOCUS_RING : "none",
+          cursor: "pointer", textAlign: "left",
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-          color: T.text, minHeight: 38, boxSizing: "border-box",
-          transition: "border-color 140ms ease",
+          minHeight: 38,
+          transition: "box-shadow var(--dur-fast) var(--ease-out)",
         } : {
           width: "100%", padding: 0, border: "none", background: "transparent",
           cursor: "pointer", fontFamily: "inherit",
           display: "flex", alignItems: "center", justifyContent: align === "left" ? "flex-start" : "flex-end", gap: 6,
           color: T.text,
         }}>
-        {/* En champ bordé, la valeur peut être longue (« Tous les comptes
+        {/* En variante champ, la valeur peut être longue (« Tous les comptes
             Funded ») : elle doit s'élider au lieu de pousser le chevron dehors. */}
         {field ? (
           <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -2022,7 +2047,7 @@ function FancyDropdown({ value, options, onChange, renderValue, renderOption, al
         atLeastAnchorWidth
         maxHeight={320}
         style={{
-          background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
+          background: T.white, border: "none", borderRadius: 10,
           boxShadow: "var(--elev-overlay)", padding: 4,
         }}
       >
@@ -2094,7 +2119,7 @@ function DateChip({ value, onChange, placeholder = "Date" }) {
         maxHeight={360}
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 280, background: T.white, border: `1px solid ${T.border}`,
+          width: 280, background: T.white, border: "none",
           borderRadius: "var(--radius-card)", boxShadow: "var(--elev-overlay)", padding: 12,
         }}
       >
@@ -2138,7 +2163,7 @@ function NoteChip({ value, onChange }) {
       style={{
         flex: 1, minWidth: 200,
         padding: "6px 10px",
-        background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6,
+        background: DA_WRITING_BG, border: "none", borderRadius: 6,
         fontSize: 12, color: T.text, outline: "none",
         fontFamily: "inherit", resize: "vertical",
         lineHeight: 1.4,
@@ -2186,7 +2211,7 @@ function RoadmapDot({ item: it, pct, color }) {
           [onLeftHalf ? "right" : "left"]: 0,
           padding: "8px 10px",
           background: T.white, color: T.text,
-          border: `1px solid ${T.border}`,
+          border: "none",
           borderRadius: "var(--radius-card)", fontSize: 11, lineHeight: 1.35,
           whiteSpace: "nowrap", maxWidth: 260,
           boxShadow: "var(--elev-overlay)",
@@ -2205,7 +2230,16 @@ function RoadmapDot({ item: it, pct, color }) {
   );
 }
 
-function RoadmapStrip({ subtasks, deadline, createdAt }) {
+/**
+ * Frise des échéances d'un objectif : rail du temps, curseur « aujourd'hui »,
+ * et un point par sous-tâche datée.
+ *
+ * `color` est la teinte de la CATÉGORIE de l'objectif — la même que son icône et
+ * que sa barre de progression, pour qu'une ligne d'objectif se lise d'une seule
+ * couleur. Les points, eux, gardent leur propre code (priorité, fait ou non) :
+ * c'est l'information qu'ils portent.
+ */
+function RoadmapStrip({ subtasks, deadline, createdAt, color }) {
   // Bornes fixes : début = date de création de l'objectif, fin = deadline.
   // La barre n'évolue plus avec le temps ; à la place, un curseur "Aujourd'hui"
   // se déplace le long pour montrer la progression.
@@ -2266,14 +2300,14 @@ function RoadmapStrip({ subtasks, deadline, createdAt }) {
         {/* Rail de fond */}
         <div style={{ position: "absolute", top: 10, left: 0, right: 0, height: 2, background: T.accentBg, borderRadius: "var(--radius-field)" }} />
         {/* Portion écoulée (de la création à aujourd'hui) */}
-        <div style={{ position: "absolute", top: 10, left: 0, width: `${todayPct}%`, height: 2, background: T.brand, borderRadius: "var(--radius-field)" }} />
+        <div style={{ position: "absolute", top: 10, left: 0, width: `${todayPct}%`, height: 2, background: color || T.brand, borderRadius: "var(--radius-field)" }} />
         {/* Curseur "Aujourd'hui" : pastille à l'accent qui se déplace */}
         {todayPct >= 0 && todayPct <= 100 && (
           <div title="Aujourd'hui"
             style={{
               position: "absolute", top: 5, left: `${todayPct}%`, transform: "translateX(-50%)",
               width: 12, height: 12, borderRadius: "50%",
-              background: T.brand,
+              background: color || T.brand,
               border: `2px solid ${T.white}`,
               boxShadow: "0 0 0 1px rgba(0,0,0,0.06)",
               zIndex: 2,
@@ -2468,70 +2502,9 @@ function GoalField({ label, hint, aside, children }) {
     </div>
   );
 }
+/* Delegue a la brique commune (components/ui/form.jsx) : un champ est un aplat
+   en pilule, pas un rectangle cerne. */
 function goalInput() {
-  return {
-    width: "100%", padding: "9px 12px", borderRadius: 8,
-    border: `1px solid ${T.border}`, background: T.white,
-    fontSize: 13, color: T.text, fontFamily: "inherit", outline: "none",
-    boxSizing: "border-box",
-  };
+  return { ...DA_FIELD };
 }
 
-function RowField({ label, children, last }) {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12,
-      padding: "16px 0",
-      borderBottom: last ? "none" : `1px solid ${T.border}`,
-    }}>
-      <div style={{ fontSize: 13, color: T.textSub, fontWeight: 500, flexShrink: 0, minWidth: 120 }}>{label}</div>
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", flex: 1, minWidth: 0, justifyContent: "flex-end" }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function FormField({ label, required, hint, children }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: T.text, letterSpacing: -0.05 }}>
-          {label}
-        </label>
-        {required && <span style={{ color: T.red, fontSize: 12, fontWeight: 600 }}>*</span>}
-      </div>
-      {children}
-      {hint && <div style={{ fontSize: 11, color: T.textMut, lineHeight: 1.5, marginTop: 2 }}>{hint}</div>}
-    </div>
-  );
-}
-
-function DetailField({ label, children }) {
-  return (
-    <div style={{ background: T.bg, borderRadius: "var(--radius-card)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
-      <div style={{ fontSize: 10, color: T.textMut, fontWeight: 500, textTransform: "none", letterSpacing: 0.2 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 22 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <div>
-      <label style={{ display: "block", fontSize: 10, color: T.textMut, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-function inputStyle() {
-  return { width: "100%", padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: T.white };
-}
-function iconBtnStyle() {
-  return { width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
-}
-function chipBtn() {
-  return { padding: "5px 14px", borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit" };
-}

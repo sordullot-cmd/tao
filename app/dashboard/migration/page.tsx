@@ -20,7 +20,7 @@ export default function MigrationPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F8FAFB" }}>
+    <div style={{ minHeight: "100vh", background: "var(--color-bg-subtle, #F9FAFA)" }}>
       <MigrationGuide />
     </div>
   );
