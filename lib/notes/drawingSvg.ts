@@ -29,11 +29,11 @@ interface Stroke {
 /** Repli hexa des encres — miroir de `INKS` dans DrawingCanvas.jsx. */
 const INK_HEX: Record<string, string> = {
   ink: "#0D0D0D",
-  blue: "#3B82F6",
-  red: "#EF4444",
-  green: "#16A34A",
-  amber: "#F97316",
-  purple: "#8B5CF6",
+  blue: "#1CB0F6",
+  red: "#FF4B4B",
+  green: "#58CC02",
+  amber: "#FF9600",
+  purple: "#CE82FF",
 };
 
 const PAD = 12;

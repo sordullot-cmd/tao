@@ -37,9 +37,9 @@ export async function exportSportPdf(opts: SportExportOptions): Promise<void> {
     primary: "#0D0D0D",
     secondary: "#5C5C5C",
     muted: "#8E8E8E",
-    accent: "#3B82F6",
-    success: "#16A34A",
-    warning: "#F59E0B",
+    accent: "#1CB0F6",
+    success: "#58CC02",
+    warning: "#FF9600",
     border: "#E5E5E5",
     background: "#F5F5F5",
   };

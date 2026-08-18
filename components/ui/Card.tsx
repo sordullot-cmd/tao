@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ChevronRight } from "lucide-react";
+import { hasFinePointer } from "@/lib/ui/pointer";
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   padded?: boolean;
@@ -13,10 +14,10 @@ export function Card({ padded = true, hoverable = false, accent = "default", sty
   const accentBorders: Record<string, string> = {
     default: "transparent",
     primary: "var(--color-text, #0D0D0D)",
-    success: "var(--color-green, #16A34A)",
-    warning: "var(--color-amber, #F97316)",
-    danger: "var(--color-red, #EF4444)",
-    info: "var(--color-info, #A855F7)",
+    success: "var(--color-green, #58CC02)",
+    warning: "var(--color-amber, #FF9600)",
+    danger: "var(--color-red, #FF4B4B)",
+    info: "var(--color-info, #CE82FF)",
   };
   const accentColor = accentBorders[accent];
 
@@ -29,24 +30,41 @@ export function Card({ padded = true, hoverable = false, accent = "default", sty
         padding: padded ? 20 : 0,
         boxShadow: "var(--elev-rest, 0 1px 2px rgba(0, 0, 0, 0.04))",
         transition:
-          "border-color 200ms cubic-bezier(0.23,1,0.32,1), box-shadow 200ms cubic-bezier(0.23,1,0.32,1), transform 200ms cubic-bezier(0.23,1,0.32,1)",
+          "border-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out), transform 200ms var(--ease-out)",
         position: "relative",
         ...(accent !== "default" && { borderLeft: `3px solid ${accentColor}` }),
         ...style,
       }}
       onMouseEnter={(e) => {
-        if (hoverable) {
-          e.currentTarget.style.borderColor = "var(--color-border-strong, #D4D4D4)";
-          e.currentTarget.style.boxShadow = "var(--elev-hover, 0 4px 12px rgba(0, 0, 0, 0.06))";
-          e.currentTarget.style.transform = "translateY(-1px)";
+        /* Le soulèvement est réservé aux pointeurs précis : au doigt, le survol
+           se déclenche à l'appui et ne se relâche jamais — la carte resterait
+           levée. */
+        if (hoverable && hasFinePointer()) {
+          const el = e.currentTarget;
+          /* On mémorise les valeurs RÉELLES de départ au lieu de réécrire
+             celles de la variante au relâchement. Une carte à qui l'appelant
+             passe `style={{ borderColor: … }}` perdait sa bordure au premier
+             survol : on lui rendait le gris par défaut, jamais la sienne. */
+          /* Lecture avec repli. `border` est posé en raccourci et contient un
+             `var()` : le navigateur ne peut pas le décomposer à l'analyse, si
+             bien que relire `style.borderColor` renvoie une chaîne vide. La
+             restaurer telle quelle effacerait la couleur de bordure — qui
+             retomberait sur `currentColor`, donc sur la couleur du texte. */
+          el.dataset.restBorder = el.style.borderColor || "var(--color-border, #E5E5E5)";
+          el.dataset.restShadow = el.style.boxShadow || "var(--elev-rest, 0 1px 2px rgba(0, 0, 0, 0.04))";
+          el.dataset.restTransform = el.style.transform || "translateY(0)";
+          el.style.borderColor = "var(--color-border-strong, #D4D4D4)";
+          el.style.boxShadow = "var(--elev-hover, 0 4px 12px rgba(0, 0, 0, 0.06))";
+          el.style.transform = "translateY(-1px)";
         }
         onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
         if (hoverable) {
-          e.currentTarget.style.borderColor = "var(--color-border, #E5E5E5)";
-          e.currentTarget.style.boxShadow = "var(--elev-rest, 0 1px 2px rgba(0, 0, 0, 0.04))";
-          e.currentTarget.style.transform = "translateY(0)";
+          const el = e.currentTarget;
+          el.style.borderColor = el.dataset.restBorder || "var(--color-border, #E5E5E5)";
+          el.style.boxShadow = el.dataset.restShadow || "var(--elev-rest, 0 1px 2px rgba(0, 0, 0, 0.04))";
+          el.style.transform = el.dataset.restTransform || "translateY(0)";
         }
         onMouseLeave?.(e);
       }}

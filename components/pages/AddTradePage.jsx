@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import ReactDOM from "react-dom";
 import {
   Check as LucideCheck,
   Upload as LucideUpload,
@@ -9,6 +8,8 @@ import {
   Star,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { luminance } from "@/lib/ui/color";
+import { STRATEGY_COLORS, STRATEGY_COLOR_DEFAULT } from "@/lib/ui/tradingColors";
 import { t, useLang, getLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { parseCSV } from "@/lib/csvParsers";
@@ -21,12 +22,19 @@ import { CARD, SectionTitle, TH } from "@/components/ui/da";
    lib/ui/accountTypes.ts. Ici elle sert de repère de groupe : pastille du
    titre, case à cocher et aplat léger d'une ligne cochée. */
 import { accountTypeStyle } from "@/lib/ui/accountTypes";
+import { FIELD_BG as DA_FIELD_BG, WRITING_BG as DA_WRITING_BG } from "@/lib/ui/tokens";
+import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
 
 /* Case à cocher de la liste des comptes. Même dessin que les cases en ligne du
    reste de l'app (TradesPage) ; `partial` sert au titre de groupe quand seule
    une partie de ses comptes est cochée. */
 function CheckBox({ on, partial = false, color, size = 15 }) {
   const filled = on || partial;
+  /* La coche s'adapte à l'aplat qui la porte. Les couleurs de type de compte
+     sont les principales de la charte : sur l'ambre (Fox) ou le jaune, une
+     coche blanche rend 2:1 et disparaît, alors qu'elle tient sur le violet.
+     Seuil à 0,45 de luminance — au-delà, l'aplat est clair, c'est l'encre. */
+  const glyph = color && luminance(color) > 0.45 ? T.text : T.onSolid;
   return (
     <span
       aria-hidden="true"
@@ -38,9 +46,9 @@ function CheckBox({ on, partial = false, color, size = 15 }) {
         transition: "border-color .12s ease, background .12s ease",
       }}
     >
-      {on && <LucideCheck size={size - 4} strokeWidth={3} color="#FFFFFF" />}
+      {on && <LucideCheck size={size - 4} strokeWidth={3} color={glyph} />}
       {!on && partial && (
-        <span style={{ width: size - 7, height: 1.5, borderRadius: 1, background: "#FFFFFF" }} />
+        <span style={{ width: size - 7, height: 1.5, borderRadius: 1, background: glyph }} />
       )}
     </span>
   );
@@ -232,17 +240,18 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
   const [loading, setLoading] = useState(false);
   const [selectedImportStrategy, setSelectedImportStrategy] = useState("");
   const [showStrategyForm, setShowStrategyForm] = useState(false);
-  const [strategyFormData, setStrategyFormData] = useState({ name: "", description: "", color: "#5F7FB4", groups: [{ id: Date.now(), name: "", rules: [{ id: Date.now() + 1, text: "" }] }] });
+  const [strategyFormData, setStrategyFormData] = useState({ name: "", description: "", color: STRATEGY_COLOR_DEFAULT, groups: [{ id: Date.now(), name: "", rules: [{ id: Date.now() + 1, text: "" }] }] });
   const fileInputRef = useRef(null);
 
-  const colors = ["#9B7D94", "#997B5D", "#A5956B", "#6B9B6F", "#4A9D6F", "#6B9D68", "#5F8BA0", "#5F7FB4", "#6B8BB4", "#8B7BA4", "#A07B94", "#7F7F7F"];
+  /* La palette de la charte, la meme que sur la page « Strategies ». */
+  const colors = STRATEGY_COLORS;
 
   // ✅ Les stratégies viennent maintenant du hook passé en props
 
   const getDefaultStrategyFormData = () => ({
     name: "",
     description: "",
-    color: "#5F7FB4",
+    color: STRATEGY_COLOR_DEFAULT,
     groups: [{ id: Date.now(), name: "", rules: [{ id: Date.now() + 1, text: "" }] }]
   });
 
@@ -1048,7 +1057,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                                     se balaie du regard, contrairement aux pilules. */}
                                 <div style={{
                                   display: "grid",
-                                  gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+                                  gridTemplateColumns: "repeat(auto-fill, minmax(min(190px, 100%), 1fr))",
                                   gap: 6,
                                 }}>
                                   {g.accounts.map((acc) => {
@@ -1109,7 +1118,9 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                       <span style={{
                         display: "inline-flex", alignItems: "center", gap: 7,
                         padding: "6px 12px", borderRadius: 999,
-                        border: `1px solid ${c.bd}`, background: c.bg,
+                        /* Aplat sans contour : c'est la teinte qui dit le type,
+                           pas un cadre. */
+                        border: "none", background: c.bg,
                         fontSize: 12, color: T.text, fontWeight: 600,
                       }}>
                         <span style={{ width: 7, height: 7, borderRadius: "50%", background: c.fg, flexShrink: 0 }} />
@@ -1354,29 +1365,40 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
             </div>
 
             {/* STRATEGY FORM MODAL */}
-            {showStrategyForm && ReactDOM.createPortal(
-              <div onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <div onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:12,padding:40,maxWidth:600,width:"90%",maxHeight:"90vh",overflowY:"auto"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-                    <h2 style={{fontSize:17,fontWeight:600,color:"#0D0D0D",margin:0,letterSpacing:-0.1,fontFamily:"var(--font-sans)"}}>{t("addTrade.createStrategy")}</h2>
-                    <button aria-label={t("addTrade.closeAria")} onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{background:"transparent",border:"none",fontSize:24,cursor:"pointer",color:T.textMut}}>✕</button>
-                  </div>
+            {showStrategyForm && (
+              <DAModal
+                open
+                title={t("addTrade.createStrategy")}
+                onClose={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }}
+                width={600}
+                maxHeight="90vh"
+                footer={(
+                  <>
+                    <DAPillButton onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }}>{t("common.cancel")}</DAPillButton>
+                    <DAPillButton variant="primary" onClick={handleCreateStrategyFromForm}>{t("addTrade.createStrategyBtn")}</DAPillButton>
+                  </>
+                )}
+              >
+                <>
+                  {/* Le titre ouvre le contenu : l'en-tete de la DA ne porte
+                      qu'une poignee et la fermeture. */}
+                  <h2 style={{fontSize:15,fontWeight:600,color:T.text,margin:0,letterSpacing:-0.1}}>{t("addTrade.createStrategy")}</h2>
 
                   <div style={{marginBottom:16}}>
                     <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:6,color:T.textMut}}>{t("addTrade.strategyName")}</label>
-                    <input type="text" value={strategyFormData.name} onChange={(e)=>setStrategyFormData({...strategyFormData,name:e.target.value})} placeholder={t("addTrade.strategyNamePh")} style={{width:"100%",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,outline:"none"}}/>
+                    <input type="text" value={strategyFormData.name} onChange={(e)=>setStrategyFormData({...strategyFormData,name:e.target.value})} placeholder={t("addTrade.strategyNamePh")} style={{width:"100%",padding:"10px 12px",border: "none",borderRadius:8,fontSize:14,outline:"none", background: DA_FIELD_BG,}}/>
                   </div>
 
                   <div style={{marginBottom:16}}>
                     <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:6,color:T.textMut}}>{t("addTrade.strategyDesc")}</label>
-                    <textarea value={strategyFormData.description} onChange={(e)=>setStrategyFormData({...strategyFormData,description:e.target.value})} placeholder={t("addTrade.strategyDescPh")} style={{width:"100%",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,outline:"none",resize:"vertical",minHeight:60}}/>
+                    <textarea value={strategyFormData.description} onChange={(e)=>setStrategyFormData({...strategyFormData,description:e.target.value})} placeholder={t("addTrade.strategyDescPh")} style={{width:"100%",padding:"10px 12px",border: "none",borderRadius:8,fontSize:14,outline:"none",resize:"vertical",minHeight:60, background: DA_WRITING_BG,}}/>
                   </div>
 
                   <div style={{marginBottom:20}}>
                     <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:8,color:T.textMut}}>{t("addTrade.strategyColor")}</label>
                     <div style={{display:"flex",gap:8}}>
                       {colors.map(color=>(
-                        <button key={color} aria-label={t("addTrade.colorAria").replace("{c}", color)} aria-pressed={strategyFormData.color===color} onClick={()=>setStrategyFormData({...strategyFormData,color})} style={{width:32,height:32,borderRadius:8,background:color,border:strategyFormData.color===color?`3px solid ${T.text}`:"2px solid #ddd",cursor:"pointer"}}/>
+                        <button key={color} aria-label={t("addTrade.colorAria").replace("{c}", color)} aria-pressed={strategyFormData.color===color} onClick={()=>setStrategyFormData({...strategyFormData,color})} style={{width:32,height:32,borderRadius:"50%",background:color,border:"none",boxShadow:strategyFormData.color===color?`0 0 0 2px ${T.white}, 0 0 0 4px ${T.text}`:"none",cursor:"pointer"}}/>
                       ))}
                     </div>
                   </div>
@@ -1384,9 +1406,9 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                   <div style={{marginBottom:20}}>
                     <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:8,color:T.textMut}}>{t("addTrade.ruleGroups")}</label>
                     {strategyFormData.groups && strategyFormData.groups.map((group,gIdx)=>(
-                      <div key={group.id} style={{marginBottom:16,padding:12,border:`1px solid ${T.border}`,borderRadius:8,background:T.bg}}>
+                      <div key={group.id} style={{marginBottom:16,padding:12,border:"none",borderRadius:12,background:DA_FIELD_BG}}>
                         <div style={{display:"flex",gap:8,marginBottom:12}}>
-                          <input type="text" placeholder={t("addTrade.groupName")} value={group.name} onChange={(e)=>updateGroup(group.id,"name",e.target.value)} style={{flex:1,padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:"none"}}/>
+                          <input type="text" placeholder={t("addTrade.groupName")} value={group.name} onChange={(e)=>updateGroup(group.id,"name",e.target.value)} style={{flex:1,padding:"8px 10px",border: "none",borderRadius:6,fontSize:12,outline:"none", background: DA_FIELD_BG,}}/>
                           {strategyFormData.groups.length > 1 && <button aria-label={t("addTrade.removeGroup")} onClick={()=>removeGroup(group.id)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:T.red}}>✕</button>}
                         </div>
 
@@ -1394,7 +1416,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                           {group.rules && group.rules.map((rule,rIdx)=>(
                             <div key={rule.id} style={{display:"flex",alignItems:"center",gap:6}}>
                               <span style={{fontSize:10,color:T.textMut}}>•</span>
-                              <input type="text" placeholder={t("addTrade.rulePh")} value={rule.text} onChange={(e)=>updateRule(group.id,rule.id,e.target.value)} style={{flex:1,padding:"6px 10px",borderRadius:4,border:`1px solid ${T.border}`,fontSize:11,outline:"none"}}/>
+                              <input type="text" placeholder={t("addTrade.rulePh")} value={rule.text} onChange={(e)=>updateRule(group.id,rule.id,e.target.value)} style={{flex:1,padding:"6px 10px",borderRadius:4,border: "none",fontSize:11,outline:"none", background: DA_FIELD_BG,}}/>
                               {group.rules.length > 1 && <button aria-label={t("addTrade.removeRule")} onClick={()=>removeRule(group.id,rule.id)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:12,color:T.red}}>✕</button>}
                             </div>
                           ))}
@@ -1402,16 +1424,11 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                         </div>
                       </div>
                     ))}
-                    <button onClick={addGroup} style={{marginTop:12,fontSize:12,color:T.accent,background:"transparent",border:`1px dashed ${T.accent}`,cursor:"pointer",padding:"8px 12px",borderRadius:6,width:"100%"}}>{t("addTrade.addGroup")}</button>
+                    <button onClick={addGroup} style={{marginTop:12,fontSize:12,fontWeight:500,color:T.accent,background:DA_FIELD_BG,border:"none",cursor:"pointer",padding:"9px 14px",borderRadius:999,width:"100%",fontFamily:"inherit",transition:"var(--tr-ui)"}}>{t("addTrade.addGroup")}</button>
                   </div>
 
-                  <div style={{display:"flex",gap:12,justifyContent:"flex-end",paddingTop:12,borderTop:`1px solid ${T.border}`}}>
-                    <button onClick={() => { setShowStrategyForm(false); setStrategyFormData(getDefaultStrategyFormData()); }} style={{padding:"10px 20px",borderRadius:6,border:`1px solid ${T.border}`,background:T.white,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("common.cancel")}</button>
-                    <button onClick={handleCreateStrategyFromForm} style={{padding:"10px 20px",borderRadius:6,border:`1px solid ${T.text}`,background:T.white,color:T.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t("addTrade.createStrategyBtn")}</button>
-                  </div>
-                </div>
-              </div>,
-              document.body
+                </>
+              </DAModal>
             )}
           </div>
 

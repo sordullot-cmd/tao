@@ -10,7 +10,7 @@
 
 import React from "react";
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
-import { T } from "@/lib/ui/tokens";
+import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
 import { fmt } from "@/lib/ui/format";
 import { periodStart } from "@/lib/ui/period";
@@ -25,23 +25,10 @@ export const CARD = {
   overflow: "hidden",
 };
 
-/* ── Aplats et traits ───────────────────────────────────────────────────────
-   Exprimés en TRANSPARENCE d'encre plutôt qu'en gris opaque : ils s'assombrissent
-   ou s'éclaircissent tout seuls avec la surface qui les porte, et n'ont donc pas
-   besoin d'un équivalent défini pour le thème sombre.
-   ------------------------------------------------------------------------- */
-
-/** Trait dilué : contour d'une case à cocher, d'une zone de dépôt, limite d'une
- *  zone qui défile — là où un bord doit se deviner sans devenir un cadre. */
-export const HAIRLINE = "color-mix(in srgb, var(--color-text) 8%, transparent)";
-
-/** Aplat d'un contrôle (pastille, champ, piste, ligne survolée). Assez pour
- *  délimiter une petite surface, trop peu pour faire un bloc dans le bloc. */
-export const FIELD_BG = "color-mix(in srgb, var(--color-text) 4%, transparent)";
-
-/** Aplat d'une zone d'écriture. Plus dilué que `FIELD_BG` : sur cent pixels de
- *  haut, le même gris ferait un pavé. */
-export const WRITING_BG = "color-mix(in srgb, var(--color-text) 1.2%, transparent)";
+/* Aplats et traits : définis dans lib/ui/tokens.ts (form.jsx en a besoin aussi,
+   et passer par ce fichier formait un cycle d'import). Réexportés tels quels —
+   `import { FIELD_BG } from "@/components/ui/da"` continue de fonctionner. */
+export { HAIRLINE, FIELD_BG, WRITING_BG } from "@/lib/ui/tokens";
 
 /**
  * Survol d'une tuile déjà colorée (case de calendrier, vignette de mois) : un
@@ -52,6 +39,16 @@ export const WRITING_BG = "color-mix(in srgb, var(--color-text) 1.2%, transparen
  * l'encre — il s'inverse avec le thème comme le reste de la DA.
  */
 export const TILE_HOVER = `inset 0 0 0 999px ${FIELD_BG}`;
+
+/* Champs, formulaires et modales : voir components/ui/form.jsx. Réexportés
+   ici pour que `from "@/components/ui/da"` reste le point d'entrée unique des
+   briques de la DA — c'est l'import que connaissent les 33 fichiers déjà
+   portés. */
+export {
+  FIELD, FIELD_AREA, FIELD_SM, FIELD_FOCUS_RING,
+  Input, Textarea, Select, Field, FieldGrid, FieldGroup, Label,
+  PillButton, IconButton, Modal, ScrollArea,
+} from "@/components/ui/form";
 
 /** Libellé d'un champ ou d'un bloc, dans une carte. */
 export function FieldLabel({ children }) {
@@ -315,7 +312,12 @@ export function BackLink({ label, icon, onClick }) {
         fontFamily: "inherit", cursor: "pointer",
         transition: "background 120ms ease, color 120ms ease",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
+      /* Voile d'ENCRE, et non `T.accentBg` : ce lien est le seul survol posé
+         directement sur le fond de page. Depuis que celui-ci est gris
+         (#F1F2F4), l'aplat opaque de `--color-hover-bg` (#F0F0F0) s'y confond
+         et le survol disparaissait. Le voile, lui, s'assombrit toujours d'un
+         cran par rapport à ce qu'il recouvre, quelle que soit la surface. */
+      onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; e.currentTarget.style.color = T.text; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = T.textSub; }}
     >
       <ArrowLeft size={14} strokeWidth={1.75} style={{ flexShrink: 0 }} />
@@ -632,15 +634,29 @@ export const PERIOD_ALL = "ALL";
  * Groupe de pastilles 1S/1M/3M/6M/1A — l'actif est blanc avec une ombre fine.
  *
  * `options` accepte un `label` pour les groupes dont l'identifiant n'est pas
- * affichable tel quel (Mois / Année du calendrier, node 297:12677). `track`
- * pose le groupe sur la piste grise arrondie de cette même maquette, et
- * `size` passe à la métrique 14 px de la page Calendrier.
+ * affichable tel quel (Mois / Année du calendrier, node 297:12677), et `size`
+ * passe à la métrique 14 px de la page Calendrier.
+ *
+ * `track` est la variante « onglets » (Éloquence, Agenda, Révisions, Sport) :
+ * libellés plus espacés et un peu plus gras. Elle n'a PLUS de piste grise —
+ * sur le fond de page, qui est déjà gris, l'aplat du groupe faisait un second
+ * gris à peine distinct du premier et n'ajoutait aucune information. C'est le
+ * bloc blanc de l'actif qui dit où l'on est ; les autres libellés reposent
+ * simplement sur le fond de la page.
+ *
+ * `rail` remet cette piste, et sert au seul cas où elle est nécessaire : un
+ * groupe posé DANS une carte blanche (la courbe de SportPage). Sans elle, le
+ * bloc blanc de l'actif serait blanc sur blanc — donc invisible.
+ *
+ * Le gras est le MÊME pour tous les onglets, actif compris : le faire monter à
+ * la sélection changerait la largeur du texte, et les onglets voisins
+ * glisseraient d'un cran à chaque changement.
  */
-export function PeriodPills({ value, onChange, options = PERIODS, track = false, size = 12 }) {
+export function PeriodPills({ value, onChange, options = PERIODS, track = false, rail = false, size = 12 }) {
   return (
     <div style={{
-      display:"flex", alignItems:"center", gap: track ? 8 : 4,
-      ...(track ? {background:T.segmentTrack, padding:2, borderRadius:999, boxShadow:T.elevCard} : null),
+      display:"flex", alignItems:"center", gap:4,
+      ...(rail ? {background:T.segmentTrack, padding:2, borderRadius:999} : null),
     }}>
       {options.map(p => {
         const active = value === p.id;
@@ -651,12 +667,13 @@ export function PeriodPills({ value, onChange, options = PERIODS, track = false,
             onClick={() => onChange?.(p.id)}
             aria-pressed={active}
             style={{
-              padding: track ? "5.5px 14px" : "6px 14px",
+              padding: track ? "6px 16px" : "6px 14px",
               borderRadius:999, border:"none",
               background: active ? T.white : "transparent",
-              boxShadow: active ? T.elevPill : "none",
+              boxShadow: active ? (track ? T.elevCard : T.elevPill) : "none",
               color: T.text, opacity: active ? 1 : 0.6,
-              fontSize:size, lineHeight:"18.6px", cursor:"pointer", fontFamily:"inherit",
+              fontSize:size, fontWeight: track ? 500 : undefined,
+              lineHeight:"18.6px", cursor:"pointer", fontFamily:"inherit",
               whiteSpace:"nowrap",
               transition:"background 140ms var(--ease-out, ease), opacity 140ms var(--ease-out, ease)",
             }}

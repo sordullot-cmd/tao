@@ -15,16 +15,18 @@ import { Play, Pause, RotateCcw, SkipForward, Square, Coffee, Focus, Flame, Chec
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { notify, ensureNotifyPermission } from "@/lib/notify";
 import { Stat } from "@/components/ui/Stat";
+import { PeriodPills } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 const T = { ...BaseT };
 
 const LOG_KEY = "tr4de_focus_sessions";
 
 const MODES = {
-  work:       { id: "work",       label: "Focus",        color: "#16A34A", duration: 25 * 60 },
-  shortBreak: { id: "shortBreak", label: "Pause",        color: "#3B82F6", duration: 5 * 60 },
-  longBreak:  { id: "longBreak",  label: "Longue pause", color: "#6366F1", duration: 15 * 60 },
+  work:       { id: "work",       label: "Focus",        color: "#58CC02", duration: 25 * 60 },
+  shortBreak: { id: "shortBreak", label: "Pause",        color: "#1CB0F6", duration: 5 * 60 },
+  longBreak:  { id: "longBreak",  label: "Longue pause", color: "#CE82FF", duration: 15 * 60 },
   stopwatch:  { id: "stopwatch",  label: "Chrono",       color: "#0D0D0D", duration: 0, manual: true },
 };
 const DURATIONS_KEY = "tr4de_focus_durations_v1";
@@ -270,20 +272,18 @@ export default function FocusTimerPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
         {/* Timer card */}
         <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, display: "flex", flexDirection: "column", alignItems: "center" }}>
-          {/* Mode tabs */}
-          <div style={{ display: "flex", gap: 6, padding: 4, background: T.accentBg, borderRadius: 999, marginBottom: 24 }}>
-            {Object.values(MODES).map(m => (
-              <button key={m.id} onClick={() => switchMode(m.id)}
-                style={{
-                  padding: "6px 14px", borderRadius: 999, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  background: mode === m.id ? T.white : "transparent",
-                  color: mode === m.id ? T.text : T.textSub,
-                  boxShadow: mode === m.id ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                  fontFamily: "inherit",
-                }}>
-                {m.label}
-              </button>
-            ))}
+          {/* Onglets de mode : la brique commune. `rail` parce qu'ils sont DANS
+              la carte blanche du minuteur — sans la piste, le bloc de l'actif
+              serait blanc sur blanc. */}
+          <div style={{ marginBottom: 24 }}>
+            <PeriodPills
+              value={mode}
+              onChange={switchMode}
+              options={Object.values(MODES).map(m => ({ id: m.id, label: m.label }))}
+              track
+              rail
+              size={12}
+            />
           </div>
 
           {/* Donut */}
@@ -326,7 +326,7 @@ export default function FocusTimerPage() {
                   value={durationDraft}
                   onChange={(e) => setDurationDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") saveDuration(); if (e.key === "Escape") setEditingDuration(false); }}
-                  style={{ width: 60, padding: "4px 8px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: T.white, textAlign: "center" }}
+                  style={{ width: 60, padding: "4px 8px", border: "none", borderRadius: 6, fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: DA_FIELD_BG, textAlign: "center" }}
                 />
                 <div style={{ display: "inline-flex", padding: 2, background: T.accentBg, borderRadius: 6, gap: 1 }}>
                   {["min", "h"].map(u => (
@@ -361,7 +361,7 @@ export default function FocusTimerPage() {
           <input
             type="text" value={taskLabel} onChange={(e) => setTaskLabel(e.target.value)}
             placeholder="Sur quoi tu travailles ?"
-            style={{ marginTop: 14, width: "100%", maxWidth: 360, padding: "8px 14px", border: `1px solid ${T.border}`, borderRadius: 999, fontSize: 13, outline: "none", fontFamily: "inherit", textAlign: "center", color: T.text, background: T.white }}
+            style={{ marginTop: 14, width: "100%", maxWidth: 360, padding: "8px 14px", border: "none", borderRadius: 999, fontSize: 13, outline: "none", fontFamily: "inherit", textAlign: "center", color: T.text, background: DA_FIELD_BG }}
           />
 
           {/* Controls */}

@@ -11,14 +11,14 @@ export function EmotionDistribution({ topEmotions }: EmotionDistributionProps) {
   // Palette catégorielle de 8 teintes DISTINCTES (aucun doublon : deux émotions
   // ne peuvent plus recevoir la même couleur). On n'affiche que les 8 premières.
   const COLORS = [
-    "#3B82F6", // bleu
-    "#16A34A", // vert
-    "#A855F7", // violet
-    "#F97316", // orange
-    "#EF4444", // rouge
-    "#06B6D4", // cyan
-    "#EC4899", // rose
-    "#EAB308", // jaune
+    "#1CB0F6", // bleu
+    "#58CC02", // vert
+    "#CE82FF", // violet
+    "#FF9600", // orange
+    "#FF4B4B", // rouge
+    "#7AF0F2", // cyan
+    "#FFB2B2", // rose
+    "#FFC800", // jaune
   ];
 
   const data = topEmotions.slice(0, 8).map((e) => ({

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { ChevronDown, ChevronUp, Search, Check, Plus, Pencil, Trash2, X } from "lucide-react";
 import Popover from "@/components/ui/Popover";
+import { FIELD_BG } from "@/lib/ui/tokens";
+import { FIELD_FOCUS_RING } from "@/components/ui/form";
 import { t, useLang } from "@/lib/i18n";
 
 // Map id (lowercase) → chemin du logo. Utilisé pour afficher l'icône à gauche
@@ -254,7 +256,6 @@ export default function QuickAccountSelector({
     }
   };
 
-  const borderColor = T.border || "var(--color-border)";
 
   return (
     <div ref={containerRef} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
@@ -279,12 +280,13 @@ export default function QuickAccountSelector({
             onClick={() => setOpen(v => !v)}
             style={{
               width: "100%", display: "flex", alignItems: "center", gap: 8,
-              padding: "8px 12px", border: `1px solid ${open ? "var(--color-border-strong)" : borderColor}`,
-              borderRadius: "var(--radius-card)", background: "var(--color-card-bg, #FFFFFF)",
+              padding: "9px 14px", border: "none",
+              borderRadius: 999, background: FIELD_BG,
+              boxShadow: open ? FIELD_FOCUS_RING : "none",
               color: hasValue ? "var(--color-text)" : "var(--color-text-muted)",
               fontSize: 13, fontWeight: 500, cursor: "pointer",
               fontFamily: "inherit", textAlign: "left",
-              transition: "border-color 120ms ease",
+              transition: "box-shadow var(--dur-fast) var(--ease-out)",
             }}
           >
             {primaryAccount ? (
@@ -325,13 +327,13 @@ export default function QuickAccountSelector({
         maxHeight={340}
         role="listbox"
         style={{
-          background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)", borderRadius: 10,
+          background: "var(--color-card-bg, #FFFFFF)", border: "none", borderRadius: 10,
           boxShadow: "var(--elev-overlay)",
         }}
       >
         <>
           {/* Search / Create input */}
-          <div style={{ flexShrink: 0, padding: 8, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
+          <div style={{ flexShrink: 0, padding: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px" }}>
               <Search size={13} color="var(--color-text-muted)" />
               <input
@@ -451,7 +453,7 @@ export default function QuickAccountSelector({
                         onClick={(e)=>e.stopPropagation()}
                         onBlur={()=>commitEdit(acc)}
                         onKeyDown={(e)=>{ if (e.key === "Enter") commitEdit(acc); if (e.key === "Escape") setEditingId(null); }}
-                        style={{ flex: 1, padding: "2px 6px", fontSize: 13, border: "1px solid var(--color-text)", borderRadius: "var(--radius-field)", outline: "none", fontFamily: "inherit", color: "var(--color-text)", background: "var(--color-card-bg, #FFFFFF)", minWidth: 0 }}
+                        style={{ flex: 1, padding: "2px 8px", fontSize: 13, border: "none", borderRadius: 999, outline: "none", boxShadow: FIELD_FOCUS_RING, fontFamily: "inherit", color: "var(--color-text)", background: FIELD_BG, minWidth: 0 }}
                       />
                     ) : (
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

@@ -43,8 +43,16 @@
 :root {
   /* Surfaces */
   --color-bg: #FFFFFF;
-  /* Fond de page de la nouvelle DA (relevé au pixel sur la maquette Figma) */
-  --color-bg-subtle: #F9FAFA;
+  /* Fond de page.
+     La maquette Figma donnait #F9FAFA — un blanc à peine teinté, sur lequel les
+     cartes blanches ne se détachaient pas : toute l'interface se lisait comme
+     une seule surface plate, et il fallait chercher les limites d'un bloc à
+     l'ombre, qui est trop douce pour ça toute seule.
+     #F1F2F4 creuse l'écart à ~4 % de luminance : assez pour que chaque carte
+     ait un bord franc, pas assez pour que le fond devienne un élément.
+     C'est le fond de PAGE ; la barre latérale reste sur --color-card-bg et
+     ressort donc en blanc, ce qui la sépare du contenu sans lui poser de trait. */
+  --color-bg-subtle: #F1F2F4;
   --color-card-bg: #FFFFFF;
   --color-hover-bg: #F0F0F0;
   --color-active-bg: #EBEBEB;
@@ -63,31 +71,36 @@
      largeur — la même valeur qu'ailleurs y pèse trop. Le survol doit indiquer
      la cible, pas la mettre en avant. */
   --color-nav-hover-bg: #F6F6F6;
-  /* Chiffres P&L — nuances plus sourdes que les couleurs status génériques */
-  --color-pnl-pos: #008932;
-  --color-pnl-neg: #B90707;
+  /* Chiffres P&L — le vert et le rouge PRINCIPAUX de la charte, bruts. Ce sont
+     les mêmes valeurs que `--color-green` / `--color-red` : un P&L positif et
+     un état positif n'ont aucune raison d'être de deux verts différents. */
+  --color-pnl-pos: #58CC02; /* Owl      */
+  --color-pnl-neg: #FF4B4B; /* Cardinal */
   /* Décimales grisées du chiffre héros (« -€98 » foncé + « .16 » gris) */
   --color-num-muted: #C0C0C0;
-  /* Tags de direction */
-  --color-tag-short-bg: #FFE7CA;
-  --color-tag-short-text: #AD4E00;
-  --color-tag-long-bg: #CAFFF3;
-  --color-tag-long-text: #007E6B;
+  /* Tags de direction (Long / Short) : la principale en encre, la même diluée
+     en aplat. Long au vert, Short à l'orange. */
+  --color-tag-short-bg: color-mix(in srgb, #FF9600 16%, transparent);
+  --color-tag-short-text: #FF9600;
+  --color-tag-long-bg: color-mix(in srgb, #58CC02 16%, transparent);
+  --color-tag-long-text: #58CC02;
   /* Calendrier P&L */
   --color-cal-empty-bg: #FAFBFB;
   --color-cal-empty-text: rgba(13, 13, 13, 0.30);
-  --color-cal-pos-bg: rgba(0, 255, 106, 0.20);
-  --color-cal-pos-text: #06700D;
-  --color-cal-neg-bg: rgba(255, 0, 4, 0.20);
-  --color-cal-neg-text: #D30004;
+  /* Aplats et encres tirés des principales : la même teinte diluée pour le
+     fond, brute pour le chiffre. */
+  --color-cal-pos-bg: color-mix(in srgb, #58CC02 24%, transparent);
+  --color-cal-pos-text: #58CC02;
+  --color-cal-neg-bg: color-mix(in srgb, #FF4B4B 24%, transparent);
+  --color-cal-neg-text: #FF4B4B;
   /* Grandes cellules de la page Calendrier : l'aplat y couvre 20 fois plus de
      surface que la pastille du tableau de bord, d'où une teinte bien plus
      diluée. S'y ajoutent l'encre du numéro de jour et celle du sous-titre. */
-  --color-cal-pos-surface: rgba(0, 255, 106, 0.05);
-  --color-cal-neg-surface: rgba(255, 0, 4, 0.05);
-  --color-cal-pos-day: rgba(10, 54, 13, 0.51);
-  --color-cal-neg-day: rgba(95, 8, 9, 0.51);
-  --color-cal-pos-sub: #06590C;
+  --color-cal-pos-surface: color-mix(in srgb, #58CC02 7%, transparent);
+  --color-cal-neg-surface: color-mix(in srgb, #FF4B4B 7%, transparent);
+  --color-cal-pos-day: color-mix(in srgb, #58CC02 85%, transparent);
+  --color-cal-neg-day: color-mix(in srgb, #FF4B4B 85%, transparent);
+  --color-cal-pos-sub: #58CC02;
   /* Piste grise d'un sélecteur segmenté (Mois / Année) */
   --color-segment-track: rgba(28, 31, 33, 0.05);
   /* Ligne de tableau mise en avant */
@@ -112,13 +125,18 @@
   --color-text-inverted: #FFFFFF;
 
   /* Couleurs sémantiques (texte/lignes/traits) — thème-aware.
-     Référencées par lib/ui/tokens.ts (T.green, T.red, T.amber, …). */
-  --color-green:  #16A34A;
-  --color-red:    #EF4444;
-  --color-amber:  #F97316;
-  --color-blue:   #3B82F6;
-  --color-purple: #8B5CF6;
-  --color-cyan:   #06B6D4;
+     Référencées par lib/ui/tokens.ts (T.green, T.red, T.amber, …).
+
+     Ce sont les HUIT PRINCIPALES de la charte (`PALETTE` dans
+     lib/ui/palette.ts), telles qu'elles sont publiées : pas de cran plus
+     sombre, pas de descente vers le noir. Une seule famille de couleurs sur
+     tout le site, celle-là. */
+  --color-green:  #58CC02; /* Owl      */
+  --color-red:    #FF4B4B; /* Cardinal */
+  --color-amber:  #FF9600; /* Fox      */
+  --color-blue:   #1CB0F6; /* Macaw    */
+  --color-purple: #CE82FF; /* Beetle   */
+  --color-cyan:   #7AF0F2; /* Moon Jelly */
   /* Accent signature style Kraken — courbe portefeuille & pastilles.
      Dérivé de l'accent de marque (voir le bloc en tête de fichier). */
   --color-kraken:     var(--accent-2);
@@ -133,24 +151,25 @@
   --color-btn-primary-text: #FFFFFF;
   --color-btn-primary-hover: #262626;
 
-  /* Status */
-  --color-success: #16A34A;
-  --color-warning: #F97316;
-  --color-danger: #EF4444;
-  --color-info: #A855F7;
+  /* Status — les mêmes principales, sous leur nom de rôle. */
+  --color-success: #58CC02;
+  --color-warning: #FF9600;
+  --color-danger: #FF4B4B;
+  --color-info: #CE82FF;
 
-  /* Pastel pills (badges P&L, status tints) */
-  --color-green-bg: #F0FDF4;
-  --color-green-bd: #86EFAC;
-  --color-red-bg:   #FEF2F2;
-  --color-red-bd:   #FECACA;
-  --color-amber-bg: #FFF4E6;
-  --color-amber-bd: #FED7AA;
-  --color-blue-bg:  #EFF6FF;
-  --color-blue-bd:  #BFDBFE;
-  /* Violet : le seul type de compte (démo) qui n'avait pas son tint. */
-  --color-purple-bg: #F5F3FF;
-  --color-purple-bd: #DDD6FE;
+  /* Aplats et lisérés teintés (badges P&L, pastilles de statut) : la
+     principale DILUÉE, et non un pastel choisi à côté. C'est ce qui garantit
+     qu'une pastille et l'encre qui l'accompagne restent de la même famille. */
+  --color-green-bg: color-mix(in srgb, #58CC02 12%, transparent);
+  --color-green-bd: color-mix(in srgb, #58CC02 45%, transparent);
+  --color-red-bg:   color-mix(in srgb, #FF4B4B 12%, transparent);
+  --color-red-bd:   color-mix(in srgb, #FF4B4B 45%, transparent);
+  --color-amber-bg: color-mix(in srgb, #FF9600 12%, transparent);
+  --color-amber-bd: color-mix(in srgb, #FF9600 45%, transparent);
+  --color-blue-bg:  color-mix(in srgb, #1CB0F6 12%, transparent);
+  --color-blue-bd:  color-mix(in srgb, #1CB0F6 45%, transparent);
+  --color-purple-bg: color-mix(in srgb, #CE82FF 12%, transparent);
+  --color-purple-bd: color-mix(in srgb, #CE82FF 45%, transparent);
 
   /* Typo — Outfit est la police de la nouvelle DA ; OpenAI Sans reste en
      repli le temps que la Google Font se charge. */
@@ -160,13 +179,18 @@
   /* === SYSTÈME VISUEL (échelles décidées — audit visuel) ===
      Objectif : du contraste, pas de la variété. Échelles courtes. */
 
-  /* Échelle typographique — 6 crans nets */
-  --text-display: 32px;  /* chiffres héros (P&L total, niveau RPG) */
-  --text-h1:      24px;  /* titre d'écran */
-  --text-h2:      17px;  /* titre de section / carte */
-  --text-body:    14px;  /* contenu courant */
-  --text-label:   12px;  /* labels, méta, légendes */
-  --text-caption: 12px;
+  /* Échelle typographique — 6 crans nets.
+     En `rem`, pas en `px` : le `rem` suit la taille de texte réglée dans le
+     navigateur ou le système. Une échelle en pixels ignore purement et
+     simplement ce réglage — quelqu'un qui a agrandi le texte de son OS
+     continue de lire du 12 px. Les valeurs sont identiques à l'ancienne
+     échelle pour une racine à 16 px : rien ne bouge par défaut. */
+  --text-display: 2rem;      /* 32px — chiffres héros (P&L total, niveau RPG) */
+  --text-h1:      1.5rem;    /* 24px — titre d'écran */
+  --text-h2:      1.0625rem; /* 17px — titre de section / carte */
+  --text-body:    0.875rem;  /* 14px — contenu courant */
+  --text-label:   0.75rem;   /* 12px — labels, méta, légendes */
+  --text-caption: 0.75rem;   /* 12px */
   --lh-display: 1.1;
   --lh-h1: 1.15;
   --lh-h2: 1.3;
@@ -222,13 +246,10 @@
   --color-border: #3A3A3A;
   --color-border-strong: #4A4A4A;
 
-  /* Couleurs sémantiques éclaircies pour rester lisibles sur fond sombre. */
-  --color-green:  #34D399;
-  --color-red:    #F87171;
-  --color-amber:  #FB923C;
-  --color-blue:   #60A5FA;
-  --color-purple: #A78BFA;
-  --color-cyan:   #22D3EE;
+  /* Les sémantiques ne sont PLUS redéfinies ici : les principales de la charte
+     rendent 5 à 11:1 sur ce fond (Owl 8,33 · Cardinal 5,27 · Macaw 7,11 ·
+     Fox 7,96), elles n'ont donc besoin d'aucune version éclaircie. Une seule
+     valeur par couleur, dans les deux thèmes. */
   /* `--color-kraken*` n'est plus redéfini ici : il suit `--accent-2` /
      `--accent-tint`, qui ont déjà leur déclinaison sombre en tête de fichier. */
 
@@ -237,17 +258,19 @@
   --elev-hover:   0 4px 14px rgba(0,0,0,.5);
   --elev-overlay: 0 16px 44px rgba(0,0,0,.6);
 
-  /* Pastel pills en dark mode : versions sombres tintées des couleurs status */
-  --color-green-bg: #1A3A2D;
-  --color-green-bd: #1F7A4E;
-  --color-red-bg:   #3A1E1E;
-  --color-red-bd:   #7A2D2D;
-  --color-amber-bg: #332818;
-  --color-amber-bd: #7A5A20;
-  --color-blue-bg:  #1E2A3D;
-  --color-blue-bd:  #2D4A7A;
-  --color-purple-bg: #292040;
-  --color-purple-bd: #4C3A7A;
+  /* Aplats teintés en sombre : même construction qu'en clair — la principale
+     diluée — juste un peu plus concentrée, un voile d'encre claire se voyant
+     moins sur du sombre que sur du blanc. */
+  --color-green-bg: color-mix(in srgb, #58CC02 16%, transparent);
+  --color-green-bd: color-mix(in srgb, #58CC02 50%, transparent);
+  --color-red-bg:   color-mix(in srgb, #FF4B4B 16%, transparent);
+  --color-red-bd:   color-mix(in srgb, #FF4B4B 50%, transparent);
+  --color-amber-bg: color-mix(in srgb, #FF9600 16%, transparent);
+  --color-amber-bd: color-mix(in srgb, #FF9600 50%, transparent);
+  --color-blue-bg:  color-mix(in srgb, #1CB0F6 16%, transparent);
+  --color-blue-bd:  color-mix(in srgb, #1CB0F6 50%, transparent);
+  --color-purple-bg: color-mix(in srgb, #CE82FF 16%, transparent);
+  --color-purple-bd: color-mix(in srgb, #CE82FF 50%, transparent);
 
   /* === NOUVELLE DA — déclinaison sombre ===
      Mêmes rôles qu'en clair, teintes remontées pour rester lisibles sur fond
@@ -260,24 +283,17 @@
   --color-nav-text: #999999;
   /* Même écart réduit en sombre : à peine détaché du fond de la sidebar. */
   --color-nav-hover-bg: #202021;
-  --color-pnl-pos: #34D399;
-  --color-pnl-neg: #F87171;
+  /* `--color-pnl-*` et `--color-tag-*-text` ne sont plus redéfinis ici : ce sont
+     les principales de la charte, et elles rendent 5 à 8:1 sur ce fond. */
   --color-num-muted: #5A5A5C;
-  --color-tag-short-bg: #3A2A17;
-  --color-tag-short-text: #F0B27A;
-  --color-tag-long-bg: #123330;
-  --color-tag-long-text: #5EEAD4;
+  --color-tag-short-bg: color-mix(in srgb, #FF9600 20%, transparent);
+  --color-tag-long-bg: color-mix(in srgb, #58CC02 20%, transparent);
   --color-cal-empty-bg: #202022;
   --color-cal-empty-text: rgba(200, 200, 200, 0.35);
-  --color-cal-pos-bg: rgba(0, 255, 106, 0.14);
-  --color-cal-pos-text: #4ADE80;
-  --color-cal-neg-bg: rgba(255, 0, 4, 0.16);
-  --color-cal-neg-text: #FF7B7E;
-  --color-cal-pos-surface: rgba(0, 255, 106, 0.07);
-  --color-cal-neg-surface: rgba(255, 0, 4, 0.09);
-  --color-cal-pos-day: rgba(167, 243, 190, 0.55);
-  --color-cal-neg-day: rgba(255, 183, 185, 0.55);
-  --color-cal-pos-sub: #4ADE80;
+  --color-cal-pos-bg: color-mix(in srgb, #58CC02 22%, transparent);
+  --color-cal-neg-bg: color-mix(in srgb, #FF4B4B 24%, transparent);
+  --color-cal-pos-surface: color-mix(in srgb, #58CC02 10%, transparent);
+  --color-cal-neg-surface: color-mix(in srgb, #FF4B4B 11%, transparent);
   --color-segment-track: rgba(255, 255, 255, 0.06);
   --color-row-highlight: rgba(255, 255, 255, 0.05);
   --elev-card: 0 0 0 1px rgba(255, 255, 255, 0.05);
@@ -475,14 +491,6 @@
 :root[data-theme="dark"] [style*="background: #86EFAC"] {
   background: #16432F !important;
 }
-:root[data-theme="dark"] [style*="background:#4ADE80"],
-:root[data-theme="dark"] [style*="background: #4ADE80"] {
-  background: #1C5A3F !important;
-}
-:root[data-theme="dark"] [style*="background:#22C55E"],
-:root[data-theme="dark"] [style*="background: #22C55E"] {
-  background: #1F7A4E !important;
-}
 
 /* Hover rule list : quand JS inline-set background via onMouseEnter,
    le navigateur normalise en rgb(). On matche donc aussi rgb(240,240,240). */
@@ -575,6 +583,77 @@ html, body {
   overflow: hidden;
 }
 
+/* === Socle tactile ===
+   Quatre défauts de navigateur qui trahissent immédiatement un site web sur un
+   téléphone. Ils se corrigent une fois, ici, pour toute l'application.
+
+   1. Le flash bleu au doigt. WebKit peint un voile sur l'élément touché, en
+      retard sur le doigt et sans rapport avec notre palette. On le coupe — nos
+      états `:active` (retrait d'échelle, changement de fond) le remplacent, et
+      eux partent au `pointerdown`.
+   2. Le délai de 300 ms. Hérité du double-tap-pour-zoomer : le navigateur
+      ATTEND de voir si un second appui arrive avant de déclencher le clic.
+      `touch-action: manipulation` déclare qu'il n'y a pas de double-tap à
+      guetter ici, et le clic part immédiatement.
+   3. Le grossissement de police en paysage sur iOS, qui casse toute échelle
+      typographique construite au pixel.
+   4. Le rebond de la page entière (« overscroll ») quand on tire au-delà du
+      bas d'une liste : il découvre le fond du navigateur sous l'app, ce qu'une
+      application native ne fait jamais. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
+}
+
+/* La sélection de texte au appui long est une gêne sur les éléments d'interface
+   (onglets, boutons, en-têtes) : elle fait surgir la loupe et les poignées de
+   sélection au moindre appui maintenu. On la garde évidemment sur le CONTENU —
+   d'où le ciblage par rôle plutôt qu'un `user-select: none` global. */
+button, [role="button"], [role="tab"], nav, label, .tr4de-tabbar, .tr4de-sheet-handle {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* === Marges de sécurité (encoche, barre de gestes, coins arrondis) ===
+   Exposées en variables pour que le reste du code n'ait jamais à écrire
+   `env()` à la main — et surtout pour qu'il puisse les COMBINER (`calc()` sur
+   un `env()` imbriqué dans un `max()` est une source d'erreurs silencieuses).
+   Elles valent 0 sur un écran sans encoche et dans un navigateur de bureau :
+   aucune règle n'a besoin d'être conditionnée. */
+:root {
+  --sa-top: env(safe-area-inset-top, 0px);
+  --sa-right: env(safe-area-inset-right, 0px);
+  --sa-bottom: env(safe-area-inset-bottom, 0px);
+  --sa-left: env(safe-area-inset-left, 0px);
+
+  /* Hauteur de la barre d'onglets basse, réserve système comprise. Le contenu
+     scrollable s'en sert comme padding de fin : sans ça, la dernière ligne de
+     chaque page reste cachée derrière la barre — le défaut le plus courant des
+     barres flottantes.
+     `--tabbar-total` vaut ZÉRO hors mobile, où la barre n'est pas rendue. Toute
+     règle qui veut se poser au-dessus d'elle (bannière d'installation, bouton
+     flottant) peut ainsi l'ajouter sans condition : elle ne réserve de la
+     place que là où il y en a à réserver. */
+  --tabbar-h: 56px;
+  --tabbar-total: 0px;
+
+  /* Hauteur de l'en-tête mobile, réserve d'encoche comprise. */
+  --mobile-header-h: 52px;
+  --mobile-header-total: calc(var(--mobile-header-h) + var(--sa-top));
+
+  /* Cible tactile minimale. 44 px est la recommandation Apple, 48 dp celle de
+     Google : on prend la plus grande des deux contraintes utiles. */
+  --tap-min: 44px;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -587,8 +666,11 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  /* Outfit est une police variable : on laisse le navigateur choisir la
+     graisse optique adaptée à la taille rendue. */
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -612,6 +694,22 @@ body { font-weight: var(--fw-body); }
 .t-label   { font-size: var(--text-label); font-weight: var(--fw-medium); color: var(--color-text-muted); }
 .t-caption { font-size: var(--text-caption); font-weight: var(--fw-body); color: var(--color-text-muted); }
 .num       { font-variant-numeric: tabular-nums; }
+
+/* === Tracking par défaut des titres ===
+   Le tracking dépend de la TAILLE : plus une lettre grandit, plus l'espace
+   qui la sépare de la suivante paraît large. Un `letter-spacing` unique est
+   donc forcément faux quelque part. Les six classes `.t-*` ci-dessus portent
+   déjà la bonne valeur, mais l'écrasante majorité des titres du site est
+   écrite en style inline et ne les traverse jamais : on accroche donc la
+   règle à l'élément lui-même.
+
+   Uniquement des valeurs NÉGATIVES : elles resserrent le texte, donc le
+   rendent plus étroit — aucun risque de provoquer un retour à la ligne qui
+   n'existait pas. Un `letterSpacing` inline reste prioritaire quand une page
+   a délibérément choisi sa valeur. */
+h1 { letter-spacing: -0.02em; }
+h2 { letter-spacing: -0.015em; }
+h3 { letter-spacing: -0.01em; }
 
 /* === Scrollbar fine OpenAI-style === */
 html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transparent; }
@@ -768,6 +866,34 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
   --dur-base: 200ms;
   --dur-slow: 280ms;
   --dur-modal: 220ms;
+  /* Boucles d'attente. Une seule valeur chacune : le site en comptait trois
+     pour le spinner (0,8 s / 1 s / 1,4 s). Un spinner rapide fait PERCEVOIR
+     un chargement plus court à durée réelle identique — d'où 0,8 s. */
+  --dur-spin: 800ms;
+  --dur-shimmer: 1400ms;
+
+  /* === Transition d'état d'un élément interactif ===
+     Remplace les `transition: all` semés dans le site (33 occurrences, 20
+     fichiers). `all` demande au navigateur de surveiller TOUTE propriété
+     animable : il suffit qu'un survol touche une largeur, une hauteur ou un
+     padding pour déclencher un recalcul de mise en page à chaque frame — sans
+     que rien dans le code ne le laisse deviner.
+
+     La liste ci-dessous énumère les seules propriétés qu'un état de survol,
+     de focus ou de sélection fait réellement varier ici. Elle vit dans une
+     variable parce que le site est écrit en styles inline : sans elle, la
+     liste serait recopiée trente-trois fois et la prochaine correction de
+     courbe en oublierait la moitié — c'est exactement ce qui était arrivé aux
+     douze `cubic-bezier(0.23,1,0.32,1)` écrits à la main.
+
+     Usage : style={{ transition: "var(--tr-ui)" }} */
+  --tr-ui:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
 @keyframes fadeUp {
@@ -788,20 +914,32 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
 }
 .anim-fade-in { animation: fadeIn 200ms var(--ease-out) both; }
 
-/* Popover / menu déroulant : l'entrée part du déclencheur (coin haut-gauche)
-   plutôt que du centre de l'écran — c'est ce qui donne la continuité spatiale
-   « ce panneau sort de ce bouton ». transform + opacity uniquement. */
+/* Popover / menu déroulant : l'entrée part du DÉCLENCHEUR, pas du centre —
+   c'est ce qui donne la continuité spatiale « ce panneau sort de ce bouton ».
+   transform + opacity uniquement.
+
+   L'origine ne peut pas être figée : le panneau bascule au-dessus de l'ancre
+   quand le bas de l'écran manque (`data-placement="top"`) et s'aligne parfois
+   sur son bord droit (`data-align="end"`). Avec un `top left` en dur, un menu
+   qui s'ouvre vers le haut naissait de son coin le plus éloigné du bouton —
+   exactement l'inverse de l'effet recherché. Le Popover pose donc ces deux
+   attributs et l'origine se recompose ici.
+
+   Définition UNIQUE : il y en avait deux dans ce fichier, et la seconde
+   — postérieure — reprenait la main sur la règle `prefers-reduced-motion`
+   ci-dessous (une media query n'ajoute aucune spécificité). Les utilisateurs
+   qui demandent moins de mouvement recevaient donc l'animation complète. */
 @keyframes popIn {
-  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  from { opacity: 0; transform: translateY(var(--pop-from-y, -4px)) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .anim-pop {
   animation: popIn 160ms var(--ease-out) both;
-  transform-origin: top left;
+  transform-origin: var(--pop-origin-x, left) var(--pop-origin-y, top);
 }
-@media (prefers-reduced-motion: reduce) {
-  .anim-pop { animation: fadeIn 140ms ease both; }
-}
+/* Le panneau est au-dessus de l'ancre : il naît de son bord BAS et monte. */
+.anim-pop[data-placement="top"] { --pop-origin-y: bottom; --pop-from-y: 4px; }
+.anim-pop[data-align="end"]     { --pop-origin-x: right; }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
@@ -834,13 +972,9 @@ button:not([data-no-press]):not(:disabled):active {
    Classe conservée côté JSX, sans cascade ni opacité de départ. */
 .anim-stagger > * { opacity: 1; animation: none; }
 
-/* === Pop : popovers / dropdowns / menus contextuels ===
-   scale 0.96 + opacity → arrive depuis le déclencheur (origine ajustée par le caller). */
-@keyframes pop {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
-}
-.anim-pop { animation: pop var(--dur-fast) var(--ease-out) both; }
+/* (Le `.anim-pop` des popovers est défini plus haut, avec son origine ancrée
+   au déclencheur. Il y avait ici une seconde définition qui l'écrasait et
+   neutralisait au passage sa règle de mouvement réduit — supprimée.) */
 
 /* === Modal entry : centré, scale subtil + fade === */
 @keyframes modalIn {
@@ -856,40 +990,98 @@ button:not([data-no-press]):not(:disabled):active {
 }
 .anim-backdrop { animation: backdropIn 180ms ease both; }
 
-/* === Drawer : translateY depuis le bas (mobile) ou translateX (latéral) === */
-@keyframes drawerUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-.anim-drawer-up { animation: drawerUp 320ms var(--ease-drawer) both; }
+/* === Sortie d'une modale ===
+   L'entrée et la sortie empruntent le MÊME chemin : la surface repart par où
+   elle est arrivée, au centre, en se rétractant. Une modale qui entrerait en
+   grandissant pour disparaître d'un coup romprait le lien entre les deux
+   moments, et l'utilisateur perdrait le fil de ce qui s'est passé.
 
-@keyframes drawerLeft {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-.anim-drawer-left { animation: drawerLeft 280ms var(--ease-drawer) both; }
+   La sortie est plus rapide que l'entrée (160 contre 220 ms) : on prend son
+   temps pour proposer une surface, jamais pour la retirer. Une fois la
+   décision de fermer prise, tout délai est du temps perdu.
 
-/* === Slide depuis la droite (toasts, side panels) === */
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: translateX(0); }
+   Posé par `useModalExit` — la durée ci-dessous doit rester en phase avec la
+   valeur passée au hook. */
+@keyframes modalOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.97); }
 }
-.anim-slide-right { animation: slideInRight var(--dur-base) var(--ease-out) both; }
+.anim-modal-out { animation: modalOut 160ms var(--ease-out) both; pointer-events: none; }
 
-/* === Skeleton shimmer === */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes backdropOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.anim-backdrop-out { animation: backdropOut 160ms ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-modal-out { animation: backdropOut 140ms ease both !important; }
+}
+
+/* === Tiroirs & panneaux latéraux ===
+   Motif à TRANSITION, pas à keyframes. Une surface de ce type se saisit :
+   l'utilisateur doit pouvoir l'attraper en plein vol et l'inverser. Une
+   keyframe repart de zéro à chaque interruption et produit un saut ; une
+   transition, elle, repart de la valeur affichée à l'écran.
+
+   Usage : poser `data-sheet` + basculer `data-open` sur l'élément.
+     <div data-sheet="bottom" data-open={open}>   (monte du bas)
+     <div data-sheet="right"  data-open={open}>   (entre par la droite)
+
+   Le `%` est relatif à la taille de l'élément : la surface se cache
+   exactement d'elle-même, quelle que soit sa hauteur ou sa largeur.
+   Entrée et sortie empruntent le MÊME chemin — ce qui rend le geste de
+   renvoi vers ce bord évident. */
+[data-sheet] {
+  transform: translate(0, 0);
+  transition: transform 320ms var(--ease-drawer), opacity 200ms var(--ease-out);
+  will-change: transform;
+}
+
+/* Point de départ AU MONTAGE, pour les surfaces montées déjà ouvertes
+   (`{open && <Drawer/>}`, le motif dominant du site). `@starting-style`
+   remplace le `useEffect(() => setMounted(true))` habituel : pas d'état, pas
+   de second rendu, et surtout pas de frame où la surface est visible à sa
+   position finale avant de repartir en arrière. */
+@starting-style {
+  [data-sheet="bottom"] { transform: translateY(100%); }
+  [data-sheet="right"]  { transform: translateX(100%); }
+  [data-sheet="left"]   { transform: translateX(-100%); }
+}
+
+/* Bascule explicite, pour les surfaces montées en permanence. */
+[data-sheet="bottom"][data-open="false"] { transform: translateY(100%); }
+[data-sheet="right"][data-open="false"]  { transform: translateX(100%); }
+[data-sheet="left"][data-open="false"]   { transform: translateX(-100%); }
+
+/* === Skeleton shimmer ===
+   Le reflet est un calque qui TRAVERSE la surface en `transform`, et non un
+   `background-position` animé : cette dernière propriété repeint la zone à
+   chaque frame, sur des listes entières de placeholders, pendant tout le
+   chargement — c'est-à-dire exactement au moment où le fil principal est le
+   plus occupé. Le calque, lui, est composité et ne coûte rien.
+   `linear` parce que le mouvement est constant : ni départ ni arrivée. */
+@keyframes shimmerSweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
 }
 .anim-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-bg-subtle, #F1F2F4);
+  isolation: isolate;
+}
+.anim-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: linear-gradient(
     90deg,
-    var(--color-bg-subtle, #F5F5F5) 0%,
+    transparent 0%,
     var(--color-hover-bg, #EEEEEE) 50%,
-    var(--color-bg-subtle, #F5F5F5) 100%
+    transparent 100%
   );
-  background-size: 200% 100%;
-  animation: shimmer 1.6s linear infinite;
+  animation: shimmerSweep var(--dur-shimmer) linear infinite;
 }
 
 /* === RPG : feedback de gain d'XP & montée de niveau ===
@@ -939,7 +1131,9 @@ button:not([data-no-press]):not(:disabled):active {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
 }
-.anim-pulse { animation: pulseSoft 2s var(--ease-in-out) infinite; }
+/* Boucle constante → `linear` : une courbe d'accélération sur un cycle qui se
+   répète crée un à-coup à chaque raccord. */
+.anim-pulse { animation: pulseSoft 2s linear infinite; }
 
 /* === Chevron rotate : pour disclosure / accordion / select ouvert ===
    Le caller met data-open="true" sur l'icône (ou un parent). */
@@ -984,10 +1178,15 @@ input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  /* Anneau discret au clavier uniquement (accessibilité), sans déplacer la
-     mise en page grâce au box-shadow. */
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-info) 32%, transparent);
-  border-color: var(--color-info);
+  /* Anneau au clavier, posé en `box-shadow` : il ne déplace pas la mise en page
+     d'un pixel, contrairement à un `outline` qui pousse ses voisins.
+
+     À l'accent de marque et non au bleu d'information : depuis que les champs
+     sont des aplats sans cadre (components/ui/form.jsx), cet anneau est le SEUL
+     signal qui désigne le champ actif — il doit parler la langue du site, pas
+     celle d'un message système. Et il n'y a plus de `border-color` à changer :
+     il n'y a plus de bordure. */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* === Liens (<a>) : transition couleur fluide === */
@@ -1035,15 +1234,51 @@ a, [role="button"] {
 }
 
 /* === Reduced motion : filet de sécurité GLOBAL ===
-   Neutralise animations et transitions pour les utilisateurs qui demandent
-   moins de mouvement — y compris les animations/transitions posées en style
-   inline (que les règles ciblant `.anim-*` ne peuvent pas atteindre). */
+   Portée : les animations et transitions posées en style INLINE, que les
+   règles ciblant `.anim-*` ne peuvent pas atteindre.
+
+   « Moins de mouvement » ne veut pas dire « aucun retour visuel ». La version
+   précédente écrasait `transition-duration` à 0,01 ms sur tout : les fondus,
+   les changements de couleur au survol et l'anneau de focus devenaient des
+   sauts secs, alors que ce sont précisément les transitions qui AIDENT à
+   comprendre — elles ne déplacent rien et ne provoquent pas de mal des
+   transports. On coupe donc les animations (souvent des déplacements) et on
+   raccourcit les transitions à une valeur douce plutôt que de les supprimer.
+   Les déplacements restants sont neutralisés cible par cible plus bas. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    /* Assez court pour qu'aucun mouvement ne soit perceptible, assez long
+       pour qu'un changement de couleur ne clignote pas. */
+    transition-duration: 120ms !important;
+    transition-timing-function: ease !important;
+  }
+}
+
+/* === Transparence réduite ===
+   Deuxième signal d'accessibilité visuelle : l'utilisateur demande des
+   surfaces opaques. On densifie les voiles et on retire les flous. */
+@media (prefers-reduced-transparency: reduce) {
+  [data-scrim], .tr4de-sidebar-backdrop {
+    background: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: none !important;
+  }
+  [data-glass] {
+    background: var(--color-bg) !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* === Contraste renforcé ===
+   Troisième signal : fonds quasi opaques et bordure franche sur les surfaces
+   flottantes, pour que le bord de la couche reste lisible. */
+@media (prefers-contrast: more) {
+  [data-popover-panel], [data-glass], .tr4de-modal-card {
+    background: var(--color-bg) !important;
+    border: 1px solid var(--color-text) !important;
+    backdrop-filter: none !important;
   }
 }
 
@@ -1054,12 +1289,10 @@ a, [role="button"] {
   transition: max-height var(--dur-slow) var(--ease-in-out), opacity var(--dur-base) var(--ease-out);
 }
 
-/* === Toast / notification : enter from top-right === */
-@keyframes toastIn {
-  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-.anim-toast { animation: toastIn var(--dur-base) var(--ease-out) both; transform-origin: top right; }
+/* Les toasts vivent dans components/AlertToast.tsx, en transitions plutôt
+   qu'en keyframes : ils s'empilent et se retirent vite, et une keyframe
+   interrompue repart de son image zéro. La classe `.anim-toast` qui se
+   trouvait ici est devenue sans usage — retirée. */
 
 /* === Image / chart load fade === */
 img, canvas {
@@ -1067,18 +1300,24 @@ img, canvas {
 }
 
 /* === Spinner uniforme : animation `spin` réutilisée === */
-.anim-spin { animation: spin 1s linear infinite; }
+.anim-spin { animation: spin var(--dur-spin) linear infinite; }
 
 /* === Reduced motion : étend les exclusions aux nouvelles animations === */
 @media (prefers-reduced-motion: reduce) {
-  .anim-pop, .anim-modal, .anim-drawer-up, .anim-drawer-left,
-  .anim-slide-right, .anim-toast {
+  .anim-pop, .anim-modal {
     animation: fadeIn 180ms ease both !important;
   }
-  .anim-shimmer, .anim-pulse { animation: none !important; }
+  /* Le balayage vit sur le pseudo-élément depuis qu'il est en `transform` :
+     cibler `.anim-shimmer` seul ne l'atteindrait plus. */
+  .anim-shimmer::after, .anim-pulse { animation: none !important; }
   [data-chevron] { transition: none !important; }
   a:active, [role="button"]:active { transform: none !important; }
   input[type="checkbox"]:active, input[type="radio"]:active { transform: none !important; }
+  /* Surfaces qui se DÉPLACENT : elles arrivent d'un coup au lieu de glisser.
+     C'est l'équivalent doux du glissement, pas sa suppression pure — le voile
+     et le fondu restent là pour signaler l'arrivée du tiroir. */
+  .tr4de-sidebar { transition: none !important; }
+  .tr4de-drawer, [data-sheet] { transition: none !important; animation: none !important; }
 }
 
 /* Reduced motion : on garde la fade (compréhension) mais on retire les
@@ -1118,7 +1357,7 @@ img, canvas {
     top: 0; left: 0; bottom: 0;
     z-index: 80;
     transform: translateX(-100%);
-    transition: transform .22s cubic-bezier(.2,.8,.2,1);
+    transition: transform 220ms var(--ease-drawer);
     box-shadow: 0 0 30px rgba(0,0,0,0.15);
   }
   .tr4de-sidebar.is-open { transform: translateX(0); }
@@ -1192,6 +1431,18 @@ img, canvas {
     width: 180px !important;
     flex-shrink: 0 !important;
   }
+}
+
+/* Grille de champs (components/ui/form.jsx) : deux colonnes en large, une
+   seule dès que la place manque. Le seuil est celui du conteneur réel et non
+   celui de la fenêtre — une modale de 480 px sur un écran de 1440 px est
+   étroite, même si la fenêtre ne l'est pas. */
+.tr4de-field-grid { container-type: inline-size; }
+@container (max-width: 380px) {
+  .tr4de-field-grid { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 560px) {
+  .tr4de-field-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Mobile (<768px) */
@@ -1355,7 +1606,17 @@ button img,
     border: none !important;
     border-radius: 0 !important;
     z-index: 1000 !important;
-    animation: tr4deTradeSheetIn .22s cubic-bezier(.2, .8, .2, 1) both;
+    animation: tr4deTradeSheetIn 220ms var(--ease-drawer) both;
+    /* Depuis que la page passe en `viewport-fit: cover`, `inset: 0` veut dire
+       « tout l'écran, encoche comprise » : sans cette réserve, le titre du
+       trade se glisserait sous l'heure et le bouton de fermeture sous la barre
+       de gestes. C'est du padding et non de l'inset — la surface doit bien
+       couvrir l'écran entier, c'est son CONTENU qui se tient à l'écart. */
+    padding-top: var(--sa-top) !important;
+    padding-bottom: var(--sa-bottom) !important;
+    padding-left: var(--sa-left) !important;
+    padding-right: var(--sa-right) !important;
+    box-sizing: border-box !important;
   }
   @keyframes tr4deTradeSheetIn {
     from { opacity: 0; transform: translateY(12px); }
@@ -1364,6 +1625,13 @@ button img,
 
   /* Page Comptes : grille 2 colonnes → 1 colonne sur mobile (cartes lisibles) */
   .tr4de-accounts-grid { grid-template-columns: 1fr !important; }
+
+  /* Sport : historique à gauche, panneau collant à droite. La colonne de droite
+     réclamait 300 px de large — sur un écran de 375 px il ne restait que
+     dix-neuf pixels à la timeline. Elle passe dessous, et perd son ancrage
+     collant : il n'y a plus rien à côté de quoi rester visible. */
+  .tr4de-sport-layout { grid-template-columns: minmax(0, 1fr) !important; }
+  .tr4de-sport-layout > div:last-child { position: static !important; }
 
   /* Inputs / cards "centrés" qui forçaient maxWidth: 360 */
   [style*="max-width: 360"], [style*="maxWidth: 360"] { max-width: 100% !important; }
@@ -1697,4 +1965,299 @@ button img,
      (Cette règle vivait dans une feuille <style> embarquée dans la page, en
      double avec les règles `.tr4de-notes-*` déjà présentes ici.) */
   .tr4de-notes-newbtn-label { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COQUILLE MOBILE
+   Barre d'onglets basse, feuille basse, en-tête mobile.
+
+   Ces trois pièces remplacent, sous 768 px, le trio « barre latérale +
+   hamburger + boîte de dialogue centrée » hérité du bureau. Le reste de
+   l'application n'en sait rien : elle voit toujours une page qui défile.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Matériau de la barre d'onglets. Semi-transparent PARCE QUE le contenu doit
+     rester perceptible dessous — c'est ce qui fait lire la barre comme une
+     couche posée sur la page plutôt que comme une bande qui l'ampute. */
+  --tabbar-bg: rgba(255, 255, 255, 0.82);
+  --tabbar-edge: rgba(0, 0, 0, 0.07);
+  --sheet-bg: #FFFFFF;
+  --sheet-handle: rgba(13, 13, 13, 0.22);
+}
+
+:root[data-theme="dark"] {
+  --tabbar-bg: rgba(26, 26, 27, 0.82);
+  --tabbar-edge: rgba(255, 255, 255, 0.10);
+  --sheet-bg: #1A1A1B;
+  --sheet-handle: rgba(255, 255, 255, 0.28);
+}
+
+/* ─── Barre d'onglets ──────────────────────────────────────────────────── */
+
+/* Retour d'appui immédiat. Il part au `pointerdown` — le `:active` du
+   navigateur — et non au clic : attendre le relâchement coûte les ~100 ms qui
+   font basculer une interface de « directe » à « en retard ».
+   Le retrait porte sur le CONTENU de l'onglet, pas sur l'onglet lui-même : si
+   la cible de 44 px rétrécissait à l'appui, un doigt posé près du bord
+   sortirait de la zone cliquable en cours de geste et le tap serait perdu. */
+.tr4de-tab > * {
+  transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.tr4de-tab:active > * {
+  transform: scale(0.88);
+}
+
+/* L'onglet actif : l'icône remonte d'un cheveu et la couleur passe à l'accent.
+   Deux signaux, pas un — la couleur seule ne suffit pas (daltonisme), et le
+   libellé passe en 600 dans le composant. */
+.tr4de-tab[data-active] svg {
+  transform: translateY(-1px);
+}
+
+.tr4de-tab-fab {
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.tr4de-tab:active .tr4de-tab-fab {
+  transform: scale(0.9);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ─── Feuille basse ────────────────────────────────────────────────────── */
+
+.tr4de-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--color-scrim, rgba(0, 0, 0, 0.45));
+  animation: scrimIn 220ms var(--ease-out) both;
+}
+.tr4de-sheet-scrim.is-closing {
+  animation: scrimOut 220ms var(--ease-out) both;
+}
+
+/* La feuille décrit son APPARENCE et son mouvement, jamais sa position : c'est
+   le conteneur qui l'ancre en bas (un `display: flex` + `align-items: flex-end`
+   sur le voile). Sans cette séparation, la classe imposerait `position: fixed`
+   à une surface déjà placée par son parent — le cas de la modale partagée, qui
+   emprunte cette même apparence en tactile — et les deux mécanismes se
+   contrediraient. */
+.tr4de-sheet {
+  position: relative;
+  /* Au-dessus du voile, qui est son frère dans le même conteneur. */
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--sheet-bg);
+  /* Rayon en haut seulement : la feuille est ANCRÉE au bas de l'écran, elle
+     n'y flotte pas. Arrondir les quatre coins la décollerait du bord et
+     trahirait le fait qu'elle vient de sortir de là. */
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.18);
+  /* Elle entre et sort par le bas, toujours. */
+  animation: sheetIn 320ms var(--ease-drawer) both;
+  /* La transition est rendue à l'élément au relâchement du geste : le hook
+     coupe puis restaure `transition`, et la surface repart alors de la valeur
+     AFFICHÉE — jamais d'une valeur théorique, donc sans saut visible. */
+  transition: transform 320ms var(--ease-drawer);
+  /* Le glissé vertical appartient à la feuille ; le navigateur ne doit pas le
+     confisquer pour faire défiler la page. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+.tr4de-sheet.is-closing {
+  animation: sheetOut 220ms var(--ease-out) both;
+}
+
+@keyframes sheetIn  { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheetOut { from { transform: translateY(0); }    to { transform: translateY(100%); } }
+@keyframes scrimIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scrimOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* Poignée de préhension. Sa zone tactile fait 28 px de haut alors que le trait
+   n'en fait que 4 : on agrandit la CIBLE, pas le dessin. */
+.tr4de-sheet-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  flex-shrink: 0;
+  cursor: grab;
+}
+.tr4de-sheet-handle > span {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--sheet-handle);
+}
+.tr4de-sheet-handle:active { cursor: grabbing; }
+
+/* Pied d'une feuille : les actions s'étalent au lieu de se serrer à droite.
+   Sur un téléphone, un bouton de 90 px calé dans l'angle inférieur droit est
+   une cible étroite au bout du pouce ; deux boutons à parts égales couvrent
+   toute la largeur et se visent sans regarder.
+   `flex-basis: 0` force le partage à parts égales — sans lui, « Enregistrer »
+   serait plus large qu'« Annuler » du seul fait de son libellé. */
+.tr4de-sheet-footer > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ─── En-tête mobile ───────────────────────────────────────────────────── */
+
+.tr4de-mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--mobile-header-total);
+  /* La réserve d'encoche est un padding HAUT : le titre descend sous l'heure
+     et la batterie au lieu de se glisser dessous. */
+  padding: var(--sa-top) 12px 0 12px;
+  background: var(--tabbar-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  font-family: var(--font-sans);
+}
+
+/* Bord de défilement plutôt qu'un filet de 1 px : le trait n'apparaît que
+   lorsque du contenu passe RÉELLEMENT sous l'en-tête. Une bordure permanente
+   dessine une frontière même quand il n'y a rien derrière. */
+.tr4de-mobile-header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: var(--tabbar-edge);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+.tr4de-mobile-header[data-scrolled]::after { opacity: 1; }
+
+/* Verrou de défilement (cf. lib/hooks/useScrollLock).
+   `position: fixed` plutôt que `overflow: hidden` : c'est le seul des deux que
+   Safari iOS respecte réellement. Le `!important` est nécessaire — la règle
+   mobile rend `overflow: auto !important` au corps de page, et un style inline
+   perdrait contre elle. */
+body.tr4de-scroll-locked {
+  position: fixed !important;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden !important;
+}
+
+/* ─── Coquille : ce qui change sous 768 px ─────────────────────────────── */
+
+@media (max-width: 767px) {
+  :root { --tabbar-total: calc(var(--tabbar-h) + var(--sa-bottom)); }
+
+  /* La barre latérale n'existe plus en tactile — ni ouverte, ni en tiroir. Ses
+     dix-sept entrées sont dans la feuille « Plus », et ses quatre destinations
+     principales sont dans la barre d'onglets. Garder les deux en parallèle
+     donnerait deux navigations concurrentes pour un même produit. */
+  .tr4de-sidebar,
+  .tr4de-sidebar-backdrop,
+  .tr4de-hamburger {
+    display: none !important;
+  }
+
+  /* Le contenu réserve la hauteur de la barre d'onglets en bas — sinon la
+     dernière carte de chaque page finit cachée derrière elle. C'est le défaut
+     le plus fréquent des barres flottantes, et il ne se voit qu'en bout de
+     page, donc jamais pendant le développement.
+     Les gouttières intègrent au passage les coins arrondis / l'encoche en
+     paysage, d'où les `max()`. */
+  .tr4de-main .scroll-thin {
+    padding-bottom: calc(24px + var(--tabbar-total)) !important;
+    --page-gutter: max(16px, var(--sa-right)) !important;
+    --page-gutter-left: max(16px, var(--sa-left)) !important;
+  }
+
+  /* L'ancienne barre du haut ne portait que le hamburger : elle n'a plus rien
+     à montrer, et l'en-tête mobile la remplace. */
+  .tr4de-topbar { display: none !important; }
+
+  /* Le cadre principal ne porte plus de gouttière : elle appartient au
+     conteneur qui défile (`--page-gutter`). La garder ici la comptait DEUX
+     fois — et surtout, elle empêchait l'en-tête translucide d'atteindre les
+     bords de l'écran, laissant deux bandes de fond de chaque côté d'une
+     surface censée être pleine largeur. */
+  .tr4de-main {
+    padding: 0 !important;
+    margin-left: 0 !important;
+  }
+
+  /* Cibles tactiles : plancher de 44 px sur tout ce qui se tape. Le `min-height`
+     agrandit la zone sans toucher au dessin — un bouton de 34 px garde son
+     allure et gagne 5 px de marge cliquable de chaque côté. */
+  .tr4de-main button:not(.tr4de-tab):not([data-tap-exempt]),
+  .tr4de-main [role="button"]:not([data-tap-exempt]) {
+    min-height: var(--tap-min);
+  }
+  /* Exception : les boutons qui vivent DANS une ligne dense (cellules de
+     tableau, pastilles de filtre) — les grandir casserait la ligne. Ils
+     gagnent à la place une zone étendue par pseudo-élément. */
+  .tr4de-main td button,
+  .tr4de-main th button,
+  .tr4de-main .tr4de-dense button {
+    min-height: 0;
+    position: relative;
+  }
+  .tr4de-main td button::after,
+  .tr4de-main th button::after,
+  .tr4de-main .tr4de-dense button::after {
+    content: "";
+    position: absolute;
+    inset: 50% 0 0 0;
+    height: var(--tap-min);
+    transform: translateY(-50%);
+  }
+
+  /* 16 px sur les champs : en dessous, iOS ZOOME automatiquement à la mise au
+     point et l'utilisateur se retrouve dans une page agrandie qu'il doit
+     dézoomer à la main. C'est la contrainte, pas un choix typographique. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* ─── Accessibilité : les trois préférences système ────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Mouvement réduit ne veut pas dire aucun retour : la feuille cesse de
+     GLISSER (c'est le déplacement qui gêne, pas le changement d'état) et se
+     contente d'un fondu. */
+  .tr4de-sheet {
+    animation: scrimIn var(--dur-base) var(--ease-out) both;
+    transition: opacity var(--dur-base) var(--ease-out);
+  }
+  .tr4de-sheet.is-closing {
+    animation: scrimOut var(--dur-base) var(--ease-out) both;
+  }
+  .tr4de-tab:active > *,
+  .tr4de-tab:active .tr4de-tab-fab { transform: none; }
+  .tr4de-tab[data-active] svg { transform: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  /* Le flou est un confort, pas une information : on rend les surfaces opaques
+     plutôt que de dégrader la lisibilité. */
+  :root { --tabbar-bg: #FFFFFF; }
+  :root[data-theme="dark"] { --tabbar-bg: #1A1A1B; }
+  .tr4de-tabbar, .tr4de-mobile-header {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .tr4de-tabbar, .tr4de-mobile-header {
+    border-color: var(--color-text) !important;
+  }
+  .tr4de-tab[data-active] { outline: 1px solid var(--accent); outline-offset: -3px; }
 }

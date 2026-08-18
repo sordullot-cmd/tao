@@ -379,7 +379,7 @@ function AddAccountsMenu({ anchorRef, open, align = "left", onCreate, onAttach, 
       role="menu"
       className="anim-pop"
       style={{
-        background: T.white, border: `1px solid ${T.border}`,
+        background: T.white, border: "none",
         borderRadius: 12, boxShadow: "var(--elev-overlay)", padding: 6,
       }}
     >

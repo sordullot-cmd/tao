@@ -5,6 +5,8 @@ import { Calculator, Info } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { getContractMultiplier } from "@/lib/csvParsers";
 import { getCurrencySymbol } from "@/lib/userPrefs";
+import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 /**
  * RiskCalculator — calcule la taille de position optimale pour un trade donné.
@@ -141,7 +143,7 @@ export default function RiskCalculator() {
         </Field>
         <Field label="Multiplicateur" hint={`${result.mult}× pour ${inputs.symbol.toUpperCase() || "—"}`}>
           <input type="number" value={result.mult} disabled
-            style={{ ...inputStyle(), color: T.textMut, background: T.bg }} />
+            style={{ ...inputStyle(), color: T.textMut, background: DA_FIELD_BG }} />
         </Field>
         <Field label="Entry">
           <input type="number" step="0.01" value={inputs.entry}
@@ -202,15 +204,8 @@ export default function RiskCalculator() {
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>
-        {label}
-      </label>
-      {children}
-      {hint && <div style={{ fontSize: 10, color: T.textMut, marginTop: 3 }}>{hint}</div>}
-    </div>
-  );
+  // Delegue a la brique commune (components/ui/form.jsx).
+  return <DAField label={label} hint={hint}>{children}</DAField>;
 }
 
 function Row({ label, value, sub, color }: { label: string; value: string; sub?: string | null; color?: string }) {
@@ -225,16 +220,7 @@ function Row({ label, value, sub, color }: { label: string; value: string; sub?:
   );
 }
 
+/* Delegue a la brique commune (components/ui/form.jsx) : aplat en pilule. */
 function inputStyle(): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: "8px 10px",
-    border: `1px solid ${T.border}`,
-    borderRadius: "var(--radius-card)",
-    fontSize: 13,
-    fontFamily: "inherit",
-    color: T.text,
-    background: T.white,
-    outline: "none",
-  };
+  return { ...DA_FIELD };
 }

@@ -34,7 +34,7 @@ export async function exportNotesPdf(opts: NotesExportOptions): Promise<void> {
     primary: "#0D0D0D",
     secondary: "#5C5C5C",
     muted: "#8E8E8E",
-    accent: "#3B82F6",
+    accent: "#1CB0F6",
     border: "#E5E5E5",
     background: "#F5F5F5",
   };

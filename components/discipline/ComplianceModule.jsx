@@ -16,6 +16,7 @@ import { useComplianceRules } from "@/lib/hooks/useComplianceData";
 import { useDailySessionNotes } from "@/lib/hooks/useDailySessionNotes";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
 import { Stat } from "@/components/ui/Stat";
+import { FIELD as DA_FIELD } from "@/components/ui/form";
 
 /** Dates journalisées (note de session ou note de trade) pour la règle `journaling`. */
 function useJournaledDates(trades) {
@@ -101,7 +102,7 @@ function RuleTypeDropdown({ value, onChange }) {
         role="listbox"
         style={{
           background: T.white,
-          border: `1px solid ${T.border}`,
+          border: "none",
           borderRadius: "var(--radius-card)",
           boxShadow: "var(--elev-overlay)",
           padding: 6,
@@ -625,17 +626,8 @@ function RuleBuilder({ rules, addRule, updateRule, deleteRule }) {
 }
 
 /* ─────────────── Styles partagés ─────────────── */
-const inp = () => ({
-  width: "100%",
-  padding: "8px 12px",
-  fontSize: 13,
-  fontFamily: "inherit",
-  color: T.text,
-  background: T.white,
-  border: `1px solid ${T.border}`,
-  borderRadius: "var(--radius-card)",
-  outline: "none",
-});
+// Aplat de la DA (components/ui/form.jsx) au lieu du cadre blanc souligne.
+const inp = () => ({ ...DA_FIELD });
 const lbl = () => ({
   display: "block",
   fontSize: 11, fontWeight: 600, color: T.textMut,

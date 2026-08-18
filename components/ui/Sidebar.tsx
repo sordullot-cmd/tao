@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import Popover from "@/components/ui/Popover";
+import { useSwipeToDismiss } from "@/lib/hooks/useSwipeToDismiss";
 
 export interface SidebarItem {
   id: string;
@@ -81,7 +82,21 @@ export default function Sidebar(props: SidebarProps) {
   /* La barre se dimensionne sur son libellé le plus long : sa largeur n'est
      plus une constante que la coquille pourrait recopier. On la mesure et on la
      remonte, pour que le contenu de page décale d'exactement ce qu'elle occupe. */
-  const asideRef = useRef<HTMLElement>(null);
+
+  /* === Renvoi du tiroir au glissé (mobile) ===
+     La barre latérale est la plus grande surface saisissable du site et elle
+     ne se saisissait pas : on ne pouvait l'ouvrir qu'au hamburger et la fermer
+     qu'en visant le voile. Sur un écran tactile, le geste attendu est de la
+     repousser vers son bord — c'est-à-dire vers la gauche, d'où `direction`.
+     Toute la physique (suivi 1:1, vélocité, projection, résistance) vit dans
+     le hook : voir lib/hooks/useSwipeToDismiss. */
+  const { ref: asideRef, handlers: swipeHandlers } = useSwipeToDismiss<HTMLElement>({
+    onDismiss: () => onMobileClose?.(),
+    direction: -1,
+    axis: "x",
+    enabled: mobileOpen,
+  });
+
   useEffect(() => {
     const el = asideRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -90,7 +105,7 @@ export default function Sidebar(props: SidebarProps) {
     const ro = new ResizeObserver(emit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [onWidthChange, collapsed]);
+  }, [onWidthChange, collapsed, asideRef]);
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userRef = useRef<HTMLDivElement>(null);
@@ -138,6 +153,7 @@ export default function Sidebar(props: SidebarProps) {
     <aside
       ref={asideRef}
       className={`tr4de-sidebar ${mobileOpen ? "is-open" : ""}`}
+      {...swipeHandlers}
       style={{
         // Carte blanche flottante posée sur le fond de page, gouttière de 12 px
         // à gauche / en haut / en bas. Sa largeur suit son contenu : elle
@@ -165,7 +181,10 @@ export default function Sidebar(props: SidebarProps) {
         top: 0,
         zIndex: 30,
         height: "calc(100dvh - 24px)",
-        transition: "width 180ms var(--ease-out), transform .22s var(--ease-drawer)",
+        /* Courbe issue des tokens : le tiroir en comptait trois différentes
+           dans le site (`.2,.8,.2,1` ici et dans la feuille de trade, plus
+           `--ease-drawer`). Une seule, désormais. */
+        transition: "width 180ms var(--ease-out), transform 220ms var(--ease-drawer)",
         fontFamily: "var(--font-sans)",
       }}
     >
@@ -266,7 +285,12 @@ export default function Sidebar(props: SidebarProps) {
                     fontSize: 13, lineHeight: "20.15px",
                     // Gras : libellé ET icône (via strokeWidth) ont le même poids.
                     fontWeight: 550, cursor: "pointer", fontFamily: "inherit",
-                    transition: "background 150ms cubic-bezier(0.23,1,0.32,1), color 150ms cubic-bezier(0.23,1,0.32,1), padding 200ms cubic-bezier(0.23,1,0.32,1)",
+                    /* Pas de `padding` dans la liste : il ne change qu'au repli
+                       de la barre, et le libellé, lui, est démonté sur-le-champ.
+                       On animait donc pendant 200 ms l'espace laissé par un
+                       texte déjà disparu — un décalage sans cause visible.
+                       `background-color` plutôt que le raccourci `background`. */
+                    transition: "background-color 150ms var(--ease-out), color 150ms var(--ease-out)",
                     position: "relative",
                   }}
                   onMouseEnter={e => { e.currentTarget.style.background = "var(--color-nav-hover-bg)"; }}
@@ -371,7 +395,7 @@ export default function Sidebar(props: SidebarProps) {
           maxHeight={360}
           role="menu"
           style={{
-            background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)",
+            background: "var(--color-card-bg, #FFFFFF)", border: "none",
             borderRadius: 10, boxShadow: "var(--elev-overlay)", padding: 4,
           }}
         >
@@ -419,7 +443,7 @@ export default function Sidebar(props: SidebarProps) {
               <button
                 onClick={() => { setUserMenuOpen(false); onLogout(); }}
                 role="menuitem"
-                style={{ ...dropdownItemStyle(), color: "var(--color-red, #EF4444)" }}
+                style={{ ...dropdownItemStyle(), color: "var(--color-red, #FF4B4B)" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "var(--color-red-bg, #FEF2F2)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >

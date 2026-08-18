@@ -21,11 +21,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 export const INKS = {
   ink:    { label: "Encre",  cssVar: "--color-text",   fallback: "#0D0D0D" },
-  blue:   { label: "Bleu",   cssVar: "--color-blue",   fallback: "#3B82F6" },
-  red:    { label: "Rouge",  cssVar: "--color-red",    fallback: "#EF4444" },
-  green:  { label: "Vert",   cssVar: "--color-green",  fallback: "#16A34A" },
-  amber:  { label: "Orange", cssVar: "--color-amber",  fallback: "#F97316" },
-  purple: { label: "Violet", cssVar: "--color-purple", fallback: "#8B5CF6" },
+  blue:   { label: "Bleu",   cssVar: "--color-blue",   fallback: "#1CB0F6" },
+  red:    { label: "Rouge",  cssVar: "--color-red",    fallback: "#FF4B4B" },
+  green:  { label: "Vert",   cssVar: "--color-green",  fallback: "#58CC02" },
+  amber:  { label: "Orange", cssVar: "--color-amber",  fallback: "#FF9600" },
+  purple: { label: "Violet", cssVar: "--color-purple", fallback: "#CE82FF" },
 };
 
 export const INK_KEYS = Object.keys(INKS);

@@ -1,4 +1,5 @@
 import { T } from "@/lib/ui/tokens";
+import { PALETTE } from "@/lib/ui/palette";
 import { t } from "@/lib/i18n";
 
 /**
@@ -12,6 +13,10 @@ import { t } from "@/lib/i18n";
  * Chaque type porte le triplet complet encre / aplat / bordure, pour que les
  * pastilles, les cases à cocher et les puces de statut viennent tous d'ici.
  * `label` est une fonction pour que le libellé suive la langue courante.
+ *
+ * Les valeurs viennent de la CHARTE (`lib/ui/palette.ts`) : la principale
+ * telle qu'elle est publiée pour l'encre et la bordure, la même diluée pour
+ * l'aplat. Une seule teinte par type, du texte à la pastille.
  */
 export interface AccountTypeStyle {
   fg: string;
@@ -20,11 +25,16 @@ export interface AccountTypeStyle {
   label: () => string;
 }
 
+/* Aplat d'un type : la principale posée à 14 %. En `color-mix` avec du
+   transparent et non en pastel figé — le même pourcentage tient donc en clair
+   comme en sombre, là où un aplat opaque serait blanchâtre dans l'un des deux. */
+const veil = (color: string) => `color-mix(in srgb, ${color} 14%, transparent)`;
+
 export const ACCOUNT_TYPE_COLORS: Record<string, AccountTypeStyle> = {
-  eval:   { fg: T.amber,  bg: T.amberBg,  bd: T.amberBd,  label: () => t("addTrade.eval") },
-  funded: { fg: T.blue,   bg: T.blueBg,   bd: T.blueBd,   label: () => t("addTrade.funded") },
-  live:   { fg: T.green,  bg: T.greenBg,  bd: T.greenBd,  label: () => t("addTrade.live") },
-  demo:   { fg: T.purple, bg: T.purpleBg, bd: T.purpleBd, label: () => t("addTrade.demo") },
+  eval:   { fg: PALETTE.orange, bg: veil(PALETTE.orange), bd: PALETTE.orange, label: () => t("addTrade.eval") },
+  funded: { fg: PALETTE.blue,   bg: veil(PALETTE.blue),   bd: PALETTE.blue,   label: () => t("addTrade.funded") },
+  live:   { fg: PALETTE.green,  bg: veil(PALETTE.green),  bd: PALETTE.green,  label: () => t("addTrade.live") },
+  demo:   { fg: PALETTE.purple, bg: veil(PALETTE.purple), bd: PALETTE.purple, label: () => t("addTrade.demo") },
 };
 
 export const DEFAULT_ACCOUNT_TYPE = "live";

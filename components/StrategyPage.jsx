@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import ReactDOM from "react-dom";
 import { Pencil, Trash2, Plus, X, Target } from "lucide-react";
-import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { parseCSV, calculateStats } from "@/lib/csvParsers";
 import { t, useLang } from "@/lib/i18n";
@@ -12,6 +11,9 @@ import { useTrades } from "@/lib/hooks/useTradeData";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { CARD } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { STRATEGY_COLORS, STRATEGY_COLOR_DEFAULT } from "@/lib/ui/tradingColors";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { Modal as DAModal, PillButton as DAPillButton, FIELD as DA_FIELD, FIELD_AREA as DA_FIELD_AREA } from "@/components/ui/form";
 
 /* ─── TOKENS (palette monochrome partagée, dark-aware) ─────────────── */
 const T = { ...BaseT };
@@ -55,7 +57,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
   const [showStrategyForm, setShowStrategyForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [strategyToDelete, setStrategyToDelete] = useState(null);
-  const [formData, setFormData] = useState({name:"",description:"",color:"#16A34A",groups:[{id:Date.now(),name:"",rules:[{id:Date.now()+1,text:""}]}]});
+  const [formData, setFormData] = useState({name:"",description:"",color:STRATEGY_COLOR_DEFAULT,groups:[{id:Date.now(),name:"",rules:[{id:Date.now()+1,text:""}]}]});
   const [editingStrategyId, setEditingStrategyId] = useState(null);
   
   // ✅ Rendre tradeStrategiesData réactif
@@ -114,9 +116,12 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const colors = ["#EF4444","#F97316","#F59E0B","#EAB308","#84CC16","#22C55E","#10B981","#06B6D4","#3B82F6","#6366F1","#A855F7","#EC4899","#D1D5DB"];
+  /* La palette de la charte, servie ici comme dans « Ajouter un trade » :
+     les deux pages creent le meme objet, elles ne peuvent pas proposer deux
+     jeux de couleurs differents. */
+  const colors = STRATEGY_COLORS;
 
-  const getDefaultFormData = () => ({name:"",description:"",color:"#16A34A",groups:[{id:Date.now(),name:"",rules:[{id:Date.now()+1,text:""}]}]});
+  const getDefaultFormData = () => ({name:"",description:"",color:STRATEGY_COLOR_DEFAULT,groups:[{id:Date.now(),name:"",rules:[{id:Date.now()+1,text:""}]}]});
 
   // ✅ Synchroniser les stratégies avec localStorage pour que DashboardNew les voit
   React.useEffect(() => {
@@ -753,7 +758,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                        moins selon la place réellement disponible. */
                     <div style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))",
                       gap: "24px 12px",
                     }}>
                       {strategy.groups.map(group => (
@@ -802,59 +807,54 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
       )}
 
       {/* ─── MODALE DE CONFIRMATION DE SUPPRESSION ─── */}
-      {showDeleteConfirm && ReactDOM.createPortal(
-        <div onClick={cancelDelete} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.5)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div role="dialog" aria-modal="true" aria-label={t("strat.deleteTitle")} onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:"var(--radius-card)",padding:32,maxWidth:400,width:"90%",boxShadow:"var(--elev-overlay)"}}>
-            <h2 style={{fontSize:18,fontWeight:700,color:T.text,textAlign:"left",marginBottom:12}}>{t("strat.deleteTitle")}</h2>
-            <p style={{fontSize:14,color:T.textSub,textAlign:"left",marginBottom:24,lineHeight:1.5}}>{t("strat.deleteWarn")}</p>
-            
-            <div style={{display:"flex",gap:12,justifyContent:"flex-end"}}>
-              <button
-                onClick={cancelDelete}
-                style={{padding:"10px 20px",borderRadius:"var(--radius-card)",border:`1px solid ${T.border}`,background:T.white,fontSize:13,fontWeight:600,cursor:"pointer",color:T.text,transition:"all .2s"}}
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={loading}
-                style={{padding:"10px 20px",borderRadius:"var(--radius-card)",border:"none",background:T.red,fontSize:13,fontWeight:600,cursor:loading?"not-allowed":"pointer",color:"#fff",transition:"all .2s",opacity:loading?0.6:1}}
-              >
-                {loading ? (t("common.loading")) : t("common.delete")}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {showDeleteConfirm && (
+        <DAModal
+          title={t("strat.deleteTitle")}
+          onClose={cancelDelete}
+          width={420}
+          draggable={false}
+          scrim
+          footer={<>
+            <DAPillButton onClick={cancelDelete}>{t("common.cancel")}</DAPillButton>
+            <DAPillButton
+              variant="primary"
+              disabled={loading}
+              style={loading ? undefined : {background:T.red,color:"#fff"}}
+              onClick={confirmDelete}>
+              {loading ? t("common.loading") : t("common.delete")}
+            </DAPillButton>
+          </>}>
+          <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>{t("strat.deleteTitle")}</div>
+          <div style={{fontSize:13,color:T.text,opacity:0.6,lineHeight:1.55}}>{t("strat.deleteWarn")}</div>
+        </DAModal>
       )}
 
       {/* ─── MODALE DE CRÉATION/ÉDITION ─── */}
-      {showStrategyForm && ReactDOM.createPortal(
-        <div {...backdropDismiss(handleCancelEdit)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font-sans)"}}>
-          <div role="dialog" aria-modal="true" aria-label={editingStrategyId ? t("strat.edit") : t("strat.new")} onClick={(e)=>e.stopPropagation()} style={{background:T.white,borderRadius:14,maxWidth:560,width:"92%",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"var(--elev-overlay)",border:`1px solid ${T.border}`,overflow:"hidden"}}>
-
-            {/* Header */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:`1px solid ${T.border}`}}>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:formData.color}}/>
-                <h2 style={{fontSize:16,fontWeight:600,color:T.text,margin:0,letterSpacing:-0.1}}>
-                  {editingStrategyId ? t("strat.edit") : t("strat.new")}
-                </h2>
-              </div>
-              <button onClick={handleCancelEdit} aria-label={t("common.cancel")} style={{display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,background:"transparent",border:"none",cursor:"pointer",color:T.textMut,borderRadius:6}}
-                onMouseEnter={(e)=>{e.currentTarget.style.background=T.accentBg}} onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}>
-                <X size={16} strokeWidth={1.75}/>
-              </button>
+      {showStrategyForm && (
+        <DAModal
+          title={editingStrategyId ? t("strat.edit") : t("strat.new")}
+          onClose={handleCancelEdit}
+          width={560}
+          maxHeight="90vh"
+          bodyStyle={{padding:"8px 24px 20px",gap:18}}
+          footer={<>
+            <DAPillButton onClick={handleCancelEdit}>{t("common.cancel")}</DAPillButton>
+            <DAPillButton variant="primary" disabled={!formData.name.trim()} onClick={handleCreateStrategy}>
+              {editingStrategyId ? t("common.save") : t("strat.createBtn2")}
+            </DAPillButton>
+          </>}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:formData.color}}/>
+            <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>
+              {editingStrategyId ? t("strat.edit") : t("strat.new")}
             </div>
-
-            {/* Body (scroll) */}
-            <div style={{flex:1,overflowY:"auto",padding:"20px 24px",display:"flex",flexDirection:"column",gap:18}}>
+          </div>
 
               {/* Nom */}
               <div>
                 <label style={{display:"block",fontSize:12,fontWeight:500,marginBottom:6,color:T.textSub}}>{t("strat.name")}</label>
                 <input type="text" value={formData.name} onChange={(e)=>setFormData({...formData,name:e.target.value})} placeholder={t("strat.namePh")}
-                  style={{width:"100%",padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",fontSize:13,outline:"none",fontFamily:"inherit",color:T.text,background:T.white}}
+                  style={DA_FIELD}
                   />
               </div>
 
@@ -862,7 +862,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               <div>
                 <label style={{display:"block",fontSize:12,fontWeight:500,marginBottom:6,color:T.textSub}}>{t("strat.description")}</label>
                 <textarea value={formData.description} onChange={(e)=>setFormData({...formData,description:e.target.value})} placeholder={t("strat.descPh")}
-                  style={{width:"100%",padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",fontSize:13,outline:"none",resize:"vertical",minHeight:64,fontFamily:"inherit",color:T.text,background:T.white,lineHeight:1.5}}
+                  style={{...DA_FIELD_AREA,minHeight:64}}
                   />
               </div>
 
@@ -892,7 +892,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
 
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   {formData.groups && formData.groups.map((group)=>(
-                    <div key={group.id} style={{padding:12,border:`1px solid ${T.border}`,borderRadius:10,background:T.white}}>
+                    <div key={group.id} style={{padding:12,border:"none",borderRadius:12,background:DA_FIELD_BG}}>
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
                         <input type="text" placeholder={t("strat.groupNamePh")} value={group.name} onChange={(e)=>updateGroup(group.id,"name",e.target.value)}
                           style={{flex:1,padding:"6px 8px",border:"none",fontSize:12,fontWeight:600,outline:"none",color:T.text,background:"transparent",fontFamily:"inherit",letterSpacing:0.2}}/>
@@ -905,7 +905,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                           </button>
                         )}
                       </div>
-                      <div style={{height:1,background:T.border,margin:"8px 0"}}/>
+                      <div style={{height:8}}/>
 
                       <div style={{display:"flex",flexDirection:"column",gap:4,marginLeft:16}}>
                         {group.rules && group.rules.map((rule)=>(
@@ -934,20 +934,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                   ))}
                 </div>
               </div>
-            </div>
-
-            {/* Footer */}
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end",padding:"14px 24px",borderTop:`1px solid ${T.border}`,background:T.bg}}>
-              <button onClick={handleCancelEdit} style={{padding:"8px 18px",height:34,borderRadius:999,border:`1px solid ${T.border}`,background:T.white,fontSize:13,fontWeight:600,cursor:"pointer",color:T.text,fontFamily:"var(--font-sans)"}}>{t("common.cancel")}</button>
-              <button onClick={handleCreateStrategy} disabled={!formData.name.trim()}
-                style={{padding:"8px 18px",height:34,borderRadius:999,border:`1px solid ${T.text}`,background:T.text,color:T.white,fontSize:13,fontWeight:600,cursor:formData.name.trim()?"pointer":"not-allowed",opacity:formData.name.trim()?1:0.5,fontFamily:"var(--font-sans)"}}>
-                {editingStrategyId ? t("common.save") : t("strat.createBtn2")}
-              </button>
-            </div>
-
-          </div>
-        </div>,
-        document.body
+        </DAModal>
       )}
     </div>
   );

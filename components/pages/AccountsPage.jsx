@@ -2,15 +2,16 @@
 
 import React from "react";
 import { T } from "@/lib/ui/tokens";
+import { TAG_COLORS } from "@/lib/ui/tradingColors";
 import { CARD, SectionTitle, HeroAmount, downsampleLTTB, sparklineBudget } from "@/components/ui/da";
-import { accountBrandColor } from "@/lib/ui/brandColors";
+import { accountBrandColor, brandColor } from "@/lib/ui/brandColors";
 import {
   AccountRowsHeader, TableRow, SubRow, RoundLogo, PassFundedButton,
   RowIconButton, AddAccountRow,
 } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
-import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+
 import { createClient } from "@/lib/supabase/client";
 import { t, useLang } from "@/lib/i18n";
 
@@ -20,17 +21,18 @@ const fmtNoCents = (n) => {
   const prefix = v < 0 ? "-" : "";
   return `${prefix}${sym}${Math.abs(v).toLocaleString("en-US")}`;
 };
-import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, X, Calendar, ChevronDown, Building2 } from "lucide-react";
+import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, Calendar, ChevronDown, Building2 } from "lucide-react";
 import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { isArchivedAccount, ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
-import ReactDOM from "react-dom";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
 import { PropFirmModal, AccountModal, AttachAccountsModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm } from "@/lib/propFirms";
 import { refreshTradesCache } from "@/lib/tradesCache";
-import { resolvePlatformIcon } from "@/lib/brokers/platforms";
+import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { firmLogo } from "@/lib/accountBrand";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
 
 const BROKER_LOGOS = {
   "tradovate":           "/trado.png",
@@ -79,7 +81,6 @@ const TEXT_INVERTED = "var(--color-text-inverted, #FFFFFF)";
 const ON_SOLID = "var(--color-on-solid, #FFFFFF)";
 // TODO token DA : `scrim` — voile derrière les modales.
 //   clair rgba(0,0,0,.45) / sombre rgba(0,0,0,.62).
-const SCRIM = "var(--color-scrim, rgba(0,0,0,0.45))";
 
 /* ─── Métadonnées funded (localStorage uniquement, pas de migration DB) ──
    Stocke par account.id : date de passage funded + paramètres (target, DD, payout).
@@ -517,7 +518,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
     };
   }, [stats, payoutFor]);
 
-  /* Les 3 comptes les plus actifs, toutes origines confondues (rattachés à une
+  /* Les 6 comptes les plus actifs, toutes origines confondues (rattachés à une
      prop firm ou non). « Actif » = nombre de trades sur les 30 derniers jours ;
      à défaut d'activité récente on retombe sur le volume total, puis sur la
      date du dernier trade. Un compte funded ne compte que depuis funded_at,
@@ -536,7 +537,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
     /* On classe des ENTITÉS, pas des comptes : un compte rattaché à une firme
        est représenté par sa firme, dont l'activité est la somme de celle de
        tous ses comptes. Sans ça, une firme à dix comptes actifs occupait les
-       trois cartes avec ses comptes pris un à un. */
+       cartes avec ses comptes pris un à un. */
     const entities = new Map();
     for (const acc of visibleAccounts) {
       const firm = acc.firm_id ? firmById.get(acc.firm_id) : null;
@@ -563,8 +564,9 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
         if (b.trades !== a.trades) return b.trades - a.trades;
         return b.last - a.last;
       })
-      .slice(0, 3);
+      .slice(0, 6);
   }, [visibleAccounts, trades, viewOf, firmById]);
+
 
   /* Un compte eval qui a atteint sa cible de profit peut passer funded. */
   const canPassFunded = React.useCallback((acc) => {
@@ -600,20 +602,29 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
       {/* Confirmation du passage eval → funded (action destructive : supprime
           le compte eval en base). Remplace l'exécution directe pour éviter
           toute perte de compte accidentelle. */}
-      {confirmFunded && ReactDOM.createPortal(
-        <div {...backdropDismiss(() => setConfirmFunded(null))} style={{ position: "fixed", inset: 0, background: SCRIM, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Confirmer le passage en Funded" style={{ background: T.white, borderRadius: 14, padding: 24, maxWidth: 420, width: "100%", boxShadow: "var(--elev-overlay)" }} className="anim-modal">
-            <div style={{ fontSize: 16, fontWeight: 500, color: T.text, marginBottom: 8 }}>Passer « {confirmFunded.name || "Compte"} » en Funded ?</div>
-            <div style={{ fontSize: 14, color: T.textSub, lineHeight: 1.55, marginBottom: 20 }}>
-              Un nouveau compte funded vierge est créé. Le compte eval est <b>archivé et retiré des totaux</b> ; ses trades restent consultables dans la page Stratégies et la ligne « Comptes eval passés ». Cette action est difficile à annuler.
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setConfirmFunded(null)} style={{ padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
-              <button type="button" onClick={() => { const acc = confirmFunded; setConfirmFunded(null); passToFunded(acc); }} style={{ padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.pnlPos, color: ON_SOLID, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Passer en Funded</button>
-            </div>
+      {confirmFunded && (
+        <DAModal
+          title="Confirmer le passage en Funded"
+          onClose={() => setConfirmFunded(null)}
+          width={440}
+          draggable={false}
+          scrim
+          footer={<>
+            <DAPillButton onClick={() => setConfirmFunded(null)}>Annuler</DAPillButton>
+            <DAPillButton
+              variant="primary"
+              style={{ background: T.pnlPos, color: ON_SOLID }}
+              onClick={() => { const acc = confirmFunded; setConfirmFunded(null); passToFunded(acc); }}>
+              Passer en Funded
+            </DAPillButton>
+          </>}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>
+            Passer « {confirmFunded.name || "Compte"} » en Funded ?
           </div>
-        </div>,
-        document.body
+          <div style={{ fontSize: 13, color: T.text, opacity: 0.6, lineHeight: 1.55 }}>
+            Un nouveau compte funded vierge est créé. Le compte eval est <b>archivé et retiré des totaux</b> ; ses trades restent consultables dans la page Stratégies et la ligne « Comptes eval passés ». Cette action est difficile à annuler.
+          </div>
+        </DAModal>
       )}
 
       {/* Emplacement des contrôles injectés par la barre du haut (sélecteur de
@@ -698,11 +709,13 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
           </div>
         </div>
 
-        {/* ─── Les plus actifs : 3 cartes, comptes de prop firm ou non ─── */}
+        {/* ─── Les plus actifs : jusqu'à 6 cartes, prop firm ou non ─── */}
         {topActiveEntities.length > 0 && (
           <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <SectionTitle>{t("accountsPage.mostActive")}</SectionTitle>
-            <div className="tr4de-accounts-live" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 24 }}>
+            {/* Six colonnes : le gap descend à 16 pour laisser de la largeur
+                aux cartes, qui portent chacune un chiffre et une courbe. */}
+            <div className="tr4de-accounts-live" style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 16 }}>
               {topActiveEntities.map((entity) => {
                 /* Une entité rattachée à une firme est présentée par sa FIRME :
                    nom, logo, courbe et chiffres agrégés de tous ses comptes. */
@@ -1191,11 +1204,22 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
           passent à la ligne d'eux-mêmes (flex-wrap) ; on resserre seulement
           leur espacement pour qu'ils tiennent sur deux lignes. */}
       <style>{`
+        @media (max-width: 1600px) {
+          .tr4de-accounts-live { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+        }
+        @media (max-width: 1360px) {
+          .tr4de-accounts-live { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+        }
         @media (max-width: 1100px) {
+          .tr4de-accounts-live { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        }
+        @media (max-width: 860px) {
           .tr4de-accounts-live { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         }
-        @media (max-width: 720px) {
+        @media (max-width: 400px) {
           .tr4de-accounts-live { grid-template-columns: minmax(0, 1fr) !important; }
+        }
+        @media (max-width: 720px) {
           .tr4de-accounts-kpis > div:last-child { gap: 18px !important; row-gap: 12px !important; }
         }
       `}</style>
@@ -1210,8 +1234,15 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
 /* Courbe d'équity miniature d'une carte « Live » — tracée sur les vrais
    trades du compte (P&L cumulé). Sans trade, on affiche une ligne médiane
    atténuée plutôt qu'une fausse courbe. */
-function Sparkline({ values: rawValues, color, height = 131 }) {
+/* `fill` : la courbe prend toute la hauteur restante de son parent flex au lieu
+   d'une hauteur fixe — indispensable dans une carte carrée, dont la hauteur
+   dépend de sa largeur. Le viewBox garde alors une hauteur nominale, l'étirement
+   étant assuré par preserveAspectRatio="none". */
+function Sparkline({ values: rawValues, color, height = 131, fill = false }) {
   const W = 100;
+  const H = fill ? 100 : height;
+  const svgHeight = fill ? "100%" : height;
+  const svgStyle = fill ? { display: "block", flex: 1, minHeight: 0 } : { display: "block" };
   /* Le nombre de points suit le nombre de trades, mais plafonne : au-delà, on
      sous-échantillonne en gardant la silhouette (pics et creux) plutôt que de
      tracer un segment par trade, qui rendait la courbe illisible. */
@@ -1221,9 +1252,9 @@ function Sparkline({ values: rawValues, color, height = 131 }) {
   );
   if (!values || values.length < 2) {
     return (
-      <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none"
-        style={{ display: "block" }} aria-hidden>
-        <line x1="0" y1={height / 2} x2={W} y2={height / 2}
+      <svg width="100%" height={svgHeight} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={svgStyle} aria-hidden>
+        <line x1="0" y1={H / 2} x2={W} y2={H / 2}
           stroke={T.numMuted} strokeWidth="2" strokeDasharray="4 5" vectorEffect="non-scaling-stroke" />
       </svg>
     );
@@ -1234,12 +1265,12 @@ function Sparkline({ values: rawValues, color, height = 131 }) {
   const pad = 3;
   const pts = values.map((v, i) => [
     (i / (values.length - 1)) * W,
-    height - pad - ((v - min) / span) * (height - pad * 2),
+    H - pad - ((v - min) / span) * (H - pad * 2),
   ]);
   const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0]} ${p[1]}`).join(" ");
   return (
-    <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none"
-      style={{ display: "block", overflow: "visible" }} aria-hidden>
+    <svg width="100%" height={svgHeight} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      style={{ ...svgStyle, overflow: "visible" }} aria-hidden>
       <path d={d} fill="none" stroke={color} strokeWidth="2.5"
         strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
@@ -1247,8 +1278,9 @@ function Sparkline({ values: rawValues, color, height = 131 }) {
 }
 
 /* ============== CARTE « LIVE » (compte hors firme) ==============
-   Maquette : logo rond 44, nom 16 / broker 14 à 40 %, courbe d'équity,
-   puis P&L (+%) au-dessus de la valeur du compte. */
+   Carte carrée : logo rond 34, puis nom 14 + badge de type sur la même ligne,
+   firme ou plateforme 12 à 40 % en dessous, courbe d'équity étirée, et le
+   montant légendé en pied. */
 function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false }) {
   /* Le logo est celui de la PROP FIRM du compte. La plateforme d'exécution ne
      sert qu'à l'import : elle n'identifie pas le compte. Sans firme (live ou
@@ -1257,8 +1289,10 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
     ? firmLogo(firm)
     : (getBrokerLogo(account.broker) || resolvePlatformIcon(account.broker));
   /* Sous-titre : la firme (ou le nombre de comptes, pour une carte de firme).
-     Le broker n'y figure plus — c'est une information d'import, pas d'identité. */
-  const subtitle = firmName || "";
+     Un compte ordinaire, lui, n'a pas de firme à afficher : on y met sa
+     PLATEFORME d'exécution, seul rattachement qu'il possède — sans quoi la
+     ligne restait vide et les cartes ne s'alignaient plus entre elles. */
+  const subtitle = firmName || (isFirm ? "" : platformName(account.broker)) || "—";
   /* Badge de tête : le type du compte avec sa taille, ou « Prop firm » pour une
      carte de firme — dont le type n'a pas de sens, ses comptes pouvant être de
      types différents. */
@@ -1282,49 +1316,65 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
-      style={{ ...CARD, padding: 20, display: "flex", flexDirection: "column", gap: 16, cursor: "pointer" }}
+      /* Carte carrée : la hauteur suit la largeur de la colonne. Plus de
+         plafond de hauteur — il aurait rogné le carré dès que les colonnes
+         s'élargissent ; seul un plancher subsiste, pour que la courbe garde de
+         quoi se tracer sur les colonnes les plus étroites. */
+      style={{
+        ...CARD, aspectRatio: "1 / 1", minHeight: 180,
+        padding: 16, display: "flex", flexDirection: "column", gap: 10, cursor: "pointer",
+      }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-        <RoundLogo src={logo} size={44} name={firm?.name || firmName || account.name} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0, flex: 1 }}>
-          {/* Le badge partage la ligne du nom : posé dans la colonne de droite
-              de l'en-tête, il flottait entre les deux lignes de texte. */}
+      {/* Nom (et firme / plateforme) posés À DROITE du logo : c'est le logo qui
+          ouvre la ligne d'identité, comme dans les lignes du tableau. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <RoundLogo src={logo} size={34} name={firm?.name || firmName || account.name} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
+          {/* Le badge partage la ligne du nom : posé dans une colonne à part, à
+              droite du bloc de texte, il flottait entre les deux lignes. */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 14, fontWeight: 500, lineHeight: "19px", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {account.name || "Compte"}
             </span>
-            {/* Badge neutre pour tous : le type se lit, il ne se code plus par
-                la couleur. Même dessin pour une firme et pour un compte. */}
             <span style={{
               marginLeft: "auto", flexShrink: 0,
               display: "inline-flex", alignItems: "center",
-              padding: "3px 10px", borderRadius: 999,
+              padding: "2px 8px", borderRadius: 999,
               border: `1px solid ${T.border}`, background: T.bg,
-              fontSize: 11, fontWeight: 500, color: T.textSub, whiteSpace: "nowrap",
+              fontSize: 11, lineHeight: "15px", fontWeight: 500, color: T.textSub, whiteSpace: "nowrap",
             }}>
               {isFirm ? t("firms.badge") : accountTypeLabel(account)}
             </span>
           </div>
-          {subtitle && (
-            <span style={{ fontSize: 14, color: T.text, opacity: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {subtitle}
-            </span>
-          )}
+          {/* Firme pour un compte rattaché, plateforme pour un compte ordinaire. */}
+          <span style={{ fontSize: 12, lineHeight: "16px", color: T.text, opacity: 0.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {subtitle}
+          </span>
         </div>
       </div>
 
-      <Sparkline values={series} color={curveColor} />
+      {/* La courbe démarre au bord GAUCHE de la carte — la marge négative y
+          annule le padding — mais garde son retrait à droite : elle se termine
+          à l'aplomb du texte, sans toucher le bord. Les marges verticales, elles,
+          s'ajoutent au gap pour dégager le texte du haut et du bas — une courbe
+          qui frôle les mots devient illisible. */}
+      <div style={{
+        display: "flex", flexDirection: "column", flex: 1, minHeight: 0,
+        marginLeft: -16, marginTop: 6, marginBottom: 6,
+      }}>
+        <Sparkline values={series} color={curveColor} fill />
+      </div>
 
       {/* Le seul chiffre de la carte, légendé : sans son libellé, rien ne
           disait s'il s'agissait de la valeur du compte ou de son P&L. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-        <span style={{ fontSize: 12, lineHeight: "17px", color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: 11, lineHeight: "15px", color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {heroIsPnl ? t("accountsPage.totalPnL") : t("accountsPage.colValue")}
         </span>
         <span style={{
-          /* 26 px : sous la hauteur de la police, `overflow: hidden` rognerait
+          /* 24 px : sous la hauteur de la police, `overflow: hidden` rognerait
              les chiffres. */
-          fontSize: 20, fontWeight: 500, lineHeight: "26px", letterSpacing: -0.65,
+          fontSize: 18, fontWeight: 500, lineHeight: "24px", letterSpacing: -0.55,
           color: heroIsPnl ? pnlColor : T.text,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
@@ -1502,7 +1552,7 @@ function ScalingSimulator({ accounts = [] }) {
                         border: `1px solid ${done ? T.pnlPos : isNext ? T.text : T.border}`,
                         fontSize: 10, fontWeight: 700,
                         boxShadow: isNext ? `0 0 0 3px ${T.accentBg}` : "none",
-                        transition: "all .15s ease",
+                        transition: "var(--tr-ui)",
                       }}>
                         {done ? <Check size={10} strokeWidth={3} /> : idx + 1}
                       </div>
@@ -1593,7 +1643,7 @@ function SimSlider({ label, value, min, max, step, fmt, onChange }) {
 
 function SimMetric({ label, value, sub, valueColor }) {
   return (
-    <div style={{ background: T.bg || "#FAFAFA", border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px" }}>
+    <div style={{ background: T.bg || T.accentBg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px" }}>
       <div style={{ fontSize: 10, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 700, color: valueColor || T.text, letterSpacing: -0.3, fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: T.textMut, marginTop: 2 }}>{sub}</div>}
@@ -1655,7 +1705,7 @@ const PLAN_TEMPLATES = [
     id: "topstep_50",
     name: "Topstep 50k",
     accountSize: 50000,
-    color: "#F59E0B",
+    color: brandColor("topstep"),
     phases: [
       { id: "eval", label: "Évaluation", profitTarget: 3000, maxDD: 2000, minDays: 5, kind: "eval" },
       { id: "funded", label: "Funded", profitTarget: null, maxDD: 2500, minDays: 0, kind: "funded" },
@@ -1665,7 +1715,7 @@ const PLAN_TEMPLATES = [
     id: "topstep_100",
     name: "Topstep 100k",
     accountSize: 100000,
-    color: "#F59E0B",
+    color: brandColor("topstep"),
     phases: [
       { id: "eval", label: "Évaluation", profitTarget: 6000, maxDD: 3000, minDays: 5, kind: "eval" },
       { id: "funded", label: "Funded", profitTarget: null, maxDD: 3000, minDays: 0, kind: "funded" },
@@ -1675,7 +1725,7 @@ const PLAN_TEMPLATES = [
     id: "topstep_150",
     name: "Topstep 150k",
     accountSize: 150000,
-    color: "#F59E0B",
+    color: brandColor("topstep"),
     phases: [
       { id: "eval", label: "Évaluation", profitTarget: 9000, maxDD: 4500, minDays: 5, kind: "eval" },
       { id: "funded", label: "Funded", profitTarget: null, maxDD: 4500, minDays: 0, kind: "funded" },
@@ -1685,7 +1735,7 @@ const PLAN_TEMPLATES = [
     id: "ftmo_100",
     name: "FTMO 100k",
     accountSize: 100000,
-    color: "#2563EB",
+    color: brandColor("ftmo"),
     phases: [
       { id: "phase1", label: "Phase 1", profitTarget: 10000, maxDD: 10000, dailyLossLimit: 5000, minDays: 4, kind: "eval" },
       { id: "phase2", label: "Phase 2", profitTarget: 5000, maxDD: 10000, dailyLossLimit: 5000, minDays: 4, kind: "eval" },
@@ -1696,7 +1746,7 @@ const PLAN_TEMPLATES = [
     id: "apex_50",
     name: "Apex 50k",
     accountSize: 50000,
-    color: "#8B5CF6",
+    color: brandColor("apex"),
     phases: [
       { id: "eval", label: "Évaluation", profitTarget: 3000, trailingDD: 2500, minDays: 0, kind: "eval" },
       { id: "funded", label: "Funded", profitTarget: null, trailingDD: 2500, minDays: 0, kind: "funded" },
@@ -1706,7 +1756,7 @@ const PLAN_TEMPLATES = [
     id: "apex_100",
     name: "Apex 100k",
     accountSize: 100000,
-    color: "#8B5CF6",
+    color: brandColor("apex"),
     phases: [
       { id: "eval", label: "Évaluation", profitTarget: 6000, trailingDD: 3000, minDays: 0, kind: "eval" },
       { id: "funded", label: "Funded", profitTarget: null, trailingDD: 3000, minDays: 0, kind: "funded" },
@@ -1716,7 +1766,7 @@ const PLAN_TEMPLATES = [
     id: "custom",
     name: "Plan personnalisé",
     accountSize: 0,
-    color: "#8E8E8E",
+    color: T.textMut,
     phases: [
       { id: "p1", label: "Phase 1", profitTarget: 1000, maxDD: 500, minDays: 0, kind: "eval" },
     ],
@@ -1757,7 +1807,7 @@ const PLAN_TYPES = [
     label: "Passer une eval",
     desc: "Atteindre N comptes funded",
     Icon: Trophy,
-    color: "#F59E0B",
+    color: TAG_COLORS.orange,
     fmt: (n) => `${Math.round(n)}`,
     auto: (accounts) => (accounts || []).filter(a => (a.account_type || "") === "funded").length,
   },
@@ -1766,7 +1816,7 @@ const PLAN_TYPES = [
     label: "Augmenter capital",
     desc: "Cumul du capital sur les funded",
     Icon: Wallet,
-    color: "#16A34A",
+    color: T.pnlPos,
     fmt: (n) => fmtNoCents(n),
     auto: (accounts) => (accounts || [])
       .filter(a => (a.account_type || "") === "funded")
@@ -1777,7 +1827,7 @@ const PLAN_TYPES = [
     label: "Multiplier comptes prop",
     desc: "Nombre de comptes funded actifs",
     Icon: Users,
-    color: "#2563EB",
+    color: TAG_COLORS.blue,
     fmt: (n) => `${Math.round(n)}`,
     auto: (accounts) => (accounts || []).filter(a => (a.account_type || "") === "funded").length,
   },
@@ -1786,7 +1836,7 @@ const PLAN_TYPES = [
     label: "Plan personnalisé",
     desc: "Compteur manuel libre",
     Icon: TargetIcon,
-    color: "#8E8E8E",
+    color: T.textMut,
     fmt: (n) => `${Math.round(n)}`,
     auto: null,
   },
@@ -1897,7 +1947,7 @@ function AccountPlans({ accounts, trades }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>Plans de progression</div>
-          <div style={{ fontSize: 11, color: "#8E8E8E", marginTop: 2 }}>Passer une eval, augmenter capital, multiplier comptes prop…</div>
+          <div style={{ fontSize: 11, color: T.textMut, marginTop: 2 }}>Passer une eval, augmenter capital, multiplier comptes prop…</div>
         </div>
         <button onClick={openCreate}
           style={{
@@ -1911,11 +1961,11 @@ function AccountPlans({ accounts, trades }) {
       </div>
 
       {(plans || []).length === 0 ? (
-        <div style={{ border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)", padding: 24, textAlign: "center", background: "var(--color-card-bg, #FFFFFF)", color: "#8E8E8E", fontSize: 12 }}>
+        <div style={{ border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)", padding: 24, textAlign: "center", background: "var(--color-card-bg, #FFFFFF)", color: T.textMut, fontSize: 12 }}>
           Aucun plan. Crée ton premier plan pour suivre tes objectifs de progression sur tes comptes.
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(360px, 100%), 1fr))", gap: 12 }}>
           {(plans || []).map(p => {
             // Plan-template (riche) ou plan simple (legacy)
             if (p.templateId) {
@@ -1948,19 +1998,19 @@ function AccountPlans({ accounts, trades }) {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: T.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
-                    <div style={{ fontSize: 10, color: "#8E8E8E", marginTop: 2 }}>{def.label}</div>
+                    <div style={{ fontSize: 10, color: T.textMut, marginTop: 2 }}>{def.label}</div>
                   </div>
                   <div style={{ display: "flex", gap: 2 }}>
                     <button onClick={() => openEdit(p)} aria-label="Modifier"
-                      style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: "#8E8E8E", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "#F5F5F5"; e.currentTarget.style.color = T.text; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8E8E8E"; }}>
+                      style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
                       <Pencil size={11} strokeWidth={1.75} />
                     </button>
                     <button onClick={() => remove(p.id)} aria-label="Supprimer"
-                      style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: "#8E8E8E", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; e.currentTarget.style.color = "#EF4444"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8E8E8E"; }}>
+                      style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
                       <Trash2 size={11} strokeWidth={1.75} />
                     </button>
                   </div>
@@ -1969,28 +2019,28 @@ function AccountPlans({ accounts, trades }) {
                 <div>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums" }}>
-                      {def.fmt(current)} <span style={{ color: "#8E8E8E", fontWeight: 500 }}>/ {def.fmt(target)}</span>
+                      {def.fmt(current)} <span style={{ color: T.textMut, fontWeight: 500 }}>/ {def.fmt(target)}</span>
                     </span>
-                    <span style={{ fontSize: 11, color: achieved ? "#16A34A" : "#5C5C5C", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ fontSize: 11, color: achieved ? T.pnlPos : T.textSub, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                       {Math.round(pct)}%
                     </span>
                   </div>
-                  <div style={{ height: 4, borderRadius: "var(--radius-field)", background: "#F0F0F0", overflow: "hidden" }}>
+                  <div style={{ height: 4, borderRadius: "var(--radius-field)", background: T.accentBg, overflow: "hidden" }}>
                     <div style={{
                       height: "100%", width: `${pct}%`, borderRadius: "var(--radius-field)",
-                      background: achieved ? "#16A34A" : def.color,
+                      background: achieved ? T.pnlPos : def.color,
                       transition: "width .4s ease",
                     }} />
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#8E8E8E" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.textMut }}>
                   {dueLabel ? (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                       <Calendar size={11} strokeWidth={1.75} /> {dueLabel}
                     </span>
                   ) : (
-                    <span style={{ color: "#B5B5B5" }}>Sans deadline</span>
+                    <span style={{ color: T.textMut }}>Sans deadline</span>
                   )}
                   {p.type === "custom" && (
                     <div style={{ marginLeft: "auto", display: "inline-flex", gap: 4 }}>
@@ -2008,52 +2058,48 @@ function AccountPlans({ accounts, trades }) {
       )}
 
       {/* Modal de création / édition */}
-      {showForm && typeof document !== "undefined" && ReactDOM.createPortal(
-        <div {...backdropDismiss(close)}
-          style={{ position: "fixed", inset: 0, background: "transparent", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
-            style={{ width: "min(560px, 100%)", maxHeight: "min(85vh, 760px)", display: "flex", flexDirection: "column", background: "var(--color-card-bg, #FFFFFF)", borderRadius: 14, boxShadow: "var(--elev-overlay)", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
-            <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>
-                {editingId ? "Modifier le plan" : "Nouveau plan"}
-              </div>
-              <button onClick={close} aria-label="Fermer"
-                style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "#5C5C5C", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#F5F5F5"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                <X size={14} strokeWidth={1.75} />
-              </button>
-            </div>
+      {showForm && (
+        <DAModal
+          title={editingId ? "Modifier le plan" : "Nouveau plan"}
+          onClose={close}
+          width={560}
+          maxHeight="min(85vh, 760px)"
+          footer={<>
+            <DAPillButton variant="ghost" onClick={close}>Annuler</DAPillButton>
+            {(() => {
+              const ok = form.title.trim() && (form.mode === "template" ? !!form.templateId : !!form.target);
+              return (
+                <DAPillButton variant="primary" disabled={!ok} onClick={save}>
+                  <Check size={13} strokeWidth={2} /> {editingId ? "Enregistrer" : "Créer"}
+                </DAPillButton>
+              );
+            })()}
+          </>}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>
+            {editingId ? "Modifier le plan" : "Nouveau plan"}
+          </div>
 
-            {/* Switch mode template / simple */}
-            <div style={{ padding: "10px 20px 0", display: "flex", gap: 6 }}>
-              {[
-                { id: "template", label: "Plan eval (template)" },
-                { id: "simple",   label: "Plan simple" },
-              ].map(opt => {
-                const active = form.mode === opt.id;
-                return (
-                  <button key={opt.id} type="button"
-                    onClick={() => setForm({ ...form, mode: opt.id })}
-                    style={{
-                      padding: "6px 12px", borderRadius: 999,
-                      border: `1px solid ${active ? T.text : T.border}`,
-                      background: active ? T.text : "#FFFFFF",
-                      color: active ? "#FFFFFF" : T.textSub,
-                      fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                    }}>
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+          {/* Bascule template / simple */}
+          <div style={{ display: "flex", gap: 6 }}>
+            {[
+              { id: "template", label: "Plan eval (template)" },
+              { id: "simple",   label: "Plan simple" },
+            ].map(opt => {
+              const active = form.mode === opt.id;
+              return (
+                <DAPillButton key={opt.id} compact type="button"
+                  variant={active ? "primary" : "secondary"}
+                  onClick={() => setForm({ ...form, mode: opt.id })}>
+                  {opt.label}
+                </DAPillButton>
+              );
+            })}
+          </div>
               {form.mode === "template" ? (
                 <>
                   {/* Template picker */}
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Template prop firm</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Template prop firm</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
                       {PLAN_TEMPLATES.map(tpl => {
                         const active = form.templateId === tpl.id;
@@ -2064,7 +2110,7 @@ function AccountPlans({ accounts, trades }) {
                               display: "flex", alignItems: "center", gap: 8,
                               padding: "10px 12px", borderRadius: "var(--radius-card)",
                               border: `1px solid ${active ? tpl.color : T.border}`,
-                              background: active ? `${tpl.color}10` : "#FFFFFF",
+                              background: active ? `${tpl.color}10` : T.white,
                               color: T.text, cursor: "pointer", fontFamily: "inherit",
                               textAlign: "left",
                             }}>
@@ -2076,7 +2122,7 @@ function AccountPlans({ accounts, trades }) {
                             }}>{tpl.phases.length}</span>
                             <span style={{ minWidth: 0, flex: 1 }}>
                               <div style={{ fontSize: 12, fontWeight: 600 }}>{tpl.name}</div>
-                              <div style={{ fontSize: 10, color: "#8E8E8E" }}>
+                              <div style={{ fontSize: 10, color: T.textMut }}>
                                 {tpl.phases.length} phase{tpl.phases.length > 1 ? "s" : ""}
                                 {tpl.accountSize > 0 ? ` · ${(tpl.accountSize / 1000).toFixed(0)}k` : ""}
                               </div>
@@ -2093,13 +2139,13 @@ function AccountPlans({ accounts, trades }) {
                     if (!tpl) return null;
                     return (
                       <div style={{ background: "var(--color-bg, #FAFAFA)", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "10px 12px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Règles des phases</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Règles des phases</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {tpl.phases.map((ph, i) => (
                             <div key={ph.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.text }}>
-                              <span style={{ minWidth: 18, fontWeight: 700, color: "#8E8E8E" }}>{i + 1}.</span>
+                              <span style={{ minWidth: 18, fontWeight: 700, color: T.textMut }}>{i + 1}.</span>
                               <span style={{ minWidth: 90, fontWeight: 600 }}>{ph.label}</span>
-                              <span style={{ color: "#5C5C5C" }}>
+                              <span style={{ color: T.textSub }}>
                                 {ph.profitTarget ? `Profit ${fmtNoCents(ph.profitTarget)}` : "Pas de target"}
                                 {ph.maxDD ? ` · DD max ${fmtNoCents(ph.maxDD)}` : ""}
                                 {ph.trailingDD ? ` · Trailing DD ${fmtNoCents(ph.trailingDD)}` : ""}
@@ -2115,11 +2161,11 @@ function AccountPlans({ accounts, trades }) {
 
                   {/* Comptes liés */}
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
                       Comptes liés <span style={{ fontWeight: 500 }}>· {form.accountIds.length} sélectionné{form.accountIds.length > 1 ? "s" : ""}</span>
                     </div>
                     {(accounts || []).length === 0 ? (
-                      <div style={{ fontSize: 12, color: "#8E8E8E" }}>Aucun compte disponible.</div>
+                      <div style={{ fontSize: 12, color: T.textMut }}>Aucun compte disponible.</div>
                     ) : (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {(accounts || []).map(a => {
@@ -2133,8 +2179,8 @@ function AccountPlans({ accounts, trades }) {
                               style={{
                                 padding: "5px 12px", borderRadius: 999,
                                 border: `1px solid ${sel ? T.text : T.border}`,
-                                background: sel ? T.text : "#FFFFFF",
-                                color: sel ? "#FFFFFF" : T.text,
+                                background: sel ? T.text : T.white,
+                                color: sel ? T.white : T.text,
                                 fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                               }}>
                               {a.name || "Compte"}
@@ -2147,24 +2193,24 @@ function AccountPlans({ accounts, trades }) {
 
                   {/* Titre + deadline */}
                   <label style={{ display: "block" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Nom du plan</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Nom du plan</div>
                     <input type="text" value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
                       placeholder="ex. Topstep 50k — passe Q1 2026"
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-field)", border: "none", fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)", background: DA_FIELD_BG,}} />
                   </label>
                   <label style={{ display: "block" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Échéance (optionnel)</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Échéance (optionnel)</div>
                     <input type="date" value={form.deadline}
                       onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-field)", border: "none", fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)", background: DA_FIELD_BG,}} />
                   </label>
                 </>
               ) : (
                 <>
                   {/* Mode SIMPLE */}
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Type</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Type</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
                       {PLAN_TYPES.map(t => {
                         const Icon = t.Icon;
@@ -2176,7 +2222,7 @@ function AccountPlans({ accounts, trades }) {
                               display: "flex", alignItems: "center", gap: 8,
                               padding: "9px 11px", borderRadius: "var(--radius-card)",
                               border: `1px solid ${active ? t.color : T.border}`,
-                              background: active ? `${t.color}10` : "#FFFFFF",
+                              background: active ? `${t.color}10` : T.white,
                               color: T.text, cursor: "pointer", fontFamily: "inherit",
                               textAlign: "left",
                             }}>
@@ -2185,7 +2231,7 @@ function AccountPlans({ accounts, trades }) {
                             </span>
                             <span style={{ minWidth: 0, flex: 1 }}>
                               <div style={{ fontSize: 12, fontWeight: 600 }}>{t.label}</div>
-                              <div style={{ fontSize: 10, color: "#8E8E8E" }}>{t.desc}</div>
+                              <div style={{ fontSize: 10, color: T.textMut }}>{t.desc}</div>
                             </span>
                           </button>
                         );
@@ -2193,56 +2239,30 @@ function AccountPlans({ accounts, trades }) {
                     </div>
                   </div>
                   <label style={{ display: "block" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Nom du plan</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Nom du plan</div>
                     <input type="text" value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
                       placeholder="ex. Passer 3 évals 50k cette année"
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-field)", border: "none", fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)", background: DA_FIELD_BG,}} />
                   </label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <label>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Cible</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Cible</div>
                       <input type="number" value={form.target}
                         onChange={(e) => setForm({ ...form, target: e.target.value })}
                         placeholder="3"
-                        style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-field)", border: "none", fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)", background: DA_FIELD_BG,}} />
                     </label>
                     <label>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Échéance</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Échéance</div>
                       <input type="date" value={form.deadline}
                         onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-                        style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)" }} />
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: "var(--radius-field)", border: "none", fontSize: 13, fontFamily: "inherit", outline: "none", color: T.text, background: "var(--color-card-bg, #FFFFFF)", background: DA_FIELD_BG,}} />
                     </label>
                   </div>
                 </>
               )}
-            </div>
-            <div style={{ padding: "12px 18px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={close}
-                style={{ padding: "8px 14px", borderRadius: "var(--radius-card)", border: "none", background: "transparent", color: "#5C5C5C", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-                Annuler
-              </button>
-              {(() => {
-                const ok = form.title.trim() && (form.mode === "template" ? !!form.templateId : !!form.target);
-                return (
-                  <button onClick={save} disabled={!ok}
-                    style={{
-                      padding: "8px 16px", borderRadius: "var(--radius-card)", border: "none",
-                      background: ok ? T.text : "#F0F0F0",
-                      color: ok ? "#FFFFFF" : "#8E8E8E",
-                      fontSize: 13, fontWeight: 600,
-                      cursor: ok ? "pointer" : "not-allowed",
-                      fontFamily: "inherit",
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                    }}>
-                    <Check size={13} strokeWidth={2} /> {editingId ? "Enregistrer" : "Créer"}
-                  </button>
-                );
-              })()}
-            </div>
-          </div>
-        </div>,
-        document.body
+        </DAModal>
       )}
     </div>
   );
@@ -2291,22 +2311,22 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
         }}>{tpl.phases.length}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: T.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{plan.title}</div>
-          <div style={{ fontSize: 10, color: "#8E8E8E", marginTop: 2 }}>
+          <div style={{ fontSize: 10, color: T.textMut, marginTop: 2 }}>
             {tpl.name}
             {linkedAccounts.length > 0 ? ` · ${linkedAccounts.map(a => a.name).join(", ")}` : " · Aucun compte lié"}
           </div>
         </div>
         <div style={{ display: "flex", gap: 2 }}>
           <button onClick={onEdit} aria-label="Modifier"
-            style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: "#8E8E8E", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#F5F5F5"; e.currentTarget.style.color = T.text; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8E8E8E"; }}>
+            style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
             <Pencil size={11} strokeWidth={1.75} />
           </button>
           <button onClick={onDelete} aria-label="Supprimer"
-            style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: "#8E8E8E", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; e.currentTarget.style.color = "#EF4444"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#8E8E8E"; }}>
+            style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
             <Trash2 size={11} strokeWidth={1.75} />
           </button>
         </div>
@@ -2321,8 +2341,8 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
               <div style={{
                 display: "flex", alignItems: "center", gap: 5,
                 padding: "3px 9px", borderRadius: 999,
-                background: active ? `${tpl.color}1F` : (done ? "#16A34A18" : "#F5F5F5"),
-                color: active ? tpl.color : (done ? "#16A34A" : "#8E8E8E"),
+                background: active ? `${tpl.color}1F` : (done ? `color-mix(in srgb, ${T.pnlPos} 12%, transparent)` : T.accentBg),
+                color: active ? tpl.color : (done ? T.pnlPos : T.textMut),
                 fontSize: 10, fontWeight: 600, whiteSpace: "nowrap",
               }}>
                 {done && <Check size={9} strokeWidth={2.5} />}
@@ -2337,7 +2357,7 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
       </div>
 
       {linkedAccounts.length === 0 ? (
-        <div style={{ fontSize: 11, color: "#8E8E8E", fontStyle: "italic", padding: "4px 0" }}>
+        <div style={{ fontSize: 11, color: T.textMut, fontStyle: "italic", padding: "4px 0" }}>
           Liez un compte pour voir la progression auto.
         </div>
       ) : (
@@ -2348,7 +2368,7 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
               currentText={fmtSigned(progress.pnl)}
               targetText={`/ ${fmtNoCents(profitTarget)}`}
               pct={pnlPct}
-              color={profitDone ? "#16A34A" : tpl.color}
+              color={profitDone ? T.pnlPos : tpl.color}
               done={profitDone}
             />
           )}
@@ -2358,7 +2378,7 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
               currentText={`-${fmtNoCents(progress.maxDD)}`}
               targetText={`/ -${fmtNoCents(ddLimit)} max`}
               pct={ddPct}
-              color={!ddOK ? "#EF4444" : (ddPct > 70 ? "#F59E0B" : "#16A34A")}
+              color={!ddOK ? T.red : (ddPct > 70 ? T.amber : T.pnlPos)}
               done={ddOK && progress.maxDD > 0}
               warn={!ddOK}
             />
@@ -2369,20 +2389,20 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
               currentText={`${progress.daysTraded}`}
               targetText={`/ ${minDays} jours min`}
               pct={daysPct}
-              color={daysDone ? "#16A34A" : tpl.color}
+              color={daysDone ? T.pnlPos : tpl.color}
               done={daysDone}
             />
           )}
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#8E8E8E", marginTop: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.textMut, marginTop: 2 }}>
         {dueLabel ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             <Calendar size={11} strokeWidth={1.75} /> {dueLabel}
           </span>
         ) : (
-          <span style={{ color: "#B5B5B5" }}>Sans deadline</span>
+          <span style={{ color: T.textMut }}>Sans deadline</span>
         )}
         <div style={{ marginLeft: "auto", display: "inline-flex", gap: 6 }}>
           <button onClick={onResetPhase}
@@ -2401,8 +2421,8 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
               title={phaseComplete ? "Valider et passer à la phase suivante" : "Atteins les targets de la phase pour valider"}
               style={{
                 padding: "4px 12px", borderRadius: 999, border: "none",
-                background: phaseComplete ? "#16A34A" : "#F0F0F0",
-                color: phaseComplete ? "#FFFFFF" : "#8E8E8E",
+                background: phaseComplete ? T.pnlPos : T.accentBg,
+                color: phaseComplete ? T.white : T.textMut,
                 fontSize: 10, fontWeight: 600,
                 cursor: phaseComplete ? "pointer" : "not-allowed",
                 fontFamily: "inherit",
@@ -2421,15 +2441,15 @@ function PhaseMetricBar({ label, currentText, targetText, pct, color, done, warn
   return (
     <div>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4, gap: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: "#8E8E8E", textTransform: "uppercase", letterSpacing: 0.4 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: T.textMut, textTransform: "uppercase", letterSpacing: 0.4 }}>
           {label}
-          {done && <Check size={9} strokeWidth={2.5} style={{ marginLeft: 4, color: "#16A34A", verticalAlign: "middle" }} />}
+          {done && <Check size={9} strokeWidth={2.5} style={{ marginLeft: 4, color: T.pnlPos, verticalAlign: "middle" }} />}
         </span>
-        <span style={{ fontSize: 11, color: warn ? "#EF4444" : T.text, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-          {currentText} <span style={{ color: "#8E8E8E", fontWeight: 500 }}>{targetText}</span>
+        <span style={{ fontSize: 11, color: warn ? T.red : T.text, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+          {currentText} <span style={{ color: T.textMut, fontWeight: 500 }}>{targetText}</span>
         </span>
       </div>
-      <div style={{ height: 4, borderRadius: "var(--radius-field)", background: "#F0F0F0", overflow: "hidden" }}>
+      <div style={{ height: 4, borderRadius: "var(--radius-field)", background: T.accentBg, overflow: "hidden" }}>
         <div style={{
           height: "100%", width: `${pct}%`, borderRadius: "var(--radius-field)",
           background: color, transition: "width .4s ease",

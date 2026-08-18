@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "@/lib/ui/tokens";
+import { FIELD } from "@/components/ui/form";
 
 /**
  * TradeChartPage — visualise un trade importé sur un graphique OHLC (Yahoo Finance).
@@ -235,15 +236,7 @@ export default function TradeChartPage({ trades = [] }) {
         <select
           value={selectedIdx}
           onChange={(e) => setSelectedIdx(Number(e.target.value))}
-          style={{
-            padding: "8px 12px",
-            border: `1px solid ${T.border2}`,
-            borderRadius: "var(--radius-card)",
-            background: T.surface,
-            color: T.text,
-            fontSize: 13,
-            minWidth: 320,
-          }}
+          style={{ ...FIELD, cursor: "pointer", minWidth: 320, width: "auto" }}
         >
           {sortedTrades.map((tr, i) => (
             <option key={i} value={i}>

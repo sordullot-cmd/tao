@@ -32,7 +32,7 @@ export function Stat({ label, value, subtext, trend, icon: Icon, size = "md", po
   const valueSize = size === "sm" ? 18 : size === "md" ? 24 : 32;
   const labelSize = 11;
 
-  const valueColor = positive ? "var(--color-green, #16A34A)" : negative ? "var(--color-red, #EF4444)" : "var(--color-text, #0D0D0D)";
+  const valueColor = positive ? "var(--color-green, #58CC02)" : negative ? "var(--color-red, #FF4B4B)" : "var(--color-text, #0D0D0D)";
 
   const content = (
     <>
@@ -50,7 +50,7 @@ export function Stat({ label, value, subtext, trend, icon: Icon, size = "md", po
       {(subtext || trend) && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: "var(--color-text-sub, #5C5C5C)" }}>
           {trend && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: trend.value >= 0 ? "var(--color-green, #16A34A)" : "var(--color-red, #EF4444)", fontWeight: 600 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: trend.value >= 0 ? "var(--color-green, #58CC02)" : "var(--color-red, #FF4B4B)", fontWeight: 600 }}>
               {trend.value >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
               {trend.value >= 0 ? "+" : ""}{trend.value.toFixed(1)}%
               {trend.period && <span style={{ color: "var(--color-text-muted, #6B6B6B)", fontWeight: 400 }}>{trend.period}</span>}

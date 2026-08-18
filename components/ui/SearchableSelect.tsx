@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronUp, ChevronDown, Search, Check } from "lucide-react";
 import Popover from "@/components/ui/Popover";
+import { FIELD_BG } from "@/lib/ui/tokens";
+import { FIELD_FOCUS_RING } from "@/components/ui/form";
 
 export interface SearchableOption {
   id: string;
@@ -117,17 +119,18 @@ export default function SearchableSelect({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: small ? "6px 10px" : "8px 12px",
-          border: `1px solid ${open ? "var(--color-border-strong)" : "var(--color-border)"}`,
-          borderRadius: "var(--radius-field)",
-          background: "var(--color-card-bg, #FFFFFF)",
+          padding: small ? "6px 12px" : "9px 14px",
+          border: "none",
+          borderRadius: 999,
+          background: FIELD_BG,
+          boxShadow: open ? FIELD_FOCUS_RING : "none",
           color: selected ? "var(--color-text)" : "var(--color-text-muted)",
           fontSize: small ? 12 : 13,
           fontWeight: 500,
           cursor: "pointer",
           fontFamily: "inherit",
           textAlign: "left",
-          transition: "border-color 120ms ease",
+          transition: "box-shadow var(--dur-fast) var(--ease-out)",
           ...triggerStyle,
         }}
       >
@@ -167,14 +170,14 @@ export default function SearchableSelect({
         className="anim-pop"
         style={{
           background: "var(--color-card-bg, #FFFFFF)",
-          border: "1px solid var(--color-border)",
+          border: "none",
           borderRadius: 10,
           boxShadow: "var(--elev-overlay)",
         }}
       >
         <>
           {searchable && options.length > 5 && (
-            <div style={{ flexShrink: 0, padding: 4, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
+            <div style={{ flexShrink: 0, padding: 4 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 8px" }}>
                 <Search size={12} strokeWidth={1.75} color="var(--color-text-muted)" />
                 <input

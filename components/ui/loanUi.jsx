@@ -22,6 +22,8 @@
 import React from "react";
 import { Check, Pencil, RefreshCw, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { FIELD } from "@/components/ui/form";
+import { FIELD_BG } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
 import { t } from "@/lib/i18n";
 import { TH } from "@/components/ui/da";
@@ -104,17 +106,13 @@ export const loanNum = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/* Champ d'un crédit : l'aplat commun (components/ui/form.jsx), en hauteur fixe
+   pour s'aligner sur les boutons de la barre de simulation. */
 export const LOAN_FIELD = {
+  ...FIELD,
   height: 36,
-  borderRadius: "var(--radius-field)",
-  border: `1px solid ${T.border}`,
-  background: T.white,
-  color: T.text,
+  padding: "0 14px",
   fontSize: 14,
-  fontFamily: "inherit",
-  padding: "0 10px",
-  minWidth: 0,
-  width: "100%",
 };
 
 /** Mesure d'un crédit : son nom au-dessus, le chiffre en dessous. `tone="neg"`
@@ -240,7 +238,7 @@ export function LoanBody({ terms, stats, aggregated, onEdit, onPay, onSync }) {
     <>
       {stats.complete ? (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(130px, 100%), 1fr))", gap: 12 }}>
             <LoanTile label={t("patrimoine.loan.nextDue")} value={next?.date ? fmtDay(next.date) : "—"} />
             <LoanTile label={t("patrimoine.loan.remaining")} value={durationLabel(stats.monthsLeft)} />
             <LoanTile label={t("patrimoine.loan.end")} value={fmtMonthYear(stats.endDate)} />
@@ -328,8 +326,10 @@ export function LoanBtn({ children, onClick, icon, tone }) {
       style={{
         display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
         padding: "0 12px", borderRadius: 999, flexShrink: 0,
-        border: solid ? "none" : `1px solid ${T.border}`,
-        background: solid ? T.text : T.white,
+        /* Jamais de contour : le secondaire est un aplat, comme les champs
+           qu'il accompagne. */
+        border: "none",
+        background: solid ? T.text : FIELD_BG,
         color: solid ? T.textInverted : T.text,
         fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
       }}
@@ -378,7 +378,7 @@ export function PrepaySimulator({ outstanding, terms, stats }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{t("patrimoine.loan.simTitle")}</div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))", gap: 10 }}>
         <SimField label={`${t("patrimoine.loan.simLump")} (${sym})`} id={`${uid}-lump`}>
           <input
             id={`${uid}-lump`}

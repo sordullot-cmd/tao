@@ -24,6 +24,7 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useSwipeToDismiss } from "@/lib/hooks/useSwipeToDismiss";
 import RiskCalculator from "@/components/RiskCalculator";
 import ComplianceModule, { ComplianceInsights } from "@/components/discipline/ComplianceModule";
 import { useComplianceRules } from "@/lib/hooks/useComplianceData";
@@ -32,6 +33,25 @@ import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
 import { describeRule, isRuleLive, computeStats, computeJournaledDates } from "@/lib/compliance";
 import { CARD } from "@/components/ui/da";
 import Popover from "@/components/ui/Popover";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { FIELD_FOCUS_RING as DA_FOCUS_RING, Modal as DAModal, PillButton as DAPillButton, ScrollArea as DAScrollArea } from "@/components/ui/form";
+import { HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
+
+
+/* Échelle de la carte de discipline : le vert PRINCIPAL de la charte, dilué en
+   cinq crans. Une seule teinte diluée fait une échelle qu'on lit d'un coup
+   d'œil, là où cinq verts choisis séparément se lisent comme cinq couleurs.
+   En `color-mix` avec du transparent plutôt qu'en pastels figés : le même
+   pourcentage tient donc en clair comme en sombre. */
+const DISC_GREENS = [
+  "color-mix(in srgb, #58CC02 22%, transparent)",
+  "color-mix(in srgb, #58CC02 45%, transparent)",
+  "color-mix(in srgb, #58CC02 68%, transparent)",
+  "color-mix(in srgb, #58CC02 85%, transparent)",
+  "#58CC02",
+];
+/* Une journée où l'on a tradé sans respecter une seule règle. */
+const DISC_RED = "color-mix(in srgb, #FF4B4B 45%, transparent)";
 
 function reorder(arr, from, to) {
   const next = [...arr];
@@ -57,6 +77,14 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  /* Renvoi au glissé : le tiroir arrive par la droite, on le repousse vers la
+     droite. Même geste et même physique que la barre latérale — vitesse de
+     relâchement, projection de l'inertie, résistance dans le mauvais sens.
+     Appelé avant le retour anticipé ci-dessous : un hook ne peut pas être
+     conditionnel. */
+  const { ref: drawerRef, handlers: swipeHandlers } =
+    useSwipeToDismiss({ onDismiss: onClose, direction: 1, axis: "x", enabled: open });
+
   if (!open) return null;
   const update = (i, val) => setDraft(d => d.map((x, idx) => idx === i ? { ...x, label: val } : x));
   const remove = (i) => setDraft(d => d.filter((_, idx) => idx !== i));
@@ -76,18 +104,27 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
         animation:"tr4de-drawer-fade 180ms ease both",
       }}/>
 
-      {/* Drawer latéral */}
-      <aside style={{
+      {/* Drawer latéral.
+          `data-sheet` (globals.css) plutôt qu'une keyframe locale : une
+          keyframe avec `both` fige la valeur finale du transform et prend le
+          pas sur le style inline — le glissé n'aurait donc eu aucun effet
+          visible. Une transition, elle, laisse la main et repart toujours de
+          la position affichée à l'écran. */}
+      <aside
+        ref={drawerRef}
+        {...swipeHandlers}
+        data-sheet="right"
+        style={{
         position:"fixed",top:0,right:0,bottom:0,width:"min(440px, 92vw)",
-        background:T.white,borderLeft:"1px solid #E5E5E5",
+        background:T.white,border:"none",
         zIndex:9999,display:"flex",flexDirection:"column",
         boxShadow:"var(--elev-overlay)",
         fontFamily:"var(--font-sans)",
-        animation:"tr4de-drawer-slide 240ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        touchAction:"pan-y",
       }}>
 
         {/* Header avec accent à gauche */}
-        <div style={{display:"flex",alignItems:"stretch",borderBottom:"1px solid #F0F0F0"}}>
+        <div style={{display:"flex",alignItems:"stretch"}}>
           <div style={{width:3,background:accent,flexShrink:0}}/>
           <div style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"18px 20px"}}>
             <div style={{flex:1,minWidth:0}}>
@@ -104,7 +141,7 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
         </div>
 
         {/* Liste éditable */}
-        <div className="scroll-thin" style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+        <DAScrollArea style={{flex:1,padding:"16px 20px"}}>
           {draft.length === 0 ? (
             <div style={{padding:"48px 16px",textAlign:"center",color:T.textMut,fontSize:13}}>
               Aucune règle pour l'instant.<br/>
@@ -122,12 +159,13 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
                   onDragEnd={()=>{setDragIdx(null);setOverIdx(null)}}
                   style={{
                     display:"flex",alignItems:"center",gap:6,
-                    background: overIdx===i && dragIdx!==i ? "var(--color-hover-bg, #F5F5F5)" : T.white,
-                    border:`1px solid ${overIdx===i && dragIdx!==i ? accent : T.border}`,
-                    borderRadius:10,
+                    background: DA_FIELD_BG,
+                    border:"none",
+                    boxShadow: overIdx===i && dragIdx!==i ? `0 0 0 2px ${accent}` : "none",
+                    borderRadius:12,
                     padding:"4px 8px 4px 4px",
                     opacity: dragIdx===i ? 0.4 : 1,
-                    transition:"border-color .12s ease, background .12s ease, opacity .12s ease",
+                    transition:"box-shadow var(--dur-fast) var(--ease-out), opacity .12s ease",
                   }}>
                   <span style={{cursor:"grab",color:T.textMut,display:"inline-flex",padding:"6px 4px",flexShrink:0}} title="Glisser pour réordonner">
                     <GripVertical size={14} strokeWidth={1.75}/>
@@ -153,25 +191,25 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
             style={{
               display:"flex",alignItems:"center",justifyContent:"center",gap:6,
               padding:"10px",fontSize:13,fontWeight:500,
-              color:T.text,background:"transparent",
-              border:"1px dashed #D4D4D4",cursor:"pointer",borderRadius:10,
+              color:T.text,background:DA_FIELD_BG,
+              border:"none",cursor:"pointer",borderRadius:999,
               fontFamily:"inherit",width:"100%",marginTop:draft.length === 0 ? 0 : 8,
-              transition:"background .12s ease, border-color .12s ease",
+              transition:"var(--tr-ui)",
             }}
-            onMouseEnter={(e)=>{e.currentTarget.style.background=accent+"14";e.currentTarget.style.borderColor=accent}}
-            onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=T.border2}}>
+            onMouseEnter={(e)=>{e.currentTarget.style.background=accent+"14"}}
+            onMouseLeave={(e)=>{e.currentTarget.style.background=DA_FIELD_BG}}>
             <Plus size={14} strokeWidth={2}/> Ajouter une règle
           </button>
-        </div>
+        </DAScrollArea>
 
         {/* Footer */}
-        <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderTop:"1px solid #F0F0F0",background:"var(--color-hover-bg, #FAFAFA)"}}>
+        <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",padding:"14px 20px",borderTop:`1px solid ${DA_HAIRLINE}`,flexShrink:0}}>
           <span style={{fontSize:11,color:T.textMut,fontVariantNumeric:"tabular-nums"}}>
             {draft.filter(d => (d.label || "").trim()).length} règle{draft.length > 1 ? "s" : ""}
           </span>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={onClose} style={{padding:"0 18px",height:34,borderRadius:999,border:`1px solid ${T.border}`,background:T.white,color:T.text,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
-            <button onClick={save} style={{padding:"0 18px",height:34,borderRadius:999,border:"1px solid #0D0D0D",background:T.white,color:T.text,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Enregistrer</button>
+            <DAPillButton onClick={onClose}>Annuler</DAPillButton>
+            <DAPillButton variant="primary" onClick={save}>Enregistrer</DAPillButton>
           </div>
         </div>
 
@@ -179,7 +217,6 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
 
       <style>{`
         @keyframes tr4de-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes tr4de-drawer-slide { from { transform: translateX(100%); } to { transform: translateX(0); } }
       `}</style>
     </>,
     document.body
@@ -248,9 +285,9 @@ function EditableTextList({ title, iconBg, icon, items, onSave, renderPrefix, ac
                   type="text" value={it.label} placeholder={`Règle ${i+1}`}
                   onChange={(e)=>update(i, e.target.value)}
                   onKeyDown={(e)=>{ if (e.key==="Enter"){ e.preventDefault(); addRow(); } }}
-                  style={{flex:1,fontSize:12,padding:"6px 8px",border:"1px solid transparent",borderRadius:6,outline:"none",fontFamily:"inherit",color:T.text,background:"var(--color-hover-bg, #FAFAFA)"}}
-                  onFocus={(e)=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.background=T.white}}
-                  onBlur={(e)=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="var(--color-hover-bg, #FAFAFA)"}}
+                  style={{flex:1,fontSize:12,padding:"6px 12px",border:"none",borderRadius:999,outline:"none",fontFamily:"inherit",color:T.text,background:DA_FIELD_BG}}
+                  onFocus={(e)=>{e.currentTarget.style.boxShadow=DA_FOCUS_RING}}
+                  onBlur={(e)=>{e.currentTarget.style.boxShadow="none"}}
                 />
                 <button type="button" onClick={()=>removeRow(i)} title="Supprimer"
                   style={{width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:T.textMut,borderRadius:"var(--radius-field)",flexShrink:0}}
@@ -349,9 +386,9 @@ function EditableCheckList({ title, iconBg, icon, items, checkedRuleIds, onToggl
                   type="text" value={it.label} placeholder={`Règle ${i+1}`}
                   onChange={(e)=>update(i, e.target.value)}
                   onKeyDown={(e)=>{ if (e.key==="Enter"){ e.preventDefault(); addRow(); } }}
-                  style={{flex:1,fontSize:12,padding:"6px 8px",border:"1px solid transparent",borderRadius:6,outline:"none",fontFamily:"inherit",color:T.text,background:"var(--color-hover-bg, #FAFAFA)"}}
-                  onFocus={(e)=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.background=T.white}}
-                  onBlur={(e)=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="var(--color-hover-bg, #FAFAFA)"}}
+                  style={{flex:1,fontSize:12,padding:"6px 12px",border:"none",borderRadius:999,outline:"none",fontFamily:"inherit",color:T.text,background:DA_FIELD_BG}}
+                  onFocus={(e)=>{e.currentTarget.style.boxShadow=DA_FOCUS_RING}}
+                  onBlur={(e)=>{e.currentTarget.style.boxShadow="none"}}
                 />
                 <button type="button" onClick={()=>removeRow(i)} title="Supprimer"
                   style={{width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",cursor:"pointer",color:T.textMut,borderRadius:"var(--radius-field)",flexShrink:0}}
@@ -403,7 +440,7 @@ function ComplianceRulesCard() {
   return (
     <div style={{background:T.white,border:`1px solid #E5E5E5`,borderRadius:"var(--radius-card)",overflow:"hidden"}}>
       <div style={{padding:"14px 16px 12px",borderBottom:`1px solid #E5E5E5`,display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:24,height:24,borderRadius:6,background:"#EFEFEF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div style={{width:24,height:24,borderRadius:6,background:DA_FIELD_BG,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <ShieldCheck size={13} strokeWidth={1.75} color={T.green}/>
         </div>
         <div style={{fontSize:13,fontWeight:600,color:T.text,letterSpacing:-0.1,flex:1}}>Règles automatiques</div>
@@ -443,7 +480,7 @@ function ComplianceRulesCard() {
                         </span>
                       ) : (
                         <span style={{display:"inline-flex",alignItems:"center",gap:3,color:T.textMut}}>
-                          <span style={{width:6,height:6,borderRadius:"50%",background:"#D1D5DB",display:"inline-block"}}/>
+                          <span style={{width:6,height:6,borderRadius:"50%",background:T.border2,display:"inline-block"}}/>
                           inactive
                         </span>
                       )}
@@ -995,7 +1032,7 @@ export default function DisciplinePage({ trades = [] }) {
                 role="listbox"
                 style={{
                   background:T.white,
-                  border:`1px solid ${T.border}`,
+                  border:"none",
                   borderRadius:"var(--radius-modal)",
                   boxShadow:"var(--elev-overlay)",
                   padding:4,
@@ -1077,12 +1114,13 @@ export default function DisciplinePage({ trades = [] }) {
                               onBlur={commitEditRule}
                               style={{
                                 flex:1, minWidth:0,
-                                padding:"4px 8px",
-                                border:`1px solid ${T.border2}`,
-                                borderRadius:6,
+                                padding:"4px 12px",
+                                border:"none",
+                                borderRadius:999,
+                                boxShadow: DA_FOCUS_RING,
                                 fontSize:13, fontWeight:500,
                                 outline:"none", fontFamily:"inherit", color:T.text,
-                                background:T.white,
+                                background: DA_FIELD_BG,
                               }}
                             />
                           ) : (
@@ -1271,14 +1309,15 @@ export default function DisciplinePage({ trades = [] }) {
                  */
                 const getColorByDiscipline = (percentage, hasData = true) => {
                   if (!hasData) return null;                // Aucune donnée = gris clair (fallback)
-                  if (percentage === 0) return '#FCA5A5';   // Activité mais 0% respecté = rouge
+                  // Activité mais rien de respecté : le rouge principal, dilué.
+                  if (percentage === 0) return DISC_RED;
                   if (percentage < 100) {
-                    if (percentage <= 25) return '#DCFCE7'; // Vert très pâle
-                    if (percentage <= 50) return '#86EFAC'; // Vert pâle
-                    if (percentage <= 75) return '#4ADE80'; // Vert moyen
-                    return '#22C55E';                       // Vert clair (proche du 100%)
+                    if (percentage <= 25) return DISC_GREENS[0];
+                    if (percentage <= 50) return DISC_GREENS[1];
+                    if (percentage <= 75) return DISC_GREENS[2];
+                    return DISC_GREENS[3];
                   }
-                  return '#16A34A';                         // Vert vif uniquement si 100%
+                  return DISC_GREENS[4]; // 100 % : le vert principal, plein
                 };
                 
                 // Historique des checklists de routine, indexé par date.
@@ -1488,7 +1527,7 @@ export default function DisciplinePage({ trades = [] }) {
                                     borderRadius:"var(--radius-field)",
                                     // Pas de cursor:pointer : pas de handler réel (évite une fausse affordance).
                                     flexShrink:0,
-                                    transition:"all 0.2s",
+                                    transition: "var(--tr-ui)",
                                     border: 'none',
                                     opacity: 1
                                   }}
@@ -1509,13 +1548,7 @@ export default function DisciplinePage({ trades = [] }) {
             {/* Legend */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:20,fontSize:11,color:T.textMut}}>
               <span>{t("disc.legendLess")}</span>
-              {[
-                '#DCFCE7',
-                '#86EFAC',
-                '#4ADE80',
-                '#22C55E',
-                '#16A34A'
-              ].map((color, i) => (
+              {DISC_GREENS.map((color, i) => (
                 <div
                   key={i}
                   style={{
@@ -1545,28 +1578,21 @@ export default function DisciplinePage({ trades = [] }) {
 
       {/* MODAL MODIFIER REGLES */}
       {showRulesModal && (
-        <div {...backdropDismiss(() => setShowRulesModal(false))} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,fontFamily:"var(--font-sans)",padding:24}}>
-          <div onClick={(e) => e.stopPropagation()} style={{background:T.white,border:`1px solid ${T.border}`,borderRadius:"var(--radius-modal)",maxWidth:480,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"var(--elev-overlay)"}}>
-            {/* HEADER */}
-            <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>{t("disc.editRules")}</div>
-                <div style={{fontSize:11,color:T.textMut,marginTop:2}}>{t("disc.editRulesSub")}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowRulesModal(false)}
-                aria-label={t("disc.closeAria")}
-                style={{width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",borderRadius:999,color:T.textMut,cursor:"pointer",fontSize:16,fontFamily:"inherit"}}
-                onMouseEnter={(e)=>{e.currentTarget.style.background=T.bg;e.currentTarget.style.color=T.text;}}
-                onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textMut;}}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* BODY */}
-            <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:20}}>
+        <DAModal
+          title={t("disc.editRules")}
+          onClose={() => setShowRulesModal(false)}
+          width={480}
+          maxHeight="85vh"
+          bodyStyle={{padding:"6px 20px 16px",gap:20}}
+          footer={
+            <DAPillButton variant="primary" onClick={() => setShowRulesModal(false)}>
+              {t("disc.done")}
+            </DAPillButton>
+          }>
+          <div>
+            <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>{t("disc.editRules")}</div>
+            <div style={{fontSize:12,color:T.text,opacity:0.5,marginTop:3,lineHeight:1.5}}>{t("disc.editRulesSub")}</div>
+          </div>
               {/* AUTOMATED */}
               <div>
                 <div style={{fontSize:12,fontWeight:600,color:T.textSub,marginBottom:8}}>{t("disc.dailyRulesSection")}</div>
@@ -1632,7 +1658,7 @@ export default function DisciplinePage({ trades = [] }) {
                       value={newManualRule}
                       onChange={(e) => setNewManualRule(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && newManualRule.trim()) addManualRule(); }}
-                      style={{flex:1,padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:"var(--radius-card)",fontSize:12,background:T.white,color:T.text,outline:"none",fontFamily:"inherit"}}
+                      style={{flex:1,padding:"8px 10px",border: "none",borderRadius: "var(--radius-field)",fontSize:12,background: DA_FIELD_BG,color:T.text,outline:"none",fontFamily:"inherit"}}
                     />
                     <button
                       type="button"
@@ -1647,19 +1673,7 @@ export default function DisciplinePage({ trades = [] }) {
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* FOOTER */}
-            <div style={{padding:"12px 20px",borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"flex-end",background:T.bg}}>
-              <button
-                onClick={() => setShowRulesModal(false)}
-                style={{padding:"8px 20px",height:36,background:T.white,color:T.text,border:`1px solid ${T.text}`,borderRadius:999,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}
-              >
-                {t("disc.done")}
-              </button>
-            </div>
-          </div>
-        </div>
+        </DAModal>
       )}
     </>
   );

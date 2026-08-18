@@ -86,8 +86,8 @@ export default function ObsidianVaultPanel({ vault }) {
         title={status === "linked" ? `Notes synchronisées avec ${label}` : "Lier les notes à un vault Obsidian"}
         style={{
           ...ACTION,
-          background: T.white,
-          border: `1px solid ${T.border}`,
+          background: FIELD_BG,
+          border: "none",
           color: T.text,
         }}
       >
@@ -113,7 +113,7 @@ export default function ObsidianVaultPanel({ vault }) {
           background: T.white,
           borderRadius: 12,
           boxShadow: "var(--elev-overlay)",
-          border: `1px solid ${T.border}`,
+          border: "none",
           padding: 0,
           fontFamily: "var(--font-sans)",
         }}
@@ -215,11 +215,11 @@ export default function ObsidianVaultPanel({ vault }) {
                   <RefreshCw size={13} strokeWidth={1.75} className={syncing ? "anim-spin" : undefined} />
                   Synchroniser
                 </button>
-                <button type="button" onClick={vault.link} style={{ ...ACTION, background: T.white, border: `1px solid ${T.border}`, color: T.text }}>
+                <button type="button" onClick={vault.link} style={{ ...ACTION, background: FIELD_BG, border: "none", color: T.text }}>
                   <FolderOpen size={13} strokeWidth={1.75} />
                   Changer de dossier
                 </button>
-                <button type="button" onClick={vault.unlink} style={{ ...ACTION, background: T.white, border: `1px solid ${T.border}`, color: T.textSub }}>
+                <button type="button" onClick={vault.unlink} style={{ ...ACTION, background: FIELD_BG, border: "none", color: T.textSub }}>
                   <Unlink size={13} strokeWidth={1.75} />
                   Délier
                 </button>

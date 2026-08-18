@@ -49,7 +49,7 @@ export function PnLTrendChart({ trades }: PnLTrendChartProps) {
       <div
         style={{
           padding: 24,
-          background: "var(--color-bg-subtle, #FAFAFA)",
+          background: "var(--color-bg-subtle, #F1F2F4)",
           borderRadius: 12,
           textAlign: "center",
           color: "var(--color-text-muted, #6B6B6B)",
@@ -94,7 +94,7 @@ export function PnLTrendChart({ trades }: PnLTrendChartProps) {
           />
           <Bar dataKey="pnl" radius={[4, 4, 0, 0]} name="P&L ($)">
             {data.map((entry: any, i: number) => (
-              <Cell key={i} fill={entry.pnl >= 0 ? "var(--color-green, #16A34A)" : "var(--color-red, #EF4444)"} />
+              <Cell key={i} fill={entry.pnl >= 0 ? "var(--color-green, #58CC02)" : "var(--color-red, #FF4B4B)"} />
             ))}
           </Bar>
         </BarChart>

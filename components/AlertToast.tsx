@@ -1,7 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AlertTriangle, AlertOctagon, Info, X } from "lucide-react";
+import {
+  VelocityTracker,
+  project,
+  rubberband,
+  FLICK_VELOCITY,
+  DRAG_HYSTERESIS,
+} from "@/lib/ui/gesture";
 
 type Severity = "info" | "warn" | "danger";
 
@@ -90,6 +97,92 @@ export default function AlertToast() {
     return () => { Object.values(t).forEach(id => window.clearTimeout(id)); };
   }, []);
 
+  /* === Renvoi au glissé ===
+     L'entrée et la sortie par la droite étaient déjà en place — c'est
+     précisément ce qui rend le geste évident : la carte annonce d'où elle
+     vient et donc où la repousser. Il ne manquait que le geste lui-même.
+
+     La distance seule ne suffit pas à décider : le mouvement naturel pour
+     écarter une notification est une chiquenaude, courte et rapide. On mesure
+     donc la vitesse et on projette où la carte se serait arrêtée. */
+  const drag = useRef({ id: -1, toast: -1, startX: 0, startY: 0, decided: -1, dx: 0, width: 0 });
+  const tracker = useRef(new VelocityTracker());
+
+  const paint = (el: HTMLElement | null, dx: number) => {
+    if (!el) return;
+    el.style.transform = dx ? `translateX(${dx}px)` : "";
+    // L'opacité suit le geste : la carte s'efface à mesure qu'elle s'en va.
+    el.style.opacity = dx > 0 ? String(Math.max(0, 1 - dx / (el.offsetWidth || 1))) : "";
+  };
+
+  const resetDrag = (el: HTMLElement | null) => {
+    if (el) {
+      el.classList.remove("tr4de-toast--dragging");
+      el.style.transform = "";
+      el.style.opacity = "";
+      el.style.willChange = "";
+    }
+    drag.current.id = -1;
+    drag.current.decided = -1;
+    tracker.current.reset();
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: number) => {
+    // Un seul doigt : changer de doigt en cours de glissé ferait sauter la
+    // carte à la nouvelle position, puisque l'origine du geste changerait.
+    if (drag.current.id !== -1) return;
+    const el = e.currentTarget;
+    drag.current = {
+      id: e.pointerId, toast: id,
+      startX: e.clientX, startY: e.clientY,
+      decided: -1, dx: 0,
+      width: el.getBoundingClientRect().width,
+    };
+    tracker.current.reset();
+    tracker.current.add(e.clientX, e.clientY, e.timeStamp);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (d.id !== e.pointerId || d.decided === 0) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+
+    if (d.decided === -1) {
+      if (Math.abs(dx) < DRAG_HYSTERESIS && Math.abs(dy) < DRAG_HYSTERESIS) return;
+      if (Math.abs(dy) > Math.abs(dx)) { d.decided = 0; return; }
+      d.decided = 1;
+      clearTimer(d.toast);                     // on ne retire pas sous le doigt
+      e.currentTarget.classList.add("tr4de-toast--dragging");
+      e.currentTarget.style.willChange = "transform, opacity";
+      /* La capture garde le geste vivant même si le doigt sort de la carte —
+         ce qui arrive systématiquement, puisque le but est de l'emmener hors
+         de l'écran. */
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+
+    tracker.current.add(e.clientX, e.clientY, e.timeStamp);
+    // Vers la droite (la sortie) : suivi exact. Vers la gauche : résistance.
+    d.dx = dx >= 0 ? dx : -rubberband(-dx, d.width);
+    paint(e.currentTarget, d.dx);
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (d.id !== e.pointerId) return;
+    const el = e.currentTarget;
+    if (d.decided !== 1) { resetDrag(el); return; }
+
+    const vx = tracker.current.velocity().x;
+    const projected = d.dx + project(vx);
+    const flick = vx / 1000 > FLICK_VELOCITY;
+    const gone = flick || projected > d.width / 2;
+
+    resetDrag(el);
+    if (gone) dismiss(d.toast);
+    else scheduleDismiss(d.toast);            // reste : le compte à rebours repart
+  };
+
   if (items.length === 0) return null;
 
   return (
@@ -106,21 +199,41 @@ export default function AlertToast() {
       }}
     >
       <style>{`
-        /* Entrée depuis la droite (là où le toast vit) : cohérence spatiale. */
-        @keyframes tr4deToastIn {
-          from { opacity: 0; transform: translateX(16px); }
-          to   { opacity: 1; transform: translateX(0); }
+        /* TRANSITION, et pas @keyframes.
+           Les toasts s'empilent et se retirent vite, parfois pendant qu'un
+           autre est déjà en train d'entrer ou de sortir. Une keyframe
+           interrompue repart de son image zéro : le toast saute. Une
+           transition, elle, repart de la valeur affichée à l'écran — c'est
+           exactement ce qu'il faut quand l'utilisateur attrape un toast en
+           train de disparaître, ou en fait entrer un nouveau au même instant.
+
+           Le point de départ vient de @starting-style : il remplace le
+           traditionnel useEffect(() => setMounted(true)), sans re-rendu. */
+        .tr4de-toast {
+          opacity: 1;
+          transform: translateX(0);
+          transition: opacity 220ms var(--ease-out),
+                      transform 220ms var(--ease-out);
+          touch-action: pan-y;
         }
-        /* Sortie vers la droite, plus rapide que l'entrée. */
-        @keyframes tr4deToastOut {
-          from { opacity: 1; transform: translateX(0); }
-          to   { opacity: 0; transform: translateX(16px); }
+        @starting-style {
+          .tr4de-toast { opacity: 0; transform: translateX(16px); }
         }
+        /* Sortie par le MÊME bord que l'entrée : c'est cette symétrie qui rend
+           le geste de renvoi vers la droite évident sans qu'on l'explique.
+           Plus rapide que l'entrée (180 contre 220 ms) : on prend son temps
+           pour proposer, jamais pour retirer. */
+        .tr4de-toast--leaving {
+          opacity: 0;
+          transform: translateX(16px);
+          transition: opacity 180ms var(--ease-out),
+                      transform 180ms var(--ease-out);
+          pointer-events: none;
+        }
+        /* Pendant le glissé : suivi au pixel, aucune interpolation. */
+        .tr4de-toast--dragging { transition: none; }
         @media (prefers-reduced-motion: reduce) {
-          .tr4de-toast, .tr4de-toast--leaving {
-            animation: none !important;
-          }
-          .tr4de-toast--leaving { opacity: 0; }
+          .tr4de-toast, .tr4de-toast--leaving { transform: none !important; }
         }
       `}</style>
       {items.map(item => {
@@ -134,18 +247,22 @@ export default function AlertToast() {
             aria-live={isDanger ? "assertive" : "polite"}
             onMouseEnter={() => clearTimer(item.id)}
             onMouseLeave={() => { if (!item.leaving) scheduleDismiss(item.id); }}
-            className={item.leaving ? "tr4de-toast tr4de-toast--leaving" : "tr4de-toast anim-toast"}
+            onPointerDown={e => onPointerDown(e, item.id)}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className={item.leaving ? "tr4de-toast tr4de-toast--leaving" : "tr4de-toast"}
             style={{
               background: c.bg,
-              border: `1px solid ${c.bd}`,
+              /* Couche flottante : `--elev-overlay` la detache, et la gravite se lit
+                 deja dans l'aplat teinte et l'icone. */
+              border: "none",
               borderRadius: 10,
               padding: "10px 12px",
               display: "flex", alignItems: "flex-start", gap: 10,
               boxShadow: "var(--elev-overlay)",
               color: c.fg,
-              animation: item.leaving
-                ? `tr4deToastOut ${EXIT_MS}ms var(--ease-out) both`
-                : undefined,
+              cursor: "grab",
             }}
           >
             <Icon size={16} strokeWidth={2} />

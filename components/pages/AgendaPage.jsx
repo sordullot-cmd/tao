@@ -22,6 +22,9 @@ import {
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
 } from "@/lib/lifeRpgCategories";
 import { GCAL_COLORS, DEFAULT_EVENT_COLOR, nearestGcalColorId } from "@/lib/gcalColors";
+import { FIELD as DA_FIELD } from "@/components/ui/form";
+import { HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 /* ─────────────── Helpers date ─────────────── */
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -1200,9 +1203,9 @@ export default function AgendaPage() {
   }, []);
 
   /* ─────────────── Header ─────────────── */
-  /* Sélecteur de vues : la brique de la page Calendrier, sur sa piste arrondie.
-     Cette page en portait une copie — même intention, mais un gris, une ombre et
-     une graisse à elle, donc deux sélecteurs qui ne se ressemblaient pas. */
+  /* Sélecteur de vues : la brique de la page Calendrier. Cette page en portait
+     une copie — même intention, mais un gris, une ombre et une graisse à elle,
+     donc deux sélecteurs qui ne se ressemblaient pas. */
   const segmented = (
     <PeriodPills value={view} onChange={setView} options={VIEWS} track size={14} />
   );
@@ -1540,7 +1543,7 @@ export default function AgendaPage() {
   const renderYear = () => {
     const year = cursor.getFullYear();
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(230px, 100%), 1fr))", gap: 12 }}>
         {Array.from({ length: 12 }, (_, m) => {
           const first = new Date(year, m, 1);
           const startPad = weekdayIdx(first);
@@ -1802,7 +1805,7 @@ export default function AgendaPage() {
                       gap={4}
                       minWidth={240}
                       maxHeight={380}
-                      style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+                      style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
                     >
                       <>
                         {RECUR_PRESETS.map((p) => {
@@ -1828,15 +1831,15 @@ export default function AgendaPage() {
 
                         {/* Panneau personnalisé */}
                         {modal.recur?.preset === "custom" && (
-                          <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 6, paddingTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
+                          <div style={{ marginTop: 10, paddingTop: 4, display: "flex", flexDirection: "column", gap: 12 }}>
                             {/* Intervalle + fréquence */}
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                               <span style={{ fontSize: 13, color: T.text }}>Tous les</span>
                               <input type="number" min={1} value={modal.recur.interval ?? 1}
                                 onChange={(e) => setRecur({ interval: e.target.value })}
-                                style={{ width: 52, padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)", outline: "none" }} />
+                                style={{ width: 52, padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: DA_FIELD_BG, border: "none", borderRadius: "var(--radius-field)", outline: "none" }} />
                               <select value={modal.recur.freq || "WEEKLY"} onChange={(e) => setRecur({ freq: e.target.value })}
-                                style={{ padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)", outline: "none", cursor: "pointer" }}>
+                                style={{ padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: DA_FIELD_BG, border: "none", borderRadius: "var(--radius-field)", outline: "none", cursor: "pointer" }}>
                                 <option value="DAILY">jour(s)</option>
                                 <option value="WEEKLY">semaine(s)</option>
                                 <option value="MONTHLY">mois</option>
@@ -1877,7 +1880,7 @@ export default function AgendaPage() {
                                 Après
                                 <input type="number" min={1} value={modal.recur.count ?? 10} disabled={modal.recur.end !== "count"}
                                   onChange={(e) => setRecur({ count: e.target.value })}
-                                  style={{ width: 52, padding: "4px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)", outline: "none", opacity: modal.recur.end === "count" ? 1 : 0.5 }} />
+                                  style={{ width: 52, padding: "4px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: DA_FIELD_BG, border: "none", borderRadius: "var(--radius-field)", outline: "none", opacity: modal.recur.end === "count" ? 1 : 0.5 }} />
                                 occurrences
                               </label>
                               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.text, cursor: "pointer" }}>
@@ -1935,7 +1938,7 @@ export default function AgendaPage() {
                     open={colorOpen}
                     closeOnOutside={false}
                     gap={4}
-                    style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}
+                    style={{ background: T.white, border: "none", borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}
                   >
                     <>
                       <button type="button" onClick={() => { setModal({ ...modal, colorId: null }); setColorOpen(false); }} title="Par défaut" style={{ width: 24, height: 24, borderRadius: "50%", background: DEFAULT_EVENT_COLOR, border: modal.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
@@ -1962,7 +1965,7 @@ export default function AgendaPage() {
                     gap={4}
                     minWidth={200}
                     maxHeight={300}
-                    style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+                    style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
                   >
                     <>
                       {REMINDER_OPTS.map((r) => {
@@ -2023,12 +2026,12 @@ export default function AgendaPage() {
               </>
 
               {modalError && (
-                <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`, borderRadius: 8, padding: "8px 10px", marginTop: 8 }}>{modalError}</div>
+                <div style={{ fontSize: 12, color: T.red, background: T.redBg, border: "none", borderRadius: 10, padding: "8px 12px", marginTop: 8 }}>{modalError}</div>
               )}
             </div>
 
             {/* Pied */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "14px 24px", borderTop: `1px solid ${T.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "14px 24px", borderTop: `1px solid ${DA_HAIRLINE}` }}>
               {modal.htmlLink && !(modal.kind === "task" || modalTab === "tasks") && (
                 <a href={modal.htmlLink} target="_blank" rel="noopener noreferrer" style={{ marginRight: "auto", fontSize: 12, color: T.blue, display: "inline-flex", alignItems: "center", gap: 5 }}>
                   <ExternalLink size={12} strokeWidth={2} /> Ouvrir dans Google
@@ -2208,11 +2211,8 @@ const codeStyle = { background: T.accentBg, padding: "1px 5px", borderRadius: "v
    met en retrait par l'opacité (cf. `FieldLabel` de da.jsx) — les capitales
    espacées de 11 px appartenaient à l'ancienne. */
 const fieldLbl = { display: "block", fontSize: 12, fontWeight: 500, color: T.text, opacity: 0.5, marginBottom: 6 };
-const inp = () => ({
-  width: "100%", padding: "9px 12px", fontSize: 14, fontFamily: "inherit",
-  color: T.text, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-field)",
-  outline: "none", boxSizing: "border-box",
-});
+// Aplat de la DA (components/ui/form.jsx) au lieu du cadre blanc souligne.
+const inp = () => ({ ...DA_FIELD, fontSize: 14 });
 const iconBtn = () => ({
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   width: 32, height: 32, borderRadius: 999, border: `1px solid ${T.border}`,
@@ -2220,8 +2220,8 @@ const iconBtn = () => ({
 });
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",
-  padding: "7px 12px", minHeight: 32, borderRadius: 999,
-  border: `1px solid ${T.border}`, background: T.white, color: T.text,
+  padding: "7px 14px", minHeight: 32, borderRadius: 999,
+  border: "none", background: FIELD_BG, color: T.text,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 const primaryBtn = (small = false) => ({

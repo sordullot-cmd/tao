@@ -179,7 +179,7 @@ export default function TradeTargetSelector({
         scroll={false}
         maxHeight={340}
         style={{
-          background: "var(--color-card-bg, #FFFFFF)", border: "1px solid var(--color-border)", borderRadius: 10,
+          background: "var(--color-card-bg, #FFFFFF)", border: "none", borderRadius: 10,
           boxShadow: "var(--elev-overlay)",
         }}
       >

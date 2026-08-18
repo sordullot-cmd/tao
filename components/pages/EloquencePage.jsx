@@ -30,7 +30,7 @@ import { useAudioRecorder } from "@/lib/hooks/useAudioRecorder";
 import { useEloquenceAudio } from "@/lib/hooks/useEloquenceAudio";
 import { decodeAudioBlob, analyzeAudioBuffer, deriveAudioScores, encodeWav } from "@/lib/eloquenceAudioAnalysis";
 import {
-  ELOQ_STORAGE_KEY, ELOQ_CLOUD_KEY, LEVELS, LEVEL_BY_ID, SCORE_AXES, FIDELITY_AXIS, AUDIO_AXES,
+  ELOQ_STORAGE_KEY, ELOQ_CLOUD_KEY, LEVELS, SCORE_AXES, FIDELITY_AXIS, AUDIO_AXES,
   READING_TEXTS, TONGUE_TWISTERS, WARMUPS, TOPIC_THEMES, STRUCTURE_FRAMEWORKS, FRAMEWORK_BY_ID,
   CONSONANT_DRILLS, CONSONANT_REPS, CONSONANT_DRILL_INSTRUCTION, TWISTER_REPS, TWISTER_SERIES,
   READING_INTENTIONS, SPEAKING_FORMATS,
@@ -39,7 +39,7 @@ import {
   getTopicsFromBank, pickRandomTopic, todayKey, buildDailyAggregate, migrateEloquenceStore,
 } from "@/lib/eloquenceData";
 import { T } from "@/lib/ui/tokens";
-import { CARD, MiniKpi, PeriodPills, FIELD_BG, HAIRLINE } from "@/components/ui/da";
+import { CARD, MiniKpi, PeriodPills, FIELD_BG, HAIRLINE, FIELD as DA_FIELD, FIELD_AREA as DA_FIELD_AREA } from "@/components/ui/da";
 
 /* ─────────────── Helpers génériques ─────────────── */
 // Couleur d'un score 0–100.
@@ -101,13 +101,14 @@ const primary = (disabled) => ({
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
   transition: "opacity 120ms ease",
 });
-const field = {
-  width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`,
-  borderRadius: 10, padding: "10px 12px", fontSize: 15, fontFamily: "inherit",
-  color: T.text, background: T.white, outline: "none",
-};
+/* Champ de la page : l'aplat de la DA, en 15 px. La taille est plus grande
+   qu'ailleurs parce qu'on relit ce qu'on vient d'écrire à voix haute — un sujet
+   de discours ou un texte à dire se lisent en levant les yeux, pas en se
+   penchant sur l'écran. */
+const field = { ...DA_FIELD, fontSize: 15 };
+/* Zone d'écriture : même taille, aplat plus dilué et rayon de zone. */
+const writing = { ...DA_FIELD_AREA, fontSize: 15 };
 const lead = { fontSize: 14, color: T.textSub, lineHeight: 1.5, margin: 0 };
-const blockTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 6 };
 const sectionTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 8 };
 const metricBox = { flex: 1, minWidth: 120, borderRadius: 8, padding: "10px 12px", background: SURFACE };
 const metricLabel = { fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 };
@@ -117,16 +118,77 @@ const metricVal = { fontSize: 18, fontWeight: 600, color: T.text, marginTop: 2, 
    dix cartes qui flottent chacune sur leur ombre font un damier que l'œil ne trie
    plus. L'état actif est un liseré d'encre en `boxShadow` plutôt qu'une bordure,
    qui décalerait le contenu. */
-const selectable = (active) => ({
-  textAlign: "left", cursor: "pointer", fontFamily: "inherit", boxSizing: "border-box",
-  border: "none", borderRadius: 12, padding: 14,
-  background: active ? T.accentBg : SURFACE,
-  boxShadow: active ? `inset 0 0 0 1.5px ${T.text}` : "none",
-  transition: "background 120ms ease, box-shadow 120ms ease",
-});
+/* Voile d'une couleur. `color-mix` avec du transparent laisse le fond de la page
+   transparaître : le même pourcentage tient donc en clair comme en sombre, là où
+   un aplat figé serait blanchâtre dans l'un des deux. */
+const veil = (color, pct) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+/* `tone` : la couleur propre de la carte, pour les rangées où chaque choix est
+   d'une nature différente (intentions de lecture, formats de parole, cadres de
+   discours). Sans `tone`, la carte reste neutre — c'est le cas des catalogues
+   où toutes les cartes disent la même chose (virelangues, textes) : les teinter
+   toutes de la même couleur ne distingue rien et sature la page. Dans les deux
+   cas, la sélection reste le vert de marque. */
+const selectable = (active, tone) => {
+  const c = tone || T.brand;
+  return {
+    textAlign: "left", cursor: "pointer", fontFamily: "inherit", boxSizing: "border-box",
+    border: "none", borderRadius: 12, padding: 14,
+    background: active ? veil(c, 22) : tone ? veil(c, 8) : SURFACE,
+    boxShadow: active ? `inset 0 0 0 1.5px ${c}` : "none",
+    transition: "background 120ms ease, box-shadow 120ms ease",
+  };
+};
+/* Une couleur par carte quand plusieurs se suivent sur une ligne (intentions de
+   lecture, formats de parole) : six tuiles grises de même taille ne se
+   distinguent que par leur texte, donc on les lit toutes avant de choisir. */
+const TONE_CYCLE = [T.blue, T.purple, T.amber, T.green, T.cyan, T.red];
+const cycleTone = (i) => TONE_CYCLE[i % TONE_CYCLE.length];
 // Filet de séparation entre deux blocs d'un même onglet : moins bruyant qu'une
 // carte de plus, et suffisant pour dire « autre exercice ».
 const divider = { height: 1, background: HAIRLINE, border: "none", margin: 0 };
+
+/* ─────────────── La couleur comme clé de lecture ───────────────
+   Une teinte par repère, tenue d'un bout à l'autre de la page : le débit est
+   bleu dans la barre de consignes comme dans le verdict d'une prise, les
+   silences sont violets partout. La couleur dit de quoi on parle — elle n'est
+   décorative nulle part, sinon elle redevient du bruit.
+   Les fonds passent par les tokens `*Bg`, qui ont leur valeur sombre. */
+const RULE_TONES = {
+  pace:     { fg: T.blue,   bg: T.blueBg },
+  silences: { fg: T.purple, bg: T.purpleBg },
+  noise:    { fg: T.amber,  bg: T.amberBg },
+  endings:  { fg: T.green,  bg: T.greenBg },
+};
+const ruleTone = (id) => RULE_TONES[id] || { fg: T.textSub, bg: SURFACE };
+// Les deux séries de virelangue : l'une pousse la vitesse, l'autre la netteté.
+const SERIE_TONES = {
+  accelerate: { fg: T.amber, bg: T.amberBg },
+  articulate: { fg: T.blue,  bg: T.blueBg },
+};
+// Fond teinté d'un verdict, pour que le statut se voie avant d'être lu.
+const statusBg = (status) => ({ ok: T.greenBg, warn: T.amberBg, bad: T.redBg }[status] || SURFACE);
+/* Cible chiffrée d'un exercice, en pastille teintée : c'est la seule ligne de la
+   consigne qu'on relit en cours de route, elle ne doit pas se perdre dans le
+   gris du paragraphe. Bleu quand elle parle de débit — la couleur du repère. */
+const targetChip = (tone) => ({
+  display: "inline-flex", alignItems: "center", gap: 8, alignSelf: "flex-start",
+  fontSize: 13, fontWeight: 600, color: tone.fg, background: tone.bg,
+  borderRadius: 999, padding: "6px 12px",
+});
+
+/* Titre de bloc précédé de sa pastille de couleur : c'est ce qui donne à
+   l'onglet son rythme, et ce qui rattache chaque exercice à sa teinte. */
+function BlockTitle({ color, children, right }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: color, flexShrink: 0, alignSelf: "center" }} />
+        <span style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{children}</span>
+      </span>
+      {right}
+    </div>
+  );
+}
 
 /* ─────────────── Synthèse vocale (modèle à écouter) ─────────────── */
 function useSpeech() {
@@ -196,7 +258,12 @@ async function runVoiceAnalysis(audioBuffer, mode, topic) {
 
    Deux lignes par repère au lieu de trois : le « pourquoi » se lit une fois, pas
    à chaque visite — il passe en infobulle et rend la barre deux fois plus
-   courte, ce qui laisse l'exercice arriver plus haut dans l'écran. */
+   courte, ce qui laisse l'exercice arriver plus haut dans l'écran.
+
+   Une seule carte blanche à quatre colonnes, sans teinte : c'est la consigne
+   permanente, elle est là à chaque visite et n'a pas à réclamer l'attention. La
+   couleur des repères reste là où elle informe — le verdict d'une prise et le
+   suivi « repères tenus ». */
 function SpeechRulesBar() {
   return (
     <div style={{ ...card, padding: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "stretch" }}>
@@ -210,12 +277,13 @@ function SpeechRulesBar() {
   );
 }
 
-// Verdict d'un repère après une prise.
+// Verdict d'un repère après une prise. Le fond suit le statut : vert tenu,
+// orange limite, rouge raté — l'ensemble se lit d'un coup d'œil, avant lecture.
 function CheckTile({ check }) {
   const color = statusColor(check.status);
   const Icon = check.status === "ok" ? Check : check.status === "bad" ? AlertTriangle : check.status === "warn" ? Minus : Clock;
   return (
-    <div style={{ flex: "1 1 200px", minWidth: 180, borderRadius: 10, padding: "12px 14px", background: SURFACE, display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ flex: "1 1 200px", minWidth: 180, borderRadius: 12, padding: "12px 14px", background: statusBg(check.status), display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <Icon size={14} color={color} />
         <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{check.label}</span>
@@ -414,11 +482,11 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, paceT
   return (
     <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
       {/* Animation de pulsation pour le micro */}
-      <style>{`@keyframes eloqPulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`@keyframes eloqPulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}70%{box-shadow:0 0 0 16px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}`}</style>
 
       {phase === "analyzing" ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "16px 0" }}>
-          <Loader2 size={34} color={T.text} style={{ animation: "spin 1s linear infinite" }} />
+          <Loader2 size={34} color={T.text} className="anim-spin" />
           <div style={{ fontSize: 14, color: T.textSub, fontWeight: 600 }}>Analyse en cours…</div>
           <div style={{ fontSize: 12, color: T.textMut }}>Transcription, mesures acoustiques, puis évaluation.</div>
         </div>
@@ -694,38 +762,36 @@ function ForbiddenVerdict({ word, count }) {
   );
 }
 
-// Niveau d'entrée des virelangues : le dernier de l'échelle, « Expert ».
-const DEFAULT_TWISTER_LEVEL = LEVELS[LEVELS.length - 1].id;
+// Niveau d'entrée des catalogues (virelangues, textes) : le dernier de
+// l'échelle, « Expert ».
+const DEFAULT_LEVEL = LEVELS[LEVELS.length - 1].id;
 
 /* ─────────────── Sélecteur de niveau ───────────────
-   `showAll` : le « Tous » n'a de sens que là où le catalogue est court. Sur les
-   virelangues il affichait les vingt-neuf cartes d'un coup — on ne choisit plus
-   rien devant un mur. Un seul niveau à la fois, et l'expert par défaut. */
+   `showAll` : le « Tous » vidait le catalogue entier à l'écran — vingt-neuf
+   virelangues, vingt-trois textes — et on ne choisit plus rien devant un mur.
+   Un seul niveau à la fois, l'expert par défaut. */
 function LevelFilter({ value, onChange, showAll = true }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
       {showAll && <button type="button" style={pill(value === 0)} onClick={() => onChange(0)}>Tous</button>}
+      {/* Chaque niveau porte sa couleur même quand il n'est pas choisi : le vert
+          du facile et le rouge de l'expert se repèrent avant d'être lus. Choisi,
+          l'aplat devient plein. */}
       {LEVELS.map((l) => (
         <button
           key={l.id}
           type="button"
-          style={{ ...pill(value === l.id), background: value === l.id ? l.color : FIELD_BG, color: value === l.id ? T.onSolid : T.text }}
+          style={{
+            ...pill(value === l.id),
+            background: value === l.id ? l.color : veil(l.color, 16),
+            color: value === l.id ? T.onSolid : l.color,
+          }}
           onClick={() => onChange(l.id)}
         >
           {l.label}
         </button>
       ))}
     </div>
-  );
-}
-
-function LevelBadge({ level }) {
-  const l = LEVEL_BY_ID[level];
-  if (!l) return null;
-  return (
-    <span style={{ fontSize: 11, fontWeight: 500, color: T.onSolid, background: l.color, padding: "2px 8px", borderRadius: 999 }}>
-      {l.label}
-    </span>
   );
 }
 
@@ -745,6 +811,11 @@ function LevelBadge({ level }) {
 function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onReset }) {
   const done = count >= total;
   const pct = Math.min(100, Math.round((count / total) * 100));
+  // Trois états, trois teintes : gris tant qu'on n'a rien fait, bleu pendant la
+  // série, vert une fois bouclée. On voit d'un regard où en sont les quatre
+  // consonnes sans lire un seul chiffre.
+  const tone = done ? T.green : count > 0 ? T.blue : T.text;
+  const padBg = done ? T.greenBg : count > 0 ? T.blueBg : SURFACE;
   return (
     <div title={hint || undefined} style={{ flex: "1 1 200px", minWidth: 180, display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
@@ -759,12 +830,12 @@ function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onRese
         aria-label={`${srName || title} — compter une répétition (${count} sur ${total})`}
         style={{
           border: "none", borderRadius: 12, padding: "20px 12px", cursor: done ? "default" : "pointer",
-          fontFamily: "inherit", background: done ? T.greenBg : SURFACE, color: T.text,
+          fontFamily: "inherit", background: padBg, color: T.text,
           display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
           transition: "background 150ms ease",
         }}
       >
-        <span style={{ fontSize: 28, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: done ? T.green : T.text, lineHeight: 1 }}>
+        <span style={{ fontSize: 28, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone, lineHeight: 1 }}>
           {count}<span style={{ fontSize: 14, color: T.numMuted, fontWeight: 500 }}> / {total}</span>
         </span>
         <span style={{ fontSize: 11, color: done ? T.green : T.textMut, display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -775,7 +846,7 @@ function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onRese
       {count > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1, height: 4, borderRadius: 999, background: HAIRLINE, overflow: "hidden" }}>
-            <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: done ? T.green : T.text, transition: "width 200ms ease" }} />
+            <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: tone, transition: "width 200ms ease" }} />
           </div>
           <button
             type="button"
@@ -799,13 +870,17 @@ function ConsonantSection({ reps, incRep, resetRep }) {
       {/* Le décompte du jour tient sur la ligne du titre : c'est un état, pas une
           consigne — il n'a pas besoin d'une ligne à lui. */}
       <div>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ ...blockTitle, marginBottom: 0 }}>Occlusives T · D · B · P</div>
-          <div style={{ fontSize: 12, color: done === CONSONANT_DRILLS.length ? T.green : T.textMut, fontWeight: 500 }}>
-            {done} / {CONSONANT_DRILLS.length} consonnes bouclées aujourd&apos;hui
-          </div>
-        </div>
-        <p style={{ ...lead, marginTop: 6 }}>{CONSONANT_DRILL_INSTRUCTION}</p>
+        <BlockTitle
+          color={T.blue}
+          right={(
+            <div style={{ fontSize: 12, color: done === CONSONANT_DRILLS.length ? T.green : T.textMut, fontWeight: 500 }}>
+              {done} / {CONSONANT_DRILLS.length} consonnes bouclées aujourd&apos;hui
+            </div>
+          )}
+        >
+          Occlusives T · D · B · P
+        </BlockTitle>
+        <p style={{ ...lead, marginTop: 6, paddingLeft: 16 }}>{CONSONANT_DRILL_INSTRUCTION}</p>
       </div>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {CONSONANT_DRILLS.map((c) => (
@@ -832,7 +907,7 @@ function ConsonantSection({ reps, incRep, resetRep }) {
 function TwisterSection({ reps, incRep, resetRep, onSession }) {
   // Expert par défaut : c'est le niveau qu'on vient chercher ici, et démarrer
   // au plus dur évite d'avoir à balayer le catalogue avant de commencer.
-  const [level, setLevel] = useState(DEFAULT_TWISTER_LEVEL);
+  const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [selectedId, setSelectedId] = useState(null);
   const [serieId, setSerieId] = useState(TWISTER_SERIES[0].id);
   const [result, setResult] = useState(null);
@@ -851,8 +926,8 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
-        <div style={{ ...blockTitle, marginBottom: 6 }}>Virelangues</div>
-        <p style={lead}>
+        <BlockTitle color={T.purple}>Virelangues</BlockTitle>
+        <p style={{ ...lead, marginTop: 6, paddingLeft: 16 }}>
           Un virelangue, deux séries de {TWISTER_REPS} : en accélérant, puis en articulant à fond.
         </p>
       </div>
@@ -861,8 +936,10 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
 
       {/* Le catalogue reste affiché pendant l'exercice — on change de virelangue
           en tapant sur un autre, sans revenir en arrière. Pas de pastille de
-          niveau sur les cartes : un seul niveau est listé à la fois, le filtre
-          juste au-dessus le dit déjà. */}
+          niveau sur les cartes, ni de teinte : un seul niveau est listé à la
+          fois, le filtre coloré juste au-dessus le dit déjà — les cartes, elles,
+          restent neutres pour que le texte du virelangue soit tout ce qu'on
+          voit. */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {list.map((tw) => {
           const active = tw.id === selectedId;
@@ -884,12 +961,24 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
           <div style={{ ...card, display: "flex", flexDirection: "column", gap: 16 }}>
             <p style={{ fontSize: 22, lineHeight: 1.5, color: T.text, margin: 0, fontWeight: 600 }}>{selected.text}</p>
 
+            {/* Les deux séries ne cherchent pas la même chose : l'orange pousse
+                la vitesse, le bleu la netteté. La pastille garde sa teinte même
+                éteinte, pour qu'on sache laquelle on va choisir. */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {TWISTER_SERIES.map((s) => (
-                <button key={s.id} type="button" style={pill(serieId === s.id)} onClick={() => { setSerieId(s.id); setResult(null); }}>
-                  {s.title}
-                </button>
-              ))}
+              {TWISTER_SERIES.map((s) => {
+                const active = serieId === s.id;
+                const tone = SERIE_TONES[s.id] || { fg: T.text, bg: FIELD_BG };
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    style={{ ...pill(active), background: active ? tone.fg : tone.bg, color: active ? T.onSolid : tone.fg }}
+                    onClick={() => { setSerieId(s.id); setResult(null); }}
+                  >
+                    {s.title}
+                  </button>
+                );
+              })}
               <ListenButton text={selected.text} rate={serie.id === "articulate" ? 0.6 : 1} label="Écouter au tempo" />
             </div>
 
@@ -989,7 +1078,8 @@ function ArticulationTab({ reps, incRep, resetRep, onSession }) {
    ═══════════════════════════════════════════════════════════ */
 function ReadingTab({ onSession }) {
   const [intentionId, setIntentionId] = useState(READING_INTENTIONS[0].id);
-  const [level, setLevel] = useState(0);
+  // Même entrée que les virelangues : un seul niveau listé, l'expert d'abord.
+  const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [selectedId, setSelectedId] = useState(null);
   const [ownText, setOwnText] = useState("");
   const [result, setResult] = useState(null);
@@ -1018,14 +1108,16 @@ function ReadingTab({ onSession }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Intention de lecture */}
+      {/* Intention de lecture — une couleur par intention : trois cartes de même
+          taille alignées ne se distinguaient que par leur texte. */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {READING_INTENTIONS.map((i) => {
+        {READING_INTENTIONS.map((i, idx) => {
           const active = i.id === intentionId;
+          const tone = cycleTone(idx);
           return (
-            <button key={i.id} type="button" onClick={() => switchIntention(i.id)} style={{ ...selectable(active), width: 260, display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{i.label}</div>
-              <div style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.4 }}>{i.tagline}</div>
+            <button key={i.id} type="button" onClick={() => switchIntention(i.id)} style={{ ...selectable(active, tone), width: 260, display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: tone }}>{i.label}</div>
+              <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.4 }}>{i.tagline}</div>
             </button>
           );
         })}
@@ -1041,7 +1133,7 @@ function ReadingTab({ onSession }) {
           ))}
         </ul>
         {paceTarget && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textSub, fontWeight: 600 }}>
+          <div style={targetChip(ruleTone("pace"))}>
             <Clock size={14} /> Débit cible de cet exercice : {paceTarget.wpmMin}–{paceTarget.wpmMax} mots/minute.
           </div>
         )}
@@ -1050,8 +1142,10 @@ function ReadingTab({ onSession }) {
       {/* Texte à lire — bibliothèque et/ou texte collé selon l'intention */}
       {intention.source !== "own" && (
         <>
-          <LevelFilter value={level} onChange={setLevel} />
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <LevelFilter value={level} onChange={setLevel} showAll={false} />
+          {/* Cartes neutres, comme les virelangues : le niveau est déjà porté par
+              le filtre coloré juste au-dessus. */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {list.map((tx) => {
               const active = tx.id === selectedId && !useOwn;
               return (
@@ -1061,10 +1155,7 @@ function ReadingTab({ onSession }) {
                   onClick={() => { setSelectedId(active ? null : tx.id); setOwnText(""); setResult(null); }}
                   style={{ ...selectable(active), width: 240 }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
-                    <span style={{ fontSize: 11, color: T.textMut, fontWeight: 600 }}>{tx.genre}</span>
-                    <LevelBadge level={tx.level} />
-                  </div>
+                  <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginBottom: 4 }}>{tx.genre}</div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{tx.title}</div>
                 </button>
               );
@@ -1083,7 +1174,7 @@ function ReadingTab({ onSession }) {
             onChange={(e) => { setOwnText(e.target.value); setResult(null); }}
             placeholder={intention.placeholder || "Colle ici un extrait de roman, de pièce ou de poème…"}
             rows={5}
-            style={{ ...field, resize: "vertical", lineHeight: 1.5 }}
+            style={{ ...writing, lineHeight: 1.5 }}
           />
         </div>
       )}
@@ -1131,22 +1222,20 @@ function FrameworkPicker({ value, onChange }) {
         </span>
       </summary>
       <div style={{ padding: "0 18px 18px", display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {STRUCTURE_FRAMEWORKS.map((f) => {
+        {/* Même cycle de couleurs que les formats : quatre cadres alignés, quatre
+            teintes, on retrouve le sien d'un coup d'œil d'une séance à l'autre. */}
+        {STRUCTURE_FRAMEWORKS.map((f, idx) => {
           const active = f.id === value;
+          const tone = cycleTone(idx);
           return (
             <button
               key={f.id}
               type="button"
               onClick={() => onChange(active ? null : f.id)}
-              style={{
-                flex: "1 1 260px", minWidth: 240, textAlign: "left", cursor: "pointer", fontFamily: "inherit",
-                border: "none", borderRadius: 10, padding: 14,
-                background: active ? T.accentBg : SURFACE,
-                boxShadow: active ? `inset 0 0 0 1.5px ${T.text}` : "none",
-              }}
+              style={{ ...selectable(active, tone), flex: "1 1 260px", minWidth: 240 }}
             >
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: T.text }}>{f.name}</div>
-              <div style={{ fontSize: 12, color: T.textMut, fontWeight: 600, marginBottom: 8 }}>{f.short}</div>
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: tone }}>{f.name}</div>
+              <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500, marginBottom: 8 }}>{f.short}</div>
               <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
                 {f.steps.map((s, i) => (
                   <li key={i} style={{ fontSize: 12, color: T.textSub }}>
@@ -1215,7 +1304,7 @@ function TopicDrawer({ onPick }) {
             <RefreshCw size={14} /> Repiocher
           </button>
           <button type="button" style={primary(loading)} disabled={loading} onClick={generate}>
-            {loading ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={15} />}
+            {loading ? <Loader2 size={15} className="anim-spin" /> : <Sparkles size={15} />}
             Générer avec l&apos;IA
           </button>
         </div>
@@ -1299,14 +1388,17 @@ function SpeakingTab({ onSession }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Format de prise de parole */}
+      {/* Format de prise de parole — une couleur par format, sur le même cycle
+          que les intentions de lecture : six tuiles identiques obligeaient à
+          toutes les lire pour en choisir une. */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {SPEAKING_FORMATS.map((f) => {
+        {SPEAKING_FORMATS.map((f, idx) => {
           const active = f.id === formatId;
+          const tone = cycleTone(idx);
           return (
-            <button key={f.id} type="button" onClick={() => switchFormat(f.id)} style={{ ...selectable(active), flex: "1 1 200px", minWidth: 190, padding: 16 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 600, color: T.text }}>{f.label}</div>
-              <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.4, marginTop: 3 }}>{f.tagline}</div>
+            <button key={f.id} type="button" onClick={() => switchFormat(f.id)} style={{ ...selectable(active, tone), flex: "1 1 200px", minWidth: 190, padding: 16 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 600, color: tone }}>{f.label}</div>
+              <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4, marginTop: 3 }}>{f.tagline}</div>
             </button>
           );
         })}
@@ -1321,12 +1413,12 @@ function SpeakingTab({ onSession }) {
           ))}
         </ul>
         {format.target && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textSub, fontWeight: 600 }}>
+          <div style={targetChip(ruleTone("pace"))}>
             <Clock size={14} /> Débit cible de ce format : {format.target.wpmMin}–{format.target.wpmMax} mots/minute.
           </div>
         )}
         {format.timerTargetSec && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textSub, fontWeight: 600 }}>
+          <div style={targetChip({ fg: T.amber, bg: T.amberBg })}>
             <Clock size={14} /> Objectif : tenir {fmtTime(format.timerTargetSec)} sans jamais t&apos;arrêter.
           </div>
         )}
@@ -1559,7 +1651,12 @@ function ProgressPanel({ sessions, mode }) {
           <div style={{ fontSize: 12, color: T.text, opacity: 0.5, fontWeight: 500 }}>Repères tenus</div>
           {checkRows.map((r) => (
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 104, fontSize: 13, color: T.textSub, fontWeight: 600 }}>{r.label}</div>
+              {/* La même pastille de couleur que dans la barre de consignes :
+                  on relie le suivi au repère sans réécrire son nom en entier. */}
+              <div style={{ width: 104, fontSize: 13, color: T.textSub, fontWeight: 600, display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ width: 7, height: 7, borderRadius: 999, background: ruleTone(r.id).fg, flexShrink: 0 }} />
+                {r.label}
+              </div>
               <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
                 <div style={{ width: `${Math.round(r.ratio * 100)}%`, height: "100%", background: r.ratio >= 0.7 ? T.green : r.ratio >= 0.4 ? T.amber : T.red, borderRadius: 999 }} />
               </div>
@@ -1676,7 +1773,7 @@ function CoachPanel({ sessions, store, setStore, mode, onOpenTab }) {
         )}
         {aggregate.sessionCount > 0 && (
           <button type="button" style={{ ...ghost(loading), marginLeft: "auto" }} onClick={generate} disabled={loading}>
-            {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={14} />}
+            {loading ? <Loader2 size={14} className="anim-spin" /> : <RefreshCw size={14} />}
             {review ? "Régénérer" : "Générer le bilan"}
           </button>
         )}
@@ -1816,7 +1913,7 @@ function RecordingsPanel({ sessions, mode }) {
               {!urls[s.id] && (
                 <button type="button" style={ghost(false)} onClick={() => listen(s)} disabled={loadingId === s.id}>
                   {loadingId === s.id
-                    ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                    ? <Loader2 size={14} className="anim-spin" />
                     : <Volume2 size={14} />}
                   Écouter
                 </button>
@@ -2000,7 +2097,8 @@ export default function EloquencePage() {
           </div>
         </div>
 
-        {/* Sélecteur d'exercice : la brique des autres pages, sur sa piste arrondie. */}
+        {/* Sélecteur d'exercice : la brique des autres pages. Les trois libellés
+            reposent sur le fond de la page ; seul l'actif porte un bloc blanc. */}
         <div className="scroll-thin" style={{ maxWidth: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           <PeriodPills value={tab} onChange={setTab} options={TABS} track size={14} />
         </div>

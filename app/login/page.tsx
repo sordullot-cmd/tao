@@ -9,6 +9,7 @@ import {
 } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
 import { AlertTriangle } from "lucide-react";
+import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
 
 // Détecte qu'on tourne dans la webview Tauri (app desktop) et non dans un
 // navigateur normal. __TAURI_INTERNALS__ est toujours injecté par le runtime
@@ -236,7 +237,7 @@ export default function LoginPage() {
             <div role="alert" style={{
               display: "flex", alignItems: "flex-start", gap: 8,
               padding: "10px 12px", background: "var(--color-red-bg, #FEF2F2)", border: "1px solid var(--color-red-bd, #FECACA)",
-              borderRadius: 8, color: "var(--color-red, #EF4444)", fontSize: 12,
+              borderRadius: 8, color: "var(--color-red, #FF4B4B)", fontSize: 12,
             }}>
               <AlertTriangle size={14} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
               <span>{error}</span>
@@ -246,7 +247,7 @@ export default function LoginPage() {
             <div role="status" style={{
               display: "flex", alignItems: "flex-start", gap: 8,
               padding: "10px 12px", background: "var(--color-green-bg, #F0FDF4)", border: "1px solid var(--color-green-bd, #86EFAC)",
-              borderRadius: 8, color: "var(--color-green, #16A34A)", fontSize: 12,
+              borderRadius: 8, color: "var(--color-green, #58CC02)", fontSize: 12,
             }}>
               <span>{success}</span>
             </div>
@@ -321,26 +322,13 @@ export default function LoginPage() {
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--color-text, #0D0D0D)", marginBottom: 6 }}>{label}</label>
-      {children}
-    </div>
-  );
+  // Delegue a la brique commune (components/ui/form.jsx).
+  return <DAField label={label}>{children}</DAField>;
 }
 
+/* Delegue a la brique commune (components/ui/form.jsx) : aplat en pilule.
+   Le 16 px et la hauteur restent : c'est la seule page ou l'on tape un mot de
+   passe au telephone, et sous 16 px Safari iOS zoome tout seul au focus. */
 function inputStyle(): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: "11px 12px",
-    border: "1px solid var(--color-border, #E5E5E5)",
-    borderRadius: 8,
-    background: "var(--color-card-bg, #FFFFFF)",
-    color: "var(--color-text, #0D0D0D)",
-    // 16px : évite le zoom automatique de Safari iOS au focus.
-    fontSize: 16,
-    fontFamily: "inherit",
-    outline: "none",
-    transition: "border-color 120ms ease, box-shadow 120ms ease",
-  };
+  return { ...DA_FIELD, padding: "11px 16px", fontSize: 16 };
 }

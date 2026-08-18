@@ -1,17 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { createPortal } from "react-dom";
 import { Plus, BookOpen, Check, Trash2, Pencil, X, BookMarked, FileText, Library, ChevronDown } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { Stat } from "@/components/ui/Stat";
 import Popover from "@/components/ui/Popover";
-import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
 import { deepen, dotRing } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
+import { Field as DAField, FIELD as DA_FIELD, FIELD_FOCUS_RING as DA_FOCUS_RING, Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { WRITING_BG as DA_WRITING_BG } from "@/lib/ui/tokens";
 
 const T = { ...BaseT };
 
@@ -139,22 +140,32 @@ export default function ReadingListPage() {
         <ReadingStatCell icon={Library}    label="À lire"     value={counts.toRead}  subLabel="à découvrir" isLast />
       </div>
 
-      {showForm && typeof document !== "undefined" && createPortal(
-        <div {...backdropDismiss(cancel)}
-          style={{ position: "fixed", inset: 0, background: "rgba(13,13,13,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", maxWidth: 480, background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", maxHeight: "85vh" }}>
-            <div style={{ padding: "16px 20px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{editingId ? "Modifier le livre" : "Nouveau livre"}</div>
-              <button onClick={cancel} aria-label="Fermer" style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                <X size={14} strokeWidth={2} />
-              </button>
-            </div>
-
-            <div style={{ padding: "4px 20px 20px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+      {showForm && (
+        <DAModal
+          open
+          /* Lu par les lecteurs d'ecran seulement : l'en-tete de la DA ne porte
+             qu'une poignee et la fermeture, et le titre du livre est deja le
+             premier champ du formulaire. */
+          title={editingId ? "Modifier le livre" : "Nouveau livre"}
+          onClose={cancel}
+          width={480}
+          maxHeight="85vh"
+          footer={(
+            <>
+              <DAPillButton variant="ghost" onClick={cancel}>Annuler</DAPillButton>
+              <DAPillButton variant="primary" disabled={!form.title.trim()} onClick={save}>
+                {editingId ? "Enregistrer" : "Ajouter"}
+              </DAPillButton>
+            </>
+          )}
+        >
+          <>
+              {/* Le titre du livre, en grand et sans chrome — comme le nom d'un
+                  document. Le filet en dessous etait le dernier contour du
+                  formulaire, et l'auteur juste apres n'en avait deja pas. */}
               <input type="text" autoFocus value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Titre du livre"
-                style={{ width: "100%", padding: "6px 0", border: "none", borderBottom: `1px solid ${T.border}`, borderRadius: 0, fontSize: 18, fontWeight: 600, outline: "none", fontFamily: "inherit", color: T.text, background: "transparent", letterSpacing: -0.2 }} />
+                style={{ width: "100%", padding: "6px 0", border: "none", borderRadius: 0, fontSize: 18, fontWeight: 600, outline: "none", fontFamily: "inherit", color: T.text, background: "transparent", letterSpacing: -0.2 }} />
 
               <input type="text" value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })}
                 placeholder="Auteur"
@@ -190,7 +201,7 @@ export default function ReadingListPage() {
                           color: active ? p.color : T.textSub,
                           fontSize: 12, fontWeight: active ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
                           display: "inline-flex", alignItems: "center", gap: 6,
-                          transition: "all .12s ease",
+                          transition: "var(--tr-ui)",
                         }}>
                         <span style={{ width: 7, height: 7, borderRadius: 999, background: p.color, boxShadow: dotRing(p.color) }} />
                         {p.label}
@@ -208,21 +219,8 @@ export default function ReadingListPage() {
                   <input type="number" value={form.currentPage} onChange={(e) => setForm({ ...form, currentPage: e.target.value })} style={inputStyleLg()} placeholder="48" />
                 </Field>
               </div>
-            </div>
-
-            <div style={{ padding: "12px 20px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={cancel}
-                style={{ padding: "7px 14px", height: 34, borderRadius: "var(--radius-card)", background: "transparent", border: "none", color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-                Annuler
-              </button>
-              <button onClick={save} disabled={!form.title.trim()}
-                style={{ padding: "7px 16px", height: 34, borderRadius: "var(--radius-card)", background: form.title.trim() ? T.text : T.accentBg, border: "none", color: form.title.trim() ? "#fff" : T.textMut, fontSize: 13, fontWeight: 600, cursor: form.title.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
-                {editingId ? "Enregistrer" : "Ajouter"}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
+          </>
+        </DAModal>
       )}
 
       {/* Filter tabs */}
@@ -253,7 +251,7 @@ export default function ReadingListPage() {
           <div style={{ fontSize: 12, color: T.textSub }}>Ajoute ton premier livre pour construire ta bibliothèque</div>
         </div>
       ) : (
-        <div className="anim-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+        <div className="anim-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))", gap: 12 }}>
           {shown.map(b => {
             const total = b.totalPages || 0;
             const current = b.currentPage || 0;
@@ -304,7 +302,7 @@ export default function ReadingListPage() {
                     value={noteDraft}
                     onChange={(e) => { setNoteDraft(e.target.value); updateNote(b.id, e.target.value); }}
                     placeholder="Citations clés, idées à retenir..."
-                    style={{ width: "100%", minHeight: 90, padding: 10, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: T.white, resize: "vertical", lineHeight: 1.5 }}
+                    style={{ width: "100%", minHeight: 90, padding: 10, border: "none", borderRadius: "var(--radius-field)", fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: DA_WRITING_BG, resize: "vertical", lineHeight: 1.5 }}
                   />
                 )}
               </div>
@@ -315,9 +313,10 @@ export default function ReadingListPage() {
     </div>
   );
 }
-function Field({ label, children }) { return (<div><label style={{ display: "block", fontSize: 10, color: T.textMut, fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</label>{children}</div>); }
-function inputStyleLg() { return { width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 14, outline: "none", fontFamily: "inherit", color: T.text, background: T.white, transition: "border-color .15s ease" }; }
-function miniBtn() { return { width: 24, height: 24, borderRadius: 6, border: `1px solid ${T.border}`, background: T.white, color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }; }
+// Deleguent aux briques communes (components/ui/form.jsx).
+function Field({ label, children }) { return <DAField label={label}>{children}</DAField>; }
+function inputStyleLg() { return { ...DA_FIELD, padding: "10px 14px", fontSize: 14 }; }
+function miniBtn() { return { width: 24, height: 24, borderRadius: "50%", border: "none", background: DA_FIELD_BG, color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }; }
 
 function PrettySelect({ value, onChange, options }) {
   const [open, setOpen] = useState(false);
@@ -331,11 +330,10 @@ function PrettySelect({ value, onChange, options }) {
         type="button"
         onClick={() => setOpen(o => !o)}
         style={{
-          width: "100%", padding: "8px 12px", border: `1px solid ${open ? T.text : T.border}`,
-          borderRadius: "var(--radius-card)", fontSize: 13, outline: "none", fontFamily: "inherit",
-          color: T.text, background: T.white, cursor: "pointer",
+          ...DA_FIELD, cursor: "pointer",
+          boxShadow: open ? DA_FOCUS_RING : "none",
           display: "inline-flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-          transition: "border-color .15s ease",
+          transition: "box-shadow var(--dur-fast) var(--ease-out)",
         }}
       >
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -352,7 +350,7 @@ function PrettySelect({ value, onChange, options }) {
         matchAnchorWidth
         maxHeight={260}
         style={{
-          background: T.white, border: `1px solid ${T.border}`, borderRadius: 10,
+          background: T.white, border: "none", borderRadius: 10,
           boxShadow: "var(--elev-overlay)", padding: 4,
         }}
       >

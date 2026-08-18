@@ -22,6 +22,8 @@ import {
   ChevronRight as LucideChevronRight,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
+import { luminance } from "@/lib/ui/color";
+import { TAG_COLORS, STRATEGY_COLOR_DEFAULT } from "@/lib/ui/tradingColors";
 import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
@@ -39,6 +41,8 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useTradeEmotionTags, useTradeErrorTags } from "@/lib/hooks/useTradeEmotionTags";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
 
 /* Tailles de page proposées sous le tableau. Le choix est mémorisé en local
    (clé tr4de_trades_page_size). */
@@ -76,6 +80,9 @@ const HIDDEN_WHEN_EMBEDDED = ["entryDate", "exitDate", "pnlPct", "weekday", "acc
  */
 function CheckChip({ label, color, checked, onClick }) {
   const ink = checked ? (color || T.text) : T.textSub;
+  /* La coche s'adapte à l'aplat : les teintes de tag sont les principales de la
+     charte, et un blanc figé disparaît sur les plus claires. */
+  const glyph = checked && color && luminance(color) > 0.45 ? T.text : T.onSolid;
   return (
     <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onClick}
       style={{
@@ -92,7 +99,7 @@ function CheckChip({ label, color, checked, onClick }) {
         boxShadow: checked ? "none" : `inset 0 0 0 1.5px ${HAIRLINE}`,
         transition:"background var(--dur-fast) var(--ease-out)",
       }}>
-        {checked && <LucideCheck size={11} strokeWidth={3} color={T.onSolid} />}
+        {checked && <LucideCheck size={11} strokeWidth={3} color={glyph} />}
       </span>
       <span style={{fontSize:12,fontWeight:checked?600:500,color:ink}}>{label}</span>
     </button>
@@ -525,31 +532,31 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     : (selected ? [selected] : []);
 
   const allEmotionTags = [
-    { id: "fomo", label: "FOMO", color: "#C94F4F" },
-    { id: "revenge", label: "Vengeance", color: "#C94F4F" },
-    { id: "overconfident", label: "Trop confiant", color: "#D4A574" },
-    { id: "hesitation", label: "Hésitation", color: "#D4A574" },
-    { id: "calm", label: "Calme & focus", color: "#4A9D6F" },
-    { id: "followed", label: "Plan suivi", color: "#4A9D6F" },
-    { id: "boredom", label: "Trade ennui", color: "#5B7EC9" },
-    { id: "earlyexit", label: "Sortie anticipée", color: "#8B6BB6" }
+    { id: "fomo", label: "FOMO", color: TAG_COLORS.red },
+    { id: "revenge", label: "Vengeance", color: TAG_COLORS.red },
+    { id: "overconfident", label: "Trop confiant", color: TAG_COLORS.orange },
+    { id: "hesitation", label: "Hésitation", color: TAG_COLORS.orange },
+    { id: "calm", label: "Calme & focus", color: TAG_COLORS.green },
+    { id: "followed", label: "Plan suivi", color: TAG_COLORS.green },
+    { id: "boredom", label: "Trade ennui", color: TAG_COLORS.blue },
+    { id: "earlyexit", label: "Sortie anticipée", color: TAG_COLORS.purple }
   ];
 
   // Type d'entrée (ICT/SMC) — multi-sélection.
   const allEntryTags = [
-    { id: "fvg", label: "FVG", color: "#5B7EC9" },
-    { id: "ifvg", label: "IFVG", color: "#4A9D6F" },
-    { id: "ob", label: "OB", color: "#8B6BB6" },
-    { id: "rejectionblock", label: "RB", color: "#D4A574" }
+    { id: "fvg", label: "FVG", color: TAG_COLORS.blue },
+    { id: "ifvg", label: "IFVG", color: TAG_COLORS.green },
+    { id: "ob", label: "OB", color: TAG_COLORS.purple },
+    { id: "rejectionblock", label: "RB", color: TAG_COLORS.orange }
   ];
 
   // Liquidité ciblée (ICT/SMC) — multi-sélection.
   const allLiquidityTags = [
-    { id: "pdhpdl", label: "PDH/PDL", color: "#5B7EC9" },
-    { id: "equalhl", label: "Equal Highs/Lows", color: "#4A9D6F" },
-    { id: "asianhl", label: "Asian H/L", color: "#D4A574" },
-    { id: "sessionhl", label: "Session H/L", color: "#8B6BB6" },
-    { id: "trendline", label: "Trendline", color: "#C94F4F" }
+    { id: "pdhpdl", label: "PDH/PDL", color: TAG_COLORS.blue },
+    { id: "equalhl", label: "Equal Highs/Lows", color: TAG_COLORS.green },
+    { id: "asianhl", label: "Asian H/L", color: TAG_COLORS.orange },
+    { id: "sessionhl", label: "Session H/L", color: TAG_COLORS.purple },
+    { id: "trendline", label: "Trendline", color: TAG_COLORS.red }
   ];
 
   // Questions de la checklist Oui/Non du panneau détail (remplace direction + horaires)
@@ -581,7 +588,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     const total = pos + neg;
     if (total === 0) return null;
     const score = Math.round((pos / total) * 10);
-    const color = score >= 7 ? T.green : score >= 4 ? "#F97316" : T.red;
+    const color = score >= 7 ? TAG_COLORS.green : score >= 4 ? TAG_COLORS.orange : TAG_COLORS.red;
     return { score, color };
   };
 
@@ -690,14 +697,14 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const toggleLiquidityTag = (selectedTrade, tagId) => toggleCloudTag(setTradeLiquidityTags, selectedTrade, tagId);
 
   const allErrorTags = [
-    { id: "poorentry", label: "Mauvaise entrée", color: "#C94F4F" },
-    { id: "poorexit", label: "Mauvaise sortie", color: "#C94F4F" },
-    { id: "nosltp", label: "Pas de SL/TP", color: "#D4A574" },
-    { id: "overleveraged", label: "Sur-leveragé", color: "#D4A574" },
-    { id: "ignoredsignal", label: "Signaux ignorés", color: "#8B6BB6" },
-    { id: "badtiming", label: "Mauvais timing", color: "#C94F4F" },
-    { id: "slttoosmall", label: "SL trop petite", color: "#D4A574" },
-    { id: "wronganalysis", label: "Mauvaise analyse", color: "#8B6BB6" }
+    { id: "poorentry", label: "Mauvaise entrée", color: TAG_COLORS.red },
+    { id: "poorexit", label: "Mauvaise sortie", color: TAG_COLORS.red },
+    { id: "nosltp", label: "Pas de SL/TP", color: TAG_COLORS.orange },
+    { id: "overleveraged", label: "Sur-leveragé", color: TAG_COLORS.orange },
+    { id: "ignoredsignal", label: "Signaux ignorés", color: TAG_COLORS.purple },
+    { id: "badtiming", label: "Mauvais timing", color: TAG_COLORS.red },
+    { id: "slttoosmall", label: "SL trop petite", color: TAG_COLORS.orange },
+    { id: "wronganalysis", label: "Mauvaise analyse", color: TAG_COLORS.purple }
   ];
 
   // ✅ Sync depuis Supabase (notes/emotions/errors): hook = source de vérité.
@@ -1129,62 +1136,13 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       )}
 
       {/* MODAL CONFIG COLONNES — apparaît centrée devant l'écran avec backdrop. */}
-      {columnsMenuOpen && typeof document !== "undefined" && ReactDOM.createPortal(
-        <div
-          {...backdropDismiss(() => setColumnsMenuOpen(false))}
-          style={{
-            position: "fixed", inset: 0, zIndex: 1000,
-            background: "transparent",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16, animation: "fadeIn .15s ease",
-          }}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            role="dialog" aria-modal="true"
-            style={{
-              width: "min(560px, 100%)", maxHeight: "min(80vh, 720px)",
-              background: T.white, borderRadius: 14,
-              boxShadow: "var(--elev-overlay)",
-              display: "flex", flexDirection: "column", overflow: "hidden",
-              fontFamily: "var(--font-sans)",
-              animation: "scaleIn var(--dur-modal) var(--ease-out)",
-            }}>
-            <style>{`
-              @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-              @keyframes scaleIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-            `}</style>
-            <div style={{
-              padding: "18px 22px 14px", display: "flex", alignItems: "center", gap: 12,
-              borderBottom: `1px solid ${T.border}`,
-            }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>
-                  Colonnes du tableau
-                </div>
-                <div style={{ fontSize: 12, color: T.textMut, marginTop: 2 }}>
-                  Coche les catégories à afficher dans le tableau des trades.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setColumnsMenuOpen(false)}
-                aria-label="Fermer"
-                style={{
-                  marginLeft: "auto", width: 30, height: 30, borderRadius: "var(--radius-card)",
-                  border: "none", background: "transparent", color: T.textSub, cursor: "pointer",
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = T.bg; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                <LucideX size={16} strokeWidth={1.75} />
-              </button>
-            </div>
-            <div style={{
-              padding: "14px 16px", overflowY: "auto",
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 4,
-            }}>
+      {columnsMenuOpen && (
+        <DAModal
+          title="Colonnes du tableau"
+          onClose={() => setColumnsMenuOpen(false)}
+          width={560}
+          maxHeight="min(80vh, 720px)"
+          bodyStyle={{ padding: "6px 16px 14px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4 }}>
               {TRADE_COLUMN_IDS.map(id => {
                 const labelMap = {
                   asset: t("trades.colAsset"), side: t("trades.colSide"),
@@ -1219,10 +1177,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                   </label>
                 );
               })}
-            </div>
-          </div>
-        </div>,
-        document.body
+        </DAModal>
       )}
 
       {/* BARRE DE FILTRES — libellés à 40 % d'opacité, hors carte, retrait de
@@ -1287,16 +1242,30 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
         {/* LEFT - TRADES TABLE.
             Carte de la maquette : coins 12, ombre très douce, PAS de bordure —
             la séparation des lignes se fait par l'espace, pas par des filets. */}
-        <div ref={tradesMainRef} className="tr4de-trades-main" style={{...CARD,flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,display:"flex",flexDirection:"column",maxHeight:"calc(100vh - 200px)",padding:16,gap:12}}>
+        <div ref={tradesMainRef} className="tr4de-trades-main" style={{...CARD,flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,display:"flex",flexDirection:"column",maxHeight:isMobile?"none":"calc(100vh - 200px)",padding:isMobile?10:16,gap:12}}>
 
-          <div className="tr4de-trades-scroll" style={{overflowX:"auto",overflowY:"auto",overscrollBehavior:"contain",flex:1,minHeight:0}}>
+          {/* Sur téléphone, c'est la PAGE qui défile — pas un cadre interne.
+              Un conteneur à défilement propre y créerait deux zones
+              concurrentes : le doigt ne saurait pas laquelle il fait bouger, et
+              la barre d'onglets masquerait la fin de la liste sans qu'on puisse
+              l'atteindre. */}
+          <div className="tr4de-trades-scroll" style={{overflowX:isMobile?"visible":"auto",overflowY:isMobile?"visible":"auto",overscrollBehavior:"contain",flex:1,minHeight:0}}>
             {/* `table-layout: fixed` : sans lui, chaque colonne s'élargissait à la
                 taille de son contenu (`max-content`), et l'écart entre deux
                 intitulés changeait d'une colonne à l'autre — et d'un filtre à
                 l'autre. Les largeurs déclarées sur les `th` font désormais loi,
                 donc l'espacement est le même partout. */}
-            <table style={{tableLayout:"fixed",width:"max-content",minWidth:"100%",borderCollapse:"separate",borderSpacing:"0 8px",fontSize:12,fontFamily:"var(--font-sans)"}}>
-              <thead style={{position:"sticky",top:0,background:T.white,zIndex:10}}>
+            {/* `table-layout: fixed` + `width: max-content` font vivre le tableau
+                de bureau. Sur téléphone les rangées sont des cartes pleine
+                largeur (cf. le rendu tactile plus bas) : la table reprend une
+                largeur de 100 % et une répartition automatique, sinon les
+                largeurs de colonnes déclarées sur les `th` continueraient de
+                s'appliquer à une cellule unique et rouvriraient le défilement
+                horizontal qu'on vient de supprimer. */}
+            <table style={{tableLayout:isMobile?"auto":"fixed",width:isMobile?"100%":"max-content",minWidth:"100%",borderCollapse:"separate",borderSpacing:"0 8px",fontSize:12,fontFamily:"var(--font-sans)"}}>
+              {/* L'en-tête nomme dix-sept colonnes qui n'existent plus en
+                  tactile : on le retire au lieu de le laisser flotter. */}
+              <thead style={{position:"sticky",top:0,background:T.white,zIndex:10,display:isMobile?"none":undefined}}>
                 <tr
                   style={{borderBottom:`1px solid ${T.border}`}}
                   onDragOver={(e) => {
@@ -1349,7 +1318,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                                 setSelectedIds(new Set());
                               }
                             }}
-                            style={{cursor:"pointer",width:14,height:14,accentColor:"#0D0D0D",margin:0,display:"block",verticalAlign:"middle"}}
+                            style={{cursor:"pointer",width:14,height:14,accentColor:T.text,margin:0,display:"block",verticalAlign:"middle"}}
                             onClick={(e)=>e.stopPropagation()}
                           />
                         )}
@@ -1559,6 +1528,99 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                   const hoverBg = "var(--color-hover-bg, #F0F0F0)";
                   const openBg = "var(--color-hover-bg, #F0F0F0)";
 
+                  /* ─── Rendu tactile ────────────────────────────────────────
+                     Dix-sept colonnes ne tiennent pas sur 375 px. La réponse
+                     habituelle — un défilement horizontal de 640 px de large —
+                     est un tableau de bureau qu'on regarde par le trou d'une
+                     serrure : on ne peut pas comparer deux lignes, on perd la
+                     colonne qui identifie le trade dès le premier glissé, et le
+                     geste horizontal entre en conflit avec le défilement de la
+                     page.
+
+                     Une ligne devient donc une CARTE, et l'on choisit : de quel
+                     instrument il s'agit, dans quel sens, ce que ça a rapporté,
+                     et quand. Le reste — frais, session, stratégie, prix
+                     d'entrée et de sortie — est à un appui, dans le panneau de
+                     détail qui existe déjà et qui s'ouvre en plein écran sur
+                     téléphone.
+
+                     Toutes les valeurs sont celles déjà calculées plus haut
+                     pour le tableau : la carte ne recalcule rien, elle ne peut
+                     donc pas diverger du bureau. */
+                  if (isMobile) {
+                    const qty = t._groupQty != null && t._groupQty > 0 ? t._groupQty : qtyOf(t);
+                    const rTxt = fmtR(rMultiple({ ...t, pnl: rowNet }));
+                    const tone = pnlColorFor(rowNet);
+                    return (
+                      <tr key={i}>
+                        <td
+                          colSpan={99}
+                          onClick={() => {
+                            const isSelectedDetail = selectedTrade && tradeKey(selectedTrade) === tKey;
+                            setSelectedTrade(isSelectedDetail ? null : t);
+                          }}
+                          style={{
+                            padding: 12,
+                            borderRadius: 12,
+                            background: isOpen || isChecked ? openBg : T.white,
+                            cursor: "pointer",
+                            /* Le retrait d'appui vit sur la cellule, pas sur la
+                               rangée : un `<tr>` n'accepte ni rayon ni
+                               transformation. */
+                            transition: "background .12s ease",
+                            paddingLeft: isChild ? 26 : 12,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                <SymbolCell symbol={t.symbol} size={28} nameSize={14} inline />
+                                <DirectionTag direction={t.direction} />
+                                {isGroupParent && groupSize > 1 && (
+                                  /* Un lot d'exécutions se signale par son
+                                     compte : sans lui, deux cartes identiques
+                                     s'expliqueraient mal. */
+                                  <span style={{
+                                    fontSize: 11, fontWeight: 500, color: T.textMut,
+                                    background: FIELD_BG, borderRadius: 999, padding: "1px 7px",
+                                    flexShrink: 0,
+                                  }}>
+                                    ×{groupSize}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{
+                                fontSize: 12, color: T.textMut, fontVariantNumeric: "tabular-nums",
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              }}>
+                                {openDate}
+                                {openTime !== "—" && ` · ${openTime}`}
+                                {closeTime !== "—" && openTime !== "—" && ` → ${closeTime}`}
+                                {qty != null && ` · ${qty} lot${qty > 1 ? "s" : ""}`}
+                              </div>
+                            </div>
+
+                            {/* Le résultat à droite, en gros : c'est la seule
+                                chose qu'on cherche en faisant défiler une liste
+                                de trades. Le R sous lui, plus discret — c'est
+                                une lecture de second temps. */}
+                            <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                              <div style={{
+                                fontSize: 16, fontWeight: 600, color: tone,
+                                fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em",
+                              }}>
+                                {rowNet >= 0 ? "+" : ""}{fmt(rowNet, false)}
+                              </div>
+                              <div style={{ fontSize: 12, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                                {rTxt} · {ret > 0 ? "+" : ""}{ret}%
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return (
                     <tr
                       key={i}
@@ -1622,7 +1684,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                                   checked={isChecked}
                                   onChange={() => {}}
                                   onClick={onCheckboxClick}
-                                  style={{cursor:"pointer",width:14,height:14,accentColor:"#0D0D0D",margin:0,display:"block",verticalAlign:"middle",flexShrink:0}}
+                                  style={{cursor:"pointer",width:14,height:14,accentColor:T.text,margin:0,display:"block",verticalAlign:"middle",flexShrink:0}}
                                 />
                               ) : null}
                             </span>
@@ -1868,8 +1930,12 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                   </div>
 
                   {/* UNITÉ DE TEMPS (timeframe d'analyse) — sélection unique.
-                      Piste `segmentTrack` et pastille flottante : le sélecteur
-                      segmenté de la DA. */}
+                      Le seul segmenté qui garde sa piste grise et sa mise en
+                      page locale, pour deux raisons : il vit DANS la carte
+                      blanche du panneau (sans piste, le bloc de l'actif serait
+                      blanc sur blanc), et ses items sont à largeur égale
+                      (`flex: 1`), ce que `PeriodPills` ne fait pas — elle
+                      dimensionne chaque pastille sur son libellé. */}
                   <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
                     <FieldLabel>Unité de temps</FieldLabel>
                     <div role="radiogroup" aria-label="Unité de temps" style={{display:"flex",gap:2,padding:3,background:T.segmentTrack,borderRadius:999}}>
@@ -2275,58 +2341,50 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       </div>
 
       {/* CONFIRM DELETE MODAL */}
-      {confirmDeleteOpen && typeof document !== "undefined" && ReactDOM.createPortal(
-        <div
-          {...backdropDismiss(() => !isDeletingTrades && setConfirmDeleteOpen(false))}
-          style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font-sans)",padding:"24px"}}
-        >
-          <div
-            onClick={(e)=>e.stopPropagation()}
-            style={{background:T.white,borderRadius:14,maxWidth:420,width:"100%",boxShadow:"var(--elev-overlay)",border:`1px solid ${T.border}`,overflow:"hidden"}}
-          >
-            <div style={{padding:"20px 24px 8px",display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:36,height:36,borderRadius:10,background:T.redBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <LucideTrash2 size={16} strokeWidth={1.75} color={T.red}/>
-              </div>
-              <h3 style={{fontSize:15,fontWeight:600,color:T.text,margin:0,letterSpacing:-0.1}}>
-                {t("trades.deleteConfirm").replace("{n}", String(selectedIds.size)).replace("{s}", selectedIds.size > 1 ? "s" : "")}
-              </h3>
-            </div>
-            <div style={{padding:"4px 24px 20px",fontSize:13,color:T.textSub,lineHeight:1.5}}>
-              {t("trades.deleteWarning")}
-            </div>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end",padding:"14px 24px",borderTop:`1px solid ${T.border}`,background:"var(--color-hover-bg, #F0F0F0)"}}>
-              <button
-                onClick={()=>setConfirmDeleteOpen(false)}
-                disabled={isDeletingTrades}
-                style={{padding:"0 16px",height:36,borderRadius:"var(--radius-card)",border:`1px solid ${T.border}`,background:T.white,color:T.text,fontSize:13,fontWeight:500,cursor:isDeletingTrades?"not-allowed":"pointer",fontFamily:"inherit",opacity:isDeletingTrades?0.5:1}}
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={async ()=>{
-                  setIsDeletingTrades(true);
-                  try {
-                    const tradesToDelete = filteredTrades.filter(t => selectedIds.has(tradeKey(t)));
-                    for (const t of tradesToDelete) {
-                      if (onDeleteTrade) await onDeleteTrade(t);
-                    }
-                    setSelectedIds(new Set());
-                  } catch (e) { console.error("delete trades failed:", e); }
-                  finally {
-                    setIsDeletingTrades(false);
-                    setConfirmDeleteOpen(false);
+      {confirmDeleteOpen && (
+        <DAModal
+          title={t("trades.deleteConfirm").replace("{n}", String(selectedIds.size)).replace("{s}", selectedIds.size > 1 ? "s" : "")}
+          onClose={() => { if (!isDeletingTrades) setConfirmDeleteOpen(false); }}
+          width={420}
+          draggable={false}
+          scrim
+          footer={<>
+            <DAPillButton onClick={()=>setConfirmDeleteOpen(false)} disabled={isDeletingTrades}>
+              {t("common.cancel")}
+            </DAPillButton>
+            <DAPillButton
+              variant="primary"
+              disabled={isDeletingTrades}
+              style={isDeletingTrades ? undefined : {background:T.red,color:T.onSolid}}
+              onClick={async ()=>{
+                setIsDeletingTrades(true);
+                try {
+                  const tradesToDelete = filteredTrades.filter(t => selectedIds.has(tradeKey(t)));
+                  for (const t of tradesToDelete) {
+                    if (onDeleteTrade) await onDeleteTrade(t);
                   }
-                }}
-                disabled={isDeletingTrades}
-                style={{padding:"0 16px",height:36,borderRadius:"var(--radius-card)",border:`1px solid ${T.red}`,background:T.red,color:"#FFFFFF",fontSize:13,fontWeight:600,cursor:isDeletingTrades?"not-allowed":"pointer",fontFamily:"inherit",opacity:isDeletingTrades?0.7:1}}
-              >
-                {isDeletingTrades ? t("trades.deleting") : t("common.delete")}
-              </button>
+                  setSelectedIds(new Set());
+                } catch (e) { console.error("delete trades failed:", e); }
+                finally {
+                  setIsDeletingTrades(false);
+                  setConfirmDeleteOpen(false);
+                }
+              }}>
+              {isDeletingTrades ? t("trades.deleting") : t("common.delete")}
+            </DAPillButton>
+          </>}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:36,height:36,borderRadius:10,background:T.redBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <LucideTrash2 size={16} strokeWidth={1.75} color={T.red}/>
+            </div>
+            <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>
+              {t("trades.deleteConfirm").replace("{n}", String(selectedIds.size)).replace("{s}", selectedIds.size > 1 ? "s" : "")}
             </div>
           </div>
-        </div>,
-        document.body
+          <div style={{fontSize:13,color:T.text,opacity:0.6,lineHeight:1.55}}>
+            {t("trades.deleteWarning")}
+          </div>
+        </DAModal>
       )}
 
       {/* BOTTOM ACTION BAR (visible quand au moins 1 trade selectionne) */}
@@ -2348,7 +2406,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           gap:14,
           fontFamily:"var(--font-sans)",
           fontSize:13,
-          border:`1px solid ${T.border}`,
+          border:"none",
           boxShadow:"var(--elev-overlay)",
           zIndex:100,
         }}>
@@ -2380,7 +2438,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
               style={{
                 background:T.white,
                 color:T.text,
-                border:`1px solid ${T.border}`,
+                border:"none",
                 borderRadius:10,
                 boxShadow:"var(--elev-overlay)",
                 padding:4,
@@ -2412,7 +2470,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                     onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)"}}
                     onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
                   >
-                    <span style={{width:8,height:8,borderRadius:"50%",background:s.color||"#16A34A"}}/>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:s.color||STRATEGY_COLOR_DEFAULT}}/>
                     <span style={{flex:1}}>{s.name}</span>
                     {(strategyTradeCounts[s.id] || 0) > 0 && (
                       <span style={{fontSize:11,color:T.textMut,fontWeight:500}}>{strategyTradeCounts[s.id]}</span>
@@ -2645,8 +2703,8 @@ function TradesPagination({ pageIndex, pageCount, pageSize, total, onPage, onPag
           value={pageSize}
           onChange={(e) => onPageSize(Number(e.target.value))}
           style={{
-            padding: "4px 8px", borderRadius: 8, border: `1px solid ${T.border}`,
-            background: T.white, color: T.text, fontSize: 12, fontFamily: "inherit",
+            padding: "4px 8px", borderRadius: 8, border: "none",
+            background: DA_FIELD_BG, color: T.text, fontSize: 12, fontFamily: "inherit",
             cursor: "pointer", outline: "none",
           }}
         >

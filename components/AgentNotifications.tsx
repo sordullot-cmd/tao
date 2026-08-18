@@ -200,7 +200,7 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
             right: -200,
             width: 320,
             background: T.white,
-            border: `1px solid ${T.border}`,
+            border: "none",
             borderRadius: "var(--radius-card)",
             boxShadow: "var(--elev-overlay)",
             zIndex: 1000,

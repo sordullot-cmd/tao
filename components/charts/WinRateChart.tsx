@@ -47,7 +47,7 @@ export function WinRateChart({ trades }: WinRateChartProps) {
       <div
         style={{
           padding: 24,
-          background: "var(--color-bg-subtle, #FAFAFA)",
+          background: "var(--color-bg-subtle, #F1F2F4)",
           borderRadius: 12,
           textAlign: "center",
           color: "var(--color-text-muted, #6B6B6B)",
@@ -97,9 +97,9 @@ export function WinRateChart({ trades }: WinRateChartProps) {
           <Line
             type="monotone"
             dataKey="winRate"
-            stroke="var(--color-green, #16A34A)"
+            stroke="var(--color-green, #58CC02)"
             strokeWidth={3}
-            dot={{ fill: "var(--color-green, #16A34A)", r: 4 }}
+            dot={{ fill: "var(--color-green, #58CC02)", r: 4 }}
             activeDot={{ r: 6 }}
             name="Win Rate %"
           />

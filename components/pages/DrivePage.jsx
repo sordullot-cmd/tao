@@ -14,6 +14,9 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { hasFinePointer } from "@/lib/ui/pointer";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { Modal as DAModal, PillButton as DAPillButton, Field as DAField, Input as DAInput, FIELD_FOCUS_RING as DA_FOCUS_RING } from "@/components/ui/form";
 
 // Palette centralisée (valeurs = var(--color-*), dark-aware). Toutes les clés
 // utilisées ici (white, border, border2, text, textSub, textMut, accent,
@@ -596,51 +599,28 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirmer", cancelLabel
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onConfirm, onCancel]);
 
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed", inset: 0, zIndex: 3000,
-        background: "rgba(13,13,13,0.32)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%", maxWidth: 380, background: T.white,
-          border: `1px solid ${T.border}`, borderRadius: 14,
-          boxShadow: "var(--elev-overlay)", padding: 20,
-          fontFamily: "inherit",
-        }}
-      >
-        <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 8 }}>{title}</div>
-        {message && <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.5, marginBottom: 18 }}>{message}</div>}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{ padding: "8px 16px", height: 36, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            autoFocus
-            onClick={onConfirm}
-            style={{ padding: "8px 16px", height: 36, borderRadius: 999, background: danger ? T.red : T.text, border: `1px solid ${danger ? T.red : T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+  /* Voile assombri et fenetre fixe : une confirmation attend une reponse,
+     il n y a rien a lire dessous ni nulle part ou la pousser. */
+  return (
+    <DAModal
+      title={title}
+      onClose={onCancel}
+      width={400}
+      draggable={false}
+      scrim
+      footer={<>
+        <DAPillButton onClick={onCancel}>{cancelLabel}</DAPillButton>
+        <DAPillButton
+          autoFocus
+          variant="primary"
+          style={danger ? { background: T.red, color: "#fff" } : undefined}
+          onClick={onConfirm}>
+          {confirmLabel}
+        </DAPillButton>
+      </>}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>
+      {message && <div style={{ fontSize: 13, color: T.text, opacity: 0.6, lineHeight: 1.55 }}>{message}</div>}
+    </DAModal>
   );
 }
 
@@ -671,36 +651,20 @@ function PromptDialog({
 
   const submit = () => onSubmit?.(value);
 
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed", inset: 0, zIndex: 3000,
-        background: "rgba(13,13,13,0.32)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%", maxWidth: 400, background: T.white,
-          border: `1px solid ${T.border}`, borderRadius: 14,
-          boxShadow: "var(--elev-overlay)", padding: 20,
-          fontFamily: "inherit",
-        }}
-      >
-        <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 12 }}>{title}</div>
-        {label && (
-          <label style={{ display: "block", fontSize: 11, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
-            {label}
-          </label>
-        )}
-        <input
+  return (
+    <DAModal
+      title={title}
+      onClose={onCancel}
+      width={420}
+      draggable={false}
+      scrim
+      footer={<>
+        <DAPillButton onClick={onCancel}>{cancelLabel}</DAPillButton>
+        <DAPillButton variant="primary" onClick={submit}>{confirmLabel}</DAPillButton>
+      </>}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>
+      <DAField label={label}>
+        <DAInput
           ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -709,32 +673,9 @@ function PromptDialog({
             if (e.key === "Enter") { e.preventDefault(); submit(); }
           }}
           placeholder={placeholder}
-          style={{
-            width: "100%", boxSizing: "border-box", padding: "9px 11px",
-            border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 13,
-            outline: "none", fontFamily: "inherit", color: T.text, background: T.white,
-            marginBottom: 18,
-          }}
         />
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            type="button"
-            onClick={onCancel}
-            style={{ padding: "8px 16px", height: 36, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            style={{ padding: "8px 16px", height: 36, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+      </DAField>
+    </DAModal>
   );
 }
 
@@ -1128,7 +1069,7 @@ function ProjectsCanvas({
                 }}
                 onBlur={submitCreate}
                 placeholder="Nom du projetâ€¦"
-                style={{ padding: "6px 8px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text }}
+                style={{ padding: "6px 8px", border: "none", borderRadius: 6, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: DA_FIELD_BG,}}
               />
             </div>
           )}
@@ -1222,7 +1163,7 @@ function ProjectContextMenu({ cardRect, project, isOwner, onClose, onOpen, onRen
       onContextMenu={(e) => e.preventDefault()}
       style={{
         position: "fixed", left, top, width: W,
-        background: T.white, border: `1px solid ${T.border}`,
+        background: T.white, border: "none",
         borderRadius: 10, boxShadow: "var(--elev-overlay)",
         padding: 4, zIndex: 2000,
         fontFamily: "inherit",
@@ -1375,9 +1316,9 @@ function ProjectCard({
               }}
               onBlur={() => onSubmitRename?.(draftName)}
               style={{
-                flex: 1, padding: "3px 6px", border: `1px solid ${T.text}`,
-                borderRadius: "var(--radius-field)", fontSize: 13, fontWeight: 600,
-                outline: "none", fontFamily: "inherit", color: T.text, background: T.white, minWidth: 0,
+                flex: 1, padding: "3px 8px", border: "none", boxShadow: DA_FOCUS_RING,
+                borderRadius: 999, fontSize: 13, fontWeight: 600,
+                outline: "none", fontFamily: "inherit", color: T.text, background: DA_FIELD_BG, minWidth: 0,
               }}
             />
           ) : (
@@ -2595,9 +2536,9 @@ function DriveToolbar({ recordingAudio, onAddImage, onAddNote, onAddLink, onAddV
           cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700,
           display: "inline-flex", alignItems: "center", gap: 8,
           boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-          transition: "transform 120ms, box-shadow 120ms",
+          transition: "transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out)",
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 10px rgba(0,0,0,0.18)"; }}
+        onMouseEnter={(e) => { if (!hasFinePointer()) return; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 10px rgba(0,0,0,0.18)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.12)"; }}
       >
         <ImageIcon size={20} strokeWidth={2} />
@@ -2657,7 +2598,7 @@ function ContextMenuPortal({ x, y, cardRect, onClose, children }) {
       onContextMenu={(e) => e.preventDefault()}
       style={{
         position: "fixed", left, top, zIndex: 2000,
-        background: T.white, border: `1px solid ${T.border}`,
+        background: T.white, border: "none",
         borderRadius: 10, boxShadow: "var(--elev-overlay)",
         padding: 4, minWidth: 220,
         fontFamily: "var(--font-sans)",
@@ -3131,10 +3072,15 @@ function DocEditor({ doc, onClose, onSaved, onRenamed }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           background: T.white, borderRadius: "var(--radius-card)", width: "100%", maxWidth: 900, height: "90vh",
+          /* Couche flottante : c'est l'ombre qui la detache du travail en
+             dessous, jamais un contour ni un voile sombre. */
+          boxShadow: "var(--elev-overlay)", border: "none",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}
       >
-        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Pas de filet sous l'en-tete : le nom du document et la surface
+            d'ecriture se separent par l'espace. */}
+        <div style={{ padding: "12px 16px 10px", display: "flex", alignItems: "center", gap: 10 }}>
           <FileText size={14} strokeWidth={1.75} color={T.blue} />
           <input
             value={name}
@@ -3244,15 +3190,15 @@ function ShareModal({ project, onClose }) {
         </div>
 
         <button onClick={generateLink} disabled={creating}
-          style={{ padding: "10px 14px", borderRadius: "var(--radius-card)", background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          style={{ padding: "10px 16px", borderRadius: 999, background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
           <Share2 size={14} strokeWidth={1.75} /> {creating ? "GÃ©nÃ©rationâ€¦" : "GÃ©nÃ©rer un lien"}
         </button>
 
         {link && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: "var(--color-hover-bg, #F0F0F0)" }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 6px 6px 14px", border: "none", borderRadius: 999, background: DA_FIELD_BG }}>
             <input readOnly value={link} style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 11, fontFamily: "monospace", color: T.text }} />
             <button onClick={copy}
-              style={{ padding: "6px 10px", borderRadius: 6, background: copied ? T.green : T.text, color: "#fff", border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              style={{ padding: "6px 12px", borderRadius: 999, background: copied ? T.green : T.text, color: "#fff", border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               {copied ? <><Check size={11} /> CopiÃ©</> : <><Copy size={11} /> Copier</>}
             </button>
           </div>
@@ -3411,27 +3357,12 @@ function MembersModal({ project, currentUserId, onClose }) {
 /* â”€â”€â”€ Modal shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function ModalShell({ title, onClose, children }) {
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        background: "transparent",
-        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: T.white, borderRadius: "var(--radius-card)", width: "100%", maxWidth: 460, maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
-      >
-        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{title}</div>
-          <button onClick={onClose} aria-label="Fermer" title="Fermer" style={{ width: 28, height: 28, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: 6 }}>
-            <X size={14} strokeWidth={1.75} />
-          </button>
-        </div>
-        <div style={{ padding: 16, overflowY: "auto" }}>{children}</div>
-      </div>
-    </div>
+    <DAModal open title={title} onClose={onClose} width={460} maxHeight="85vh">
+      {/* Le titre n'est plus dans le chrome (la DA n'y met qu'une poignee et les
+          actions) : il ouvre le contenu, la ou on le lit avant le formulaire. */}
+      <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{title}</div>
+      {children}
+    </DAModal>
   );
 }
 

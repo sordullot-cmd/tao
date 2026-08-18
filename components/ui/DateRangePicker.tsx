@@ -254,7 +254,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
         maxHeight={520}
         style={{
           background: "var(--color-card-bg, #FFFFFF)",
-          border: "1px solid var(--color-border)",
+          border: "none",
           borderRadius: "var(--radius-modal)",
           boxShadow: "var(--elev-overlay)",
           flexDirection: "row",

@@ -26,7 +26,6 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import ReactDOM from "react-dom";
 import {
   Plus, X, Trash2, Pencil, Target, Flag, ListChecks, Gift, Users,
   Check, ChevronLeft, ChevronRight, Wand2, Trophy, Route, Calendar, Quote,
@@ -36,13 +35,16 @@ import { useUndo } from "@/lib/contexts/UndoContext";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { Field as DAField, Modal as DAModal, FIELD as DA_FIELD } from "@/components/ui/form";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 export const BLUEPRINT_STORAGE_KEY = "tr4de_blueprints";
 export const BLUEPRINT_CLOUD_KEY = "blueprints";
 
 // `bg` local (#F5F5F5) = fond subtil, mappé sur la var de survol (thème sombre).
 // `violet` absent du T partagé → réutilise la var `purple` existante.
-const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)", violet: "var(--color-purple, #8B5CF6)" };
+const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)", violet: "var(--color-purple, #CE82FF)" };
 
 // Les cinq clés de la motivation, dans l'ordre du wizard. Chaque entrée porte
 // son texte pédagogique (résumé fidèle de la vidéo) affiché en tête d'étape.
@@ -75,14 +77,14 @@ const PILLARS = [
 ];
 
 const CATEGORIES = [
-  { id: "perso",    label: "Personnel", color: "#EF4444" },
-  { id: "trading",  label: "Trading",   color: "#16A34A" },
-  { id: "sport",    label: "Sport",     color: "#F97316" },
+  { id: "perso",    label: "Personnel", color: "#FF4B4B" },
+  { id: "trading",  label: "Trading",   color: "#58CC02" },
+  { id: "sport",    label: "Sport",     color: "#FF9600" },
   { id: "career",   label: "Carrière",  color: "#64748B" },
-  { id: "learning", label: "Apprentissage", color: "#3B82F6" },
-  { id: "health",   label: "Santé",     color: "#06B6D4" },
+  { id: "learning", label: "Apprentissage", color: "#1CB0F6" },
+  { id: "health",   label: "Santé",     color: "#7AF0F2" },
   { id: "finance",  label: "Finances",  color: "#059669" },
-  { id: "creative", label: "Créatif",   color: "#8B5CF6" },
+  { id: "creative", label: "Créatif",   color: "#CE82FF" },
 ];
 const catById = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
 const getCat = (id) => catById[id] || CATEGORIES[0];
@@ -197,7 +199,7 @@ export default function BlueprintPage() {
       ) : list.length === 0 ? (
         <EmptyState onCreate={() => setWizard(emptyDraft())} />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: 12 }}>
           {list.map(bp => (
             <PlanCard key={bp.id} bp={bp} onOpen={() => setOpenId(bp.id)} onDelete={() => removePlan(bp.id)} />
           ))}
@@ -470,7 +472,7 @@ function MilestoneGroup({ milestone, items, reached, onToggle }) {
 
 function SectionHeader({ icon: Icon, color, title, subtitle }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: `1px solid ${T.border}` }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 8px" }}>
       <div style={{ width: 30, height: 30, borderRadius: "var(--radius-card)", background: `color-mix(in srgb, ${color} 8%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Icon size={16} strokeWidth={2} color={color} />
       </div>
@@ -532,7 +534,7 @@ function Wizard({ initial, onSave, onClose }) {
       </div>
 
       {/* Navigation */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24 }}>
         <button onClick={onClose} style={btnGhost()}>Annuler</button>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {step > 0 && <button onClick={back} style={btnGhost()}><ChevronLeft size={14} strokeWidth={2} /> Précédent</button>}
@@ -700,7 +702,7 @@ function StepRewards({ draft, setMilestones, set }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px", borderRadius: 10, background: T.amberBg, border: `1px solid color-mix(in srgb, ${T.amber} 35%, transparent)`, marginTop: 4 }}>
         <Trophy size={16} strokeWidth={2} color={T.amber} style={{ flexShrink: 0 }} />
         <input value={draft.finalReward} onChange={e => set({ finalReward: e.target.value })}
-          placeholder="Grande récompense à l'arrivée (ex. un week-end, un achat que je m'offre)" style={{ ...inputStyle(), flex: 1, padding: "7px 9px", background: T.white }} />
+          placeholder="Grande récompense à l'arrivée (ex. un week-end, un achat que je m'offre)" style={{ ...inputStyle(), flex: 1, padding: "7px 9px", background: DA_FIELD_BG }} />
       </div>
     </div>
   );
@@ -708,47 +710,41 @@ function StepRewards({ draft, setMilestones, set }) {
 
 /* ---------- Primitives UI ---------- */
 function Field({ label, hint, children, style }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 5, ...style }}>
-      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{label}</span>
-      {hint && <span style={{ fontSize: 11, color: T.textMut, marginTop: -2 }}>{hint}</span>}
-      {children}
-    </label>
-  );
+  /* Delegue a la brique commune (components/ui/form.jsx) : le site comptait
+     quatorze definitions locales de champ, chacune avec sa taille de libelle,
+     sa hauteur et son rayon. Le style vit la-bas, une seule fois. */
+  return <DAField label={label} hint={hint} style={style}>{children}</DAField>;
 }
 
+/**
+ * Assistant de création de plan : délègue à la modale de la DA.
+ *
+ * Le blocage du défilement du fond a été retiré avec la coque locale : le corps
+ * de la modale défile de lui-même, et geler `document.body` faisait sauter la
+ * page d'un cran à chaque ouverture (la barre de défilement disparaît, la
+ * largeur utile change).
+ */
 function Modal({ children, onClose, maxWidth = 600 }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [onClose]);
-  if (typeof document === "undefined") return null;
-  return ReactDOM.createPortal(
-    <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(13,13,13,0.42)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px 16px", overflowY: "auto", fontFamily: "var(--font-sans)" }}>
-      <div role="dialog" aria-modal="true" aria-label="Assistant de création de plan"
-        style={{ width: "100%", maxWidth, background: T.white, borderRadius: "var(--radius-modal)", padding: 22, boxShadow: "var(--elev-overlay)" }}>
-        {children}
-      </div>
-    </div>,
-    document.body,
+  return (
+    <DAModal title="Assistant de création de plan" onClose={onClose} width={maxWidth} bodyStyle={{ padding: 22 }}>
+      {children}
+    </DAModal>
   );
 }
 
+/* Delegue a la brique commune (components/ui/form.jsx) : aplat en pilule. */
 function inputStyle() {
-  return { width: "100%", boxSizing: "border-box", fontFamily: "inherit", fontSize: 13, color: T.text, padding: "9px 11px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, outline: "none" };
+  return { ...DA_FIELD };
 }
 function btnPrimary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: "var(--radius-card)", border: "none", background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 999, border: "none", background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnGhost() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.textSub, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnSoft() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.accentBg, color: T.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: "none", background: T.accentBg, color: T.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function iconBtnSm() {
-  return { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textMut, cursor: "pointer", flexShrink: 0, padding: 0 };
+  return { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: "none", background: DA_FIELD_BG, color: T.textMut, cursor: "pointer", flexShrink: 0, padding: 0 };
 }

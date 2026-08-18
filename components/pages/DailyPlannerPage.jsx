@@ -43,6 +43,7 @@ import {
 import { T } from "@/lib/ui/tokens";
 import { CARD, StepperPill, FIELD_BG } from "@/components/ui/da";
 import Popover from "@/components/ui/Popover";
+import { FIELD_BG as DA_FIELD_BG, WRITING_BG as DA_WRITING_BG, HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
 
 /* Surface secondaire (pastilles d'icône, champs, aplats internes). L'ancien
    `T.bg` local pointait sur le gris de survol pour ne pas être blanc ; la page
@@ -76,14 +77,14 @@ const topIconBtn = {
 };
 const pillBtn = {
   display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "7px 12px", minHeight: 32, borderRadius: 999,
-  border: `1px solid ${T.border}`, background: T.white, color: T.text,
+  padding: "7px 14px", minHeight: 32, borderRadius: 999,
+  border: "none", background: DA_FIELD_BG, color: T.text,
   fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
 };
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",
-  padding: "7px 12px", minHeight: 32, borderRadius: 999,
-  border: `1px solid ${T.border}`, background: T.white, color: T.text,
+  padding: "7px 14px", minHeight: 32, borderRadius: 999,
+  border: "none", background: DA_FIELD_BG, color: T.text,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 const primaryBtn = (small = false) => ({
@@ -575,7 +576,7 @@ export default function DailyPlannerPage() {
                   <div>
                     <input type="text" value={habitDraft.name} onChange={(e) => setHabitDraft({ ...habitDraft, name: e.target.value })}
                       placeholder="Nom de l'habitude" autoFocus
-                      style={{ width: "100%", boxSizing: "border-box", padding: "8px 2px", border: "none", borderBottom: `2px solid ${T.border}`, borderRadius: 0, fontSize: 16, fontWeight: 500, outline: "none", fontFamily: "inherit", color: T.text, background: "transparent" }} />
+                      style={{ width: "100%", boxSizing: "border-box", padding: "8px 2px", border: "none", borderRadius: 0, fontSize: 16, fontWeight: 500, outline: "none", fontFamily: "inherit", color: T.text, background: "transparent" }} />
                   </div>
 
                   {/* Icône — sélecteur en menu déroulant (style Calendar) */}
@@ -599,10 +600,10 @@ export default function DailyPlannerPage() {
                         gap={4}
                         matchAnchorWidth
                         maxHeight={260}
-                        style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)" }}
+                        style={{ background: T.white, border: "none", borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)" }}
                       >
                         <>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(34px, 1fr))", gap: 6 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(34px, 100%), 1fr))", gap: 6 }}>
                               {(() => {
                                 const previewName = habitDraft.name?.trim() || "";
                                 const AutoIco = autoIcon(previewName);
@@ -614,8 +615,8 @@ export default function DailyPlannerPage() {
                                       width: "100%", aspectRatio: "1 / 1",
                                       display: "flex", alignItems: "center", justifyContent: "center",
                                       borderRadius: 12,
-                                      border: `1px solid ${isAuto ? T.text : T.border}`,
-                                      background: isAuto ? T.text : T.white,
+                                      border: "none",
+                                      background: isAuto ? T.text : DA_FIELD_BG,
                                       color: isAuto ? T.textInverted : T.text,
                                       cursor: "pointer", padding: 0, position: "relative",
                                     }}>
@@ -634,14 +635,14 @@ export default function DailyPlannerPage() {
                                       width: "100%", aspectRatio: "1 / 1",
                                       display: "flex", alignItems: "center", justifyContent: "center",
                                       borderRadius: 12,
-                                      border: `1px solid ${selected ? T.text : T.border}`,
-                                      background: selected ? T.text : T.white,
+                                      border: "none",
+                                      background: selected ? T.text : DA_FIELD_BG,
                                       color: selected ? T.textInverted : T.text,
                                       cursor: "pointer", padding: 0,
                                       transition: "background .12s ease, border-color .12s ease",
                                     }}
                                     onMouseEnter={(e) => { if (!selected) { e.currentTarget.style.background = SURFACE; } }}
-                                    onMouseLeave={(e) => { if (!selected) { e.currentTarget.style.background = T.white; } }}>
+                                    onMouseLeave={(e) => { if (!selected) { e.currentTarget.style.background = DA_FIELD_BG; } }}>
                                     <IconCmp size={15} strokeWidth={1.75} />
                                   </button>
                                 );
@@ -660,7 +661,7 @@ export default function DailyPlannerPage() {
                       </label>
                       <TimeField value={habitDraft.time} onChange={(v) => setHabitDraft({ ...habitDraft, time: v })}
                         placeholder="Choisir l'heure"
-                        triggerStyle={{ width: "100%", boxSizing: "border-box", padding: "8px 14px", border: `1px solid ${T.border}`, borderRadius: 999, fontSize: 13, color: T.text, background: T.white, justifyContent: "space-between" }} />
+                        triggerStyle={{ width: "100%", boxSizing: "border-box", padding: "9px 14px", border: "none", borderRadius: 999, fontSize: 13, color: T.text, background: DA_FIELD_BG, justifyContent: "space-between" }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 11, fontWeight: 500, color: T.textSub, display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
@@ -668,7 +669,7 @@ export default function DailyPlannerPage() {
                       </label>
                       <input type="text" value={habitDraft.location} onChange={(e) => setHabitDraft({ ...habitDraft, location: e.target.value })}
                         placeholder="ex. Bureau, salon…"
-                        style={{ width: "100%", boxSizing: "border-box", padding: "8px 14px", border: `1px solid ${T.border}`, borderRadius: 999, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: T.white }} />
+                        style={{ width: "100%", boxSizing: "border-box", padding: "8px 14px", border: "none", borderRadius: 999, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: DA_FIELD_BG }} />
                     </div>
                   </div>
 
@@ -680,7 +681,7 @@ export default function DailyPlannerPage() {
                     <textarea value={habitDraft.description} onChange={(e) => setHabitDraft({ ...habitDraft, description: e.target.value })}
                       placeholder="Pourquoi cette habitude ? Comment la déclencher ?"
                       rows={3}
-                      style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: T.white, resize: "vertical", lineHeight: 1.5 }} />
+                      style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", border: "none", borderRadius: 10, fontSize: 13, outline: "none", fontFamily: "inherit", color: T.text, background: DA_WRITING_BG, resize: "vertical", lineHeight: 1.5 }} />
                   </div>
 
                   {/* Objectifs de l'année — liens optionnels (plusieurs possibles) */}
@@ -695,7 +696,7 @@ export default function DailyPlannerPage() {
                         const toggle = () => setHabitDraft({ ...habitDraft, attributes: active ? sel.filter(x => x !== c.id) : [...sel, c.id] });
                         return (
                           <button key={c.id} type="button" onClick={toggle}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: "none", boxShadow: active ? `inset 0 0 0 1px ${c.color}` : "none", background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : DA_FIELD_BG, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                             {active
                               ? <Check size={13} strokeWidth={2.5} color={c.color} />
                               : <CatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
@@ -713,7 +714,7 @@ export default function DailyPlannerPage() {
                 </div>
 
                 {/* Pied */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "14px 24px", borderTop: `1px solid ${T.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "14px 24px", borderTop: `1px solid ${DA_HAIRLINE}` }}>
                   <button onClick={closeHabitForm} style={ghostBtn()}>Annuler</button>
                   <button onClick={saveHabit} disabled={!habitDraft.name?.trim()}
                     style={{ ...primaryBtn(true), opacity: habitDraft.name?.trim() ? 1 : 0.5, cursor: habitDraft.name?.trim() ? "pointer" : "not-allowed" }}>
@@ -839,7 +840,7 @@ export default function DailyPlannerPage() {
                         background: done ? (color || T.green) : T.white,
                         cursor: "pointer",
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0, transition: "all .15s ease",
+                        flexShrink: 0, transition: "var(--tr-ui)",
                       }}>
                       {done && <Check size={11} strokeWidth={3} color={T.onSolid} />}
                     </button>
@@ -985,7 +986,7 @@ function HabitsChart({ habits, history }) {
                     ? "translate(calc(-100% - 14px), -50%)"
                     : "translate(14px, -50%)",
                   background: T.white, color: T.text,
-                  border: `1px solid ${T.border}`,
+                  border: "none",
                   borderRadius: 12, padding: "10px 12px",
                   fontSize: 11, lineHeight: 1.4,
                   minWidth: 170, maxWidth: 260,
@@ -1070,31 +1071,3 @@ function DailyStatCell({ label, value, subLabel, color }) {
   );
 }
 
-function Row({ done, text, onToggle, onDelete, accent }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
-      <button onClick={onToggle}
-        style={{ width: 18, height: 18, borderRadius: "var(--radius-field)", border: `1.5px solid ${done ? accent : T.border}`, background: done ? accent : T.white, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        {done && <Check size={11} strokeWidth={2.5} color={T.onSolid} />}
-      </button>
-      <div style={{ flex: 1, fontSize: 13, color: done ? T.textMut : T.text, textDecoration: done ? "line-through" : "none" }}>{text}</div>
-      <button onClick={onDelete} style={{ width: 22, height: 22, background: "transparent", border: "none", color: T.textMut, cursor: "pointer", borderRadius: "var(--radius-field)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-        <Trash2 size={12} strokeWidth={1.75} />
-      </button>
-    </div>
-  );
-}
-
-function AddInput({ value, onChange, onAdd, placeholder }) {
-  return (
-    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") onAdd(); }}
-        placeholder={placeholder}
-        style={{ flex: 1, padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 12, outline: "none", fontFamily: "inherit", color: T.text, background: T.white }} />
-      <button onClick={onAdd} style={{ padding: "0 12px", height: 28, background: T.text, color: T.textInverted, border: "none", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-        <Plus size={12} strokeWidth={2.5} />
-      </button>
-    </div>
-  );
-}

@@ -19,6 +19,7 @@ import {
 import { T as BaseT } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
 import { PALETTE } from "@/lib/ui/palette";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 /* ---------------------------------------------------------------------------
    Page « Sport » — portée dans la direction artistique des pages récentes
@@ -43,7 +44,7 @@ import { PALETTE } from "@/lib/ui/palette";
 // Tokens partagés (câblés sur les CSS vars, dark-mode aware). `bg` est redéfini
 // en surface subtile interne (les sous-cartes/hover) car BaseT.bg vaut la couleur
 // de page (blanc en clair) — on garde le rendu d'origine tout en suivant le thème.
-const T = { ...BaseT, bg: "var(--color-bg-subtle, #FAFAFA)" };
+const T = { ...BaseT, bg: "var(--color-bg-subtle, #F1F2F4)" };
 
 /* ─── Constantes ──────────────────────────────────────────────────── */
 
@@ -323,6 +324,21 @@ export default function SportPage() {
     }, 350);
     return () => clearTimeout(handle);
   }, [form, editingId, showForm]);
+  // Autosave en création : dès qu'un exercice porte un nom et au moins une
+  // série renseignée, la séance est créée pour de bon et l'on bascule en mode
+  // édition — l'autosave ci-dessus prend alors le relais. Le bouton corbeille
+  // de l'en-tête, qui apparaît avec `editingId`, remplace l'« Annuler » perdu.
+  useEffect(() => {
+    if (!showForm || editingId || !form?.date) return;
+    const data = buildData(form);
+    if (!data.exercises.some(e => (e.sets || []).length > 0)) return;
+    const handle = setTimeout(() => {
+      const id = Date.now();
+      setSessions(prev => [...(prev || []), { id, createdAt: new Date(id).toISOString(), ...data }]);
+      setEditingId(id);
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [form, editingId, showForm]);
   const remove = (id) => setSessions(prev => (prev || []).filter(s => s.id !== id));
 
   /* ─── Stats agrégées ──────────────────────────────────────────── */
@@ -585,25 +601,15 @@ export default function SportPage() {
           seule rangée au lieu de deux, comme les pages récentes qui posent
           leurs commandes sur la même ligne. */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        {/* Onglets : piste `segmentTrack` et pastille flottante de la DA. */}
-        <div style={{ display: "inline-flex", gap: 2, padding: 3, background: T.segmentTrack, borderRadius: 999 }}>
-          {[{ id: "workout", label: "Entraînement" }, { id: "photos", label: "Photos" }].map(tb => {
-            const active = tab === tb.id;
-            return (
-              <button key={tb.id} type="button" onClick={() => setTab(tb.id)}
-                style={{
-                  padding: "6px 16px", borderRadius: 999, border: "none",
-                  background: active ? T.white : "transparent",
-                  color: active ? T.text : T.textSub,
-                  fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
-                  boxShadow: active ? T.elevPill : "none",
-                  transition: "color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out)",
-                }}>
-                {tb.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Onglets : la brique commune. C'etait une copie locale de
+            `PeriodPills`, avec sa propre piste et sa propre graisse. */}
+        <PeriodPills
+          value={tab}
+          onChange={setTab}
+          options={[{ id: "workout", label: "Entraînement" }, { id: "photos", label: "Photos" }]}
+          track
+          size={13}
+        />
 
         <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>
           {stats.total === 0
@@ -628,7 +634,7 @@ export default function SportPage() {
 
       {/* Layout en 2 colonnes : timeline à gauche, panneau collant à droite */}
       {tab === "workout" && (
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(300px, 1fr)", gap: 24, alignItems: "start" }}>
+      <div className="tr4de-sport-layout" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(300px, 1fr)", gap: 24, alignItems: "start" }}>
 
         {/* Colonne gauche : filtres + timeline mensuelle */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -947,7 +953,7 @@ function PhotosTab({ photos, setPhotos }) {
                 <span style={{ fontSize: 13, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{group.label}</span>
                 <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>· {group.items.length} photo{group.items.length > 1 ? "s" : ""}</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))", gap: 12 }}>
                 {group.items.map(p => (
                   /* La vignette EST la carte : coins 12 et ombre douce comme les
                      autres, plus de cadre gris autour de l'image. */
@@ -968,9 +974,9 @@ function PhotosTab({ photos, setPhotos }) {
 
       {/* Visionneuse plein écran + détails éditables */}
       {viewer && typeof document !== "undefined" && ReactDOM.createPortal(
-        <div {...backdropDismiss(() => setViewerId(null))}
+        <div {...backdropDismiss(() => setViewerId(null))} className="anim-backdrop"
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.62)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
+          <div className="anim-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
             style={{ width: "min(900px, 100%)", maxHeight: "92vh", display: "flex", flexWrap: "wrap", background: T.white, borderRadius: "var(--radius-modal)", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
             <div
               onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
@@ -1316,7 +1322,10 @@ function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = []
                 value={metric}
                 onChange={onChangeMetric}
                 options={metrics.map(m => ({ id: m, label: METRIC_LABEL[m] }))}
+                /* `rail` : ce groupe-ci est DANS la carte blanche de la courbe,
+                   son actif a donc besoin de la piste grise pour se detacher. */
                 track
+                rail
               />
             ) : (
               <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>
@@ -1506,6 +1515,10 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
   return (
     <div {...backdropDismiss(onClose)}
       style={{ position: "fixed", inset: 0, background: "transparent", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      {/* Pas d'`anim-modal` ici, volontairement : cette fenêtre se déplace à la
+          souris et sa position vit dans un `transform`. Une animation d'entrée
+          en `transform` écraserait ce translate — la fenêtre sauterait à
+          l'origine le temps de l'animation, puis reviendrait. */}
       <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true"
         style={{ width: "min(640px, 100%)", maxHeight: "min(88vh, 820px)", display: "flex", flexDirection: "column", background: T.white, borderRadius: "var(--radius-modal)", boxShadow: "var(--elev-overlay)", overflow: "hidden", fontFamily: "var(--font-sans)", transform: `translate(${winPos.x}px, ${winPos.y}px)` }}>
         {/* Header — sert aussi de poignée pour déplacer la fenêtre */}
@@ -1551,7 +1564,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
               </div>
               {showPresets && (
                 <div style={{
-                  display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                  display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(180px, 100%), 1fr))",
                   gap: 6, padding: 10,
                   background: FIELD_BG, border: "none", borderRadius: 12,
                   maxHeight: 220, overflowY: "auto",
@@ -2259,7 +2272,7 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
 
   return (
     <div style={{
-      width: 280, background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-modal)",
+      width: 280, background: T.white, border: "none", borderRadius: "var(--radius-modal)",
       boxShadow: "var(--elev-overlay)", padding: 12,
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -2327,7 +2340,7 @@ function SetInput({ value, onChange, placeholder, small }) {
         padding: "6px 12px", borderRadius: 999,
         border: "none", fontSize: 12,
         fontFamily: "inherit", outline: "none", color: T.text,
-        background: T.white, fontVariantNumeric: "tabular-nums",
+        background: DA_FIELD_BG, fontVariantNumeric: "tabular-nums",
       }}
     />
   );

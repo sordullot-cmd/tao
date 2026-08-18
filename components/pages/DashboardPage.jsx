@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { T } from "@/lib/ui/tokens";
+import { TAG_COLORS } from "@/lib/ui/tradingColors";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
 import { periodStart } from "@/lib/ui/period";
@@ -175,47 +176,47 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   }, []);
 
   const allEmotionTags = [
-    { id: "fomo", label: t("tag.fomo"), color: "#C94F4F" },
-    { id: "revenge", label: t("tag.revenge"), color: "#C94F4F" },
-    { id: "overconfident", label: t("tag.overconfident"), color: "#D4A574" },
-    { id: "hesitation", label: t("tag.hesitation"), color: "#D4A574" },
-    { id: "calm", label: t("tag.calm"), color: "#4A9D6F" },
-    { id: "followed", label: t("tag.followed"), color: "#4A9D6F" },
-    { id: "boredom", label: t("tag.boredom"), color: "#5B7EC9" },
-    { id: "earlyexit", label: t("tag.earlyexit"), color: "#8B6BB6" }
+    { id: "fomo", label: t("tag.fomo"), color: TAG_COLORS.red },
+    { id: "revenge", label: t("tag.revenge"), color: TAG_COLORS.red },
+    { id: "overconfident", label: t("tag.overconfident"), color: TAG_COLORS.orange },
+    { id: "hesitation", label: t("tag.hesitation"), color: TAG_COLORS.orange },
+    { id: "calm", label: t("tag.calm"), color: TAG_COLORS.green },
+    { id: "followed", label: t("tag.followed"), color: TAG_COLORS.green },
+    { id: "boredom", label: t("tag.boredom"), color: TAG_COLORS.blue },
+    { id: "earlyexit", label: t("tag.earlyexit"), color: TAG_COLORS.purple }
   ];
 
   const allErrorTags = [
-    { id: "poorentry", label: t("errtag.poorentry"), color: "#C94F4F" },
-    { id: "poorexit", label: t("errtag.poorexit"), color: "#C94F4F" },
-    { id: "nosltp", label: t("errtag.nosltp"), color: "#D4A574" },
-    { id: "overleveraged", label: t("errtag.overleveraged"), color: "#D4A574" },
-    { id: "ignoredsignal", label: t("errtag.ignoredsignal"), color: "#8B6BB6" },
-    { id: "badtiming", label: t("errtag.badtiming"), color: "#C94F4F" },
-    { id: "slttoosmall", label: t("errtag.slttoosmall"), color: "#D4A574" },
-    { id: "wronganalysis", label: t("errtag.wronganalysis"), color: "#8B6BB6" }
+    { id: "poorentry", label: t("errtag.poorentry"), color: TAG_COLORS.red },
+    { id: "poorexit", label: t("errtag.poorexit"), color: TAG_COLORS.red },
+    { id: "nosltp", label: t("errtag.nosltp"), color: TAG_COLORS.orange },
+    { id: "overleveraged", label: t("errtag.overleveraged"), color: TAG_COLORS.orange },
+    { id: "ignoredsignal", label: t("errtag.ignoredsignal"), color: TAG_COLORS.purple },
+    { id: "badtiming", label: t("errtag.badtiming"), color: TAG_COLORS.red },
+    { id: "slttoosmall", label: t("errtag.slttoosmall"), color: TAG_COLORS.orange },
+    { id: "wronganalysis", label: t("errtag.wronganalysis"), color: TAG_COLORS.purple }
   ];
 
   // Catégories ICT/SMC + unité de temps — identiques à TradesPage (pour recouper les stats).
   const allEntryTags = [
-    { id: "fvg", label: "FVG", color: "#5B7EC9" },
-    { id: "ifvg", label: "IFVG", color: "#4A9D6F" },
-    { id: "ob", label: "OB", color: "#8B6BB6" },
-    { id: "rejectionblock", label: "RB", color: "#D4A574" }
+    { id: "fvg", label: "FVG", color: TAG_COLORS.blue },
+    { id: "ifvg", label: "IFVG", color: TAG_COLORS.green },
+    { id: "ob", label: "OB", color: TAG_COLORS.purple },
+    { id: "rejectionblock", label: "RB", color: TAG_COLORS.orange }
   ];
   const allLiquidityTags = [
-    { id: "pdhpdl", label: "PDH/PDL", color: "#5B7EC9" },
-    { id: "equalhl", label: "Equal Highs/Lows", color: "#4A9D6F" },
-    { id: "asianhl", label: "Asian H/L", color: "#D4A574" },
-    { id: "sessionhl", label: "Session H/L", color: "#8B6BB6" },
-    { id: "trendline", label: "Trendline", color: "#C94F4F" }
+    { id: "pdhpdl", label: "PDH/PDL", color: TAG_COLORS.blue },
+    { id: "equalhl", label: "Equal Highs/Lows", color: TAG_COLORS.green },
+    { id: "asianhl", label: "Asian H/L", color: TAG_COLORS.orange },
+    { id: "sessionhl", label: "Session H/L", color: TAG_COLORS.purple },
+    { id: "trendline", label: "Trendline", color: TAG_COLORS.red }
   ];
   const allTimeframeTags = [
-    { id: "M1", label: "M1", color: "#C94F4F" },
-    { id: "M5", label: "M5", color: "#D4A574" },
-    { id: "M15", label: "M15", color: "#4A9D6F" },
-    { id: "H1", label: "H1", color: "#5B7EC9" },
-    { id: "H4", label: "H4", color: "#8B6BB6" }
+    { id: "M1", label: "M1", color: TAG_COLORS.red },
+    { id: "M5", label: "M5", color: TAG_COLORS.orange },
+    { id: "M15", label: "M15", color: TAG_COLORS.green },
+    { id: "H1", label: "H1", color: TAG_COLORS.blue },
+    { id: "H4", label: "H4", color: TAG_COLORS.purple }
   ];
 
   // Load emotion tags from localStorage

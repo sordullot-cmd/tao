@@ -755,7 +755,7 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
         role="listbox"
         className="anim-pop"
         style={{
-          background: T.white, border: `1px solid ${T.border}`, borderRadius: 12,
+          background: T.white, border: "none", borderRadius: 12,
           boxShadow: "var(--elev-overlay)", padding: 6,
         }}
       >

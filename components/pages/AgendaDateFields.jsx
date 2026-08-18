@@ -71,7 +71,7 @@ export function DateField({ value, min, onChange }) {
         open={open}
         onClose={close}
         maxHeight={360}
-        style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 12, boxShadow: "var(--elev-overlay)", width: 252 }}
+        style={{ background: T.white, border: "none", borderRadius: "var(--radius-card)", padding: 12, boxShadow: "var(--elev-overlay)", width: 252 }}
       >
         <>
           {/* En-tête mois + navigation */}
@@ -178,7 +178,7 @@ export function TimeField({ value, onChange, placeholder = "", triggerStyle }) {
         onClose={close}
         maxHeight={240}
         style={{
-          background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 6,
+          background: T.white, border: "none", borderRadius: "var(--radius-card)", padding: 6,
           boxShadow: "var(--elev-overlay)", width: 110,
         }}
       >

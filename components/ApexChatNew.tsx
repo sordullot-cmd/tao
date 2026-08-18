@@ -53,9 +53,9 @@ const T = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Trades: "#22C55E",
-  "Net P&L": "#3B82F6",
-  Mind: "#A855F7",
+  Trades: "#58CC02",
+  "Net P&L": "#1CB0F6",
+  Mind: "#CE82FF",
 };
 
 const PROMPT_DAILY = "Analyse de ma journée";
@@ -888,7 +888,7 @@ function InputBar({
               bottom: 50,
               right: 10,
               background: T.panel,
-              border: `1px solid ${T.border}`,
+              border: "none",
               borderRadius: "var(--radius-card)",
               boxShadow: "var(--elev-overlay)",
               maxHeight: 320,

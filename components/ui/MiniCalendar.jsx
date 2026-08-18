@@ -72,7 +72,7 @@ export default function MiniCalendar({ value, onSelect, onClose, align = "left",
   const pick = (d) => { onSelect?.(new Date(viewYear, viewMonth, d)); onClose?.(); };
 
   const panelStyle = {
-    background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)",
+    background: T.white, border: "none", borderRadius: "var(--radius-card)",
     padding: 12, width: 244, boxShadow: "var(--elev-overlay)",
     fontFamily: "var(--font-sans)",
   };

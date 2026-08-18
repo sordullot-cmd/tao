@@ -32,6 +32,8 @@ import { DEFAULT_ALERT_SETTINGS } from "@/lib/hooks/useTradeAlerts";
 import { notify, ensureNotifyPermission, isNotifyGranted, isTauri } from "@/lib/notify";
 import { T as BaseT } from "@/lib/ui/tokens";
 import { ACCENT_PRESETS, applyAccent, isHexColor, readAccent } from "@/lib/ui/accent";
+import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
+import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 // Clés locales absentes de BaseT mappées sur des tokens dark-aware.
 const T = { ...BaseT, panel: BaseT.accentBg, borderHover: BaseT.border2 };
@@ -805,7 +807,7 @@ function GlobalsSection() {
           setRisk(n);
           try { localStorage.setItem("tr4de_risk_per_trade", String(n)); } catch {}
         }}
-        style={{ width: "100%", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", fontSize: 13, fontFamily: "inherit", color: T.text, outline: "none", background: T.white }}
+        style={{ width: "100%", padding: "8px 10px", border: "none", borderRadius: "var(--radius-field)", fontSize: 13, fontFamily: "inherit", color: T.text, outline: "none", background: DA_FIELD_BG }}
       />
       <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{t("settings.globals.riskHint")}</div>
 
@@ -905,9 +907,11 @@ function AccentField({ label, hint, value, onChange }) {
   return (
     <label style={{ flex: "1 1 180px", minWidth: 160 }}>
       <div style={{ fontSize: 12, fontWeight: 500, color: T.text, marginBottom: 6 }}>{label}</div>
+      {/* Le champ est un aplat, pas un cadre : la pastille de couleur et le code
+          hexadecimal vivent dans la meme pilule. */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
-        border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.white,
+        display: "flex", alignItems: "center", gap: 8, padding: "5px 8px 5px 6px",
+        border: "none", borderRadius: 999, background: DA_FIELD_BG,
       }}>
         <input
           type="color"
@@ -915,7 +919,7 @@ function AccentField({ label, hint, value, onChange }) {
           onChange={(e) => onChange(e.target.value.toUpperCase())}
           aria-label={`${label} — sélecteur de couleur`}
           style={{
-            width: 28, height: 28, padding: 0, border: "none", borderRadius: 6,
+            width: 28, height: 28, padding: 0, border: "none", borderRadius: "50%",
             background: "none", cursor: "pointer", flexShrink: 0,
           }}
         />
@@ -1258,39 +1262,17 @@ function FooterHelp() {
 }
 
 function Field({ label, hint, children }) {
-  return (
-    <div>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.text, marginBottom: 6 }}>{label}</label>
-      {children}
-      {hint && <div style={{ fontSize: 11, color: T.textMut, marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
-    </div>
-  );
+  /* Delegue a la brique commune (components/ui/form.jsx) : le site comptait
+     quatorze definitions locales de champ, chacune avec sa taille de libelle,
+     sa hauteur et son rayon. Le style vit la-bas, une seule fois. */
+  return <DAField label={label} hint={hint}>{children}</DAField>;
 }
 
+/* Delegue a la brique commune (components/ui/form.jsx) : un champ est un aplat
+   en pilule, pas un rectangle cerne. Le `selectStyle` qui en derivait est parti
+   avec : plus aucun appel depuis que les menus deroulants sont des popovers. */
 function inputStyle() {
-  return {
-    width: "100%",
-    padding: "8px 12px",
-    border: `1px solid ${T.border}`,
-    borderRadius: "var(--radius-card)",
-    background: T.bg,
-    color: T.text,
-    fontSize: 13,
-    fontFamily: "inherit",
-    outline: "none",
-  };
-}
-
-function selectStyle() {
-  return {
-    ...inputStyle(),
-    cursor: "pointer",
-    appearance: "none",
-    backgroundImage: 'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%238E8E8E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>\')',
-    backgroundRepeat: "no-repeat",
-    backgroundPosition: "right 12px center",
-    paddingRight: 36,
-  };
+  return { ...DA_FIELD };
 }
 
 /* ── Alerts section ────────────────────────────────────────────────── */

@@ -27,7 +27,8 @@
 
 import React from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import { T } from "@/lib/ui/tokens";
+import { T, FIELD_BG } from "@/lib/ui/tokens";
+import { FIELD_FOCUS_RING } from "@/components/ui/form";
 import Popover from "@/components/ui/Popover";
 import { RoundLogo } from "@/components/ui/accountRows";
 
@@ -136,9 +137,13 @@ export default function ComboInput({
              serait pas tout à fait aligné sur les `TextInput` voisins. */
           minHeight: 36, boxSizing: "border-box",
           padding: exact?.iconUrl ? "0 6px 0 7px" : "0 6px 0 12px",
-          borderRadius: 8, background: T.white,
-          border: `1px solid ${focused ? T.border2 : T.border}`,
-          transition: "border-color 120ms ease",
+          /* Aplat en pilule, comme tout champ du site. Le focus est un anneau
+             posé en `box-shadow` : il n'y a plus de bordure a assombrir, et rien
+             ne bouge d'un pixel a la prise de focus. */
+          borderRadius: 999, background: FIELD_BG,
+          border: "none",
+          boxShadow: focused ? FIELD_FOCUS_RING : "none",
+          transition: "box-shadow var(--dur-fast) var(--ease-out)",
           cursor: "text",
         }}
       >
@@ -217,7 +222,8 @@ export default function ComboInput({
         className="anim-pop scroll-thin"
         style={{
           background: T.white,
-          border: `1px solid ${T.border}`,
+          /* Couche flottante : `--elev-overlay` la detache deja. */
+          border: "none",
           borderRadius: 10,
           boxShadow: "var(--elev-overlay)",
           padding: 4,

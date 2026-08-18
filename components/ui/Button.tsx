@@ -46,7 +46,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     primary: { background: "var(--color-btn-primary-bg, #0D0D0D)", color: "var(--color-btn-primary-text, #FFFFFF)", border: "1px solid var(--color-btn-primary-bg, #0D0D0D)" },
     secondary: { background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text, #0D0D0D)", border: "1px solid var(--color-border, #E5E5E5)" },
     ghost: { background: "transparent", color: "var(--color-text, #0D0D0D)", border: "1px solid transparent" },
-    danger: { background: "var(--color-danger, #EF4444)", color: "#FFFFFF", border: "1px solid var(--color-danger, #EF4444)" },
+    danger: { background: "var(--color-danger, #FF4B4B)", color: "#FFFFFF", border: "1px solid var(--color-danger, #FF4B4B)" },
   };
 
   const hoverBg: Record<Variant, string> = {
@@ -65,8 +65,14 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     fontFamily: "var(--font-sans)",
     cursor: isDisabled ? "not-allowed" : "pointer",
     opacity: isDisabled ? 0.55 : 1,
+    /* `background-color` et non `background` : le raccourci embarque aussi
+       `background-image`, `background-position` et compagnie — on demandait au
+       navigateur de surveiller cinq propriétés pour n'en faire varier qu'une.
+       Courbes prises dans les tokens plutôt que réécrites à la main : elles
+       étaient recopiées littéralement à douze endroits du site, ce qui rendait
+       toute correction de la courbe illusoire. */
     transition:
-      "background 150ms cubic-bezier(0.23,1,0.32,1), color 150ms cubic-bezier(0.23,1,0.32,1), border-color 150ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1), box-shadow 150ms cubic-bezier(0.23,1,0.32,1)",
+      "background-color 150ms var(--ease-out), color 150ms var(--ease-out), border-color 150ms var(--ease-out), transform 160ms var(--ease-out), box-shadow 150ms var(--ease-out)",
     width: fullWidth ? "100%" : undefined,
     whiteSpace: "nowrap",
     ...sizeStyles[size],
@@ -80,17 +86,25 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
       disabled={isDisabled}
       style={baseStyle}
       onMouseEnter={(e) => {
-        if (!isDisabled) e.currentTarget.style.background = hoverBg[variant];
+        if (!isDisabled) {
+          const el = e.currentTarget;
+          /* Valeur de départ réelle, pas celle de la variante : un bouton avec
+             `style={{ background: … }}` se voyait repeindre aux couleurs de sa
+             variante dès qu'on le survolait une fois. */
+          el.dataset.restBg = el.style.background || (variantStyles[variant].background as string);
+          el.style.background = hoverBg[variant];
+        }
         onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = variantStyles[variant].background as string;
+        const el = e.currentTarget;
+        el.style.background = el.dataset.restBg || (variantStyles[variant].background as string);
         onMouseLeave?.(e);
       }}
       {...rest}
     >
       {loading ? (
-        <Loader2 size={iconSize} strokeWidth={2} style={{ animation: "spin 0.8s linear infinite" }} />
+        <Loader2 size={iconSize} strokeWidth={2} className="anim-spin" />
       ) : (
         Icon && iconPosition === "left" && <Icon size={iconSize} strokeWidth={1.75} />
       )}

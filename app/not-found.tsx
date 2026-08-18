@@ -61,7 +61,7 @@ export default function NotFound() {
             gap: 8,
             padding: "6px 12px",
             borderRadius: 999,
-            background: "var(--color-bg-subtle, #F5F5F5)",
+            background: "var(--color-bg-subtle, #F1F2F4)",
             border: "1px solid var(--color-border, #E5E5E5)",
             fontSize: 12,
             fontWeight: 600,
@@ -75,7 +75,7 @@ export default function NotFound() {
               width: 6,
               height: 6,
               borderRadius: 999,
-              background: "var(--color-warning, #F97316)",
+              background: "var(--color-warning, #FF9600)",
             }}
           />
           Erreur 404
