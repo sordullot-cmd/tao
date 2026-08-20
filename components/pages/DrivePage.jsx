@@ -472,7 +472,7 @@ export default function DrivePage() {
             <button
               onClick={() => setSelectedProjectId(null)}
               title="Retour aux projets"
-              style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              style={{ padding: "8px 16px", height: 34, minHeight: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <ArrowLeft size={14} strokeWidth={1.75} /> Projets
             </button>
             <h1 className="t-h2" style={{ color: T.text, margin: 0 }}>
@@ -486,17 +486,17 @@ export default function DrivePage() {
             </span>
           </>
         )}
-        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
           {selectedProject && (
             <>
               <button
                 onClick={() => setShowMembersModal(true)}
-                style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                style={{ padding: "8px 16px", height: 34, minHeight: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Users size={14} strokeWidth={1.75} /> Membres
               </button>
               <button
                 onClick={() => setShowShareModal(true)}
-                style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                style={{ padding: "8px 16px", height: 34, minHeight: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Share2 size={14} strokeWidth={1.75} /> Partager
               </button>
               {selectedProject.owner_id === user?.id && (
@@ -516,7 +516,7 @@ export default function DrivePage() {
           {/* "Nouveau projet" : toujours visible, dans les deux vues. */}
           <button
             onClick={requestNewProject}
-            style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            style={{ padding: "8px 16px", height: 34, minHeight: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <Plus size={14} strokeWidth={2} /> Nouveau projet
           </button>
         </div>
@@ -2242,7 +2242,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
               <div style={{ marginTop: 14, pointerEvents: "auto", display: "inline-flex" }}>
                 <button
                   onClick={() => genericInputRef.current?.click()}
-                  style={{ minHeight: 44, padding: "0 18px", borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 8 }}
+                  style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
                   <Upload size={15} strokeWidth={1.75} /> Importer un fichier
                 </button>
@@ -2971,7 +2971,7 @@ function ImageLightbox({ url, alt, onClose, onDownload }) {
         title="Fermer (Ã‰chap)"
         style={{
           position: "absolute", top: 16, right: 16, zIndex: 2,
-          width: 36, height: 36, borderRadius: 999,
+          width: 34, height: 34, borderRadius: 999,
           background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)",
           color: "#fff", cursor: "pointer",
           display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -2989,7 +2989,7 @@ function ImageLightbox({ url, alt, onClose, onDownload }) {
           title="TÃ©lÃ©charger l'image originale"
           style={{
             position: "absolute", top: 16, right: 60, zIndex: 2,
-            height: 36, padding: "0 14px", borderRadius: 999,
+            height: 34, padding: "8px 16px", borderRadius: 999,
             background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)",
             color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 500,
             fontFamily: "inherit",
@@ -3190,7 +3190,7 @@ function ShareModal({ project, onClose }) {
         </div>
 
         <button onClick={generateLink} disabled={creating}
-          style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
           <Share2 size={14} strokeWidth={1.75} /> {creating ? "GÃ©nÃ©rationâ€¦" : "GÃ©nÃ©rer un lien"}
         </button>
 
@@ -3198,7 +3198,7 @@ function ShareModal({ project, onClose }) {
           <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 6px 6px 14px", border: "none", borderRadius: 999, background: DA_FIELD_BG }}>
             <input readOnly value={link} style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 11, fontFamily: "monospace", color: T.text }} />
             <button onClick={copy}
-              style={{ minHeight: 28, padding: "5px 12px", borderRadius: 999, background: copied ? T.green : T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, background: copied ? T.green : T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               {copied ? <><Check size={11} /> CopiÃ©</> : <><Copy size={11} /> Copier</>}
             </button>
           </div>
@@ -3511,7 +3511,7 @@ function AudioPlayer({ url }) {
             onClick={toggle}
             title={playing ? "Pause" : "Lecture"}
             style={{
-              width: 32, height: 32, borderRadius: 999,
+              width: 34, height: 34, borderRadius: 999,
               background: T.text, color: "#fff", border: "none",
               cursor: "pointer", flexShrink: 0,
               display: "inline-flex", alignItems: "center", justifyContent: "center",

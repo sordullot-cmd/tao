@@ -679,8 +679,8 @@ export function PeriodPills({ value, onChange, options = PERIODS, track = false,
             type="button"
             onClick={() => onChange?.(p.id)}
             aria-pressed={active}
-            style={{
-              padding: track ? "6px 16px" : "6px 14px",
+            style={{minHeight: 34,
+              padding: "8px 16px",
               borderRadius:999, border:"none",
               background: active ? T.white : "transparent",
               boxShadow: active ? (track ? T.elevCard : T.elevPill) : "none",
@@ -692,7 +692,12 @@ export function PeriodPills({ value, onChange, options = PERIODS, track = false,
                  graisse pour la pastille prise et les autres : l'état actif se
                  dit par le fond et l'ombre. */
               fontSize:size, fontWeight:600,
-              lineHeight:"18.6px", cursor:"pointer", fontFamily:"inherit",
+              /* 18 px et non les 18,6 relevés dans Figma : avec les 8 px de
+                 marge haute et basse communs à tous les boutons, la pastille
+                 tombe alors sur 34 px pile — la hauteur du site. À 18,6 elle
+                 dépassait d'un pixel, et une rangée d'onglets posée à côté d'un
+                 bouton se voyait décalée. */
+              lineHeight:"18px", cursor:"pointer", fontFamily:"inherit",
               whiteSpace:"nowrap",
               transition:"background 140ms var(--ease-out, ease), opacity 140ms var(--ease-out, ease)",
             }}
@@ -733,7 +738,7 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
   return (
     <div style={{
       display:"flex", alignItems:"center", gap:8,
-      height:34, minHeight: 34, padding: "8px 16px", borderRadius:999,
+      height:34, padding: "8px 16px", minHeight: 34, borderRadius:999,
       background:T.white, boxShadow:T.elevPill,
     }}>
       <button

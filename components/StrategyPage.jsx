@@ -279,11 +279,6 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     /* Même ossature que les autres pages de la DA : fond gris hérité de la
        coquille, sections espacées de 24, léger retrait haut. */
     <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
-      {/* Emplacement des contrôles injectés par la barre du haut. */}
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
-      </div>
-
       {/* Le bouton de création vit DANS la barre de records, calé sur la ligne
           de ses intitulés (cf. plus bas) : sur sa propre rangée, il laissait une
           bande vide en travers du haut de page. Il ne subsiste ici que pour
@@ -292,7 +287,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
         <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:16,flexWrap:"wrap"}}>
           <button
             onClick={() => setShowStrategyForm(true)}
-            style={{display:"inline-flex",alignItems:"center",gap:6,minHeight: 34, padding: "8px 16px",borderRadius:999,background:T.text,border:"none",color:T.textInverted,fontSize: 13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
+            style={{display:"inline-flex",alignItems:"center",gap:6,padding: "8px 16px",minHeight: 34, borderRadius:999,background:T.text,border:"none",color:T.textInverted,fontSize: 13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
           >
             <Plus size={14} strokeWidth={1.75}/> {t("strat.createBtn")}
           </button>
@@ -440,16 +435,18 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               value={bestPF ? (bestPF.profitFactor === Infinity ? "∞" : bestPF.profitFactor.toFixed(2)) : "—"}
             />
 
-            {/* Le bouton se cale sur la LIGNE DES INTITULÉS, pas sur le haut du
-                bloc : le retrait négatif compense la différence entre sa hauteur
-                (34) et celle d'un intitulé (16), pour que leurs milieux
-                coïncident. */}
+            {/* Le bouton se cale sur le HAUT du bloc, comme l'action de toutes
+                les autres pages. Il portait un retrait de -9 px pour centrer sa
+                hauteur (34) sur la ligne des intitulés (16) : l'alignement était
+                juste vis-à-vis des intitulés, mais il posait ce bouton 9 px plus
+                haut que son équivalent partout ailleurs, et le saut se voyait en
+                passant d'une page à l'autre. */}
             <button
               onClick={() => setShowStrategyForm(true)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
-                marginLeft: "auto", marginTop: -9, alignSelf: "flex-start", flexShrink: 0,
-                minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.text, border: "none",
+                marginLeft: "auto", alignSelf: "flex-start", flexShrink: 0,
+                padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, border: "none",
                 color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               }}
             >

@@ -257,10 +257,6 @@ export default function FocusTimerPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-      </div>
-
       {/* Header stats — 4 blocs collés dans un seul conteneur (séparateurs fins) */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
         <Stat flat icon={Focus}        label="Aujourd'hui"     countUp={todayMinutes} suffix="m"  subtext={`${todaysSessions.length} session${todaysSessions.length > 1 ? "s" : ""}`} size="sm" />

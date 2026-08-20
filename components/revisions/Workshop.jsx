@@ -318,7 +318,7 @@ export default function Workshop({ decks, notes, books, onCommit, onCreateDeck }
                 onClick={() => { setSource(s.id); setError(null); }}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+                  padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                   background: active ? T.text : FIELD_BG,
                   color: active ? T.textInverted : T.textSub,
                   fontSize: 13, fontWeight: 500, fontFamily: "inherit",

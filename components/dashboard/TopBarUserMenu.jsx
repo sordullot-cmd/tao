@@ -32,7 +32,7 @@ export default function TopBarUserMenu({ user, onProfile, onSettings, onDarkMode
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        style={{
+        style={{minHeight: 34,
           display: "inline-flex", alignItems: "center", gap: 8,
           padding: "4px 12px 4px 4px", borderRadius: 999,
           background: open ? "#EDEDED" : "transparent", border: "none",

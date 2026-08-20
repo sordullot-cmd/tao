@@ -258,7 +258,7 @@ function ReportsPanel({ trades }: { trades: any[] }) {
               key={f}
               onClick={() => setFilter(f)}
               style={{
-                minHeight: 28, padding: "5px 12px",
+                minHeight: 34, padding: "8px 16px",
                 borderRadius: 999,
                 border: `1px solid ${filter === f ? T.accent : T.border}`,
                 background: filter === f ? T.accent : "transparent",

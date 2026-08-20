@@ -860,7 +860,18 @@ export default function App() {
               pour que la courbe pleine largeur monte jusqu'au bord supérieur.
               Les autres pages gardent leur respiration de 20 px, et les media
               queries mobiles rendent à la barre son padding vertical, où le
-              hamburger doit tenir. */}
+              hamburger doit tenir.
+              Sur desktop le hamburger est masqué : ces 10 px en haut et en bas
+              sont donc toute la marge qui sépare le contenu du bord de la
+              fenêtre. C'est ici, et nulle part dans les pages, que se règle
+              cette marge — le conteneur scrollable juste en dessous est à
+              padding-top 0.
+              Le tableau de bord est la SEULE exception, et elle est voulue : sa
+              barre est à hauteur nulle pour que la courbe du P&L monte jusqu'au
+              bord de la fenêtre. Il réintègre ces 20 px lui-même, dans la bande
+              haute de son bloc de tête (`HEAD_PAD_TOP`), ce qui pose son chiffre
+              héros à la même hauteur que le premier élément des autres pages
+              sans river la courbe au passage. */}
           <div className="tr4de-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #F5F5F5)",padding:page === "dashboard" ? "0 28px 0 calc(var(--shell-left, 0px) + 28px)" : "10px 28px 10px calc(var(--shell-left, 0px) + 28px)",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
             <button
               type="button"

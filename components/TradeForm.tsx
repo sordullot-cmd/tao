@@ -464,7 +464,7 @@ export default function TradeForm({
                     aria-pressed={active}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
-                      minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                      padding: "8px 16px", minHeight: 34, borderRadius: 999,
                       border: `1px solid ${active ? color : T.border}`,
                       background: active ? `color-mix(in srgb, ${color} 15%, transparent)` : T.white,
                       color: active ? color : T.textSub,

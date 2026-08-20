@@ -267,7 +267,7 @@ function DateInput({ label, value, onChange }) {
 
 function pillStyle(active, color) {
   return {
-    minHeight: 28, padding: "5px 12px", borderRadius: 999,
+    padding: "8px 16px", minHeight: 34, borderRadius: 999,
     border: `1px solid ${active ? T.text : T.border}`,
     background: active ? T.text : T.white,
     color: active ? "#fff" : T.text,

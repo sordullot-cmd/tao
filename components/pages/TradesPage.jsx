@@ -85,7 +85,7 @@ function CheckChip({ label, color, checked, onClick }) {
   const glyph = checked && color && luminance(color) > 0.45 ? T.text : T.onSolid;
   return (
     <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onClick}
-      style={{
+      style={{minHeight: 34,
         display:"inline-flex",alignItems:"center",gap:7,
         padding:"6px 12px 6px 9px",borderRadius:999,border:"none",
         background: checked && color ? `${color}1F` : FIELD_BG,
@@ -1071,9 +1071,6 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
        nouvelle DA (coins 12, ombre douce, sans bordure) comme le tableau. */
     return (
       <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
-        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:12}}>
-          <div id="tr4de-page-header-slot" />
-        </div>
         <div style={{...CARD,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
           <div style={{width:48,height:48,borderRadius:12,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <LucideTrendingUp size={22} strokeWidth={1.75} color={T.text}/>
@@ -1128,13 +1125,6 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     /* 14 px de retrait haut : la barre du haut apporte déjà 20 px, ce qui place
        le titre aux 34 px de la maquette (même calcul que le dashboard). */
     <div style={{display:"flex",flexDirection:"column",gap:embedded?16:48,fontFamily:"var(--font-sans)"}} className="anim-1">
-      {/* Barre d'en-tête — slot d'en-tête + actions, alignés à droite. */}
-      {!embedded && (
-        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:12,flexWrap:"wrap"}}>
-          <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
-        </div>
-      )}
-
       {/* MODAL CONFIG COLONNES — apparaît centrée devant l'écran avec backdrop. */}
       {columnsMenuOpen && (
         <DAModal
@@ -1222,11 +1212,15 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
             />
             {/* « Importer » vit sur la MÊME ligne que les filtres, poussé à
                 droite : c'est la barre d'outils du tableau, la séparer en deux
-                rangées éloignait l'action de ce sur quoi elle agit. */}
+                rangées éloignait l'action de ce sur quoi elle agit.
+                Le retrait négatif annule POUR LUI le padding de 28 px de la
+                barre : ce retrait aligne les libellés de filtres sur le contenu
+                de la carte, mais il arrêtait l'action 28 px avant le bord droit
+                de la page, là où tous les autres boutons du site s'arrêtent. */}
             <button
               type="button"
               onClick={onImportClick}
-              style={{display:"inline-flex",alignItems:"center",gap:6,marginLeft:"auto",padding: "8px 16px",minHeight: 34,borderRadius:999,
+              style={{display:"inline-flex",alignItems:"center",gap:6,marginLeft:"auto",marginRight:-28,padding: "8px 16px",minHeight: 34, borderRadius:999,
                       background:T.text,border:"none",color:T.textInverted,fontSize: 13,fontWeight:500,
                       cursor:"pointer",fontFamily:"inherit"}}
             >
@@ -1432,7 +1426,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                       <button
                         type="button"
                         onClick={() => { setSymbolFilter([]); setAccountFilter(""); setSideFilter(""); }}
-                        style={{padding: "8px 16px",minHeight: 34,borderRadius:999,border:"none",
+                        style={{padding: "8px 16px",minHeight: 34, borderRadius:999,border:"none",
                                 background:T.white,boxShadow:T.elevPill,color:T.text,
                                 fontSize: 13,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}
                       >
@@ -1862,7 +1856,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                 en a plus qu'un. */}
             <div style={{padding:compact?"8px 14px 0":"12px 16px 0",display:"flex",justifyContent:"flex-end",alignItems:"center",flexShrink:0}}>
               <button onClick={()=>setSelectedTrade(null)} aria-label={t("trades.detail.close")}
-                style={{width:28,height:28,borderRadius:999,background:"transparent",border:"none",cursor:"pointer",color:T.textSub,
+                style={{width: 34,height: 34,borderRadius:999,background:"transparent",border:"none",cursor:"pointer",color:T.textSub,
                         display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,
                         transition:"background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)"}}
                 onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG;e.currentTarget.style.color=T.text;}}
@@ -1943,7 +1937,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                         const active = (tradeTimeframe[selectedTrade.id] || "") === opt;
                         return (
                           <button key={opt} type="button" role="radio" aria-checked={active} aria-label={opt} onClick={()=>setTimeframeFor(selectedTrade, opt)}
-                            style={{
+                            style={{minHeight: 34,
                               flex:1,padding:"6px 0",borderRadius:999,border:"none",
                               background:active?T.white:"transparent",
                               color:active?T.text:T.textSub,
@@ -2547,7 +2541,7 @@ function StratMenu({ open, onToggle, onClose, onDetach }) {
         aria-label="Options stratégie"
         aria-haspopup="menu"
         aria-expanded={open}
-        style={{background:"transparent",border:"none",cursor:"pointer",color:T.textSub,width:26,height:26,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"background var(--dur-fast) var(--ease-out)"}}
+        style={{background:"transparent",border:"none",cursor:"pointer",color:T.textSub,width: 34,height: 34,borderRadius:999,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"background var(--dur-fast) var(--ease-out)"}}
         onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG}}
         onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
       >
@@ -2600,7 +2594,7 @@ function TagMultiSelect({ placeholder, allTags, selected, onToggle }) {
   return (
     <div ref={ref} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
       <button type="button" onClick={() => setOpen((o) => !o)}
-        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, minHeight: 34, padding: "8px 16px", fontSize: 13, border: "none", borderRadius: 999, background: FIELD_BG, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", fontSize: 13, border: "none", minHeight: 34, borderRadius: 999, background: FIELD_BG, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6 }}>
           {chosen.length === 0
             ? <span style={{ fontSize: 13, color: T.textSub }}>{placeholder}</span>

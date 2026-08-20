@@ -174,8 +174,8 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
       onClick={onClick}
       onBlur={onBlur}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-        padding: "0 12px", borderRadius: 999, border: "none",
+        display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+        padding: "8px 16px", borderRadius: 999, border: "none",
         background: danger ? T.redBg : "transparent", color: base,
         fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
         whiteSpace: "nowrap", transition: "background 120ms ease, color 120ms ease",
@@ -416,7 +416,7 @@ export default function BudgetPage() {
                 onClick={() => selectPlan(p.id)}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  height: 36, padding: "0 14px", borderRadius: 999, border: "none",
+                  height: 34, padding: "8px 16px", borderRadius: 999, border: "none",
                   background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
                   cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
                   transition: "background 120ms ease, color 120ms ease",
@@ -568,7 +568,7 @@ export default function BudgetPage() {
                   title={t(it.fixed ? "budget.unfixAmount" : "budget.fixAmount").replace("{name}", it.label)}
                   aria-label={t(it.fixed ? "budget.unfixAmount" : "budget.fixAmount").replace("{name}", it.label)}
                   style={{
-                    width: COL_BTN, height: 36, borderRadius: 999, flexShrink: 0, border: "none",
+                    width: COL_BTN, height: 34, borderRadius: 999, flexShrink: 0, border: "none",
                     background: it.fixed ? T.accentBg : "transparent",
                     color: it.fixed ? T.text : T.textMut, cursor: "pointer",
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -589,7 +589,7 @@ export default function BudgetPage() {
                   onClick={() => removeItem(it.id)}
                   aria-label={t("budget.removeCategory").replace("{name}", it.label)}
                   style={{
-                    width: COL_BTN, height: 36, borderRadius: 999, flexShrink: 0, border: "none",
+                    width: COL_BTN, height: 34, borderRadius: 999, flexShrink: 0, border: "none",
                     background: "transparent", color: T.textMut, cursor: "pointer",
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     transition: "background 120ms ease, color 120ms ease",
@@ -633,8 +633,8 @@ export default function BudgetPage() {
               type="button"
               onClick={addItem}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-                padding: "0 16px", borderRadius: 999, border: "none",
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                padding: "8px 16px", borderRadius: 999, border: "none",
                 background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
                 cursor: "pointer", fontFamily: "inherit",
               }}

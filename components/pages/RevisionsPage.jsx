@@ -266,8 +266,12 @@ export default function RevisionsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <PeriodPills value={tab} onChange={setTab} options={TABS} track size={13} />
+        {/* À l'encre : c'est l'action de la page, comme « Nouvelle séance » sur
+            Sport ou « Nouvelle habitude » sur Habitudes. L'aplat gris du variant
+            par défaut la faisait passer pour une commande secondaire à côté des
+            onglets. */}
         {store.decks.length > 0 && (
-          <PillButton compact onClick={() => setEditing({ deckId: store.decks[0].id })}>
+          <PillButton variant="primary" compact onClick={() => setEditing({ deckId: store.decks[0].id })}>
             <Plus size={13} /> Nouvelle note
           </PillButton>
         )}
@@ -311,8 +315,11 @@ export default function RevisionsPage() {
                   type="button"
                   onClick={() => startSession(null)}
                   style={{
-                    minHeight: 40, padding: "11px 20px", borderRadius: 999, border: "none",
-                    background: T.brand, color: T.onSolid,
+                    padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
+                    /* À l'encre, comme l'action principale des autres pages :
+                       l'accent vert servait ici à une action ordinaire, alors
+                       qu'ailleurs il est réservé aux repères de progression. */
+                    background: T.text, color: T.textInverted,
                     fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
                     display: "inline-flex", alignItems: "center", gap: 8,
                     transition: "var(--tr-ui)",

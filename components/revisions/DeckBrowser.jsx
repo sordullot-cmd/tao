@@ -125,7 +125,7 @@ function DeckModal({ deck, onSave, onDelete, onClose }) {
                 onClick={() => set({ color: c })}
                 aria-label={c}
                 style={{
-                  width: 26, height: 26, borderRadius: 999, cursor: "pointer",
+                  width: 34, height: 34, borderRadius: 999, cursor: "pointer",
                   background: PALETTE[c], border: "none", padding: 0,
                   boxShadow: form.color === c ? `0 0 0 2px ${T.white}, 0 0 0 4px ${PALETTE_DARK[c]}` : "none",
                   transition: "var(--tr-ui)",

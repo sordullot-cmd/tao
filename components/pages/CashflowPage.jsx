@@ -420,8 +420,8 @@ export default function CashflowPage({ setPage }) {
             type="button"
             onClick={() => setPage?.("patrimoine-bank")}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-              padding: "0 16px", borderRadius: 999, border: "none",
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+              padding: "8px 16px", borderRadius: 999, border: "none",
               background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
               cursor: "pointer", fontFamily: "inherit",
             }}
@@ -584,8 +584,8 @@ export default function CashflowPage({ setPage }) {
           type="button"
           onClick={() => setPage?.("budget")}
           style={{
-            display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-            padding: "0 16px", borderRadius: 999, border: "none",
+            display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+            padding: "8px 16px", borderRadius: 999, border: "none",
             background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
             cursor: "pointer", fontFamily: "inherit",
           }}

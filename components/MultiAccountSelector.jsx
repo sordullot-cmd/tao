@@ -69,7 +69,7 @@ export default function MultiAccountSelector({
         aria-expanded={isOpen}
         style={{
           width: "100%",
-          minHeight: 28, padding: "5px 12px",
+          minHeight: 34, padding: "8px 16px",
           height: 34,
           borderRadius: 999,
           background: "var(--color-card-bg, #FFFFFF)",

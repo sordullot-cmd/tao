@@ -131,9 +131,6 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
   if (allDays.length === 0) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
-          <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-        </div>
         <div style={{ ...CARD, padding: "64px 40px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{
             width: 48, height: 48, borderRadius: 12, background: T.accentBg,
@@ -161,7 +158,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
           la page montre, l'export ne fait que l'emporter. */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <PeriodPills value={period} onChange={setPeriod} />
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
           <div id="tr4de-page-header-slot" />
           <button
             type="button"
@@ -209,7 +206,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
             type="button"
             onClick={() => setShownDays((n) => n + DAYS_PER_PAGE)}
             style={{
-              alignSelf: "center", minHeight: 34, padding: "8px 16px", borderRadius: 999,
+              alignSelf: "center", padding: "8px 16px", minHeight: 34, borderRadius: 999,
               border: `1px solid ${T.border}`, background: T.white, color: T.text,
               fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}

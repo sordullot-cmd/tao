@@ -188,9 +188,9 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
 
           {/* Bouton ajouter */}
           <button type="button" onClick={add}
-            style={{
+            style={{minHeight: 34,
               display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-              padding:"10px",fontSize:13,fontWeight:500,
+              padding:"8px 16px",fontSize:13,fontWeight:500,
               color:T.text,background:DA_FIELD_BG,
               border:"none",cursor:"pointer",borderRadius:999,
               fontFamily:"inherit",width:"100%",marginTop:draft.length === 0 ? 0 : 8,
@@ -980,7 +980,7 @@ export default function DisciplinePage({ trades = [] }) {
     <>
       {/* Même ossature que les autres pages de la DA : fond gris hérité de la
           coquille, sections espacées de 24, léger retrait haut. */}
-      <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:8,fontFamily:"var(--font-sans)"}} className="anim-1">
+      <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{marginLeft:"auto", display:"flex", alignItems:"center", gap:8}}>
             <div ref={routineBtnRef} style={{position:"relative", fontFamily:"var(--font-sans)"}}>
@@ -1666,7 +1666,7 @@ export default function DisciplinePage({ trades = [] }) {
                       disabled={!newManualRule.trim()}
                       aria-label={t("disc.addAria")}
                       title={t("disc.addAria")}
-                      style={{width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",background:newManualRule.trim()?T.text:T.bg,color:newManualRule.trim()?"#fff":T.textMut,border:`1px solid ${newManualRule.trim()?T.text:T.border}`,borderRadius:999,cursor:newManualRule.trim()?"pointer":"not-allowed",fontFamily:"inherit",flexShrink:0}}
+                      style={{width: 34,height: 34,display:"inline-flex",alignItems:"center",justifyContent:"center",background:newManualRule.trim()?T.text:T.bg,color:newManualRule.trim()?"#fff":T.textMut,border:`1px solid ${newManualRule.trim()?T.text:T.border}`,borderRadius:999,cursor:newManualRule.trim()?"pointer":"not-allowed",fontFamily:"inherit",flexShrink:0}}
                     >
                       <Plus size={14} strokeWidth={2}/>
                     </button>

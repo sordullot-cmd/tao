@@ -627,13 +627,6 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
         </DAModal>
       )}
 
-      {/* Emplacement des contrôles injectés par la barre du haut (sélecteur de
-          comptes). Les actions de création, elles, vivent désormais sur la
-          ligne du chiffre héros. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-      </div>
-
       {/* Corps de page : blocs séparés de 36 px (maquette « Frame 94 »). */}
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
 
@@ -667,7 +660,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                 onClick={() => setCreatingAccount({ firmId: "" })}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+                  padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                   background: T.white, boxShadow: T.elevPill, color: T.text,
                   fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 }}
@@ -679,7 +672,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                 onClick={() => setCreatingFirm(true)}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+                  padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                   background: T.text, color: TEXT_INVERTED,
                   fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 }}
@@ -1952,7 +1945,7 @@ function AccountPlans({ accounts, trades }) {
         <button onClick={openCreate}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            minHeight: 28, padding: "5px 12px", borderRadius: 999,
+            padding: "8px 16px", minHeight: 34, borderRadius: 999,
             border: `1px solid ${T.border}`, background: "var(--color-card-bg, #FFFFFF)", color: T.text,
             fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}>
@@ -2177,7 +2170,7 @@ function AccountPlans({ accounts, trades }) {
                                 accountIds: sel ? form.accountIds.filter(x => x !== a.id) : [...form.accountIds, a.id],
                               })}
                               style={{
-                                minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                                padding: "8px 16px", minHeight: 34, borderRadius: 999,
                                 border: `1px solid ${sel ? T.text : T.border}`,
                                 background: sel ? T.text : T.white,
                                 color: sel ? T.white : T.text,
@@ -2408,7 +2401,7 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
           <button onClick={onResetPhase}
             title="Recommencer la phase (reset de la progression à zéro)"
             style={{
-              minHeight: 28, padding: "5px 12px", borderRadius: 999,
+              padding: "8px 16px", minHeight: 34, borderRadius: 999,
               border: `1px solid ${T.border}`, background: "var(--color-card-bg, #FFFFFF)",
               color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer",
               fontFamily: "inherit",
@@ -2420,7 +2413,7 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
               disabled={!phaseComplete}
               title={phaseComplete ? "Valider et passer à la phase suivante" : "Atteins les targets de la phase pour valider"}
               style={{
-                minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+                padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                 background: phaseComplete ? T.pnlPos : T.accentBg,
                 color: phaseComplete ? T.white : T.textMut,
                 fontSize: 13, fontWeight: 500,

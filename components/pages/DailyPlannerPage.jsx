@@ -77,19 +77,19 @@ const topIconBtn = {
 };
 const pillBtn = {
   display: "inline-flex", alignItems: "center", gap: 6,
-  minHeight: 34, padding: "8px 16px", minHeight: 32, borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: "none", background: DA_FIELD_BG, color: T.text,
   fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
 };
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",
-  minHeight: 34, padding: "8px 16px", minHeight: 32, borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: "none", background: DA_FIELD_BG, color: T.text,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 const primaryBtn = (small = false) => ({
   display: "inline-flex", alignItems: "center",
-  padding: small ? "7px 14px" : "10px 20px", minHeight: small ? 32 : undefined, borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: "none", background: T.text, color: T.textInverted,
   fontSize: small ? 12 : 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
@@ -702,7 +702,7 @@ export default function DailyPlannerPage() {
                         const toggle = () => setHabitDraft({ ...habitDraft, attributes: active ? sel.filter(x => x !== c.id) : [...sel, c.id] });
                         return (
                           <button key={c.id} type="button" onClick={toggle}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none", boxShadow: active ? `inset 0 0 0 1px ${c.color}` : "none", background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : DA_FIELD_BG, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", boxShadow: active ? `inset 0 0 0 1px ${c.color}` : "none", background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : DA_FIELD_BG, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                             {active
                               ? <Check size={13} strokeWidth={2.5} color={c.color} />
                               : <CatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}

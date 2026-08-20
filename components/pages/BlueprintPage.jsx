@@ -331,7 +331,7 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={onBack} aria-label="Retour aux plans" style={iconBtnSm()}><ChevronLeft size={16} strokeWidth={2} /></button>
         <span style={{ fontSize: 12, color: T.textSub }}>Retour aux plans</span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
           <button onClick={onEdit} style={btnGhost()}><Pencil size={13} strokeWidth={1.75} /> Modifier</button>
           <button onClick={onDelete} style={btnGhost()}><Trash2 size={13} strokeWidth={1.75} /> Supprimer</button>
         </div>
@@ -576,7 +576,7 @@ function StepGoal({ draft, set }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {CATEGORIES.map(c => (
               <button key={c.id} onClick={() => set({ category: c.id })}
-                style={{ fontSize: 13, fontWeight: 500, minHeight: 28, padding: "5px 12px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${draft.category === c.id ? c.color : T.border}`, background: draft.category === c.id ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: draft.category === c.id ? c.color : T.textSub }}>
+                style={{ fontSize: 13, fontWeight: 500, padding: "8px 16px", minHeight: 34, borderRadius: 999, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${draft.category === c.id ? c.color : T.border}`, background: draft.category === c.id ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: draft.category === c.id ? c.color : T.textSub }}>
                 {c.label}
               </button>
             ))}
@@ -736,13 +736,13 @@ function inputStyle() {
   return { ...DA_FIELD };
 }
 function btnPrimary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.text, color: T.white, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.text, color: T.white, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnGhost() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnSoft() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.accentBg, color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.accentBg, color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function iconBtnSm() {
   return { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: "none", background: DA_FIELD_BG, color: T.textMut, cursor: "pointer", flexShrink: 0, padding: 0 };

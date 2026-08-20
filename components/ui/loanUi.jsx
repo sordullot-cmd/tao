@@ -325,7 +325,7 @@ export function LoanBtn({ children, onClick, icon, tone }) {
       onClick={onClick}
       style={{
         display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
-        padding: "0 12px", borderRadius: 999, flexShrink: 0,
+        padding: "8px 16px", borderRadius: 999, flexShrink: 0,
         /* Jamais de contour : le secondaire est un aplat, comme les champs
            qu'il accompagne. */
         border: "none",

@@ -921,10 +921,6 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-      </div>
-
       {/* Corps de page : mêmes blocs de 36 px que les autres pages de la DA. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1319,7 +1315,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                     disabled={!ready}
                     style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      minHeight: 40, padding: "11px 20px", borderRadius: 999, border: "none",
+                      padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                       background: ready ? T.text : T.white,
                       boxShadow: ready ? "none" : T.elevPill,
                       color: ready ? T.textInverted : T.textMut,

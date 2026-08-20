@@ -10,18 +10,21 @@ import { TS } from "./type";
  * dans la même barre d'outils n'avaient donc pas la même hauteur, et rien ne
  * disait laquelle était la bonne.
  *
- * ── Trois tailles, pas plus ───────────────────────────────────────────────
- * Trois, parce que trois besoins distincts existent vraiment :
- * - `sm` — dans une ligne de tableau ou une barre d'outils dense, où un bouton
- *   de 34 px ferait grossir la ligne ;
- * - `md` — le défaut, et celui qu'on prend quand on hésite ;
- * - `lg` — l'action qui conclut un formulaire ou une modale, seule sur sa
- *   ligne : elle a besoin d'être visée sans être cherchée.
+ * ── UNE seule métrique ────────────────────────────────────────────────────
+ * Tous les boutons font **34 px de haut** et **16 px de marge de chaque côté
+ * du texte** — les valeurs du bouton « Créer une stratégie », prises comme
+ * référence. Les trois paliers d'avant se distinguaient par leur hauteur puis
+ * par leur respiration : dans les deux cas la nuance était lisible ici, pas à
+ * l'écran, où elle ne produisait qu'un bouton plus court ou plus serré que son
+ * voisin sans qu'on sache pourquoi.
+ *
+ * Les clés `sm` / `md` / `lg` survivent pour ne pas casser leurs appels ; elles
+ * rendent la même métrique. Seul `lg` garde son texte d'un cran au-dessus, pour
+ * l'action qui conclut une modale.
  *
  * `minHeight` autant que le padding : sans lui, deux boutons voisins dont l'un
  * porte une icône et l'autre non ne font pas la même hauteur, parce que la
- * hauteur de ligne du texte diffère de celle du glyphe. C'est le défaut le
- * plus visible de l'état actuel.
+ * hauteur de ligne du texte diffère de celle du glyphe.
  *
  * ── Ce que ce fichier ne dit PAS ──────────────────────────────────────────
  * Ni couleur, ni bordure, ni ombre : la PEAU d'un bouton (primaire, discret,
@@ -52,13 +55,18 @@ export interface ButtonMetrics {
    rayon qui change avec la taille ferait trois formes au lieu d'une. */
 const PILL = { borderRadius: 999, fontWeight: 500 } as const;
 
+/** La hauteur, commune à tous les boutons. Un bouton du site fait ça, point. */
+export const BTN_HEIGHT = 34;
+/** La marge interne, commune elle aussi : 8 px au-dessus, 16 px de chaque côté. */
+export const BTN_PADDING = "8px 16px";
+
 export const BTN: Record<"sm" | "md" | "lg", ButtonMetrics> = {
-  /** 28 px — ligne de tableau, barre d'outils dense, action secondaire. */
-  sm: { ...PILL, minHeight: 28, padding: "5px 12px",  fontSize: TS.body,    gap: 5 },
-  /** 34 px — le défaut. Celui qu'on prend sans réfléchir. */
-  md: { ...PILL, minHeight: 34, padding: "8px 16px",  fontSize: TS.body,    gap: 6 },
-  /** 40 px — l'action qui conclut un formulaire ou une modale. */
-  lg: { ...PILL, minHeight: 40, padding: "11px 20px", fontSize: TS.callout, gap: 8 },
+  /** Ligne de tableau, barre d'outils dense. */
+  sm: { ...PILL, minHeight: BTN_HEIGHT, padding: BTN_PADDING, fontSize: TS.body,    gap: 6 },
+  /** Le défaut. Celui qu'on prend sans réfléchir. */
+  md: { ...PILL, minHeight: BTN_HEIGHT, padding: BTN_PADDING, fontSize: TS.body,    gap: 6 },
+  /** L'action qui conclut un formulaire ou une modale — seul son texte diffère. */
+  lg: { ...PILL, minHeight: BTN_HEIGHT, padding: BTN_PADDING, fontSize: TS.callout, gap: 6 },
 };
 
 /**
@@ -68,7 +76,7 @@ export const BTN: Record<"sm" | "md" | "lg", ButtonMetrics> = {
  * ondule.
  */
 export const BTN_ICON: Record<"sm" | "md" | "lg", { width: number; height: number; borderRadius: string }> = {
-  sm: { width: 28, height: 28, borderRadius: "50%" },
-  md: { width: 34, height: 34, borderRadius: "50%" },
-  lg: { width: 40, height: 40, borderRadius: "50%" },
+  sm: { width: BTN_HEIGHT, height: BTN_HEIGHT, borderRadius: "50%" },
+  md: { width: BTN_HEIGHT, height: BTN_HEIGHT, borderRadius: "50%" },
+  lg: { width: BTN_HEIGHT, height: BTN_HEIGHT, borderRadius: "50%" },
 };

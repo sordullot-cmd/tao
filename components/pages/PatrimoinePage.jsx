@@ -218,8 +218,8 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
               type="button"
               onClick={() => setAddingAsset(true)}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-                padding: "0 16px", borderRadius: 999, border: "none",
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                padding: "8px 16px", borderRadius: 999, border: "none",
                 background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
                 cursor: "pointer", fontFamily: "inherit",
               }}
@@ -230,8 +230,8 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
               type="button"
               onClick={() => setPage?.("patrimoine-bank")}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-                padding: "0 16px", borderRadius: 999, border: "none",
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                padding: "8px 16px", borderRadius: 999, border: "none",
                 background: "transparent", color: T.textSub, fontSize: 14, fontWeight: 500,
                 cursor: "pointer", fontFamily: "inherit",
               }}
@@ -296,14 +296,34 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
               d'identifiants Enable Banking — la modale n'aurait aucun
               établissement à proposer, et la page Banque, elle, dit ce qui
               manque. La saisie manuelle, elle, marche toujours. */}
+          {/* La saisie manuelle d'abord, l'aplat d'encre EN DERNIER : dans une
+              rangée d'actions, le plein se lit comme la conclusion de la ligne,
+              et il se trouve alors du côté où la main revient. « Ajouter un
+              actif » passe en blanc posé sur l'ombre de pilule — la peau des
+              actions secondaires de la DA — plutôt que sur l'aplat d'accent :
+              deux fonds colorés côte à côte se disputaient le regard sans dire
+              lequel des deux était l'action principale. */}
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => setAddingAsset(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                padding: "8px 16px", borderRadius: 999, border: "none", flexShrink: 0,
+                background: T.white, color: T.text, boxShadow: T.elevPill,
+                fontSize: 13, fontWeight: 500,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.assets.add")}
+            </button>
             {bank.configured && (
               <button
                 type="button"
                 onClick={() => setAddingBank(true)}
                 style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-                  padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
+                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                  padding: "8px 16px", borderRadius: 999, border: "none", flexShrink: 0,
                   background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
                   cursor: "pointer", fontFamily: "inherit",
                 }}
@@ -311,18 +331,6 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
                 <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.bank.addBank")}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setAddingAsset(true)}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-                padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
-                background: T.accentBg, color: T.text, fontSize: 13, fontWeight: 500,
-                cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              <Plus size={14} strokeWidth={1.75} /> {t("patrimoine.assets.add")}
-            </button>
           </div>
         </div>
 
@@ -636,7 +644,7 @@ function OpenBudgetButton({ onOpen }) {
       onClick={onOpen}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-        alignSelf: "flex-start", minHeight: 36, padding: "0 14px", borderRadius: 999,
+        alignSelf: "flex-start", padding: "8px 16px", minHeight: 34, borderRadius: 999,
         border: "none", background: T.accentBg, color: T.text,
         fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
       }}
@@ -788,7 +796,7 @@ function ClassSection({ cls, assets, total, positiveTotal, onOpenClass, onOpenAs
             aria-controls={panelId}
             aria-label={t(open ? "patrimoine.collapseClass" : "patrimoine.expandClass").replace("{name}", t(cls.labelKey))}
             style={{
-              width: 28, height: 28, flexShrink: 0, borderRadius: 999, border: "none",
+              width: 34, height: 34, flexShrink: 0, borderRadius: 999, border: "none",
               background: "transparent", color: T.textSub, cursor: "pointer",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
             }}

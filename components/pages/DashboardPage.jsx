@@ -278,9 +278,6 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   if (tradesLoading && (!trades || trades.length === 0)) {
     return (
       <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1" aria-busy="true" aria-live="polite">
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
-        </div>
         <Skeleton width={90} height={14} />
         <Skeleton width={220} height={40} />
         <div style={{background:T.white,borderRadius:12,boxShadow:T.elevCard,padding:16}}>
@@ -292,9 +289,6 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   if (!trades || trades.length === 0) {
     return (
       <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
-        </div>
         <div style={{background:T.white,borderRadius:12,boxShadow:T.elevCard,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
           <div style={{width:48,height:48,borderRadius:12,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <LayoutDashboard size={22} strokeWidth={1.75} color={T.text}/>
@@ -704,19 +698,22 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
 
   /* ── Marge du haut, alignée sur le reste du site ───────────────────────────
-     Toutes les autres pages posent leur premier élément à la même hauteur :
-     barre du haut (20 px) + retrait de page (14 px) + l'écart de section (48 px)
-     que leur barre d'en-tête vide laisse au-dessus du contenu.
+     Ailleurs, le premier élément d'une page tombe sous la seule barre du haut
+     (20 px) : le conteneur qui défile est à padding-top 0 et les pages ne
+     posent plus de retrait à elles.
 
-     Le tableau de bord n'a NI l'une NI l'autre — sa barre du haut est mise à
-     hauteur nulle et sa racine n'a pas de retrait, pour que la courbe monte
-     jusqu'au bord de la fenêtre. Il doit donc réintégrer les deux ici, dans la
-     bande haute : le graphique continue de coller au bord, mais le chiffre héros
-     tombe exactement à la hauteur du premier titre des autres pages. */
+     Le tableau de bord, lui, garde sa barre du haut à hauteur NULLE pour que la
+     courbe du P&L monte jusqu'au bord de la fenêtre. Il réintègre donc ces
+     20 px ici, dans la bande haute : le graphique continue de coller au bord,
+     mais le chiffre héros tombe exactement à la hauteur du premier élément des
+     autres pages.
+
+     Ce chiffre valait 82 px (20 + 14 de retrait + 48 d'écart de section) du
+     temps où chaque page ouvrait sur une barre d'en-tête VIDE — une div à zéro
+     qui consommait quand même un `gap`, et poussait tout le contenu vers le
+     bas. Ces barres ont été supprimées ; il ne reste que la barre du haut. */
   const TOPBAR_H = 20;      // hauteur de la barre du haut ailleurs sur le site
-  const PAGE_INSET = 14;    // retrait haut de la racine des autres pages
-  const SECTION_GAP = 48;   // écart de section, comme sur Calendrier ou Comptes
-  const HEAD_PAD_TOP = TOPBAR_H + PAGE_INSET + SECTION_GAP;
+  const HEAD_PAD_TOP = TOPBAR_H;
 
   /* Bande haute du bloc de tête : le chiffre héros l'occupe, la courbe passe
      dessous (elle ne commence à tracer qu'à `topY = HEAD_BAND`). Les deux
@@ -779,7 +776,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                   onClick={() => setPeriod(p.id)}
                   aria-pressed={active}
                   style={{
-                    minHeight: 28, padding: "5px 12px", borderRadius:999, border:"none",
+                    padding: "8px 16px", minHeight: 34, borderRadius:999, border:"none",
                     background: active ? T.white : "transparent",
                     boxShadow: active ? T.elevPill : "none",
                     color: T.text, opacity: active ? 1 : 0.6,
@@ -1185,7 +1182,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                     onClick={() => setBreakdown(b.id)}
                     aria-pressed={active}
                     style={{
-                      minHeight: 28, padding: "5px 12px", borderRadius:999, border:"none",
+                      padding: "8px 16px", minHeight: 34, borderRadius:999, border:"none",
                       background: active ? T.accentBg : "transparent",
                       color: T.text, opacity: active ? 1 : 0.5,
                       fontSize: 13, fontWeight:500,

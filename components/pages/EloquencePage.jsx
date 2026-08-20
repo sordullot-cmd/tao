@@ -80,14 +80,14 @@ const card = { ...CARD, padding: 20, boxSizing: "border-box" };
 const SURFACE = FIELD_BG;
 const pill = (active) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
-  minHeight: 28, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "none",
+  padding: "8px 16px", minHeight: 34, borderRadius: 999, cursor: "pointer", border: "none",
   background: active ? T.text : FIELD_BG, color: active ? T.textInverted : T.text,
   fontSize: 13, fontWeight: 500, fontFamily: "inherit",
   transition: "background 120ms ease, color 120ms ease",
 });
 const ghost = (disabled) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
-  minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
   fontSize: 13, fontWeight: 500, fontFamily: "inherit",
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
@@ -95,7 +95,7 @@ const ghost = (disabled) => ({
 });
 const primary = (disabled) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
-  minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: "none", background: T.text, color: T.textInverted,
   fontSize: 12, fontWeight: 500, fontFamily: "inherit",
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
@@ -2056,14 +2056,8 @@ export default function EloquencePage() {
 
   return (
     <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }}>
-      {/* ═══ 1. EN-TÊTE ═══ Ni titre ni sous-titre : la barre latérale dit déjà
-          où l'on est. Ne reste que le slot d'en-tête, que toutes les pages rendent. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-      </div>
-
       {/* ═══ 2. CHIFFRE HÉROS + MINI-KPI + SÉLECTEUR D'EXERCICE ═══ */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             {/* Deux tons comme `HeroAmount` : le score en encre pleine, son

@@ -1424,7 +1424,7 @@ function NumberInput({ value, onChange, suffix, placeholder }) {
 // Harmonisé avec PrimaryButton : primaire = fond T.text / texte blanc.
 function primaryBtn() {
   return {
-    minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.text}`,
+    padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px solid ${T.text}`,
     background: T.text, color: T.white,
     fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
   };
@@ -1432,7 +1432,7 @@ function primaryBtn() {
 // Secondaire = fond T.white, bordure T.border (comme SecondaryButton).
 function secondaryBtn(disabled) {
   return {
-    minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.border}`,
+    padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px solid ${T.border}`,
     background: T.white, color: T.text,
     fontSize: 12, fontWeight: 500, cursor: disabled ? "default" : "pointer",
     opacity: disabled ? 0.7 : 1, fontFamily: "inherit",

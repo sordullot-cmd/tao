@@ -463,7 +463,7 @@ export default function PropFirmDetailPage({
             type="button"
             onClick={() => setEditingFirm(true)}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 28, padding: "5px 12px",
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px",
               borderRadius: 999, border: `1px solid ${T.border}`, background: T.white,
               color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}
@@ -477,7 +477,7 @@ export default function PropFirmDetailPage({
             title={t("firms.deleteFirm")}
             style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 32, height: 32, borderRadius: 999,
+              width: 34, height: 34, borderRadius: 999,
               border: `1px solid ${T.border}`, background: T.white, color: T.textMut, cursor: "pointer",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.redBd; }}

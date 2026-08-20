@@ -121,8 +121,8 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
             type="button"
             onClick={() => setAddingAsset({ type: "loan" })}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-              padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+              padding: "8px 16px", borderRadius: 999, border: "none", flexShrink: 0,
               background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
               cursor: "pointer", fontFamily: "inherit",
             }}
@@ -138,8 +138,8 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
               type="button"
               onClick={() => setAddingAsset({ type: "loan" })}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40,
-                padding: "0 16px", borderRadius: 999, border: "none",
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                padding: "8px 16px", borderRadius: 999, border: "none",
                 background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
                 cursor: "pointer", fontFamily: "inherit",
               }}
@@ -260,7 +260,7 @@ function LoanCard({ asset, stats, aggregated, onEdit, onOpen, onPay, onSync }) {
           aria-controls={panelId}
           aria-label={t(open ? "patrimoine.loan.collapse" : "patrimoine.loan.expand").replace("{name}", asset.name || "")}
           style={{
-            width: 28, height: 28, flexShrink: 0, borderRadius: 999, border: "none",
+            width: 34, height: 34, flexShrink: 0, borderRadius: 999, border: "none",
             background: "transparent", color: T.textSub, cursor: "pointer",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
           }}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { BTN, BTN_ICON } from "@/lib/ui/buttons";
+import { BTN, BTN_ICON, BTN_HEIGHT, BTN_PADDING } from "@/lib/ui/buttons";
 import { TYPE_SIZES } from "@/lib/ui/type";
 
 /**
@@ -27,9 +27,9 @@ const ROOTS = ["components", "app"];
 const EXEMPT = ["font-test"];
 const SRC = /\.(jsx|tsx)$/;
 
-/** Les trois seules marges internes de bouton admises. */
+/** La seule marge interne de bouton admise. */
 const CANON = new Set(Object.values(BTN).map(b => b.padding));
-/** Les trois seules hauteurs. */
+/** La seule hauteur — les trois paliers la partagent. */
 const HEIGHTS = new Set(Object.values(BTN).map(b => b.minHeight));
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -64,10 +64,16 @@ function buttonTags(src: string): { tag: string; line: number }[] {
 }
 
 describe("métriques de boutons", () => {
-  it("n'offre que trois paliers, et ils grandissent", () => {
+  it("sert la même métrique aux trois paliers", () => {
     expect(Object.keys(BTN)).toEqual(["sm", "md", "lg"]);
-    expect(BTN.sm.minHeight).toBeLessThan(BTN.md.minHeight);
-    expect(BTN.md.minHeight).toBeLessThan(BTN.lg.minHeight);
+    /* Ni hauteur ni marge interne ne varient d'un bouton à l'autre : les deux
+       se voyaient dès que deux boutons se croisaient dans une barre, et rien à
+       l'écran ne disait pourquoi l'un était plus court ou plus serré. Seul le
+       texte de `lg` monte encore d'un cran. */
+    for (const [name, b] of Object.entries(BTN)) {
+      expect(b.minHeight, `palier ${name}`).toBe(BTN_HEIGHT);
+      expect(b.padding, `palier ${name}`).toBe(BTN_PADDING);
+    }
   });
 
   it("prend ses tailles de texte dans l'échelle typographique", () => {
@@ -76,10 +82,10 @@ describe("métriques de boutons", () => {
     }
   });
 
-  it("garde le bouton d'icône carré, à la hauteur de son palier", () => {
+  it("garde le bouton d'icône carré, à la hauteur commune", () => {
     for (const key of ["sm", "md", "lg"] as const) {
       expect(BTN_ICON[key].width).toBe(BTN_ICON[key].height);
-      expect(BTN_ICON[key].height).toBe(BTN[key].minHeight);
+      expect(BTN_ICON[key].height).toBe(BTN_HEIGHT);
     }
   });
 

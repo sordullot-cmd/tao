@@ -1264,7 +1264,7 @@ export default function AgendaPage() {
           )}
         </div>
       )}
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
         {connected && !isMobile && (
           <>
             {segmented}
@@ -1342,7 +1342,7 @@ export default function AgendaPage() {
                       }}
                       style={{
                         display: "flex", alignItems: "center", gap: 5, width: "100%",
-                        minHeight: 28, padding: "5px 12px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
+                        padding: "8px 16px", minHeight: 34, borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
                         border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500,
                       }}>
                       <Target size={12} strokeWidth={2.2} color={T.blue} style={{ flexShrink: 0 }} />
@@ -1718,7 +1718,7 @@ export default function AgendaPage() {
                     <button key={k} type="button" onClick={() => setModalTab(k)}
                       style={{
                         display: "inline-flex", alignItems: "center", gap: 6,
-                        minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none", fontFamily: "inherit",
+                        padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", fontFamily: "inherit",
                         fontSize: 13, fontWeight: 500,
                         background: active ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : "transparent",
                         color: active ? T.blue : T.textMut, cursor: "pointer",
@@ -2011,7 +2011,7 @@ export default function AgendaPage() {
                           });
                           return (
                             <button key={c.id} type="button" onClick={toggle}
-                              style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 28, padding: "5px 12px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `${c.color}14` : T.white, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `${c.color}14` : T.white, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                               {active
                                 ? <Check size={13} strokeWidth={2.5} color={c.color} />
                                 : <CatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
@@ -2202,7 +2202,7 @@ const topIconBtn = {
 };
 const pillBtn = {
   display: "inline-flex", alignItems: "center", gap: 8,
-  minHeight: 34, padding: "8px 16px", borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
   fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
 };
@@ -2220,13 +2220,13 @@ const iconBtn = () => ({
 });
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",
-  padding: "7px 14px", minHeight: 32, borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: "none", background: FIELD_BG, color: T.text,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 const primaryBtn = (small = false) => ({
   display: "inline-flex", alignItems: "center",
-  padding: small ? "7px 14px" : "10px 20px", minHeight: small ? 32 : undefined, borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: "none", background: T.text, color: T.textInverted,
   fontSize: small ? 12 : 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });

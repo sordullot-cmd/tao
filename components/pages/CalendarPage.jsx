@@ -390,11 +390,6 @@ export default function CalendarPage({ trades = [], setPage }) {
     /* 14 px de retrait haut : la barre du haut apporte déjà 20 px, ce qui place
        le titre aux 34 px de la maquette (même calcul que le dashboard). */
     <div style={{ display: "flex", flexDirection: "column", gap: 48, fontFamily: "var(--font-sans)" }} className="anim-1">
-      {/* Barre d'en-tête — slot d'en-tête aligné à droite. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
-        <div id="tr4de-page-header-slot" />
-      </div>
-
       <div style={{ display: "flex", flexDirection: "column", gap: 24, width: "100%" }}>
         {/* En-tête : période + P&L héros à gauche, navigation à droite */}
         <div className="tr4de-cal-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>

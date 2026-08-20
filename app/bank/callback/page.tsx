@@ -86,7 +86,7 @@ function CallbackContent() {
 
   const button = {
     display: "flex", alignItems: "center", justifyContent: "center",
-    width: "100%", minHeight: 44, borderRadius: 999, border: "none",
+    width: "100%", minHeight: 34, borderRadius: 999, border: "none",
     fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
   } as const;
 

@@ -827,24 +827,22 @@ export default function LifeRpgPage() {
        celle-ci en empile davantage et respirait trop). */
     <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">
 
-      {/* ─── Barre d'en-tête : seulement le slot de la barre du haut ─── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-      </div>
-
       {/* ─── Bloc héros : l'ANNÉE, comme le P&L du dashboard ───
           Le cadre de la page n'est plus le niveau mais l'année en cours : ce
           qu'il en reste, et ce qu'on en a fait. Le niveau global (barre d'XP,
           feedback « +N XP » et pop de montée de niveau) passe à droite, avec
           l'action de la page. */}
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
           <span style={{ fontSize: 13, lineHeight: "17.05px", color: T.textSub }}>{`Mes ${MAX_YEAR_GOALS} objectifs de l'année`}</span>
           <span style={{ fontSize: 24, fontWeight: 500, lineHeight: 1, letterSpacing: -0.2, color: T.text, fontVariantNumeric: "tabular-nums" }}>
             {YEAR}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        {/* Les actions se calent en HAUT de la ligne, pas au milieu ni en bas :
+            c'est ce qui pose le bouton au même pixel que sur toutes les autres
+            pages, quelle que soit la hauteur du bloc de tête à sa gauche. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
           <XpBar
             level={lvl.level}
             pct={lvl.pct}
@@ -1309,7 +1307,7 @@ function EmptyGoalSlot({ rank, onCreate }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, justifyContent: "center" }}>
         {YEAR_GOAL_TEMPLATES.slice(0, 4).map(tpl => (
           <button key={tpl.label} type="button" onClick={() => onCreate(tpl)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, minHeight: 28, padding: "5px 12px", borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.textSub, cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.textSub, cursor: "pointer", fontFamily: "inherit" }}>
             <CatIcon name={tpl.icon} size={11} strokeWidth={1.9} color={tpl.color} />
             {tpl.label}
           </button>
@@ -1713,7 +1711,7 @@ function StepsBlock({ cat, steps, today, goalsByStep = {}, stepPcts = {}, allObj
            point de passage ne se pilote pas. */
         <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
           onFocus={() => setBlockHov(true)} onBlur={() => setBlockHov(false)}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: revealed ? 1 : 0, transition: "opacity .15s ease" }}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: revealed ? 1 : 0, transition: "opacity .15s ease" }}
           onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 10%, transparent)`; }}
           onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 5%, transparent)`; }}>
           <Milestone size={14} strokeWidth={2} /> Par où passer ?
@@ -1799,7 +1797,7 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
       ) : (
         <button type="button" onClick={() => setOpen(o => !o)}
           onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: filled ? `1px dashed color-mix(in srgb, ${color} 40%, transparent)` : "1px solid transparent", background: filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent", color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: filled ? `1px dashed color-mix(in srgb, ${color} 40%, transparent)` : "1px solid transparent", background: filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent", color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
           onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} ${filled ? 10 : 8}%, transparent)`; }}
           onMouseLeave={e => { e.currentTarget.style.background = filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent"; }}>
           <Plus size={14} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
@@ -1968,7 +1966,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
 
       <Field label="Objectifs (ils mesurent l'avancement)">
         <button onClick={onGoToObjectives}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
           <Target size={14} strokeWidth={1.9} /> Gérer les objectifs
         </button>
       </Field>
@@ -2207,23 +2205,23 @@ function AutoTextarea({ value, onChange, placeholder, minRows = 3, style }) {
    Comptes et Calendrier) : 12 px, pas de bordure, l'action principale en aplat
    d'encre, les secondaires en blanc posé sur l'ombre de pilule. */
 function btnPrimary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 // Bouton d'action principal d'une modale : même aplat d'accent, cible plus
 // généreuse. (S'appelait `btnDark` du temps où l'action principale était noire.)
 function btnPrimaryLg() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 /* Action forte NEUTRE : mêmes métriques que btnPrimary, mais à l'encre au lieu
    de l'accent. C'est ce qui permet de poser deux actions pleines côte à côte
    sans qu'elles se disputent le regard — l'accent reste réservé à celle qui
    structure la page. */
 function btnDark() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 // Bouton secondaire d'une modale.
 function btnGhost() {
-  return { minHeight: 34, padding: "8px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  return { padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 function iconBtn() {
   return { width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };

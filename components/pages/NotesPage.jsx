@@ -821,7 +821,7 @@ export default function NotesPage() {
       {/* En-tête sans titre de page : la barre latérale dit déjà où l'on est.
           Ne restent que l'action et le slot d'en-tête, alignés à droite. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
         <ObsidianVaultPanel vault={vault} />
         <button
           type="button"
@@ -860,7 +860,7 @@ export default function NotesPage() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
                 {activeTag && (
                   <button onClick={() => setActiveTag(null)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none", background: FIELD_BG, fontSize: 13, cursor: "pointer", color: T.textSub, fontFamily: "inherit" }}>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: FIELD_BG, fontSize: 13, cursor: "pointer", color: T.textSub, fontFamily: "inherit" }}>
                     <X size={10} strokeWidth={2} /> Tout
                   </button>
                 )}
@@ -868,7 +868,7 @@ export default function NotesPage() {
                   <button key={tag} onClick={() => setActiveTag(tag === activeTag ? null : tag)}
                     aria-pressed={activeTag === tag}
                     style={{
-                      minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+                      padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                       background: activeTag === tag ? T.text : FIELD_BG,
                       color: activeTag === tag ? T.textInverted : T.textSub,
                       fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
@@ -938,7 +938,7 @@ export default function NotesPage() {
                     aria-pressed={preview}
                     title={preview ? "Modifier (Ctrl+E)" : "Aperçu formaté : formules $…$, titres, listes (Ctrl+E)"}
                     style={{
-                      minHeight: 32, padding: "0 12px", borderRadius: 999,
+                      padding: "8px 16px", minHeight: 34, borderRadius: 999,
                       background: preview ? T.text : T.white,
                       border: preview ? "none" : `1px solid ${T.border}`,
                       color: preview ? T.textInverted : T.text,

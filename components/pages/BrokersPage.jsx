@@ -80,10 +80,6 @@ export default function BrokersPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
-      </div>
-
       <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
         Importe ton historique broker via fichier (CSV/HTML) ou connecte-toi via API
         pour synchroniser automatiquement (Tradovate uniquement pour l&apos;instant).
@@ -219,7 +215,7 @@ function Pill({ children, color }) {
 function btnStyle(disabled, variant) {
   const base = {
     display: "inline-flex", alignItems: "center", gap: 6,
-    minHeight: 28, padding: "5px 12px", borderRadius: 999,
+    padding: "8px 16px", minHeight: 34, borderRadius: 999,
     fontSize: 12, fontWeight: 500,
     cursor: disabled ? "not-allowed" : "pointer",
     fontFamily: "inherit",

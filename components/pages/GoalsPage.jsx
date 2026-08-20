@@ -672,7 +672,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
       {!embedded && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <button onClick={openCreate}
-            style={{ marginLeft: "auto", minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.brand, border: "none", color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            style={{ marginLeft: "auto", padding: "8px 16px", height: 34, minHeight: 34, borderRadius: 999, background: T.brand, border: "none", color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <Plus size={14} strokeWidth={2} /> Nouvel objectif
           </button>
         </div>
@@ -828,7 +828,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                 <button key={lv.id} type="button" role="radio" aria-checked={active}
                   onClick={() => setForm({ ...form, level: lv.id })}
                   style={{
-                    display: "inline-flex", alignItems: "center", gap: 7, minHeight: 34, padding: "8px 16px", borderRadius: 999,
+                    display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", minHeight: 34, borderRadius: 999,
                     border: `1px solid ${active ? lv.color : T.border}`,
                     background: active ? `color-mix(in srgb, ${lv.color} 10%, transparent)` : T.white,
                     color: active ? lv.color : T.text,
@@ -1044,9 +1044,9 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                   onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
                 {suffix && <span style={{ fontSize: 12, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>{suffix.trim()}</span>}
                 <button type="button" onClick={() => adjustManual(g.id, -1)} aria-label="Retirer 1"
-                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit" }}>−</button>
+                  style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit" }}>−</button>
                 <button type="button" onClick={() => adjustManual(g.id, 1)} aria-label="Ajouter 1"
-                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit" }}>+</button>
+                  style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit" }}>+</button>
               </div>
             </GoalField>
           );
@@ -1070,7 +1070,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                   return (
                     <button key={c.id} type="button"
                       onClick={() => setForm({ ...form, rpgCategory: active ? "" : c.id })}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                       {active
                         ? <Check size={13} strokeWidth={2.5} color={c.color} />
                         : <RpgCatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
@@ -1689,7 +1689,7 @@ function EmptyState({ onClick }) {
       <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>Pas d&apos;objectif pour le moment</div>
       <div style={{ fontSize: 13, color: T.textSub, marginBottom: 16, maxWidth: 380, margin: "0 auto 16px" }}>Crée ton premier objectif pour commencer à suivre ta progression.</div>
       <button onClick={onClick}
-        style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
         <Plus size={13} strokeWidth={2} /> Créer un objectif
       </button>
     </div>
@@ -1784,7 +1784,7 @@ function DeadlineField({ value, onChange }) {
           return (
             <button key={p.id} type="button" onClick={() => onChange(p.id)}
               style={{
-                minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                padding: "8px 16px", minHeight: 34, borderRadius: 999,
                 border: `1px solid ${active ? T.brand : T.border}`,
                 background: active ? T.brand : T.white,
                 color: active ? T.onSolid : T.textSub,
@@ -2099,7 +2099,7 @@ function DateChip({ value, onChange, placeholder = "Date" }) {
       <button ref={btnRef} type="button" onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
         style={{
           display: "inline-flex", alignItems: "center", gap: 4,
-          minHeight: 28, padding: "5px 12px", borderRadius: 999,
+          padding: "8px 16px", minHeight: 34, borderRadius: 999,
           border: `1px dashed ${value ? "transparent" : T.border}`,
           background: value ? T.accentBg : "transparent",
           color: value ? T.text : T.textMut,
@@ -2142,7 +2142,7 @@ function NoteChip({ value, onChange }) {
       <button type="button" onClick={(e) => { e.stopPropagation(); setEditing(true); }}
         style={{
           display: "inline-flex", alignItems: "center", gap: 4,
-          minHeight: 28, padding: "5px 12px", borderRadius: 999,
+          padding: "8px 16px", minHeight: 34, borderRadius: 999,
           border: `1px dashed ${T.border}`, background: "transparent",
           color: T.textMut, fontSize: 13, fontWeight: 500,
           cursor: "pointer", fontFamily: "inherit",

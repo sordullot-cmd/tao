@@ -647,7 +647,7 @@ export default function SportPage() {
             : `${stats.total} séance${stats.total > 1 ? "s" : ""} enregistrée${stats.total > 1 ? "s" : ""}`}
         </span>
 
-        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 12 }}>
+        <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
           <div id="tr4de-page-header-slot" />
           {tab === "workout" && (
             <button onClick={openCreate}
@@ -1022,7 +1022,7 @@ function PhotosTab({ photos, setPhotos, onAdd, busy }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "18px 18px 0" }}>
                 <div style={{ fontSize: 16, fontWeight: 500, color: T.text, textTransform: "capitalize", lineHeight: 1.2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{fmtDate(viewer.date)}</div>
                 <button type="button" onClick={() => setViewerId(null)} aria-label="Fermer"
-                  style={{ flex: "0 0 auto", width: 28, height: 28, borderRadius: 999, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background var(--dur-fast) var(--ease-out)" }}
+                  style={{ flex: "0 0 auto", width: 34, height: 34, borderRadius: 999, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background var(--dur-fast) var(--ease-out)" }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                   <X size={16} strokeWidth={1.75} />
@@ -1054,7 +1054,7 @@ function PhotosTab({ photos, setPhotos, onAdd, busy }) {
 
               {/* Suppression */}
               <button type="button" onClick={() => del(viewer.id)}
-                style={{ margin: "auto 18px 18px", minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: FIELD_BG, color: T.red, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                style={{ margin: "auto 18px 18px", padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: FIELD_BG, color: T.red, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                 <Trash2 size={13} strokeWidth={1.75} /> Supprimer la photo
               </button>
             </div>
@@ -1090,7 +1090,7 @@ function FilterPills({ value, onChange, options, clearValue = "all" }) {
                aplat, sans cadre — une rangée de pilules cerclées faisait autant
                de traits que de filtres. */
             style={{
-              minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+              padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
               background: active ? T.text : FIELD_BG,
               color: active ? T.textInverted : T.textSub,
               fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
@@ -1658,7 +1658,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                     onClick={() => setForm({ ...form, discipline: d.id })}
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
-                      minHeight: 34, padding: "8px 16px", fontSize: 13, borderRadius: 999, border: "none",
+                      padding: "8px 16px", fontSize: 13, minHeight: 34, borderRadius: 999, border: "none",
                       background: active ? `${d.color}1F` : FIELD_BG,
                       color: active ? T.text : T.textSub, cursor: "pointer", fontFamily: "inherit",
                       textAlign: "left",
@@ -1804,7 +1804,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                       </div>
                       <button type="button" onClick={() => addSet(ex.id)}
                         style={{
-                          marginTop: 8, minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                          marginTop: 8, padding: "8px 16px", minHeight: 34, borderRadius: 999,
                           border: "none", background: T.white,
                           color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer",
                           fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4,
@@ -1846,13 +1846,13 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
               style={{ ...input(), minHeight: 28, padding: "5px 12px", fontSize: 13 }}
             />
             <button type="button" onClick={() => setPresetNamePrompt(null)}
-              style={{ minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none", background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
               Annuler
             </button>
             <button type="button" onClick={confirmSaveAsPreset}
               disabled={!(presetNamePrompt || "").trim()}
               style={{
-                minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+                padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                 background: (presetNamePrompt || "").trim() ? T.text : FIELD_BG,
                 color: (presetNamePrompt || "").trim() ? T.textInverted : T.textSub,
                 fontSize: 13, fontWeight: 500,
@@ -1938,7 +1938,7 @@ function input() {
    « Sauver comme modèle ») : pilule à aplat, sans contour. */
 function softPill(enabled = true) {
   return {
-    minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
+    padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
     background: FIELD_BG, color: T.textSub,
     fontSize: 12, fontWeight: 500,
     cursor: enabled ? "pointer" : "not-allowed", opacity: enabled ? 1 : 0.5,

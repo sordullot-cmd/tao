@@ -127,8 +127,8 @@ export default function PatrimoineBankPage({ setPage }) {
               type="button"
               onClick={() => setAddingBank(true)}
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-                padding: "0 14px", borderRadius: 999, border: "none", flexShrink: 0,
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                padding: "8px 16px", borderRadius: 999, border: "none", flexShrink: 0,
                 background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500,
                 cursor: "pointer", fontFamily: "inherit",
               }}
@@ -210,7 +210,7 @@ export default function PatrimoineBankPage({ setPage }) {
                     disabled={revalidating}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
-                      padding: "0 12px", borderRadius: 999, border: "none",
+                      padding: "8px 16px", borderRadius: 999, border: "none",
                       background: "transparent", color: T.textSub, fontSize: 13,
                       cursor: revalidating ? "default" : "pointer", fontFamily: "inherit",
                       opacity: revalidating ? 0.5 : 1,
@@ -329,7 +329,7 @@ export default function PatrimoineBankPage({ setPage }) {
             type="button"
             onClick={() => setPage?.("patrimoine")}
             style={{
-              minHeight: 36, padding: "0 14px", borderRadius: 999, border: "none",
+              padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
               background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
               cursor: "pointer", fontFamily: "inherit",
             }}
@@ -369,8 +369,8 @@ function FavoriteBankChip({ fav, connecting, busy, connected, onConnect, onRemov
         disabled={busy}
         title={t("patrimoine.bank.connectFav").replace("{name}", fav.name)}
         style={{
-          display: "inline-flex", alignItems: "center", gap: 8, minHeight: 30,
-          padding: "0 6px", border: "none", borderRadius: 999,
+          display: "inline-flex", alignItems: "center", gap: 8, minHeight: 34,
+          padding: "8px 16px", border: "none", borderRadius: 999,
           background: "transparent", color: T.text, fontSize: 13, fontWeight: 500,
           cursor: busy ? "default" : "pointer", fontFamily: "inherit",
           opacity: busy && !connecting ? 0.5 : 1,
@@ -397,7 +397,7 @@ function FavoriteBankChip({ fav, connecting, busy, connected, onConnect, onRemov
         aria-label={t("patrimoine.bank.removeFav")}
         title={t("patrimoine.bank.removeFav")}
         style={{
-          width: 24, height: 24, borderRadius: 999, border: "none", flexShrink: 0,
+          width: 34, height: 34, borderRadius: 999, border: "none", flexShrink: 0,
           background: "transparent", cursor: "pointer",
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           transition: "background 120ms ease",
@@ -428,7 +428,7 @@ function IconButton({ children, label, onClick, onBlur, danger }) {
       aria-label={label}
       title={label}
       style={{
-        width: 32, height: 32, borderRadius: 999, border: "none", flexShrink: 0,
+        width: 34, height: 34, borderRadius: 999, border: "none", flexShrink: 0,
         background: "transparent", color: T.textMut, cursor: "pointer",
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         opacity: 0.65,

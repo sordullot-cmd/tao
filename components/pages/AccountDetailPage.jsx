@@ -685,7 +685,7 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
 function pillActionStyle() {
   return {
     display: "inline-flex", alignItems: "center", gap: 6,
-    minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999,
+    padding: "8px 16px", minHeight: 34, borderRadius: 999,
     border: `1px solid ${T.border}`, background: T.white,
     color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
   };

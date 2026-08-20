@@ -227,7 +227,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
           display: "inline-flex",
           alignItems: "center",
           gap: 8,
-          minHeight: 28, padding: "5px 12px",
+          minHeight: 34, padding: "8px 16px",
           width: width ?? "auto",
           height: 34,
           border: "1px solid var(--color-border)",
@@ -344,7 +344,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
                 <button
                   type="button"
                   onClick={clear}
-                  style={{ minHeight: 28, padding: "5px 12px", border: "1px solid var(--color-border)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 13, fontWeight: 500, borderRadius: 999, cursor: "pointer", fontFamily: "inherit" }}
+                  style={{ padding: "8px 16px", border: "1px solid var(--color-border)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 13, fontWeight: 500, minHeight: 34, borderRadius: 999, cursor: "pointer", fontFamily: "inherit" }}
                 >
                   Clear
                 </button>
@@ -352,7 +352,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
                   type="button"
                   onClick={apply}
                   disabled={!draftStart}
-                  style={{ minHeight: 28, padding: "5px 12px", border: "1px solid var(--color-text)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 13, fontWeight: 500, borderRadius: 999, cursor: draftStart ? "pointer" : "not-allowed", opacity: draftStart ? 1 : 0.5, fontFamily: "inherit" }}
+                  style={{ padding: "8px 16px", border: "1px solid var(--color-text)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 13, fontWeight: 500, minHeight: 34, borderRadius: 999, cursor: draftStart ? "pointer" : "not-allowed", opacity: draftStart ? 1 : 0.5, fontFamily: "inherit" }}
                 >
                   Apply
                 </button>

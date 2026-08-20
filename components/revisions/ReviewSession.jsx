@@ -244,7 +244,7 @@ export default function ReviewSession({ store, setStore, queue, openedAt, onExit
         <button
           type="button"
           onClick={onExit}
-          style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", transition: "var(--tr-ui)" }}
+          style={{ padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", transition: "var(--tr-ui)" }}
         >
           Retour
         </button>

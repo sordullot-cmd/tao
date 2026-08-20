@@ -114,7 +114,7 @@ export default function SearchableSelect({
         onClick={toggleOpen}
         aria-haspopup="listbox"
         aria-expanded={open}
-        style={{
+        style={{minHeight: 34,
           width: "100%",
           display: "flex",
           alignItems: "center",

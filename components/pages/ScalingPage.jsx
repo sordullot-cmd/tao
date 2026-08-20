@@ -474,7 +474,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
                 type="button"
                 onClick={() => setCapital(v)}
                 style={{
-                  minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                  padding: "8px 16px", minHeight: 34, borderRadius: 999,
                   border: `1px solid ${active ? T.text : T.border}`,
                   background: active ? T.text : T.white,
                   color: active ? T.white : T.textSub,
@@ -552,7 +552,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
                         onClick={() => setStepIdx(i - 1)}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
-                          minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                          padding: "8px 16px", minHeight: 34, borderRadius: 999,
                           border: `1px solid ${T.border}`, background: T.white,
                           color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         }}>
@@ -566,7 +566,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
                         onClick={() => setStepIdx(i + 1)}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
-                          minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                          padding: "8px 16px", minHeight: 34, borderRadius: 999,
                           border: "none", background: T.blue, color: "#FFFFFF",
                           fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         }}>
@@ -579,7 +579,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
                         onClick={() => setStepIdx(steps.length)}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
-                          minHeight: 28, padding: "5px 12px", borderRadius: 999,
+                          padding: "8px 16px", minHeight: 34, borderRadius: 999,
                           border: "none", background: T.green, color: "#FFFFFF",
                           fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         }}>
@@ -719,7 +719,7 @@ export function SimulatorSection({ sim, setSim, accounts, onGeneratePlan }) {
           onClick={() => onGeneratePlan?.(sim)}
           style={{
             alignSelf: "flex-start",
-            minHeight: 34, padding: "8px 16px", height: 34, borderRadius: 999,
+            padding: "8px 16px", height: 34, minHeight: 34, borderRadius: 999,
             border: `1px solid ${T.text}`, background: T.white, color: T.text,
             fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             marginTop: 4,

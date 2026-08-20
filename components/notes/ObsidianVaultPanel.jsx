@@ -63,7 +63,7 @@ function Switch({ checked, onChange, label }) {
 
 const ACTION = {
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-  minHeight: 32, padding: "0 12px", borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 };
 
@@ -130,7 +130,7 @@ export default function ObsidianVaultPanel({ vault }) {
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Fermer"
-            style={{ width: 24, height: 24, borderRadius: 999, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+            style={{ width: 34, height: 34, borderRadius: 999, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
           >
             <X size={12} strokeWidth={2} />
           </button>

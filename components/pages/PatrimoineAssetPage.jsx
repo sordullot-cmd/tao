@@ -310,8 +310,8 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
                 type="button"
                 onClick={() => setEditingAsset(true)}
                 style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36,
-                  padding: "0 14px", borderRadius: 999, border: "none",
+                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                  padding: "8px 16px", borderRadius: 999, border: "none",
                   background: T.accentBg, color: T.text, fontSize: 13, fontWeight: 500,
                   cursor: "pointer", fontFamily: "inherit",
                 }}
@@ -447,8 +447,8 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
               <button
                 type="submit"
                 style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 38,
-                  padding: "0 14px", borderRadius: 999, border: "none",
+                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34,
+                  padding: "8px 16px", borderRadius: 999, border: "none",
                   background: T.accentBg, color: T.text, fontSize: 14, fontWeight: 500,
                   cursor: "pointer", fontFamily: "inherit",
                 }}
@@ -461,7 +461,7 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
                   type="button"
                   onClick={resetLine}
                   style={{
-                    minHeight: 38, padding: "0 12px", borderRadius: 999, border: "none",
+                    padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
                     background: "transparent", color: T.textSub, fontSize: 14, fontWeight: 500,
                     cursor: "pointer", fontFamily: "inherit",
                   }}
@@ -571,7 +571,7 @@ function DeleteAssetButton({ name, onClick }) {
       title={t("common.delete")}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 36, height: 36, borderRadius: 999, border: "none",
+        width: 34, height: 34, borderRadius: 999, border: "none",
         background: "transparent", color: T.textMut, cursor: "pointer", fontFamily: "inherit",
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
@@ -878,7 +878,7 @@ function IconButton({ children, label, onClick, onBlur, danger }) {
       aria-label={label}
       title={label}
       style={{
-        width: 36, height: 36, borderRadius: 999, border: "none",
+        width: 34, height: 34, borderRadius: 999, border: "none",
         background: "transparent", color: rest, cursor: "pointer",
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         transition: "background 120ms ease, color 120ms ease",

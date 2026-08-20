@@ -290,7 +290,7 @@ function ViolationsLog({ stats, rules }) {
           aria-label={open ? "Replier les violations récentes" : "Déplier les violations récentes"}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            minHeight: 28, padding: "5px 12px", borderRadius: 999,
+            padding: "8px 16px", minHeight: 34, borderRadius: 999,
             border: `1px solid ${T.border}`, background: T.white, color: T.text,
             fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}
@@ -530,7 +530,7 @@ function RuleBuilder({ rules, addRule, updateRule, deleteRule }) {
           onClick={() => { if (open) { reset(); setOpen(false); } else { setOpen(true); } }}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            minHeight: 28, padding: "5px 12px", borderRadius: 999,
+            padding: "8px 16px", minHeight: 34, borderRadius: 999,
             border: `1px solid ${T.text}`, background: T.text, color: "#FFF",
             fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}>
@@ -635,12 +635,12 @@ const lbl = () => ({
   marginBottom: 6,
 });
 const btnPrimary = () => ({
-  minHeight: 28, padding: "5px 12px", borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: `1px solid ${T.text}`, background: T.text, color: "#FFF",
   fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
 });
 const btnGhost = () => ({
-  minHeight: 28, padding: "5px 12px", borderRadius: 999,
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });

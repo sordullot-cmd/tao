@@ -269,7 +269,7 @@ export default function Sidebar(props: SidebarProps) {
                   title={collapsed ? item.label : undefined}
                   aria-label={item.label}
                   aria-current={active ? "page" : undefined}
-                  style={{
+                  style={{minHeight: 34,
                     width: "100%", display: "flex", alignItems: "center",
                     gap: collapsed ? 0 : 10, justifyContent: collapsed ? "center" : "flex-start",
                     padding: collapsed ? "8px 0" : "8px 12px 8px 10px",
