@@ -472,7 +472,7 @@ export default function DrivePage() {
             <button
               onClick={() => setSelectedProjectId(null)}
               title="Retour aux projets"
-              style={{ padding: "7px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <ArrowLeft size={14} strokeWidth={1.75} /> Projets
             </button>
             <h1 className="t-h2" style={{ color: T.text, margin: 0 }}>
@@ -491,12 +491,12 @@ export default function DrivePage() {
             <>
               <button
                 onClick={() => setShowMembersModal(true)}
-                style={{ padding: "7px 14px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Users size={14} strokeWidth={1.75} /> Membres
               </button>
               <button
                 onClick={() => setShowShareModal(true)}
-                style={{ padding: "7px 14px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Share2 size={14} strokeWidth={1.75} /> Partager
               </button>
               {selectedProject.owner_id === user?.id && (
@@ -516,7 +516,7 @@ export default function DrivePage() {
           {/* "Nouveau projet" : toujours visible, dans les deux vues. */}
           <button
             onClick={requestNewProject}
-            style={{ padding: "7px 14px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            style={{ minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <Plus size={14} strokeWidth={2} /> Nouveau projet
           </button>
         </div>
@@ -618,7 +618,7 @@ function ConfirmDialog({ title, message, confirmLabel = "Confirmer", cancelLabel
           {confirmLabel}
         </DAPillButton>
       </>}>
-      <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>
       {message && <div style={{ fontSize: 13, color: T.text, opacity: 0.6, lineHeight: 1.55 }}>{message}</div>}
     </DAModal>
   );
@@ -662,7 +662,7 @@ function PromptDialog({
         <DAPillButton onClick={onCancel}>{cancelLabel}</DAPillButton>
         <DAPillButton variant="primary" onClick={submit}>{confirmLabel}</DAPillButton>
       </>}>
-      <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>
       <DAField label={label}>
         <DAInput
           ref={inputRef}
@@ -1142,7 +1142,7 @@ function ProjectContextMenu({ cardRect, project, isOwner, onClose, onOpen, onRen
         padding: "8px 12px", width: "100%",
         background: "transparent", border: "none",
         color: disabled ? T.textMut : (danger ? T.red : T.text),
-        fontSize: 13, fontFamily: "inherit",
+        fontSize:13, fontFamily: "inherit",
         cursor: disabled ? "not-allowed" : "pointer",
         textAlign: "left",
         opacity: disabled ? 0.5 : 1,
@@ -1333,7 +1333,7 @@ function ProjectCard({
           )}
         </div>
         {!isOwner && (
-          <span style={{ fontSize: 9, color: T.blue, background: `color-mix(in srgb, ${T.blue} 8%, transparent)`, padding: "2px 8px", borderRadius: 999, fontWeight: 600, alignSelf: "flex-start" }}>
+          <span style={{ fontSize: 10, color: T.blue, background: `color-mix(in srgb, ${T.blue} 8%, transparent)`, padding: "2px 8px", borderRadius: 999, fontWeight: 600, alignSelf: "flex-start" }}>
             PartagÃ© avec vous
           </span>
         )}
@@ -2242,7 +2242,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
               <div style={{ marginTop: 14, pointerEvents: "auto", display: "inline-flex" }}>
                 <button
                   onClick={() => genericInputRef.current?.click()}
-                  style={{ minHeight: 44, padding: "0 18px", borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 8 }}
+                  style={{ minHeight: 44, padding: "0 18px", borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
                   <Upload size={15} strokeWidth={1.75} /> Importer un fichier
                 </button>
@@ -2332,7 +2332,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
               display: "flex", alignItems: "center", gap: 10,
               padding: "7px 12px", width: "100%",
               background: "transparent", border: "none", textAlign: "left",
-              fontSize: 12.5, color: opts.danger ? T.red : (opts.disabled ? T.textMut : T.text),
+              fontSize:12, color: opts.danger ? T.red : (opts.disabled ? T.textMut : T.text),
               cursor: opts.disabled ? "not-allowed" : "pointer",
               fontFamily: "inherit",
             }}
@@ -2375,7 +2375,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
               display: "flex", alignItems: "center", gap: 10,
               padding: "7px 12px", width: "100%",
               background: "transparent", border: "none", textAlign: "left",
-              fontSize: 12.5, color: T.text, cursor: "pointer",
+              fontSize:12, color: T.text, cursor: "pointer",
               fontFamily: "inherit",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
@@ -2430,7 +2430,7 @@ function DriveToolbar({ recordingAudio, onAddImage, onAddNote, onAddLink, onAddV
         background: active ? (danger ? T.red : T.text) : "transparent",
         border: "none",
         color: active ? "#fff" : T.text,
-        cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600,
+        cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
         display: "inline-flex", alignItems: "center", gap: 6,
         transition: "background 120ms",
       }}
@@ -2533,7 +2533,7 @@ function DriveToolbar({ recordingAudio, onAddImage, onAddNote, onAddLink, onAddV
         style={{
           height: 44, padding: "0 16px", borderRadius: 10,
           background: T.text, color: "#fff", border: "none",
-          cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700,
+          cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500,
           display: "inline-flex", alignItems: "center", gap: 8,
           boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
           transition: "transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out)",
@@ -2934,7 +2934,7 @@ function ToolbarBtn({ icon: Icon, label, onClick, primary }) {
         background: primary ? T.text : T.white,
         border: `1px solid ${primary ? T.text : T.border}`,
         color: primary ? "#fff" : T.text,
-        fontSize: 12, fontWeight: 600, cursor: "pointer",
+        fontSize:12, fontWeight: 500, cursor: "pointer",
         fontFamily: "inherit",
         display: "inline-flex", alignItems: "center", gap: 6,
       }}
@@ -2991,7 +2991,7 @@ function ImageLightbox({ url, alt, onClose, onDownload }) {
             position: "absolute", top: 16, right: 60, zIndex: 2,
             height: 36, padding: "0 14px", borderRadius: 999,
             background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)",
-            color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600,
+            color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 500,
             fontFamily: "inherit",
             display: "inline-flex", alignItems: "center", gap: 6,
           }}
@@ -3181,7 +3181,7 @@ function ShareModal({ project, onClose }) {
                   border: `1px solid ${role === r ? T.text : T.border}`,
                   background: role === r ? T.text : T.white,
                   color: role === r ? "#fff" : T.text,
-                  fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  fontSize:12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 }}>
                 {r === "editor" ? "Ã‰diteur (peut modifier)" : "Lecteur (lecture seule)"}
               </button>
@@ -3190,7 +3190,7 @@ function ShareModal({ project, onClose }) {
         </div>
 
         <button onClick={generateLink} disabled={creating}
-          style={{ padding: "10px 16px", borderRadius: 999, background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
           <Share2 size={14} strokeWidth={1.75} /> {creating ? "GÃ©nÃ©rationâ€¦" : "GÃ©nÃ©rer un lien"}
         </button>
 
@@ -3198,7 +3198,7 @@ function ShareModal({ project, onClose }) {
           <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 6px 6px 14px", border: "none", borderRadius: 999, background: DA_FIELD_BG }}>
             <input readOnly value={link} style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 11, fontFamily: "monospace", color: T.text }} />
             <button onClick={copy}
-              style={{ padding: "6px 12px", borderRadius: 999, background: copied ? T.green : T.text, color: "#fff", border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              style={{ minHeight: 28, padding: "5px 12px", borderRadius: 999, background: copied ? T.green : T.text, color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               {copied ? <><Check size={11} /> CopiÃ©</> : <><Copy size={11} /> Copier</>}
             </button>
           </div>
@@ -3330,7 +3330,7 @@ function MembersModal({ project, currentUserId, onClose }) {
                 )}
                 {isMe && !isOwner && (
                   <button onClick={leave}
-                    style={{ padding: "4px 10px", border: `1px solid ${T.border}`, borderRadius: 6, background: T.white, color: T.red, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                    style={{ padding: "4px 10px", border: `1px solid ${T.border}`, borderRadius: 6, background: T.white, color: T.red, fontSize:11, fontWeight: 500, cursor: "pointer" }}>
                     Quitter
                   </button>
                 )}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { parseCSV, calculateStats } from "@/lib/csvParsers";
 import { createClient } from "@/lib/supabase/client";
 import { getLocalDateString } from "@/lib/dateUtils";
@@ -117,7 +117,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "strategy-detail", "daily-planner", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending"];
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -138,8 +138,8 @@ function TradingViewChart({ trade }) {
 
 function NavItem({ icon, label, active, onClick, badge }) {
   return (
-    <button className="nav-item" onClick={onClick} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderRadius:8,border:"none",background: active ? T.accentBg : "transparent",color: active ? T.accent : T.textSub,fontSize:13,fontWeight: active ? 600 : 400,transition:"all .15s",textAlign:"left",}}>
-      <span style={{fontSize:15,opacity: active?1:.7}}>{icon}</span>
+    <button className="nav-item" onClick={onClick} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding: "9px 14px",borderRadius:8,border:"none",background: active ? T.accentBg : "transparent",color: active ? T.accent : T.textSub,fontSize:13,fontWeight: 500,transition:"all .15s",textAlign:"left",}}>
+      <span style={{fontSize:14,opacity: active?1:.7}}>{icon}</span>
       <span>{label}</span>
       {badge && <span style={{marginLeft:"auto",fontSize:10,padding:"1px 6px",borderRadius:20,background:T.redBg,color:T.red,fontWeight:600}}>{badge}</span>}
     </button>
@@ -692,13 +692,36 @@ export default function App() {
 
   // Raccourcis clavier : Alt+1..9 pour naviguer entre les pages de la sidebar
   const flatNavIds = SIDEBAR_SECTIONS.flatMap(s => s.items.map(i => i.id));
-  // Ctrl+Tab : page suivante dans la navbar ; Ctrl+Shift+Tab : page précédente.
-  const goRelative = (delta) => {
-    if (flatNavIds.length === 0) return;
-    const idx = flatNavIds.indexOf(page);
-    const cur = idx < 0 ? 0 : idx;
-    const next = (cur + delta + flatNavIds.length) % flatNavIds.length;
-    setPage(flatNavIds[next]);
+
+  /* Pages visitées, de la plus récente à la plus ancienne — la page courante
+     en tête. C'est un ordre d'USAGE, pas l'ordre de la sidebar : Ctrl+Tab
+     faisait défiler la navigation cran par cran, ce qui obligeait à traverser
+     huit pages pour revenir à celle qu'on quittait. Il ramène maintenant sur
+     la dernière page visitée, comme Alt+Tab entre deux fenêtres.
+     Les pages de détail (compte, firme, stratégie…) comptent aussi : c'est
+     souvent d'elles qu'on part et vers elles qu'on veut revenir.
+     Un `ref` et non un `state` : cet historique ne se dessine pas, et le
+     remonter dans un état déclencherait un rendu de plus à chaque
+     navigation. */
+  const pageHistory = useRef([page]);
+  useEffect(() => {
+    const seen = pageHistory.current;
+    if (seen[0] === page) return;
+    // La page revisitée remonte en tête au lieu de s'empiler deux fois : sinon
+    // un aller-retour saturerait l'historique de la même paire.
+    pageHistory.current = [page, ...seen.filter(id => id !== page)].slice(0, 12);
+  }, [page]);
+
+  /* Ctrl+Tab : la page la plus récente (donc aller-retour, puisque la page
+     qu'on quitte passe aussitôt en tête). Ctrl+Shift+Tab : un cran plus loin
+     dans l'historique — sans quoi le raccourci ferait exactement la même chose
+     que sans Shift. Au démarrage, l'historique n'a qu'une entrée : il n'y a
+     alors nulle part où revenir et le raccourci ne fait rien, plutôt que de
+     sauter sur une page qu'on n'a jamais ouverte. */
+  const goRecent = (rank) => {
+    const target = pageHistory.current[rank] ?? pageHistory.current[1];
+    if (!target || target === page) return;
+    setPage(target);
     setMobileNavOpen(false);
   };
   useKeyboardShortcuts([
@@ -711,14 +734,14 @@ export default function App() {
       key: "Tab",
       ctrlOrCmd: true,
       ignoreInInputs: false,
-      handler: (e) => { e.preventDefault(); goRelative(1); },
+      handler: (e) => { e.preventDefault(); goRecent(1); },
     },
     {
       key: "Tab",
       ctrlOrCmd: true,
       shift: true,
       ignoreInInputs: false,
-      handler: (e) => { e.preventDefault(); goRelative(-1); },
+      handler: (e) => { e.preventDefault(); goRecent(2); },
     },
   ]);
 
@@ -866,13 +889,22 @@ export default function App() {
               border: daPage ? "none" : "1px solid rgba(0, 0, 0, 0.06)",
               borderRadius: daPage ? 0 : 10,
               boxShadow: "none",
-              // Gouttière de la maquette : 24 px à droite, un peu plus à gauche
-              // pour décoller le contenu de la barre latérale. Les deux valeurs
-              // sont exposées en variables : une page peut reprendre la gauche
-              // en marge négative pour un bloc pleine largeur (la courbe du
-              // tableau de bord), sans la redéclarer en dur.
-              "--page-gutter": "24px",
+              /* Gouttière du site — UNE seule valeur, la même à gauche et à
+                 droite (40 px, la marge de la page Patrimoine prise pour base).
+                 La droite était à 24 px : un contenu qui part à 40 et s'arrête à
+                 24 n'est pas centré dans sa colonne, et l'écart se voyait d'une
+                 page à l'autre. Les deux restent exposées en variables : une
+                 page peut reprendre la gauche en marge négative pour un bloc
+                 pleine largeur (la courbe du tableau de bord), sans la
+                 redéclarer en dur. */
               "--page-gutter-left": "40px",
+              "--page-gutter": "var(--page-gutter-left)",
+              /* Respiration verticale, elle aussi commune à TOUTES les pages :
+                 les pages n'ont plus de `paddingTop` à elles (elles allaient de
+                 8 à 20 px selon l'endroit), c'est le conteneur qui défile qui la
+                 porte, une fois. */
+              "--page-pad-top": "14px",
+              "--page-pad-bottom": "24px",
               /* La réserve de la barre latérale est portée ICI, par le
                  conteneur scrollable lui-même, et pas par le cadre au-dessus :
                  c'est ce qui place son bord (donc son clip) au premier pixel de
@@ -881,10 +913,10 @@ export default function App() {
                  en passant derrière la barre. */
               "--content-left": "calc(var(--shell-left, 0px) + var(--page-gutter-left))",
               padding: daPage
-                ? "0 var(--page-gutter) 24px var(--content-left)"
+                ? "var(--page-pad-top) var(--page-gutter) var(--page-pad-bottom) var(--content-left)"
                 // Hors DA, la réserve de la barre est déjà prise par le cadre
                 // au-dessus : seule la gouttière reste à poser.
-                : "20px var(--page-gutter) 20px var(--page-gutter-left)",
+                : "var(--page-pad-top) var(--page-gutter) var(--page-pad-bottom) var(--page-gutter-left)",
               display: "block",
               width: "100%",
               flex: 1,

@@ -598,7 +598,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
       {/* Confirmation du passage eval → funded (action destructive : supprime
           le compte eval en base). Remplace l'exécution directe pour éviter
           toute perte de compte accidentelle. */}
@@ -618,7 +618,7 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
               Passer en Funded
             </DAPillButton>
           </>}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>
             Passer « {confirmFunded.name || "Compte"} » en Funded ?
           </div>
           <div style={{ fontSize: 13, color: T.text, opacity: 0.6, lineHeight: 1.55 }}>
@@ -667,9 +667,9 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                 onClick={() => setCreatingAccount({ firmId: "" })}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "7px 14px", borderRadius: 999, border: "none",
+                  minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
                   background: T.white, boxShadow: T.elevPill, color: T.text,
-                  fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 }}
               >
                 <Plus size={13} strokeWidth={1.75} /> {t("accountsPage.newAccount")}
@@ -679,9 +679,9 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
                 onClick={() => setCreatingFirm(true)}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "7px 14px", borderRadius: 999, border: "none",
+                  minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
                   background: T.text, color: TEXT_INVERTED,
-                  fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 }}
               >
                 <Building2 size={13} strokeWidth={1.75} /> {t("firms.newFirm")}
@@ -1016,10 +1016,10 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
             <div style={{ fontSize: 20, fontWeight: 500, color: T.text, marginBottom: 6 }}>{t("accountsPage.empty")}</div>
             <div style={{ fontSize: 14, color: T.textSub, marginBottom: 20, maxWidth: 380, lineHeight: 1.5 }}>{t("firms.emptySub")}</div>
             <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-              <button type="button" onClick={() => setCreatingFirm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 999, background: T.text, color: TEXT_INVERTED, fontSize: 14, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit" }}>
+              <button type="button" onClick={() => setCreatingFirm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.text, color: TEXT_INVERTED, fontSize: 13, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit" }}>
                 <Building2 size={14} strokeWidth={1.75} /> {t("firms.newFirm")}
               </button>
-              <button type="button" onClick={() => setCreatingAccount({ firmId: "" })} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 999, background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 14, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit" }}>
+              <button type="button" onClick={() => setCreatingAccount({ firmId: "" })} style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit" }}>
                 <Plus size={14} strokeWidth={1.75} /> {t("accountsPage.newAccount")}
               </button>
             </div>
@@ -1374,7 +1374,7 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
         <span style={{
           /* 24 px : sous la hauteur de la police, `overflow: hidden` rognerait
              les chiffres. */
-          fontSize: 18, fontWeight: 500, lineHeight: "24px", letterSpacing: -0.55,
+          fontSize: 16, fontWeight: 500, lineHeight: "24px", letterSpacing: -0.55,
           color: heroIsPnl ? pnlColor : T.text,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
@@ -1511,7 +1511,7 @@ function ScalingSimulator({ accounts = [] }) {
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                   <span style={{
-                    fontSize: 22, fontWeight: 700,
+                    fontSize: 24, fontWeight: 700,
                     color: allDone ? T.green : T.text,
                     letterSpacing: -0.4, lineHeight: 1, fontVariantNumeric: "tabular-nums",
                   }}>
@@ -1592,7 +1592,7 @@ function SimKpi({ label, value, valueColor, sub, last }) {
   return (
     <div style={{ padding: "14px 18px", borderRight: last ? "none" : `1px solid ${T.border}` }}>
       <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: valueColor || T.text, letterSpacing: -0.3, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: valueColor || T.text, letterSpacing: -0.3, fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: T.textMut, marginTop: 2 }}>{sub}</div>}
     </div>
   );
@@ -1645,7 +1645,7 @@ function SimMetric({ label, value, sub, valueColor }) {
   return (
     <div style={{ background: T.bg || T.accentBg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px" }}>
       <div style={{ fontSize: 10, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: valueColor || T.text, letterSpacing: -0.3, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: valueColor || T.text, letterSpacing: -0.3, fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: T.textMut, marginTop: 2 }}>{sub}</div>}
     </div>
   );
@@ -1952,9 +1952,9 @@ function AccountPlans({ accounts, trades }) {
         <button onClick={openCreate}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 999,
+            minHeight: 28, padding: "5px 12px", borderRadius: 999,
             border: `1px solid ${T.border}`, background: "var(--color-card-bg, #FFFFFF)", color: T.text,
-            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}>
           <Plus size={12} strokeWidth={1.75} /> Nouveau plan
         </button>
@@ -2075,7 +2075,7 @@ function AccountPlans({ accounts, trades }) {
               );
             })()}
           </>}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>
             {editingId ? "Modifier le plan" : "Nouveau plan"}
           </div>
 
@@ -2177,11 +2177,11 @@ function AccountPlans({ accounts, trades }) {
                                 accountIds: sel ? form.accountIds.filter(x => x !== a.id) : [...form.accountIds, a.id],
                               })}
                               style={{
-                                padding: "5px 12px", borderRadius: 999,
+                                minHeight: 28, padding: "5px 12px", borderRadius: 999,
                                 border: `1px solid ${sel ? T.text : T.border}`,
                                 background: sel ? T.text : T.white,
                                 color: sel ? T.white : T.text,
-                                fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                                fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                               }}>
                               {a.name || "Compte"}
                             </button>
@@ -2408,9 +2408,9 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
           <button onClick={onResetPhase}
             title="Recommencer la phase (reset de la progression à zéro)"
             style={{
-              padding: "4px 10px", borderRadius: 999,
+              minHeight: 28, padding: "5px 12px", borderRadius: 999,
               border: `1px solid ${T.border}`, background: "var(--color-card-bg, #FFFFFF)",
-              color: T.textSub, fontSize: 10, fontWeight: 500, cursor: "pointer",
+              color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer",
               fontFamily: "inherit",
             }}>
             Reset
@@ -2420,10 +2420,10 @@ function TemplatePlanCard({ plan, accounts, trades, onEdit, onDelete, onAdvance,
               disabled={!phaseComplete}
               title={phaseComplete ? "Valider et passer à la phase suivante" : "Atteins les targets de la phase pour valider"}
               style={{
-                padding: "4px 12px", borderRadius: 999, border: "none",
+                minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
                 background: phaseComplete ? T.pnlPos : T.accentBg,
                 color: phaseComplete ? T.white : T.textMut,
-                fontSize: 10, fontWeight: 600,
+                fontSize: 13, fontWeight: 500,
                 cursor: phaseComplete ? "pointer" : "not-allowed",
                 fontFamily: "inherit",
                 display: "inline-flex", alignItems: "center", gap: 4,

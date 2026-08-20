@@ -217,7 +217,7 @@ export default function TradeChartPage({ trades = [] }) {
   const pnl = Number(selected?.pnl) || 0;
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 13, color: T.textMut, margin: "4px 0 0 0" }}>
           Bougies Yahoo Finance · markers d’entrée et de sortie

@@ -508,7 +508,7 @@ export default function TradeImportModal({ isOpen, onClose, onImport, T }) {
                 color: T.text,
                 cursor: "pointer",
                 fontSize: "14px",
-                fontWeight: "600",
+                fontWeight: 500,
                 transition: "all 0.2s",
               }}
               onMouseOver={(e) => (e.target.style.background = T.border)}
@@ -528,7 +528,7 @@ export default function TradeImportModal({ isOpen, onClose, onImport, T }) {
                 borderRadius: "6px",
                 cursor: accountName.trim() && !loading ? "pointer" : "not-allowed",
                 fontSize: "14px",
-                fontWeight: "600",
+                fontWeight: 500,
                 transition: "all 0.2s",
                 opacity: accountName.trim() && !loading ? 1 : 0.6,
               }}

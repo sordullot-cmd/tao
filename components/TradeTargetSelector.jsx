@@ -32,7 +32,7 @@ function OptionRow({ opt, active, onPick }) {
         width: "100%", display: "flex", alignItems: "center", gap: 8,
         padding: "8px 10px", border: "none", borderRadius: 6,
         background: active ? "var(--color-active-bg)" : "transparent",
-        color: "var(--color-text)", fontSize: 13, fontWeight: active ? 600 : 500,
+        color: "var(--color-text)", fontSize:13, fontWeight: 500,
         fontFamily: "inherit", textAlign: "left", cursor: "pointer", minWidth: 0,
         transition: "background 100ms ease",
       }}
@@ -153,7 +153,7 @@ export default function TradeTargetSelector({
           border: `1px solid ${open ? "var(--color-border-strong)" : "var(--color-border)"}`,
           background: "var(--color-card-bg, #FFFFFF)",
           color: selectedOption ? "var(--color-text)" : "var(--color-text-muted)",
-          fontSize: 13, fontWeight: 500, fontFamily: "inherit", textAlign: "left",
+          fontSize:13, fontWeight: 500, fontFamily: "inherit", textAlign: "left",
           cursor: "pointer", transition: "border-color 120ms ease",
         }}
       >

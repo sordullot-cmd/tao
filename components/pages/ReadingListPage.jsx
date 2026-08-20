@@ -102,7 +102,7 @@ export default function ReadingListPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyForm); }}
-          style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          style={{ marginLeft: "auto", minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <Plus size={14} strokeWidth={2} /> Ajouter un livre
         </button>
         <div id="tr4de-page-header-slot" />
@@ -127,7 +127,7 @@ export default function ReadingListPage() {
         </div>
       ) : (
         <button onClick={() => setShowIntro(true)}
-          style={{ alignSelf: "flex-start", padding: "6px 12px", borderRadius: 999, border: `1px dashed ${T.border}`, background: T.white, color: T.textSub, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          style={{ alignSelf: "flex-start", minHeight: 28, padding: "5px 12px", borderRadius: 999, border: `1px dashed ${T.border}`, background: T.white, color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <BookOpen size={12} strokeWidth={1.75} /> Afficher l’importance de la lecture
         </button>
       )}
@@ -165,7 +165,7 @@ export default function ReadingListPage() {
                   formulaire, et l'auteur juste apres n'en avait deja pas. */}
               <input type="text" autoFocus value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Titre du livre"
-                style={{ width: "100%", padding: "6px 0", border: "none", borderRadius: 0, fontSize: 18, fontWeight: 600, outline: "none", fontFamily: "inherit", color: T.text, background: "transparent", letterSpacing: -0.2 }} />
+                style={{ width: "100%", padding: "6px 0", border: "none", borderRadius: 0, fontSize: 16, fontWeight: 600, outline: "none", fontFamily: "inherit", color: T.text, background: "transparent", letterSpacing: -0.2 }} />
 
               <input type="text" value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })}
                 placeholder="Auteur"
@@ -195,11 +195,11 @@ export default function ReadingListPage() {
                     return (
                       <button key={p.id} type="button" onClick={() => setForm({ ...form, priority: p.id })}
                         style={{
-                          padding: "6px 12px", borderRadius: 999,
+                          minHeight: 28, padding: "5px 12px", borderRadius: 999,
                           border: `1px solid ${active ? p.color : T.border}`,
                           background: active ? p.color + "14" : T.white,
                           color: active ? p.color : T.textSub,
-                          fontSize: 12, fontWeight: active ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
+                          fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                           display: "inline-flex", alignItems: "center", gap: 6,
                           transition: "var(--tr-ui)",
                         }}>
@@ -228,11 +228,11 @@ export default function ReadingListPage() {
         {[{ id: "all", label: "Tous" }, ...STATUSES].map(f => (
           <button key={f.id} onClick={() => setFilter(f.id)}
             style={{
-              padding: "6px 12px", borderRadius: 999,
+              minHeight: 28, padding: "5px 12px", borderRadius: 999,
               border: `1px solid ${filter === f.id ? T.text : T.border}`,
               background: filter === f.id ? T.text : T.white,
               color: filter === f.id ? T.white : T.text,
-              fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+              fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: 6,
               flexShrink: 0, whiteSpace: "nowrap",
             }}>
@@ -367,9 +367,9 @@ function PrettySelect({ value, onChange, options }) {
                 style={{
                   width: "100%", padding: "8px 10px", border: "none", borderRadius: 6,
                   background: selected ? T.accentBg : "transparent", color: T.text,
-                  fontSize: 13, fontFamily: "inherit", cursor: "pointer", textAlign: "left",
+                  fontSize:13, fontFamily: "inherit", cursor: "pointer", textAlign: "left",
                   display: "inline-flex", alignItems: "center", gap: 8,
-                  fontWeight: selected ? 600 : 400,
+                  fontWeight: 500,
                 }}
               >
                 {o.color && <span style={{ width: 8, height: 8, borderRadius: 999, background: o.color, flexShrink: 0 }} />}

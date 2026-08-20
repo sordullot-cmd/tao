@@ -280,7 +280,7 @@ export default function QuickAccountSelector({
             onClick={() => setOpen(v => !v)}
             style={{
               width: "100%", display: "flex", alignItems: "center", gap: 8,
-              padding: "9px 14px", border: "none",
+              minHeight: 34, padding: "8px 16px", border: "none",
               borderRadius: 999, background: FIELD_BG,
               boxShadow: open ? FIELD_FOCUS_RING : "none",
               color: hasValue ? "var(--color-text)" : "var(--color-text-muted)",
@@ -366,7 +366,7 @@ export default function QuickAccountSelector({
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8,
                   padding: "8px 10px", border: "none", background: "transparent",
-                  color: "var(--color-text)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                  color: "var(--color-text)", fontSize:13, fontWeight: 500, cursor: "pointer",
                   fontFamily: "inherit", textAlign: "left", borderRadius: 6,
                 }}
                 onMouseEnter={(e)=>{e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"}}
@@ -384,7 +384,7 @@ export default function QuickAccountSelector({
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8,
                   padding: "8px 10px", border: "none", background: "transparent",
-                  color: "var(--color-text)", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                  color: "var(--color-text)", fontSize:13, fontWeight: 500, cursor: "pointer",
                   fontFamily: "inherit", textAlign: "left", borderRadius: 6,
                 }}
                 onMouseEnter={(e)=>{e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"}}
@@ -441,7 +441,7 @@ export default function QuickAccountSelector({
                       flex: 1, display: "flex", alignItems: "center", gap: 8,
                       padding: 0, border: "none", background: "transparent",
                       cursor: isEditing ? "text" : "pointer",
-                      color: "var(--color-text)", fontSize: 13, fontWeight: isSelected ? 600 : 500,
+                      color: "var(--color-text)", fontSize: 13, fontWeight: 500,
                       fontFamily: "inherit", textAlign: "left", minWidth: 0,
                     }}
                   >

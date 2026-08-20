@@ -159,7 +159,7 @@ export function PillGroup({ options, value, onChange, ariaLabel }) {
             aria-checked={active}
             onClick={() => onChange(opt.id)}
             style={{
-              padding: "8px 14px", borderRadius: 999,
+              minHeight: 34, padding: "8px 16px", borderRadius: 999,
               border: `1px solid ${active ? T.text : T.border}`,
               background: active ? T.text : T.white,
               color: active ? T.bg : T.text,
@@ -199,9 +199,9 @@ export function PrimaryBtn({ children, onClick, disabled, tone = "text" }) {
       onClick={onClick}
       disabled={disabled}
       style={{
-        padding: "9px 16px", minHeight: 40, borderRadius: 999,
+        padding: "11px 20px", minHeight: 40, borderRadius: 999,
         border: `1px solid ${bg}`, background: bg, color: "#fff",
-        fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+        fontSize: 14, fontWeight: 500, fontFamily: "inherit",
         cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
       }}
     >
@@ -217,10 +217,10 @@ export function GhostBtn({ children, onClick, tone }) {
       type="button"
       onClick={onClick}
       style={{
-        padding: "9px 16px", minHeight: 40, borderRadius: 999,
+        padding: "11px 20px", minHeight: 40, borderRadius: 999,
         border: `1px solid ${tone === "danger" ? T.redBd : T.border}`,
         background: T.white, color,
-        fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+        fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
       }}
     >
       {children}
@@ -389,10 +389,10 @@ export function PropFirmModal({ firm = null, accounts = [], userId, onClose, onS
                 onClick={() => applyPreset(preset)}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "6px 10px", borderRadius: 999,
+                  minHeight: 28, padding: "5px 12px", borderRadius: 999,
                   border: `1px solid ${active ? T.text : T.border}`,
                   background: active ? T.accentBg : T.white,
-                  color: T.text, fontSize: 12, fontWeight: 500,
+                  color: T.text, fontSize: 13, fontWeight: 500,
                   cursor: "pointer", fontFamily: "inherit",
                 }}
               >
@@ -685,7 +685,7 @@ export function AttachAccountsModal({ firm, accounts = [], firms = [], onClose, 
                       onClick={() => toggle(acc.id)}
                       style={{
                         width: "100%", display: "flex", alignItems: "center", gap: 10,
-                        padding: "8px 10px", minHeight: 44, textAlign: "left",
+                        padding: "8px 10px", minHeight:44, textAlign: "left",
                         border: "none", borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
                         /* `backgroundColor`, pas le raccourci `background` : on ne
                            remplace qu'une couleur, et le raccourci réinitialise
@@ -866,9 +866,9 @@ export function AccountModal({
               onClick={() => onDelete(account)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6, marginRight: "auto",
-                padding: "9px 14px", minHeight: 40, borderRadius: 999,
+                padding: "11px 20px", minHeight: 40, borderRadius: 999,
                 border: `1px solid ${T.redBd}`, background: T.white, color: T.red,
-                fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+                fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
               }}
             >
               <Trash2 size={13} strokeWidth={1.75} /> {t("common.delete")}

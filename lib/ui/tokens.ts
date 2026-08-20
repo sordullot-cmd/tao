@@ -65,7 +65,11 @@ export const T = {
   tagLongText:  "var(--color-tag-long-text, #58CC02)",
   // Vignette ronde d'un instrument (maquette « Trades », node 283:6381)
   symbolBadge:     "var(--color-symbol-badge, #018FBF)",
-  symbolBadgeText: "var(--color-symbol-badge-text, #FFFFFF)",
+  /* Le sigle du disque est blanc, sans variable qui puisse le reprendre : une
+     passe de palette l'avait descendu à l'encre et les « 100 » / « 500 » des
+     vignettes d'instruments s'écrivaient en noir sur leur couleur de marque.
+     Ces vignettes sont des logos, pas une surface de thème. */
+  symbolBadgeText: "#FFFFFF",
   // Calendrier P&L
   calEmptyBg:   "var(--color-cal-empty-bg, #FAFBFB)",
   calEmptyText: "var(--color-cal-empty-text, rgba(13,13,13,0.30))",

@@ -208,7 +208,7 @@ export default function Sidebar(props: SidebarProps) {
         />
         {!collapsed && (
           <span style={{
-            fontSize: 18, fontWeight: 600, letterSpacing: -0.2,
+            fontSize: 16, fontWeight: 600, letterSpacing: -0.2,
             color: "var(--color-text)", whiteSpace: "nowrap", lineHeight: 1,
           }}>
             tao
@@ -237,7 +237,7 @@ export default function Sidebar(props: SidebarProps) {
                 aria-expanded={!sectionCollapsed}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 12px 6px 10px", fontSize: 12, fontWeight: 400,
+                  padding: "8px 12px 6px 10px", fontSize: 12, fontWeight: 500,
                   lineHeight: "18.6px",
                   color: "var(--color-text-muted)", letterSpacing: 0,
                   background: "transparent", border: "none", cursor: "pointer",
@@ -250,7 +250,7 @@ export default function Sidebar(props: SidebarProps) {
                 <span style={{ flex: 1 }}>{sec.label}</span>
                 {sectionCollapsed && (
                   <span style={{
-                    fontSize: 9, fontWeight: 600, color: "var(--color-text-muted)",
+                    fontSize: 10, fontWeight: 600, color: "var(--color-text-muted)",
                     background: "var(--color-hover-bg)", padding: "1px 6px", borderRadius: 999,
                     letterSpacing: 0,
                   }}>
@@ -284,7 +284,7 @@ export default function Sidebar(props: SidebarProps) {
                     color: active ? "var(--color-nav-active-text)" : "var(--color-nav-text)",
                     fontSize: 13, lineHeight: "20.15px",
                     // Gras : libellé ET icône (via strokeWidth) ont le même poids.
-                    fontWeight: 550, cursor: "pointer", fontFamily: "inherit",
+                    fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                     /* Pas de `padding` dans la liste : il ne change qu'au repli
                        de la barre, et le libellé, lui, est démonté sur-le-champ.
                        On animait donc pendant 200 ms l'espace laissé par un

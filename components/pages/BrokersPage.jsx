@@ -207,7 +207,7 @@ export default function BrokersPage() {
 function Pill({ children, color }) {
   return (
     <span style={{
-      fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4,
+      fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4,
       padding: "2px 7px", borderRadius: 999,
       color, background: color + "18",
     }}>
@@ -219,8 +219,8 @@ function Pill({ children, color }) {
 function btnStyle(disabled, variant) {
   const base = {
     display: "inline-flex", alignItems: "center", gap: 6,
-    padding: "7px 14px", borderRadius: 999,
-    fontSize: 12, fontWeight: 600,
+    minHeight: 28, padding: "5px 12px", borderRadius: 999,
+    fontSize: 12, fontWeight: 500,
     cursor: disabled ? "not-allowed" : "pointer",
     fontFamily: "inherit",
     opacity: disabled ? 0.5 : 1,

@@ -257,6 +257,34 @@ export default function SportPage() {
   const [filterDiscipline, setFilterDiscipline] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
 
+  /* Ajout de photos — l'input et son état vivent ICI, pas dans `PhotosTab`.
+     Le bouton d'ajout est posé dans la ligne de tête, à côté des onglets, à la
+     place qu'occupe « Nouvelle séance » sur l'autre onglet : les deux onglets
+     ont donc leur action principale au même pixel. `PhotosTab` garde le droit
+     de la déclencher (sa grande carte d'état vide), d'où `onAdd` en prop. */
+  const photoInputRef = React.useRef(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const pickPhotos = () => photoInputRef.current?.click();
+  const onPickPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setPhotoBusy(true);
+    try {
+      const added = [];
+      for (const f of files) {
+        if (!f.type.startsWith("image/")) continue;
+        try {
+          const dataUrl = await compressImage(f);
+          added.push({ id: Date.now() + Math.floor(Math.random() * 1e6), date: todayISO(), dataUrl, weight: "", note: "" });
+        } catch { /* ignore l'image en échec */ }
+      }
+      if (added.length) setProgressPhotos(prev => [...added, ...(prev || [])]);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const emptyForm = () => ({
@@ -596,10 +624,12 @@ export default function SportPage() {
   }, [filteredSessions]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8 }} className="anim-1">
-      {/* LIGNE DE TÊTE — onglets à gauche, décompte et action à droite : une
-          seule rangée au lieu de deux, comme les pages récentes qui posent
-          leurs commandes sur la même ligne. */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="anim-1">
+      {/* LIGNE DE TÊTE — onglets à GAUCHE, commandes à droite : une seule
+          rangée au lieu de deux, comme les pages récentes qui posent leurs
+          commandes sur la même ligne. Les onglets ouvrent la ligne parce qu'ils
+          disent où l'on est ; le bouton la ferme parce qu'il dit ce qu'on peut
+          y faire. */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         {/* Onglets : la brique commune. C'etait une copie locale de
             `PeriodPills`, avec sa propre piste et sa propre graisse. */}
@@ -625,11 +655,19 @@ export default function SportPage() {
               <Plus size={14} strokeWidth={1.75} /> Nouvelle séance
             </button>
           )}
+          {tab === "photos" && (
+            <button type="button" onClick={pickPhotos} disabled={photoBusy}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, border: "none", color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: photoBusy ? "default" : "pointer", opacity: photoBusy ? 0.6 : 1, fontFamily: "inherit" }}>
+              <ImagePlus size={14} strokeWidth={1.75} /> {photoBusy ? "Ajout…" : "Ajouter des photos"}
+            </button>
+          )}
         </div>
       </div>
 
+      <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={onPickPhotos} style={{ display: "none" }} />
+
       {tab === "photos" && (
-        <PhotosTab photos={progressPhotos} setPhotos={setProgressPhotos} />
+        <PhotosTab photos={progressPhotos} setPhotos={setProgressPhotos} onAdd={pickPhotos} busy={photoBusy} />
       )}
 
       {/* Layout en 2 colonnes : timeline à gauche, panneau collant à droite */}
@@ -650,15 +688,20 @@ export default function SportPage() {
           </SectionTitle>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Pas de pilule « Toutes » : c'était un bouton dont le seul rôle
+                était de défaire le précédent. Le retour à la vue complète passe
+                maintenant par la pilule active elle-même, qu'un second clic
+                relâche — et à l'arrivée sur la page, aucune n'est prise, donc
+                tout est déjà visible. */}
             <FilterPills
               value={filterDiscipline}
               onChange={setFilterDiscipline}
-              options={[{ id: "all", label: "Toutes disciplines" }, ...DISCIPLINES.map(d => ({ id: d.id, label: d.label, color: d.color }))]}
+              options={DISCIPLINES.map(d => ({ id: d.id, label: d.label, color: d.color }))}
             />
             <FilterPills
               value={filterCategory}
               onChange={setFilterCategory}
-              options={[{ id: "all", label: "Toutes catégories" }, ...CATEGORIES.map(c => ({ id: c.id, label: c.label, color: c.color }))]}
+              options={CATEGORIES.map(c => ({ id: c.id, label: c.label, color: c.color }))}
             />
           </div>
 
@@ -839,35 +882,16 @@ function navArrow(side) {
 }
 
 /* ─── Onglet « Photos » — suivi de l'évolution physique ─────────── */
-function PhotosTab({ photos, setPhotos }) {
-  const inputRef = React.useRef(null);
-  const [busy, setBusy] = useState(false);
+/* `onAdd` / `busy` viennent de la page : l'input de fichier et l'état d'ajout
+   sont chez elle, parce que le bouton qui les déclenche est dans SA ligne de
+   tête. L'onglet ne garde que les points d'appel. */
+function PhotosTab({ photos, setPhotos, onAdd, busy }) {
   const [viewerId, setViewerId] = useState(null);
 
   const sorted = useMemo(
     () => [...(photos || [])].sort((a, b) => (b.date || "").localeCompare(a.date || "")),
     [photos]
   );
-
-  const onPick = async (e) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    if (!files.length) return;
-    setBusy(true);
-    try {
-      const added = [];
-      for (const f of files) {
-        if (!f.type.startsWith("image/")) continue;
-        try {
-          const dataUrl = await compressImage(f);
-          added.push({ id: Date.now() + Math.floor(Math.random() * 1e6), date: todayISO(), dataUrl, weight: "", note: "" });
-        } catch { /* ignore l'image en échec */ }
-      }
-      if (added.length) setPhotos(prev => [...added, ...(prev || [])]);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const update = (id, patch) => setPhotos(prev => (prev || []).map(p => p.id === id ? { ...p, ...patch } : p));
   const del = (id) => { setPhotos(prev => (prev || []).filter(p => p.id !== id)); setViewerId(cur => cur === id ? null : cur); };
@@ -920,22 +944,14 @@ function PhotosTab({ photos, setPhotos }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <input ref={inputRef} type="file" accept="image/*" multiple onChange={onPick} style={{ display: "none" }} />
-
-      <SectionTitle
-        size="sm"
-        action={
-          <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, border: "none", color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "inherit" }}>
-            <ImagePlus size={14} strokeWidth={1.75} /> {busy ? "Ajout…" : "Ajouter des photos"}
-          </button>
-        }
-      >
+      {/* Plus de bouton en action de titre : il est monté dans la ligne de tête
+          de la page, à côté des onglets. */}
+      <SectionTitle size="sm">
         Évolution physique
       </SectionTitle>
 
       {sorted.length === 0 ? (
-        <button type="button" onClick={() => inputRef.current?.click()}
+        <button type="button" onClick={onAdd} disabled={busy}
           style={{ ...CARD, padding: "48px 32px", textAlign: "center", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: FIELD_BG, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
             <Camera size={22} strokeWidth={1.75} color={T.text} />
@@ -1004,7 +1020,7 @@ function PhotosTab({ photos, setPhotos }) {
               {/* En-tête : date en titre + fermeture. Plus de sur-titre en
                   capitales ni de filet — la date suffit à dire où l'on est. */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "18px 18px 0" }}>
-                <div style={{ fontSize: 17, fontWeight: 500, color: T.text, textTransform: "capitalize", lineHeight: 1.2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{fmtDate(viewer.date)}</div>
+                <div style={{ fontSize: 16, fontWeight: 500, color: T.text, textTransform: "capitalize", lineHeight: 1.2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{fmtDate(viewer.date)}</div>
                 <button type="button" onClick={() => setViewerId(null)} aria-label="Fermer"
                   style={{ flex: "0 0 auto", width: 28, height: 28, borderRadius: 999, border: "none", background: "transparent", color: T.textSub, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background var(--dur-fast) var(--ease-out)" }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
@@ -1038,7 +1054,7 @@ function PhotosTab({ photos, setPhotos }) {
 
               {/* Suppression */}
               <button type="button" onClick={() => del(viewer.id)}
-                style={{ margin: "auto 18px 18px", padding: "10px 14px", borderRadius: 999, border: "none", background: FIELD_BG, color: T.red, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                style={{ margin: "auto 18px 18px", minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: FIELD_BG, color: T.red, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                 <Trash2 size={13} strokeWidth={1.75} /> Supprimer la photo
               </button>
             </div>
@@ -1052,22 +1068,32 @@ function PhotosTab({ photos, setPhotos }) {
 
 
 /* ─── Filtres en pills ──────────────────────────────────────────── */
-function FilterPills({ value, onChange, options }) {
+/**
+ * Rangée de filtres à choix unique, RELÂCHABLE.
+ *
+ * Il n'y a pas d'option « Toutes » dans la liste : cliquer la pilule déjà prise
+ * la relâche et rend `clearValue`, ce qui remet la vue complète. Un filtre sans
+ * échappatoire obligerait à garder un bouton dont le seul rôle est d'annuler le
+ * précédent, et « Toutes » ferait alors passer pour un choix ce qui est en fait
+ * l'absence de choix — l'état par défaut de la page.
+ */
+function FilterPills({ value, onChange, options, clearValue = "all" }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
       {options.map(o => {
         const active = value === o.id;
         return (
           <button key={o.id} type="button"
-            onClick={() => onChange(o.id)}
+            aria-pressed={active}
+            onClick={() => onChange(active ? clearValue : o.id)}
             /* Actif : pastille pleine à l'encre du texte. Au repos : simple
                aplat, sans cadre — une rangée de pilules cerclées faisait autant
                de traits que de filtres. */
             style={{
-              padding: "6px 13px", borderRadius: 999, border: "none",
+              minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
               background: active ? T.text : FIELD_BG,
               color: active ? T.textInverted : T.textSub,
-              fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+              fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: 6,
               transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
             }}>
@@ -1225,7 +1251,7 @@ function SessionCard({ session: s, onEdit, onDelete }) {
             );
           })}
           {s.notes && (
-            <div style={{ marginTop: 12, padding: "10px 12px", background: WRITING_BG, borderRadius: 10, fontSize: 12, color: T.textSub, lineHeight: 1.55 }}>
+            <div style={{ marginTop: 12, minHeight: 34, padding: "8px 16px", background: WRITING_BG, borderRadius: 10, fontSize: 13, color: T.textSub, lineHeight: 1.55 }}>
               {s.notes}
             </div>
           )}
@@ -1523,7 +1549,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
         style={{ width: "min(640px, 100%)", maxHeight: "min(88vh, 820px)", display: "flex", flexDirection: "column", background: T.white, borderRadius: "var(--radius-modal)", boxShadow: "var(--elev-overlay)", overflow: "hidden", fontFamily: "var(--font-sans)", transform: `translate(${winPos.x}px, ${winPos.y}px)` }}>
         {/* Header — sert aussi de poignée pour déplacer la fenêtre */}
         <div onMouseDown={startWindowDrag}
-          style={{ position: "relative", padding: "8px 12px", display: "flex", alignItems: "center", gap: 10, cursor: "move", userSelect: "none" }}>
+          style={{ position: "relative", minHeight: 34, padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, cursor: "move", userSelect: "none" }}>
           {/* Poignée de déplacement */}
           <div style={{
             position: "absolute", left: "50%", top: 7, transform: "translateX(-50%)",
@@ -1632,7 +1658,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                     onClick={() => setForm({ ...form, discipline: d.id })}
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
-                      padding: "9px 13px", borderRadius: 999, border: "none",
+                      minHeight: 34, padding: "8px 16px", fontSize: 13, borderRadius: 999, border: "none",
                       background: active ? `${d.color}1F` : FIELD_BG,
                       color: active ? T.text : T.textSub, cursor: "pointer", fontFamily: "inherit",
                       textAlign: "left",
@@ -1778,9 +1804,9 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                       </div>
                       <button type="button" onClick={() => addSet(ex.id)}
                         style={{
-                          marginTop: 8, padding: "5px 11px", borderRadius: 999,
+                          marginTop: 8, minHeight: 28, padding: "5px 12px", borderRadius: 999,
                           border: "none", background: T.white,
-                          color: T.textSub, fontSize: 12, fontWeight: 500, cursor: "pointer",
+                          color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer",
                           fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4,
                         }}>
                         <Plus size={11} strokeWidth={1.75} /> Ajouter une série
@@ -1817,19 +1843,19 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                 else if (e.key === "Escape") { e.preventDefault(); setPresetNamePrompt(null); }
               }}
               placeholder="Ex : Push lourd"
-              style={{ ...input(), padding: "6px 10px", fontSize: 12 }}
+              style={{ ...input(), minHeight: 28, padding: "5px 12px", fontSize: 13 }}
             />
             <button type="button" onClick={() => setPresetNamePrompt(null)}
-              style={{ padding: "7px 13px", borderRadius: 999, border: "none", background: "transparent", color: T.textSub, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+              style={{ minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none", background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
               Annuler
             </button>
             <button type="button" onClick={confirmSaveAsPreset}
               disabled={!(presetNamePrompt || "").trim()}
               style={{
-                padding: "7px 13px", borderRadius: 999, border: "none",
+                minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
                 background: (presetNamePrompt || "").trim() ? T.text : FIELD_BG,
                 color: (presetNamePrompt || "").trim() ? T.textInverted : T.textSub,
-                fontSize: 12, fontWeight: 500,
+                fontSize: 13, fontWeight: 500,
                 cursor: (presetNamePrompt || "").trim() ? "pointer" : "not-allowed",
                 fontFamily: "inherit",
               }}>
@@ -1912,7 +1938,7 @@ function input() {
    « Sauver comme modèle ») : pilule à aplat, sans contour. */
 function softPill(enabled = true) {
   return {
-    padding: "5px 12px", borderRadius: 999, border: "none",
+    minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
     background: FIELD_BG, color: T.textSub,
     fontSize: 12, fontWeight: 500,
     cursor: enabled ? "pointer" : "not-allowed", opacity: enabled ? 1 : 0.5,
@@ -2093,7 +2119,7 @@ function ExerciseNameCombobox({
                     flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8,
                     padding: "4px 4px", border: "none", background: "transparent",
                     cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                    color: T.text, fontSize: 12,
+                    color: T.text, fontSize:12,
                   }}
                 >
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -2169,7 +2195,7 @@ function ExerciseNameCombobox({
                   display: "flex", alignItems: "center", gap: 8,
                   width: "100%", padding: "6px 10px", border: "none",
                   background: "transparent", cursor: "pointer", borderRadius: 8,
-                  color: T.text, fontSize: 12, fontFamily: "inherit", textAlign: "left",
+                  color: T.text, fontSize:12, fontFamily: "inherit", textAlign: "left",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = FIELD_BG; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -2187,7 +2213,7 @@ function ExerciseNameCombobox({
                 onMouseDown={(e) => { e.preventDefault(); setHiddenExercises?.([]); }}
                 style={{
                   border: "none", background: "transparent", cursor: "pointer",
-                  color: T.textSub, fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+                  color: T.textSub, fontSize:12, fontWeight: 500, fontFamily: "inherit",
                   padding: "2px 6px", borderRadius: 8,
                 }}
               >
@@ -2308,7 +2334,7 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
               style={{
                 width: "100%", aspectRatio: "1 / 1",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: isSel ? 600 : 500,
+                fontSize: 12, fontWeight: 500,
                 color: isSel ? "#fff" : T.text,
                 background: isSel ? T.text : "transparent",
                 border: isToday && !isSel ? `1px solid ${T.border}` : "none",

@@ -240,7 +240,7 @@ export default function CalendarPage({ trades = [], setPage }) {
             background: positive ? T.calPosBg : negative ? T.calNegBg : traded ? T.border2 : T.calEmptyBg,
             color: positive ? T.pnlPos : negative ? T.pnlNeg : traded ? T.text : T.calEmptyText,
             boxShadow: todayRing || "none",
-            fontSize: 11.5, lineHeight: 1, fontWeight: traded ? 500 : 400,
+            fontSize: 11, lineHeight: 1, fontWeight: traded ? 500 : 400,
             fontVariantNumeric: "tabular-nums",
             cursor: traded ? "pointer" : "default",
             transition: "box-shadow 140ms var(--ease-out, ease)",
@@ -273,7 +273,7 @@ export default function CalendarPage({ trades = [], setPage }) {
               title={t("cal.openMonth")}
               style={{
                 padding: 0, border: "none", background: "transparent", cursor: "pointer",
-                fontFamily: "inherit", fontSize: 13, lineHeight: "18px", fontWeight: 600,
+                fontFamily: "inherit", fontSize: 13, lineHeight: "18px", fontWeight: 500,
                 color: T.text, textTransform: "capitalize",
               }}
             >
@@ -389,7 +389,7 @@ export default function CalendarPage({ trades = [], setPage }) {
   return (
     /* 14 px de retrait haut : la barre du haut apporte déjà 20 px, ce qui place
        le titre aux 34 px de la maquette (même calcul que le dashboard). */
-    <div style={{ display: "flex", flexDirection: "column", gap: 48, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 48, fontFamily: "var(--font-sans)" }} className="anim-1">
       {/* Barre d'en-tête — slot d'en-tête aligné à droite. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
         <div id="tr4de-page-header-slot" />

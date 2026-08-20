@@ -117,7 +117,7 @@ export default function NotFound() {
           style={{
             margin: 0,
             maxWidth: 420,
-            fontSize: 15,
+            fontSize: 14,
             lineHeight: 1.6,
             color: "var(--color-text-sub, #5C5C5C)",
           }}

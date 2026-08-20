@@ -277,7 +277,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   const { tradesLoading } = useApp();
   if (tradesLoading && (!trades || trades.length === 0)) {
     return (
-      <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:14,fontFamily:"var(--font-sans)"}} className="anim-1" aria-busy="true" aria-live="polite">
+      <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1" aria-busy="true" aria-live="polite">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
         </div>
@@ -291,7 +291,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   }
   if (!trades || trades.length === 0) {
     return (
-      <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:14,fontFamily:"var(--font-sans)"}} className="anim-1">
+      <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
         </div>
@@ -301,8 +301,8 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
           </div>
           <div style={{fontSize:20,fontWeight:500,color:T.text,marginBottom:6}}>{t("dash.noTrades")}</div>
           <div style={{fontSize:14,color:T.textSub,marginBottom:20,maxWidth:380,lineHeight:1.5}}>{t("dash.noTradesSub")}</div>
-          <button onClick={()=>setPage?.("add-trade")} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:999,background:T.white,color:T.text,fontSize:13,fontWeight:500,cursor:"pointer",boxShadow:T.elevPill,border:"none",fontFamily:"var(--font-sans)"}}>
-            <Plus size={14} strokeWidth={2}/> {t("trades.importBtn").replace(/^\+\s*/, "")}
+          <button onClick={()=>setPage?.("add-trade")} style={{display:"inline-flex",alignItems:"center",gap:6,minHeight: 34, padding: "8px 16px",borderRadius:999,background:T.white,color:T.text,fontSize: 13,fontWeight:500,cursor:"pointer",boxShadow:T.elevPill,border:"none",fontFamily:"var(--font-sans)"}}>
+            <Plus size={14} strokeWidth={2}/> {t("trades.importBtn")}
           </button>
         </div>
       </div>
@@ -779,11 +779,11 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                   onClick={() => setPeriod(p.id)}
                   aria-pressed={active}
                   style={{
-                    padding:"6px 14px", borderRadius:999, border:"none",
+                    minHeight: 28, padding: "5px 12px", borderRadius:999, border:"none",
                     background: active ? T.white : "transparent",
                     boxShadow: active ? T.elevPill : "none",
                     color: T.text, opacity: active ? 1 : 0.6,
-                    fontSize:12, lineHeight:"18.6px", cursor:"pointer", fontFamily:"inherit",
+                    fontSize: 13, lineHeight:"18.6px", cursor:"pointer", fontFamily:"inherit",
                     transition:"background 140ms ease, opacity 140ms ease",
                   }}
                 >
@@ -1055,7 +1055,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
               }}>
                 {["L","M","M","J","V","S","D"].map((d, idx) => (
                   <div key={`h-${idx}`} style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <span style={{fontSize:8,lineHeight:"12.4px",color:T.textMut,textAlign:"center"}}>{d}</span>
+                    <span style={{fontSize:10,lineHeight:"12.4px",color:T.textMut,textAlign:"center"}}>{d}</span>
                   </div>
                 ))}
                 {calendarDays.map((day, i) => {
@@ -1185,10 +1185,10 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                     onClick={() => setBreakdown(b.id)}
                     aria-pressed={active}
                     style={{
-                      padding:"6px 14px", borderRadius:999, border:"none",
+                      minHeight: 28, padding: "5px 12px", borderRadius:999, border:"none",
                       background: active ? T.accentBg : "transparent",
                       color: T.text, opacity: active ? 1 : 0.5,
-                      fontSize:13, fontWeight: active ? 600 : 500,
+                      fontSize: 13, fontWeight:500,
                       cursor:"pointer", fontFamily:"inherit",
                       transition:"background 140ms ease, opacity 140ms ease",
                     }}
@@ -1224,7 +1224,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                       <span style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
                         <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
                           <span style={{width:9,height:9,borderRadius:96,background:r.color,flexShrink:0}}/>
-                          <span style={{fontSize:15,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
+                          <span style={{fontSize:14,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
                         </span>
                         <span style={{height:4,borderRadius:999,background:T.accentBg,overflow:"hidden",maxWidth:260}}>
                           <span style={{
@@ -1233,8 +1233,8 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
                           }} />
                         </span>
                       </span>
-                      <span style={{textAlign:"right",fontSize:15,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
-                      <span style={{textAlign:"right",fontSize:15,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
+                      <span style={{textAlign:"right",fontSize:14,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
+                      <span style={{textAlign:"right",fontSize:14,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
                       <StackedAmount value={r.pnl} />
                     </div>
                   ))}
@@ -1281,7 +1281,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
               const expectancy = dayPnL / Math.max(dayTrades.length, 1);
               const isSelected = selectedDay === idx;
               if (selectedDay !== null && !isSelected) return null;
-              const CELL = { fontSize:15, fontWeight:500, lineHeight:"17.05px", color:T.text, textAlign:"right", fontVariantNumeric:"tabular-nums" };
+              const CELL = { fontSize:14, fontWeight:500, lineHeight:"17.05px", color:T.text, textAlign:"right", fontVariantNumeric:"tabular-nums" };
               return (
                   <div
                     key={idx}

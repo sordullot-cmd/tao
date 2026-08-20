@@ -29,8 +29,10 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { T, FIELD_BG, WRITING_BG, HAIRLINE } from "@/lib/ui/tokens";
+import { BTN } from "@/lib/ui/buttons";
+import { luminance } from "@/lib/ui/color";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { useModalExit } from "@/lib/hooks/useModalExit";
 import { useScrollEdges, scrollEdgeShadow } from "@/lib/hooks/useScrollEdges";
@@ -169,22 +171,27 @@ export function PillButton({
     danger: { background: T.redBg, color: T.red },
   };
   const skin = disabled ? { background: FIELD_BG, color: T.textSub } : skins[variant];
+  const metrics = compact ? BTN.sm : BTN.md;
   return (
     <button
       disabled={disabled}
+      /* Métriques : BTN (lib/ui/buttons.ts), jamais des nombres écrits ici.
+         `compact` = le palier `sm`, qui a maintenant une hauteur minimale au
+         lieu de zéro : sans elle, un bouton compact portant une icône était
+         plus haut que son voisin qui n'en porte pas. */
       style={{
-        padding: compact ? "5px 12px" : "8px 16px",
-        minHeight: compact ? 0 : 34,
-        borderRadius: 999,
+        minHeight: metrics.minHeight,
+        padding: metrics.padding,
+        borderRadius: metrics.borderRadius,
         border: "none",
-        fontSize: compact ? 12 : 13,
-        fontWeight: 500,
+        fontSize: metrics.fontSize,
+        fontWeight: metrics.fontWeight,
         fontFamily: "inherit",
         cursor: disabled ? "not-allowed" : "pointer",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: 6,
+        gap: metrics.gap,
         whiteSpace: "nowrap",
         transition: "var(--tr-ui)",
         ...skin,
@@ -224,6 +231,45 @@ export function IconButton({ tone = "neutral", style = undefined, children = und
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Case à cocher de l'app : carré au trait dilué au repos, aplat plein coché.
+ *
+ * Elle remplace `<input type="checkbox">` partout où la ligne entière est
+ * cliquable : la case native ne suit ni le rayon ni l'encre de la DA, et son
+ * `accentColor` ne dit rien du glyphe posé dessus.
+ *
+ * `color` attend de préférence un HEX — les principales de la charte sont
+ * claires (Owl rend 2,09:1 sur blanc), une coche blanche y disparaîtrait. Le
+ * glyphe est donc calculé à partir de la luminance de l'aplat, seuil 0,45,
+ * comme les autres coches sur couleur de l'app. Une valeur non hexadécimale
+ * (une `var()`) retombe sur l'encre claire, le repli le moins risqué.
+ *
+ * `partial` sert aux têtes de groupe dont seule une partie des lignes est
+ * cochée : un tiret, pas une coche.
+ */
+/** @param {{ on?: boolean, partial?: boolean, color?: string, size?: number }} props */
+export function CheckBox({ on = false, partial = false, color = T.text, size = 16 }) {
+  const filled = on || partial;
+  const glyph = luminance(color) > 0.45 ? T.text : T.onSolid;
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: size, height: size, borderRadius: "var(--radius-field)", flexShrink: 0,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        border: `1.5px solid ${filled ? color : HAIRLINE}`,
+        background: filled ? color : "transparent",
+        transition: "var(--tr-ui)",
+      }}
+    >
+      {on && <Check size={size - 4} strokeWidth={3} color={glyph} />}
+      {!on && partial && (
+        <span style={{ width: size - 7, height: 1.5, borderRadius: 1, background: glyph }} />
+      )}
+    </span>
   );
 }
 

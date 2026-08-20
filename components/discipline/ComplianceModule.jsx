@@ -236,7 +236,7 @@ function KpiRow({ stats, sessionViolations, activeRules, totalRules, isClean, fl
         }}>
           <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500 }}>{c.label}</div>
           <div style={{
-            fontSize: 19, fontWeight: 600, color: T.text, letterSpacing: -0.2,
+            fontSize: 20, fontWeight: 600, color: T.text, letterSpacing: -0.2,
             lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             display: "inline-flex", alignItems: "center", gap: 7,
           }}>
@@ -290,9 +290,9 @@ function ViolationsLog({ stats, rules }) {
           aria-label={open ? "Replier les violations récentes" : "Déplier les violations récentes"}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 999,
+            minHeight: 28, padding: "5px 12px", borderRadius: 999,
             border: `1px solid ${T.border}`, background: T.white, color: T.text,
-            fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}
         >
           {open ? "Masquer" : "Afficher"}
@@ -530,9 +530,9 @@ function RuleBuilder({ rules, addRule, updateRule, deleteRule }) {
           onClick={() => { if (open) { reset(); setOpen(false); } else { setOpen(true); } }}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "7px 14px", borderRadius: 999,
+            minHeight: 28, padding: "5px 12px", borderRadius: 999,
             border: `1px solid ${T.text}`, background: T.text, color: "#FFF",
-            fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}>
           <Plus size={13} strokeWidth={1.75} />
           {open ? "Annuler" : "Nouvelle règle"}
@@ -635,12 +635,12 @@ const lbl = () => ({
   marginBottom: 6,
 });
 const btnPrimary = () => ({
-  padding: "7px 14px", borderRadius: 999,
+  minHeight: 28, padding: "5px 12px", borderRadius: 999,
   border: `1px solid ${T.text}`, background: T.text, color: "#FFF",
   fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
 });
 const btnGhost = () => ({
-  padding: "7px 14px", borderRadius: 999,
+  minHeight: 28, padding: "5px 12px", borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });

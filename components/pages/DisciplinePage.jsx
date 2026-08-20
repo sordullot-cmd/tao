@@ -990,7 +990,7 @@ export default function DisciplinePage({ trades = [] }) {
                 aria-expanded={showRoutinePopover}
                 title="Règles de routine du jour"
                 style={{
-                  padding:"7px 14px",
+                  padding:"8px 16px",
                   height:34,
                   borderRadius:999,
                   background:T.white,
@@ -1590,7 +1590,7 @@ export default function DisciplinePage({ trades = [] }) {
             </DAPillButton>
           }>
           <div>
-            <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>{t("disc.editRules")}</div>
+            <div style={{fontSize:14,fontWeight:600,color:T.text,letterSpacing:-0.1}}>{t("disc.editRules")}</div>
             <div style={{fontSize:12,color:T.text,opacity:0.5,marginTop:3,lineHeight:1.5}}>{t("disc.editRulesSub")}</div>
           </div>
               {/* AUTOMATED */}

@@ -253,7 +253,7 @@ export default function StrategiesNew() {
           color: #8B95AA;
         }
         .rule-accuracy {
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 700;
           color: #AD6B6B;
         }
@@ -364,7 +364,7 @@ export default function StrategiesNew() {
         .form-modal h2 {
           color: #FFFFFF;
           margin-bottom: 20px;
-          font-size: 18px;
+          font-size: 16px;
         }
         .form-group {
           margin-bottom: 16px;

@@ -97,7 +97,7 @@ export default function JoinProjectPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#FAFAFA" }}>
       <div style={{ background: "#fff", border: "1px solid #E5E5E5", borderRadius: 14, padding: 28, maxWidth: 420, width: "100%", textAlign: "center" }}>
-        <h1 style={{ fontSize: 17, fontWeight: 600, margin: 0, color: "#0D0D0D" }}>
+        <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0D0D0D" }}>
           {status === "ok" ? "Tu as rejoint le projet" :
            status === "error" ? "Impossible de rejoindre" :
            "Rejoindre un projet"}
@@ -114,7 +114,7 @@ export default function JoinProjectPage() {
         {status === "error" && (
           <button
             onClick={() => router.replace("/dashboard")}
-            style={{ marginTop: 16, padding: "8px 16px", borderRadius: 8, background: "#0D0D0D", color: "#fff", border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            style={{ marginTop: 16, padding: "8px 16px", borderRadius: 8, background: "#0D0D0D", color: "#fff", border: "none", fontSize:13, fontWeight: 500, cursor: "pointer" }}>
             Retour au dashboard
           </button>
         )}

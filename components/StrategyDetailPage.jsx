@@ -578,7 +578,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
   }
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:8,fontFamily:"var(--font-sans)"}} className="anim-1">
+    <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
       {/* ═══ 1. BARRE D'ACTIONS ═══ retour nommé, comme les fiches de compte et
           de firme : le rond de 28 px portant une flèche seule ne disait pas où
           il ramenait. */}
@@ -745,7 +745,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                       onMouseLeave={(e) => { if (!active) e.currentTarget.style.opacity = 0.5; }}
                     >
                       <span style={{width:8,height:8,borderRadius:"50%",background:s.strategy.color,flexShrink:0}}/>
-                      <span style={{fontSize:12,fontWeight:active ? 600 : 500,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>
+                      <span style={{fontSize:12,fontWeight:500,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>
                         {s.strategy.name}
                       </span>
                       <span style={{fontSize:12,fontWeight:500,whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums",color:last > 0 ? T.pnlPos : last < 0 ? T.pnlNeg : T.textSub}}>
@@ -768,7 +768,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
         {/* CARD 2 : Condition probabilite */}
         <div style={{...CARD, padding:0}}>
           <div style={{padding:"16px 20px",borderBottom:`1px solid ${HAIRLINE}`}}>
-            <div style={{fontSize:15,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
+            <div style={{fontSize:14,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
               {t("strat.detail.condProb")} <span style={{color:T.textMut,fontWeight:500}}>›</span>
             </div>
             <div style={{fontSize:11,color:T.textMut,marginTop:2}}>{t("strat.detail.condProbSub")}</div>
@@ -779,15 +779,15 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.bestDay")}</div>
-                  <div style={{fontSize:15,fontWeight:600,color:T.text}}>{bestDay.day}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:T.text}}>{bestDay.day}</div>
                 </div>
                 <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.bestWindow")}</div>
-                  <div style={{fontSize:15,fontWeight:600,color:T.text}}>{bestHour.hour}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:T.text}}>{bestHour.hour}</div>
                 </div>
                 <div>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.bestAsset")}</div>
-                  <div style={{fontSize:15,fontWeight:600,color:T.text}}>{bestSymbol.symbol}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:T.text}}>{bestSymbol.symbol}</div>
                 </div>
               </div>
             </div>
@@ -796,15 +796,15 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
                 <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.worstDay")}</div>
-                  <div style={{fontSize:15,fontWeight:600,color:T.text}}>{worstDay.day}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:T.text}}>{worstDay.day}</div>
                 </div>
                 <div style={{paddingBottom:14,borderBottom:`1px solid ${HAIRLINE}`}}>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.worstWindow")}</div>
-                  <div style={{fontSize:15,fontWeight:600,color:T.text}}>{worstHour.hour}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:T.text}}>{worstHour.hour}</div>
                 </div>
                 <div>
                   <div style={{fontSize:11,color:T.textMut,marginBottom:6,fontWeight:500}}>{t("strat.detail.worstAsset")}</div>
-                  <div style={{fontSize:15,fontWeight:600,color:T.text}}>{worstSymbol.symbol}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:T.text}}>{worstSymbol.symbol}</div>
                 </div>
               </div>
             </div>
@@ -814,7 +814,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
         {/* CARD 3 : tao score */}
         <div style={{...CARD, padding:0}}>
           <div style={{padding:"16px 20px"}}>
-            <div style={{fontSize:15,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
+            <div style={{fontSize:14,fontWeight:600,color:T.text,display:"inline-flex",alignItems:"center",gap:4}}>
               tao score <span style={{color:T.textMut,fontWeight:500}}>›</span>
             </div>
             <div style={{fontSize:11,color:T.textMut,marginTop:2}}>{t("strat.detail.taoScoreSub")}</div>
@@ -867,7 +867,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
                 {[0,20,40,60,80,100].map(v => {
                   const tx = v === 0 ? "translateX(0)" : v === 100 ? "translateX(-100%)" : "translateX(-50%)";
                   return (
-                    <span key={v} style={{position:"absolute",left:`${v}%`,transform:tx,fontSize: 9,color:T.textMut,fontWeight:500,fontVariantNumeric:"tabular-nums"}}>{v}</span>
+                    <span key={v} style={{position:"absolute",left:`${v}%`,transform:tx,fontSize: 10,color:T.textMut,fontWeight:500,fontVariantNumeric:"tabular-nums"}}>{v}</span>
                   );
                 })}
               </div>

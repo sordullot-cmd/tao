@@ -327,7 +327,7 @@ export default function BudgetPage() {
   const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <SectionTitle
@@ -459,7 +459,7 @@ export default function BudgetPage() {
                   onChange={(e) => updateActive((p) => ({ ...p, income: Math.max(0, Number(e.target.value) || 0) }))}
                   style={{
                     ...FIELD, height: 40, width: 150, padding: 0,
-                    fontSize: 26, fontWeight: 600, letterSpacing: -0.4,
+                    fontSize: 24, fontWeight: 600, letterSpacing: -0.4,
                     border: "none", background: "transparent",
                   }}
                 />

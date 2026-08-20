@@ -810,7 +810,7 @@ export default function NotesPage() {
 
   return (
     <div
-      style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, height: "calc(100vh - 120px)", fontFamily: "var(--font-sans)" }}
+      style={{ display: "flex", flexDirection: "column", gap: 16, height: "calc(100vh - 120px)", fontFamily: "var(--font-sans)" }}
       className="anim-1 tr4de-notes-page"
     >
       {/* Les reprises responsive de cette page vivent dans globals.css avec
@@ -828,9 +828,9 @@ export default function NotesPage() {
           onClick={createNote}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none",
+            padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
             background: T.text, color: T.textInverted,
-            fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
           }}
         >
           <Plus size={13} strokeWidth={1.75} />
@@ -860,7 +860,7 @@ export default function NotesPage() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
                 {activeTag && (
                   <button onClick={() => setActiveTag(null)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 999, border: "none", background: FIELD_BG, fontSize: 11, cursor: "pointer", color: T.textSub, fontFamily: "inherit" }}>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none", background: FIELD_BG, fontSize: 13, cursor: "pointer", color: T.textSub, fontFamily: "inherit" }}>
                     <X size={10} strokeWidth={2} /> Tout
                   </button>
                 )}
@@ -868,10 +868,10 @@ export default function NotesPage() {
                   <button key={tag} onClick={() => setActiveTag(tag === activeTag ? null : tag)}
                     aria-pressed={activeTag === tag}
                     style={{
-                      padding: "4px 10px", borderRadius: 999, border: "none",
+                      minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
                       background: activeTag === tag ? T.text : FIELD_BG,
                       color: activeTag === tag ? T.textInverted : T.textSub,
-                      fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                      fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                       transition: "background 120ms ease, color 120ms ease",
                     }}>
                     #{tag}
@@ -1278,7 +1278,7 @@ export default function NotesPage() {
                           padding: "7px 8px", borderRadius: 8, border: "none",
                           background: on ? FIELD_BG : "transparent",
                           color: T.text, cursor: "pointer", textAlign: "left",
-                          fontFamily: "inherit", fontSize: 13,
+                          fontFamily: "inherit", fontSize:13,
                           transition: "var(--tr-ui)",
                         }}
                       >

@@ -54,7 +54,7 @@ export default function PatrimoineHoldingPage({ selection, setPage, setSelectedA
 
   if (!asset || !holding) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
         {back}
         <section style={{ ...CARD, padding: "40px 24px", textAlign: "center", fontSize: 14, color: T.textSub }}>
           {t("patrimoine.holding.notFound")}
@@ -89,7 +89,7 @@ export default function PatrimoineHoldingPage({ selection, setPage, setSelectedA
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
       {back}
 
       <header style={{ display: "flex", flexDirection: "column", gap: 2 }}>

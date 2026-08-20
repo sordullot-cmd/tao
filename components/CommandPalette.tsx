@@ -211,7 +211,7 @@ export default function CommandPalette() {
             aria-activedescendant={activeOptionId}
             style={{
               flex: 1, border: "none", outline: "none",
-              fontSize: 15, fontFamily: "inherit", color: "inherit",
+              fontSize: 14, fontFamily: "inherit", color: "inherit",
               background: "transparent",
             }}
           />
@@ -247,7 +247,7 @@ export default function CommandPalette() {
                       borderRadius: "var(--radius-card)", border: "none",
                       background: isActive ? "var(--color-hover-bg, #F0F0F0)" : "transparent",
                       cursor: "pointer", textAlign: "left",
-                      color: "inherit", fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+                      color: "inherit", fontFamily: "inherit", fontSize:13, fontWeight: 500,
                     }}
                   >
                     <ArrowRight size={14} strokeWidth={1.75} color={isActive ? undefined : "var(--color-text-muted, #8E8E8E)"} />

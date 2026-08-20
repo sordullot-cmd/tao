@@ -105,7 +105,7 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
     }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
         {/* L'action de saisie est en haut à droite du titre : c'est ici qu'on
             ajoute un crédit — et, plus largement, n'importe quel actif, la page

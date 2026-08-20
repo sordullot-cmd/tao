@@ -227,15 +227,17 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
           display: "inline-flex",
           alignItems: "center",
           gap: 8,
-          padding: "7px 14px",
+          minHeight: 28, padding: "5px 12px",
           width: width ?? "auto",
           height: 34,
           border: "1px solid var(--color-border)",
           borderRadius: 999,
           background: "var(--color-card-bg, #FFFFFF)",
           color: "var(--color-text)",
-          fontSize: 12,
-          fontWeight: 500,
+          fontSize: 13,
+          // Même graisse que `StepperPill` : les deux tiennent la même place,
+          // et la commande ne doit pas changer de poids en « Personnalisé ».
+          fontWeight: 600,
           cursor: "pointer",
           fontFamily: "inherit",
           textAlign: "left",
@@ -272,7 +274,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
                 style={{
                   textAlign: "left",
                   padding: "8px 12px",
-                  fontSize: 12,
+                  fontSize:12,
                   fontWeight: 500,
                   color: "var(--color-text)",
                   background: "transparent",
@@ -342,7 +344,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
                 <button
                   type="button"
                   onClick={clear}
-                  style={{ padding: "6px 16px", border: "1px solid var(--color-border)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 12, fontWeight: 500, borderRadius: 999, cursor: "pointer", fontFamily: "inherit" }}
+                  style={{ minHeight: 28, padding: "5px 12px", border: "1px solid var(--color-border)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 13, fontWeight: 500, borderRadius: 999, cursor: "pointer", fontFamily: "inherit" }}
                 >
                   Clear
                 </button>
@@ -350,7 +352,7 @@ export default function DateRangePicker({ value, onChange, width }: Props) {
                   type="button"
                   onClick={apply}
                   disabled={!draftStart}
-                  style={{ padding: "6px 16px", border: "1px solid var(--color-text)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 12, fontWeight: 600, borderRadius: 999, cursor: draftStart ? "pointer" : "not-allowed", opacity: draftStart ? 1 : 0.5, fontFamily: "inherit" }}
+                  style={{ minHeight: 28, padding: "5px 12px", border: "1px solid var(--color-text)", background: "var(--color-card-bg, #FFFFFF)", color: "var(--color-text)", fontSize: 13, fontWeight: 500, borderRadius: 999, cursor: draftStart ? "pointer" : "not-allowed", opacity: draftStart ? 1 : 0.5, fontFamily: "inherit" }}
                 >
                   Apply
                 </button>

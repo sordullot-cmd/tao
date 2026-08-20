@@ -48,11 +48,19 @@
      cartes blanches ne se détachaient pas : toute l'interface se lisait comme
      une seule surface plate, et il fallait chercher les limites d'un bloc à
      l'ombre, qui est trop douce pour ça toute seule.
-     #F1F2F4 creuse l'écart à ~4 % de luminance : assez pour que chaque carte
-     ait un bord franc, pas assez pour que le fond devienne un élément.
+     La série essayée depuis, en écart de clarté (L*) sous la carte blanche :
+       #FAFBFB  1,7 — rien ne détache plus les blocs
+       #F7F7F7  2,8 — Polar, encore léger
+       #F5F5F5  3,5 — retenu
+       #F3F3F3  4,2 — le fond commence à peser
+       #F1F2F4  4,6 — trop lourd, et bleuté avec ça
+     #F5F5F5 est donc le cran du milieu, et il est NEUTRE comme les gris de la
+     charte : le #F1F2F4 d'origine tirait sur le bleu, ce qui refroidissait tout
+     l'écran dès que le fond prenait de la surface. La charte ne publie rien
+     entre Polar (#F7F7F7) et Swan (#E5E5E5) — d'où une valeur intermédiaire.
      C'est le fond de PAGE ; la barre latérale reste sur --color-card-bg et
      ressort donc en blanc, ce qui la sépare du contenu sans lui poser de trait. */
-  --color-bg-subtle: #F1F2F4;
+  --color-bg-subtle: #F5F5F5; /* entre Polar et Swan */
   --color-card-bg: #FFFFFF;
   --color-hover-bg: #F0F0F0;
   --color-active-bg: #EBEBEB;
@@ -179,22 +187,37 @@
   /* === SYSTÈME VISUEL (échelles décidées — audit visuel) ===
      Objectif : du contraste, pas de la variété. Échelles courtes. */
 
-  /* Échelle typographique — 6 crans nets.
-     En `rem`, pas en `px` : le `rem` suit la taille de texte réglée dans le
-     navigateur ou le système. Une échelle en pixels ignore purement et
-     simplement ce réglage — quelqu'un qui a agrandi le texte de son OS
-     continue de lire du 12 px. Les valeurs sont identiques à l'ancienne
-     échelle pour une racine à 16 px : rien ne bouge par défaut. */
-  --text-display: 2rem;      /* 32px — chiffres héros (P&L total, niveau RPG) */
-  --text-h1:      1.5rem;    /* 24px — titre d'écran */
-  --text-h2:      1.0625rem; /* 17px — titre de section / carte */
-  --text-body:    0.875rem;  /* 14px — contenu courant */
-  --text-label:   0.75rem;   /* 12px — labels, méta, légendes */
-  --text-caption: 0.75rem;   /* 12px */
-  --lh-display: 1.1;
-  --lh-h1: 1.15;
-  --lh-h2: 1.3;
-  --lh-body: 1.55;
+  /* Échelle typographique — DIX crans, les mêmes que lib/ui/type.ts.
+     Cette liste et celle du module TypeScript sont les mêmes valeurs : le site
+     est en styles inline (donc en nombres de pixels), la feuille de style est
+     en `rem` (donc elle suit la taille de texte réglée dans le système). On ne
+     touche jamais à l'une sans l'autre.
+     Les six crans d'avant vivaient ici sans qu'aucune page ne les lise : les
+     pages posaient leurs propres nombres, 21 valeurs distinctes en tout. */
+  --text-caption2: 0.625rem;  /* 10px — méta minuscule, axe de graphique */
+  --text-caption:  0.6875rem; /* 11px — légende, sous-libellé, unité */
+  --text-label:    0.75rem;   /* 12px — libellé de champ, en-tête de tableau */
+  --text-body:     0.8125rem; /* 13px — le socle : valeur, texte courant */
+  --text-callout:  0.875rem;  /* 14px — bouton, onglet, ligne à lire d'abord */
+  --text-headline: 1rem;      /* 16px — titre de carte, nom d'instrument */
+  --text-title3:   1.25rem;   /* 20px — titre de section */
+  --text-title2:   1.5rem;    /* 24px — titre d'écran */
+  --text-title1:   1.75rem;   /* 28px — chiffre héros d'une carte */
+  --text-display:  2.5rem;    /* 40px — le P&L héros du tableau de bord */
+
+  /* Anciens noms, gardés comme ALIAS : ils ne servent plus qu'à deux ou trois
+     endroits (une classe `.t-h2` dans DrivePage, le rendu des notes), et les
+     retirer casserait ces vues sans rien apporter. Ils pointent sur un cran de
+     la nouvelle échelle, jamais sur une valeur à eux. */
+  --text-h1: var(--text-title2);
+  --text-h2: var(--text-title3);
+
+  /* Interlignes — à l'inverse de la taille : serré sur un titre, aéré sur du
+     texte courant. Mêmes rapports que les rôles de lib/ui/type.ts. */
+  --lh-display: 1;
+  --lh-h1: 1.1;
+  --lh-h2: 1.2;
+  --lh-body: 1.4;
 
   /* Graisses — 4 rôles (le corps repasse en 400) */
   --fw-body: 400;
@@ -687,12 +710,12 @@ input, button, select, textarea, optgroup {
    Le corps est en 400 : la graisse redevient un signal de hiérarchie. */
 body { font-weight: var(--fw-body); }
 
-.t-display { font-size: var(--text-display); font-weight: var(--fw-bold); line-height: var(--lh-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.t-h1      { font-size: var(--text-h1); font-weight: var(--fw-bold); line-height: var(--lh-h1); letter-spacing: -0.02em; }
-.t-h2      { font-size: var(--text-h2); font-weight: var(--fw-semibold); line-height: var(--lh-h2); letter-spacing: -0.01em; }
-.t-body    { font-size: var(--text-body); font-weight: var(--fw-body); line-height: var(--lh-body); }
-.t-label   { font-size: var(--text-label); font-weight: var(--fw-medium); color: var(--color-text-muted); }
-.t-caption { font-size: var(--text-caption); font-weight: var(--fw-body); color: var(--color-text-muted); }
+.t-display { font-size: var(--text-display); font-weight: var(--fw-medium); line-height: var(--lh-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.t-h1      { font-size: var(--text-title2); font-weight: var(--fw-medium); line-height: 1.1; letter-spacing: -0.015em; }
+.t-h2      { font-size: var(--text-title3); font-weight: var(--fw-medium); line-height: 1.2; letter-spacing: -0.01em; }
+.t-body    { font-size: var(--text-body); font-weight: var(--fw-body); line-height: 1.4; }
+.t-label   { font-size: var(--text-label); font-weight: var(--fw-medium); line-height: 1.3; color: var(--color-text-muted); }
+.t-caption { font-size: var(--text-caption); font-weight: var(--fw-medium); line-height: 1.25; letter-spacing: 0.005em; color: var(--color-text-muted); }
 .num       { font-variant-numeric: tabular-nums; }
 
 /* === Tracking par défaut des titres ===
@@ -944,6 +967,19 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* === Graisse des boutons : UNE seule, 500 ===
+   La référence est la rangée de choix « Jour / Mois / Année » du calendrier
+   (`PeriodPills`) : tous ses boutons ont la même graisse, y compris celui qui
+   est pris — l'état actif se dit par le fond et l'ombre, pas par le gras.
+   Le reste du site allait de 400 à 700 selon l'endroit, et deux boutons côte à
+   côte n'avaient pas le même poids. Posé ici pour que ce soit vrai par DÉFAUT :
+   un bouton écrit sans `fontWeight` est déjà au bon poids.
+   `font-weight` d'un `<button>` ne s'hérite pas du parent (valeur initiale du
+   User-Agent), d'où la règle explicite. */
+button, [role="button"] {
+  font-weight: var(--fw-medium, 500);
 }
 
 /* === Press feedback : tous les boutons réagissent au clic ===
@@ -1534,9 +1570,9 @@ button img,
   pointer-events: none;
 }
 
-/* Gouttières de page : la gauche est plus large que la droite en desktop pour
-   décoller le contenu de la barre latérale. Sur mobile la barre passe en
-   overlay et l'écran est étroit — les deux côtés reviennent à 16 px.
+/* Gouttières de page : 40 px de chaque côté en desktop (cf. DashboardNew, une
+   seule valeur pour les deux bords). Sur mobile la barre passe en overlay et
+   l'écran est étroit — les deux côtés descendent à 16 px.
    `!important` parce que les variables sont posées en style inline. */
 @media (max-width: 767px) {
   .tr4de-main .scroll-thin {

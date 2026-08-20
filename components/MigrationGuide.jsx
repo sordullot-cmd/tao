@@ -75,7 +75,7 @@ export default function MigrationGuide() {
       <div style={{ marginBottom: 40 }}>
         <h1
           style={{
-            fontSize: 32,
+            fontSize: 28,
             fontWeight: 700,
             color: T.text,
             marginBottom: 8,
@@ -99,7 +99,7 @@ export default function MigrationGuide() {
           marginBottom: 24,
         }}
       >
-        <h2 style={{ fontSize: 18, fontWeight: 600, color: T.text, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 16 }}>
           📊 Statut Actuel
         </h2>
         <div
@@ -188,7 +188,7 @@ export default function MigrationGuide() {
           marginBottom: 24,
         }}
       >
-        <h2 style={{ fontSize: 18, fontWeight: 600, color: T.text, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 16 }}>
           📋 Données à Migrer
         </h2>
         <ul
@@ -201,7 +201,7 @@ export default function MigrationGuide() {
           }}
         >
           <li style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            <span style={{ fontSize: 18 }}>📊</span>
+            <span style={{ fontSize: 16 }}>📊</span>
             <div>
               <div style={{ fontWeight: 600, color: T.text }}>Stratégies</div>
               <div style={{ fontSize: 12, color: T.textMut, marginTop: 4 }}>
@@ -210,7 +210,7 @@ export default function MigrationGuide() {
             </div>
           </li>
           <li style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            <span style={{ fontSize: 18 }}>📝</span>
+            <span style={{ fontSize: 16 }}>📝</span>
             <div>
               <div style={{ fontWeight: 600, color: T.text }}>Notes de Trades</div>
               <div style={{ fontSize: 12, color: T.textMut, marginTop: 4 }}>
@@ -219,7 +219,7 @@ export default function MigrationGuide() {
             </div>
           </li>
           <li style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            <span style={{ fontSize: 18 }}>✅</span>
+            <span style={{ fontSize: 16 }}>✅</span>
             <div>
               <div style={{ fontWeight: 600, color: T.text }}>Règles de Trading</div>
               <div style={{ fontSize: 12, color: T.textMut, marginTop: 4 }}>
@@ -228,7 +228,7 @@ export default function MigrationGuide() {
             </div>
           </li>
           <li style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            <span style={{ fontSize: 18 }}>⚙️</span>
+            <span style={{ fontSize: 16 }}>⚙️</span>
             <div>
               <div style={{ fontWeight: 600, color: T.text }}>Préférences</div>
               <div style={{ fontSize: 12, color: T.textMut, marginTop: 4 }}>
@@ -252,7 +252,7 @@ export default function MigrationGuide() {
         >
           <h2
             style={{
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: 600,
               color: result.success ? T.green : T.red,
               marginBottom: 8,
@@ -280,8 +280,8 @@ export default function MigrationGuide() {
             border: "none",
             background: T.blue,
             color: T.white,
-            fontSize: 14,
-            fontWeight: 600,
+            fontSize:14,
+            fontWeight: 500,
             cursor: migrating ? "not-allowed" : "pointer",
             opacity: migrating ? 0.6 : 1,
             transition: "all 0.2s ease",
@@ -301,7 +301,7 @@ export default function MigrationGuide() {
           marginTop: 24,
         }}
       >
-        <h2 style={{ fontSize: 18, fontWeight: 600, color: T.text, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 16 }}>
           📚 Prochaines Étapes
         </h2>
         <ol

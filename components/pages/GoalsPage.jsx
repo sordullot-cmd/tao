@@ -672,7 +672,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
       {!embedded && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <button onClick={openCreate}
-            style={{ marginLeft: "auto", padding: "7px 16px", height: 34, borderRadius: 999, background: T.brand, border: "none", color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            style={{ marginLeft: "auto", minHeight: 28, padding: "5px 12px", height: 34, borderRadius: 999, background: T.brand, border: "none", color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <Plus size={14} strokeWidth={2} /> Nouvel objectif
           </button>
         </div>
@@ -747,7 +747,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                         margin: "8px 16px 0",
                         padding: "6px 10px",
                         border: "none", background: "transparent",
-                        color: T.textSub, fontSize: 12, fontWeight: 500,
+                        color: T.textSub, fontSize:12, fontWeight: 500,
                         cursor: "pointer", fontFamily: "inherit",
                         borderRadius: 6, transition: "background .12s ease",
                       }}
@@ -793,7 +793,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
         width={560}
         footer={
           <>
-            <span style={{ marginRight: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.textMut }}>
+            <span style={{ marginRight: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textMut }}>
               <Check size={13} strokeWidth={2.5} color={T.green} /> Enregistré automatiquement
             </span>
             <PrimaryBtn onClick={close}>Terminé</PrimaryBtn>
@@ -828,7 +828,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                 <button key={lv.id} type="button" role="radio" aria-checked={active}
                   onClick={() => setForm({ ...form, level: lv.id })}
                   style={{
-                    display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 999,
+                    display: "inline-flex", alignItems: "center", gap: 7, minHeight: 34, padding: "8px 16px", borderRadius: 999,
                     border: `1px solid ${active ? lv.color : T.border}`,
                     background: active ? `color-mix(in srgb, ${lv.color} 10%, transparent)` : T.white,
                     color: active ? lv.color : T.text,
@@ -915,7 +915,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
         <GoalField label="Catégorie"
           aside={(() => {
             const cat = CATEGORIES.find(c => c.id === form.category) || CATEGORIES[0];
-            return <span style={{ fontSize: 11.5, fontWeight: 600, color: cat.color }}>{cat.label}</span>;
+            return <span style={{ fontSize: 11, fontWeight: 600, color: cat.color }}>{cat.label}</span>;
           })()}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
             {CATEGORIES.map(c => {
@@ -944,7 +944,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                     <Icon size={15} strokeWidth={1.75} />
                   </div>
                   <span style={{
-                    fontSize: 9.5, fontWeight: 600,
+                    fontSize: 10, fontWeight: 600,
                     color: active ? c.color : T.textMut,
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%",
                     transition: "color .15s ease",
@@ -1042,11 +1042,11 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                   style={{ ...goalInput(), flex: 1, minWidth: 0, MozAppearance: "textfield", appearance: "textfield" }}
                   onFocus={(e) => { e.currentTarget.style.boxShadow = DA_FOCUS_RING; }}
                   onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
-                {suffix && <span style={{ fontSize: 12.5, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>{suffix.trim()}</span>}
+                {suffix && <span style={{ fontSize: 12, color: T.textMut, fontWeight: 500, flexShrink: 0 }}>{suffix.trim()}</span>}
                 <button type="button" onClick={() => adjustManual(g.id, -1)} aria-label="Retirer 1"
-                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>−</button>
+                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.text, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit" }}>−</button>
                 <button type="button" onClick={() => adjustManual(g.id, 1)} aria-label="Ajouter 1"
-                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>+</button>
+                  style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit" }}>+</button>
               </div>
             </GoalField>
           );
@@ -1070,7 +1070,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                   return (
                     <button key={c.id} type="button"
                       onClick={() => setForm({ ...form, rpgCategory: active ? "" : c.id })}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${active ? c.color : T.border}`, background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : T.white, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                       {active
                         ? <Check size={13} strokeWidth={2.5} color={c.color} />
                         : <RpgCatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
@@ -1087,7 +1087,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                     style={{ ...goalInput(), width: 96, textAlign: "center", MozAppearance: "textfield", appearance: "textfield" }}
                     onFocus={(e) => { e.currentTarget.style.boxShadow = DA_FOCUS_RING; }}
                     onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
-                  <span style={{ fontSize: 12.5, color: T.textMut, fontWeight: 500 }}>XP à 100 %</span>
+                  <span style={{ fontSize: 12, color: T.textMut, fontWeight: 500 }}>XP à 100 %</span>
                 </div>
               )}
             </div>
@@ -1551,7 +1551,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           {/* Rythme requis pour tenir l'échéance (métriques additives uniquement). */}
           {!isAchieved && pace?.requiredRate != null && (
             <div title="Ce qu'il reste à accomplir, réparti sur le temps restant jusqu'à l'échéance (jours de bourse pour le trading : le week-end ne compte pas)"
-              style={{ fontSize: 9, color: T.textMut, fontWeight: 500, marginTop: 6, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              style={{ fontSize: 10, color: T.textMut, fontWeight: 500, marginTop: 6, fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               ≈ {fmtVal(pace.requiredRate, unit)}/{pace.rateUnit === "semaine" ? "sem." : pace.rateUnit === "mois" ? "mois" : "j"} requis
             </div>
           )}
@@ -1686,10 +1686,10 @@ function EmptyState({ onClick }) {
       <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: "var(--radius-card)", background: T.accentBg, marginBottom: 12 }}>
         <Target size={22} strokeWidth={1.75} color={T.textSub} />
       </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>Pas d&apos;objectif pour le moment</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 6, letterSpacing: -0.1 }}>Pas d&apos;objectif pour le moment</div>
       <div style={{ fontSize: 13, color: T.textSub, marginBottom: 16, maxWidth: 380, margin: "0 auto 16px" }}>Crée ton premier objectif pour commencer à suivre ta progression.</div>
       <button onClick={onClick}
-        style={{ padding: "8px 20px", borderRadius: 999, background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", border: "none", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
         <Plus size={13} strokeWidth={2} /> Créer un objectif
       </button>
     </div>
@@ -1784,11 +1784,11 @@ function DeadlineField({ value, onChange }) {
           return (
             <button key={p.id} type="button" onClick={() => onChange(p.id)}
               style={{
-                padding: "5px 11px", borderRadius: 999,
+                minHeight: 28, padding: "5px 12px", borderRadius: 999,
                 border: `1px solid ${active ? T.brand : T.border}`,
                 background: active ? T.brand : T.white,
                 color: active ? T.onSolid : T.textSub,
-                fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
               }}>
               {p.label}
@@ -1862,7 +1862,7 @@ function MiniCalendar({ value, viewDate, setViewDate, onPick }) {
               style={{
                 width: "100%", aspectRatio: "1 / 1",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: isSel ? 600 : 500,
+                fontSize: 12, fontWeight: 500,
                 color: isSel ? T.onSolid : T.text,
                 background: isSel ? T.brand : "transparent",
                 border: isToday && !isSel ? `1px solid ${T.border2 || T.border}` : "none",
@@ -1922,7 +1922,7 @@ function DropdownBody({ options, value, onSelect, renderOption }) {
             width: "100%", padding: "8px 10px", borderRadius: 6, border: "none",
             background: "transparent", cursor: "pointer", fontFamily: "inherit",
             display: "flex", alignItems: "center", gap: 6, textAlign: "left",
-            fontSize: 11, fontWeight: 600, color: T.textMut,
+            fontSize:11, fontWeight: 500, color: T.textMut,
             textTransform: "uppercase", letterSpacing: 0.4,
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = T.bg; }}
@@ -1958,7 +1958,7 @@ function DropdownBody({ options, value, onSelect, renderOption }) {
           background: isActiveGroup ? T.accentBg : "transparent",
           cursor: "pointer", fontFamily: "inherit",
           display: "flex", alignItems: "center", gap: 8, textAlign: "left",
-          fontSize: 13, fontWeight: isActiveGroup ? 600 : 500, color: T.text,
+          fontSize:13, fontWeight: 500, color: T.text,
           transition: "background .12s ease",
         }}
         onMouseEnter={(e) => { if (!isActiveGroup) e.currentTarget.style.background = T.bg; }}
@@ -1980,7 +1980,7 @@ function DropdownItem({ option: o, active, onSelect, renderOption }) {
         background: active ? T.accentBg : "transparent",
         cursor: "pointer", fontFamily: "inherit",
         display: "flex", alignItems: "center", gap: 8, textAlign: "left",
-        fontSize: 13, fontWeight: active ? 600 : 500, color: T.text,
+        fontSize:13, fontWeight: 500, color: T.text,
         transition: "background .12s ease",
       }}
       onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = T.bg; }}
@@ -2033,7 +2033,7 @@ function FancyDropdown({ value, options, onChange, renderValue, renderOption, al
             )}
           </span>
         ) : renderValue ? renderValue(selected) : (
-          <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{selected?.label}</span>
+          <span style={{ fontSize: 14, fontWeight: 500, color: T.text }}>{selected?.label}</span>
         )}
         <ChevronDown size={14} strokeWidth={1.75} color={T.textMut}
           style={{ transition: "transform .15s", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }} />
@@ -2099,11 +2099,11 @@ function DateChip({ value, onChange, placeholder = "Date" }) {
       <button ref={btnRef} type="button" onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
         style={{
           display: "inline-flex", alignItems: "center", gap: 4,
-          padding: "2px 8px", borderRadius: 999,
+          minHeight: 28, padding: "5px 12px", borderRadius: 999,
           border: `1px dashed ${value ? "transparent" : T.border}`,
           background: value ? T.accentBg : "transparent",
           color: value ? T.text : T.textMut,
-          fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+          fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
         }}>
         <Calendar size={10} strokeWidth={1.75} />
         {label}
@@ -2142,9 +2142,9 @@ function NoteChip({ value, onChange }) {
       <button type="button" onClick={(e) => { e.stopPropagation(); setEditing(true); }}
         style={{
           display: "inline-flex", alignItems: "center", gap: 4,
-          padding: "2px 8px", borderRadius: 999,
+          minHeight: 28, padding: "5px 12px", borderRadius: 999,
           border: `1px dashed ${T.border}`, background: "transparent",
-          color: T.textMut, fontSize: 11, fontWeight: 500,
+          color: T.textMut, fontSize: 13, fontWeight: 500,
           cursor: "pointer", fontFamily: "inherit",
         }}>
         <BookOpen size={10} strokeWidth={1.75} /> Ajouter une note
@@ -2338,7 +2338,7 @@ function SubtaskAdder({ onAdd, label = "Ajouter" }) {
         display: "inline-flex", alignItems: "center", gap: 4,
         padding: "4px 8px", marginTop: 4, marginLeft: 42,
         border: "none", background: "transparent",
-        color: T.textMut, fontSize: 11, fontWeight: 500,
+        color: T.textMut, fontSize:11, fontWeight: 500,
         cursor: "pointer", fontFamily: "inherit",
         borderRadius: 6, transition: "color .12s ease, background .12s ease",
       }}
@@ -2464,7 +2464,7 @@ function SubtasksField({ subtasks, onChange }) {
   return (
     <GoalField label="Sous-objectifs"
       aside={total > 0
-        ? <span style={{ fontSize: 11.5, color: T.textMut, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{done}/{total}</span>
+        ? <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{done}/{total}</span>
         : null}>
       {subtasks.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 6 }}>

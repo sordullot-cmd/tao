@@ -244,7 +244,7 @@ export default function ReviewSession({ store, setStore, queue, openedAt, onExit
         <button
           type="button"
           onClick={onExit}
-          style={{ padding: "9px 20px", borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", transition: "var(--tr-ui)" }}
+          style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer", transition: "var(--tr-ui)" }}
         >
           Retour
         </button>
@@ -294,7 +294,7 @@ export default function ReviewSession({ store, setStore, queue, openedAt, onExit
           </div>
         )}
 
-        <div style={{ fontSize: 22, lineHeight: 1.45, fontWeight: 500, color: T.text, whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 24, lineHeight: 1.45, fontWeight: 500, color: T.text, whiteSpace: "pre-wrap" }}>
           {rendered.question}
         </div>
 
@@ -329,7 +329,7 @@ export default function ReviewSession({ store, setStore, queue, openedAt, onExit
           style={{
             padding: "14px 20px", borderRadius: 14, border: "none",
             background: T.text, color: T.textInverted,
-            fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+            fontSize:14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
             transition: "var(--tr-ui)",
           }}
         >

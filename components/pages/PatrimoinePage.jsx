@@ -205,7 +205,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
 
   if (assets.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
         <SectionTitle>{t("patrimoine.title")}</SectionTitle>
         <section style={{ ...CARD, padding: "48px 32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
           <div style={{ fontSize: 14, color: T.textSub, maxWidth: 420 }}>
@@ -251,7 +251,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
       {/* Chiffre héros + courbe, posés à même le fond comme sur le tableau de
           bord de trading : la courbe reprend la réserve gauche et file sous la
           barre latérale (`bleedLeft` par défaut). */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {hasLiabilities ? (

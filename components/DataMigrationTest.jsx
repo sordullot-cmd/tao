@@ -56,7 +56,7 @@ export default function DataMigrationTest() {
           alignItems: "center",
           justifyContent: "space-between",
           fontSize: 14,
-          fontWeight: 600,
+          fontWeight: 500,
           color: T.text,
         }}
       >
@@ -116,7 +116,7 @@ export default function DataMigrationTest() {
       <div style={{ marginBottom: 40 }}>
         <h1
           style={{
-            fontSize: 32,
+            fontSize: 28,
             fontWeight: 700,
             color: T.text,
             marginBottom: 8,
@@ -163,7 +163,7 @@ export default function DataMigrationTest() {
       <div style={{ marginBottom: 32 }}>
         <h2
           style={{
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: 600,
             color: T.text,
             marginBottom: 16,

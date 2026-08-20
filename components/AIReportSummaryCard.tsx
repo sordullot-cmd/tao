@@ -76,14 +76,14 @@ export default function AIReportSummaryCard({ onOpenReports }: AIReportSummaryCa
     <div style={{ fontFamily: "var(--font-sans)", padding: "4px 4px" }}>
       {/* Header: Rapport IA + Voir tout */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1 }}>Rapport IA</h3>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1 }}>Rapport IA</h3>
         {onOpenReports && (
           <button
             onClick={onOpenReports}
             style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               padding: "4px 8px", borderRadius: 6, border: "none",
-              background: "transparent", color: T.textSub, fontSize: 12, fontWeight: 500,
+              background: "transparent", color: T.textSub, fontSize:12, fontWeight: 500,
               cursor: "pointer", fontFamily: "inherit",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}

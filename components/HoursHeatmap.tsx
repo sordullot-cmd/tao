@@ -121,7 +121,7 @@ export default function HoursHeatmap({ trades }: HoursHeatmapProps) {
       ) : (
         <>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", fontSize: 9, fontVariantNumeric: "tabular-nums", minWidth: 720 }}>
+            <table style={{ borderCollapse: "collapse", fontSize: 10, fontVariantNumeric: "tabular-nums", minWidth: 720 }}>
               <thead>
                 <tr>
                   <th style={{ width: 28 }} />

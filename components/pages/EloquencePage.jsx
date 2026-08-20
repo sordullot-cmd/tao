@@ -80,22 +80,22 @@ const card = { ...CARD, padding: 20, boxSizing: "border-box" };
 const SURFACE = FIELD_BG;
 const pill = (active) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "6px 14px", borderRadius: 999, cursor: "pointer", border: "none",
+  minHeight: 28, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "none",
   background: active ? T.text : FIELD_BG, color: active ? T.textInverted : T.text,
-  fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+  fontSize: 13, fontWeight: 500, fontFamily: "inherit",
   transition: "background 120ms ease, color 120ms ease",
 });
 const ghost = (disabled) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "7px 14px", minHeight: 32, borderRadius: 999,
+  minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999,
   border: `1px solid ${T.border}`, background: T.white, color: T.text,
-  fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+  fontSize: 13, fontWeight: 500, fontFamily: "inherit",
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
   transition: "opacity 120ms ease",
 });
 const primary = (disabled) => ({
   display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "7px 16px", minHeight: 32, borderRadius: 999,
+  minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999,
   border: "none", background: T.text, color: T.textInverted,
   fontSize: 12, fontWeight: 500, fontFamily: "inherit",
   cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
@@ -105,14 +105,14 @@ const primary = (disabled) => ({
    qu'ailleurs parce qu'on relit ce qu'on vient d'écrire à voix haute — un sujet
    de discours ou un texte à dire se lisent en levant les yeux, pas en se
    penchant sur l'écran. */
-const field = { ...DA_FIELD, fontSize: 15 };
+const field = { ...DA_FIELD, fontSize: 14 };
 /* Zone d'écriture : même taille, aplat plus dilué et rayon de zone. */
-const writing = { ...DA_FIELD_AREA, fontSize: 15 };
+const writing = { ...DA_FIELD_AREA, fontSize: 14 };
 const lead = { fontSize: 14, color: T.textSub, lineHeight: 1.5, margin: 0 };
-const sectionTitle = { fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 8 };
+const sectionTitle = { fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 8 };
 const metricBox = { flex: 1, minWidth: 120, borderRadius: 8, padding: "10px 12px", background: SURFACE };
 const metricLabel = { fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 };
-const metricVal = { fontSize: 18, fontWeight: 600, color: T.text, marginTop: 2, fontVariantNumeric: "tabular-nums" };
+const metricVal = { fontSize: 16, fontWeight: 600, color: T.text, marginTop: 2, fontVariantNumeric: "tabular-nums" };
 /* Carte sélectionnable (texte, virelangue, format…). Plate, posée sur le fond de
    champ plutôt qu'en relief : la page en aligne parfois une dizaine à la suite, et
    dix cartes qui flottent chacune sur leur ombre font un damier que l'œil ne trie
@@ -183,7 +183,7 @@ function BlockTitle({ color, children, right }) {
     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
         <span style={{ width: 8, height: 8, borderRadius: 999, background: color, flexShrink: 0, alignSelf: "center" }} />
-        <span style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{children}</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{children}</span>
       </span>
       {right}
     </div>
@@ -270,7 +270,7 @@ function SpeechRulesBar() {
       {SPEECH_RULES.map((r) => (
         <div key={r.id} title={r.why} style={{ flex: "1 1 190px", minWidth: 180, display: "flex", flexDirection: "column", gap: 3 }}>
           <div style={{ fontSize: 11, color: T.text, opacity: 0.5, fontWeight: 500 }}>{r.label}</div>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text, lineHeight: 1.3 }}>{r.rule}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, lineHeight: 1.3 }}>{r.rule}</div>
         </div>
       ))}
     </div>
@@ -288,7 +288,7 @@ function CheckTile({ check }) {
         <Icon size={14} color={color} />
         <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{check.label}</span>
       </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color, fontVariantNumeric: "tabular-nums" }}>{check.value}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color, fontVariantNumeric: "tabular-nums" }}>{check.value}</div>
       <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4 }}>{check.detail}</div>
     </div>
   );
@@ -348,7 +348,7 @@ function MirrorView() {
     };
   }, []);
 
-  if (err) return <div style={{ fontSize: 12.5, color: T.textMut, textAlign: "center" }}>{err}</div>;
+  if (err) return <div style={{ fontSize: 12, color: T.textMut, textAlign: "center" }}>{err}</div>;
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 420, aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden", background: T.scrim }}>
       <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} />
@@ -510,10 +510,10 @@ function RecorderPanel({ mode, referenceText, topic, framework, drillGoal, paceT
             }}
           >
             {recording ? <Square size={26} fill="currentColor" /> : <Mic size={28} />}
-            <span style={{ fontSize: 11, fontWeight: 600 }}>{recording ? "Arrêter" : "Commencer"}</span>
+            <span style={{ fontSize: 11, fontWeight: 500 }}>{recording ? "Arrêter" : "Commencer"}</span>
           </button>
 
-          <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: recording ? T.red : T.textMut }}>
+          <div style={{ fontSize: 24, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: recording ? T.red : T.textMut }}>
             {fmtTime(durationSec)}
           </div>
           <LevelMeter level={level} recording={recording} />
@@ -571,7 +571,7 @@ function AxisBar({ label, desc, value, feedback }) {
         <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: scoreColor(val) }}>{val}</div>
       </div>
       {feedback && (
-        <div style={{ paddingLeft: 108, fontSize: 12.5, color: T.textSub, lineHeight: 1.5, borderLeft: `2px solid ${scoreColor(val)}`, marginLeft: 2 }}>
+        <div style={{ paddingLeft: 108, fontSize: 12, color: T.textSub, lineHeight: 1.5, borderLeft: `2px solid ${scoreColor(val)}`, marginLeft: 2 }}>
           {feedback}
         </div>
       )}
@@ -655,7 +655,7 @@ function ResultCard({ result, showFidelity }) {
           <span style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>/ 100</span>
         </div>
         <div style={{ flex: 1, minWidth: 200, marginTop: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Jugement du coach</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Jugement du coach</div>
           {analysis.summary && (
             <div style={{ fontSize: 13, color: T.textSub, marginTop: 4, fontStyle: "italic" }}>{analysis.summary}</div>
           )}
@@ -751,7 +751,7 @@ function ForbiddenVerdict({ word, count }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: 10, padding: "12px 14px", background: ok ? T.greenBg : T.redBg }}>
       {ok ? <Check size={18} color={T.green} /> : <Ban size={18} color={T.red} />}
-      <div style={{ fontSize: 13.5, color: T.text }}>
+      <div style={{ fontSize: 13, color: T.text }}>
         {ok ? (
           <>Le mot « <strong>{word}</strong> » n&apos;est jamais sorti.</>
         ) : (
@@ -819,7 +819,7 @@ function RepCounter({ title, srName, subtitle, hint, total, count, onInc, onRese
   return (
     <div title={hint || undefined} style={{ flex: "1 1 200px", minWidth: 180, display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: T.text, lineHeight: 1.2 }}>{title}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.2 }}>{title}</div>
         {subtitle && <div style={{ fontSize: 11, color: T.textMut, textAlign: "right", flexShrink: 0 }}>{subtitle}</div>}
       </div>
 
@@ -959,7 +959,7 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
       {selected && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 4 }}>
           <div style={{ ...card, display: "flex", flexDirection: "column", gap: 16 }}>
-            <p style={{ fontSize: 22, lineHeight: 1.5, color: T.text, margin: 0, fontWeight: 600 }}>{selected.text}</p>
+            <p style={{ fontSize: 24, lineHeight: 1.5, color: T.text, margin: 0, fontWeight: 600 }}>{selected.text}</p>
 
             {/* Les deux séries ne cherchent pas la même chose : l'orange pousse
                 la vitesse, le bleu la netteté. La pastille garde sa teinte même
@@ -987,7 +987,7 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
             <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.55 }}>{serie.instruction}</div>
             <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
               {serie.tips.map((t, i) => (
-                <li key={i} style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
+                <li key={i} style={{ fontSize: 12, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
               ))}
             </ul>
           </div>
@@ -1002,7 +1002,7 @@ function TwisterSection({ reps, incRep, resetRep, onSession }) {
               onReset={() => repKey && resetRep(repKey)}
             />
             <div style={{ flex: "2 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>
+              <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.45 }}>
                 Facultatif : enregistre une série pour faire noter ton articulation.
               </div>
               <RecorderPanel
@@ -1027,7 +1027,7 @@ function WarmupSection() {
   const [openId, setOpenId] = useState(null);
   return (
     <details style={{ ...card, padding: 0, overflow: "hidden" }}>
-      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.text }}>
+      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: T.text }}>
         <Sparkles size={15} color={T.amber} />
         Échauffement de la voix
         <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: T.textMut }}>
@@ -1046,7 +1046,7 @@ function WarmupSection() {
               >
                 <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <ChevronRight size={15} color={T.textMut} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 150ms ease" }} />
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>{w.title}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{w.title}</span>
                 </span>
                 <span style={{ fontSize: 12, color: T.textMut }}>{w.duration}s</span>
               </button>
@@ -1116,8 +1116,8 @@ function ReadingTab({ onSession }) {
           const tone = cycleTone(idx);
           return (
             <button key={i.id} type="button" onClick={() => switchIntention(i.id)} style={{ ...selectable(active, tone), width: 260, display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: tone }}>{i.label}</div>
-              <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.4 }}>{i.tagline}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: tone }}>{i.label}</div>
+              <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4 }}>{i.tagline}</div>
             </button>
           );
         })}
@@ -1129,7 +1129,7 @@ function ReadingTab({ onSession }) {
         <p style={{ ...lead, color: T.text }}>{intention.description}</p>
         <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
           {intention.tips.map((t, i) => (
-            <li key={i} style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
+            <li key={i} style={{ fontSize: 12, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
           ))}
         </ul>
         {paceTarget && (
@@ -1156,7 +1156,7 @@ function ReadingTab({ onSession }) {
                   style={{ ...selectable(active), width: 240 }}
                 >
                   <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginBottom: 4 }}>{tx.genre}</div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>{tx.title}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{tx.title}</div>
                 </button>
               );
             })}
@@ -1166,7 +1166,7 @@ function ReadingTab({ onSession }) {
 
       {intention.source !== "library" && (
         <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
             {intention.source === "own" ? "Le texte de ton modèle" : "…ou colle ton propre texte"}
           </div>
           <textarea
@@ -1184,7 +1184,7 @@ function ReadingTab({ onSession }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
                 {useOwn ? "Ton texte" : libraryText.title}
               </div>
               <ListenButton text={reference} rate={intention.id === "slow" ? 0.6 : 0.95} />
@@ -1214,7 +1214,7 @@ function ReadingTab({ onSession }) {
 function FrameworkPicker({ value, onChange }) {
   return (
     <details style={{ ...card, padding: 0, overflow: "hidden" }} open={!!value}>
-      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.text }}>
+      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: T.text }}>
         <Lightbulb size={15} color={T.amber} />
         Cadre de discours
         <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: value ? T.text : T.textMut }}>
@@ -1234,7 +1234,7 @@ function FrameworkPicker({ value, onChange }) {
               onClick={() => onChange(active ? null : f.id)}
               style={{ ...selectable(active, tone), flex: "1 1 260px", minWidth: 240 }}
             >
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: tone }}>{f.name}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: tone }}>{f.name}</div>
               <div style={{ fontSize: 12, color: T.textSub, fontWeight: 500, marginBottom: 8 }}>{f.short}</div>
               <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
                 {f.steps.map((s, i) => (
@@ -1280,7 +1280,7 @@ function TopicDrawer({ onPick }) {
 
   return (
     <details style={{ ...card, padding: 0, overflow: "hidden" }}>
-      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.text }}>
+      <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: T.text }}>
         <Sparkles size={15} color={T.blue} />
         Trouver un sujet
         <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 500, color: T.textMut }}>banque ou génération IA</span>
@@ -1324,8 +1324,8 @@ function TopicDrawer({ onPick }) {
               }}
             >
               <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.35 }}>{tp.title}</div>
-              {tp.angle && <div style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.4 }}>{tp.angle}</div>}
-              <div style={{ fontSize: 11.5, color: T.blue, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+              {tp.angle && <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4 }}>{tp.angle}</div>}
+              <div style={{ fontSize: 11, color: T.blue, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
                 <Mic size={12} /> Prendre ce sujet
               </div>
             </button>
@@ -1397,7 +1397,7 @@ function SpeakingTab({ onSession }) {
           const tone = cycleTone(idx);
           return (
             <button key={f.id} type="button" onClick={() => switchFormat(f.id)} style={{ ...selectable(active, tone), flex: "1 1 200px", minWidth: 190, padding: 16 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 600, color: tone }}>{f.label}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: tone }}>{f.label}</div>
               <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.4, marginTop: 3 }}>{f.tagline}</div>
             </button>
           );
@@ -1409,7 +1409,7 @@ function SpeakingTab({ onSession }) {
         <p style={{ ...lead, color: T.text }}>{format.description}</p>
         <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
           {format.tips.map((t, i) => (
-            <li key={i} style={{ fontSize: 12.5, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
+            <li key={i} style={{ fontSize: 12, color: T.textMut, lineHeight: 1.45 }}>{t}</li>
           ))}
         </ul>
         {format.target && (
@@ -1660,7 +1660,7 @@ function ProgressPanel({ sessions, mode }) {
               <div style={{ flex: 1, height: 8, background: T.accentBg, borderRadius: 999, overflow: "hidden" }}>
                 <div style={{ width: `${Math.round(r.ratio * 100)}%`, height: "100%", background: r.ratio >= 0.7 ? T.green : r.ratio >= 0.4 ? T.amber : T.red, borderRadius: 999 }} />
               </div>
-              <div style={{ width: 46, textAlign: "right", fontSize: 12.5, fontWeight: 600, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+              <div style={{ width: 46, textAlign: "right", fontSize: 12, fontWeight: 600, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
                 {r.okCount}/{r.total}
               </div>
             </div>
@@ -1794,7 +1794,7 @@ function CoachPanel({ sessions, store, setStore, mode, onOpenTab }) {
           {review.priority && (
             <div style={{ background: SURFACE, borderRadius: 8, padding: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
               <Sparkles size={16} color={T.text} style={{ flexShrink: 0, marginTop: 1 }} />
-              <div style={{ fontSize: 13.5, color: T.text }}>
+              <div style={{ fontSize: 13, color: T.text }}>
                 <span style={{ fontWeight: 700 }}>Priorité n°1 : </span>{review.priority}
               </div>
             </div>
@@ -1807,8 +1807,8 @@ function CoachPanel({ sessions, store, setStore, mode, onOpenTab }) {
                 {review.dayPlan.map((t, i) => (
                   <div key={i} style={{ background: SURFACE, borderRadius: 10, padding: 12, display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 180 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>{t.title}</div>
-                      {t.why && <div style={{ fontSize: 12.5, color: T.textSub, marginTop: 2 }}>{t.why}</div>}
+                      <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{t.title}</div>
+                      {t.why && <div style={{ fontSize: 12, color: T.textSub, marginTop: 2 }}>{t.why}</div>}
                     </div>
                     {t.mode && modeLabel(t.mode) && (
                       <button type="button" style={ghost(false)} onClick={() => onOpenTab(t.mode)}>
@@ -1839,7 +1839,7 @@ function CoachPanel({ sessions, store, setStore, mode, onOpenTab }) {
               <summary style={{ cursor: "pointer", color: T.textSub, fontWeight: 600 }}>Détail par critère</summary>
               <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
                 {axisDefs.map((ax) => (review.axisReview[ax.id] ? (
-                  <div key={ax.id} style={{ fontSize: 12.5, color: T.textSub }}>
+                  <div key={ax.id} style={{ fontSize: 12, color: T.textSub }}>
                     <span style={{ fontWeight: 700, color: T.text }}>{ax.label} : </span>{review.axisReview[ax.id]}
                   </div>
                 ) : null))}
@@ -1894,7 +1894,7 @@ function RecordingsPanel({ sessions, mode }) {
 
   return (
     <details style={card}>
-      <summary style={{ cursor: "pointer", fontSize: 15, fontWeight: 600, color: T.text }}>
+      <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 600, color: T.text }}>
         Tes enregistrements ({items.length})
       </summary>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
@@ -2055,7 +2055,7 @@ export default function EloquencePage() {
   };
 
   return (
-    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }}>
+    <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }}>
       {/* ═══ 1. EN-TÊTE ═══ Ni titre ni sous-titre : la barre latérale dit déjà
           où l'on est. Ne reste que le slot d'en-tête, que toutes les pages rendent. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

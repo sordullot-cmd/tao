@@ -87,7 +87,7 @@ function CallbackContent() {
   const button = {
     display: "flex", alignItems: "center", justifyContent: "center",
     width: "100%", minHeight: 44, borderRadius: 999, border: "none",
-    fontSize: 15, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+    fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
   } as const;
 
   return (
@@ -107,7 +107,7 @@ function CallbackContent() {
           <CheckCircle2 size={40} strokeWidth={1.5} style={{ color: T.pnlPos }} aria-hidden="true" />
         )}
 
-        <h1 style={{ margin: "12px 0 0", fontSize: 18, fontWeight: 500 }}>
+        <h1 style={{ margin: "12px 0 0", fontSize: 16, fontWeight: 500 }}>
           {failed ? "Connexion échouée" : "Banque connectée"}
         </h1>
         <p style={{ margin: "6px 0 0", fontSize: 14, lineHeight: 1.5, color: T.textSub }}>

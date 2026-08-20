@@ -278,7 +278,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
   return (
     /* Même ossature que les autres pages de la DA : fond gris hérité de la
        coquille, sections espacées de 24, léger retrait haut. */
-    <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:8,fontFamily:"var(--font-sans)"}} className="anim-1">
+    <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
       {/* Emplacement des contrôles injectés par la barre du haut. */}
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div id="tr4de-page-header-slot" style={{marginLeft:"auto"}} />
@@ -292,7 +292,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
         <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:16,flexWrap:"wrap"}}>
           <button
             onClick={() => setShowStrategyForm(true)}
-            style={{display:"inline-flex",alignItems:"center",gap:6,padding:"9px 18px",borderRadius:999,background:T.text,border:"none",color:T.textInverted,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
+            style={{display:"inline-flex",alignItems:"center",gap:6,minHeight: 34, padding: "8px 16px",borderRadius:999,background:T.text,border:"none",color:T.textInverted,fontSize: 13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
           >
             <Plus size={14} strokeWidth={1.75}/> {t("strat.createBtn")}
           </button>
@@ -449,7 +449,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 marginLeft: "auto", marginTop: -9, alignSelf: "flex-start", flexShrink: 0,
-                padding: "9px 18px", borderRadius: 999, background: T.text, border: "none",
+                minHeight: 34, padding: "8px 16px", borderRadius: 999, background: T.text, border: "none",
                 color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
               }}
             >
@@ -798,9 +798,9 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
           <div style={{width:48,height:48,borderRadius:"var(--radius-card)",background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <Target size={22} strokeWidth={1.75} color={T.text}/>
           </div>
-          <div style={{fontSize:17,fontWeight:600,color:T.text,marginBottom:6,letterSpacing:-0.1}}>{t("strat.empty")}</div>
+          <div style={{fontSize:16,fontWeight:600,color:T.text,marginBottom:6,letterSpacing:-0.1}}>{t("strat.empty")}</div>
           <div style={{fontSize:13,color:T.textSub,marginBottom:20,maxWidth:380,lineHeight:1.5}}>{t("strat.emptySub")}</div>
-          <button onClick={()=>setShowStrategyForm(true)} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:999,background:T.white,color:T.text,fontSize:13,fontWeight:600,cursor:"pointer",border:`1px solid ${T.text}`,fontFamily:"var(--font-sans)"}}>
+          <button onClick={()=>setShowStrategyForm(true)} style={{display:"inline-flex",alignItems:"center",gap:6,minHeight: 34, padding: "8px 16px",borderRadius:999,background:T.white,color:T.text,fontSize: 13,fontWeight:500,cursor:"pointer",border:`1px solid ${T.text}`,fontFamily:"var(--font-sans)"}}>
             <Plus size={14} strokeWidth={2}/> {t("strat.createBtn")}
           </button>
         </div>
@@ -824,7 +824,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               {loading ? t("common.loading") : t("common.delete")}
             </DAPillButton>
           </>}>
-          <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>{t("strat.deleteTitle")}</div>
+          <div style={{fontSize:14,fontWeight:600,color:T.text,letterSpacing:-0.1}}>{t("strat.deleteTitle")}</div>
           <div style={{fontSize:13,color:T.text,opacity:0.6,lineHeight:1.55}}>{t("strat.deleteWarn")}</div>
         </DAModal>
       )}
@@ -845,7 +845,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
           </>}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:formData.color}}/>
-            <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>
+            <div style={{fontSize:14,fontWeight:600,color:T.text,letterSpacing:-0.1}}>
               {editingStrategyId ? t("strat.edit") : t("strat.new")}
             </div>
           </div>
@@ -884,7 +884,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
               <div>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                   <label style={{fontSize:12,fontWeight:500,color:T.textSub}}>{t("strat.rules")}</label>
-                  <button onClick={addGroup} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:12,color:T.text,background:"transparent",border:"none",cursor:"pointer",padding:"4px 8px",borderRadius:6,fontFamily:"inherit",fontWeight:500}}
+                  <button onClick={addGroup} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:12,color:T.text,background:"transparent",border:"none",cursor:"pointer",padding: "4px 8px",borderRadius:6,fontFamily:"inherit",fontWeight:500}}
                     onMouseEnter={(e)=>{e.currentTarget.style.background=T.accentBg}} onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}>
                     <Plus size={13} strokeWidth={2}/> {t("strat.addGroup")}
                   </button>
@@ -924,7 +924,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                             )}
                           </div>
                         ))}
-                        <button onClick={()=>addRule(group.id)} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:4,fontSize:12,color:T.textSub,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:"4px 8px",borderRadius:6,fontFamily:"inherit",alignSelf:"flex-start"}}
+                        <button onClick={()=>addRule(group.id)} style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:4,fontSize:12,color:T.textSub,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding: "4px 8px",borderRadius:6,fontFamily:"inherit",alignSelf:"flex-start"}}
                           onMouseEnter={(e)=>{e.currentTarget.style.background=T.accentBg;e.currentTarget.style.color=T.text}}
                           onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textSub}}>
                           <Plus size={11} strokeWidth={2}/> {t("strat.addRule")}

@@ -345,7 +345,7 @@ export default function TradeForm({
                       background: active ? T.white : "transparent",
                       color: active ? color : T.textMut,
                       border: "none", borderRadius: 6,
-                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      fontSize:12, fontWeight: 500, cursor: "pointer",
                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5,
                       boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
                       transition: "all .12s ease",
@@ -464,11 +464,11 @@ export default function TradeForm({
                     aria-pressed={active}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "5px 10px", borderRadius: 999,
+                      minHeight: 28, padding: "5px 12px", borderRadius: 999,
                       border: `1px solid ${active ? color : T.border}`,
                       background: active ? `color-mix(in srgb, ${color} 15%, transparent)` : T.white,
                       color: active ? color : T.textSub,
-                      fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      fontSize: 13, fontWeight: 500, cursor: "pointer",
                       fontFamily: "inherit",
                       transition: "all .12s ease",
                     }}
@@ -547,8 +547,8 @@ export default function TradeForm({
           color: T.white,
           border: `1px solid ${loading ? T.textMut : T.accent}`,
           borderRadius: "var(--radius-card)",
-          fontSize: 13,
-          fontWeight: 600,
+          fontSize:13,
+          fontWeight: 500,
           cursor: loading ? "wait" : "pointer",
           fontFamily: "inherit",
           display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,

@@ -104,7 +104,7 @@ export default function Sheet({ open, onClose, title, maxHeight = "min(80dvh, 64
           <div
             style={{
               padding: "0 20px 12px",
-              fontSize: 17,
+              fontSize: 16,
               fontWeight: 600,
               letterSpacing: "-0.01em",
               color: "var(--color-text)",

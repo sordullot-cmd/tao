@@ -194,7 +194,7 @@ export default function DeckBrowser({
 
           {decks.length === 0 ? (
             <div style={{ ...CARD, textAlign: "center", padding: 32 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Aucun paquet</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Aucun paquet</div>
               <div style={{ fontSize: 13, color: T.textSub, margin: "8px auto 16px", maxWidth: 420, lineHeight: 1.6 }}>
                 {NO_DECK_HINT}
               </div>

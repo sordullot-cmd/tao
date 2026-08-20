@@ -151,7 +151,7 @@ export default function RevisionSettings({ store, setStore, onRestore }) {
 
       {/* ── Rythme ───────────────────────────────────────────────────────── */}
       <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Rythme</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Rythme</div>
 
         <Field
           label={`Rétention visée — ${retentionPct} %`}
@@ -278,7 +278,7 @@ export default function RevisionSettings({ store, setStore, onRestore }) {
       {/* ── Algorithme ───────────────────────────────────────────────────── */}
       <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Algorithme</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Algorithme</div>
           <div style={{ fontSize: 12, color: T.textSub, marginTop: 4, lineHeight: 1.6 }}>{COPY.algorithm}</div>
         </div>
 
@@ -387,7 +387,7 @@ export default function RevisionSettings({ store, setStore, onRestore }) {
       {/* ── Données ──────────────────────────────────────────────────────── */}
       <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Données</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Données</div>
           <div style={{ fontSize: 12, color: T.textSub, marginTop: 4, lineHeight: 1.6 }}>{COPY.dataFormats}</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -401,9 +401,9 @@ export default function RevisionSettings({ store, setStore, onRestore }) {
             <input type="file" accept=".json,application/json" onChange={onRestoreFile} style={{ display: "none" }} />
             <span
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px",
+                display: "inline-flex", alignItems: "center", gap: 6, minHeight: 28, padding: "5px 12px",
                 borderRadius: 999, background: FIELD_BG, color: T.text,
-                fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "var(--tr-ui)",
+                fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "var(--tr-ui)",
               }}
             >
               <Upload size={13} /> Restaurer une sauvegarde

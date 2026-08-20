@@ -101,8 +101,8 @@ function TabsBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
               border: "none",
               borderBottom: `2px solid ${active ? T.text : "transparent"}`,
               color: active ? T.text : T.textSub,
-              fontWeight: active ? 600 : 500,
-              fontSize: 13,
+              fontWeight: 500,
+              fontSize:13,
               cursor: "pointer",
               fontFamily: "var(--font-sans)",
               display: "inline-flex",
@@ -131,7 +131,7 @@ function primaryBtnStyle(disabled?: boolean): React.CSSProperties {
     background: T.text,
     color: T.white,
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 500,
     cursor: disabled ? "not-allowed" : "pointer",
     fontFamily: "var(--font-sans)",
     opacity: disabled ? 0.6 : 1,
@@ -247,7 +247,7 @@ function ReportsPanel({ trades }: { trades: any[] }) {
       <div style={{ width: 340, minWidth: 340, borderRight: `1px solid ${T.border}`, overflowY: "auto", padding: 16 }}>
         {statusBanner}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>
             {t("agent.reports.title")} {unreadCount > 0 && <span style={{ marginLeft: 6, padding: "2px 8px", borderRadius: 999, background: T.accent, color: T.white, fontSize: 11 }}>{unreadCount}</span>}
           </div>
         </div>
@@ -258,12 +258,12 @@ function ReportsPanel({ trades }: { trades: any[] }) {
               key={f}
               onClick={() => setFilter(f)}
               style={{
-                padding: "4px 10px",
+                minHeight: 28, padding: "5px 12px",
                 borderRadius: 999,
                 border: `1px solid ${filter === f ? T.accent : T.border}`,
                 background: filter === f ? T.accent : "transparent",
                 color: filter === f ? T.white : T.textSub,
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: 500,
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -370,7 +370,7 @@ function ReportDetail({ report }: { report: AIReport }) {
         <div style={{ fontSize: 12, color: T.textMut, marginBottom: 4 }}>
           {t("agent.reports.generatedAt")} {d.toLocaleString()}
         </div>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: T.text, margin: 0 }}>{report.title}</h2>
+        <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, margin: 0 }}>{report.title}</h2>
       </div>
 
       {report.stats && (
@@ -511,7 +511,7 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
         {/* Header style site */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
-            <h1 style={{ fontSize: 17, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <h1 style={{ fontSize: 16, fontWeight: 600, color: T.text, margin: 0, letterSpacing: -0.1, display: "inline-flex", alignItems: "center", gap: 4 }}>
               {t("agent.insights.title")} <span style={{ color: T.textMut, fontWeight: 500 }}>›</span>
             </h1>
             <p style={{ fontSize: 12, color: T.textMut, margin: "2px 0 0" }}>
@@ -523,7 +523,7 @@ function InsightsPanel({ trades = [] }: { trades?: any[] }) {
             disabled={analyzing}
             style={{
               padding: "8px 14px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`,
-              background: T.white, color: T.text, fontSize: 13, fontWeight: 500,
+              background: T.white, color: T.text, fontSize:13, fontWeight: 500,
               cursor: analyzing ? "not-allowed" : "pointer", fontFamily: "inherit",
               opacity: analyzing ? 0.6 : 1, transition: "background 120ms ease",
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -782,7 +782,7 @@ function ProfilePanel() {
       <div style={{ maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
           <div>
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: T.text, margin: 0 }}>{t("agent.profile.title")}</h2>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, margin: 0 }}>{t("agent.profile.title")}</h2>
             <p style={{ fontSize: 13, color: T.textSub, margin: "4px 0 0" }}>
               {t("agent.profile.subtitle")}
             </p>
@@ -910,7 +910,7 @@ function ProfilePanel() {
           <button
             onClick={reset}
             disabled={saving}
-            style={{ padding: "6px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.red}`, background: "transparent", color: T.red, fontSize: 11, fontWeight: 500, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}
+            style={{ padding: "6px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.red}`, background: "transparent", color: T.red, fontSize:11, fontWeight: 500, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}
           >
             {t("agent.profile.reset")}
           </button>
@@ -1021,7 +1021,7 @@ function ListEditor({ items, editing, onChange, placeholder }: { items: string[]
             />
             <button
               onClick={() => onChange(safeItems.filter((_, j) => j !== i))}
-              style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.panel, color: T.red, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+              style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.panel, color: T.red, fontSize:11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               {t("agent.profile.delete")}
             </button>
@@ -1039,7 +1039,7 @@ function ListEditor({ items, editing, onChange, placeholder }: { items: string[]
         />
         <button
           onClick={add}
-          style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${T.accent}`, background: T.accent, color: T.white, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${T.accent}`, background: T.accent, color: T.white, fontSize:12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
         >
           {t("agent.profile.addBtn")}
         </button>

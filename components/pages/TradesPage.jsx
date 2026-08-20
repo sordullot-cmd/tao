@@ -101,7 +101,7 @@ function CheckChip({ label, color, checked, onClick }) {
       }}>
         {checked && <LucideCheck size={11} strokeWidth={3} color={glyph} />}
       </span>
-      <span style={{fontSize:12,fontWeight:checked?600:500,color:ink}}>{label}</span>
+      <span style={{fontSize:12,fontWeight:500,color:ink}}>{label}</span>
     </button>
   );
 }
@@ -1070,7 +1070,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     /* La page est posée sur le fond gris : l'état vide est donc une carte de la
        nouvelle DA (coins 12, ombre douce, sans bordure) comme le tableau. */
     return (
-      <div style={{display:"flex",flexDirection:"column",gap:24,paddingTop:14,fontFamily:"var(--font-sans)"}} className="anim-1">
+      <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
         <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:12}}>
           <div id="tr4de-page-header-slot" />
         </div>
@@ -1078,10 +1078,10 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           <div style={{width:48,height:48,borderRadius:12,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
             <LucideTrendingUp size={22} strokeWidth={1.75} color={T.text}/>
           </div>
-          <div style={{fontSize:17,fontWeight:600,color:T.text,marginBottom:6,letterSpacing:-0.1}}>{t("journal.empty")}</div>
+          <div style={{fontSize:16,fontWeight:600,color:T.text,marginBottom:6,letterSpacing:-0.1}}>{t("journal.empty")}</div>
           <div style={{fontSize:13,color:T.textSub,marginBottom:20,maxWidth:380,lineHeight:1.5}}>{t("journal.emptySub")}</div>
-          <button onClick={onImportClick} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 16px",borderRadius:999,background:T.white,color:T.text,fontSize:13,fontWeight:600,cursor:"pointer",border:`1px solid ${T.text}`,fontFamily:"var(--font-sans)"}}>
-            <LucidePlus size={14} strokeWidth={2}/> {t("trades.importBtn").replace(/^\+\s*/, "")}
+          <button onClick={onImportClick} style={{display:"inline-flex",alignItems:"center",gap:6,minHeight: 34, padding: "8px 16px",borderRadius:999,background:T.white,color:T.text,fontSize: 13,fontWeight:500,cursor:"pointer",border:`1px solid ${T.text}`,fontFamily:"var(--font-sans)"}}>
+            <LucidePlus size={14} strokeWidth={2}/> {t("trades.importBtn")}
           </button>
         </div>
       </div>
@@ -1127,7 +1127,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   return (
     /* 14 px de retrait haut : la barre du haut apporte déjà 20 px, ce qui place
        le titre aux 34 px de la maquette (même calcul que le dashboard). */
-    <div style={{display:"flex",flexDirection:"column",gap:embedded?16:48,paddingTop:embedded?0:14,fontFamily:"var(--font-sans)"}} className="anim-1">
+    <div style={{display:"flex",flexDirection:"column",gap:embedded?16:48,fontFamily:"var(--font-sans)"}} className="anim-1">
       {/* Barre d'en-tête — slot d'en-tête + actions, alignés à droite. */}
       {!embedded && (
         <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:12,flexWrap:"wrap"}}>
@@ -1226,11 +1226,11 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
             <button
               type="button"
               onClick={onImportClick}
-              style={{display:"inline-flex",alignItems:"center",gap:6,marginLeft:"auto",padding:"7px 14px",minHeight:34,borderRadius:999,
-                      background:T.text,border:"none",color:T.textInverted,fontSize:12,fontWeight:500,
+              style={{display:"inline-flex",alignItems:"center",gap:6,marginLeft:"auto",padding: "8px 16px",minHeight: 34,borderRadius:999,
+                      background:T.text,border:"none",color:T.textInverted,fontSize: 13,fontWeight:500,
                       cursor:"pointer",fontFamily:"inherit"}}
             >
-              <LucidePlus size={13} strokeWidth={1.75} /> {t("trades.importBtn").replace(/^\+\s*/, "")}
+              <LucidePlus size={13} strokeWidth={1.75} /> {t("trades.importBtn")}
             </button>
           </div>
         </div>
@@ -1432,9 +1432,9 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                       <button
                         type="button"
                         onClick={() => { setSymbolFilter([]); setAccountFilter(""); setSideFilter(""); }}
-                        style={{padding:"7px 14px",minHeight:36,borderRadius:999,border:"none",
+                        style={{padding: "8px 16px",minHeight: 34,borderRadius:999,border:"none",
                                 background:T.white,boxShadow:T.elevPill,color:T.text,
-                                fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}
+                                fontSize: 13,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}
                       >
                         {t("trades.clearFilters")}
                       </button>
@@ -2043,7 +2043,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                               </label>
                               <button type="button" onClick={async () => { setScreenshotBusy(true); try { await removeScreenshot(tradeId); } finally { setScreenshotBusy(false); } }}
                                 disabled={screenshotBusy}
-                                style={{padding:"2px 6px",fontSize:12,fontWeight:500,color:T.red,background:"transparent",border:"none",cursor:screenshotBusy?"not-allowed":"pointer",fontFamily:"inherit"}}>
+                                style={{padding: "2px 6px",fontSize:12,fontWeight:500,color:T.red,background:"transparent",border:"none",cursor:screenshotBusy?"not-allowed":"pointer",fontFamily:"inherit"}}>
                                 {t("trades.detail.delete")}
                               </button>
                             </div>
@@ -2173,11 +2173,11 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                             onClick={()=>setShowStrategyDropdown(!showStrategyDropdown)}
                             style={{
                               width:"100%",
-                              padding:"9px 16px",
+                              minHeight: 34, padding: "8px 16px",
                               borderRadius:999,
                               border:"none",
                               background:FIELD_BG,
-                              fontSize:13,
+                              fontSize: 13,
                               fontWeight:500,
                               color:T.text,
                               cursor:"pointer",
@@ -2231,7 +2231,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                                       });
                                       setTradeStrategies(newTradeStrategies);
                                       setShowStrategyDropdown(false);
-                                    }} style={{width:"100%",padding:"8px 10px",borderRadius:8,background:isSelected?FIELD_BG:"transparent",border:"none",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,fontFamily:"inherit",transition:"background var(--dur-fast) var(--ease-out)"}}
+                                    }} style={{width:"100%",padding: "8px 10px",borderRadius:8,background:isSelected?FIELD_BG:"transparent",border:"none",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,fontFamily:"inherit",transition:"background var(--dur-fast) var(--ease-out)"}}
                                       onMouseEnter={(e)=>{if(!isSelected) e.currentTarget.style.background=FIELD_BG;}}
                                       onMouseLeave={(e)=>{if(!isSelected) e.currentTarget.style.background="transparent";}}>
                                     <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:strat.color}}/>
@@ -2377,7 +2377,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
             <div style={{width:36,height:36,borderRadius:10,background:T.redBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <LucideTrash2 size={16} strokeWidth={1.75} color={T.red}/>
             </div>
-            <div style={{fontSize:15,fontWeight:600,color:T.text,letterSpacing:-0.1}}>
+            <div style={{fontSize:14,fontWeight:600,color:T.text,letterSpacing:-0.1}}>
               {t("trades.deleteConfirm").replace("{n}", String(selectedIds.size)).replace("{s}", selectedIds.size > 1 ? "s" : "")}
             </div>
           </div>
@@ -2422,7 +2422,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
               onClick={() => setShowBulkStrategyDropdown(v => !v)}
               aria-haspopup="menu"
               aria-expanded={showBulkStrategyDropdown}
-              style={{background:"transparent",border:"none",color:T.text,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px",borderRadius:6,display:"inline-flex",alignItems:"center",gap:4}}
+              style={{background:"transparent",border:"none",color:T.text,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding: "4px 8px",borderRadius:6,display:"inline-flex",alignItems:"center",gap:4}}
               onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)"}}
               onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
             >
@@ -2466,7 +2466,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                       setShowBulkStrategyDropdown(false);
                       setSelectedIds(new Set());
                     }}
-                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,color:T.text,borderRadius:6,textAlign:"left"}}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding: "8px 10px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:500,color:T.text,borderRadius:6,textAlign:"left"}}
                     onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-hover-bg, #F0F0F0)"}}
                     onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
                   >
@@ -2487,7 +2487,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
           <button
             onClick={() => setConfirmDeleteOpen(true)}
-            style={{background:"transparent",border:"none",color:T.red,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding:"4px 8px",borderRadius:6}}
+            style={{background:"transparent",border:"none",color:T.red,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit",padding: "4px 8px",borderRadius:6}}
             onMouseEnter={(e)=>{e.currentTarget.style.background="var(--color-red-bg, #FEF2F2)"}}
             onMouseLeave={(e)=>{e.currentTarget.style.background="transparent"}}
           >
@@ -2497,7 +2497,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           <button
             onClick={() => setSelectedIds(new Set())}
             aria-label="Tout désélectionner"
-            style={{background:"transparent",border:"none",color:T.textMut,fontSize:16,cursor:"pointer",fontFamily:"inherit",padding:"2px 6px",lineHeight:1}}
+            style={{background:"transparent",border:"none",color:T.textMut,fontSize:16,cursor:"pointer",fontFamily:"inherit",padding: "2px 6px",lineHeight:1}}
             onMouseEnter={(e)=>{e.currentTarget.style.color=T.text}}
             onMouseLeave={(e)=>{e.currentTarget.style.color=T.textMut}}
           >
@@ -2600,7 +2600,7 @@ function TagMultiSelect({ placeholder, allTags, selected, onToggle }) {
   return (
     <div ref={ref} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
       <button type="button" onClick={() => setOpen((o) => !o)}
-        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", border: "none", borderRadius: 999, background: FIELD_BG, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, minHeight: 34, padding: "8px 16px", fontSize: 13, border: "none", borderRadius: 999, background: FIELD_BG, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6 }}>
           {chosen.length === 0
             ? <span style={{ fontSize: 13, color: T.textSub }}>{placeholder}</span>

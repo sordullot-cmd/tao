@@ -155,9 +155,9 @@ export function TimeField({ value, onChange, placeholder = "", triggerStyle }) {
             onClick={() => { onChange(s); setOpen(false); }}
             style={{
               display: "block", width: "100%", textAlign: "left", border: "none", fontFamily: "inherit",
-              padding: "6px 10px", borderRadius: "var(--radius-card)", cursor: "pointer", fontSize: 13,
+              padding: "6px 10px", borderRadius: "var(--radius-card)", cursor: "pointer", fontSize:13,
               background: isSel ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : "transparent",
-              color: isSel ? T.blue : T.text, fontWeight: isSel ? 600 : 400,
+              color: isSel ? T.blue : T.text, fontWeight: 500,
             }}>
             {s}
           </button>

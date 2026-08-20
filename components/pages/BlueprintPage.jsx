@@ -37,7 +37,6 @@ import { t, useLang } from "@/lib/i18n";
 import { T as BaseT } from "@/lib/ui/tokens";
 import { Field as DAField, Modal as DAModal, FIELD as DA_FIELD } from "@/components/ui/form";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
-import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 export const BLUEPRINT_STORAGE_KEY = "tr4de_blueprints";
 export const BLUEPRINT_CLOUD_KEY = "blueprints";
@@ -251,7 +250,7 @@ function PlanCard({ bp, onOpen, onDelete }) {
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: cat.color, flexShrink: 0 }} />
             <span style={{ fontSize: 11, fontWeight: 600, color: cat.color }}>{cat.label}</span>
           </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{bp.title || "Objectif sans titre"}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{bp.title || "Objectif sans titre"}</div>
         </div>
         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Supprimer" aria-label="Supprimer le plan"
           style={{ ...iconBtnSm(), opacity: hover ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
@@ -261,7 +260,7 @@ function PlanCard({ bp, onOpen, onDelete }) {
 
       <ProgressTrack pct={pct} milestones={bp.milestones || []} compact />
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11.5, color: T.textMut }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: T.textMut }}>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>{done}/{total} étapes · {pct}%</span>
         {dl != null && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: dl < 0 ? T.red : dl <= 7 ? T.amber : T.textMut, fontWeight: 600 }}>
@@ -296,7 +295,7 @@ function ProgressTrack({ pct, milestones, compact = false, onMilestoneClick }) {
         })}
       </div>
       {!compact && sorted.map(m => (
-        <div key={m.id} style={{ position: "absolute", left: `${m.atPct}%`, bottom: 2, transform: m.atPct >= 98 ? "translateX(-100%)" : m.atPct <= 2 ? "translateX(0)" : "translateX(-50%)", fontSize: 10.5, fontWeight: 600, color: pct >= m.atPct ? T.text : T.textMut, whiteSpace: "nowrap", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div key={m.id} style={{ position: "absolute", left: `${m.atPct}%`, bottom: 2, transform: m.atPct >= 98 ? "translateX(-100%)" : m.atPct <= 2 ? "translateX(0)" : "translateX(-50%)", fontSize: 10, fontWeight: 600, color: pct >= m.atPct ? T.text : T.textMut, whiteSpace: "nowrap", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis" }}>
           {m.label}
         </div>
       ))}
@@ -331,7 +330,7 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
       {/* Barre d'actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button onClick={onBack} aria-label="Retour aux plans" style={iconBtnSm()}><ChevronLeft size={16} strokeWidth={2} /></button>
-        <span style={{ fontSize: 12.5, color: T.textSub }}>Retour aux plans</span>
+        <span style={{ fontSize: 12, color: T.textSub }}>Retour aux plans</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button onClick={onEdit} style={btnGhost()}><Pencil size={13} strokeWidth={1.75} /> Modifier</button>
           <button onClick={onDelete} style={btnGhost()}><Trash2 size={13} strokeWidth={1.75} /> Supprimer</button>
@@ -352,18 +351,18 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
                 </span>
               )}
             </div>
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: T.text, margin: 0, letterSpacing: -0.3, lineHeight: 1.25 }}>{plan.title || "Objectif sans titre"}</h2>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, margin: 0, letterSpacing: -0.3, lineHeight: 1.25 }}>{plan.title || "Objectif sans titre"}</h2>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 34, fontWeight: 800, color: reachedFinal ? T.green : T.text, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{pct}%</div>
-            <div style={{ fontSize: 11.5, color: T.textMut }}>{done}/{total} étapes</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: reachedFinal ? T.green : T.text, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{pct}%</div>
+            <div style={{ fontSize: 11, color: T.textMut }}>{done}/{total} étapes</div>
           </div>
         </div>
 
         {plan.why && (
           <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-card)", background: `color-mix(in srgb, ${cat.color} 4%, transparent)`, border: `1px solid color-mix(in srgb, ${cat.color} 12%, transparent)` }}>
             <Quote size={16} strokeWidth={2} color={cat.color} style={{ flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontSize: 13.5, color: T.textSub, fontStyle: "italic", lineHeight: 1.5 }}>{plan.why}</div>
+            <div style={{ fontSize: 13, color: T.textSub, fontStyle: "italic", lineHeight: 1.5 }}>{plan.why}</div>
           </div>
         )}
 
@@ -374,12 +373,12 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
         {reachedFinal ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-card)", background: T.greenBg, border: `1px solid ${T.greenBd}` }}>
             <Trophy size={18} strokeWidth={2} color={T.green} />
-            <div style={{ fontSize: 13.5, color: T.green, fontWeight: 600 }}>
+            <div style={{ fontSize: 13, color: T.green, fontWeight: 600 }}>
               Objectif atteint — vous êtes un vrai gagnant !{plan.finalReward ? ` Récompense : ${plan.finalReward}.` : ""}
             </div>
           </div>
         ) : nextMilestone && (
-          <div style={{ fontSize: 12.5, color: T.textSub }}>
+          <div style={{ fontSize: 12, color: T.textSub }}>
             Prochain marqueur : <strong style={{ color: T.text }}>{nextMilestone.label}</strong> à {nextMilestone.atPct}%
             {nextMilestone.reward ? <> — récompense : <strong style={{ color: T.text }}>{nextMilestone.reward}</strong></> : null}
           </div>
@@ -423,9 +422,9 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{m.label}</div>
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 2 }}>
-                    {m.reward ? <span style={{ fontSize: 11.5, color: T.textSub, display: "inline-flex", alignItems: "center", gap: 4 }}><Gift size={11} strokeWidth={2} color={T.red} /> {m.reward}</span> : null}
-                    {m.recognizedBy ? <span style={{ fontSize: 11.5, color: T.textSub, display: "inline-flex", alignItems: "center", gap: 4 }}><Users size={11} strokeWidth={2} color={T.violet} /> {m.recognizedBy}</span> : null}
-                    {!m.reward && !m.recognizedBy && <span style={{ fontSize: 11.5, color: T.textMut, fontStyle: "italic" }}>Aucune récompense ni reconnaissance définie</span>}
+                    {m.reward ? <span style={{ fontSize: 11, color: T.textSub, display: "inline-flex", alignItems: "center", gap: 4 }}><Gift size={11} strokeWidth={2} color={T.red} /> {m.reward}</span> : null}
+                    {m.recognizedBy ? <span style={{ fontSize: 11, color: T.textSub, display: "inline-flex", alignItems: "center", gap: 4 }}><Users size={11} strokeWidth={2} color={T.violet} /> {m.recognizedBy}</span> : null}
+                    {!m.reward && !m.recognizedBy && <span style={{ fontSize: 11, color: T.textMut, fontStyle: "italic" }}>Aucune récompense ni reconnaissance définie</span>}
                   </div>
                 </div>
               </div>
@@ -435,8 +434,8 @@ function PlanDetail({ plan, onBack, onEdit, onDelete, onToggleTask }) {
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, background: T.amberBg, border: `1px solid color-mix(in srgb, ${T.amber} 35%, transparent)` }}>
               <Trophy size={18} strokeWidth={2} color={T.amber} style={{ flexShrink: 0 }} />
               <div>
-                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: T.amber }}>Récompense finale</div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: T.text }}>{plan.finalReward}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: T.amber }}>Récompense finale</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{plan.finalReward}</div>
               </div>
             </div>
           )}
@@ -462,7 +461,7 @@ function MilestoneGroup({ milestone, items, reached, onToggle }) {
             <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${tk.done ? T.green : T.border}`, background: tk.done ? T.green : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               {tk.done && <Check size={11} strokeWidth={3} />}
             </span>
-            <span style={{ flex: 1, fontSize: 13.5, color: tk.done ? T.textMut : T.text, textDecoration: tk.done ? "line-through" : "none" }}>{tk.label}</span>
+            <span style={{ flex: 1, fontSize: 13, color: tk.done ? T.textMut : T.text, textDecoration: tk.done ? "line-through" : "none" }}>{tk.label}</span>
           </button>
         ))}
       </div>
@@ -478,7 +477,7 @@ function SectionHeader({ icon: Icon, color, title, subtitle }) {
       </div>
       <div>
         <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{title}</div>
-        {subtitle && <div style={{ fontSize: 11.5, color: T.textMut }}>{subtitle}</div>}
+        {subtitle && <div style={{ fontSize: 11, color: T.textMut }}>{subtitle}</div>}
       </div>
     </div>
   );
@@ -520,9 +519,9 @@ function Wizard({ initial, onSave, onClose }) {
       {/* Intro pédagogique de l'étape */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: pillar.color, letterSpacing: 0.4 }}>CLÉ {step + 1}/5</span>
-        <h3 style={{ fontSize: 17, fontWeight: 700, color: T.text, margin: 0 }}>{pillar.title}</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: T.text, margin: 0 }}>{pillar.title}</h3>
       </div>
-      <p style={{ fontSize: 12.5, color: T.textSub, lineHeight: 1.55, margin: "0 0 16px" }}>{pillar.intro}</p>
+      <p style={{ fontSize: 12, color: T.textSub, lineHeight: 1.55, margin: "0 0 16px" }}>{pillar.intro}</p>
 
       {/* Corps de l'étape */}
       <div style={{ minHeight: 220 }}>
@@ -577,7 +576,7 @@ function StepGoal({ draft, set }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {CATEGORIES.map(c => (
               <button key={c.id} onClick={() => set({ category: c.id })}
-                style={{ fontSize: 12, fontWeight: 600, padding: "5px 11px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${draft.category === c.id ? c.color : T.border}`, background: draft.category === c.id ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: draft.category === c.id ? c.color : T.textSub }}>
+                style={{ fontSize: 13, fontWeight: 500, minHeight: 28, padding: "5px 12px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${draft.category === c.id ? c.color : T.border}`, background: draft.category === c.id ? `color-mix(in srgb, ${c.color} 8%, transparent)` : T.white, color: draft.category === c.id ? c.color : T.textSub }}>
                 {c.label}
               </button>
             ))}
@@ -612,7 +611,7 @@ function StepMarkers({ draft, setMilestones }) {
           <button onClick={() => remove(m.id)} aria-label="Retirer le marqueur" style={iconBtnSm()}><X size={13} strokeWidth={2} /></button>
         </div>
       ))}
-      {milestones.length === 0 && <div style={{ fontSize: 12.5, color: T.textMut, padding: "8px 0" }}>Ajoutez au moins un marqueur pour suivre votre progression.</div>}
+      {milestones.length === 0 && <div style={{ fontSize: 12, color: T.textMut, padding: "8px 0" }}>Ajoutez au moins un marqueur pour suivre votre progression.</div>}
     </div>
   );
 }
@@ -638,7 +637,7 @@ function StepTasks({ draft, setTasks }) {
         <button onClick={add} style={btnPrimary()}><Plus size={14} strokeWidth={2} /> Ajouter</button>
       </div>
       {tasks.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: T.textMut, padding: "8px 0" }}>Listez les actions concrètes — chacune deviendra une victoire à cocher.</div>
+        <div style={{ fontSize: 12, color: T.textMut, padding: "8px 0" }}>Listez les actions concrètes — chacune deviendra une victoire à cocher.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
           {tasks.map(tk => (
@@ -665,7 +664,7 @@ function StepTasks({ draft, setTasks }) {
 function StepRecognition({ draft, setMilestones }) {
   const milestones = [...(draft.milestones || [])].sort((a, b) => a.atPct - b.atPct);
   const patch = (id, p) => setMilestones(ms => ms.map(m => (m.id === id ? { ...m, ...p } : m)));
-  if (milestones.length === 0) return <div style={{ fontSize: 12.5, color: T.textMut }}>{"Revenez à l'étape « Marqueurs » pour définir vos jalons."}</div>;
+  if (milestones.length === 0) return <div style={{ fontSize: 12, color: T.textMut }}>{"Revenez à l'étape « Marqueurs » pour définir vos jalons."}</div>;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {milestones.map(m => (
@@ -737,13 +736,13 @@ function inputStyle() {
   return { ...DA_FIELD };
 }
 function btnPrimary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 999, border: "none", background: T.text, color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.text, color: T.white, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnGhost() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.textSub, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: DA_FIELD_BG, color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function btnSoft() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: "none", background: T.accentBg, color: T.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.accentBg, color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" };
 }
 function iconBtnSm() {
   return { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: "none", background: DA_FIELD_BG, color: T.textMut, cursor: "pointer", flexShrink: 0, padding: 0 };

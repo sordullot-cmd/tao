@@ -84,9 +84,15 @@ export default function ObsidianVaultPanel({ vault }) {
         aria-expanded={open}
         aria-label="Synchronisation avec Obsidian"
         title={status === "linked" ? `Notes synchronisées avec ${label}` : "Lier les notes à un vault Obsidian"}
+        /* Blanc, pas l'aplat gris des champs : ce bouton est posé sur le FOND
+           de page, à côté de la pilule noire « Nouvelle note ». En blanc il se
+           lit comme une surface à part entière et forme une paire nette avec
+           elle, là où le gris se confondait avec le fond. L'ombre de pilule lui
+           donne son bord — sans elle, un blanc sur gris clair flotte. */
         style={{
           ...ACTION,
-          background: FIELD_BG,
+          background: T.white,
+          boxShadow: T.elevPill,
           border: "none",
           color: T.text,
         }}

@@ -79,7 +79,7 @@ export default function MobileHeader({ title, onBack, action, scrollRef }: Mobil
           flex: 1,
           minWidth: 0,
           margin: 0,
-          fontSize: 17,
+          fontSize: 16,
           fontWeight: 600,
           /* Interlettrage resserré : à 17 px et en 600, les lettres d'Outfit
              s'écartent visuellement. Le réglage suit la taille, il n'est pas

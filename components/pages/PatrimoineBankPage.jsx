@@ -113,7 +113,7 @@ export default function PatrimoineBankPage({ setPage }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
         {/* Le choix de la banque n'occupe plus un bloc de la page : on ne
             connecte un établissement qu'une fois, l'action vit donc en haut à
@@ -171,7 +171,7 @@ export default function PatrimoineBankPage({ setPage }) {
             échouera — on dit ce qui manque. */}
         {!configured && connections.length === 0 && (
           <section style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ fontSize: 15, fontWeight: 500, color: T.text }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>
               {t("patrimoine.bank.notConfigured")}
             </div>
             <div style={{ fontSize: 14, lineHeight: 1.6, color: T.textSub }}>
@@ -265,7 +265,7 @@ export default function PatrimoineBankPage({ setPage }) {
                       )}
                     </span>
 
-                    <span style={{ fontSize: 15, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
                       {fmt(a.balance)}
                     </span>
 

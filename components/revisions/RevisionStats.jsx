@@ -108,7 +108,7 @@ function StackedBars({ data, series, height = 120, labelEvery = 5, emptyLabel })
       </div>
       <div style={{ display: "flex", gap: 2, marginTop: 6 }}>
         {data.map((d, i) => (
-          <div key={d.day || i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 9, color: T.textMut, whiteSpace: "nowrap", overflow: "hidden" }}>
+          <div key={d.day || i} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: 10, color: T.textMut, whiteSpace: "nowrap", overflow: "hidden" }}>
             {i % labelEvery === 0 ? (d.day ? shortDay(d.day) : d.label) : ""}
           </div>
         ))}
@@ -184,7 +184,7 @@ export default function RevisionStats({ store, cards }) {
       <div style={{ ...CARD, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 20 }}>
         <div>
           <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>Rétention constatée</div>
-          <div style={{ fontSize: 26, fontWeight: 600, color: driftColor, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ fontSize: 24, fontWeight: 600, color: driftColor, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
             {pct(observed)}
           </div>
           <div style={{ fontSize: 11, color: T.textMut, marginTop: 3 }}>
@@ -193,7 +193,7 @@ export default function RevisionStats({ store, cards }) {
         </div>
         <div>
           <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>Cartes sues</div>
-          <div style={{ fontSize: 26, fontWeight: 600, color: T.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ fontSize: 24, fontWeight: 600, color: T.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
             {Math.round(known)}
           </div>
           <div style={{ fontSize: 11, color: T.textMut, marginTop: 3 }}>
@@ -202,14 +202,14 @@ export default function RevisionStats({ store, cards }) {
         </div>
         <div>
           <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>Série en cours</div>
-          <div style={{ fontSize: 26, fontWeight: 600, color: T.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ fontSize: 24, fontWeight: 600, color: T.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
             {sk.current} j
           </div>
           <div style={{ fontSize: 11, color: T.textMut, marginTop: 3 }}>record {sk.best} j · {sk.activeDays} jours actifs</div>
         </div>
         <div>
           <div style={{ fontSize: 11, color: T.textSub, marginBottom: 4 }}>Charge à 7 jours</div>
-          <div style={{ fontSize: 26, fontWeight: 600, color: T.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ fontSize: 24, fontWeight: 600, color: T.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
             {nextWeek}
           </div>
           <div style={{ fontSize: 11, color: T.textMut, marginTop: 3 }}>
@@ -231,7 +231,7 @@ export default function RevisionStats({ store, cards }) {
       {/* Prévision de charge. */}
       <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Prévision de charge</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Prévision de charge</div>
           <div style={{ fontSize: 11, color: T.textMut }}>30 prochains jours</div>
         </div>
         <StackedBars
@@ -254,7 +254,7 @@ export default function RevisionStats({ store, cards }) {
       {/* Historique. */}
       <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Travail effectué</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Travail effectué</div>
           <div style={{ fontSize: 11, color: T.textMut }}>
             {totalReviews} réponse{totalReviews > 1 ? "s" : ""}
             {totalMinutes >= 1 ? ` · ${Math.round(totalMinutes)} min` : ""}
@@ -280,7 +280,7 @@ export default function RevisionStats({ store, cards }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
         {/* Composition du paquet. */}
         <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Composition</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Composition</div>
           <SplitBar parts={[
             { label: "Nouvelles", value: breakdown.new, color: GREY.grey500 },
             { label: "Apprentissage", value: breakdown.learning, color: PALETTE.red },
@@ -300,7 +300,7 @@ export default function RevisionStats({ store, cards }) {
 
         {/* Rétention détaillée. */}
         <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Rétention par maturité</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Rétention par maturité</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
               { label: "Cartes jeunes (< 21 j)", data: ret.young, color: PALETTE.blue },
@@ -329,7 +329,7 @@ export default function RevisionStats({ store, cards }) {
 
         {/* Intervalles. */}
         <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Intervalles en cours</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Intervalles en cours</div>
           <StackedBars
             data={intervals.map(b => ({ label: b.label, count: b.count }))}
             series={[{ key: "count", label: "Cartes", color: PALETTE.blue }]}
@@ -341,7 +341,7 @@ export default function RevisionStats({ store, cards }) {
 
         {/* Boutons. */}
         <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Vos réponses</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Vos réponses</div>
           <SplitBar parts={[
             { label: "À revoir", value: ratings[1], color: PALETTE.red },
             { label: "Difficile", value: ratings[2], color: PALETTE.orange },

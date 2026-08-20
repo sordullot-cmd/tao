@@ -64,7 +64,7 @@ export default function SettingsPage({ user, onBack, setPage }) {
   const [active, setActive] = useState("profile");
 
   return (
-    <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto", fontFamily: "var(--font-sans)" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", fontFamily: "var(--font-sans)" }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <p style={{ fontSize: 13, color: T.textSub, margin: "4px 0 0" }}>{t("settings.subtitle")}</p>
@@ -117,7 +117,7 @@ function SettingsNav({ active, setActive }) {
                   padding: "8px 10px", borderRadius: "var(--radius-card)", border: "none",
                   background: isActive ? T.text : "transparent",
                   color: isActive ? T.white : T.text,
-                  fontSize: 13, fontWeight: isActive ? 600 : 500,
+                  fontSize:13, fontWeight: 500,
                   cursor: "pointer", fontFamily: "inherit", textAlign: "left",
                   transition: "background 120ms ease",
                 }}
@@ -152,7 +152,7 @@ function Card({ children, padded = true }) {
 function CardHeader({ title, subtitle }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0 }}>{title}</h2>
+      <h2 style={{ fontSize: 14, fontWeight: 600, color: T.text, margin: 0 }}>{title}</h2>
       {subtitle && <p style={{ fontSize: 12, color: T.textMut, margin: "2px 0 0" }}>{subtitle}</p>}
     </div>
   );
@@ -164,13 +164,13 @@ function PrimaryButton({ children, onClick, disabled, icon: Icon }) {
       onClick={onClick}
       disabled={disabled}
       style={{
-        padding: "8px 16px",
+        minHeight: 34, padding: "8px 16px",
         borderRadius: 999,
         border: `1px solid ${T.text}`,
         background: T.text,
         color: T.white,
         fontSize: 13,
-        fontWeight: 600,
+        fontWeight: 500,
         cursor: disabled ? "not-allowed" : "pointer",
         fontFamily: "inherit",
         opacity: disabled ? 0.6 : 1,
@@ -198,7 +198,7 @@ function SecondaryButton({ children, onClick, icon: Icon }) {
         border: `1px solid ${T.border}`,
         background: T.white,
         color: T.text,
-        fontSize: 13,
+        fontSize:13,
         fontWeight: 500,
         cursor: "pointer",
         fontFamily: "inherit",
@@ -322,7 +322,7 @@ function ProfileSection({ user }) {
           <div style={{
             width: 64, height: 64, borderRadius: "50%", background: T.panel,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 22, fontWeight: 600, color: T.text, flexShrink: 0,
+            fontSize: 24, fontWeight: 600, color: T.text, flexShrink: 0,
           }}>
             {initials}
           </div>
@@ -436,7 +436,7 @@ function SubscriptionSection({ user }) {
     <>
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0 }}>{t("settings.sub.currentPlan")}</h2>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: T.text, margin: 0 }}>{t("settings.sub.currentPlan")}</h2>
           <PrimaryButton icon={Sparkles}>{t("settings.sub.goPro")}</PrimaryButton>
         </div>
         <div style={{
@@ -569,7 +569,7 @@ function AccountsSection({ setPage }) {
     <Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: T.text, margin: 0 }}>{t("settings.accounts.cardTitle")}</h2>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: T.text, margin: 0 }}>{t("settings.accounts.cardTitle")}</h2>
           <p style={{ fontSize: 12, color: T.textMut, margin: "2px 0 0" }}>{t("settings.accounts.cardSub")}</p>
         </div>
         <PrimaryButton onClick={() => setPage?.("accounts")}>{t("settings.accounts.manage")}</PrimaryButton>
@@ -852,7 +852,7 @@ function GlobalsSection() {
                 padding: "6px 10px", borderRadius: "var(--radius-pill)",
                 border: `1px solid ${active ? T.text : T.border}`,
                 background: active ? T.accentBg : T.white,
-                color: T.text, fontSize: 12, fontFamily: "inherit",
+                color: T.text, fontSize:12, fontFamily: "inherit",
                 cursor: "pointer", transition: "border-color 150ms, background 150ms",
               }}
             >
@@ -1416,7 +1416,7 @@ function NumberInput({ value, onChange, suffix, placeholder }) {
         min={0}
         style={{ ...inputStyle(), maxWidth: 160 }}
       />
-      {suffix && <span style={{ fontSize: 12, color: T.textMut, fontWeight: 500 }}>{suffix}</span>}
+      {suffix && <span style={{ fontSize: 13, color: T.textMut, fontWeight: 500 }}>{suffix}</span>}
     </div>
   );
 }
@@ -1424,17 +1424,17 @@ function NumberInput({ value, onChange, suffix, placeholder }) {
 // Harmonisé avec PrimaryButton : primaire = fond T.text / texte blanc.
 function primaryBtn() {
   return {
-    padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.text}`,
+    minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.text}`,
     background: T.text, color: T.white,
-    fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+    fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
   };
 }
 // Secondaire = fond T.white, bordure T.border (comme SecondaryButton).
 function secondaryBtn(disabled) {
   return {
-    padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.border}`,
+    minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.border}`,
     background: T.white, color: T.text,
-    fontSize: 12, fontWeight: 600, cursor: disabled ? "default" : "pointer",
+    fontSize: 12, fontWeight: 500, cursor: disabled ? "default" : "pointer",
     opacity: disabled ? 0.7 : 1, fontFamily: "inherit",
   };
 }

@@ -266,7 +266,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                     border: "none",
                     color: T.textSub,
                     cursor: "pointer",
-                    fontSize: 18,
+                    fontSize: 16,
                     lineHeight: 1,
                     minWidth: 32,
                     minHeight: 32,
@@ -314,7 +314,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
               border: "none",
               borderRadius: 6,
               cursor: "pointer",
-              fontSize: 13,
+              fontSize:13,
               fontWeight: 500,
               transition: "all 0.2s",
             }}
@@ -394,7 +394,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                   border: "none",
                   borderRadius: "var(--radius-field)",
                   cursor: loading ? "not-allowed" : "pointer",
-                  fontSize: 13,
+                  fontSize:13,
                   fontWeight: 500,
                   flex: 1,
                 }}
@@ -414,7 +414,7 @@ export default function TradingAccountsManager({ userId, onAccountSelect }) {
                   border: `1px solid ${T.border}`,
                   borderRadius: "var(--radius-field)",
                   cursor: "pointer",
-                  fontSize: 13,
+                  fontSize:13,
                   fontWeight: 500,
                   flex: 1,
                 }}

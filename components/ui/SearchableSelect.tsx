@@ -230,7 +230,7 @@ export default function SearchableSelect({
                         background: isSelected ? "var(--color-active-bg)" : (isActive ? "var(--color-hover-bg)" : "transparent"),
                         color: "var(--color-text)",
                         fontSize: small ? 12 : 13,
-                        fontWeight: isSelected ? 600 : 400,
+                        fontWeight: 500,
                         cursor: "pointer",
                         fontFamily: "inherit",
                         textAlign: "left",

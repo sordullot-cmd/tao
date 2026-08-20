@@ -57,7 +57,7 @@ export default function Error({
       <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text, #0D0D0D)" }}>
         Une erreur est survenue
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--color-text-sub, #5C5C5C)", maxWidth: 340, textAlign: "center", lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12, color: "var(--color-text-sub, #5C5C5C)", maxWidth: 340, textAlign: "center", lineHeight: 1.5 }}>
         Quelque chose n'a pas fonctionné. Réessaie, ou recharge la page si le problème persiste.
       </div>
 
@@ -69,12 +69,12 @@ export default function Error({
             background: "var(--color-btn-primary-bg, #0D0D0D)",
             color: "var(--color-btn-primary-text, #FFFFFF)",
             border: "1px solid var(--color-btn-primary-bg, #0D0D0D)",
-            padding: "9px 18px",
+            padding: "11px 20px", fontSize: 14,
             minHeight: 40,
             borderRadius: 999,
             cursor: "pointer",
             fontFamily: "inherit",
-            fontWeight: 600,
+            fontWeight: 500,
           }}
         >
           Réessayer
@@ -86,7 +86,7 @@ export default function Error({
             background: "var(--color-card-bg, #FFFFFF)",
             color: "var(--color-text, #0D0D0D)",
             border: "1px solid var(--color-border, #E5E5E5)",
-            padding: "9px 18px",
+            padding: "11px 20px", fontSize: 14,
             minHeight: 40,
             borderRadius: 999,
             cursor: "pointer",

@@ -250,7 +250,7 @@ export default function ComboInput({
                   width: "100%", display: "flex", alignItems: "center", gap: 10,
                   padding: "7px 8px", border: "none", borderRadius: 6,
                   background: idx === active ? T.accentBg : "transparent",
-                  color: T.text, fontSize: 13, fontWeight: selected ? 600 : 400,
+                  color: T.text, fontSize:13, fontWeight: 500,
                   fontFamily: "inherit", textAlign: "left", cursor: "pointer",
                   transition: "background 100ms ease",
                 }}

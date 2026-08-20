@@ -47,7 +47,7 @@ export const TILE_HOVER = `inset 0 0 0 999px ${FIELD_BG}`;
 export {
   FIELD, FIELD_AREA, FIELD_SM, FIELD_FOCUS_RING,
   Input, Textarea, Select, Field, FieldGrid, FieldGroup, Label,
-  PillButton, IconButton, Modal, ScrollArea,
+  PillButton, IconButton, CheckBox, Modal, ScrollArea,
 } from "@/components/ui/form";
 
 /** Libellé d'un champ ou d'un bloc, dans une carte. */
@@ -94,7 +94,7 @@ export function StatsCard({ title, rows = [], expanded = false, visible = 4 }) {
   const shown = expanded ? rows : rows.slice(0, visible);
   return (
     <div style={{...CARD, display:"flex", flexDirection:"column", gap:14}}>
-      <div style={{fontSize:15,fontWeight:600,lineHeight:1.2,color:T.text}}>{title}</div>
+      <div style={{fontSize:14,fontWeight:600,lineHeight:1.2,color:T.text}}>{title}</div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {shown.map(r => (
           <StatRow key={r.label} label={r.label} value={r.value} color={r.color} />
@@ -262,7 +262,7 @@ export function AllocationChart({
             </span>
           </span>
           <span style={{
-            fontSize: 18, fontWeight: 600, lineHeight: 1.1, whiteSpace: "nowrap",
+            fontSize: 16, fontWeight: 600, lineHeight: 1.1, whiteSpace: "nowrap",
             fontVariantNumeric: "tabular-nums",
             color: !shown && centreTone ? centreTone : T.text,
           }}>
@@ -308,7 +308,7 @@ export function BackLink({ label, icon, onClick }) {
       style={{
         display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0,
         padding: "7px 8px", borderRadius: 8, border: "none", background: "none",
-        color: T.textSub, fontSize: 13, fontWeight: 500,
+        color: T.textSub, fontSize:13, fontWeight: 500,
         fontFamily: "inherit", cursor: "pointer",
         transition: "background 120ms ease, color 120ms ease",
       }}
@@ -357,15 +357,20 @@ export function SectionAction({ children, onClick }) {
   );
 }
 
-/** Pastille Long / Short. */
+/**
+ * Sens du trade, en texte seul.
+ *
+ * Ni aplat ni couleur propre : le sens n'est pas un jugement (contrairement au
+ * P&L, qui garde son vert / rouge), c'est une donnée de la ligne comme la date
+ * ou les lots. Le mot hérite donc de l'encre de son contexte et, sans padding,
+ * s'aligne exactement sur l'en-tête « Sens » de sa colonne.
+ */
 export function DirectionTag({ direction }) {
   const isShort = String(direction || "").toLowerCase().startsWith("s");
   return (
     <span style={{
-      display:"inline-flex", alignItems:"center", justifyContent:"center",
-      padding:"2px 12px", borderRadius:48, fontSize:14, lineHeight:"17.05px",
-      background: isShort ? T.tagShortBg : T.tagLongBg,
-      color: isShort ? T.tagShortText : T.tagLongText,
+      display:"inline-flex", alignItems:"center",
+      fontSize:14, lineHeight:"17.05px", color:"inherit",
     }}>
       {isShort ? "Short" : "Long"}
     </span>
@@ -530,13 +535,21 @@ export function SymbolBadge({ symbol, size = 32 }) {
      marqueurs les plus fréquents — s'en trouvaient rapetissés sans nécessité.
      Trois caractères tiennent à 0.32 ; on ne resserre vraiment qu'au-delà. */
   const scale = label.length >= 4 ? 0.26 : label.length === 3 ? 0.32 : 0.375;
+  /* Le sigle est BLANC, en dur, et ne se calcule pas.
+     Il est passé par un token (`--color-symbol-badge-text`) que la palette de
+     la charte avait descendu à l'encre `#0D0D0D` : les disques gardaient bien
+     leur couleur de marque, mais « 100 » et « 500 » s'écrivaient en noir
+     dessus. Il est aussi passé par un seuil de luminance, qui basculait la
+     même vignette d'un thème à l'autre. Ces vignettes sont des LOGOS dessinés
+     à la main, à la couleur de marque de l'instrument : leur sigle est blanc
+     partout, comme sur la vraie pastille du Nasdaq ou du S&P 500. */
   return (
     <div
       aria-hidden
       style={{
         width: size, height: size, borderRadius: "50%", flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: known?.color || T.symbolBadge, color: T.symbolBadgeText,
+        background: known?.color || T.symbolBadge, color: "#FFFFFF",
         fontSize: Math.round(size * scale), fontWeight: 600,
         letterSpacing: -0.65, lineHeight: 1, whiteSpace: "nowrap",
       }}
@@ -672,7 +685,13 @@ export function PeriodPills({ value, onChange, options = PERIODS, track = false,
               background: active ? T.white : "transparent",
               boxShadow: active ? (track ? T.elevCard : T.elevPill) : "none",
               color: T.text, opacity: active ? 1 : 0.6,
-              fontSize:size, fontWeight: track ? 500 : undefined,
+              /* 600 et non le 500 des autres boutons : ces pastilles CADRENT
+                 tout ce qu'on lit en dessous (la courbe, les totaux). On les
+                 relit en boucle en comparant deux fenêtres, et elles doivent se
+                 retrouver d'un coup d'oeil dans une rangée de commandes. Même
+                 graisse pour la pastille prise et les autres : l'état actif se
+                 dit par le fond et l'ombre. */
+              fontSize:size, fontWeight:600,
               lineHeight:"18.6px", cursor:"pointer", fontFamily:"inherit",
               whiteSpace:"nowrap",
               transition:"background 140ms var(--ease-out, ease), opacity 140ms var(--ease-out, ease)",
@@ -714,7 +733,7 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
   return (
     <div style={{
       display:"flex", alignItems:"center", gap:8,
-      height:34, padding:"7px 14px", borderRadius:999,
+      height:34, minHeight: 34, padding: "8px 16px", borderRadius:999,
       background:T.white, boxShadow:T.elevPill,
     }}>
       <button
@@ -729,9 +748,9 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
           onClick={onLabel}
           title={labelTitle}
           style={{
-            margin:"-7px -6px", padding:"7px 6px", border:"none", background:"none",
+            margin:"-7px -6px", padding: "7px 6px", border:"none", background:"none",
             borderRadius:8, cursor:"pointer", fontFamily:"inherit",
-            fontSize:14, lineHeight:"18.6px", color:T.text, whiteSpace:"nowrap",
+            fontSize:14, fontWeight:600, lineHeight:"18.6px", color:T.text, whiteSpace:"nowrap",
             textTransform:"capitalize", transition:"background 120ms ease",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
@@ -740,7 +759,9 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
           {label}
         </button>
       ) : (
-        <span style={{fontSize:14,lineHeight:"18.6px",color:T.text,whiteSpace:"nowrap",textTransform:"capitalize"}}>
+        /* Même graisse que la variante cliquable : la pastille dit la période
+           qu'on regarde, que son libellé ouvre un sélecteur ou non. */
+        <span style={{fontSize:14,fontWeight:600,lineHeight:"18.6px",color:T.text,whiteSpace:"nowrap",textTransform:"capitalize"}}>
           {label}
         </span>
       )}
@@ -895,7 +916,7 @@ function FilterOption({ label, checked, onClick }) {
       onClick={onClick}
       style={{
         display:"flex", alignItems:"center", gap:8, width:"100%",
-        padding:"8px 10px", minHeight:36, borderRadius:8, border:"none",
+        padding: "8px 10px", minHeight:36, borderRadius:8, border:"none",
         background: checked ? T.rowHighlight : "transparent",
         color:T.text, fontFamily:"inherit", fontSize:13, textAlign:"left",
         cursor:"pointer", transition:"background 120ms ease",

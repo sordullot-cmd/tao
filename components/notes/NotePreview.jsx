@@ -73,8 +73,8 @@ export default function NotePreview({ content, onChange, onOpenNote, onEditAt })
            plutôt que par petits écarts qu'on ne distingue pas. */
         .rt-h { font-weight: 600; line-height: 1.3; letter-spacing: -0.01em; }
         .rt-h1 { font-size: 28px; margin: 28px 0 10px; }
-        .rt-h2 { font-size: 21px; margin: 24px 0 8px; }
-        .rt-h3 { font-size: 17px; margin: 20px 0 6px; }
+        .rt-h2 { font-size: 20px; margin: 24px 0 8px; }
+        .rt-h3 { font-size: 16px; margin: 20px 0 6px; }
         .rt-h4, .rt-h5, .rt-h6 {
           font-size: var(--text-body, 14px);
           margin: 16px 0 4px;

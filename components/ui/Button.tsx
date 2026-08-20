@@ -1,6 +1,7 @@
 "use client";
 
 import React, { forwardRef } from "react";
+import { BTN } from "@/lib/ui/buttons";
 import { Loader2, LucideIcon } from "lucide-react";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -34,10 +35,16 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
 ) {
   const isDisabled = disabled || loading;
 
+  /* Les trois tailles ne sont plus décrites ici : elles viennent de BTN
+     (lib/ui/buttons.ts), qui est la seule table de hauteurs de boutons du
+     site. Ce composant en donnait sa propre version — proche, mais pas
+     identique à celle de `PillButton` — et deux boutons de la même « taille
+     md » ne faisaient donc pas la même hauteur selon le composant employé.
+     `height` et non `minHeight` : ce bouton-ci fixe sa hauteur. */
   const sizeStyles: Record<Size, React.CSSProperties> = {
-    sm: { padding: "6px 12px", fontSize: 12, height: 28, borderRadius: 999 },
-    md: { padding: "8px 16px", fontSize: 13, height: 34, borderRadius: 999 },
-    lg: { padding: "10px 20px", fontSize: 14, height: 40, borderRadius: 999 },
+    sm: { padding: BTN.sm.padding, fontSize: BTN.sm.fontSize, height: BTN.sm.minHeight, borderRadius: BTN.sm.borderRadius },
+    md: { padding: BTN.md.padding, fontSize: BTN.md.fontSize, height: BTN.md.minHeight, borderRadius: BTN.md.borderRadius },
+    lg: { padding: BTN.lg.padding, fontSize: BTN.lg.fontSize, height: BTN.lg.minHeight, borderRadius: BTN.lg.borderRadius },
   };
 
   const iconSize = size === "sm" ? 13 : size === "md" ? 14 : 16;

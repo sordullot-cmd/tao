@@ -260,18 +260,18 @@ function DateInput({ label, value, onChange }) {
     <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ fontSize: 11, color: T.textMut, fontWeight: 600 }}>{label}</span>
       <input type="date" value={value} onChange={e => onChange(e.target.value)}
-        style={{ padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 12, fontFamily: "inherit", color: T.text, background: T.white, outline: "none" }} />
+        style={{ padding: "6px 10px", border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, fontFamily: "inherit", color: T.text, background: T.white, outline: "none" }} />
     </label>
   );
 }
 
 function pillStyle(active, color) {
   return {
-    padding: "5px 11px", borderRadius: 999,
+    minHeight: 28, padding: "5px 12px", borderRadius: 999,
     border: `1px solid ${active ? T.text : T.border}`,
     background: active ? T.text : T.white,
     color: active ? "#fff" : T.text,
-    fontSize: 11, fontWeight: 600, cursor: "pointer",
+    fontSize: 11, fontWeight: 500, cursor: "pointer",
     fontFamily: "inherit",
     display: "inline-flex", alignItems: "center", gap: 6,
   };

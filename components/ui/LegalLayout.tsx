@@ -58,7 +58,7 @@ export function LegalLayout({
           </p>
           <div
             className="tr4de-legal-body"
-            style={{ marginTop: 24, fontSize: 15, lineHeight: 1.65, color: T.textSub }}
+            style={{ marginTop: 24, fontSize: 14, lineHeight: 1.65, color: T.textSub }}
           >
             {children}
           </div>

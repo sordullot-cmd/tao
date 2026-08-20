@@ -17,7 +17,7 @@ const sameYMD = (a, b) =>
 
 const navBtn = {
   width: 24, height: 24, borderRadius: "var(--radius-field)", border: "none", background: "transparent",
-  cursor: "pointer", color: T.textSub, fontSize: 16, fontWeight: 600, lineHeight: 1,
+  cursor: "pointer", color: T.textSub, fontSize: 16, fontWeight: 500, lineHeight: 1,
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   transition: "background .12s ease",
 };

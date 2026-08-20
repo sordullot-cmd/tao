@@ -291,7 +291,7 @@ export default function Workshop({ decks, notes, books, onCommit, onCreateDeck }
   if (!decks.length) {
     return (
       <div style={{ ...CARD, textAlign: "center", padding: 32 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Aucun paquet</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Aucun paquet</div>
         <div style={{ fontSize: 13, color: T.textSub, margin: "8px 0 16px" }}>
           {NO_DECK_HINT}
         </div>
@@ -318,10 +318,10 @@ export default function Workshop({ decks, notes, books, onCommit, onCreateDeck }
                 onClick={() => { setSource(s.id); setError(null); }}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "7px 12px", borderRadius: 999, border: "none",
+                  minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none",
                   background: active ? T.text : FIELD_BG,
                   color: active ? T.textInverted : T.textSub,
-                  fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+                  fontSize: 13, fontWeight: 500, fontFamily: "inherit",
                   cursor: "pointer", transition: "var(--tr-ui)",
                 }}
               >
@@ -369,7 +369,7 @@ export default function Workshop({ decks, notes, books, onCommit, onCreateDeck }
               <input type="file" accept=".txt,.tsv,.csv,text/plain" onChange={onFile} style={{ display: "none" }} />
               <span
                 style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px",
+                  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px",
                   borderRadius: 999, background: FIELD_BG, color: T.text,
                   fontSize: 13, fontWeight: 500, cursor: "pointer", transition: "var(--tr-ui)",
                 }}

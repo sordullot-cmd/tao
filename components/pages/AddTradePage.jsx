@@ -8,7 +8,6 @@ import {
   Star,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
-import { luminance } from "@/lib/ui/color";
 import { STRATEGY_COLORS, STRATEGY_COLOR_DEFAULT } from "@/lib/ui/tradingColors";
 import { t, useLang, getLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
@@ -23,36 +22,7 @@ import { CARD, SectionTitle, TH } from "@/components/ui/da";
    titre, case à cocher et aplat léger d'une ligne cochée. */
 import { accountTypeStyle } from "@/lib/ui/accountTypes";
 import { FIELD_BG as DA_FIELD_BG, WRITING_BG as DA_WRITING_BG } from "@/lib/ui/tokens";
-import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
-
-/* Case à cocher de la liste des comptes. Même dessin que les cases en ligne du
-   reste de l'app (TradesPage) ; `partial` sert au titre de groupe quand seule
-   une partie de ses comptes est cochée. */
-function CheckBox({ on, partial = false, color, size = 15 }) {
-  const filled = on || partial;
-  /* La coche s'adapte à l'aplat qui la porte. Les couleurs de type de compte
-     sont les principales de la charte : sur l'ambre (Fox) ou le jaune, une
-     coche blanche rend 2:1 et disparaît, alors qu'elle tient sur le violet.
-     Seuil à 0,45 de luminance — au-delà, l'aplat est clair, c'est l'encre. */
-  const glyph = color && luminance(color) > 0.45 ? T.text : T.onSolid;
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        width: size, height: size, borderRadius: "var(--radius-field)", flexShrink: 0,
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        border: `1.5px solid ${filled ? color : T.border2}`,
-        background: filled ? color : T.white,
-        transition: "border-color .12s ease, background .12s ease",
-      }}
-    >
-      {on && <LucideCheck size={size - 4} strokeWidth={3} color={glyph} />}
-      {!on && partial && (
-        <span style={{ width: size - 7, height: 1.5, borderRadius: 1, background: glyph }} />
-      )}
-    </span>
-  );
-}
+import { CheckBox, Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
 
 /**
  * En-tête d'une carte d'étape : pastille numérotée + titre, action à droite.
@@ -950,7 +920,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
   const brokerInfo = getBrokerInstructions();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
       </div>
@@ -1047,7 +1017,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                                   }}
                                 >
                                   <CheckBox on={groupOn} partial={checked > 0 && !groupOn} color={c.fg} size={14} />
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{c.label()}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 500, color: T.text }}>{c.label()}</span>
                                   <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500 }}>
                                     {checked}/{g.accounts.length}
                                   </span>
@@ -1073,7 +1043,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                                           padding: "9px 11px", borderRadius: "var(--radius-field)",
                                           border: `1px solid ${on ? c.bd : T.border}`,
                                           background: on ? c.bg : T.white,
-                                          color: T.text, fontSize: 12.5, fontWeight: on ? 600 : 500,
+                                          color: T.text, fontSize:12, fontWeight: 500,
                                           cursor: "pointer", fontFamily: "inherit", textAlign: "left",
                                           transition: "background .12s ease, border-color .12s ease",
                                         }}
@@ -1349,7 +1319,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                     disabled={!ready}
                     style={{
                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      minHeight: 40, padding: "10px 20px", borderRadius: 999, border: "none",
+                      minHeight: 40, padding: "11px 20px", borderRadius: 999, border: "none",
                       background: ready ? T.text : T.white,
                       boxShadow: ready ? "none" : T.elevPill,
                       color: ready ? T.textInverted : T.textMut,
@@ -1382,7 +1352,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                 <>
                   {/* Le titre ouvre le contenu : l'en-tete de la DA ne porte
                       qu'une poignee et la fermeture. */}
-                  <h2 style={{fontSize:15,fontWeight:600,color:T.text,margin:0,letterSpacing:-0.1}}>{t("addTrade.createStrategy")}</h2>
+                  <h2 style={{fontSize:14,fontWeight:600,color:T.text,margin:0,letterSpacing:-0.1}}>{t("addTrade.createStrategy")}</h2>
 
                   <div style={{marginBottom:16}}>
                     <label style={{display:"block",fontSize:12,fontWeight:600,marginBottom:6,color:T.textMut}}>{t("addTrade.strategyName")}</label>
@@ -1424,7 +1394,7 @@ export default function AddTradePage({ trades, setPage, setAccounts, accounts = 
                         </div>
                       </div>
                     ))}
-                    <button onClick={addGroup} style={{marginTop:12,fontSize:12,fontWeight:500,color:T.accent,background:DA_FIELD_BG,border:"none",cursor:"pointer",padding:"9px 14px",borderRadius:999,width:"100%",fontFamily:"inherit",transition:"var(--tr-ui)"}}>{t("addTrade.addGroup")}</button>
+                    <button onClick={addGroup} style={{marginTop:12,fontSize: 13,fontWeight:500,color:T.accent,background:DA_FIELD_BG,border:"none",cursor:"pointer",minHeight: 34, padding: "8px 16px",borderRadius:999,width:"100%",fontFamily:"inherit",transition:"var(--tr-ui)"}}>{t("addTrade.addGroup")}</button>
                   </div>
 
                 </>

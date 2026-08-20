@@ -157,7 +157,7 @@ export default function AgentNotifications({ userId }: AgentNotificationsProps) 
           position: "relative",
           background: "none",
           border: "none",
-          fontSize: 18,
+          fontSize: 16,
           cursor: "pointer",
           padding: 0,
           minWidth: 44,

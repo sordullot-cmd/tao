@@ -408,7 +408,7 @@ export default function CashflowPage({ setPage }) {
   const noBank = bank.accounts.length === 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">
       {header}
 
       {noBank ? (

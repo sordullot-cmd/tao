@@ -213,8 +213,8 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
                 borderRadius: "var(--radius-card)",
                 border: `1px solid ${T.border}`,
                 background: T.white,
-                fontSize: 13,
-                fontWeight: 600,
+                fontSize:13,
+                fontWeight: 500,
                 color: T.text,
                 cursor: "pointer",
               }}
@@ -231,8 +231,8 @@ export default function BrokerLoginModal({ onConnected, onClose }) {
                 border: "none",
                 background: T.accent,
                 color: T.white,
-                fontSize: 13,
-                fontWeight: 600,
+                fontSize:13,
+                fontWeight: 500,
                 cursor: loading ? "not-allowed" : "pointer",
                 opacity: loading ? 0.7 : 1,
               }}

@@ -69,7 +69,7 @@ export default function MultiAccountSelector({
         aria-expanded={isOpen}
         style={{
           width: "100%",
-          padding: "7px 14px",
+          minHeight: 28, padding: "5px 12px",
           height: 34,
           borderRadius: 999,
           background: "var(--color-card-bg, #FFFFFF)",
@@ -243,7 +243,7 @@ export default function MultiAccountSelector({
                   fontFamily: "inherit",
                   textAlign: "left",
                   color: "var(--color-text)",
-                  fontSize: 13,
+                  fontSize:13,
                   fontWeight: 500,
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"; }}
@@ -269,7 +269,7 @@ export default function MultiAccountSelector({
               <div style={{width:36,height:36,borderRadius:10,background:"var(--color-red-bg, #FEF2F2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 <Trash2 size={16} strokeWidth={1.75} color="var(--color-red, #EF4444)"/>
               </div>
-              <h3 style={{fontSize:15,fontWeight:600,color:"var(--color-text)",margin:0,letterSpacing:-0.1}}>
+              <h3 style={{fontSize:14,fontWeight:600,color:"var(--color-text)",margin:0,letterSpacing:-0.1}}>
                 {t("accounts.confirmDeleteTitle").replace("{name}", confirmDelete.name)}
               </h3>
             </div>
@@ -290,7 +290,7 @@ export default function MultiAccountSelector({
                   finally { setDeleting(false); setConfirmDelete(null); setIsOpen(false); }
                 }}
                 disabled={deleting}
-                style={{padding:"0 16px",height:36,borderRadius:"var(--radius-card)",border:"1px solid var(--color-red, #EF4444)",background:"var(--color-red, #EF4444)",color:"#FFFFFF",fontSize:13,fontWeight:600,cursor: deleting ? "not-allowed" : "pointer",fontFamily:"inherit",opacity: deleting ? 0.7 : 1}}>
+                style={{padding:"0 16px",height:36,borderRadius:"var(--radius-card)",border:"1px solid var(--color-red, #EF4444)",background:"var(--color-red, #EF4444)",color:"#FFFFFF",fontSize:13,fontWeight: 500,cursor: deleting ? "not-allowed" : "pointer",fontFamily:"inherit",opacity: deleting ? 0.7 : 1}}>
                 {deleting ? t("accounts.deleting") : t("common.delete")}
               </button>
             </div>

@@ -130,7 +130,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
   /* ── État vide ────────────────────────────────────────────────────────── */
   if (allDays.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, flexWrap: "wrap" }}>
           <div id="tr4de-page-header-slot" style={{ marginLeft: "auto" }} />
         </div>
@@ -149,18 +149,20 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
 
       {/* ═══ UNE SEULE LIGNE DE TÊTE ═══
           Le bilan de période (chiffre héros + cinq mini-KPI) et le calendrier du
           mois ont disparu : ils répétaient ce que le tableau de bord et la page
           Calendrier montrent déjà, et repoussaient le journal — le contenu de la
           page — sous deux écrans de synthèse. Ne restent que les deux commandes
-          qui n'existent nulle part ailleurs : la fenêtre de lecture et l'export. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          qui n'existent nulle part ailleurs : la fenêtre de lecture et l'export.
+          La fenêtre OUVRE la ligne, à gauche : c'est elle qui décide de ce que
+          la page montre, l'export ne fait que l'emporter. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <PeriodPills value={period} onChange={setPeriod} />
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div id="tr4de-page-header-slot" />
-          <PeriodPills value={period} onChange={setPeriod} />
           <button
             type="button"
             aria-label={t("journal.exportAria")}
@@ -172,9 +174,9 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
               title: t("journal.title"),
             })}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px",
-              minHeight: 32, borderRadius: 999, border: "none", background: T.text,
-              color: T.textInverted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+              display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px",
+              minHeight: 34, borderRadius: 999, border: "none", background: T.text,
+              color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}
           >
             <Download size={13} strokeWidth={1.75} /> {t("journal.exportPdf")}
@@ -207,7 +209,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
             type="button"
             onClick={() => setShownDays((n) => n + DAYS_PER_PAGE)}
             style={{
-              alignSelf: "center", padding: "9px 18px", borderRadius: 999,
+              alignSelf: "center", minHeight: 34, padding: "8px 16px", borderRadius: 999,
               border: `1px solid ${T.border}`, background: T.white, color: T.text,
               fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}
@@ -261,9 +263,9 @@ function DayCard({ day, note, onNoteChange, noteColor, strategies, tradeStrategi
             background: "none", border: "none", padding: 0, font: "inherit", cursor: "pointer",
           }}
         >
-          <span style={{ fontSize: 15, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{label}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{label}</span>
           <span style={{
-            fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+            fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
             color: day.pnl > 0 ? T.pnlPos : day.pnl < 0 ? T.pnlNeg : T.textSub,
           }}>
             {day.pnl > 0 ? "+" : ""}{fmt(day.pnl, false)}

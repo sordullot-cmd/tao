@@ -178,7 +178,7 @@ export default function LoginPage() {
         {/* Logo + brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 32 }}>
           <img src="/logo.svg" alt="tao" width={36} height={36} style={{ display: "block", borderRadius: "50%", objectFit: "cover" }} />
-          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--color-text, #0D0D0D)" }}>tao trade</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text, #0D0D0D)" }}>tao trade</div>
         </div>
 
         {/* Title */}
@@ -277,12 +277,12 @@ export default function LoginPage() {
             justifyContent: "center",
             gap: 8,
             padding: "10px 14px",
-            minHeight: 44,
+            minHeight:44,
             borderRadius: 8,
             border: "1px solid var(--color-border, #E5E5E5)",
             background: "var(--color-card-bg, #FFFFFF)",
             color: "var(--color-text, #0D0D0D)",
-            fontSize: 14,
+            fontSize:14,
             fontWeight: 500,
             cursor: loading ? "not-allowed" : "pointer",
             fontFamily: "inherit",
@@ -309,7 +309,7 @@ export default function LoginPage() {
             onClick={() => { setIsLogin(!isLogin); setError(""); setSuccess(""); }}
             style={{
               background: "transparent", border: "none", padding: 0,
-              color: "var(--color-text, #0D0D0D)", fontWeight: 600, cursor: "pointer",
+              color: "var(--color-text, #0D0D0D)", fontWeight: 500, cursor: "pointer",
               textDecoration: "underline", fontFamily: "inherit", fontSize: "inherit",
             }}
           >

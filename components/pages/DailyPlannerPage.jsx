@@ -77,13 +77,13 @@ const topIconBtn = {
 };
 const pillBtn = {
   display: "inline-flex", alignItems: "center", gap: 6,
-  padding: "7px 14px", minHeight: 32, borderRadius: 999,
+  minHeight: 34, padding: "8px 16px", minHeight: 32, borderRadius: 999,
   border: "none", background: DA_FIELD_BG, color: T.text,
-  fontSize: 12, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+  fontSize: 13, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
 };
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",
-  padding: "7px 14px", minHeight: 32, borderRadius: 999,
+  minHeight: 34, padding: "8px 16px", minHeight: 32, borderRadius: 999,
   border: "none", background: DA_FIELD_BG, color: T.text,
   fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
@@ -464,19 +464,17 @@ export default function DailyPlannerPage() {
   const taskDoneCount = tasks.filter(p => p.done).length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
       {/* ═══ 1. BARRE DU JOUR ═══
           Pas de titre de page — comme le dashboard et le calendrier, la page se
-          présente par son contenu. Les contrôles sont calés à droite : avancement
-          du jour, navigation, ajout.
+          présente par son contenu. Le sélecteur de jour OUVRE la ligne, à gauche :
+          c'est lui qui dit ce qu'on regarde, et tout le reste de la page en
+          dépend. L'avancement du jour et l'ajout ferment la ligne à droite.
           La date passe par la brique commune de navigation de période
           (`StepperPill`, celle du calendrier et de l'agenda) — le libellé ouvre
           toujours le sélecteur de date. Le filet de 1 px qui poussait le compteur
           vers la droite a disparu avec elle. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13, color: T.textSub, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-          {habits.filter(h => habitHistory[h.id]?.[dateKey]).length}/{habits.length}
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div ref={dayPickerAnchor} style={{ position: "relative", display: "inline-flex" }}>
           <StepperPill
             label={(() => { const p = fmtDateParts(dateKey); return `${p.weekday} ${p.day} ${p.month}`; })()}
@@ -497,9 +495,17 @@ export default function DailyPlannerPage() {
             />
           )}
         </div>
-        <button onClick={openCreateHabit} title="Ajouter une habitude" aria-label="Ajouter une habitude"
-          style={{ width: 32, height: 32, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Plus size={14} strokeWidth={2} />
+        <span style={{ marginLeft: "auto", fontSize: 13, color: T.textSub, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+          {habits.filter(h => habitHistory[h.id]?.[dateKey]).length}/{habits.length}
+        </span>
+        {/* Action principale de la page : une pilule LIBELLÉE, comme « Nouvelle
+            séance » (Sport) ou « Nouvelle note » (Révisions). Le rond « + » muet
+            d'avant obligeait à survoler pour savoir ce qu'il ajoutait — sur une
+            page qui porte à la fois des habitudes et des tâches du jour, c'était
+            une devinette. */}
+        <button onClick={openCreateHabit}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap" }}>
+          <Plus size={14} strokeWidth={1.75} /> Nouvelle habitude
         </button>
         <div id="tr4de-page-header-slot" />
       </div>
@@ -621,7 +627,7 @@ export default function DailyPlannerPage() {
                                       cursor: "pointer", padding: 0, position: "relative",
                                     }}>
                                     <AutoIco size={15} strokeWidth={1.75} />
-                                    <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 8, background: isAuto ? T.white : T.text, color: isAuto ? T.text : T.textInverted, borderRadius: 6, padding: "1px 3px", lineHeight: 1, fontWeight: 600 }}>A</span>
+                                    <span style={{ position: "absolute", bottom: -2, right: -2, fontSize: 10, background: isAuto ? T.white : T.text, color: isAuto ? T.text : T.textInverted, borderRadius: 6, padding: "1px 3px", lineHeight: 1, fontWeight: 600 }}>A</span>
                                   </button>
                                 );
                               })()}
@@ -696,7 +702,7 @@ export default function DailyPlannerPage() {
                         const toggle = () => setHabitDraft({ ...habitDraft, attributes: active ? sel.filter(x => x !== c.id) : [...sel, c.id] });
                         return (
                           <button key={c.id} type="button" onClick={toggle}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 999, border: "none", boxShadow: active ? `inset 0 0 0 1px ${c.color}` : "none", background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : DA_FIELD_BG, color: active ? c.color : T.text, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, minHeight: 28, padding: "5px 12px", borderRadius: 999, border: "none", boxShadow: active ? `inset 0 0 0 1px ${c.color}` : "none", background: active ? `color-mix(in srgb, ${c.color} 10%, transparent)` : DA_FIELD_BG, color: active ? c.color : T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                             {active
                               ? <Check size={13} strokeWidth={2.5} color={c.color} />
                               : <CatIcon name={c.icon} size={13} strokeWidth={1.9} color={T.textMut} />}
@@ -705,7 +711,7 @@ export default function DailyPlannerPage() {
                         );
                       })}
                     </div>
-                    <div style={{ fontSize: 10.5, color: T.textMut, marginTop: 6, lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 10, color: T.textMut, marginTop: 6, lineHeight: 1.4 }}>
                       {rpgCategories.length === 0
                         ? "Définis d'abord tes objectifs de l'année sur la page « Objectifs » pour y rattacher cette habitude."
                         : "Rattache cette habitude à un ou plusieurs objectifs de l'année (page « Objectifs ») : la cocher les fait progresser."}
@@ -1065,7 +1071,7 @@ function DailyStatCell({ label, value, subLabel, color }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 10, color: T.textMut, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: color || T.text, letterSpacing: -0.3, marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: color || T.text, letterSpacing: -0.3, marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{value}</div>
       <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subLabel}</div>
     </div>
   );

@@ -340,7 +340,7 @@ export default function PropFirmDetailPage({
 
   if (!firm) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 14 }} className="anim-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="anim-1">
         <div style={{ display: "flex", alignItems: "center", margin: "-7px -8px" }}>
           <BackLink label={t("nav.accounts")} onClick={() => setPage?.("accounts")} />
         </div>
@@ -438,7 +438,7 @@ export default function PropFirmDetailPage({
 
   return (
     <div
-      style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }}
+      style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }}
       className="anim-1"
     >
       {/* ═══ 1. BARRE D'ACTIONS ═══
@@ -463,9 +463,9 @@ export default function PropFirmDetailPage({
             type="button"
             onClick={() => setEditingFirm(true)}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px",
+              display: "inline-flex", alignItems: "center", gap: 6, minHeight: 28, padding: "5px 12px",
               borderRadius: 999, border: `1px solid ${T.border}`, background: T.white,
-              color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+              color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}
           >
             <Settings2 size={13} strokeWidth={1.75} /> {t("firms.editFirm")}
@@ -957,7 +957,7 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
                   onClick={() => choose(() => onOpenAccount?.(acc.id))}
                   style={{
                     flex: "1 1 auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0,
-                    textAlign: "left", padding: "8px 10px", minHeight: 40, borderRadius: 6,
+                    textAlign: "left", padding: "8px 10px", minHeight:40, borderRadius: 6,
                     border: "none", background: "transparent", cursor: "pointer",
                     fontFamily: "inherit", color: T.text,
                   }}
@@ -1009,9 +1009,9 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
                 onClick={() => choose(onAddAccount)}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  textAlign: "left", padding: "8px 10px", minHeight: 36, borderRadius: 6,
+                  textAlign: "left", padding: "8px 10px", minHeight:36, borderRadius: 6,
                   border: "none", background: "transparent", cursor: "pointer",
-                  fontFamily: "inherit", fontSize: 13, fontWeight: 500, color: T.textSub,
+                  fontFamily: "inherit", fontSize:13, fontWeight: 500, color: T.textSub,
                   transition: "background var(--dur-fast) var(--ease-out)",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}

@@ -373,7 +373,7 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
     /* Même squelette que la page pleine — retour dans sa barre, message dans une
        carte : l'écran vide reste une page de l'app, pas un cul-de-sac. */
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
         <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
           <BackLink label={t("nav.accounts")} onClick={() => setPage?.("accounts")} />
         </div>
@@ -462,7 +462,7 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
 
       {/* ═══ 1. BARRE D'ACTIONS ═══
           Une ligne à elle seule, comme sur la page d'une prop firm : le retour à
@@ -685,9 +685,9 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
 function pillActionStyle() {
   return {
     display: "inline-flex", alignItems: "center", gap: 6,
-    padding: "7px 12px", minHeight: 32, borderRadius: 999,
+    minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999,
     border: `1px solid ${T.border}`, background: T.white,
-    color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+    color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
   };
 }
 
@@ -761,7 +761,7 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
       >
         <>
           {error && (
-            <div style={{ padding: "6px 8px", fontSize: 11.5, color: T.red, lineHeight: 1.4 }}>{error}</div>
+            <div style={{ padding: "6px 8px", fontSize: 11, color: T.red, lineHeight: 1.4 }}>{error}</div>
           )}
 
           {firms.length === 0 ? (

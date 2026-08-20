@@ -153,7 +153,7 @@ const FR: Dict = {
 
   // Trades page
   "trades.title": "Trades",
-  "trades.importBtn": "+ Importer",
+  "trades.importBtn": "Import de trades",
   "trades.colAsset": "Actif",
   "trades.colSide": "Sens",
   "trades.filterSymbols": "Rechercher des symbols",
@@ -1542,7 +1542,7 @@ const EN: Dict = {
 
   // Trades page
   "trades.title": "Trades",
-  "trades.importBtn": "+ Import",
+  "trades.importBtn": "Import trades",
   "trades.colAsset": "Asset",
   "trades.colSide": "Side",
   "trades.filterSymbols": "Search symbols",

@@ -48,7 +48,7 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
 
   if (!cls) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
         {back}
         <section style={{ ...CARD, padding: "40px 24px", textAlign: "center", fontSize: 14, color: T.textSub }}>
           {t("patrimoine.class.notFound")}
@@ -74,7 +74,7 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
   const positiveTotal = netWorth(allAssets).gross;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">
       {back}
 
       <header style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>

@@ -152,7 +152,7 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
 
   if (!asset) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
         {back}
         <section style={{ ...CARD, padding: "40px 24px", textAlign: "center", fontSize: 14, color: T.textSub }}>
           {t("patrimoine.asset.notFound")}
@@ -252,7 +252,7 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
     patchAsset((a) => ({ ...a, balance: -Math.max(0, value), updatedAt: new Date().toISOString() }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">
       {back}
 
       {/* Un crédit se lit dans UNE carte, la même que celle de la page

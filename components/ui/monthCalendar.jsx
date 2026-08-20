@@ -134,7 +134,7 @@ export default function MonthCalendar({ trades = [], onDayClick, title = "Calend
       {/* En-tête : mois + total, navigation à droite */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.2, color: T.text }}>{title}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2, color: T.text }}>{title}</span>
           <span style={{
             fontSize: 14, fontWeight: 600, whiteSpace: "nowrap",
             fontVariantNumeric: "tabular-nums",

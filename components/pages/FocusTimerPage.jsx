@@ -307,7 +307,7 @@ export default function FocusTimerPage() {
             </svg>
             <style>{`@keyframes tr4de-chrono-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ fontSize: 48, fontWeight: 700, color: T.text, letterSpacing: -1, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtMMSS(remaining)}</div>
+              <div style={{ fontSize: 40, fontWeight: 700, color: T.text, letterSpacing: -1, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtMMSS(remaining)}</div>
               {taskLabel.trim() ? (
                 <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginTop: 8, maxWidth: 200, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{taskLabel.trim()}</div>
               ) : (
@@ -335,7 +335,7 @@ export default function FocusTimerPage() {
                         padding: "2px 8px", border: "none", borderRadius: "var(--radius-field)",
                         background: durationUnit === u ? T.white : "transparent",
                         color: durationUnit === u ? T.text : T.textSub,
-                        fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                        fontSize:10, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         boxShadow: durationUnit === u ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
                       }}>
                       {u}

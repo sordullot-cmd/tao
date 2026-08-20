@@ -825,7 +825,7 @@ export default function LifeRpgPage() {
   return (
     /* 14 px de retrait haut ; blocs à 28 px (les autres pages sont à 36, mais
        celle-ci en empile davantage et respirait trop). */
-    <div style={{ display: "flex", flexDirection: "column", gap: 28, paddingTop: 14, fontFamily: "var(--font-sans)" }} className="anim-1">
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">
 
       {/* ─── Barre d'en-tête : seulement le slot de la barre du haut ─── */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -840,7 +840,7 @@ export default function LifeRpgPage() {
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
           <span style={{ fontSize: 13, lineHeight: "17.05px", color: T.textSub }}>{`Mes ${MAX_YEAR_GOALS} objectifs de l'année`}</span>
-          <span style={{ fontSize: 26, fontWeight: 500, lineHeight: 1, letterSpacing: -0.2, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ fontSize: 24, fontWeight: 500, lineHeight: 1, letterSpacing: -0.2, color: T.text, fontVariantNumeric: "tabular-nums" }}>
             {YEAR}
           </span>
         </div>
@@ -858,9 +858,13 @@ export default function LifeRpgPage() {
             width={180}
           />
           {/* À ne pas confondre avec les trois objectifs de l'année : ceci crée
-              un objectif CHIFFRÉ (page Objectifs), qui mesure l'un d'eux. */}
-          <button type="button" onClick={() => createGoalRef.current?.()} style={btnSecondary()}>
-            <Plus size={13} strokeWidth={1.75} /> Nouvel objectif chiffré
+              un objectif MESURÉ, celui de la liste plus bas, qui chiffre
+              l'avancement de l'un d'eux. En noir, pas en accent : l'accent est
+              pris par « Définir un objectif de l'année », qui est l'action
+              structurante de la page — deux verts côte à côte ne diraient plus
+              laquelle des deux passe en premier. */}
+          <button type="button" onClick={() => createGoalRef.current?.()} style={btnDark()}>
+            <Plus size={13} strokeWidth={1.75} /> Nouvel objectif
           </button>
           {!isFull && (
             <button type="button" onClick={() => openNewCategory()} style={btnPrimary()}>
@@ -917,10 +921,10 @@ export default function LifeRpgPage() {
         </div>
       </div>
 
-      {/* ─── Objectifs chiffrés (la page Objectifs, absorbée ici) : ce sont eux
-             qui mesurent l'avancement des trois objectifs de l'année. ─── */}
+      {/* ─── Objectifs (la page Objectifs, absorbée ici) : ce sont eux qui
+             mesurent l'avancement des trois objectifs de l'année. ─── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <SectionTitle size="sm">Objectifs chiffrés</SectionTitle>
+        <SectionTitle size="sm">Objectifs</SectionTitle>
         <GoalsPage embedded registerCreate={(fn) => { createGoalRef.current = fn; }} />
       </div>
 
@@ -1052,8 +1056,8 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Rang de l'objectif : il y en a trois, et celui-ci est le n°X. */}
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: cat.color, opacity: 0.9 }}>Objectif {rank} · {year}</div>
-          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.25, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{cat.label}</div>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: cat.color, opacity: 0.9 }}>Objectif {rank} · {year}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.25, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{cat.label}</div>
         </div>
         {/* Boutons modifier / supprimer : masqués, visibles au survol de la carte */}
         <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hover ? 1 : 0.55, pointerEvents: "auto", transition: "opacity 120ms var(--ease-out)" }}>
@@ -1075,7 +1079,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
       <div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
           <span style={{ fontSize: 24, fontWeight: 600, lineHeight: 1, letterSpacing: -0.3, color: T.text, fontVariantNumeric: "tabular-nums" }}>{pct}%</span>
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: status.color }}>{status.label}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: status.color }}>{status.label}</span>
           <span style={{ marginLeft: "auto", fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
             {dLeft == null ? "" : dLeft >= 0 ? `J-${dLeft}` : `${-dLeft} j de retard`}
           </span>
@@ -1095,7 +1099,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           <span>
             {measured
               ? [
-                  progress.hasGoals ? `${freeGoals.length} objectif${freeGoals.length > 1 ? "s" : ""} chiffré${freeGoals.length > 1 ? "s" : ""}` : null,
+                  progress.hasGoals ? `${freeGoals.length} objectif${freeGoals.length > 1 ? "s" : ""}` : null,
                   progress.hasSteps ? `${stepProg.done}/${stepProg.total} étape${stepProg.total > 1 ? "s" : ""}` : null,
                 ].filter(Boolean).join(" · ")
               : `Vers le niveau ${cl.level + 1}`}
@@ -1120,7 +1124,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: cat.color, marginBottom: 3, opacity: 0.85 }}>Mon modèle</div>
             <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{cat.roleModel}</div>
-            {cat.roleModelWhy && <div style={{ fontSize: 11.5, color: T.textSub, marginTop: 3, lineHeight: 1.45 }}>{cat.roleModelWhy}</div>}
+            {cat.roleModelWhy && <div style={{ fontSize: 11, color: T.textSub, marginTop: 3, lineHeight: 1.45 }}>{cat.roleModelWhy}</div>}
           </div>
         </div>
       )}
@@ -1154,8 +1158,8 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
               return (
                 <div key={g.id} className="tr4de-linked-goal">
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: reached ? T.green : T.textSub, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: reached ? T.green : T.textSub, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</span>
                     {onDetachObjective && (
                       /* Retrait : la croix ne se montre qu'au survol de SON
                          objectif (CSS ci-dessous). Une croix par objectif,
@@ -1184,12 +1188,12 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                         const sgNegative = sg.rawPct < 0;
                         return (
                           <div key={sg.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ flexShrink: 0, maxWidth: "42%", fontSize: 11.5, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sg.label}</span>
+                            <span style={{ flexShrink: 0, maxWidth: "42%", fontSize: 11, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sg.label}</span>
                             <div role="progressbar" aria-valuenow={Math.round(sg.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${sg.label} : ${Math.round(sg.rawPct)}%`}
                               style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
                               <div style={{ width: `${sg.pct}%`, height: "100%", background: cat.color, borderRadius: 999, opacity: 0.75, transition: "width var(--dur-slow) var(--ease-out)" }} />
                             </div>
-                            <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: sgNegative ? T.red : sgReached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtGoalVal(sg.current, sg.unit)} / {fmtGoalVal(sg.target, sg.unit)}</span>
+                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: sgNegative ? T.red : sgReached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtGoalVal(sg.current, sg.unit)} / {fmtGoalVal(sg.target, sg.unit)}</span>
                           </div>
                         );
                       })}
@@ -1242,7 +1246,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                       }}
                       onBlur={submitNewTask}
                       placeholder="Nouvelle tâche…"
-                      style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12.5, color: T.text, fontFamily: "inherit", padding: 0 }} />
+                      style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, color: T.text, fontFamily: "inherit", padding: 0 }} />
                   </div>
                 )}
               </div>
@@ -1257,7 +1261,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
             <button type="button" onClick={openAdd}
               onMouseEnter={() => setTaskAddHov(true)} onMouseLeave={() => setTaskAddHov(false)}
               onFocus={() => setTasksHov(true)} onBlur={() => setTasksHov(false)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: taskAddHov ? T.textSub : T.textMut, opacity: tasksHov ? (taskAddHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: taskAddHov ? T.textSub : T.textMut, opacity: tasksHov ? (taskAddHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
               <Plus size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
               Ajouter
             </button>
@@ -1305,7 +1309,7 @@ function EmptyGoalSlot({ rank, onCreate }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, justifyContent: "center" }}>
         {YEAR_GOAL_TEMPLATES.slice(0, 4).map(tpl => (
           <button key={tpl.label} type="button" onClick={() => onCreate(tpl)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, padding: "4px 9px", borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.textSub, cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, minHeight: 28, padding: "5px 12px", borderRadius: 999, background: T.white, border: `1px solid ${T.border}`, color: T.textSub, cursor: "pointer", fontFamily: "inherit" }}>
             <CatIcon name={tpl.icon} size={11} strokeWidth={1.9} color={tpl.color} />
             {tpl.label}
           </button>
@@ -1400,7 +1404,7 @@ function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
       <div aria-hidden="true" style={{ position: "relative", height: 12 }}>
         {MONTH_INITIALS.map((mi, i) => (
           <span key={`lbl${i}`}
-            style={{ position: "absolute", left: `${((i + 0.5) / 12) * 100}%`, transform: "translateX(-50%)", fontSize: 9.5, color: T.textMut, letterSpacing: 0.2 }}>
+            style={{ position: "absolute", left: `${((i + 0.5) / 12) * 100}%`, transform: "translateX(-50%)", fontSize: 10, color: T.textMut, letterSpacing: 0.2 }}>
             {mi}
           </span>
         ))}
@@ -1408,7 +1412,7 @@ function YearTimeline({ year, yearPct, daysLeft, markers, today }) {
 
       {/* Détail du jalon survolé, à hauteur fixe pour que la page ne saute pas
           quand on parcourt la frise. */}
-      <div style={{ minHeight: 16, fontSize: 11.5, color: T.textSub }}>
+      <div style={{ minHeight: 16, fontSize: 11, color: T.textSub }}>
         {hover && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: hover.cat.color, boxShadow: dotRing(hover.cat.color), flexShrink: 0 }} />
@@ -1523,13 +1527,13 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
                 else if (e.key === "Escape") { setDraft(step.label); setEditing(false); }
               }}
               onBlur={commit}
-              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
+              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
           ) : (
             <button type="button" onClick={() => { setDraft(step.label); setEditing(true); }}
               title="Renommer l'étape"
               style={{
                 flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent",
-                padding: 0, cursor: "text", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600,
+                padding: 0, cursor: "text", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
                 color: tone.text, textDecoration: done ? "line-through" : "none",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
@@ -1549,7 +1553,7 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
             rappelle en lecture seule (et on signale son retard), sans jamais
             proposer d'en poser une nouvelle. */}
         {step.due && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 10.5, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone.label ?? T.textMut }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone.label ?? T.textMut }}>
             <CalendarClock size={10} strokeWidth={2} />
             {fmtDayShort(step.due)}
             {status === "late" && " · en retard"}
@@ -1567,12 +1571,12 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
               const negative = g.rawPct < 0;
               return (
                 <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ flexShrink: 0, maxWidth: "40%", fontSize: 11.5, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                  <span style={{ flexShrink: 0, maxWidth: "40%", fontSize: 11, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                   <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)} %`}
                     style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
                     <div style={{ width: `${g.pct}%`, height: "100%", background: cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
                   </div>
-                  <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                  <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
                     {fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}
                   </span>
                   {onToggleObjective && (
@@ -1691,7 +1695,7 @@ function StepsBlock({ cat, steps, today, goalsByStep = {}, stepPcts = {}, allObj
             }}
             onBlur={() => submit(false)}
             placeholder="Nouvelle étape…"
-            style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
+            style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
         </div>
       )}
 
@@ -1699,7 +1703,7 @@ function StepsBlock({ cat, steps, today, goalsByStep = {}, stepPcts = {}, allObj
         <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
           onMouseEnter={() => setAddHov(true)} onMouseLeave={() => setAddHov(false)}
           onFocus={() => setBlockHov(true)} onBlur={() => setBlockHov(false)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: addHov ? T.textSub : T.textMut, opacity: revealed ? (addHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: addHov ? T.textSub : T.textMut, opacity: revealed ? (addHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
           <Plus size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
           Ajouter
         </button>
@@ -1709,7 +1713,7 @@ function StepsBlock({ cat, steps, today, goalsByStep = {}, stepPcts = {}, allObj
            point de passage ne se pilote pas. */
         <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
           onFocus={() => setBlockHov(true)} onBlur={() => setBlockHov(false)}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: revealed ? 1 : 0, transition: "opacity .15s ease" }}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: revealed ? 1 : 0, transition: "opacity .15s ease" }}
           onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 10%, transparent)`; }}
           onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 5%, transparent)`; }}>
           <Milestone size={14} strokeWidth={2} /> Par où passer ?
@@ -1731,19 +1735,19 @@ function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
         style={{ width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0, border: `1.5px solid ${tk.done ? deepen(cat.color) : T.border}`, background: tk.done ? deepen(cat.color) : T.white, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
         {tk.done && <Check size={10} strokeWidth={3} />}
       </button>
-      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: tk.done ? T.textMut : T.text, textDecoration: tk.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tk.title}</span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: tk.done ? T.textMut : T.text, textDecoration: tk.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tk.title}</span>
       {/* Date cliquable : ouvre la modale d'édition (choix/modification de la date
           via le mini-calendrier). Sans date, un « Dater » discret apparaît au survol. */}
       {onEdit ? (
         <button type="button" onClick={onEdit} title={tk.day ? "Modifier la date" : "Ajouter une date"}
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", padding: "2px 5px", borderRadius: 6, fontSize: 10.5, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tk.day ? T.textMut : T.blue, opacity: tk.day ? 1 : (hov ? 1 : 0), transition: "opacity .15s ease, background .12s ease" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", padding: "2px 5px", borderRadius: 6, fontSize:10, fontWeight: 500, fontVariantNumeric: "tabular-nums", color: tk.day ? T.textMut : T.blue, opacity: tk.day ? 1 : (hov ? 1 : 0), transition: "opacity .15s ease, background .12s ease" }}
           onMouseEnter={e => { e.currentTarget.style.background = T.accentBg; }}
           onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
           <CalendarClock size={11} strokeWidth={2} />
           {tk.day ? (tk.startTime ? `${fmtDayShort(tk.day)} · ${tk.startTime}` : fmtDayShort(tk.day)) : "Dater"}
         </button>
       ) : (
-        tk.day && <span style={{ fontSize: 10.5, color: T.textMut, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{tk.startTime ? `${fmtDayShort(tk.day)} · ${tk.startTime}` : fmtDayShort(tk.day)}</span>
+        tk.day && <span style={{ fontSize: 10, color: T.textMut, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{tk.startTime ? `${fmtDayShort(tk.day)} · ${tk.startTime}` : fmtDayShort(tk.day)}</span>
       )}
       {onDelete && (
         <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hov ? 1 : 0.5, pointerEvents: "auto", transition: "opacity .15s ease" }}>
@@ -1788,14 +1792,14 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
       {compact ? (
         <button type="button" onClick={() => setOpen(o => !o)}
           onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: (open || hov) ? T.textSub : T.textMut, opacity: (open || hov) ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
+          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: (open || hov) ? T.textSub : T.textMut, opacity: (open || hov) ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
           <Plus size={13} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
           {label}
         </button>
       ) : (
         <button type="button" onClick={() => setOpen(o => !o)}
           onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 999, border: filled ? `1px dashed color-mix(in srgb, ${color} 40%, transparent)` : "1px solid transparent", background: filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent", color, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: filled ? `1px dashed color-mix(in srgb, ${color} 40%, transparent)` : "1px solid transparent", background: filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent", color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
           onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} ${filled ? 10 : 8}%, transparent)`; }}
           onMouseLeave={e => { e.currentTarget.style.background = filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent"; }}>
           <Plus size={14} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
@@ -1831,13 +1835,13 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
                 onMouseLeave={e => { if (!here) e.currentTarget.style.background = "transparent"; }}>
                 <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${here ? deepen(color) : T.border}`, background: here ? deepen(color) : T.white, color: "#fff" }}>{here && <Check size={11} strokeWidth={3} />}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label || "Objectif"}</span>
-                {note && <span style={{ fontSize: 9, color: T.textMut, flexShrink: 0 }}>{note}</span>}
+                {note && <span style={{ fontSize: 10, color: T.textMut, flexShrink: 0 }}>{note}</span>}
               </button>
             );
           })}
           {onCreate && (
             <button type="button" onClick={() => { setOpen(false); onCreate(); }}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginTop: objectives.length ? 4 : 0, borderTop: objectives.length ? `1px solid ${T.border}` : "none", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: T.textSub, fontSize: 12.5, fontWeight: 600 }}>
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginTop: objectives.length ? 4 : 0, borderTop: objectives.length ? `1px solid ${T.border}` : "none", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: T.textSub, fontSize:12, fontWeight: 500}}>
               <Plus size={14} strokeWidth={2} /> Créer un objectif
             </button>
           )}
@@ -1929,7 +1933,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
           {/* Raccourci : la fin de l'année, échéance par défaut de la page. */}
           {form.deadline !== endOfYear && (
             <button type="button" onClick={() => setForm({ ...form, deadline: endOfYear })}
-              style={{ padding: "9px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              style={{ padding: "9px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize:12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
               31 déc.
             </button>
           )}
@@ -1962,9 +1966,9 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
           rows={2} style={{ ...writing(), minHeight: 0, lineHeight: 1.4 }} />
       </Field>
 
-      <Field label="Objectifs chiffrés (ils mesurent l'avancement)">
+      <Field label="Objectifs (ils mesurent l'avancement)">
         <button onClick={onGoToObjectives}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
           <Target size={14} strokeWidth={1.9} /> Gérer les objectifs
         </button>
       </Field>
@@ -1974,7 +1978,7 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textMut }}>
           <Check size={12} strokeWidth={2.5} color={T.green} /> Enregistré automatiquement
         </span>
-        <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
+        <button onClick={onClose} style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
       </div>
     </Overlay>
   );
@@ -2051,7 +2055,7 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
   return (
     <Overlay onClose={onClose} title={isEdit ? "Modifier la tâche" : "Nouvelle tâche"}>
       {/* Rappel de la carte à laquelle la tâche est rattachée */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 12.5, color: T.textSub }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 12, color: T.textSub }}>
         <span style={{ width: 24, height: 24, borderRadius: "var(--radius-card)", background: `color-mix(in srgb, ${cat.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <CatIcon name={cat.icon} size={14} strokeWidth={1.9} color={cat.color} />
         </span>
@@ -2112,7 +2116,7 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
                   </div>
                 ) : (
                   <button type="button" onClick={() => setHasTime(true)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, color: T.blue }}>
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: T.blue }}>
                     <CalendarClock size={13} strokeWidth={2} /> Ajouter une heure
                   </button>
                 )}
@@ -2165,7 +2169,7 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
 function Overlay({ title, children, onClose }) {
   return (
     <DAModal title={title} onClose={onClose} width={440} maxHeight="90vh" bodyStyle={{ padding: 20 }}>
-      {title && <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>}
+      {title && <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>}
       {children}
     </DAModal>
   );
@@ -2203,22 +2207,23 @@ function AutoTextarea({ value, onChange, placeholder, minRows = 3, style }) {
    Comptes et Calendrier) : 12 px, pas de bordure, l'action principale en aplat
    d'encre, les secondaires en blanc posé sur l'ombre de pilule. */
 function btnPrimary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 // Bouton d'action principal d'une modale : même aplat d'accent, cible plus
 // généreuse. (S'appelait `btnDark` du temps où l'action principale était noire.)
 function btnPrimaryLg() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
-/* Pendant clair de btnPrimary : mêmes métriques (32 px, 12 px, gap 6) pour que
-   les deux actions de l'en-tête forment une paire. btnGhost est réservé aux
-   modales — plus haut, et sans inline-flex il désaligne l'icône. */
-function btnSecondary() {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", minHeight: 32, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+/* Action forte NEUTRE : mêmes métriques que btnPrimary, mais à l'encre au lieu
+   de l'accent. C'est ce qui permet de poser deux actions pleines côte à côte
+   sans qu'elles se disputent le regard — l'accent reste réservé à celle qui
+   structure la page. */
+function btnDark() {
+  return { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 28, padding: "5px 12px", minHeight: 32, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 // Bouton secondaire d'une modale.
 function btnGhost() {
-  return { padding: "9px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  return { minHeight: 34, padding: "8px 16px", minHeight: 40, borderRadius: 999, border: "none", background: T.white, boxShadow: T.elevPill, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
 }
 function iconBtn() {
   return { width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: T.textMut, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };

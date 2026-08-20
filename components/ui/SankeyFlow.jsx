@@ -251,7 +251,7 @@ export default function SankeyFlow({
         }}
       >
         <span style={{ fontSize: 11, lineHeight: 1.2, color: T.textMut }}>{centreLabel}</span>
-        <span style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.2, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2, color: T.text, fontVariantNumeric: "tabular-nums" }}>
           {formatValue(centreValue)}
         </span>
       </div>

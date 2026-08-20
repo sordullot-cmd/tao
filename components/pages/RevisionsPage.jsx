@@ -71,7 +71,7 @@ const INTRO_RULE_AFTER = ". Le reste, l'atelier s'en charge.";
 function DueCounter({ value, label, color }) {
   return (
     <div style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 30, fontWeight: 600, lineHeight: 1.1, color: value ? color : T.textMut, opacity: value ? 1 : 0.4, fontVariantNumeric: "tabular-nums" }}>
+      <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.1, color: value ? color : T.textMut, opacity: value ? 1 : 0.4, fontVariantNumeric: "tabular-nums" }}>
         {value}
       </div>
       <div style={{ fontSize: 11, color: T.textSub, marginTop: 4 }}>{label}</div>
@@ -235,7 +235,7 @@ export default function RevisionsPage() {
 
   if (session) {
     return (
-      <div style={{ padding: "8px 0 40px" }}>
+      <div>
         <ReviewSession
           store={store}
           setStore={setStore}
@@ -263,7 +263,7 @@ export default function RevisionsPage() {
   /* ── Page ──────────────────────────────────────────────────────────────── */
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18, paddingBottom: 40 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <PeriodPills value={tab} onChange={setTab} options={TABS} track size={13} />
         {store.decks.length > 0 && (
@@ -282,7 +282,7 @@ export default function RevisionsPage() {
               <div style={{ width: 52, height: 52, borderRadius: 999, background: FIELD_BG, display: "grid", placeItems: "center" }}>
                 <Brain size={24} color={T.brand} />
               </div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: T.text }}>Réviser au bon moment</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>Réviser au bon moment</div>
               <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.65, maxWidth: 520 }}>
                 {INTRO_METHOD}
               </div>
@@ -311,9 +311,9 @@ export default function RevisionsPage() {
                   type="button"
                   onClick={() => startSession(null)}
                   style={{
-                    padding: "13px 32px", borderRadius: 999, border: "none",
+                    minHeight: 40, padding: "11px 20px", borderRadius: 999, border: "none",
                     background: T.brand, color: T.onSolid,
-                    fontSize: 15, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+                    fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
                     display: "inline-flex", alignItems: "center", gap: 8,
                     transition: "var(--tr-ui)",
                   }}
@@ -322,7 +322,7 @@ export default function RevisionsPage() {
                 </button>
               ) : (
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: T.text }}>Rien à réviser</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Rien à réviser</div>
                   <div style={{ fontSize: 13, color: T.textSub, marginTop: 6, lineHeight: 1.6, maxWidth: 400 }}>
                     {counters.answered > 0
                       ? `${counters.answered} réponse${counters.answered > 1 ? "s" : ""} aujourd'hui. La suite reviendra d'elle-même.`

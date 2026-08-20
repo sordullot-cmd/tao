@@ -125,7 +125,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">
+      {/* Les extensions navigateur (ColorZilla, Grammarly…) ajoutent des attributs
+          sur <body> avant l'hydratation : on ignore l'écart sur cet élément. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ErrorBoundary>
           <AuthProvider>
             <UndoProvider>

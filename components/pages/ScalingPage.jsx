@@ -74,7 +74,7 @@ export default function ScalingPage({ onGeneratePlan }) {
           style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
             padding: "12px 16px", border: `1px dashed ${T.border}`, borderRadius: "var(--radius-card)",
-            background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500,
+            background: "transparent", color: T.textSub, fontSize:13, fontWeight: 500,
             cursor: "pointer", fontFamily: "inherit",
           }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = T.text; e.currentTarget.style.color = T.text; }}
@@ -99,7 +99,7 @@ function MetricCard({ label, value, valueColor = T.text }) {
   return (
     <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: "14px 16px" }}>
       <div style={{ fontSize: 11, color: T.textMut, fontWeight: 500, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: valueColor, letterSpacing: -0.4, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: valueColor, letterSpacing: -0.4, fontVariantNumeric: "tabular-nums" }}>{value}</div>
     </div>
   );
 }
@@ -182,7 +182,7 @@ function AccountCard({ account, expanded, onToggle, onDelete }) {
                     </div>
                   </div>
                   <div style={{
-                    fontSize: 22, fontWeight: 700,
+                    fontSize: 24, fontWeight: 700,
                     color: barColor, letterSpacing: -0.4,
                     fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
                   }}>
@@ -276,7 +276,7 @@ function AccountForm({ onClose, onSave }) {
     <div {...backdropDismiss(onClose)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 }}>
       <div role="dialog" aria-modal="true" aria-label="Nouveau compte" onClick={e => e.stopPropagation()} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-modal)", maxWidth: 440, width: "100%", boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>Nouveau compte</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>Nouveau compte</div>
         </div>
         <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
           <Field label="Firm">
@@ -311,9 +311,9 @@ function AccountForm({ onClose, onSave }) {
             <Toggle label="Consistency rule" checked={consistencyRule} onChange={setConsistencyRule} />
           </div>
         </div>
-        <div style={{ padding: "12px 20px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", gap: 8, background: T.bg }}>
-          <button onClick={onClose} style={{ padding: "8px 16px", height: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
-          <button onClick={submit} style={{ padding: "8px 18px", height: 34, borderRadius: 999, border: `1px solid ${T.text}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Créer</button>
+        <div style={{ minHeight: 40, padding: "11px 20px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", gap: 8, background: T.bg }}>
+          <button onClick={onClose} style={{ minHeight: 34, padding: "8px 16px", height: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+          <button onClick={submit} style={{ minHeight: 34, padding: "8px 16px", height: 34, borderRadius: 999, border: `1px solid ${T.text}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Créer</button>
         </div>
       </div>
     </div>
@@ -474,11 +474,11 @@ export function RoadmapSection({ accounts, sim, glued }) {
                 type="button"
                 onClick={() => setCapital(v)}
                 style={{
-                  padding: "3px 9px", borderRadius: 999,
+                  minHeight: 28, padding: "5px 12px", borderRadius: 999,
                   border: `1px solid ${active ? T.text : T.border}`,
                   background: active ? T.text : T.white,
                   color: active ? T.white : T.textSub,
-                  fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                   fontVariantNumeric: "tabular-nums",
                 }}>
                 ${v / 1000}k
@@ -526,7 +526,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
                   width: 26, height: 26, borderRadius: "50%",
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                   background: ringBg, color: ringColor, border: `1px solid ${ringBorder}`,
-                  fontSize: 11, fontWeight: 700, flexShrink: 0, marginTop: 1,
+                  fontSize: 11, fontWeight: 500, flexShrink: 0, marginTop: 1,
                   cursor: "pointer", padding: 0, fontFamily: "inherit",
                   transition: "transform .12s ease, box-shadow .12s ease",
                 }}
@@ -552,9 +552,9 @@ export function RoadmapSection({ accounts, sim, glued }) {
                         onClick={() => setStepIdx(i - 1)}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
-                          padding: "5px 12px", borderRadius: 999,
+                          minHeight: 28, padding: "5px 12px", borderRadius: 999,
                           border: `1px solid ${T.border}`, background: T.white,
-                          color: T.textSub, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                          color: T.textSub, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         }}>
                         <ArrowRight size={11} strokeWidth={2} style={{ transform: "rotate(180deg)" }} />
                         {t("scaling.prevStep")}
@@ -566,9 +566,9 @@ export function RoadmapSection({ accounts, sim, glued }) {
                         onClick={() => setStepIdx(i + 1)}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
-                          padding: "5px 12px", borderRadius: 999,
+                          minHeight: 28, padding: "5px 12px", borderRadius: 999,
                           border: "none", background: T.blue, color: "#FFFFFF",
-                          fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                          fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         }}>
                         <Check size={11} strokeWidth={2.5} /> {t("scaling.markDone")}
                       </button>
@@ -579,9 +579,9 @@ export function RoadmapSection({ accounts, sim, glued }) {
                         onClick={() => setStepIdx(steps.length)}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
-                          padding: "5px 12px", borderRadius: 999,
+                          minHeight: 28, padding: "5px 12px", borderRadius: 999,
                           border: "none", background: T.green, color: "#FFFFFF",
-                          fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                          fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                         }}>
                         <Check size={11} strokeWidth={2.5} /> {t("scaling.roadmapDoneBtn")}
                       </button>
@@ -644,7 +644,7 @@ export function SimulatorSection({ sim, setSim, accounts, onGeneratePlan }) {
                   <div style={{ fontSize: 11, fontWeight: 500, color: T.textMut, marginBottom: 2 }}>Progression</div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                     <span style={{
-                      fontSize: 22, fontWeight: 700,
+                      fontSize: 24, fontWeight: 700,
                       color: allDone ? T.green : T.text,
                       letterSpacing: -0.4, lineHeight: 1, fontVariantNumeric: "tabular-nums",
                     }}>
@@ -719,9 +719,9 @@ export function SimulatorSection({ sim, setSim, accounts, onGeneratePlan }) {
           onClick={() => onGeneratePlan?.(sim)}
           style={{
             alignSelf: "flex-start",
-            padding: "8px 18px", height: 34, borderRadius: 999,
+            minHeight: 34, padding: "8px 16px", height: 34, borderRadius: 999,
             border: `1px solid ${T.text}`, background: T.white, color: T.text,
-            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             marginTop: 4,
           }}
         >

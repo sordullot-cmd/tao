@@ -130,7 +130,7 @@ export default function TabBar({ items, activeId, onSelect, moreOpen = false }: 
                 style={{
                   fontSize: 10,
                   lineHeight: 1,
-                  fontWeight: active ? 600 : 500,
+                  fontWeight: 500,
                   letterSpacing: 0.1,
                   maxWidth: "100%",
                   overflow: "hidden",

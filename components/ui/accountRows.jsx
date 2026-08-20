@@ -101,7 +101,7 @@ export function PassFundedButton({ busy, onClick }) {
         display: "inline-flex", alignItems: "center", gap: 4,
         padding: "2px 10px", borderRadius: 48, border: "none",
         background: T.tagLongBg, color: T.tagLongText,
-        fontSize: 12, lineHeight: "17.05px", fontFamily: "inherit",
+        fontSize:12, lineHeight: "17.05px", fontFamily: "inherit",
         cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1, whiteSpace: "nowrap",
       }}
     >
@@ -477,9 +477,9 @@ export function AddAccountsButton({ onCreate, onAttach }) {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         style={{
-          display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px",
-          minHeight: 32, borderRadius: 999, border: "none", background: T.text,
-          color: T.textInverted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+          display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px",
+          minHeight: 34, borderRadius: 999, border: "none", background: T.text,
+          color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
         }}
       >
         <Plus size={13} strokeWidth={1.75} /> {t("firms.addAccount")}

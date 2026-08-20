@@ -139,8 +139,15 @@ const CELL = {
   fontVariantNumeric: "tabular-nums",
 };
 
-/** En-tête discret, calé sur la même colonne que les cellules. */
-const TH_CELL = { ...TH, ...COL, fontSize: 11, textAlign: "left", whiteSpace: "nowrap" };
+/**
+ * En-tête de colonne, calé sur la même colonne que les cellules.
+ *
+ * Taille laissée à `TH` (12 px) : c'est ce qu'affichent les en-têtes des
+ * tableaux de la page Cashflow (`ListHeader`) et du tableau des comptes. Les
+ * 11 px d'ici étaient un cran plus petits que partout ailleurs, pour un texte
+ * déjà posé à 40 % d'opacité.
+ */
+const TH_CELL = { ...TH, ...COL, textAlign: "left", whiteSpace: "nowrap" };
 
 const pnlColor = (v) => (v > 0 ? T.pnlPos : v < 0 ? T.pnlNeg : T.textSub);
 
@@ -268,8 +275,10 @@ export default function TradesList({
     <div style={{ ...CARD, overflow: "hidden", ...style }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
 
-        {/* En-tête : les libellés servent à interpréter « 1.4 » ou « 3 », on les
-            garde mais très en retrait (11px, 40 % d'opacité). */}
+        {/* En-tête, dans la carte, aligné sur les cellules (12 px de retrait
+            comme les lignes). Les libellés servent à interpréter « 1.4 » ou
+            « 3 » : ils gardent la mise en retrait des autres tableaux du site —
+            12 px à 40 % d'opacité (cf. `ListHeader` de Cashflow). */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 12px", opacity: 0.4 }}>
           {cols.map(id => (
             <span key={id} className={hideClass(COLUMN_DEFS[id])} style={TH_CELL}>

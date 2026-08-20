@@ -167,7 +167,7 @@ export default function Calendar() {
         }
 
         .calendar-title {
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 700;
           color: #0F0F1A;
           margin: 0;

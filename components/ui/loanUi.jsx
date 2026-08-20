@@ -581,7 +581,7 @@ function SimResult({ label, value, tone }) {
     <div>
       <div style={{ fontSize: 11, color: T.textSub }}>{label}</div>
       <div style={{
-        fontSize: 15, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+        fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums",
         color: tone === "pos" ? T.pnlPos : T.text,
       }}>
         {value}
