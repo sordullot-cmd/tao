@@ -59,7 +59,9 @@ pub fn run() {
       allow_vault_dir,
       tracker::activity_snapshot,
       blocker::focus_reclaim,
-      blocker::focus_blocking_supported
+      blocker::focus_blocking_supported,
+      blocker::front_tab,
+      blocker::redirect_tab
     ])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime

@@ -26,40 +26,48 @@
  *      de tao trade reprend la main et l'écran de blocage s'affiche. Rien n'est
  *      tué ni fermé — la friction est le retour forcé, pas la perte de travail
  *      (cf. src-tauri/src/blocker.rs).
- *   5. LES FENÊTRES DE NAVIGATEUR. Un navigateur n'est pas coupé en bloc : on
- *      lit le TITRE de sa fenêtre, qui porte le nom du site actif. C'est ce qui
- *      rattrape l'onglet YouTube ouvert hors de l'app — là où la couche web,
- *      enfermée dans son propre onglet, ne voit rien.
+ *   5. LES SITES OUVERTS AILLEURS. Un navigateur n'est jamais coupé en bloc —
+ *      c'est un contenant, pas une distraction. On lui demande l'URL de son
+ *      onglet actif, et c'est `verdictFor` qui trace : les mêmes règles que pour
+ *      un lien cliqué dans l'app, sous-domaines et mode « seuls autorisés »
+ *      compris. Un onglet coupé est renvoyé vers une page vide, et RIEN n'est
+ *      fermé : un retour arrière ramène la page. C'est ce qui rattrape le
+ *      YouTube ouvert hors de l'app, là où la couche web, enfermée dans son
+ *      propre onglet, ne voit rien.
+ *   6. À DÉFAUT, LE TITRE. Firefox n'expose pas ses URLs, Windows n'a pas
+ *      d'équivalent d'AppleScript, et l'autorisation d'automatisation peut être
+ *      refusée. Le garde retombe alors sur le titre de la fenêtre : il repère
+ *      encore le site et reprend la main, mais ne renvoie pas l'onglet et ne
+ *      juge pas une liste inversée. Moins précis, jamais silencieux.
  *
  * Ce qui n'est toujours PAS tenu, et qu'il ne faut pas laisser croire : une
  * appli lancée pendant que la fenêtre est réduite au tray n'est vue qu'au relevé
- * suivant, et le titre d'une fenêtre de navigateur ne dit rien des onglets
- * d'arrière-plan. Un blocage vraiment étanche passerait par le pare-feu ou le
- * fichier hosts — donc par une élévation de privilèges que cette app ne demande
- * pas.
+ * suivant, et rien ne voit les onglets d'ARRIÈRE-PLAN — seul celui qu'on regarde
+ * est jugé. Un blocage vraiment étanche passerait par le pare-feu ou le fichier
+ * hosts — donc par une élévation de privilèges que cette app ne demande pas.
  */
 
 import { useEffect, useRef, useState } from "react";
 import {
-  appVerdictFor, dayKey, sessionFromSchedule, shouldFire, verdictFor,
+  appVerdictFor, dayKey, isBrowserApp, sessionFromSchedule, shouldFire, verdictFor,
   type FocusSchedule, type FocusStore, type RunningSession,
 } from "./model";
-import { frontSnapshot, nativeAvailable, reclaimFocus } from "./native";
+import { frontSnapshot, frontTab, nativeAvailable, reclaimFocus, redirectTab } from "./native";
 
 /** Un blocage constaté, tel qu'il remonte à l'interface. */
 export interface GuardHit {
   /** Identifiant catalogue, domaine libre, ou `away`. */
   target: string;
   /**
-   * Ce qui a été coupé. `url` pour une navigation depuis l'app, `app` pour une
-   * application passée au premier plan, `window` pour une fenêtre de navigateur
-   * reconnue à son titre, `away` pour une sortie de l'app.
+   * Ce qui a été coupé. `url` pour une navigation depuis l'app, `site` pour un
+   * onglet ouvert ailleurs et reconnu à son URL, `window` pour le même onglet
+   * deviné à son seul titre, `app` pour une application passée au premier plan,
+   * `away` pour une sortie de l'app.
    *
-   * L'écran de blocage ne dit pas la même chose dans les quatre cas : un site
-   * refusé est un lien qui n'aboutit pas, une appli coupée est une fenêtre qu'on
-   * vient de reprendre.
+   * L'écran de blocage ne dit pas la même chose dans tous les cas : un lien
+   * refusé n'a mené nulle part, un onglet renvoyé était déjà ouvert.
    */
-  kind?: "url" | "app" | "window" | "away";
+  kind?: "url" | "site" | "app" | "window" | "away";
   /** URL refusée, quand c'est une navigation. */
   url?: string;
   /** Nom de l'application relevée, tel que l'OS le rapporte. */
@@ -193,7 +201,7 @@ export function useFocusGuard(
     };
   }, [active, blocklistIds]);
 
-  /* ── Applications et fenêtres : ce que seule l'app de bureau voit ──────── */
+  /* ── Applications et sites : ce que seule l'app de bureau voit ────────── */
   useEffect(() => {
     if (!active || !blocklistIds || !nativeAvailable()) return;
 
@@ -214,27 +222,26 @@ export function useFocusGuard(
         const snap = await frontSnapshot();
         if (!alive || !snap?.ok || !snap.full) return;
 
-        const v = appVerdictFor(snap.app, snap.title, storeRef.current, blocklistIds);
-        if (!v.blocked) return;
+        const hit = isBrowserApp(snap.app)
+          ? await siteHit(snap.app, snap.title, storeRef.current, blocklistIds)
+          : appHit(snap.app, snap.title, storeRef.current, blocklistIds);
+        if (!alive || !hit) return;
 
-        const target = v.target || snap.app;
         const now = Date.now();
 
-        if (now - (lastReclaim.get(target) || 0) >= RECLAIM_COOLDOWN_MS) {
-          lastReclaim.set(target, now);
+        /* La reprise de main d'abord, l'onglet ensuite : c'est l'ordre dans
+           lequel l'utilisateur le vit — la fenêtre passe devant, et la page
+           qu'il vient de quitter est déjà partie quand il y retourne. */
+        if (now - (lastReclaim.get(hit.target) || 0) >= RECLAIM_COOLDOWN_MS) {
+          lastReclaim.set(hit.target, now);
           await reclaimFocus();
+          if (hit.kind === "site") await redirectTab(snap.app);
         }
         if (!alive) return;
 
-        if (now - (lastAttempt.get(target) || 0) < ATTEMPT_COOLDOWN_MS) return;
-        lastAttempt.set(target, now);
-        onHitRef.current({
-          kind: v.via === "window" ? "window" : "app",
-          target,
-          appName: snap.app,
-          windowTitle: snap.title,
-          listName: v.list?.name,
-        });
+        if (now - (lastAttempt.get(hit.target) || 0) < ATTEMPT_COOLDOWN_MS) return;
+        lastAttempt.set(hit.target, now);
+        onHitRef.current(hit);
       } finally {
         busy = false;
       }
@@ -275,6 +282,47 @@ export function useFocusGuard(
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [running]);
+}
+
+/** Verdict sur une application qui n'est pas un navigateur. */
+function appHit(
+  app: string, title: string, store: FocusStore, blocklistIds: string[]
+): GuardHit | null {
+  const v = appVerdictFor(app, title, store, blocklistIds);
+  if (!v.blocked) return null;
+  return {
+    kind: v.via === "window" ? "window" : "app",
+    target: v.target || app,
+    appName: app,
+    windowTitle: title,
+    listName: v.list?.name,
+  };
+}
+
+/**
+ * Verdict sur le site qu'un navigateur a sous les yeux.
+ *
+ * L'URL d'abord, le titre à défaut. Le repli n'est pas un détail de robustesse :
+ * c'est le cas ORDINAIRE sous Firefox et sous Windows, et il ne doit donc rien
+ * casser — simplement décider moins bien, ce que `kind` dit à l'écran.
+ */
+async function siteHit(
+  app: string, title: string, store: FocusStore, blocklistIds: string[]
+): Promise<GuardHit | null> {
+  const tab = await frontTab(app);
+  if (tab?.ok && tab.url) {
+    const v = verdictFor(tab.url, store, blocklistIds);
+    if (!v.blocked) return null;
+    return {
+      kind: "site",
+      target: v.target || tab.url,
+      url: tab.url,
+      appName: app,
+      windowTitle: title,
+      listName: v.list?.name,
+    };
+  }
+  return appHit(app, title, store, blocklistIds);
 }
 
 /**

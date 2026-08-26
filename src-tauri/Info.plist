@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Complément fusionné dans l'Info.plist du bundle macOS par le bundler Tauri.
+
+  Sans NSAppleEventsUsageDescription, macOS REFUSE les Apple Events à l'app
+  empaquetée : `osascript` ne peut pas interroger System Events et le titre de
+  la fenêtre active reste vide, même si « Accessibilité » est cochée. Le nom de
+  l'application, lui, passe par `lsappinfo` et ne dépend d'aucune autorisation
+  (cf. src-tauri/src/tracker.rs).
+-->
+<plist version="1.0">
+<dict>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>tao trade lit le titre de la fenêtre active pour mesurer le temps passé par application et par site.</string>
+	<key>LSUIElement</key>
+	<false/>
+</dict>
+</plist>

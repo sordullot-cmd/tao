@@ -10,19 +10,37 @@ import { render, act } from "@testing-library/react";
 const snap = { app: "Discord", title: "général", idleSeconds: 0, ok: true, full: true, platform: "macos" };
 const frontSnapshot = vi.fn(async () => snap);
 const reclaimFocus = vi.fn(async () => true);
+type Tab = { app: string; url: string; ok: boolean; error: string | null };
+const frontTab = vi.fn(async (app: string): Promise<Tab> => ({ app, url: "", ok: false, error: "not-scriptable" }));
+const redirectTab = vi.fn(async (_app: string) => true);
 
 vi.mock("@/lib/focus/native", () => ({
   nativeAvailable: () => true,
   frontSnapshot: () => frontSnapshot(),
   reclaimFocus: () => reclaimFocus(),
+  frontTab: (app: string) => frontTab(app),
+  redirectTab: (app: string) => redirectTab(app),
 }));
+
+/** Le poste montre un navigateur, sur l'URL donnée. `null` = URL illisible
+ *  (Firefox, Windows, automatisation refusée), ce qui doit faire tomber le
+ *  garde sur le titre de la fenêtre. */
+function showBrowser(title: string, url: string | null, app = "Google Chrome") {
+  frontSnapshot.mockResolvedValue({ ...snap, app, title });
+  frontTab.mockResolvedValue(
+    url ? { app, url, ok: true, error: null } : { app, url: "", ok: false, error: "automation-denied" }
+  );
+}
 
 import { useFocusGuard, type GuardHit } from "@/lib/focus/guard";
 import { emptyStore, sessionFromPreset } from "@/lib/focus/model";
 
 const store = emptyStore();
 const session = sessionFromPreset(
-  { id: "p", name: "Test", durationMin: 30, blocklistIds: ["bl-msg"], mode: "normal", color: "blue", icon: "timer" },
+  {
+    id: "p", name: "Test", durationMin: 30, blocklistIds: ["bl-msg", "bl-video"],
+    mode: "normal", color: "blue", icon: "timer",
+  },
   new Date()
 );
 
@@ -44,8 +62,12 @@ async function advance(ms: number) {
 describe("garde natif", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    frontSnapshot.mockClear();
+    frontSnapshot.mockReset();
+    frontSnapshot.mockResolvedValue(snap);
+    frontTab.mockReset();
+    frontTab.mockResolvedValue({ app: "", url: "", ok: false, error: "not-scriptable" });
     reclaimFocus.mockClear();
+    redirectTab.mockClear();
   });
   afterEach(() => vi.useRealTimers());
 
@@ -92,5 +114,49 @@ describe("garde natif", () => {
     unmount();
     await advance(10_000);
     expect(frontSnapshot.mock.calls.length).toBe(seen);
+  });
+
+  it("juge un onglet sur son URL et le renvoie vers une page vide", async () => {
+    showBrowser("Mix — YouTube", "https://m.youtube.com/watch?v=x");
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} />);
+    await advance(0);
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].kind).toBe("site");
+    expect(hits[0].target).toBe("youtube");
+    expect(hits[0].url).toBe("https://m.youtube.com/watch?v=x");
+    expect(redirectTab).toHaveBeenCalledWith("Google Chrome");
+    expect(reclaimFocus).toHaveBeenCalled();
+  });
+
+  it("ne touche pas à un onglet que rien ne retient, même sur un titre trompeur", async () => {
+    // Le titre contient « YouTube », l'URL non : c'est l'URL qui tranche.
+    showBrowser("Comment YouTube gagne de l'argent — Le Monde", "https://arxiv.org/abs/1");
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} />);
+    await advance(0);
+
+    expect(hits).toHaveLength(0);
+    expect(redirectTab).not.toHaveBeenCalled();
+  });
+
+  it("retombe sur le titre quand l'URL n'est pas lisible, sans renvoyer l'onglet", async () => {
+    showBrowser("Mix — YouTube", null, "Firefox");
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} />);
+    await advance(0);
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].kind).toBe("window");
+    expect(hits[0].target).toBe("youtube");
+    // Rien à renvoyer : on n'a pas su lire l'onglet, on ne prétend pas l'écrire.
+    expect(redirectTab).not.toHaveBeenCalled();
+  });
+
+  it("ne demande pas d'URL à une appli qui n'est pas un navigateur", async () => {
+    render(<Harness onHit={() => {}} />);
+    await advance(0);
+    expect(frontTab).not.toHaveBeenCalled();
   });
 });

@@ -36,23 +36,37 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
   if (!hit || !session) return null;
 
   const away = hit.target === "away";
-  /* Une appli reprise et un lien refusé ne se racontent pas pareil : dans un
-     cas la fenêtre était déjà ouverte et on vient de la reprendre, dans l'autre
-     rien ne s'est passé du tout. Le titre et la ligne d'explication le disent. */
-  const native = hit.kind === "app" || hit.kind === "window";
+  /* Quatre situations, et elles ne se racontent pas pareil : un lien refusé n'a
+     mené nulle part, une appli coupée était déjà ouverte et vient de repasser
+     derrière, un onglet coupé vient d'être renvoyé ailleurs. Dire « bloqué »
+     partout laisserait chercher ce qui a bien pu se passer. */
+  const isApp = hit.kind === "app";
+  const isSite = hit.kind === "site";
+  const isWindow = hit.kind === "window";
   const left = remainingMs(session, now);
   const count = session.attempts.length;
   const line = LINES[Math.min(count, LINES.length) - 1] || LINES[0];
   const mode = MODES[session.mode];
   const accent = away ? PALETTE.orange : PALETTE.green;
-  const Icon = away ? MonitorOff : native ? AppWindow : ShieldCheck;
+  const Icon = away ? MonitorOff : isApp ? AppWindow : ShieldCheck;
 
-  const title = away ? "Écart constaté" : native ? "Application coupée" : "Site bloqué";
+  const title = away ? "Écart constaté" : isApp ? "Application coupée" : "Site bloqué";
   const heading = away
     ? `${fmtDur(hit.awayMs || 0)} hors de l'app`
-    : hit.kind === "app"
+    : isApp
       ? `${hit.appName || targetLabel(hit.target, store)} est coupé`
       : `${targetLabel(hit.target, store)} est coupé`;
+
+  /* Ce qui vient d'être fait à l'appareil, en une phrase, avant la liste
+     responsable. Absent pour un lien intercepté : il ne s'est rien passé
+     ailleurs, et l'annoncer inventerait un geste. */
+  const done = isApp
+    ? "La fenêtre est repassée derrière celle-ci. Rien n'a été fermé."
+    : isSite
+      ? "L'onglet a été renvoyé vers une page vide — un retour arrière le ramène. Rien n'a été fermé."
+      : isWindow
+        ? `Repéré au titre de la fenêtre ${hit.appName || "du navigateur"}, dont l'URL n'est pas lisible : l'onglet est resté ouvert.`
+        : null;
 
   return (
     <Modal open title={title} onClose={onBack} draggable={false} scrim width={440}>
@@ -72,17 +86,10 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
             {away
               ? "L'écart est noté au journal de la session. Il ne l'annule pas."
               : <>
-                  {native && (
-                    <>
-                      {hit.kind === "window" && hit.appName
-                        ? `Repéré au titre de la fenêtre ${hit.appName}. `
-                        : "La fenêtre est repassée derrière celle-ci. "}
-                      {/* Dit une fois, ici : rien n'a été fermé. Sans cette
-                          phrase, on referme l'écran en craignant d'avoir perdu
-                          ce qui était en cours dans l'autre appli. */}
-                      Rien n&apos;a été fermé.{" "}
-                    </>
-                  )}
+                  {/* Dit une fois, ici : rien n'a été fermé. Sans cette phrase,
+                      on referme l'écran en craignant d'avoir perdu ce qui était
+                      en cours de l'autre côté. */}
+                  {done && <>{done} </>}
                   {hit.listName
                     ? <>Liste « {hit.listName} », active jusqu&apos;à la fin de la session.</>
                     : "Coupé par la session en cours."}

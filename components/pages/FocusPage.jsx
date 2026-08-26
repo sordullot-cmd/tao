@@ -243,8 +243,9 @@ export default function FocusPage() {
                         interceptés, et toute sortie de l&apos;app pendant une session est comptée comme un
                         écart. Couper une appli demande l&apos;app de bureau.</>
                     : native.reading
-                      ? <>Blocage des applications actif : une appli listée qui passe devant repasse
-                          derrière, et l&apos;écran de blocage prend sa place. Rien n&apos;est fermé.</>
+                      ? <>Blocage système actif : une appli listée qui passe devant repasse derrière, et
+                          un onglet ouvert sur un site coupé est renvoyé vers une page vide. Rien
+                          n&apos;est fermé.</>
                       /* Le cas qui compte vraiment : l'app de bureau est là, mais macOS n'a pas
                          accordé l'accès « Accessibilité ». Sans cette ligne, le blocage semble
                          simplement ne pas marcher, et on cherche la panne du mauvais côté. */

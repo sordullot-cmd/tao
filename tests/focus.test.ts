@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   CATCH_UP_MIN, EXIT_PHRASE, MODES, appVerdictFor, canPause, closeSession, dayKey, emptyStore,
   focusedMs, hostOf, isDone, listApps, listSize, matchesApp, matchesDomain, nextRun,
-  normalizeStore, pause, progress, remainingMs, resume, sessionFromPreset, sessionFromSchedule,
+  isBrowserApp, normalizeStore, pause, progress, remainingMs, resume, sessionFromPreset,
+  sessionFromSchedule,
   shouldFire, startSession, targetLabel, verdictFor, weekday,
   type FocusSchedule, type FocusStore, type SessionLog,
 } from "@/lib/focus/model";
@@ -135,7 +136,13 @@ describe("verdict d'application", () => {
     expect(appVerdictFor("Steam", "", allow, ["only"]).blocked).toBe(true);
   });
 
-  it("juge un navigateur sur le titre de sa fenêtre, pas sur l'appli", () => {
+  it("reconnaît un navigateur, à qui on demandera l'URL plutôt que le nom", () => {
+    expect(isBrowserApp("Google Chrome")).toBe(true);
+    expect(isBrowserApp("firefox.exe")).toBe(true);
+    expect(isBrowserApp("Discord")).toBe(false);
+  });
+
+  it("juge un navigateur sur le titre de sa fenêtre à défaut d'URL", () => {
     const onYouTube = appVerdictFor("Google Chrome", "Mix — YouTube", store, ["bl-video"]);
     expect(onYouTube.blocked).toBe(true);
     expect(onYouTube.target).toBe("youtube");

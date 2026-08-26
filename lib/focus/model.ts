@@ -279,7 +279,7 @@ export interface FocusAttempt {
   /** Par où la tentative est passée (cf. `GuardHit` dans guard.ts). Absent sur
    *  les sessions d'avant le blocage natif : les statistiques ne s'en servent
    *  que pour nuancer un libellé, jamais pour compter. */
-  kind?: "url" | "app" | "window" | "away";
+  kind?: "url" | "site" | "app" | "window" | "away";
   /** Temps passé dehors, pour un écart (ms). */
   awayMs?: number;
 }
@@ -699,15 +699,34 @@ const SELF_APPS = new Set(["tao trade", "taotrade", "app"]);
  *
  * Un navigateur n'est pas une distraction : c'est un contenant. Le couper en
  * bloc parce qu'un onglet YouTube y traîne couperait aussi la documentation
- * ouverte à côté. On ne le juge donc que sur le TITRE de sa fenêtre, qui porte
- * le nom du site actif — et jamais en mode « seuls autorisés », où le titre ne
- * suffit pas à prouver qu'un onglet est permis.
+ * ouverte à côté. C'est donc le SITE qu'on juge, jamais le navigateur.
+ *
+ * Le chemin normal passe par l'URL de l'onglet actif, lue par la coquille de
+ * bureau et tranchée par `verdictFor` — mêmes règles que pour un lien cliqué
+ * dans l'app, sous-domaines et mode « seuls autorisés » compris.
+ *
+ * `appVerdictFor` n'intervient sur un navigateur qu'en REPLI, quand cette URL
+ * n'a pas pu être lue : Firefox, Windows, ou autorisation d'automatisation
+ * refusée. Il ne lui reste alors que le TITRE de la fenêtre, qui porte le nom du
+ * site actif — et jamais en mode « seuls autorisés », où un titre ne suffit pas
+ * à prouver qu'un onglet est permis.
  */
 const BROWSER_APPS = new Set([
   "google chrome", "chrome", "chromium", "safari", "firefox", "librewolf",
   "microsoft edge", "msedge", "brave browser", "brave", "opera", "opera gx",
   "arc", "vivaldi", "zen", "tor browser", "duckduckgo",
 ]);
+
+/**
+ * Cette application est-elle un navigateur ?
+ *
+ * Le garde s'en sert pour choisir sa question : sur un navigateur, il demande
+ * l'URL de l'onglet actif (précise, jugeable par `verdictFor`) ; ailleurs, le
+ * nom de l'appli suffit.
+ */
+export function isBrowserApp(app: string): boolean {
+  return BROWSER_APPS.has(normApp(app));
+}
 
 /** Nom d'appli ramené à une forme comparable : minuscules, sans « .exe ». */
 export function normApp(name: string): string {
