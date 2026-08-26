@@ -22,9 +22,13 @@ purger.
 
 Notes par plateforme :
   • macOS — `lsappinfo` donne le nom de l'app SANS autorisation particulière.
-    Le titre de fenêtre, lui, passe par System Events (AppleScript) et réclame
-    l'autorisation « Accessibilité » : sans elle on garde l'app et le titre
-    reste vide, ce qui suffit à mesurer le temps par application.
+    Le titre de fenêtre passe par l'API d'accessibilité (AXUIElement), qui
+    réclame l'autorisation « Accessibilité » : sans elle on garde l'app et le
+    titre reste vide, ce qui suffit à mesurer le temps par application.
+    Surtout, aucun `osascript` ici : lancer un processus et un Apple Event vers
+    System Events coûtait de 350 ms à 1,9 s par relevé sur un poste ordinaire,
+    plusieurs fois par minute — l'app passait son temps à interroger le système
+    au lieu de le laisser travailler.
   • Windows — API Win32 directes (fenêtre de premier plan + `GetLastInputInfo`).
   • Linux — `xdotool` / `xprintidle` s'ils sont installés (X11).
 */
@@ -52,7 +56,21 @@ pub fn activity_snapshot() -> ActivitySnapshot {
 #[cfg(target_os = "macos")]
 mod imp {
   use super::ActivitySnapshot;
+  use core_foundation::base::TCFType;
+  use core_foundation::string::CFString;
+  use core_foundation_sys::base::{CFGetTypeID, CFRelease, CFTypeRef};
+  use core_foundation_sys::string::{CFStringGetTypeID, CFStringRef};
   use std::process::Command;
+
+  /* L'API d'accessibilité, déclarée à la main : quatre symboles d'un framework
+     système, contre une dépendance de plus à suivre pour rien. */
+  #[link(name = "ApplicationServices", kind = "framework")]
+  extern "C" {
+    fn AXIsProcessTrusted() -> bool;
+    fn AXUIElementCreateApplication(pid: i32) -> CFTypeRef;
+    fn AXUIElementCopyAttributeValue(el: CFTypeRef, attr: CFStringRef, out: *mut CFTypeRef) -> i32;
+    fn AXUIElementSetMessagingTimeout(el: CFTypeRef, seconds: f32) -> i32;
+  }
 
   fn run(cmd: &str, args: &[&str]) -> Option<String> {
     let out = Command::new(cmd).args(args).output().ok()?;
@@ -62,42 +80,79 @@ mod imp {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
   }
 
-  /// Nom de l'app au premier plan via `lsappinfo` — pas d'autorisation requise.
-  fn front_app_lsappinfo() -> Option<String> {
+  /// Nom et pid de l'app au premier plan — `lsappinfo`, sans autorisation.
+  ///
+  /// Les deux en un seul appel : le pid sert ensuite à viser cette app-là avec
+  /// l'API d'accessibilité, et le redemander laisserait la place à un changement
+  /// d'application entre les deux lectures.
+  fn front_app() -> Option<(String, i32)> {
     let front = run("lsappinfo", &["front"])?;
-    let asn = front.split_whitespace().next()?.to_string();
+    let asn = front.split_whitespace().next()?;
     if asn.is_empty() {
       return None;
     }
-    let info = run("lsappinfo", &["info", "-only", "name", &asn])?;
-    // Sortie type : "LSDisplayName"="Google Chrome"
-    let name = info.split('=').nth(1)?.trim().trim_matches('"').to_string();
-    if name.is_empty() { None } else { Some(name) }
+    // Sortie type : "LSDisplayName"="Google Chrome" puis "pid"=1038
+    let info = run("lsappinfo", &["info", "-only", "name", "-only", "pid", asn])?;
+    let mut name = String::new();
+    let mut pid = 0i32;
+    for line in info.lines() {
+      let Some((key, value)) = line.split_once('=') else { continue };
+      let value = value.trim().trim_matches('"');
+      match key.trim().trim_matches('"') {
+        "LSDisplayName" => name = value.to_string(),
+        "pid" => pid = value.parse().unwrap_or(0),
+        _ => {}
+      }
+    }
+    if name.is_empty() { None } else { Some((name, pid)) }
   }
 
-  /// App + titre via System Events. Réclame l'autorisation « Accessibilité ».
-  fn front_app_osascript() -> Option<(String, String)> {
-    const SCRIPT: &str = r#"
-      tell application "System Events"
-        set procs to (every application process whose frontmost is true)
-        if (count of procs) is 0 then return ""
-        set p to item 1 of procs
-        set appName to name of p
-        set winTitle to ""
-        try
-          set winTitle to name of front window of p
-        end try
-        return appName & tab & winTitle
-      end tell
-    "#;
-    let out = run("osascript", &["-e", SCRIPT])?;
-    if out.is_empty() {
+  /// Valeur d'un attribut d'accessibilité, ou `None` si l'app ne le donne pas.
+  ///
+  /// L'appelant devient propriétaire de ce qui est rendu (règle « Copy » de
+  /// Core Foundation) et doit le relâcher.
+  fn ax_attr(el: CFTypeRef, attr: &str) -> Option<CFTypeRef> {
+    let key = CFString::new(attr);
+    let mut out: CFTypeRef = std::ptr::null();
+    let err = unsafe { AXUIElementCopyAttributeValue(el, key.as_concrete_TypeRef(), &mut out) };
+    if err != 0 || out.is_null() { None } else { Some(out) }
+  }
+
+  /// Titre de la fenêtre active d'un processus, par l'API d'accessibilité.
+  ///
+  /// Le chemin d'avant passait par `osascript` et System Events : mesuré sur ce
+  /// poste, entre 350 ms et 1,9 s PAR relevé, pour une boucle qui échantillonne
+  /// toutes les 2 à 5 secondes — de quoi faire tousser la machine à elle seule.
+  /// Ici, aucun processus lancé, aucun Apple Event : un appel direct, de l'ordre
+  /// de la milliseconde. L'autorisation reste la même (« Accessibilité »).
+  fn window_title(pid: i32) -> Option<String> {
+    if pid <= 0 {
       return None;
     }
-    let mut parts = out.splitn(2, '\t');
-    let app = parts.next().unwrap_or("").trim().to_string();
-    let title = parts.next().unwrap_or("").trim().to_string();
-    if app.is_empty() { None } else { Some((app, title)) }
+    let app = unsafe { AXUIElementCreateApplication(pid) };
+    if app.is_null() {
+      return None;
+    }
+    // Une app figée ne doit pas figer le relevé avec elle : au-delà, on renonce
+    // au titre plutôt que de bloquer la boucle d'échantillonnage.
+    unsafe { AXUIElementSetMessagingTimeout(app, 0.25) };
+
+    let title = ax_attr(app, "AXFocusedWindow").and_then(|win| {
+      let t = ax_attr(win, "AXTitle");
+      unsafe { CFRelease(win) };
+      t
+    });
+    unsafe { CFRelease(app) };
+
+    let raw = title?;
+    // `AXTitle` est une chaîne, mais l'API rend un CFType quelconque : on vérifie
+    // avant d'interpréter, sinon un attribut d'un autre type serait lu de travers.
+    if unsafe { CFGetTypeID(raw) } != unsafe { CFStringGetTypeID() } {
+      unsafe { CFRelease(raw) };
+      return None;
+    }
+    let text = unsafe { CFString::wrap_under_create_rule(raw as CFStringRef) }.to_string();
+    if text.trim().is_empty() { None } else { Some(text) }
   }
 
   /// Inactivité système : `HIDIdleTime` est en NANOsecondes dans ioreg.
@@ -120,33 +175,27 @@ mod imp {
 
   pub fn snapshot() -> ActivitySnapshot {
     let idle = idle_seconds();
-    // On tente d'abord System Events : c'est le seul chemin qui donne AUSSI le
-    // titre de fenêtre. S'il est refusé, `lsappinfo` sauve la mesure par app.
-    if let Some((app, title)) = front_app_osascript() {
+    let Some((app, pid)) = front_app() else {
       return ActivitySnapshot {
-        app,
-        title,
-        idle_seconds: idle,
-        ok: true,
         platform: "macos".into(),
-        error: None,
-      };
-    }
-    if let Some(app) = front_app_lsappinfo() {
-      return ActivitySnapshot {
-        app,
-        title: String::new(),
         idle_seconds: idle,
-        ok: true,
-        platform: "macos".into(),
-        error: Some("accessibility-denied".into()),
+        error: Some("frontmost-app-unavailable".into()),
+        ..Default::default()
       };
-    }
+    };
+
+    // Sans l'autorisation « Accessibilité », le titre est hors de portée mais le
+    // temps par application reste juste : on le dit et on rend la mesure.
+    let trusted = unsafe { AXIsProcessTrusted() };
+    let title = if trusted { window_title(pid).unwrap_or_default() } else { String::new() };
+
     ActivitySnapshot {
-      platform: "macos".into(),
+      app,
+      title,
       idle_seconds: idle,
-      error: Some("frontmost-app-unavailable".into()),
-      ..Default::default()
+      ok: true,
+      platform: "macos".into(),
+      error: if trusted { None } else { Some("accessibility-denied".into()) },
     }
   }
 }

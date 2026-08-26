@@ -238,21 +238,30 @@ export default function FocusPage() {
               <div style={{ ...CARD, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <Info size={15} color={T.textMut} style={{ flexShrink: 0, marginTop: 1 }} />
                 <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
-                  {!native.available
-                    ? <>Blocage au niveau du navigateur : les liens de l&apos;app vers un site coupé sont
-                        interceptés, et toute sortie de l&apos;app pendant une session est comptée comme un
-                        écart. Couper une appli demande l&apos;app de bureau.</>
-                    : native.reading
+                  {native.available
+                    ? native.reading
                       ? <>Blocage système actif : une appli listée qui passe devant repasse derrière, et
                           un onglet ouvert sur un site coupé est renvoyé vers une page vide. Rien
                           n&apos;est fermé.</>
-                      /* Le cas qui compte vraiment : l'app de bureau est là, mais macOS n'a pas
-                         accordé l'accès « Accessibilité ». Sans cette ligne, le blocage semble
-                         simplement ne pas marcher, et on cherche la panne du mauvais côté. */
+                      /* L'app de bureau est là, mais macOS n'a pas accordé l'accès
+                         « Accessibilité ». Sans cette ligne, le blocage semble simplement ne pas
+                         marcher, et on cherche la panne du mauvais côté. */
                       : <>App de bureau détectée, mais le poste n&apos;est pas lisible
                           ({native.error || "cause inconnue"}) : seuls les liens de l&apos;app sont
                           interceptés. Sur macOS, autorisez tao trade dans Réglages Système →
-                          Confidentialité et sécurité → Accessibilité.</>}
+                          Confidentialité et sécurité → Accessibilité.</>
+                    /* Le cas qui trompe le plus : une app installée depuis le navigateur a son
+                       icône et sa fenêtre, donc tout dit « application » — alors qu'à l'intérieur
+                       c'est une page web, qui ne voit rien du reste du poste. Le dire ici, une
+                       fois, vaut mieux que de laisser chercher pourquoi Discord passe encore. */
+                    : native.installedWeb
+                      ? <>App installée depuis le web : sa fenêtre est à elle, mais son blocage reste
+                          celui d&apos;une page — les liens de l&apos;app vers un site coupé sont
+                          interceptés, et toute sortie est comptée comme un écart. Couper une appli ou
+                          un onglet ouvert ailleurs demande l&apos;app de bureau.</>
+                      : <>Blocage au niveau du navigateur : les liens de l&apos;app vers un site coupé
+                          sont interceptés, et toute sortie de l&apos;app pendant une session est comptée
+                          comme un écart. Couper une appli demande l&apos;app de bureau.</>}
                 </div>
               </div>
             </>

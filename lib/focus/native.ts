@@ -30,6 +30,34 @@ export function nativeAvailable(): boolean {
 }
 
 /**
+ * L'app tourne-t-elle dans sa propre fenêtre, installée depuis le web ?
+ *
+ * La question a l'air cosmétique et ne l'est pas. Une app installée depuis le
+ * navigateur a son icône, son cadre, sa place dans le dock — tout dit
+ * « application », et rien ne dit qu'à l'intérieur c'est toujours une page web,
+ * qui ne voit donc RIEN du reste du poste. Sans cette distinction, l'interface
+ * annonce le même blocage dans les deux cas et l'un des deux ment.
+ *
+ * `display-mode` couvre les navigateurs de bureau et Android ; iOS ne
+ * l'implémente pas et pose `navigator.standalone` à la place.
+ */
+export function webAppInstalled(): boolean {
+  if (typeof window === "undefined" || isTauri()) return false;
+  const mm = window.matchMedia;
+  if (typeof mm === "function") {
+    for (const mode of ["standalone", "window-controls-overlay", "minimal-ui"]) {
+      try {
+        if (mm.call(window, `(display-mode: ${mode})`).matches) return true;
+      } catch {
+        // Un navigateur qui ne connaît pas la requête la rejette : ce n'est pas
+        // une panne, c'est une réponse — celle-là n'est simplement pas la bonne.
+      }
+    }
+  }
+  return (window.navigator as { standalone?: boolean }).standalone === true;
+}
+
+/**
  * Ramène la fenêtre au premier plan.
  *
  * Ne jette jamais : un échec de reprise (fenêtre en cours de fermeture, version

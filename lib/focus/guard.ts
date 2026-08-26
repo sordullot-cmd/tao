@@ -47,12 +47,14 @@
  * hosts — donc par une élévation de privilèges que cette app ne demande pas.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   appVerdictFor, dayKey, isBrowserApp, sessionFromSchedule, shouldFire, verdictFor,
   type FocusSchedule, type FocusStore, type RunningSession,
 } from "./model";
-import { frontSnapshot, frontTab, nativeAvailable, reclaimFocus, redirectTab } from "./native";
+import {
+  frontSnapshot, frontTab, nativeAvailable, reclaimFocus, redirectTab, webAppInstalled,
+} from "./native";
 
 /** Un blocage constaté, tel qu'il remonte à l'interface. */
 export interface GuardHit {
@@ -100,6 +102,8 @@ export interface NativeGuardStatus {
   available: boolean;
   /** Le poste a été lu pour de bon (autorisation accordée). */
   reading: boolean;
+  /** App installée depuis le web : sa propre fenêtre, mais aucun accès au poste. */
+  installedWeb: boolean;
   /** Cause de l'échec de lecture, telle que la remonte la commande Rust. */
   error?: string | null;
 }
@@ -118,21 +122,49 @@ export interface NativeGuardStatus {
  * à l'autre. En navigateur, aucun appel n'est fait.
  */
 export function useNativeGuardStatus(): NativeGuardStatus {
-  const [status, setStatus] = useState<NativeGuardStatus>({
-    available: nativeAvailable(), reading: false, error: null,
+  /* Dans quelle coquille tourne-t-on ? La question se pose au navigateur, qui
+     n'existe pas au rendu serveur — d'où `useSyncExternalStore` et son instantané
+     serveur distinct, plutôt qu'un état initial qui différerait entre les deux
+     rendus. Rien à quoi s'abonner : une app ne change pas de coquille en cours
+     de route. */
+  const shell = useSyncExternalStore(NO_SUBSCRIBE, readShell, readShellOnServer);
+
+  const [probe, setProbe] = useState<{ reading: boolean; error?: string | null }>({
+    reading: false, error: null,
   });
 
   useEffect(() => {
-    if (!nativeAvailable()) return;
+    if (shell !== "native") return;
     let alive = true;
     void frontSnapshot().then(snap => {
-      if (!alive) return;
-      setStatus({ available: true, reading: !!snap?.ok, error: snap?.error ?? null });
+      if (alive) setProbe({ reading: !!snap?.ok, error: snap?.error ?? null });
     });
     return () => { alive = false; };
-  }, []);
+  }, [shell]);
 
-  return status;
+  return {
+    available: shell === "native",
+    installedWeb: shell === "installed",
+    reading: probe.reading,
+    error: probe.error,
+  };
+}
+
+/** Coquille dans laquelle la page tourne. */
+type Shell = "native" | "installed" | "web";
+
+const NO_SUBSCRIBE = () => () => {};
+
+function readShell(): Shell {
+  if (nativeAvailable()) return "native";
+  return webAppInstalled() ? "installed" : "web";
+}
+
+/* Au rendu serveur, on ne sait rien du poste : on annonce la coquille la plus
+   pauvre, celle qui ne promet aucun blocage système. Une promesse tenue en
+   dessous de ce qui est affiché passe ; l'inverse non. */
+function readShellOnServer(): Shell {
+  return "web";
 }
 
 /**
@@ -255,10 +287,28 @@ export function useFocusGuard(
   /* ── Écarts : l'attention qui part ailleurs ────────────────────────────── */
   useEffect(() => {
     if (!active) return;
+
+    /* Deux signaux, et il en FAUT deux.
+     *
+     * `visibilitychange` ne dit que la visibilité : il se déclenche pour un
+     * onglet passé à l'arrière-plan ou une fenêtre réduite, jamais pour une
+     * fenêtre restée à l'écran qu'on a simplement cessé de regarder. Dans une
+     * app installée depuis le web, c'est le cas ORDINAIRE — la fenêtre est
+     * seule dans son cadre, elle reste visible à côté de celle où l'on est
+     * parti, et l'écart n'était jamais compté. C'est le `blur` de la fenêtre
+     * qui le voit.
+     *
+     * On est donc « ici » quand la page est visible ET tient le focus, et on
+     * repart de cette seule question à chaque signal : deux écouteurs qui
+     * décident chacun de leur côté finiraient par compter deux fois le même
+     * départ, ou par en oublier un au retour.
+     */
     let leftAt: number | null = null;
-    const onVisibility = () => {
-      if (document.hidden) {
-        leftAt = Date.now();
+    const here = () => !document.hidden && document.hasFocus();
+
+    const settle = () => {
+      if (!here()) {
+        if (leftAt === null) leftAt = Date.now();
         return;
       }
       if (leftAt === null) return;
@@ -266,8 +316,21 @@ export function useFocusGuard(
       leftAt = null;
       if (away >= graceMs) onHitRef.current({ kind: "away", target: "away", awayMs: away });
     };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
+
+    /* Un `blur` peut n'être qu'un déplacement de focus INTERNE — une iframe, la
+       console du navigateur. Le document garde alors le focus : on laisse le
+       navigateur le poser avant de trancher, sinon chaque champ intégré à la
+       page compterait comme une sortie. */
+    const onBlur = () => { setTimeout(settle, 0); };
+
+    document.addEventListener("visibilitychange", settle);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", settle);
+    return () => {
+      document.removeEventListener("visibilitychange", settle);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", settle);
+    };
   }, [active, graceMs]);
 
   /* ── Fermeture de la page ──────────────────────────────────────────────── */

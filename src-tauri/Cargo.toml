@@ -35,6 +35,14 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Suivi d'activité : le titre de la fenêtre active passe par l'API
+# d'accessibilité (cf. src/tracker.rs). Les symboles AX sont déclarés sur place ;
+# ces deux caisses ne servent qu'à manipuler les chaînes Core Foundation qu'elle
+# rend, et arrivaient déjà en dépendance indirecte de Tauri.
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 # Suivi d'activité (cf. src/tracker.rs) : fenêtre de premier plan, processus
 # propriétaire et temps d'inactivité clavier/souris. `windows-sys` et non
