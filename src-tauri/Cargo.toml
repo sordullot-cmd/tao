@@ -35,6 +35,19 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+# Suivi d'activité (cf. src/tracker.rs) : fenêtre de premier plan, processus
+# propriétaire et temps d'inactivité clavier/souris. `windows-sys` et non
+# `windows` : ce sont les liaisons BRUTES, dont la signature ne bouge pas d'une
+# version à l'autre, pour trois appels qui n'ont pas besoin d'ergonomie.
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 # Sur Windows/Linux, le deep link arrive en argument d'un 2e process : on le
 # relaie à l'instance déjà lancée via single-instance.

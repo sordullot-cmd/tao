@@ -11,6 +11,7 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { useTradeAlerts } from "@/lib/hooks/useTradeAlerts";
 import { useAgendaReminders } from "@/lib/hooks/useAgendaReminders";
+import { useActivityTracker } from "@/lib/hooks/useActivityTracker";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
@@ -22,8 +23,12 @@ import SportPage from "@/components/pages/SportPage";
 import ReadingListPage from "@/components/pages/ReadingListPage";
 import NotesPage from "@/components/pages/NotesPage";
 import RevisionsPage from "@/components/pages/RevisionsPage";
+import FocusPage from "@/components/pages/FocusPage";
 import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
+import ActivityPage from "@/components/pages/ActivityPage";
+import ActivityReportsPage from "@/components/pages/ActivityReportsPage";
+import ActivityRulesPage from "@/components/pages/ActivityRulesPage";
 import EloquencePage from "@/components/pages/EloquencePage";
 import CashflowPage from "@/components/pages/CashflowPage";
 import BudgetPage from "@/components/pages/BudgetPage";
@@ -92,6 +97,8 @@ import {
   Landmark as LucideLandmark,
   ChartPie as LucideChartPie,
   Brain as LucideBrain,
+  ShieldOff as LucideShieldOff,
+  Activity as LucideActivity,
 } from "lucide-react";
 
 /* ─── TOKENS ───────────────────────────────────────────────────────────
@@ -117,7 +124,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions"];
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -207,6 +214,11 @@ export default function App() {
   useTradeAlerts(trades || []);
   // Rappels d'agenda → vraies notifications système, quelle que soit la page.
   useAgendaReminders();
+  /* Suivi d'activité du poste : la boucle d'échantillonnage vit ICI et non dans
+     la page « Activité ». Le temps passé sur les autres applications doit être
+     mesuré même quand on regarde le journal de trading — c'est tout l'objet de
+     la mesure — et deux boucles compteraient le même temps deux fois. */
+  useActivityTracker();
   const { strategies, addStrategy, updateStrategy, deleteStrategy } = useStrategies();
   const [userId, setUserId] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -654,12 +666,21 @@ export default function App() {
         /* « Objectifs » a fusionné dans « Quête de soi » : une seule entrée,
            la page porte les catégories PUIS la liste des objectifs. */
         { id: "life-rpg",      icon: Mountain,           label: t("nav.lifeRpg") },
+        /* « Activité » suit le planificateur et l'agenda : les trois disent le
+           même sujet — le temps — mais celle-ci le MESURE au lieu de le prévoir.
+           C'est la place où l'on va vérifier ce que la journée est devenue. */
+        { id: "activity",      icon: LucideActivity,     label: t("nav.activity") },
         { id: "sport",         icon: LucideDumbbell,     label: "Sport" },
         { id: "notes",         icon: LucideFileText,     label: t("nav.notes") },
         /* « Révisions » suit « Notes » : c'est là qu'on écrit ce qu'on veut
            retenir, et l'atelier des révisions part précisément de ces notes. */
         { id: "revisions",     icon: LucideBrain,        label: t("nav.revisions") },
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
+        /* « Focus » ferme la section : c'est la page qui PROTÈGE les autres.
+           On y va pour pouvoir travailler sur les précédentes, pas pour
+           consulter quelque chose — sa place est au bout, comme un interrupteur
+           et non comme une destination. */
+        { id: "focus",         icon: LucideShieldOff,    label: t("nav.focus") },
       ],
     },
     /* Finance — l'argent personnel, à distinguer du capital de trading qui vit
@@ -772,9 +793,13 @@ export default function App() {
     reading: <ReadingListPage />,
     notes: <NotesPage />,
     revisions: <RevisionsPage />,
+    focus: <FocusPage />,
     drive: <DrivePage />,
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,
+    activity: <ActivityPage setPage={setPage} />,
+    "activity-reports": <ActivityReportsPage setPage={setPage} />,
+    "activity-rules": <ActivityRulesPage setPage={setPage} />,
     cashflow: <CashflowPage setPage={setPage} />,
     budget: <BudgetPage setPage={setPage} />,
     /* Ancienne route « Dépenses » : le réalisé vit dans Cashflow, et les liens

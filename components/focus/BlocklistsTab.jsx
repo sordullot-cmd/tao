@@ -1,0 +1,149 @@
+"use client";
+
+/**
+ * Onglet « Listes » — le vocabulaire du blocage.
+ *
+ * Une liste est un objet qu'on écrit UNE fois et qu'on réutilise partout : dans
+ * un preset, dans un programme, dans une session improvisée. C'est ce qui évite
+ * de recocher Instagram tous les matins, et c'est pour ça que cet onglet existe
+ * séparément du lancement d'une session.
+ */
+
+import React, { useState } from "react";
+import { Plus, Copy, Pencil, ShieldOff } from "lucide-react";
+import { T, FIELD_BG } from "@/lib/ui/tokens";
+import { PALETTE } from "@/lib/ui/palette";
+import { CARD, PillButton, SectionTitle } from "@/components/ui/da";
+import { CATALOG_BY_ID, listSize, newId } from "@/lib/focus/model";
+import BlocklistEditor from "./BlocklistEditor";
+
+/** Les premiers noms d'une liste, pour qu'on la reconnaisse sans l'ouvrir. */
+function Preview({ list }) {
+  const names = [
+    ...list.itemIds.map(id => CATALOG_BY_ID[id]?.name).filter(Boolean),
+    ...list.custom.map(c => c.name || c.domain),
+  ];
+  if (!names.length) return <span style={{ fontSize: 12, color: PALETTE.orange }}>Vide</span>;
+  const shown = names.slice(0, 4).join(", ");
+  const rest = names.length - 4;
+  return (
+    <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
+      {shown}{rest > 0 && ` +${rest}`}
+    </span>
+  );
+}
+
+export default function BlocklistsTab({ store, setStore }) {
+  const [editing, setEditing] = useState(null); // { list } | { create: true }
+
+  const save = (list) => setStore(prev => {
+    const exists = prev.blocklists.some(b => b.id === list.id);
+    return {
+      ...prev,
+      blocklists: exists
+        ? prev.blocklists.map(b => (b.id === list.id ? list : b))
+        : [...prev.blocklists, list],
+    };
+  });
+
+  /* Suppression : la liste part AUSSI des presets et des programmes qui la
+     citaient. Laisser un identifiant orphelin ferait une session qui ne bloque
+     plus rien, sans que rien à l'écran ne l'explique. */
+  const remove = (id) => setStore(prev => ({
+    ...prev,
+    blocklists: prev.blocklists.filter(b => b.id !== id),
+    presets: prev.presets.map(p => ({ ...p, blocklistIds: p.blocklistIds.filter(x => x !== id) })),
+    schedules: prev.schedules.map(s => ({ ...s, blocklistIds: s.blocklistIds.filter(x => x !== id) })),
+  }));
+
+  const duplicate = (list) => save({
+    ...list, id: newId("bl"), name: `${list.name} (copie)`,
+    custom: list.custom.map(c => ({ ...c, id: newId("c") })),
+  });
+
+  const usedBy = (id) => [
+    ...store.presets.filter(p => p.blocklistIds.includes(id)).map(p => p.name),
+    ...store.schedules.filter(s => s.blocklistIds.includes(id)).map(s => s.name),
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <SectionTitle size="sm">Listes de blocage</SectionTitle>
+        <PillButton variant="primary" compact onClick={() => setEditing({ create: true })}>
+          <Plus size={13} /> Nouvelle liste
+        </PillButton>
+      </div>
+
+      {store.blocklists.length === 0 ? (
+        <div style={{ ...CARD, padding: 26, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+          <div style={{ width: 48, height: 48, borderRadius: 999, background: FIELD_BG, display: "grid", placeItems: "center" }}>
+            <ShieldOff size={22} color={T.brand} />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>Aucune liste</div>
+          <div style={{ fontSize: 13, color: T.textSub, maxWidth: 420, lineHeight: 1.6 }}>
+            Une liste dit ce qui devient inaccessible pendant une session. Composez-la
+            maintenant, à froid : c&apos;est tout l&apos;intérêt du procédé.
+          </div>
+          <PillButton variant="primary" onClick={() => setEditing({ create: true })}>
+            <Plus size={14} /> Composer une liste
+          </PillButton>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+          {store.blocklists.map(list => {
+            const hue = PALETTE[list.color] || PALETTE.purple;
+            const used = usedBy(list.id);
+            return (
+              <div key={list.id} style={{ ...CARD, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 999, background: hue, flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {list.name}
+                  </span>
+                  <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+                    {listSize(list)}
+                  </span>
+                </div>
+
+                {list.mode === "allow" && (
+                  <span style={{
+                    alignSelf: "flex-start", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                    background: `color-mix(in srgb, ${PALETTE.orange} 14%, transparent)`, color: PALETTE.orange,
+                  }}>
+                    Seuls autorisés
+                  </span>
+                )}
+
+                <Preview list={list} />
+
+                {used.length > 0 && (
+                  <div style={{ fontSize: 11, color: T.textMut }}>
+                    Utilisée par {used.join(", ")}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 6, marginTop: "auto" }}>
+                  <PillButton compact onClick={() => setEditing({ list })}><Pencil size={12} /> Modifier</PillButton>
+                  <PillButton compact variant="ghost" onClick={() => duplicate(list)} title="Dupliquer">
+                    <Copy size={12} />
+                  </PillButton>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {editing && (
+        <BlocklistEditor
+          key={editing.list?.id || "new"}
+          list={editing.list}
+          onSave={save}
+          onDelete={remove}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </div>
+  );
+}

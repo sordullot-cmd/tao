@@ -28,10 +28,13 @@ const DEFAULT_COMMANDS: Command[] = [
   { id: "nav.discipline",    group: "Navigation", label: "Discipline",                                        run: c => c.setPage("discipline") },
   { id: "nav.daily-planner", group: "Navigation", label: "Planning du jour",           keywords: ["habitudes", "tâches"], run: c => c.setPage("daily-planner") },
   { id: "nav.goals",         group: "Navigation", label: "Objectifs",                  keywords: ["goals"], run: c => c.setPage("goals") },
-  { id: "nav.focus",         group: "Navigation", label: "Minuteur Focus",             keywords: ["pomodoro", "focus", "timer"], run: c => c.setPage("focus") },
+  { id: "nav.focus",         group: "Navigation", label: "Focus",                      keywords: ["pomodoro", "timer", "bloquer", "blocage", "distraction", "opal", "concentration"], run: c => c.setPage("focus") },
   { id: "nav.reading",       group: "Navigation", label: "Liste de lecture",           keywords: ["livres", "lectures", "books"], run: c => c.setPage("reading") },
   { id: "nav.notes",         group: "Navigation", label: "Notes",                      keywords: ["notes", "idées", "ideas"], run: c => c.setPage("notes") },
   { id: "nav.revisions",     group: "Navigation", label: "Révisions",                  keywords: ["anki", "cartes", "flashcards", "mémoire", "srs", "réviser"], run: c => c.setPage("revisions") },
+  { id: "nav.activity",      group: "Navigation", label: "Activité",                   keywords: ["rize", "temps", "écran", "suivi", "tracking", "apps", "productivité"], run: c => c.setPage("activity") },
+  { id: "nav.activity-reports", group: "Navigation", label: "Rapports d'activité",      keywords: ["rize", "semaine", "temps d'écran", "statistiques"], run: c => c.setPage("activity-reports") },
+  { id: "nav.activity-rules", group: "Navigation", label: "Catégories & règles d'activité", keywords: ["rize", "classement", "règles", "catégories", "distraction"], run: c => c.setPage("activity-rules") },
   { id: "nav.settings",      group: "Navigation", label: "Paramètres",                 keywords: ["preferences", "profile"], run: c => c.setPage("settings") },
 
   // Actions

@@ -1,3 +1,5 @@
+mod tracker;
+
 use tauri::{
   menu::{Menu, MenuItem},
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -52,7 +54,10 @@ pub fn run() {
     // Notes en .md dans un vault Obsidian : sélection du dossier + accès disque.
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
-    .invoke_handler(tauri::generate_handler![allow_vault_dir])
+    .invoke_handler(tauri::generate_handler![
+      allow_vault_dir,
+      tracker::activity_snapshot
+    ])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime
       // (nécessaire notamment en dev où l'OS ne connaît pas encore l'app).
