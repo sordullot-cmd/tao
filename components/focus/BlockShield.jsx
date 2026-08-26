@@ -15,7 +15,7 @@
  */
 
 import React from "react";
-import { ShieldCheck, MonitorOff } from "lucide-react";
+import { ShieldCheck, MonitorOff, AppWindow } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { Modal, PillButton } from "@/components/ui/da";
@@ -36,15 +36,26 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
   if (!hit || !session) return null;
 
   const away = hit.target === "away";
+  /* Une appli reprise et un lien refusé ne se racontent pas pareil : dans un
+     cas la fenêtre était déjà ouverte et on vient de la reprendre, dans l'autre
+     rien ne s'est passé du tout. Le titre et la ligne d'explication le disent. */
+  const native = hit.kind === "app" || hit.kind === "window";
   const left = remainingMs(session, now);
   const count = session.attempts.length;
   const line = LINES[Math.min(count, LINES.length) - 1] || LINES[0];
   const mode = MODES[session.mode];
   const accent = away ? PALETTE.orange : PALETTE.green;
-  const Icon = away ? MonitorOff : ShieldCheck;
+  const Icon = away ? MonitorOff : native ? AppWindow : ShieldCheck;
+
+  const title = away ? "Écart constaté" : native ? "Application coupée" : "Site bloqué";
+  const heading = away
+    ? `${fmtDur(hit.awayMs || 0)} hors de l'app`
+    : hit.kind === "app"
+      ? `${hit.appName || targetLabel(hit.target, store)} est coupé`
+      : `${targetLabel(hit.target, store)} est coupé`;
 
   return (
-    <Modal open title={away ? "Écart constaté" : "Site bloqué"} onClose={onBack} draggable={false} scrim width={440}>
+    <Modal open title={title} onClose={onBack} draggable={false} scrim width={440}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "8px 4px 4px", textAlign: "center" }}>
         <div style={{
           width: 56, height: 56, borderRadius: 999, display: "grid", placeItems: "center",
@@ -55,16 +66,27 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
 
         <div>
           <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>
-            {away
-              ? `${fmtDur(hit.awayMs || 0)} hors de l'app`
-              : `${targetLabel(hit.target, store)} est coupé`}
+            {heading}
           </div>
           <div style={{ fontSize: 13, color: T.textSub, marginTop: 6, lineHeight: 1.6 }}>
             {away
               ? "L'écart est noté au journal de la session. Il ne l'annule pas."
-              : hit.listName
-                ? <>Liste « {hit.listName} », active jusqu&apos;à la fin de la session.</>
-                : "Coupé par la session en cours."}
+              : <>
+                  {native && (
+                    <>
+                      {hit.kind === "window" && hit.appName
+                        ? `Repéré au titre de la fenêtre ${hit.appName}. `
+                        : "La fenêtre est repassée derrière celle-ci. "}
+                      {/* Dit une fois, ici : rien n'a été fermé. Sans cette
+                          phrase, on referme l'écran en craignant d'avoir perdu
+                          ce qui était en cours dans l'autre appli. */}
+                      Rien n&apos;a été fermé.{" "}
+                    </>
+                  )}
+                  {hit.listName
+                    ? <>Liste « {hit.listName} », active jusqu&apos;à la fin de la session.</>
+                    : "Coupé par la session en cours."}
+                </>}
           </div>
         </div>
 

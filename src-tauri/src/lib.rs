@@ -1,3 +1,4 @@
+mod blocker;
 mod tracker;
 
 use tauri::{
@@ -56,7 +57,9 @@ pub fn run() {
     .plugin(tauri_plugin_fs::init())
     .invoke_handler(tauri::generate_handler![
       allow_vault_dir,
-      tracker::activity_snapshot
+      tracker::activity_snapshot,
+      blocker::focus_reclaim,
+      blocker::focus_blocking_supported
     ])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime

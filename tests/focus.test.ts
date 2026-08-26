@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  CATCH_UP_MIN, EXIT_PHRASE, MODES, canPause, closeSession, dayKey, emptyStore, focusedMs,
-  hostOf, isDone, listSize, matchesDomain, nextRun, normalizeStore, pause, progress,
-  remainingMs, resume, sessionFromPreset, sessionFromSchedule, shouldFire, startSession,
-  targetLabel, verdictFor, weekday, type FocusSchedule, type FocusStore, type SessionLog,
+  CATCH_UP_MIN, EXIT_PHRASE, MODES, appVerdictFor, canPause, closeSession, dayKey, emptyStore,
+  focusedMs, hostOf, isDone, listApps, listSize, matchesApp, matchesDomain, nextRun,
+  normalizeStore, pause, progress, remainingMs, resume, sessionFromPreset, sessionFromSchedule,
+  shouldFire, startSession, targetLabel, verdictFor, weekday,
+  type FocusSchedule, type FocusStore, type SessionLog,
 } from "@/lib/focus/model";
 import {
   byBlocklist, dayTotals, daySeries, fmtClock, fmtDur, focusScore, hourHistogram, streak,
@@ -69,6 +70,108 @@ describe("verdict de blocage", () => {
   it("nomme la cible pour l'écran de blocage", () => {
     expect(targetLabel("tiktok", store)).toBe("TikTok");
     expect(targetLabel("away", store)).toBe("Sortie de l'app");
+  });
+});
+
+/* ── Blocage d'application et de fenêtre ──────────────────────────────────── */
+
+describe("correspondance d'applications", () => {
+  it("ignore la casse et l'extension Windows", () => {
+    expect(matchesApp("Discord.exe", "Discord")).toBe(true);
+    expect(matchesApp("discord", "Discord")).toBe(true);
+  });
+
+  it("accepte un suffixe sur frontière de mot, jamais au milieu d'un autre nom", () => {
+    expect(matchesApp("Telegram Desktop", "Telegram")).toBe(true);
+    expect(matchesApp("Steamworks Common", "Steam")).toBe(false);
+    expect(matchesApp("Steam", "Steamworks")).toBe(false);
+  });
+
+  it("liste les applications d'une liste, catalogue et entrées libres", () => {
+    const b = {
+      id: "l", name: "L", color: "blue", itemIds: ["discord"], mode: "block" as const,
+      custom: [{ id: "c1", name: "Photoshop", domain: "", app: "Photoshop" }],
+    };
+    expect(listApps(b)).toContain("Discord");
+    expect(listApps(b)).toContain("Photoshop");
+  });
+});
+
+describe("verdict d'application", () => {
+  const store = emptyStore();
+
+  it("coupe une appli listée et nomme la cible du catalogue", () => {
+    const v = appVerdictFor("Discord", "général — mon serveur", store, ["bl-msg"]);
+    expect(v.blocked).toBe(true);
+    expect(v.target).toBe("discord");
+    expect(v.via).toBe("app");
+  });
+
+  it("laisse passer une appli qu'aucune liste ne retient", () => {
+    expect(appVerdictFor("Visual Studio Code", "model.ts", store, ["bl-msg"]).blocked).toBe(false);
+  });
+
+  it("ne coupe jamais l'app elle-même ni la coquille du système", () => {
+    const allow: FocusStore = {
+      ...store,
+      blocklists: [{ id: "only", name: "Rien", color: "green", itemIds: [], custom: [], mode: "allow" }],
+    };
+    expect(appVerdictFor("tao trade", "", allow, ["only"]).blocked).toBe(false);
+    expect(appVerdictFor("Finder", "", allow, ["only"]).blocked).toBe(false);
+    expect(appVerdictFor("explorer.exe", "", allow, ["only"]).blocked).toBe(false);
+    // Un relevé vide ne coupe rien : mieux vaut ne rien couper que couper au hasard.
+    expect(appVerdictFor("", "", allow, ["only"]).blocked).toBe(false);
+  });
+
+  it("coupe tout ce qui n'est pas listé en mode « seuls autorisés »", () => {
+    const allow: FocusStore = {
+      ...store,
+      blocklists: [{
+        id: "only", name: "Travail", color: "green", itemIds: [],
+        custom: [{ id: "c1", name: "TradingView", domain: "", app: "TradingView" }], mode: "allow",
+      }],
+    };
+    expect(appVerdictFor("TradingView", "", allow, ["only"]).blocked).toBe(false);
+    expect(appVerdictFor("Steam", "", allow, ["only"]).blocked).toBe(true);
+  });
+
+  it("juge un navigateur sur le titre de sa fenêtre, pas sur l'appli", () => {
+    const onYouTube = appVerdictFor("Google Chrome", "Mix — YouTube", store, ["bl-video"]);
+    expect(onYouTube.blocked).toBe(true);
+    expect(onYouTube.target).toBe("youtube");
+    expect(onYouTube.via).toBe("window");
+    // Le navigateur lui-même n'est pas une distraction : rien d'autre ne le coupe.
+    expect(appVerdictFor("Google Chrome", "Documentation React", store, ["bl-video"]).blocked).toBe(false);
+  });
+
+  it("n'ouvre pas le feu sur un titre qui contient seulement la racine", () => {
+    // « xanax » contient « x », « youtubeur » contient « youtube » : ni l'un ni
+    // l'autre ne désigne le site, et couper là serait un faux positif.
+    expect(appVerdictFor("Google Chrome", "xanax — Wikipédia", store, ["bl-social"]).blocked).toBe(false);
+    expect(appVerdictFor("Google Chrome", "métier de youtubeur", store, ["bl-video"]).blocked).toBe(false);
+  });
+
+  it("laisse le navigateur tranquille en mode « seuls autorisés »", () => {
+    /* Le titre dit quel onglet est DEVANT, pas si tous les onglets sont permis :
+       couper le navigateur entier sur cette base couperait aussi le travail. */
+    const allow: FocusStore = {
+      ...store,
+      blocklists: [{ id: "only", name: "Travail", color: "green", itemIds: [], custom: [], mode: "allow" }],
+    };
+    expect(appVerdictFor("Safari", "Documentation", allow, ["only"]).blocked).toBe(false);
+  });
+
+  it("nomme une appli ajoutée à la main pour l'écran de blocage", () => {
+    const withApp: FocusStore = {
+      ...store,
+      blocklists: [{
+        id: "l", name: "Jeux", color: "green", itemIds: [],
+        custom: [{ id: "c9", name: "Photoshop", domain: "", app: "Photoshop" }], mode: "block",
+      }],
+    };
+    const v = appVerdictFor("Photoshop", "sans titre", withApp, ["l"]);
+    expect(v.blocked).toBe(true);
+    expect(targetLabel(v.target!, withApp)).toBe("Photoshop");
   });
 });
 

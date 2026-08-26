@@ -33,6 +33,27 @@ function cleanDomain(raw) {
   return hostOf(withScheme) || v.replace(/^www\./, "").split("/")[0];
 }
 
+/**
+ * Site ou application ? Le champ est unique, et c'est délibéré : on tape le nom
+ * de ce dont on veut se couper sans avoir à choisir une catégorie d'abord.
+ *
+ * La règle de tri est celle qui se lit à l'œil nu — un point suivi d'une
+ * extension fait un domaine, le reste fait une application. « discord.com »
+ * coupe le site, « Discord » coupe l'appli. Le doute penche du côté du domaine,
+ * qui est ce qu'on colle le plus souvent depuis la barre d'adresse.
+ */
+function cleanTarget(raw) {
+  const v = (raw || "").trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v) || /^[^\s/]+\.[a-z]{2,}(\/|$)/i.test(v)) {
+    const domain = cleanDomain(v);
+    return domain ? { name: domain, domain } : null;
+  }
+  // « steam.exe » désigne bien une appli : l'extension n'est pas un domaine.
+  const app = v.replace(/\.exe$/i, "");
+  return { name: app, domain: "", app };
+}
+
 function Row({ label, sub, on, partial, color, onToggle, action }) {
   return (
     <div
@@ -88,10 +109,13 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
   };
 
   const addCustom = () => {
-    const domain = cleanDomain(draft);
-    if (!domain) return;
-    if (custom.some(c => c.domain === domain)) { setDraft(""); return; }
-    setCustom(prev => [...prev, { id: newId("c"), name: domain, domain }]);
+    const t = cleanTarget(draft);
+    if (!t) return;
+    const dupe = custom.some(c => (
+      t.app ? (c.app || "").toLowerCase() === t.app.toLowerCase() : c.domain === t.domain
+    ));
+    if (dupe) { setDraft(""); return; }
+    setCustom(prev => [...prev, { id: newId("c"), ...t }]);
     setDraft("");
   };
 
@@ -222,29 +246,33 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
           </div>
         </Field>
 
-        <Field label="Ajouter un domaine" hint="Ce que le catalogue ne connaît pas : un forum, un jeu, un site d'infos.">
+        <Field
+          label="Ajouter un site ou une appli"
+          hint="Ce que le catalogue ne connaît pas. Un domaine coupe le site (exemple.fr) ; un nom seul coupe l'application (Steam), et cela demande l'app de bureau."
+        >
           <div style={{ display: "flex", gap: 8 }}>
             <Input
               value={draft}
               onChange={e => setDraft(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
-              placeholder="exemple.fr"
+              placeholder="exemple.fr — ou Steam"
               style={{ flex: 1 }}
             />
-            <PillButton onClick={addCustom} disabled={!cleanDomain(draft)}><Plus size={14} /> Ajouter</PillButton>
+            <PillButton onClick={addCustom} disabled={!cleanTarget(draft)}><Plus size={14} /> Ajouter</PillButton>
           </div>
           {custom.length > 0 && (
             <div style={{ marginTop: 8 }}>
               {custom.map(c => (
                 <Row
                   key={c.id}
-                  label={c.domain}
+                  label={c.domain || c.app}
+                  sub={c.domain ? undefined : "application"}
                   action={
                     <button
                       type="button"
                       onClick={() => setCustom(prev => prev.filter(x => x.id !== c.id))}
                       style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: T.textMut, display: "inline-flex" }}
-                      aria-label={`Retirer ${c.domain}`}
+                      aria-label={`Retirer ${c.domain || c.app}`}
                     >
                       <Trash2 size={14} />
                     </button>

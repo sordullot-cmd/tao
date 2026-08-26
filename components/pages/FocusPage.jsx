@@ -33,7 +33,7 @@ import { CARD, CheckBox, Field, Input, PeriodPills, PillButton, SectionTitle } f
 import {
   closeSession, emptyStore, isDone, normalizeStore, pause, resume,
 } from "@/lib/focus/model";
-import { useFocusGuard, useScheduleRunner, useTicker, nativeBlocking } from "@/lib/focus/guard";
+import { useFocusGuard, useScheduleRunner, useTicker, useNativeGuardStatus } from "@/lib/focus/guard";
 import { MIN_MS, dayTotals, fmtDur, focusScore, streak } from "@/lib/focus/stats";
 import SessionStart from "@/components/focus/SessionStart";
 import SessionRunner from "@/components/focus/SessionRunner";
@@ -72,6 +72,7 @@ export default function FocusPage() {
   const [raw, setRaw] = useCloudState(STORAGE_KEY, CLOUD_KEY, emptyStore());
   const [tab, setTab] = useState("session");
   const [shield, setShield] = useState(null);
+  const native = useNativeGuardStatus();
   /** Dernière session fermée, gardée le temps de l'annoncer. */
   const [finished, setFinished] = useState(null);
 
@@ -149,7 +150,9 @@ export default function FocusPage() {
       ...prev,
       running: {
         ...prev.running,
-        attempts: [...prev.running.attempts, { target: hit.target, at: new Date().toISOString(), awayMs: hit.awayMs }],
+        attempts: [...prev.running.attempts, {
+          target: hit.target, at: new Date().toISOString(), kind: hit.kind, awayMs: hit.awayMs,
+        }],
       },
     } : prev));
     setShield(hit);
@@ -235,11 +238,20 @@ export default function FocusPage() {
               <div style={{ ...CARD, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <Info size={15} color={T.textMut} style={{ flexShrink: 0, marginTop: 1 }} />
                 <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
-                  {nativeBlocking()
-                    ? "Blocage système actif : les applis et sites listés sont coupés au niveau de l'appareil."
-                    : <>Blocage au niveau du navigateur : les liens de l&apos;app vers un site coupé sont
+                  {!native.available
+                    ? <>Blocage au niveau du navigateur : les liens de l&apos;app vers un site coupé sont
                         interceptés, et toute sortie de l&apos;app pendant une session est comptée comme un
-                        écart. Couper une appli au niveau du système demandera l&apos;app de bureau.</>}
+                        écart. Couper une appli demande l&apos;app de bureau.</>
+                    : native.reading
+                      ? <>Blocage des applications actif : une appli listée qui passe devant repasse
+                          derrière, et l&apos;écran de blocage prend sa place. Rien n&apos;est fermé.</>
+                      /* Le cas qui compte vraiment : l'app de bureau est là, mais macOS n'a pas
+                         accordé l'accès « Accessibilité ». Sans cette ligne, le blocage semble
+                         simplement ne pas marcher, et on cherche la panne du mauvais côté. */
+                      : <>App de bureau détectée, mais le poste n&apos;est pas lisible
+                          ({native.error || "cause inconnue"}) : seuls les liens de l&apos;app sont
+                          interceptés. Sur macOS, autorisez tao trade dans Réglages Système →
+                          Confidentialité et sécurité → Accessibilité.</>}
                 </div>
               </div>
             </>

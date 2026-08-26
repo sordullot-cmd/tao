@@ -4,9 +4,9 @@
  * Application du blocage — ce qui est réellement tenu, et par quoi.
  *
  * Il faut être honnête sur la portée, sinon la page promet ce qu'elle ne peut
- * pas faire. Une page web n'a AUCUN moyen d'empêcher une autre application de
- * s'ouvrir, ni de fermer un onglet qu'elle n'a pas ouvert. Ce que cette couche
- * tient, en revanche :
+ * pas faire. Deux couches, et elles ne bloquent pas la même chose.
+ *
+ * DANS LE NAVIGATEUR — toujours active, y compris en web :
  *
  *   1. LES DÉPARTS DEPUIS L'APP. Tout lien de l'app vers un domaine coupé est
  *      intercepté avant la navigation (capture, donc avant les gestionnaires de
@@ -14,48 +14,117 @@
  *      décide pas d'aller sur YouTube, on clique un lien qui y mène.
  *   2. LES ÉCARTS. Quitter l'app pendant une session — changer d'onglet,
  *      basculer sur une autre fenêtre — est mesuré, et au-delà d'un délai de
- *      grâce, compté comme un écart. C'est ce que voit vraiment un navigateur,
- *      et c'est déjà la mesure la plus utile : elle dit combien de fois
- *      l'attention est partie, sans prétendre l'avoir retenue.
+ *      grâce, compté comme un écart.
  *   3. LA SORTIE DE PAGE. Une session ferme avec un avertissement natif du
  *      navigateur, la seule friction qu'il concède avant de laisser partir.
  *
- * Ce qu'il faudrait pour bloquer POUR DE VRAI : la coquille Tauri (src-tauri).
- * Un blocage système passe par le pare-feu ou le fichier hosts pour les sites,
- * et par la surveillance des processus pour les applis — donc du code natif et
- * une autorisation de l'utilisateur. `nativeBlocking()` est le point
- * d'accrochage prévu pour ça : le jour où la commande existe, elle lira les
- * mêmes listes, et cette couche web restera le filet côté navigateur.
+ * DANS L'APP DE BUREAU — la couche qui manquait, et la raison d'être de la
+ * coquille Tauri :
+ *
+ *   4. LES APPLIS. Le poste est relevé toutes les deux secondes ; si
+ *      l'application au premier plan est coupée par une liste active, la fenêtre
+ *      de tao trade reprend la main et l'écran de blocage s'affiche. Rien n'est
+ *      tué ni fermé — la friction est le retour forcé, pas la perte de travail
+ *      (cf. src-tauri/src/blocker.rs).
+ *   5. LES FENÊTRES DE NAVIGATEUR. Un navigateur n'est pas coupé en bloc : on
+ *      lit le TITRE de sa fenêtre, qui porte le nom du site actif. C'est ce qui
+ *      rattrape l'onglet YouTube ouvert hors de l'app — là où la couche web,
+ *      enfermée dans son propre onglet, ne voit rien.
+ *
+ * Ce qui n'est toujours PAS tenu, et qu'il ne faut pas laisser croire : une
+ * appli lancée pendant que la fenêtre est réduite au tray n'est vue qu'au relevé
+ * suivant, et le titre d'une fenêtre de navigateur ne dit rien des onglets
+ * d'arrière-plan. Un blocage vraiment étanche passerait par le pare-feu ou le
+ * fichier hosts — donc par une élévation de privilèges que cette app ne demande
+ * pas.
  */
 
 import { useEffect, useRef, useState } from "react";
 import {
-  dayKey, sessionFromSchedule, shouldFire, verdictFor,
+  appVerdictFor, dayKey, sessionFromSchedule, shouldFire, verdictFor,
   type FocusSchedule, type FocusStore, type RunningSession,
 } from "./model";
+import { frontSnapshot, nativeAvailable, reclaimFocus } from "./native";
 
 /** Un blocage constaté, tel qu'il remonte à l'interface. */
 export interface GuardHit {
   /** Identifiant catalogue, domaine libre, ou `away`. */
   target: string;
+  /**
+   * Ce qui a été coupé. `url` pour une navigation depuis l'app, `app` pour une
+   * application passée au premier plan, `window` pour une fenêtre de navigateur
+   * reconnue à son titre, `away` pour une sortie de l'app.
+   *
+   * L'écran de blocage ne dit pas la même chose dans les quatre cas : un site
+   * refusé est un lien qui n'aboutit pas, une appli coupée est une fenêtre qu'on
+   * vient de reprendre.
+   */
+  kind?: "url" | "app" | "window" | "away";
   /** URL refusée, quand c'est une navigation. */
   url?: string;
+  /** Nom de l'application relevée, tel que l'OS le rapporte. */
+  appName?: string;
+  /** Titre de la fenêtre relevée. */
+  windowTitle?: string;
   /** Nom de la liste qui a tranché. */
   listName?: string;
   /** Durée de l'absence, pour un écart (ms). */
   awayMs?: number;
 }
 
+/** Cadence du relevé du poste. Deux secondes : assez court pour que la reprise
+ *  de main suive le geste, assez long pour ne pas peser sur la machine — la
+ *  page « Activité » échantillonne au même ordre de grandeur. */
+const NATIVE_POLL_MS = 2_000;
+
+/** Délai minimal entre deux reprises de main sur la MÊME cible. Sans lui, un
+ *  utilisateur qui insiste déclencherait une reprise toutes les deux secondes :
+ *  le poste devient inutilisable au lieu d'être protégé. */
+const RECLAIM_COOLDOWN_MS = 6_000;
+
+/** Délai minimal entre deux tentatives notées au journal pour la même cible.
+ *  Une insistance de trente secondes est UNE tentative, pas quinze. */
+const ATTEMPT_COOLDOWN_MS = 25_000;
+
+/** État du garde natif, tel qu'il s'affiche dans la page. */
+export interface NativeGuardStatus {
+  /** L'app de bureau est là — la capacité existe. */
+  available: boolean;
+  /** Le poste a été lu pour de bon (autorisation accordée). */
+  reading: boolean;
+  /** Cause de l'échec de lecture, telle que la remonte la commande Rust. */
+  error?: string | null;
+}
+
 /**
- * Le blocage au niveau du système est-il disponible ?
+ * Le blocage natif est-il disponible, et lit-il vraiment le poste ?
  *
- * Faux partout aujourd'hui : la commande Tauri correspondante n'existe pas
- * encore. La fonction est là pour que l'interface dise la vérité sur ce qu'elle
- * bloque — une bannière « blocage navigateur » plutôt qu'un bouclier qui laisse
- * croire à une coupure système.
+ * Deux questions et non une, parce qu'elles se répondent différemment et que
+ * l'interface doit dire laquelle a échoué : la CAPACITÉ (l'app de bureau est-elle
+ * là ?) se lit tout de suite, l'AUTORISATION (macOS a-t-il accordé
+ * l'« Accessibilité » ?) demande un vrai relevé. Sans cette distinction, un
+ * refus d'autorisation ressemble à une panne du blocage, et on cherche du
+ * mauvais côté.
+ *
+ * Un seul relevé au montage suffit : l'autorisation ne change pas d'une seconde
+ * à l'autre. En navigateur, aucun appel n'est fait.
  */
-export function nativeBlocking(): boolean {
-  return false;
+export function useNativeGuardStatus(): NativeGuardStatus {
+  const [status, setStatus] = useState<NativeGuardStatus>({
+    available: nativeAvailable(), reading: false, error: null,
+  });
+
+  useEffect(() => {
+    if (!nativeAvailable()) return;
+    let alive = true;
+    void frontSnapshot().then(snap => {
+      if (!alive) return;
+      setStatus({ available: true, reading: !!snap?.ok, error: snap?.error ?? null });
+    });
+    return () => { alive = false; };
+  }, []);
+
+  return status;
 }
 
 /**
@@ -100,7 +169,7 @@ export function useFocusGuard(
       // peut aussi réagir au clic : on coupe la propagation dans la foulée.
       e.preventDefault();
       e.stopPropagation();
-      onHitRef.current({ target: v.target || href, url: href, listName: v.list?.name });
+      onHitRef.current({ kind: "url", target: v.target || href, url: href, listName: v.list?.name });
     };
 
     // `window.open` échappe au clic (appelé depuis du code, pas depuis un lien) :
@@ -110,7 +179,7 @@ export function useFocusGuard(
       const target = typeof url === "string" ? url : url?.toString() || "";
       const v = check(target);
       if (v.blocked) {
-        onHitRef.current({ target: v.target || target, url: target, listName: v.list?.name });
+        onHitRef.current({ kind: "url", target: v.target || target, url: target, listName: v.list?.name });
         return null;
       }
       // @ts-expect-error — signature variadique de window.open, rendue telle quelle.
@@ -122,6 +191,58 @@ export function useFocusGuard(
       document.removeEventListener("click", onClick, true);
       window.open = nativeOpen;
     };
+  }, [active, blocklistIds]);
+
+  /* ── Applications et fenêtres : ce que seule l'app de bureau voit ──────── */
+  useEffect(() => {
+    if (!active || !blocklistIds || !nativeAvailable()) return;
+
+    let alive = true;
+    /* Dernière reprise et dernière tentative notée, PAR CIBLE. Deux horloges
+       distinctes et non une seule : la reprise de main doit rester serrée pour
+       être une friction, le journal doit rester lisible. */
+    const lastReclaim = new Map<string, number>();
+    const lastAttempt = new Map<string, number>();
+    /* Un relevé peut mettre plus de deux secondes à revenir (AppleScript passe
+       par System Events). Sans ce verrou, les appels s'empileraient. */
+    let busy = false;
+
+    const tick = async () => {
+      if (busy || !alive) return;
+      busy = true;
+      try {
+        const snap = await frontSnapshot();
+        if (!alive || !snap?.ok || !snap.full) return;
+
+        const v = appVerdictFor(snap.app, snap.title, storeRef.current, blocklistIds);
+        if (!v.blocked) return;
+
+        const target = v.target || snap.app;
+        const now = Date.now();
+
+        if (now - (lastReclaim.get(target) || 0) >= RECLAIM_COOLDOWN_MS) {
+          lastReclaim.set(target, now);
+          await reclaimFocus();
+        }
+        if (!alive) return;
+
+        if (now - (lastAttempt.get(target) || 0) < ATTEMPT_COOLDOWN_MS) return;
+        lastAttempt.set(target, now);
+        onHitRef.current({
+          kind: v.via === "window" ? "window" : "app",
+          target,
+          appName: snap.app,
+          windowTitle: snap.title,
+          listName: v.list?.name,
+        });
+      } finally {
+        busy = false;
+      }
+    };
+
+    void tick();
+    const id = setInterval(() => { void tick(); }, NATIVE_POLL_MS);
+    return () => { alive = false; clearInterval(id); };
   }, [active, blocklistIds]);
 
   /* ── Écarts : l'attention qui part ailleurs ────────────────────────────── */
@@ -136,7 +257,7 @@ export function useFocusGuard(
       if (leftAt === null) return;
       const away = Date.now() - leftAt;
       leftAt = null;
-      if (away >= graceMs) onHitRef.current({ target: "away", awayMs: away });
+      if (away >= graceMs) onHitRef.current({ kind: "away", target: "away", awayMs: away });
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);

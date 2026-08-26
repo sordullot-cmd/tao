@@ -22,6 +22,9 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
 vi.mock("@/lib/notify", () => ({
   notify: vi.fn(),
   ensureNotifyPermission: vi.fn(async () => true),
+  // La page tourne ici en NAVIGATEUR : le garde natif doit rester en retrait,
+  // et c'est la couche web seule que ces cas mettent à l'épreuve.
+  isTauri: () => false,
 }));
 
 import FocusPage from "@/components/pages/FocusPage";

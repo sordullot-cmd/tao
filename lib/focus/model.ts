@@ -65,6 +65,17 @@ export interface CatalogEntry {
   /** Domaines qui identifient le service. Le premier sert de repère visuel.
    *  Un domaine couvre ses sous-domaines (cf. `matchesDomain`). */
   domains: string[];
+  /**
+   * Noms de l'application de bureau, tels que le SYSTÈME les rapporte : nom de
+   * l'app sur macOS, nom de l'exécutable sans « .exe » sur Windows. Les deux
+   * coïncident le plus souvent (« Discord »), d'où une seule liste ; les cas
+   * où ils divergent y figurent tous les deux (« Epic Games Launcher » /
+   * « EpicGamesLauncher »).
+   *
+   * Absent quand le service n'a pas d'app de bureau : Instagram se bloque par
+   * son domaine, pas par un processus qui n'existe pas.
+   */
+  apps?: string[];
 }
 
 /**
@@ -91,17 +102,17 @@ export const CATALOG: CatalogEntry[] = [
   { id: "threads",   name: "Threads",   category: "social", domains: ["threads.net", "threads.com"] },
   // Vidéo & streaming
   { id: "youtube",   name: "YouTube",   category: "video", domains: ["youtube.com", "youtu.be"] },
-  { id: "netflix",   name: "Netflix",   category: "video", domains: ["netflix.com"] },
-  { id: "twitch",    name: "Twitch",    category: "video", domains: ["twitch.tv"] },
-  { id: "primevideo", name: "Prime Video", category: "video", domains: ["primevideo.com"] },
-  { id: "disney",    name: "Disney+",   category: "video", domains: ["disneyplus.com"] },
+  { id: "netflix",   name: "Netflix",   category: "video", domains: ["netflix.com"], apps: ["Netflix"] },
+  { id: "twitch",    name: "Twitch",    category: "video", domains: ["twitch.tv"], apps: ["Twitch"] },
+  { id: "primevideo", name: "Prime Video", category: "video", domains: ["primevideo.com"], apps: ["Prime Video"] },
+  { id: "disney",    name: "Disney+",   category: "video", domains: ["disneyplus.com"], apps: ["Disney+"] },
   { id: "dailymotion", name: "Dailymotion", category: "video", domains: ["dailymotion.com"] },
   // Messagerie
-  { id: "whatsapp",  name: "WhatsApp",  category: "messaging", domains: ["web.whatsapp.com", "whatsapp.com"] },
-  { id: "telegram",  name: "Telegram",  category: "messaging", domains: ["web.telegram.org", "telegram.org"] },
-  { id: "discord",   name: "Discord",   category: "messaging", domains: ["discord.com", "discordapp.com"] },
-  { id: "messenger", name: "Messenger", category: "messaging", domains: ["messenger.com"] },
-  { id: "slack",     name: "Slack",     category: "messaging", domains: ["slack.com"] },
+  { id: "whatsapp",  name: "WhatsApp",  category: "messaging", domains: ["web.whatsapp.com", "whatsapp.com"], apps: ["WhatsApp"] },
+  { id: "telegram",  name: "Telegram",  category: "messaging", domains: ["web.telegram.org", "telegram.org"], apps: ["Telegram", "Telegram Desktop", "Unigram"] },
+  { id: "discord",   name: "Discord",   category: "messaging", domains: ["discord.com", "discordapp.com"], apps: ["Discord"] },
+  { id: "messenger", name: "Messenger", category: "messaging", domains: ["messenger.com"], apps: ["Messenger"] },
+  { id: "slack",     name: "Slack",     category: "messaging", domains: ["slack.com"], apps: ["Slack"] },
   // Actualités
   { id: "gnews",     name: "Google Actualités", category: "news", domains: ["news.google.com"] },
   { id: "lemonde",   name: "Le Monde",  category: "news", domains: ["lemonde.fr"] },
@@ -114,19 +125,19 @@ export const CATALOG: CatalogEntry[] = [
   { id: "leboncoin", name: "Leboncoin", category: "shopping", domains: ["leboncoin.fr"] },
   { id: "aliexpress", name: "AliExpress", category: "shopping", domains: ["aliexpress.com"] },
   // Jeux
-  { id: "steam",     name: "Steam",     category: "gaming", domains: ["steampowered.com", "steamcommunity.com"] },
-  { id: "epic",      name: "Epic Games", category: "gaming", domains: ["epicgames.com"] },
-  { id: "roblox",    name: "Roblox",    category: "gaming", domains: ["roblox.com"] },
-  { id: "chesscom",  name: "Chess.com", category: "gaming", domains: ["chess.com"] },
+  { id: "steam",     name: "Steam",     category: "gaming", domains: ["steampowered.com", "steamcommunity.com"], apps: ["Steam", "steamwebhelper"] },
+  { id: "epic",      name: "Epic Games", category: "gaming", domains: ["epicgames.com"], apps: ["Epic Games Launcher", "EpicGamesLauncher"] },
+  { id: "roblox",    name: "Roblox",    category: "gaming", domains: ["roblox.com"], apps: ["Roblox", "RobloxPlayerBeta"] },
+  { id: "chesscom",  name: "Chess.com", category: "gaming", domains: ["chess.com"], apps: ["Chess.com"] },
   { id: "lichess",   name: "Lichess",   category: "gaming", domains: ["lichess.org"] },
   // Paris & casino
-  { id: "winamax",   name: "Winamax",   category: "betting", domains: ["winamax.fr"] },
+  { id: "winamax",   name: "Winamax",   category: "betting", domains: ["winamax.fr"], apps: ["Winamax"] },
   { id: "betclic",   name: "Betclic",   category: "betting", domains: ["betclic.fr"] },
   { id: "unibet",    name: "Unibet",    category: "betting", domains: ["unibet.fr"] },
-  { id: "pokerstars", name: "PokerStars", category: "betting", domains: ["pokerstars.fr", "pokerstars.com"] },
+  { id: "pokerstars", name: "PokerStars", category: "betting", domains: ["pokerstars.fr", "pokerstars.com"], apps: ["PokerStars"] },
   // Cours & marchés
-  { id: "tradingview", name: "TradingView", category: "markets", domains: ["tradingview.com"] },
-  { id: "binance",   name: "Binance",   category: "markets", domains: ["binance.com"] },
+  { id: "tradingview", name: "TradingView", category: "markets", domains: ["tradingview.com"], apps: ["TradingView"] },
+  { id: "binance",   name: "Binance",   category: "markets", domains: ["binance.com"], apps: ["Binance"] },
   { id: "coinbase",  name: "Coinbase",  category: "markets", domains: ["coinbase.com"] },
   { id: "coingecko", name: "CoinGecko", category: "markets", domains: ["coingecko.com", "coinmarketcap.com"] },
   { id: "boursorama", name: "Boursorama", category: "markets", domains: ["boursorama.com"] },
@@ -147,8 +158,14 @@ export function catalogOf(category: CategoryId): CatalogEntry[] {
 export interface CustomTarget {
   id: string;
   name: string;
-  /** Domaine nu, sans schéma ni chemin (`exemple.fr`). */
+  /** Domaine nu, sans schéma ni chemin (`exemple.fr`). Vide pour une appli. */
   domain: string;
+  /**
+   * Nom de l'application, tel que le système la rapporte. Une entrée porte
+   * l'un OU l'autre : « steam.com » se coupe par le domaine, « Photoshop » par
+   * le processus. `cleanTarget` tranche à la saisie.
+   */
+  app?: string;
 }
 
 export interface Blocklist {
@@ -259,6 +276,10 @@ export interface FocusAttempt {
   /** Identifiant catalogue, domaine libre, ou `away` pour une sortie de l'app. */
   target: string;
   at: string;
+  /** Par où la tentative est passée (cf. `GuardHit` dans guard.ts). Absent sur
+   *  les sessions d'avant le blocage natif : les statistiques ne s'en servent
+   *  que pour nuancer un libellé, jamais pour compter. */
+  kind?: "url" | "app" | "window" | "away";
   /** Temps passé dehors, pour un écart (ms). */
   awayMs?: number;
 }
@@ -578,14 +599,21 @@ export function listDomains(b: Blocklist): string[] {
   return [...fromCatalog, ...fromCustom];
 }
 
+/** Toutes les applications couvertes par une liste. */
+export function listApps(b: Blocklist): string[] {
+  const fromCatalog = b.itemIds.flatMap(id => CATALOG_BY_ID[id]?.apps || []);
+  const fromCustom = b.custom.map(c => c.app || "").filter(Boolean);
+  return [...fromCatalog, ...fromCustom];
+}
+
 /** Nom lisible d'une cible, pour l'écran de blocage et les statistiques. */
 export function targetLabel(target: string, store: FocusStore): string {
   if (target === "away") return "Sortie de l'app";
   const entry = CATALOG_BY_ID[target];
   if (entry) return entry.name;
   for (const b of store.blocklists) {
-    const c = b.custom.find(x => x.id === target || x.domain === target);
-    if (c) return c.name || c.domain;
+    const c = b.custom.find(x => x.id === target || x.domain === target || x.app === target);
+    if (c) return c.name || c.domain || c.app || target;
   }
   return target;
 }
@@ -640,9 +668,154 @@ function findTarget(host: string, b: Blocklist): string | null {
   return null;
 }
 
+/* ── Applications et fenêtres ─────────────────────────────────────────────── */
+
+/**
+ * Ce que le garde natif ne coupe JAMAIS.
+ *
+ * Sans cette liste, une liste en mode « seuls autorisés » reprendrait la main
+ * sur le Finder, sur l'explorateur de fichiers ou sur les réglages du système —
+ * c'est-à-dire sur les outils qui servent à s'en sortir. Un blocage qui rend le
+ * poste inutilisable n'est pas ferme, c'est une panne (même raison que
+ * l'exception de `verdictFor` pour l'app elle-même).
+ */
+const SYSTEM_APPS = new Set([
+  // macOS
+  "finder", "dock", "systemuiserver", "controlcenter", "notificationcenter",
+  "loginwindow", "windowserver", "spotlight", "system settings",
+  "system preferences", "securityagent", "universalaccessauthwarn",
+  "coreautha", "screensaverengine", "installer", "keychain access",
+  // Windows
+  "explorer", "shellexperiencehost", "startmenuexperiencehost", "searchhost",
+  "searchapp", "applicationframehost", "textinputhost", "lockapp", "logonui",
+  "systemsettings", "taskmgr", "dwm", "sihost", "ctfmon", "consent",
+]);
+
+/** L'app elle-même, sous les noms que lui donne le système selon la build. */
+const SELF_APPS = new Set(["tao trade", "taotrade", "app"]);
+
+/**
+ * Navigateurs — traités à part, et pour une raison précise.
+ *
+ * Un navigateur n'est pas une distraction : c'est un contenant. Le couper en
+ * bloc parce qu'un onglet YouTube y traîne couperait aussi la documentation
+ * ouverte à côté. On ne le juge donc que sur le TITRE de sa fenêtre, qui porte
+ * le nom du site actif — et jamais en mode « seuls autorisés », où le titre ne
+ * suffit pas à prouver qu'un onglet est permis.
+ */
+const BROWSER_APPS = new Set([
+  "google chrome", "chrome", "chromium", "safari", "firefox", "librewolf",
+  "microsoft edge", "msedge", "brave browser", "brave", "opera", "opera gx",
+  "arc", "vivaldi", "zen", "tor browser", "duckduckgo",
+]);
+
+/** Nom d'appli ramené à une forme comparable : minuscules, sans « .exe ». */
+export function normApp(name: string): string {
+  return (name || "").trim().replace(/\.exe$/i, "").toLowerCase();
+}
+
+/** `Telegram` couvre `Telegram Desktop` ; `Tel` ne couvre rien. */
+export function matchesApp(front: string, listed: string): boolean {
+  const a = normApp(front);
+  const b = normApp(listed);
+  if (!a || !b) return false;
+  // Le préfixe n'est retenu que s'il s'arrête sur une frontière de mot :
+  // sinon « Steam » couvrirait « Steamworks Common Redistributables ».
+  return a === b || (a.startsWith(b) && /[^a-z0-9]/.test(a.charAt(b.length)));
+}
+
+/**
+ * Ce titre de fenêtre porte-t-il le nom d'une cible de la liste ?
+ *
+ * On cherche le nom du service et la racine de ses domaines (`youtube` pour
+ * `youtube.com`) comme MOTS ENTIERS. Les racines de moins de trois lettres sont
+ * écartées — `x.com` ferait feu sur presque tous les titres.
+ */
+function findTitleTarget(title: string, b: Blocklist): string | null {
+  const t = (title || "").toLowerCase();
+  if (!t) return null;
+  const hit = (needle: string) => {
+    const n = needle.toLowerCase();
+    if (n.length < 3) return false;
+    const i = t.indexOf(n);
+    if (i < 0) return false;
+    const before = i === 0 ? "" : t.charAt(i - 1);
+    const after = t.charAt(i + n.length);
+    return !/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after);
+  };
+  for (const id of b.itemIds) {
+    const e = CATALOG_BY_ID[id];
+    if (!e) continue;
+    if (hit(e.name) || e.domains.some(d => hit(d.replace(/^www\./, "").split(".")[0]))) return id;
+  }
+  for (const c of b.custom) {
+    if (c.domain && hit(c.domain.split(".")[0])) return c.id || c.domain;
+  }
+  return null;
+}
+
+/** Identifiant de la cible d'une liste qui couvre cette appli, sinon `null`. */
+function findAppTarget(app: string, b: Blocklist): string | null {
+  for (const id of b.itemIds) {
+    const e = CATALOG_BY_ID[id];
+    if (e?.apps?.some(a => matchesApp(app, a))) return id;
+  }
+  for (const c of b.custom) {
+    if (c.app && matchesApp(app, c.app)) return c.id || c.app;
+  }
+  return null;
+}
+
+export interface AppVerdict extends BlockVerdict {
+  /** Ce qui a tranché : l'appli elle-même, ou le titre de sa fenêtre. */
+  via?: "app" | "window";
+}
+
+/**
+ * Cette application au premier plan est-elle coupée par les listes actives ?
+ *
+ * C'est le pendant de `verdictFor` pour ce qui vit HORS du navigateur, et il
+ * n'a de sens que dans l'app de bureau : une page web ne sait pas quelle appli
+ * est devant (cf. `lib/focus/guard.ts`).
+ *
+ * Trois refus d'emblée, avant même de regarder les listes : l'app elle-même, la
+ * coquille du système, et un relevé vide — mieux vaut ne rien couper que couper
+ * au hasard sur un nom d'appli qu'on n'a pas su lire.
+ */
+export function appVerdictFor(
+  app: string,
+  title: string,
+  store: FocusStore,
+  blocklistIds: string[]
+): AppVerdict {
+  const name = normApp(app);
+  if (!name || SELF_APPS.has(name) || SYSTEM_APPS.has(name)) return { blocked: false };
+  const browser = BROWSER_APPS.has(name);
+
+  const lists = store.blocklists.filter(b => blocklistIds.includes(b.id));
+  for (const b of lists) {
+    if (b.mode === "allow") {
+      // Le navigateur échappe au mode « seuls autorisés » : son titre dit quel
+      // site est devant, pas si TOUS les onglets sont permis. Le garde du
+      // navigateur (guard.ts) reste seul juge à l'intérieur.
+      if (browser) continue;
+      if (!findAppTarget(name, b)) return { blocked: true, list: b, target: app, via: "app" };
+      continue;
+    }
+    if (!browser) {
+      const hit = findAppTarget(name, b);
+      if (hit) return { blocked: true, list: b, target: hit, via: "app" };
+      continue;
+    }
+    const hit = findTitleTarget(title, b);
+    if (hit) return { blocked: true, list: b, target: hit, via: "window" };
+  }
+  return { blocked: false };
+}
+
 /** Nombre de cibles d'une liste — ce qui s'affiche sous son nom. */
 export function listSize(b: Blocklist): number {
-  return b.itemIds.length + b.custom.filter(c => c.domain).length;
+  return b.itemIds.length + b.custom.filter(c => c.domain || c.app).length;
 }
 
 /* ── Programmes : quand déclencher ────────────────────────────────────────── */
