@@ -12,7 +12,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>tao trade lit le titre de la fenêtre active pour mesurer le temps passé par application et par site.</string>
+	<string>tao lit le titre de la fenêtre active pour mesurer le temps passé par application et par site.</string>
 	<key>LSUIElement</key>
 	<false/>
 </dict>
