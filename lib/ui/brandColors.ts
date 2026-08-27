@@ -70,24 +70,25 @@ export const BRAND_COLORS: Record<string, BrandPalette> = {
     secondary: ["#06246C", "#4C86FF"],
     propFirm: true,
   },
-  /* ⚠️ Les deux maisons ci-dessous n'ont pas encore de logo embarqué dans
-     /public/brokers/ : leurs teintes ne viennent donc NI du fichier, ni de
-     `scripts/extract-logo-colors.mjs` — contrairement à toutes les autres. Ce
-     sont des teintes de travail, choisies pour se distinguer des dix-huit
-     principales déjà prises. Dès que le logo est déposé :
-       node scripts/extract-logo-colors.mjs public/brokers/<fichier>
-     et on remplace les trois valeurs par ce qu'il rend. */
-  traday: {
-    primary: "#7A5CFF",                      // à confirmer sur le logo
-    secondary: ["#3D2E99", "#A992FF"],
+  tradeday: {
+    aliases: ["trade day"],
+    /* Les barres du logo. Le fond, un marine quasi noir (#110338), ferait une
+       courbe indistinguable de l'encre du graphique : il monte en secondaire,
+       éclairci de ce qu'il faut pour rester lisible dans les deux thèmes.
+       Ce cyan frôle celui de Topstep — c'est le sien, on ne l'écarte pas
+       artificiellement (cf. l'en-tête du fichier). */
+    primary: "#48C3C8",
+    secondary: ["#2D1B69", "#7FDCE1"],
     propFirm: true,
   },
   myfundedfutures: {
     /* « MFFU » est le sigle courant : un compte nommé ainsi doit se rattacher
        à la maison, comme « TopstepX » se rattache à Topstep. */
     aliases: ["my funded futures", "mffu", "mff"],
-    primary: "#12E29A",                      // à confirmer sur le logo
-    secondary: ["#0A8F62", "#7BF3C9"],
+    /* Les trois teintes sortent du SVG : l'or du trophée, le bleu de son
+       couvercle, puis la fin claire du dégradé. */
+    primary: "#D8AE5E",
+    secondary: ["#3A82F7", "#F3CC81"],
     propFirm: true,
   },
 

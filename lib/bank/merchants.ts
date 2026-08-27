@@ -435,6 +435,12 @@ const MERCHANTS: Array<{ match: RegExp; merchant: Merchant }> = [
      d'un homonyme se verrait décorer d'un logo. */
   { match: /\btradeify\b/, merchant: { slug: "tradeify", name: "Tradeify", color: "#16C98D", logo: "/brokers/Tradeify.png" } },
   { match: /\bapex\b|\bapextrader/, merchant: { slug: "apex", name: "Apex Trader Funding", color: "#0B2A4A", logo: "/brokers/apex.avif" } },
+  { match: /\btrade ?day\b/, merchant: { slug: "tradeday", name: "TradeDay", color: "#110338", logo: "/brokers/tradeday_logo.jpeg" } },
+  /* `mff` n'est PAS reconnu ici, à la différence de la palette : trois lettres
+     sur un libellé de relevé attrapent trop large (un « MFF » quelconque dans
+     une référence de virement suffirait). Le sigle complet, lui, est sans
+     ambiguïté. */
+  { match: /\bmy ?funded ?futures\b|\bmffu\b/, merchant: { slug: "myfundedfutures", name: "MyFundedFutures", color: "#D8AE5E", logo: "/brokers/myfundedfuture.svg" } },
 ];
 
 /** Marchand par `slug` — sert au repli sur l'intermédiaire de paiement. */

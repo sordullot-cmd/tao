@@ -1,4 +1,4 @@
-import { resolvePlatformIcon, PROP_FIRM_PRESETS } from "@/lib/brokers/platforms";
+import { resolvePlatformIcon, matchesExactly, matchesLoosely, PROP_FIRM_PRESETS } from "@/lib/brokers/platforms";
 
 /**
  * Identité visuelle d'un compte : celle de sa PROP FIRM.
@@ -41,12 +41,14 @@ export function firmBrandId(firm: FirmLike | null | undefined): string | null {
   if (!firm?.name) return null;
   const key = firm.name.trim().toLowerCase();
   if (!key) return null;
-  const exact = PROP_FIRM_PRESETS.find((p) => p.id === key || p.name.toLowerCase() === key);
+  /* Les deux mêmes comparaisons que la résolution de logo, et pour cause : une
+     firme reconnue ici doit l'être là-bas. Elles vivaient en double, à la
+     virgule près — et les graphies déclarées (« Trade Day » en deux mots) ne
+     seraient arrivées que d'un côté. */
+  const exact = PROP_FIRM_PRESETS.find((p) => matchesExactly(p, key));
   if (exact) return exact.id;
   // « Topstep #2 », « Apex 2 », « Lucid » : le nom porte encore la maison.
-  const partial = PROP_FIRM_PRESETS.find(
-    (p) => key.includes(p.id) || key.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(key)
-  );
+  const partial = PROP_FIRM_PRESETS.find((p) => matchesLoosely(p, key));
   return partial?.id || null;
 }
 

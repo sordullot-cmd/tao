@@ -116,8 +116,8 @@ export const BROKERS: Record<BrokerId, BrokerAdapter> = {
   alphafutures: propFirm("alphafutures", "Alpha Futures", "Prop firm futures. Export CSV depuis le dashboard (plateforme ProjectX).", "#0EA5E9", "A", "/brokers/alpha%20futur.svg"),
   tradeify: propFirm("tradeify", "Tradeify", "Prop firm futures. Export CSV depuis le dashboard (plateforme ProjectX).", "#F43F5E", "T", "/brokers/Tradeify.png"),
   lucid: propFirm("lucid", "Lucid Trading", "Prop firm futures. Export CSV depuis le dashboard (plateforme ProjectX).", "#6366F1", "L", "/brokers/lucid.png"),
-  traday: propFirm("traday", "Traday", "Prop firm futures. Export CSV depuis le dashboard (plateforme ProjectX).", "#7A5CFF", "TR"),
-  myfundedfutures: propFirm("myfundedfutures", "MyFundedFutures", "Prop firm futures. Export CSV depuis la plateforme (Tradovate / Rithmic / ProjectX).", "#12E29A", "MF"),
+  tradeday: propFirm("tradeday", "TradeDay", "Prop firm futures. Export CSV depuis le dashboard (plateforme ProjectX).", "#48C3C8", "TD", "/brokers/tradeday_logo.jpeg"),
+  myfundedfutures: propFirm("myfundedfutures", "MyFundedFutures", "Prop firm futures. Export CSV depuis la plateforme (Tradovate / Rithmic / ProjectX).", "#D8AE5E", "MF", "/brokers/myfundedfuture.svg"),
 
   // ── Prop firms forex / CFD ──
   ftmo: propFirm("ftmo", "FTMO", "Prop firm forex/CFD. Export CSV ou rapport HTML MetaTrader.", "#2563EB", "F", "/brokers/ftmo.png", "generic"),

@@ -268,7 +268,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Apex Trader Funding", app: [], web: ["apextraderfunding.com"], title: ["apex trader funding"] },
     { name: "Topstep", app: [], web: ["topstep.com", "topsteptrader.com"] },
     { name: "MyFundedFutures", app: [], web: ["myfundedfutures.com"] },
-    { name: "Traday", app: [], web: ["traday.com"] },
+    { name: "TradeDay", app: [], web: ["tradeday.com"] },
     { name: "Take Profit Trader", app: [], web: ["takeprofittrader.com"] },
     { name: "TradeZella", app: [], web: ["tradezella.com"], title: ["tradezella"] },
     { name: "TraderSync", app: [], web: ["tradersync.com"] },

@@ -1,27 +1,30 @@
 import { describe, it, expect } from "vitest";
+import { existsSync } from "node:fs";
 import { PLATFORMS, PROP_FIRM_PRESETS, resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { BROKERS, getBroker } from "@/lib/brokers/registry";
 import { brandColor } from "@/lib/ui/brandColors";
 import { firmBrandId, firmLogo } from "@/lib/accountBrand";
+import { findMerchant } from "@/lib/bank/merchants";
 import { subcategorizeTransaction, type CategorizableTransaction } from "@/lib/bank/categories";
 
-/* Ajouter une maison de prop trading demande de la poser à QUATRE endroits :
-   le catalogue des plateformes (elle devient un preset de création de firme),
-   l'adaptateur d'import, sa couleur d'identité, et la règle bancaire qui range
-   son abonnement. En oublier un ne casse rien visiblement — la firme se crée,
-   mais sort grise, sans parseur, ou son prélèvement tombe dans « Autres ». */
+/* Ajouter une maison de prop trading demande de la poser à CINQ endroits : le
+   catalogue des plateformes (elle devient un preset de création de firme),
+   l'adaptateur d'import, sa couleur d'identité, la règle bancaire qui range son
+   abonnement, et la vignette de relevé. En oublier un ne casse rien de
+   visible — la firme se crée, mais sort grise, sans parseur, ou son
+   prélèvement tombe dans « Autres ». */
 
-const NEW_FIRMS = ["traday", "myfundedfutures"] as const;
+const NEW_FIRMS = ["tradeday", "myfundedfutures"] as const;
 
 /** Un prélèvement par carte, la forme sous laquelle arrive un abonnement. */
 const debit = (label: string): CategorizableTransaction =>
   ({ label, detail: null, kind: "card", amount: -165 });
 
 describe("Catalogue des prop firms", () => {
-  it("propose Traday et MyFundedFutures à la création d'une firme", () => {
+  it("propose TradeDay et MyFundedFutures à la création d'une firme", () => {
     const ids = PROP_FIRM_PRESETS.map(p => p.id);
     for (const id of NEW_FIRMS) expect(ids).toContain(id);
-    expect(platformName("traday")).toBe("Traday");
+    expect(platformName("tradeday")).toBe("TradeDay");
     expect(platformName("myfundedfutures")).toBe("MyFundedFutures");
   });
 
@@ -35,52 +38,61 @@ describe("Catalogue des prop firms", () => {
   });
 
   it("leur donne une teinte propre, reconnue aussi par le nom affiché", () => {
-    expect(brandColor("traday")).toBeTruthy();
-    expect(brandColor("Traday")).toBe(brandColor("traday"));
-    expect(brandColor("MyFundedFutures")).toBe(brandColor("myfundedfutures"));
-    expect(brandColor("traday")).not.toBe(brandColor("myfundedfutures"));
+    expect(brandColor("tradeday")).toBe("#48C3C8");
+    expect(brandColor("TradeDay")).toBe("#48C3C8");
+    expect(brandColor("myfundedfutures")).toBe("#D8AE5E");
+    expect(brandColor("MyFundedFutures")).toBe("#D8AE5E");
   });
 
-  it("reconnaît MyFundedFutures sous son sigle", () => {
-    /* « MFFU » est le nom que tout le monde emploie : un compte saisi ainsi
-       doit sortir aux couleurs de la maison, pas à celles de son type. */
-    expect(brandColor("MFFU")).toBe(brandColor("myfundedfutures"));
-    expect(brandColor("mon compte MFFU #2")).toBe(brandColor("myfundedfutures"));
+  it("reconnaît les graphies courantes des deux maisons", () => {
+    /* « Trade Day » en deux mots et « MFFU » : c'est sous ces formes-là qu'un
+       compte se saisit à la main, et il doit sortir aux couleurs de sa maison
+       plutôt qu'à celles de son type. */
+    expect(brandColor("Trade Day")).toBe("#48C3C8");
+    expect(brandColor("MFFU")).toBe("#D8AE5E");
+    expect(brandColor("mon compte MFFU #2")).toBe("#D8AE5E");
   });
 
   it("rattache une firme à sa maison, renommée ou pas", () => {
-    expect(firmBrandId({ name: "Traday" })).toBe("traday");
+    expect(firmBrandId({ name: "TradeDay" })).toBe("tradeday");
     expect(firmBrandId({ name: "MyFundedFutures 50k" })).toBe("myfundedfutures");
     // La marque choisie à la création survit à n'importe quel libellé.
-    expect(firmBrandId({ name: "Mes comptes", brand: "traday" })).toBe("traday");
+    expect(firmBrandId({ name: "Mes comptes", brand: "tradeday" })).toBe("tradeday");
   });
 
-  it("ne leur prête pas le logo d'une autre marque, faute du leur", () => {
-    /* Aucun fichier n'est embarqué pour ces deux maisons. Le contrat est de
-       rendre `null` — `RoundLogo` pose alors les initiales — et surtout pas le
-       logo d'une marque au nom voisin, ce que faisait la recherche approchante
-       avant que la correspondance exacte lui coupe la route. */
-    for (const id of NEW_FIRMS) {
-      expect(resolvePlatformIcon(id)).toBeNull();
-      expect(firmLogo({ brand: id })).toBeNull();
+  it("rattache aussi une firme saisie sous sa graphie courante", () => {
+    /* Une firme créée à la main, sans passer par le preset : c'est son NOM qui
+       doit la rattacher, et il s'écrit comme les gens l'écrivent. */
+    expect(firmBrandId({ name: "Trade Day" })).toBe("tradeday");
+    expect(firmBrandId({ name: "Trade Day 50k #2" })).toBe("tradeday");
+    expect(firmBrandId({ name: "MFFU" })).toBe("myfundedfutures");
+    expect(firmLogo({ name: "Trade Day" })).toBe("/brokers/tradeday_logo.jpeg");
+    expect(resolvePlatformIcon("MFFU")).toBe("/brokers/myfundedfuture.svg");
+  });
+
+  it("porte leur logo, et le fichier est bien livré", () => {
+    expect(resolvePlatformIcon("tradeday")).toBe("/brokers/tradeday_logo.jpeg");
+    expect(firmLogo({ brand: "myfundedfutures" })).toBe("/brokers/myfundedfuture.svg");
+    /* Un chemin qui ne mène à rien affiche une image cassée — pire que les
+       initiales. On vérifie donc les fichiers eux-mêmes, pour TOUT le
+       catalogue : c'est l'erreur qu'un renommage de fichier laisse passer. */
+    for (const p of PLATFORMS) {
+      if (!p.iconPath) continue;
+      const file = "public" + decodeURIComponent(p.iconPath);
+      expect(existsSync(file), `${p.name} → ${file}`).toBe(true);
     }
-    // La garde ne doit pas non plus avoir cassé les maisons qui ont un logo.
-    expect(resolvePlatformIcon("topstep")).toBe("/brokers/Topstep_Logo.jpg");
-    expect(resolvePlatformIcon("Apex Trader Funding")).toBe("/brokers/apex.avif");
   });
 
   it("range leurs prélèvements dans les frais de prop firm", () => {
-    expect(subcategorizeTransaction(debit("TRADAY LLC"))).toBe("trading.propfirm");
+    expect(subcategorizeTransaction(debit("TRADEDAY"))).toBe("trading.propfirm");
+    expect(subcategorizeTransaction(debit("TRADE DAY LLC"))).toBe("trading.propfirm");
     expect(subcategorizeTransaction(debit("MYFUNDEDFUTURES"))).toBe("trading.propfirm");
     expect(subcategorizeTransaction(debit("MY FUNDED FUTURES"))).toBe("trading.propfirm");
   });
 
-  it("garde TradeDay et Traday distincts", () => {
-    /* Deux maisons réelles, à une lettre près. Le motif « trade ?day » ne
-       capte pas « traday » — d'où son motif à lui — et l'inverse doit rester
-       vrai : chacune se range pour ce qu'elle est. */
-    expect(PROP_FIRM_PRESETS.some(p => p.id === "tradeday")).toBe(false);
-    expect(firmBrandId({ name: "TradeDay" })).not.toBe("traday");
+  it("décore la ligne de relevé de la vignette de la marque", () => {
+    expect(findMerchant(debit("CARTE 12/08 TRADEDAY"))?.name).toBe("TradeDay");
+    expect(findMerchant(debit("CARTE 12/08 MYFUNDEDFUTURES"))?.name).toBe("MyFundedFutures");
   });
 
   it("n'a pas de plateforme sans entrée d'import ni de doublon d'identifiant", () => {

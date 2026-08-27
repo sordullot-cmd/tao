@@ -540,9 +540,6 @@ const RULES: [sub: SpendingSubcategory, re: RegExp][] = [
     "funded ?next", "fundednext", "funding ?pips", "fundingpips", "e8 ?funding", "e8 ?markets",
     "alpha ?capital", "the ?funded ?trader", "blue ?guardian", "goat ?funded", "maven ?trading",
     "ftuk", "city ?traders", "earn2trade", "leeloo", "bulenox", "trade ?day", "tradeday",
-    /* `traday` porte son propre motif : « trade ?day » ne le capte pas, et les
-       deux maisons sont bien distinctes (TradeDay ≠ Traday). */
-    "traday",
     "elite ?trader ?funding", "apex ?trader", "apextrader", "topstep", "take ?profit ?trader",
     "my ?funded ?futures", "myfundedfutures", "instant ?funding", "hola ?prime", "alpha ?futures",
     "tradeify", "funded ?trading", "prop ?firm", "propfirm",

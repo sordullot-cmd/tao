@@ -22,7 +22,7 @@ export type BrokerId =
   | "alphafutures"
   | "tradeify"
   | "lucid"
-  | "traday"
+  | "tradeday"
   | "myfundedfutures"
   // Prop firms forex / CFD
   | "ftmo";
