@@ -59,6 +59,7 @@ import { reconstructHistory } from "@/lib/patrimoineHistory";
 import { periodDays } from "@/lib/ui/period";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonChart, SkeletonList } from "@/components/ui/Skeleton";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, planTotals, primaryPlan,
 } from "@/lib/budgetPlans";
@@ -202,6 +203,19 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
     () => historyChange(points, periodDays(period)),
     [points, period],
   );
+
+  /* Les comptes agrégés arrivent d'un appel réseau. Sans ce garde, la page
+     ouvre sur « ajoute un premier actif » — l'écran de bienvenue — pour
+     quelqu'un dont tout le patrimoine est déjà là, à une seconde près. */
+  if (bank.loading && assets.length === 0) {
+    return (
+      <SkeletonScreen label={t("patrimoine.loading")} gap={24}>
+        <SkeletonStats count={3} />
+        <SkeletonCard><SkeletonChart /></SkeletonCard>
+        <SkeletonCard><SkeletonList rows={5} /></SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
 
   if (assets.length === 0) {
     return (
@@ -590,9 +604,9 @@ function SpendingByCategory({ accounts }) {
         {/* Chargement à vide seulement : dès qu'un relevé est arrivé, on montre
             la répartition et elle se précise compte par compte. */}
         {slices.length === 0 ? (
-          <div style={{ fontSize: 13, color: T.textSub }}>
-            {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
-          </div>
+          loading ? <SkeletonList rows={4} avatar={false} /> : (
+            <div style={{ fontSize: 13, color: T.textSub }}>{t("patrimoine.spending.empty")}</div>
+          )
         ) : (
           <>
             <AllocationChart

@@ -31,6 +31,8 @@ import {
   Check, ChevronLeft, ChevronRight, Wand2, Trophy, Route, Calendar, Quote,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { t, useLang } from "@/lib/i18n";
@@ -136,7 +138,7 @@ function emptyDraft() {
 /* ---------- Page ---------- */
 export default function BlueprintPage() {
   useLang();
-  const [blueprints, setBlueprints] = useCloudState(BLUEPRINT_STORAGE_KEY, BLUEPRINT_CLOUD_KEY, []);
+  const [blueprints, setBlueprints, blueprintsReady] = useCloudState(BLUEPRINT_STORAGE_KEY, BLUEPRINT_CLOUD_KEY, []);
   const { pushUndo } = useUndo();
   const list = useMemo(() => (Array.isArray(blueprints) ? blueprints : []), [blueprints]);
 
@@ -176,6 +178,10 @@ export default function BlueprintPage() {
       return { ...b, tasks };
     }));
   };
+
+  if (useFirstLoad(blueprintsReady, BLUEPRINT_STORAGE_KEY)) {
+    return <PageSkeleton variant="list" label={t("nav.blueprint")} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">

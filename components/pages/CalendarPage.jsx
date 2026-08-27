@@ -26,6 +26,8 @@ import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { fmtInt } from "@/lib/ui/format";
 import { CARD, HeroAmount, PeriodPills, StepperPill, TILE_HOVER } from "@/components/ui/da";
+import { useApp } from "@/lib/contexts/AppContext";
+import { SkeletonScreen, SkeletonCard, SkeletonHeader, Skeleton } from "@/components/ui/Skeleton";
 
 const WEEKDAY_KEYS = ["wd.monday", "wd.tuesday", "wd.wednesday", "wd.thursday", "wd.friday", "wd.saturday", "wd.sunday"];
 
@@ -385,6 +387,25 @@ export default function CalendarPage({ trades = [], setPage }) {
       })}
     </div>
   );
+
+  /* La grille se remplit avec les trades : sans garde, on peint un mois
+     entièrement vide, puis on le recolore — le calendrier « clignote ». */
+  const { tradesLoading } = useApp();
+  if (tradesLoading && trades.length === 0) {
+    return (
+      <SkeletonScreen label={t("nav.calendar")} gap={48}>
+        <SkeletonHeader />
+        <SkeletonCard>
+          {/* Sept colonnes, six rangées : la grille du mois, à sa vraie taille. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+            {Array.from({ length: 42 }).map((_, i) => (
+              <Skeleton key={i} height={83} radius={10} />
+            ))}
+          </div>
+        </SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
 
   return (
     /* 14 px de retrait haut : la barre du haut apporte déjà 20 px, ce qui place

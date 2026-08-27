@@ -20,10 +20,11 @@
 
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
-  classify,
+  classify, classifyDetailed, hostOf, isBrowser,
   type CategoryEdit, type ClassifyRule, type CustomCategory, type Productivity,
 } from "@/lib/activity/categories";
 import { snapshot, type Snapshot } from "@/lib/activity/native";
+import { frontTab } from "@/lib/focus/native";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -38,6 +39,8 @@ export interface Segment {
   label: string;
   /** Titre de fenêtre au moment où le segment a commencé. */
   title: string;
+  /** Hôte de l'onglet, quand le navigateur a pu le dire. Absent sinon. */
+  site?: string;
   /** Identifiant de catégorie (cf. lib/activity/categories). */
   cat: string;
 }
@@ -264,7 +267,7 @@ function flush(): void {
 }
 
 /** Ajoute un intervalle mesuré au jour concerné, en fusionnant si possible. */
-function append(startMs: number, endMs: number, app: string, label: string, title: string, cat: string): void {
+function append(startMs: number, endMs: number, app: string, label: string, title: string, cat: string, site = ""): void {
   if (endMs <= startMs) return;
 
   const date = getLocalDateString(new Date(startMs));
@@ -274,8 +277,8 @@ function append(startMs: number, endMs: number, app: string, label: string, titl
     // absorberait les premières minutes d'aujourd'hui.
     const midnight = new Date(endMs);
     midnight.setHours(0, 0, 0, 0);
-    append(startMs, midnight.getTime() - 1, app, label, title, cat);
-    append(midnight.getTime(), endMs, app, label, title, cat);
+    append(startMs, midnight.getTime() - 1, app, label, title, cat, site);
+    append(midnight.getTime(), endMs, app, label, title, cat, site);
     return;
   }
 
@@ -292,10 +295,70 @@ function append(startMs: number, endMs: number, app: string, label: string, titl
     // un par échantillon — un jour ferait sinon 17 000 entrées.
     last.e = Math.max(last.e, endMs);
   } else {
-    cache.segments.push({ s: startMs, e: endMs, app, label, title, cat });
+    cache.segments.push({ s: startMs, e: endMs, app, label, title, cat, ...(site ? { site } : {}) });
   }
   dirtyTicks += 1;
   if (dirtyTicks >= 4) flush();
+}
+
+/* ─── L'hôte de l'onglet ─────────────────────────────────────────────────── */
+
+/**
+ * Hôte de la page ouverte dans le navigateur, quand le titre ne suffit pas.
+ *
+ * Le problème qu'il résout : beaucoup de sites n'écrivent pas leur nom dans le
+ * titre de la fenêtre. Le lecteur web de Spotify affiche le morceau en cours
+ * — « ELEVEN OCEANS • Moji x Sboy » —, si bien que CHAQUE chanson écoutée
+ * ressortait comme un site différent, qu'aucune ne pouvait être rangée, et que
+ * le temps de musique se retrouvait éparpillé en dizaines de lignes d'une
+ * minute. L'hôte, lui, est le même du premier au dernier morceau.
+ *
+ * Trois précautions, parce que lire l'onglet coûte cher (un `osascript` et un
+ * Apple Event, de l'ordre de 400 ms — cf. src-tauri/src/blocker.rs) :
+ *
+ *  • on ne demande RIEN quand le titre suffit déjà à reconnaître le site. La
+ *    question est posée au catalogue seul, règles de l'utilisateur écartées :
+ *    une règle donne la bonne catégorie mais laisse le nom deviné, donc la
+ *    ligne resterait éclatée.
+ *  • le résultat est mis en cache par (application, titre). Une même page ne se
+ *    demande donc qu'une fois — et pendant l'écoute, c'est une lecture par
+ *    morceau, pas une par échantillon.
+ *  • l'échec est mémorisé comme un vide. Un navigateur non pilotable ou une
+ *    autorisation d'automatisation refusée ne doit pas faire relancer la
+ *    question toutes les deux secondes.
+ *
+ * Le cache vit en mémoire, pas sur le disque : il n'est qu'une économie, et une
+ * URL est ce qu'un suivi d'activité a de plus intime — elle n'a rien à faire
+ * dans un enregistrement permanent. Seul l'HÔTE part dans le segment.
+ */
+const siteByTitle = new Map<string, string>();
+/** Au-delà, on repart de zéro : le cache est une économie, pas un journal. */
+const SITE_CACHE_MAX = 500;
+
+async function resolveSite(snap: Snapshot): Promise<string> {
+  if (!snap.full || !snap.app || !isBrowser(snap.app) || !snap.title) return "";
+
+  const key = `${snap.app}\n${snap.title}`;
+  const known = siteByTitle.get(key);
+  if (known !== undefined) return known;
+
+  // Le titre nomme déjà le site : inutile de déranger le navigateur.
+  if (classifyDetailed(snap.app, snap.title, []).via !== "none") {
+    siteByTitle.set(key, "");
+    return "";
+  }
+
+  let host = "";
+  try {
+    const tab = await frontTab(snap.app);
+    host = tab?.ok ? hostOf(tab.url) : "";
+  } catch {
+    /* Rien de rattrapable ici : on note l'échec comme un vide et on continue de
+       mesurer avec le titre seul. */
+  }
+  if (siteByTitle.size >= SITE_CACHE_MAX) siteByTitle.clear();
+  siteByTitle.set(key, host);
+  return host;
 }
 
 async function tick(): Promise<void> {
@@ -327,9 +390,10 @@ async function tick(): Promise<void> {
     return;
   }
 
-  const { category, label } = classify(snap.app, snap.title, settings.rules);
+  const site = await resolveSite(snap);
+  const { category, label } = classify(snap.app, snap.title, settings.rules, site);
   const changed = live.app !== snap.app || live.label !== label || live.cat !== category;
-  append(now - elapsed, now, snap.app, label, snap.title, category);
+  append(now - elapsed, now, snap.app, label, snap.title, category, site);
 
   live = {
     running: true,

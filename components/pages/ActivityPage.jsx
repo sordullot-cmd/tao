@@ -37,7 +37,9 @@ import { T } from "@/lib/ui/tokens";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
 import { loadRange } from "@/lib/activity/engine";
-import { categoryLabel, isBrowser, PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
+import {
+  categoryLabel, isBrowser, PRODUCTIVITY_COLOR, rootDomain,
+} from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
   ActivityHeader, AppRows, BlockDetail, CategoryRows, DayColumn, Disclosure,
@@ -166,8 +168,18 @@ export default function ActivityPage({ setPage }) {
    * titre — une règle sur « chrome » classerait tout le navigateur.
    */
   const assign = (bucket, category) => {
-    const viaTitle = bucket.isSite;
-    const match = (viaTitle ? bucket.label : bucket.app || bucket.label).trim().toLowerCase();
+    /* Trois champs possibles, du plus sûr au plus approximatif :
+         • le DOMAINE quand on a pu le lire — il range tout le site d'un geste,
+           sous-domaines comprises, et ne peut pas se tromper de cible ;
+         • le TITRE pour un site dont on ne connaît que le nom deviné ;
+         • le NOM DE L'APP pour tout le reste.
+       Le domaine passe en premier parce qu'il est le seul à couvrir les pages
+       qu'on n'a pas encore vues : sans lui, chaque nouvelle page d'un site déjà
+       rangé revenait dans la file. */
+    const domain = bucket.site ? rootDomain(bucket.site) : "";
+    const field = domain ? "site" : (bucket.isSite ? "title" : "app");
+    const match = (domain || (bucket.isSite ? bucket.label : bucket.app || bucket.label))
+      .trim().toLowerCase();
     if (!match) return;
     setSettings(s => ({
       ...s,
@@ -176,7 +188,7 @@ export default function ActivityPage({ setPage }) {
         {
           id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           match,
-          field: viaTitle ? "title" : "app",
+          field,
           category,
         },
       ],
@@ -191,7 +203,9 @@ export default function ActivityPage({ setPage }) {
      Le clic y était IGNORÉ en silence : on choisissait une catégorie, rien ne
      changeait, et rien ne disait pourquoi. La ligne porte maintenant « À
      régler… » et mène à l'endroit où c'est possible. */
-  const canAssign = (a) => !(a.isSite && isBrowser(a.label));
+  /* Un site dont on connaît le domaine est toujours rangeable, même si son
+     titre ne dit rien : c'est le domaine qui porte la règle. */
+  const canAssign = (a) => Boolean(a.site) || !(a.isSite && isBrowser(a.label));
   const blocked = (a) => (canAssign(a)
     ? null
     : "Page sans nom de site : la règle doit porter sur un mot de son titre. Ouvre « Catégories & règles » pour le choisir.");

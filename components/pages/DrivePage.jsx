@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { T as BaseT } from "@/lib/ui/tokens";
+import { Skeleton, SkeletonCircle } from "@/components/ui/Skeleton";
 import { hasFinePointer } from "@/lib/ui/pointer";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { Modal as DAModal, PillButton as DAPillButton, Field as DAField, Input as DAInput, FIELD_FOCUS_RING as DA_FOCUS_RING } from "@/components/ui/form";
@@ -3301,7 +3302,19 @@ function MembersModal({ project, currentUserId, onClose }) {
     <>
     <ModalShell title="Membres" onClose={onClose}>
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: T.textSub, fontSize: 12 }}>Chargementâ€¦</div>
+        /* Trois lignes de membres : la modale garde sa hauteur au lieu de
+           s'agrandir d'un coup quand la liste arrive. */
+        <div aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)" }}>
+              <SkeletonCircle size={28} />
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+                <Skeleton width="60%" height={12} />
+                <Skeleton width="20%" height={10} />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {members.map((m) => {
@@ -3534,7 +3547,13 @@ function AudioPlayer({ url }) {
           </div>
         </>
       ) : (
-        <div style={{ fontSize: 11, color: T.textMut }}>Chargement de l'audioâ€¦</div>
+        /* La forme du lecteur (bouton rond + onde + minutage), pour que la
+           tuile ne change pas de taille quand le fichier arrive. */
+        <div aria-busy="true" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <SkeletonCircle size={28} />
+          <Skeleton height={10} radius={999} style={{ flex: 1 }} />
+          <Skeleton width={48} height={10} />
+        </div>
       )}
     </div>
   );

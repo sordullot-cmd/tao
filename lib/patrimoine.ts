@@ -497,8 +497,9 @@ export const newAssetId = (): string =>
 export function usePatrimoine(): [
   PatrimoineStore,
   (updater: PatrimoineStore | ((prev: PatrimoineStore) => PatrimoineStore)) => void,
+  boolean,
 ] {
-  const [raw, setStore] = useCloudState<PatrimoineStore>(
+  const [raw, setStore, hydrated] = useCloudState<PatrimoineStore>(
     PATRIMOINE_LOCAL_KEY,
     PATRIMOINE_CLOUD_KEY,
     emptyStore(),
@@ -507,7 +508,11 @@ export function usePatrimoine(): [
     assets: Array.isArray(raw?.assets) ? raw.assets : [],
     history: Array.isArray(raw?.history) ? raw.history : [],
   };
-  return [store, setStore];
+  /* Le 3ᵉ élément relaie celui de `useCloudState` : sans lui, les pages
+     Finance ne pouvaient pas distinguer « patrimoine vide » de « pas encore
+     lu », et ouvraient toutes sur leur écran de bienvenue. Les appelants qui
+     ne déstructurent que deux éléments ne changent pas. */
+  return [store, setStore, hydrated];
 }
 
 function round2(n: number): number {

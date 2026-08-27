@@ -27,6 +27,7 @@ import { deleteTradingAccount, notifyAccountsChanged } from "@/lib/propFirms";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { getLang, setLang as setLangPref, t, useLang } from "@/lib/i18n";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { DEFAULT_ALERT_SETTINGS } from "@/lib/hooks/useTradeAlerts";
 import { notify, ensureNotifyPermission, isNotifyGranted, isTauri } from "@/lib/notify";
@@ -577,7 +578,7 @@ function AccountsSection({ setPage }) {
       <div style={{ height: 1, background: T.border, margin: "0 -20px 0" }} />
 
       {loading ? (
-        <div style={{ padding: 16, color: T.textMut, fontSize: 12 }}>{t("settings.loading")}</div>
+        <div aria-busy="true" style={{ padding: "8px 0" }}><SkeletonList rows={3} /></div>
       ) : accounts.length === 0 ? (
         <div style={{ padding: "32px 0", textAlign: "center", color: T.textMut, fontSize: 13 }}>{t("settings.accounts.empty")}</div>
       ) : (
@@ -1032,7 +1033,7 @@ function ImportHistorySection() {
       <div style={{ height: 1, background: T.border, margin: "0 -20px 0" }} />
 
       {loading ? (
-        <div style={{ padding: 16, color: T.textMut, fontSize: 12 }}>{t("settings.loading")}</div>
+        <div aria-busy="true" style={{ padding: "8px 0" }}><SkeletonList rows={3} avatar={false} /></div>
       ) : history.length === 0 ? (
         <div style={{ padding: "32px 0", textAlign: "center", color: T.textMut, fontSize: 13 }}>{t("settings.import.empty")}</div>
       ) : (

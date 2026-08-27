@@ -38,7 +38,9 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Info, RotateCcw } from "lucide-react";
 import { notify, ensureNotifyPermission } from "@/lib/notify";
-import { useFocusStore } from "@/lib/focus/useFocusStore";
+import { useFocusStore, FOCUS_STORAGE_KEY } from "@/lib/focus/useFocusStore";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { T } from "@/lib/ui/tokens";
 import { CARD, PeriodPills, PillButton } from "@/components/ui/da";
 import { closeSession, emptyStore, pause, resume } from "@/lib/focus/model";
@@ -57,7 +59,7 @@ const TABS = [
 ];
 
 export default function FocusPage() {
-  const [store, setStore] = useFocusStore();
+  const [store, setStore, storeReady] = useFocusStore();
   const [tab, setTab] = useState("session");
   /** Nœud d'accueil des boutons d'action, dans la barre d'onglets. */
   const [actionSlot, setActionSlot] = useState(null);
@@ -105,6 +107,10 @@ export default function FocusPage() {
   )), [setStore]);
 
   /* ── Rendu ─────────────────────────────────────────────────────────────── */
+
+  if (useFirstLoad(storeReady, FOCUS_STORAGE_KEY)) {
+    return <PageSkeleton variant="list" />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

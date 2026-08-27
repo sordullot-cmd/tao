@@ -32,7 +32,7 @@ import { PALETTE } from "@/lib/ui/palette";
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
   allCategories, assignableCategories, BUILTIN_CATEGORIES, categoryById, catalogSize, categoryLabel,
-  isBrowser, newCategoryId, PRODUCTIVITY_COLOR, resolveProductivity, suggestCategory,
+  isBrowser, newCategoryId, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain, suggestCategory,
 } from "@/lib/activity/categories";
 import { clearAll, listDays, loadRange } from "@/lib/activity/engine";
 import { fmtDur, recategorize, unclassified } from "@/lib/activity/stats";
@@ -347,9 +347,14 @@ export default function ActivityRulesPage({ setPage }) {
             {pending.slice(0, 25).map(a => {
               /* Un site vu dans un navigateur ne se reconnaît qu'à son titre :
                  une règle sur « chrome » classerait TOUT le navigateur. */
-              const viaTitle = a.isSite;
-              const target = viaTitle ? a.label : (a.app || a.label);
-              const risky = viaTitle && isBrowser(a.label);
+              /* Le domaine d'abord quand on a pu le lire : une règle dessus
+                 range le site ENTIER, pages jamais vues comprises. C'est ce qui
+                 fait la différence entre vider la file une fois et la voir
+                 revenir à chaque nouvelle page du même site. */
+              const domain = a.site ? rootDomain(a.site) : "";
+              const field = domain ? "site" : (a.isSite ? "title" : "app");
+              const target = domain || (a.isSite ? a.label : (a.app || a.label));
+              const risky = !domain && a.isSite && isBrowser(a.label);
               const suggestion = suggestCategory(a.app, a.titles[0]?.title || "");
               return (
                 <div key={a.label} style={{
@@ -360,9 +365,9 @@ export default function ActivityRulesPage({ setPage }) {
                     <span style={{ fontSize: 13, color: T.text }}>{a.label}</span>
                     {/* Le nom brut n'est répété que s'il apprend quelque chose :
                         « BidulePro » sous « BidulePro » ne dit rien. */}
-                    {(a.titles[0]?.title || (viaTitle ? "page sans titre" : a.app)) !== a.label && (
+                    {(a.titles[0]?.title || (a.isSite ? "page sans titre" : a.app)) !== a.label && (
                       <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
-                        {a.titles[0]?.title || (viaTitle ? "page sans titre" : a.app)}
+                        {a.titles[0]?.title || (a.isSite ? "page sans titre" : a.app)}
                       </span>
                     )}
                   </div>
@@ -370,7 +375,7 @@ export default function ActivityRulesPage({ setPage }) {
                   {suggestion && !risky && (
                     <button
                       type="button"
-                      onClick={() => addRule(target, viaTitle ? "title" : "app", suggestion)}
+                      onClick={() => addRule(target, field, suggestion)}
                       title={`Créer la règle « ${target} » → ${categoryLabel(suggestion)}`}
                       style={{
                         ...BTN.sm, border: "none", fontFamily: "inherit", cursor: "pointer",
@@ -393,7 +398,7 @@ export default function ActivityRulesPage({ setPage }) {
                     <CategoryPicker
                       cat="other"
                       label="Classer dans…"
-                      onPick={(cat) => addRule(target, viaTitle ? "title" : "app", cat)}
+                      onPick={(cat) => addRule(target, field, cat)}
                     />
                   )}
                 </div>
@@ -613,8 +618,12 @@ export default function ActivityRulesPage({ setPage }) {
       >
         <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
           Une règle cherche un fragment de texte dans le nom de l’application ou dans le titre de
-          la fenêtre. Tes règles passent avant celles livrées avec l’app, et la plus récente
-          l’emporte — corriger une erreur ne demande donc pas de supprimer l’ancienne.
+          la fenêtre. « Sur le domaine » est le cas à part et le plus sûr : elle ne cherche pas un
+          fragment mais vise le domaine lui-même et ses sous-domaines — « spotify.com » couvre
+          <code style={{ fontFamily: "var(--font-mono, monospace)" }}>open.spotify.com</code> sans
+          jamais attraper un autre site. C’est celle qu’écrit un clic depuis la file d’attente,
+          quand le domaine a pu être lu. Tes règles passent avant celles livrées avec l’app, et la
+          plus récente l’emporte — corriger une erreur ne demande donc pas de supprimer l’ancienne.
         </span>
 
         {settings.rules.map(r => (
@@ -632,6 +641,7 @@ export default function ActivityRulesPage({ setPage }) {
             >
               <option value="app">dans l’application</option>
               <option value="title">dans le titre</option>
+              <option value="site">sur le domaine</option>
             </Select>
             <Select
               value={r.category}
@@ -661,6 +671,7 @@ export default function ActivityRulesPage({ setPage }) {
           <Select value={draft.field} onChange={(e) => setDraft(d => ({ ...d, field: e.target.value }))} style={{ width: 150 }}>
             <option value="app">dans l’application</option>
             <option value="title">dans le titre</option>
+            <option value="site">sur le domaine</option>
           </Select>
           <Select value={draft.category} onChange={(e) => setDraft(d => ({ ...d, category: e.target.value }))} style={{ width: 190 }}>
             {assignableCategories().map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}

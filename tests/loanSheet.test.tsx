@@ -22,7 +22,10 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
       cloudStore.set(k, next);
       return next;
     });
-    return [v, set];
+    /* 3ᵉ élément : le hook réel annonce l'hydratation TERMINÉE dès qu'il n'y a
+       pas d'utilisateur, ce qui est le cas ici. Un mock qui l'omet laisse les
+       pages sur leur squelette de chargement, indéfiniment. */
+    return [v, set, true];
   },
 }));
 

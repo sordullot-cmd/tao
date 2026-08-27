@@ -18,11 +18,12 @@ import { useCallback, useMemo } from "react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { emptyStore, normalizeStore, type FocusStore } from "./model";
 
-const STORAGE_KEY = "tr4de_focus_block";
+export const FOCUS_STORAGE_KEY = "tr4de_focus_block";
+const STORAGE_KEY = FOCUS_STORAGE_KEY;
 const CLOUD_KEY = "focus_blocker";
 
-export function useFocusStore(): [FocusStore, (u: FocusStore | ((p: FocusStore) => FocusStore)) => void] {
-  const [raw, setRaw] = useCloudState<FocusStore>(STORAGE_KEY, CLOUD_KEY, emptyStore());
+export function useFocusStore(): [FocusStore, (u: FocusStore | ((p: FocusStore) => FocusStore)) => void, boolean] {
+  const [raw, setRaw, hydrated] = useCloudState<FocusStore>(STORAGE_KEY, CLOUD_KEY, emptyStore());
 
   /* Le magasin lu du stockage peut venir d'une version antérieure : on le
      complète à la lecture plutôt qu'en écrivant une migration. */
@@ -35,5 +36,8 @@ export function useFocusStore(): [FocusStore, (u: FocusStore | ((p: FocusStore) 
     });
   }, [setRaw]);
 
-  return [store, setStore];
+  /* 3ᵉ élément relayé : la page Focus s'en sert pour ne pas ouvrir sur son
+     écran de bienvenue avant d'avoir lu ses programmes. Le sentinelle, qui ne
+     déstructure que deux éléments, ne change pas. */
+  return [store, setStore, hydrated];
 }

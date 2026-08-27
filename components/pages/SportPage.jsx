@@ -5,6 +5,8 @@ import ReactDOM from "react-dom";
 import Popover from "@/components/ui/Popover";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import {
   Plus, Pencil, Trash2, Check, X, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
@@ -241,7 +243,7 @@ function pickMetric(available, allowed = METRIC_ORDER) {
 
 export default function SportPage() {
   useLang();
-  const [sessions, setSessions] = useCloudState("tr4de_sport_sessions", "sport_sessions", []);
+  const [sessions, setSessions, sessionsReady] = useCloudState("tr4de_sport_sessions", "sport_sessions", []);
   // Bibliothèque personnalisable :
   // - customExercises : exercices ajoutés par l'utilisateur ({ name, category })
   // - hiddenExercises : noms (de la lib intégrée OU custom) que l'utilisateur a masqués
@@ -622,6 +624,10 @@ export default function SportPage() {
       sessions: list,
     }));
   }, [filteredSessions]);
+
+  if (useFirstLoad(sessionsReady, "tr4de_sport_sessions")) {
+    return <PageSkeleton variant="stats" stats={3} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }} className="anim-1">

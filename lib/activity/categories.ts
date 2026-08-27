@@ -279,8 +279,15 @@ export interface ClassifyRule {
   id: string;
   /** Fragment cherché, en minuscules. */
   match: string;
-  /** Où le chercher. Par défaut : le nom de l'application. */
-  field?: "app" | "title";
+  /**
+   * Où le chercher. Par défaut : le nom de l'application.
+   *
+   * `site` cherche dans l'HÔTE de l'onglet, sous-domaines comprises : une règle
+   * sur « spotify.com » couvre `open.spotify.com` comme `accounts.spotify.com`.
+   * C'est le seul champ qui range un site d'un seul geste — sur le titre, il
+   * faut trouver un mot commun à toutes ses pages, et beaucoup n'en ont aucun.
+   */
+  field?: "app" | "title" | "site";
   /** Catégorie attribuée. */
   category: string;
 }
@@ -337,15 +344,27 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
 }
 
 /** Première règle de l'utilisateur qui reconnaît ce relevé (la plus récente). */
-function userHit(rules: ClassifyRule[], app: string, title: string): { category: string; match: string } | null {
+function userHit(
+  rules: ClassifyRule[], app: string, title: string, host = ""
+): { category: string; match: string } | null {
   const al = (app || "").toLowerCase();
   const tl = (title || "").toLowerCase();
+  const hl = (host || "").toLowerCase();
   // Écrite en dernier = consultée en premier : corriger une erreur ne demande
   // pas de supprimer l'ancienne règle.
   for (let i = rules.length - 1; i >= 0; i--) {
     const r = rules[i];
     if (!r?.match) continue;
     const needle = r.match.toLowerCase();
+    if (r.field === "site") {
+      /* Sur un hôte, on ne cherche pas n'importe où dans la chaîne : « ted.com »
+         ne doit pas attraper « limited.com ». La règle vaut pour le domaine
+         lui-même et pour ses sous-domaines, et pour rien d'autre. */
+      if (hl && (hl === needle || hl.endsWith(`.${needle}`))) {
+        return { category: r.category, match: r.match };
+      }
+      continue;
+    }
     const hay = r.field === "title" ? tl : al;
     if (hay.includes(needle)) return { category: r.category, match: r.match };
   }
@@ -362,22 +381,35 @@ function userHit(rules: ClassifyRule[], app: string, title: string): { category:
 export function classifyDetailed(
   app: string,
   title: string,
-  userRules: ClassifyRule[] = []
+  userRules: ClassifyRule[] = [],
+  /* Hote de l'onglet, quand le navigateur a bien voulu le dire (cf.
+     lib/activity/engine). Vide le reste du temps : tout ce qui suit doit
+     continuer de fonctionner sans lui. */
+  site = ""
 ): Classification {
   const browser = isBrowserApp(app);
+  const host = browser ? hostOf(site) : "";
 
   /* Le nom d'abord : il est utile MÊME quand rien n'est classé, et c'est lui
      qui fait la différence entre une file de « Google Chrome » identiques et
-     une liste de sites qu'on peut ranger. */
-  const domain = browser ? domainInTitle(title) : null;
+     une liste de sites qu'on peut ranger.
+
+     L'hôte passe AVANT le titre, sur les deux plans. Pour reconnaître le site,
+     parce qu'un domaine ne se trompe pas là où un titre peut tout dire. Et pour
+     le NOMMER, parce que beaucoup de pages n'écrivent pas le nom du site dans
+     leur titre : le lecteur web de Spotify affiche « ELEVEN OCEANS • Moji x
+     Sboy », si bien que chaque morceau écouté devenait un site à lui seul, et
+     qu'aucun ne pouvait être rangé — le nom deviné changeait à chaque chanson.
+     L'hôte, lui, ne change pas. */
+  const domain = browser ? (host || domainInTitle(title)) : null;
   const siteHit = browser
     ? (domain ? matchDomain(domain) : null) ?? matchTitle(title)
     : null;
   const label = browser
-    ? (siteHit?.entry.name ?? guessSiteName(title) ?? appLabel(app))
+    ? (siteHit?.entry.name ?? hostLabel(host) ?? guessSiteName(title) ?? appLabel(app))
     : (matchAppExact(app)?.entry.name ?? matchAppWord(app)?.entry.name ?? appLabel(app));
 
-  const mine = userHit(userRules, app, title);
+  const mine = userHit(userRules, app, title, host);
   if (mine) {
     return { category: settle(mine.category), label, via: "user", matched: mine.match, isSite: browser, confidence: 1 };
   }
@@ -414,10 +446,68 @@ export function classifyDetailed(
 export function classify(
   app: string,
   title: string,
-  userRules: ClassifyRule[] = []
+  userRules: ClassifyRule[] = [],
+  site = ""
 ): { category: string; label: string } {
-  const { category, label } = classifyDetailed(app, title, userRules);
+  const { category, label } = classifyDetailed(app, title, userRules, site);
   return { category, label };
+}
+
+/* --- Hote ----------------------------------------------------------------- */
+
+/** L'hote d'une URL, sans `www.` -- ou la chaine vide si ce n'en est pas une. */
+export function hostOf(url: string): string {
+  const raw = (url || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    /* Certains navigateurs rendent l'hote nu, sans protocole. On ne va pas plus
+       loin qu'une forme evidente : mieux vaut pas de nom qu'un faux nom. */
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(raw) ? raw.replace(/^www\./, "").toLowerCase() : "";
+  }
+}
+
+/* Suffixes a deux etages : sans eux, « bbc.co.uk » se reduirait a « co.uk » et
+   une regle de domaine attraperait tout le Royaume-Uni. La liste est courte
+   exprès — elle couvre ce qu'on rencontre, pas la liste publique entiere. */
+const TWO_LEVEL_TLD = new Set([
+  "co.uk", "org.uk", "ac.uk", "gov.uk", "co.jp", "or.jp", "ne.jp",
+  "com.au", "net.au", "org.au", "com.br", "com.mx", "com.tr", "com.cn",
+  "co.in", "co.kr", "co.nz", "co.za", "com.ar", "com.sg", "com.hk",
+]);
+
+/**
+ * Le domaine sur lequel poser une regle : « open.spotify.com » -> « spotify.com ».
+ *
+ * C'est ce niveau-la qu'il faut viser et pas l'hote complet : un site se
+ * promene sur ses sous-domaines (`open.`, `accounts.`, `www.`), et une regle par
+ * sous-domaine ferait recommencer le rangement a chaque fois.
+ */
+export function rootDomain(host: string): string {
+  const h = hostOf(host) || (host || "").trim().toLowerCase();
+  if (!h) return "";
+  const parts = h.split(".");
+  if (parts.length <= 2) return h;
+  const lastTwo = parts.slice(-2).join(".");
+  return TWO_LEVEL_TLD.has(lastTwo) ? parts.slice(-3).join(".") : lastTwo;
+}
+
+/**
+ * Le nom presentable d'un hote : « open.spotify.com » -> « Spotify ».
+ *
+ * Sert de nom de repli quand le catalogue ne connait pas le domaine. C'est
+ * grossier -- « Mon-Super-Site » ressort « Mon-super-site » -- mais c'est
+ * STABLE d'une page a l'autre du meme site, ce qu'un nom devine dans le titre
+ * n'est pas, et c'est ce qui permet de ranger le site d'un clic.
+ */
+function hostLabel(host: string): string | null {
+  if (!host) return null;
+  const parts = host.split(".");
+  if (parts.length < 2) return null;
+  const core = parts[parts.length - 2];
+  if (!core || core === "localhost") return host;
+  return core.charAt(0).toUpperCase() + core.slice(1);
 }
 
 /* ─── Noms ───────────────────────────────────────────────────────────────── */

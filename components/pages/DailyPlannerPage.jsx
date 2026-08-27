@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { t, useLang } from "@/lib/i18n";
@@ -305,7 +307,7 @@ export default function DailyPlannerPage() {
   const [dateKey, setDateKey] = useState(() => todayKey());
 
   // Planner (tâches, objectifs, énergie) par jour — synchronisé Supabase
-  const [plannerStore, setPlannerStore] = useCloudState(STORAGE_PLANNER, "daily_planner", {});
+  const [plannerStore, setPlannerStore, plannerReady] = useCloudState(STORAGE_PLANNER, "daily_planner", {});
   const day = plannerStore[dateKey] || { tasks: [], goals: [], energy: 7 };
   const updateDay = (patch) => setPlannerStore(prev => ({ ...prev, [dateKey]: { ...day, ...patch } }));
 
@@ -463,6 +465,13 @@ export default function DailyPlannerPage() {
   const updateTaskNote = (id, note) => updateDay({ tasks: tasks.map(p => p.id === id ? { ...p, note } : p) });
   const removeTask = (id) => updateDay({ tasks: tasks.filter(p => p.id !== id) });
   const taskDoneCount = tasks.filter(p => p.done).length;
+
+  /* Journée et habitudes viennent de la même hydratation : les deux clés sont
+     passées pour qu'un cache partiel (habitudes en place, journée absente)
+     n'ouvre PAS sur un squelette — il y a déjà de quoi peindre. */
+  if (useFirstLoad(plannerReady, STORAGE_PLANNER, STORAGE_HABITS)) {
+    return <PageSkeleton variant="list" label={t("nav.dailyPlanner")} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">

@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from "react";
 import { ChevronDown, Plus, Check, ArrowRight, Trash2 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
@@ -34,7 +36,7 @@ const sizeToUsd = (s) => {
 
 export default function ScalingPage({ onGeneratePlan }) {
   useLang();
-  const [accounts, setAccounts] = useCloudState(STORAGE_KEY, "prop_firm_accounts", []);
+  const [accounts, setAccounts, accountsReady] = useCloudState(STORAGE_KEY, "prop_firm_accounts", []);
   const [sim, setSim] = useCloudState(STORAGE_SIM_KEY, "scaling_sim", { capitalSize: 50000, pctMonthly: 5, accountsTarget: 3, weeksPerEval: 7 });
   const [expanded, setExpanded] = useState({});
   const [showForm, setShowForm] = useState(false);
@@ -42,6 +44,10 @@ export default function ScalingPage({ onGeneratePlan }) {
   const totalCapital = accounts.filter(a => a.status !== "failed").reduce((s, a) => s + sizeToUsd(a.size), 0);
   const totalPnL = accounts.reduce((s, a) => s + (Number(a.pnl) || 0), 0);
   const activeCount = accounts.filter(a => a.status !== "failed").length;
+
+  if (useFirstLoad(accountsReady, STORAGE_KEY)) {
+    return <PageSkeleton variant="stats" stats={3} />;
+  }
 
   return (
     <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 20 }}>

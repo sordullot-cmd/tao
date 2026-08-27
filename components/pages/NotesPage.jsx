@@ -35,6 +35,8 @@ import {
 // Le titre vient du module du vault : c'est lui qui nomme les fichiers .md, et
 // un lien [[…]] doit viser exactement ce nom pour rester valide dans Obsidian.
 import { noteTitle } from "@/lib/notes/markdown";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { SkeletonScreen, SkeletonCard, SkeletonList, Skeleton } from "@/components/ui/Skeleton";
 
 // KaTeX (~280 ko) n'est téléchargé qu'à la première ouverture de l'aperçu.
 const NotePreview = dynamic(() => import("@/components/notes/NotePreview"), {
@@ -807,6 +809,25 @@ export default function NotesPage() {
   }, [notes, query, activeTag]);
 
   const firstLine = (content) => (content || "").split("\n").find(l => l.trim()) || "(Sans titre)";
+
+  /* Première visite sur cet appareil : rien en cache, donc l'écran afficherait
+     « aucune note » à quelqu'un qui en a des centaines dans le cloud. */
+  const booting = useFirstLoad(notesHydrated, STORAGE_KEY);
+  if (booting) {
+    return (
+      <SkeletonScreen label={t("nav.notes")} gap={16} style={{ height: "calc(100vh - 120px)" }}>
+        <Skeleton width={240} height={34} radius={999} />
+        {/* Deux colonnes : la liste à gauche, l'éditeur à droite — la même
+            répartition que la page réelle, pour qu'elle ne se réagence pas. */}
+        <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
+          <div style={{ width: 280, flexShrink: 0 }}>
+            <SkeletonCard style={{ height: "100%" }}><SkeletonList rows={7} avatar={false} /></SkeletonCard>
+          </div>
+          <SkeletonCard style={{ flex: 1, minWidth: 0 }}><SkeletonList rows={9} avatar={false} /></SkeletonCard>
+        </div>
+      </SkeletonScreen>
+    );
+  }
 
   return (
     <div

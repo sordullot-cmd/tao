@@ -26,6 +26,8 @@ import { luminance } from "@/lib/ui/color";
 import { TAG_COLORS, STRATEGY_COLOR_DEFAULT } from "@/lib/ui/tradingColors";
 import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
+import { useApp } from "@/lib/contexts/AppContext";
+import { SkeletonScreen, SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
 import { fmt } from "@/lib/ui/format";
 import {
   CARD, TH, DirectionTag, SymbolCell, TableFilter, symbolLabel,
@@ -1064,6 +1066,20 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     const start = pageIndex * pageSize;
     return sortedGroups.slice(start, start + pageSize);
   }, [sortedGroups, paginated, pageIndex, pageSize]);
+
+  /* Les trades arrivent de Supabase. Sans ce garde, la page affiche « Aucun
+     trade » le temps de la requête — un état vide qui n'est pas vrai, et le
+     seul écran du site où l'utilisateur risque de croire ses données perdues.
+     Le squelette reprend la forme du tableau, pas celle de l'état vide. */
+  const { tradesLoading } = useApp();
+  if (tradesLoading && (!trades || trades.length === 0)) {
+    if (embedded) return null;
+    return (
+      <SkeletonScreen label={t("trades.title")} gap={24}>
+        <SkeletonCard><SkeletonTable rows={maxRows || 10} cols={6} /></SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
 
   if (!trades || trades.length === 0) {
     if (embedded) return null; // l'empty state est géré par le parent

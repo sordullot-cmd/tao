@@ -25,11 +25,14 @@ import {
   holdingGainPct,
   holdingValue,
   usePatrimoine,
+  PATRIMOINE_LOCAL_KEY,
 } from "@/lib/patrimoine";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 export default function PatrimoineHoldingPage({ selection, setPage, setSelectedAssetId }) {
   useLang();
-  const [store] = usePatrimoine();
+  const [store, , storeReady] = usePatrimoine();
 
   const asset = (store.assets || []).find((a) => a.id === selection?.assetId) || null;
   const holding = asset
@@ -51,6 +54,12 @@ export default function PatrimoineHoldingPage({ selection, setPage, setSelectedA
       />
     </div>
   );
+
+  /* Le store est lu depuis le cloud : « introuvable » avant sa réponse est
+     une erreur affichée à tort, sur une page ouverte par un lien direct. */
+  if (useFirstLoad(storeReady, PATRIMOINE_LOCAL_KEY)) {
+    return <PageSkeleton variant="detail" />;
+  }
 
   if (!asset || !holding) {
     return (

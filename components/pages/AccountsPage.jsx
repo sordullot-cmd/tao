@@ -33,6 +33,7 @@ import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { firmLogo } from "@/lib/accountBrand";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
+import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList, SkeletonHeader } from "@/components/ui/Skeleton";
 
 const BROKER_LOGOS = {
   "tradovate":           "/trado.png",
@@ -104,7 +105,7 @@ const parseEvalSize = (size) => {
   return num;
 };
 
-export default function AccountsPage({ accounts = [], trades = [], setPage, selectedAccountIds = [], setSelectedAccountDetailId, setSelectedFirmId, setAccounts, firms = [], setFirms, userId, archivedMeta = {}, setArchivedMeta }) {
+export default function AccountsPage({ accountsLoading = false, accounts = [], trades = [], setPage, selectedAccountIds = [], setSelectedAccountDetailId, setSelectedFirmId, setAccounts, firms = [], setFirms, userId, archivedMeta = {}, setArchivedMeta }) {
   useLang();
   const notPlaceholder = (accounts || []).filter((a) => !isPlaceholderAccount(a.id));
   const firmById = React.useMemo(() => new Map((firms || []).map((f) => [f.id, f])), [firms]);
@@ -596,6 +597,19 @@ export default function AccountsPage({ accounts = [], trades = [], setPage, sele
     const arr = Array.isArray(prev) ? prev : [];
     return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
   });
+
+  /* Comptes et firmes arrivent de Supabase après l'authentification. L'état
+     vide de cette page est une invitation à créer un premier compte : la
+     montrer à quelqu'un qui en possède déjà est le contresens à éviter. */
+  if (accountsLoading && accounts.length === 0) {
+    return (
+      <SkeletonScreen label={t("nav.accounts")} gap={24}>
+        <SkeletonHeader />
+        <SkeletonStats count={3} />
+        <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">

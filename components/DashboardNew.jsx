@@ -224,6 +224,13 @@ export default function App() {
   const [userId, setUserId] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [accounts, setAccounts] = useState([]);
+  /* Les comptes viennent d'une requête Supabase lancée après l'auth. Sans ce
+     drapeau, les pages qui en dépendent n'ont aucun moyen de distinguer « pas
+     encore reçus » de « aucun compte » — et affichent l'invitation à en créer
+     un à quelqu'un qui en a déjà. Reste vrai tant que la PREMIÈRE requête n'a
+     pas répondu ; les resynchronisations suivantes n'y touchent plus, elles
+     doivent se faire sans vider l'écran. */
+  const [accountsLoading, setAccountsLoading] = useState(true);
   // Firmes de prop trading (parents des comptes) — voir lib/propFirms.
   const { firms, setFirms } = usePropFirms(user?.id);
   const [selectedAccountIdHeader, setSelectedAccountIdHeader] = useState(null);
@@ -323,11 +330,17 @@ export default function App() {
       } catch (err) {
         console.error("Error loading accounts:", err);
         setAccounts([]);
+      } finally {
+        setAccountsLoading(false);
       }
     };
 
     if (user?.id) {
       loadAccounts();
+    } else {
+      /* Pas d'utilisateur : la requête ne partira jamais, et laisser le drapeau
+         levé figerait les pages sur leur squelette. */
+      setAccountsLoading(false);
     }
     // Resynchronise quand un compte est créé/modifié/supprimé ailleurs
     // (modales de la page Comptes, page détail d'une firme, sélecteurs).
@@ -780,11 +793,11 @@ export default function App() {
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
     backtest: <BacktestPage firms={firms} />,
     brokers: <BrokersPage />,
-    accounts: <AccountsPage accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
-    "account-detail": <AccountDetailPage accountId={selectedAccountDetailId} accounts={accounts} firms={firms} trades={trades} strategies={strategies} setPage={setPage} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
+    accounts: <AccountsPage accountsLoading={accountsLoading} accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
+    "account-detail": <AccountDetailPage accountsLoading={accountsLoading} accountId={selectedAccountDetailId} accounts={accounts} firms={firms} trades={trades} strategies={strategies} setPage={setPage} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
     // `strategies` alimente la colonne « Stratégie » du tableau de trades :
     // sans elle, la page retombe sur le cache localStorage de TradesPage.
-    "firm-detail": <PropFirmDetailPage firmId={selectedFirmId} firms={firms} accounts={accounts} trades={trades} strategies={strategies} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} />,
+    "firm-detail": <PropFirmDetailPage accountsLoading={accountsLoading} firmId={selectedFirmId} firms={firms} accounts={accounts} trades={trades} strategies={strategies} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} />,
     /* Ancienne route « Objectifs » : elle mène désormais à la page fusionnée,
        pour que les liens existants (palette de commandes, renvois d'autres
        pages) tombent au bon endroit plutôt que sur un doublon. */

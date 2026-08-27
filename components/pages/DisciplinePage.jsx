@@ -32,6 +32,8 @@ import { useDailySessionNotes } from "@/lib/hooks/useDailySessionNotes";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
 import { describeRule, isRuleLive, computeStats, computeJournaledDates } from "@/lib/compliance";
 import { CARD } from "@/components/ui/da";
+import { useApp } from "@/lib/contexts/AppContext";
+import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList, SkeletonText } from "@/components/ui/Skeleton";
 import Popover from "@/components/ui/Popover";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { FIELD_FOCUS_RING as DA_FOCUS_RING, Modal as DAModal, PillButton as DAPillButton, ScrollArea as DAScrollArea } from "@/components/ui/form";
@@ -975,6 +977,20 @@ export default function DisciplinePage({ trades = [] }) {
       [ruleId]: prev[ruleId].map((day, idx) => idx === dayIdx ? !day : day)
     }));
   };
+
+  /* Les scores de discipline se calculent SUR les trades : affichés avant
+     qu'ils soient là, ils annoncent 0 % de respect des règles — le pire
+     contresens possible sur cette page-là. */
+  const { tradesLoading } = useApp();
+  if (tradesLoading && trades.length === 0) {
+    return (
+      <SkeletonScreen label={t("nav.discipline")} gap={24}>
+        <SkeletonStats count={4} />
+        <SkeletonCard><SkeletonList rows={5} avatar={false} /></SkeletonCard>
+        <SkeletonCard><SkeletonText lines={4} /></SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
 
   return (
     <>

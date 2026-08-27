@@ -75,7 +75,10 @@ import {
   newAssetId,
   styleOfType,
   usePatrimoine,
+  PATRIMOINE_LOCAL_KEY,
 } from "@/lib/patrimoine";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 const FIELD = {
   height: 38,
@@ -99,7 +102,7 @@ const num = (v) => {
 
 export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHolding }) {
   useLang();
-  const [store, setStore] = usePatrimoine();
+  const [store, setStore, storeReady] = usePatrimoine();
   const [line, setLine] = React.useState(EMPTY_LINE);
   const [editingLineId, setEditingLineId] = React.useState(null);
   const [confirmingId, setConfirmingId] = React.useState(null);
@@ -149,6 +152,12 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
       <BackLink label={t("patrimoine.title")} onClick={() => setPage?.("patrimoine")} />
     </div>
   );
+
+  /* Le store est lu depuis le cloud : « introuvable » avant sa réponse est
+     une erreur affichée à tort, sur une page ouverte par un lien direct. */
+  if (useFirstLoad(storeReady, PATRIMOINE_LOCAL_KEY)) {
+    return <PageSkeleton variant="detail" />;
+  }
 
   if (!asset) {
     return (

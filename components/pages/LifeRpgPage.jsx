@@ -41,6 +41,8 @@ import {
   CalendarClock, Flag, Milestone,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 
 import MiniCalendar from "@/components/ui/MiniCalendar";
@@ -821,6 +823,10 @@ export default function LifeRpgPage() {
      passent donc par là, au lieu de renvoyer vers une autre page. */
   const createGoalRef = useRef(null);
   const openGoalForm = () => createGoalRef.current?.();
+
+  if (useFirstLoad(stateReady, STORAGE_KEY)) {
+    return <PageSkeleton variant="stats" label={t("nav.lifeRpg")} stats={3} />;
+  }
 
   return (
     /* 14 px de retrait haut ; blocs à 28 px (les autres pages sont à 36, mais

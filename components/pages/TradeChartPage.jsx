@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "@/lib/ui/tokens";
 import { FIELD } from "@/components/ui/form";
+import { useApp } from "@/lib/contexts/AppContext";
+import { SkeletonScreen, SkeletonCard, SkeletonChart, Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * TradeChartPage — visualise un trade importé sur un graphique OHLC (Yahoo Finance).
@@ -206,6 +208,18 @@ export default function TradeChartPage({ trades = [] }) {
     return () => { cancelled = true; };
   }, [selected]);
 
+  /* Le sélecteur de trade est vide tant que les trades n'ont pas atterri :
+     on montrerait « aucun trade importé » à quelqu'un qui en a mille. */
+  const { tradesLoading } = useApp();
+  if (tradesLoading && !sortedTrades.length) {
+    return (
+      <SkeletonScreen label="Chargement" style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <Skeleton width={320} height={36} radius={8} />
+        <SkeletonCard><SkeletonChart height={480} bars={24} /></SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
+
   if (!sortedTrades.length) {
     return (
       <div style={{ padding: 32, color: T.textSub }}>
@@ -279,21 +293,20 @@ export default function TradeChartPage({ trades = [] }) {
         }}
       >
         <div ref={containerRef} style={{ width: "100%", height: 480 }} />
+        {/* Le voile OPAQUE, et non translucide : sous lui il n'y a que le
+            graphique du trade précédent, dont les prix n'ont plus rien à voir
+            avec celui qu'on vient de choisir. Le laisser transparaître le
+            ferait lire comme la réponse en cours d'arrivée. */}
         {loading && (
           <div
             style={{
               position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "color-mix(in srgb, var(--color-card-bg, #FFFFFF) 78%, transparent)",
-              color: T.textSub,
-              fontSize: 13,
+              inset: 12,
+              background: T.surface,
               borderRadius: "var(--radius-card)",
             }}
           >
-            Chargement des bougies…
+            <SkeletonChart height={480} bars={24} />
           </div>
         )}
         {error && !loading && (

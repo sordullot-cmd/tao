@@ -74,6 +74,7 @@ import {
 } from "@/lib/bank/transactions";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList } from "@/components/ui/Skeleton";
 import { fmt } from "@/lib/ui/format";
 
 /* Trois fenêtres, et une saisie libre. La semaine et le semestre sont partis :
@@ -407,6 +408,19 @@ export default function CashflowPage({ setPage }) {
      le prévisionnel, qui ne dépend d'aucune banque, reste en dessous. */
   const noBank = bank.accounts.length === 0;
 
+  /* Synchronisation bancaire en cours et rien en cache : la carte « connecte
+     une banque » proposerait de brancher ce qui est justement en train de se
+     brancher. Le squelette dit « ça arrive » sans proposer d'action fausse. */
+  if (bank.loading && noBank) {
+    return (
+      <SkeletonScreen label={t("patrimoine.spending.loading")} gap={28}>
+        {header}
+        <SkeletonStats count={4} />
+        <SkeletonCard><SkeletonList rows={6} /></SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">
       {header}
@@ -430,8 +444,10 @@ export default function CashflowPage({ setPage }) {
           </button>
         </section>
       ) : empty ? (
-        <section style={{ ...CARD, padding: "48px 32px", textAlign: "center", fontSize: 14, color: T.textSub }}>
-          {loading ? t("patrimoine.spending.loading") : t("patrimoine.spending.empty")}
+        <section style={{ ...CARD, padding: loading ? 16 : "48px 32px", textAlign: loading ? "left" : "center", fontSize: 14, color: T.textSub }} aria-busy={loading || undefined}>
+          {/* Les comptes sont là, les opérations pas encore : c'est la liste
+              qu'on attend, on montre donc sa forme et non une phrase. */}
+          {loading ? <SkeletonList rows={6} /> : t("patrimoine.spending.empty")}
         </section>
       ) : (
         <>

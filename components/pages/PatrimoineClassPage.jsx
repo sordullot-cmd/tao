@@ -29,11 +29,14 @@ import {
   netWorth,
   shareOf,
   usePatrimoine,
+  PATRIMOINE_LOCAL_KEY,
 } from "@/lib/patrimoine";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAssetId }) {
   useLang();
-  const [store] = usePatrimoine();
+  const [store, , storeReady] = usePatrimoine();
   const cls = classBySlug(classSlug || "");
   const [addingAsset, setAddingAsset] = React.useState(false);
   const [addingBank, setAddingBank] = React.useState(false);
@@ -45,6 +48,12 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
       <BackLink label={t("patrimoine.title")} onClick={() => setPage?.("patrimoine")} />
     </div>
   );
+
+  /* Le store est lu depuis le cloud : « introuvable » avant sa réponse est
+     une erreur affichée à tort, sur une page ouverte par un lien direct. */
+  if (useFirstLoad(storeReady, PATRIMOINE_LOCAL_KEY)) {
+    return <PageSkeleton variant="detail" />;
+  }
 
   if (!cls) {
     return (

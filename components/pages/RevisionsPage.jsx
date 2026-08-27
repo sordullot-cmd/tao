@@ -23,6 +23,8 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Play, Sparkles, Plus, Brain } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
@@ -80,7 +82,7 @@ function DueCounter({ value, label, color }) {
 }
 
 export default function RevisionsPage() {
-  const [raw, setRaw] = useCloudState(STORAGE_KEY, "srs", emptyStore());
+  const [raw, setRaw, srsReady] = useCloudState(STORAGE_KEY, "srs", emptyStore());
   const [notes] = useCloudState("tr4de_notes", "notes", []);
   const [books] = useCloudState("tr4de_books", "reading_list", []);
   const { pushUndo } = useUndo();
@@ -231,6 +233,10 @@ export default function RevisionsPage() {
     setSession({ queue: q, at });
   };
 
+  /* Appelé AVANT le retour anticipé de la séance : un hook placé après lui ne
+     serait pas exécuté sur tous les rendus, et React perdrait son ordre. */
+  const booting = useFirstLoad(srsReady, STORAGE_KEY);
+
   /* ── Séance ────────────────────────────────────────────────────────────── */
 
   if (session) {
@@ -259,6 +265,8 @@ export default function RevisionsPage() {
       </div>
     );
   }
+
+  if (booting) return <PageSkeleton variant="list" />;
 
   /* ── Page ──────────────────────────────────────────────────────────────── */
 

@@ -23,6 +23,7 @@ import { accountBrand, firmLogo } from "@/lib/accountBrand";
 import { AccountModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 /* ---------------------------------------------------------------------------
    Page « détail d'un compte » — portée depuis la maquette Figma
@@ -95,7 +96,7 @@ function cumulativeByDay(list) {
     .filter(p => !isNaN(msOf(p.date)));
 }
 
-export default function AccountDetailPage({ accountId, accounts = [], firms = [], trades = [], strategies = [], setPage, setSelectedFirmId, setAccounts, archivedMeta = {} }) {
+export default function AccountDetailPage({ accountsLoading = false, accountId, accounts = [], firms = [], trades = [], strategies = [], setPage, setSelectedFirmId, setAccounts, archivedMeta = {} }) {
   useLang();
   const { user } = useAuth();
   /* Les couleurs de courbe suivent la prop firm du compte avant son broker :
@@ -367,6 +368,13 @@ export default function AccountDetailPage({ accountId, accounts = [], firms = []
       }))
       .filter(s => s.points.length > 1);
   }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId, firmById]);
+
+  /* Avant le garde du dessous : sans compte chargé, `account` est introuvable
+     et la page annonce « compte introuvable » — un message d'erreur pour ce
+     qui n'est qu'une requête en cours. */
+  if (accountsLoading && accounts.length === 0) {
+    return <PageSkeleton variant="detail" label={t("nav.accounts")} />;
+  }
 
   // Vue normale sans compte, ou vue archivée sans aucun compte archivé.
   if ((!isArchivedView && !account) || (isArchivedView && archivedAccts.length === 0)) {

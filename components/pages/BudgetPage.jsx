@@ -53,6 +53,8 @@ import { AllocationChart, CARD, PeriodPills, SectionTitle } from "@/components/u
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import {
   BUDGET_CLOUD_KEY, BUDGET_STORAGE_KEY, amountOf, pctOf,
 } from "@/lib/budgetPlans";
@@ -195,7 +197,7 @@ function GhostButton({ icon, children, onClick, onBlur, danger, tone = "mute" })
    laisser croire qu'il reste un lien à suivre. */
 export default function BudgetPage() {
   useLang();
-  const [store, setStore] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
+  const [store, setStore, budgetReady] = useCloudState(BUDGET_STORAGE_KEY, BUDGET_CLOUD_KEY, defaultStore());
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   /* Id de l'élément qui vient d'être créé : son champ prend le focus au montage,
      texte sélectionné — on tape directement le nom voulu. */
@@ -325,6 +327,10 @@ export default function BudgetPage() {
     amount: amountOf(it, plan.income),
   }));
   const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
+
+  if (useFirstLoad(budgetReady, BUDGET_STORAGE_KEY)) {
+    return <PageSkeleton variant="stats" label={t("nav.budget")} stats={3} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }} className="anim-1">

@@ -24,6 +24,7 @@ import { RoundLogo } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { bankLogo, bankMatchKey } from "@/lib/bank/bankLogos";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
+import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonHeader } from "@/components/ui/Skeleton";
 import { useFavoriteBanks } from "@/lib/bank/useFavoriteBanks";
 import { startBankConnection } from "@/lib/bank/startConnection";
 import { BankFormModal } from "@/components/modals/PatrimoineModals";
@@ -67,7 +68,7 @@ function formatBalanceTime(iso) {
 export default function PatrimoineBankPage({ setPage }) {
   useLang();
   const {
-    configured, connections, accounts, error, reload, revalidating, updatedAt,
+    configured, connections, accounts, error, reload, revalidating, updatedAt, loading,
   } = useBankAccounts();
   /* Le choix de l'établissement et la redirection DSP2 vivent dans la modale
      (components/modals/PatrimoineModals.jsx) : la page n'a plus qu'à l'ouvrir. */
@@ -111,6 +112,18 @@ export default function PatrimoineBankPage({ setPage }) {
     await fetch(`/api/bank/accounts?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     reload();
   };
+
+  /* `loading` du hook ne vaut vrai QU'À VIDE (une relecture par-dessus des
+     comptes déjà affichés passe par `revalidating`) : le squelette ne peut donc
+     pas remplacer une liste déjà peinte. */
+  if (loading) {
+    return (
+      <SkeletonScreen gap={24}>
+        <SkeletonHeader />
+        <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
+      </SkeletonScreen>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">

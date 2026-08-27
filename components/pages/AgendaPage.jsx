@@ -11,6 +11,7 @@ import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { DateField, TimeField } from "./AgendaDateFields";
 import MiniCalendar from "@/components/ui/MiniCalendar";
@@ -1565,7 +1566,13 @@ export default function AgendaPage() {
   /* ─────────────── Corps ─────────────── */
   let body = null;
   if (!ready || configured === null) {
-    body = <div style={{ ...card(), padding: 48, textAlign: "center", color: T.textMut }}>Chargement…</div>;
+    /* Le mot « Chargement… » posé au centre d'une carte vide ne dit rien de ce
+       qui arrive ; la silhouette de la liste d'évènements, si. */
+    body = (
+      <div style={{ ...card(), padding: 16 }} aria-busy="true">
+        <SkeletonList rows={5} />
+      </div>
+    );
   } else if (configured === false) {
     body = (
       <div style={{ ...card(), padding: 32, textAlign: "center" }}>

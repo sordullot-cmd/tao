@@ -40,11 +40,13 @@ import { AssetFormModal } from "@/components/modals/PatrimoineModals";
 import { fmt, fmtMonthYear } from "@/lib/ui/format";
 import { debtTotals, loanStats } from "@/lib/loans";
 import { bankAccountToAsset, isBankAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
-import { assetValue, classBySlug, netWorth, usePatrimoine } from "@/lib/patrimoine";
+import { assetValue, classBySlug, netWorth, usePatrimoine, PATRIMOINE_LOCAL_KEY } from "@/lib/patrimoine";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
 export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId }) {
   useLang();
-  const [store, setStore] = usePatrimoine();
+  const [store, setStore, storeReady] = usePatrimoine();
   /* `null` = fermé ; un objet ouvre la modale de saisie, éventuellement avec un
      type pré-choisi (« ajouter un crédit » depuis l'état vide). */
   const [addingAsset, setAddingAsset] = React.useState(null);
@@ -103,6 +105,10 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
       balance: -Math.max(0, value),
       updatedAt: new Date().toISOString(),
     }));
+
+  if (useFirstLoad(storeReady, PATRIMOINE_LOCAL_KEY)) {
+    return <PageSkeleton variant="list" />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">

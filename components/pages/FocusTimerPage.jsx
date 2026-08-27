@@ -13,6 +13,8 @@ const saveTimer = (s) => {
 };
 import { Play, Pause, RotateCcw, SkipForward, Square, Coffee, Focus, Flame, CheckCircle2, Pencil, Check, X } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { notify, ensureNotifyPermission } from "@/lib/notify";
 import { Stat } from "@/components/ui/Stat";
 import { PeriodPills } from "@/components/ui/da";
@@ -62,7 +64,7 @@ const fmtDuration = (secs) => {
 
 export default function FocusTimerPage() {
   useLang();
-  const [sessions, setSessions] = useCloudState(LOG_KEY, "focus_sessions", []);
+  const [sessions, setSessions, sessionsReady] = useCloudState(LOG_KEY, "focus_sessions", []);
 
   // Custom durations per mode (persisted)
   const [durations, setDurations] = useState(() => {
@@ -254,6 +256,10 @@ export default function FocusTimerPage() {
     }
     return count;
   })();
+
+  if (useFirstLoad(sessionsReady, LOG_KEY)) {
+    return <PageSkeleton variant="stats" label={t("nav.focus")} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">

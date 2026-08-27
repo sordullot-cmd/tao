@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { Plus, BookOpen, Check, Trash2, Pencil, X, BookMarked, FileText, Library, ChevronDown } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { Stat } from "@/components/ui/Stat";
 import Popover from "@/components/ui/Popover";
@@ -44,7 +46,7 @@ function defaultBooks() {
 
 export default function ReadingListPage() {
   useLang();
-  const [books, setBooks] = useCloudState(STORAGE_KEY, "reading_list", defaultBooks());
+  const [books, setBooks, booksReady] = useCloudState(STORAGE_KEY, "reading_list", defaultBooks());
   const { pushUndo } = useUndo();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -97,6 +99,10 @@ export default function ReadingListPage() {
     if (b.status === "reading") return sum + (b.currentPage || 0);
     return sum;
   }, 0);
+
+  if (useFirstLoad(booksReady, STORAGE_KEY)) {
+    return <PageSkeleton variant="list" label={t("nav.reading")} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">

@@ -26,6 +26,8 @@ import {
   AlertTriangle, Minus,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { useAudioRecorder } from "@/lib/hooks/useAudioRecorder";
 import { useEloquenceAudio } from "@/lib/hooks/useEloquenceAudio";
 import { decodeAudioBlob, analyzeAudioBuffer, deriveAudioScores, encodeWav } from "@/lib/eloquenceAudioAnalysis";
@@ -2053,6 +2055,10 @@ export default function EloquencePage() {
       return { ...(prev || {}), sessions: [entry, ...list].slice(0, 100) };
     });
   };
+
+  if (useFirstLoad(hydrated, ELOQ_STORAGE_KEY)) {
+    return <PageSkeleton variant="stats" stats={3} />;
+  }
 
   return (
     <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: "var(--font-sans)" }}>

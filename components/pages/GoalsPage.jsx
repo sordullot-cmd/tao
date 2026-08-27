@@ -14,6 +14,8 @@ import { getCurrencySymbol } from "@/lib/userPrefs";
 import { ModalShell, PrimaryBtn } from "@/components/modals/AccountModals";
 import { useTrades, useTradingAccounts } from "@/lib/hooks/useTradeData";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { t, useLang } from "@/lib/i18n";
 import {
@@ -456,7 +458,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
   const accountsHook = useTradingAccounts();
   const accounts = accountsHook?.accounts || [];
 
-  const [goals, setGoals] = useCloudState(STORAGE_KEY, "goals", defaultGoals());
+  const [goals, setGoals, goalsReady] = useCloudState(STORAGE_KEY, "goals", defaultGoals());
   const { pushUndo } = useUndo();
 
   // Catégories Vie RPG persistées (pour rattacher un objectif à une catégorie
@@ -664,6 +666,10 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
     return { total, achieved, onTrack, atRisk };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goals, trades]);
+
+  if (useFirstLoad(goalsReady, STORAGE_KEY)) {
+    return <PageSkeleton variant="list" label={t("nav.goals")} />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className={embedded ? undefined : "anim-1"}>
