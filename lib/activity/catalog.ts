@@ -517,11 +517,6 @@ export const CATALOG: CatalogEntry[] = [
     { name: "VLC", app: ["vlc", "vlc media player"] },
     { name: "IINA", app: ["iina"] },
     { name: "mpv", app: ["mpv"] },
-    { name: "Spotify", word: ["spotify"], web: ["open.spotify.com"], title: ["spotify"] },
-    { name: "Musique", app: ["music", "apple music", "itunes", "musique", "groove"] },
-    { name: "Deezer", app: ["deezer"], web: ["deezer.com"] },
-    { name: "SoundCloud", app: [], web: ["soundcloud.com"] },
-    { name: "Tidal", app: ["tidal"], web: ["tidal.com"] },
     { name: "Podcasts", app: ["podcasts", "overcast", "pocket casts"] },
     { name: "Photos", app: ["photos", "photo", "windowsphotos", "microsoft photos"] },
     { name: "QuickTime", app: ["quicktime player", "quicktime"] },
@@ -529,6 +524,26 @@ export const CATALOG: CatalogEntry[] = [
     { name: "L'Équipe", app: [], web: ["lequipe.fr"] },
     { name: "DAZN", app: [], web: ["dazn.com"] },
     { name: "Eurosport", app: [], web: ["eurosport.fr"] },
+  ]),
+
+  /* L'écoute de musique, à part du divertissement : c'est le seul temps d'écran
+     qui se superpose à un autre — on code EN écoutant. Rangée avec les films,
+     une matinée de travail passait pour une matinée de distraction.
+
+     Spotify est déclaré sur les trois champs parce qu'il se présente de trois
+     façons : l'application de bureau (`word`, son nom de processus varie selon
+     les plateformes), le lecteur web (`web`), et le titre de fenêtre du lecteur
+     web quand l'URL n'est pas lisible (`title`) — c'est ce dernier qui rattrape
+     les onglets vus dans Arc, où seul le titre remonte. */
+  ...of("music", [
+    { name: "Spotify", word: ["spotify"], web: ["open.spotify.com", "spotify.com"], title: ["spotify"] },
+    { name: "Apple Music", app: ["music", "apple music", "itunes", "musique", "groove"], web: ["music.apple.com"], title: ["apple music"] },
+    { name: "Deezer", app: ["deezer"], web: ["deezer.com"], title: ["deezer"] },
+    { name: "SoundCloud", app: ["soundcloud"], web: ["soundcloud.com"], title: ["soundcloud"] },
+    { name: "Tidal", app: ["tidal"], web: ["tidal.com"], title: ["tidal"] },
+    { name: "YouTube Music", app: [], web: ["music.youtube.com"], title: ["youtube music"] },
+    { name: "Bandcamp", app: [], web: ["bandcamp.com"] },
+    { name: "Last.fm", app: [], web: ["last.fm"] },
   ]),
 
   ...of("games", [

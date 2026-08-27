@@ -88,6 +88,15 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
   { id: "admin",     label: "Admin & gestion",    labelEn: "Admin",         color: PALETTE_DARK.blue,   productivity: "productive",  hint: "Tableurs, agenda, fichiers, démarches, gestion de projet." },
   { id: "meetings",  label: "Réunions",           labelEn: "Meetings",      color: PALETTE.orange,      productivity: "neutral",     hint: "Visioconférence et appels." },
   { id: "comms",     label: "Communication",      labelEn: "Communication", color: PALETTE.yellow,      productivity: "neutral",     hint: "Messageries et courrier." },
+  /* La musique sort de « Divertissement » : elle ACCOMPAGNE le travail au lieu
+     de le remplacer, et une heure de Spotify comptée en distraction pendant
+     qu'on code fausse la lecture de la journée. Neutre, donc — ni portée au
+     crédit du travail, ni retenue contre lui ; celui pour qui c'est autre chose
+     le change dans « Catégories & règles ».
+     La teinte suit la règle de la charte (cf. lib/ui/palette) : les huit
+     principales étant prises, on descend d'un cran — l'ambre profond n'est pas
+     l'orange vif des réunions. */
+  { id: "music",     label: "Musique",            labelEn: "Music",         color: PALETTE_DARK.orange, productivity: "neutral",     hint: "Écoute de musique : Spotify, Apple Music, Deezer, SoundCloud." },
   { id: "utilities", label: "Utilitaires & système", labelEn: "Utilities",  color: PALETTE_DARK.green,  productivity: "neutral",     hint: "Fichiers, réglages, mots de passe, bureau du système." },
   { id: "shopping",  label: "Achats",             labelEn: "Shopping",      color: HUE.moonJelly,       productivity: "neutral",     hint: "Boutiques en ligne, petites annonces, livraison." },
   { id: "social",    label: "Réseaux sociaux",    labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux et communautés." },
@@ -119,6 +128,16 @@ export const OTHER = "other";
 export interface CategoryEdit {
   label?: string;
   color?: string;
+  /**
+   * Catégorie retirée du vocabulaire.
+   *
+   * On ne l'efface pas de la liste des livrées : le catalogue continue d'y
+   * ranger des centaines d'applications, et il faut pouvoir la RÉTABLIR. Elle
+   * disparaît de l'interface, et ce qu'elle classait retourne à « Non classé »
+   * (cf. `settle` plus bas) — donc dans la file, où l'utilisateur lui donnera la
+   * catégorie qu'il préfère.
+   */
+  hidden?: boolean;
 }
 
 /** Une catégorie créée de toutes pièces. */
@@ -131,6 +150,7 @@ export interface CustomCategory {
 interface CategorySettings {
   customCategories?: CustomCategory[] | null;
   categoryEdits?: Record<string, CategoryEdit> | null;
+  categoryOrder?: string[] | null;
 }
 
 let REGISTRY: ActivityCategory[] = BUILTIN_CATEGORIES;
@@ -151,11 +171,12 @@ export function applyCategorySettings(settings: CategorySettings | null | undefi
   const edits = (settings?.categoryEdits && typeof settings.categoryEdits === "object")
     ? settings.categoryEdits
     : {};
-  const signature = JSON.stringify([custom, edits]);
+  const order = Array.isArray(settings?.categoryOrder) ? settings!.categoryOrder! : [];
+  const signature = JSON.stringify([custom, edits, order]);
   if (signature === SIGNATURE) return;
   SIGNATURE = signature;
 
-  const edited = BUILTIN_CATEGORIES.map(c => {
+  const edited = BUILTIN_CATEGORIES.filter(c => c.id === OTHER || !edits[c.id]?.hidden).map(c => {
     const e = edits[c.id];
     if (!e) return c;
     return {
@@ -179,9 +200,16 @@ export function applyCategorySettings(settings: CategorySettings | null | undefi
       hint: "Catégorie que tu as créée.",
     }));
 
-  const withoutOther = edited.filter(c => c.id !== OTHER);
-  const other = edited.find(c => c.id === OTHER)!;
-  REGISTRY = [...withoutOther, ...mine, other];
+  /* L'ordre de l'utilisateur d'abord ; ce qu'il n'a jamais déplacé garde sa
+     place relative derrière (le tri est stable, une catégorie ajoutée par une
+     mise à jour ne se retrouve donc pas propulsée en tête). « Non classé » reste
+     en dernier quoi qu'il arrive : c'est la file d'attente du classement, pas
+     une catégorie parmi les autres. */
+  const rank = new Map(order.map((id, i) => [id, i]));
+  const withoutOther = [...edited.filter(c => c.id !== OTHER), ...mine]
+    .sort((a, b) => (rank.get(a.id) ?? 1e6) - (rank.get(b.id) ?? 1e6));
+  const other = edited.find(c => c.id === OTHER) ?? BUILTIN_CATEGORIES[BUILTIN_CATEGORIES.length - 1];
+  REGISTRY = [...withoutOther, other];
   BY_ID = Object.fromEntries(REGISTRY.map(c => [c.id, c]));
 }
 
@@ -285,9 +313,21 @@ const CONFIDENCE: Record<ClassifySource, number> = {
   user: 1, web: 0.95, app: 0.9, word: 0.75, title: 0.6, none: 0,
 };
 
+/**
+ * Catégorie servie à l'interface : celle du catalogue si elle existe encore.
+ *
+ * Une catégorie retirée par l'utilisateur (ou disparue d'une version à l'autre)
+ * laisserait sinon des segments pointant vers un identifiant sans nom ni
+ * couleur — du temps gris, impossible à lire et impossible à corriger. Il
+ * retourne donc à « Non classé », d'où la file d'attente le rattrape.
+ */
+function settle(id: string): string {
+  return BY_ID[id] ? id : OTHER;
+}
+
 function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: string): Classification {
   return {
-    category: hit.entry.cat,
+    category: settle(hit.entry.cat),
     label,
     via: hit.via,
     matched,
@@ -339,7 +379,7 @@ export function classifyDetailed(
 
   const mine = userHit(userRules, app, title);
   if (mine) {
-    return { category: mine.category, label, via: "user", matched: mine.match, isSite: browser, confidence: 1 };
+    return { category: settle(mine.category), label, via: "user", matched: mine.match, isSite: browser, confidence: 1 };
   }
 
   if (browser) {
@@ -434,7 +474,8 @@ export function siteOf(title: string): string | null {
 /** Indices FAIBLES : ils proposent, ils ne classent pas. */
 const CLUES: { cat: string; re: RegExp }[] = [
   { cat: "games",    re: /\b(jeu|jeux|game|gaming|gameplay|serveur|server|mod(s|pack)?|patch notes|ranked|elo)\b/ },
-  { cat: "fun",      re: /\b(film|serie|episode|saison|streaming|vostfr|vf|replay|bande annonce|trailer|clip|album|playlist)\b/ },
+  { cat: "fun",      re: /\b(film|serie|episode|saison|streaming|vostfr|vf|replay|bande annonce|trailer|clip)\b/ },
+  { cat: "music",    re: /\b(album|playlist|morceau|titre en cours|now playing|discographie)\b/ },
   { cat: "shopping", re: /\b(panier|livraison|promo|soldes|acheter|prix|commande|boutique|shop|checkout)\b/ },
   { cat: "research", re: /\b(wiki|documentation|tutoriel|tutorial|guide|cours|lecon|article|actualites|journal)\b/ },
   { cat: "dev",      re: /\b(api|sdk|github|npm|typescript|javascript|python|docker|erreur|error|stack trace|compil)\b/ },

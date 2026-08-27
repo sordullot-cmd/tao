@@ -41,6 +41,7 @@ export function useActivitySettings(): [ActivitySettings, (updater: ActivitySett
       productivity: (raw?.productivity && typeof raw.productivity === "object") ? raw.productivity : {},
       customCategories: Array.isArray(raw?.customCategories) ? raw!.customCategories! : [],
       categoryEdits: (raw?.categoryEdits && typeof raw.categoryEdits === "object") ? raw.categoryEdits : {},
+      categoryOrder: Array.isArray(raw?.categoryOrder) ? raw!.categoryOrder! : [],
     };
     /* Le vocabulaire des catégories est relu ICI, pendant le rendu et non dans
        un effet : `categoryLabel()` est appelé par des composants qui ne
@@ -61,6 +62,7 @@ export function useActivitySettings(): [ActivitySettings, (updater: ActivitySett
         productivity: (prev?.productivity && typeof prev.productivity === "object") ? prev.productivity : {},
         customCategories: Array.isArray(prev?.customCategories) ? prev!.customCategories! : [],
         categoryEdits: (prev?.categoryEdits && typeof prev.categoryEdits === "object") ? prev.categoryEdits : {},
+        categoryOrder: Array.isArray(prev?.categoryOrder) ? prev!.categoryOrder! : [],
       };
       return typeof updater === "function" ? (updater as (p: ActivitySettings) => ActivitySettings)(base) : updater;
     });

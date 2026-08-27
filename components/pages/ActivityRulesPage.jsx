@@ -22,17 +22,16 @@
    ========================================================================== */
 
 import React, { useMemo, useState } from "react";
-import { Check, Play, Plus, Trash2 } from "lucide-react";
+import { Check, GripVertical, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
   CARD, FIELD_BG, HAIRLINE, Field, FieldGrid, Input, PillButton, Select, IconButton,
 } from "@/components/ui/da";
 import { T } from "@/lib/ui/tokens";
 import { BTN } from "@/lib/ui/buttons";
 import { PALETTE } from "@/lib/ui/palette";
-import { dotRing } from "@/lib/ui/color";
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
-  allCategories, assignableCategories, categoryById, catalogSize, categoryLabel,
+  allCategories, assignableCategories, BUILTIN_CATEGORIES, categoryById, catalogSize, categoryLabel,
   isBrowser, newCategoryId, PRODUCTIVITY_COLOR, resolveProductivity, suggestCategory,
 } from "@/lib/activity/categories";
 import { clearAll, listDays, loadRange } from "@/lib/activity/engine";
@@ -129,6 +128,10 @@ export default function ActivityRulesPage({ setPage }) {
   const [draft, setDraft] = useState({ match: "", field: "app", category: "dev" });
   /** Catégorie en cours de renommage (une seule à la fois). */
   const [editCat, setEditCat] = useState(null);
+  /* Glisser-déposer : `armed` est l'identifiant de la ligne dont on a saisi la
+     poignée. On n'arme QUE par la poignée — une ligne entièrement `draggable`
+     empêcherait de sélectionner son nom pour le renommer. */
+  const [drag, setDrag] = useState({ armed: null, from: null, over: null, mode: null });
   const [draftCat, setDraftCat] = useState({ label: "", color: CATEGORY_SWATCHES[0] });
   const [version, setVersion] = useState(0);
 
@@ -221,20 +224,65 @@ export default function ActivityRulesPage({ setPage }) {
     });
   };
 
-  /* Supprimer une catégorie créée emporte ce qui n'a plus de sens sans elle :
-     les règles qui y renvoyaient (elles classeraient dans le vide) et son
-     jugement. Les journées déjà mesurées, elles, se reclassent toutes seules —
-     rien n'est perdu, ce temps retourne simplement à « Non classé ». */
+  /* Supprimer emporte ce qui n'a plus de sens sans la catégorie : les règles qui
+     y renvoyaient (elles classeraient dans le vide) et son jugement. Les
+     journées déjà mesurées, elles, se reclassent toutes seules — rien n'est
+     perdu, ce temps retourne à « Non classé », donc dans la file d'attente.
+
+     Une catégorie CRÉÉE disparaît pour de bon ; une catégorie LIVRÉE est
+     seulement masquée, parce que le catalogue continue d'y ranger des centaines
+     d'applications et qu'il faut pouvoir revenir en arrière. */
   const removeCategory = (c) => patch(s => {
     const productivity = { ...s.productivity };
     delete productivity[c.id];
-    return {
+    const base = {
       ...s,
-      customCategories: s.customCategories.filter(x => x.id !== c.id),
       rules: s.rules.filter(r => r.category !== c.id),
       productivity,
     };
+    if (c.id.startsWith("u-")) {
+      return { ...base, customCategories: s.customCategories.filter(x => x.id !== c.id) };
+    }
+    return { ...base, categoryEdits: { ...s.categoryEdits, [c.id]: { ...s.categoryEdits?.[c.id], hidden: true } } };
   });
+
+  /**
+   * Déplacer une catégorie dans la hiérarchie.
+   *
+   * L'ordre enregistré est la liste COMPLÈTE des identifiants et non un rang par
+   * catégorie : un rang par catégorie se décale à la première insertion et il
+   * faut alors réécrire tout le reste de toute façon.
+   */
+  const moveCategory = (fromId, toId, mode) => {
+    if (!fromId || !toId || fromId === toId) return;
+    patch(s => {
+      const ids = allCategories().filter(c => c.id !== "other").map(c => c.id);
+      const from = ids.indexOf(fromId);
+      if (from < 0) return s;
+      ids.splice(from, 1);
+      let to = ids.indexOf(toId);
+      if (to < 0) return s;
+      if (mode === "after") to += 1;
+      ids.splice(to, 0, fromId);
+      return { ...s, categoryOrder: ids };
+    });
+  };
+
+  /** Rétablir une catégorie livrée masquée, avec son nom et sa couleur d'alors. */
+  const restoreCategory = (id) => patch(s => {
+    const edit = { ...s.categoryEdits?.[id] };
+    delete edit.hidden;
+    const next = { ...s.categoryEdits };
+    if (Object.keys(edit).length) next[id] = edit;
+    else delete next[id];
+    return { ...s, categoryEdits: next };
+  });
+
+  /** Les livrées mises de côté : sans cette liste, la suppression serait sans retour. */
+  const hidden = useMemo(
+    () => BUILTIN_CATEGORIES.filter(c => settings.categoryEdits?.[c.id]?.hidden),
+    [settings.categoryEdits]
+  );
 
   const segmentCount = useMemo(() => logs.reduce((n, l) => n + l.segments.length, 0), [logs]);
 
@@ -373,18 +421,78 @@ export default function ActivityRulesPage({ setPage }) {
           La nature d’une catégorie décide de ce qui compte comme focus et comme distraction.
           « Réunions » est du travail pour l’un, du temps subi pour l’autre : c’est à toi de trancher.
           {" "}L’app reconnaît {catalog.total} applications et sites d’elle-même ; tes règles passent avant.
+          {" "}Prends une ligne par sa poignée pour la déplacer : cet ordre est celui de toute la section —
+          l’anneau, les légendes, les listes de choix.
         </span>
+        <style>{
+          ".tr4de-cat-del,.tr4de-cat-grip{opacity:0;transition:opacity 120ms var(--ease-out, ease)}" +
+          ".tr4de-cat-row:hover .tr4de-cat-del,.tr4de-cat-row:focus-within .tr4de-cat-del," +
+          ".tr4de-cat-row:hover .tr4de-cat-grip{opacity:1}" +
+          "@media (hover:none){.tr4de-cat-del,.tr4de-cat-grip{opacity:1}}"
+        }</style>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {categories.map(c => {
             const nature = resolveProductivity(c.id, settings.productivity);
             const ms = categoryTotals.get(c.id) || 0;
             const mine = c.id.startsWith("u-");
             const editing = editCat === c.id;
+            // « Non classé » ne se déplace pas : elle ferme la liste par nature.
+            const movable = c.id !== "other";
             return (
-              <div key={c.id} style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
-                borderBottom: `1px solid ${HAIRLINE}`, flexWrap: "wrap",
-              }}>
+              <div
+                key={c.id}
+                className="tr4de-cat-row"
+                draggable={drag.armed === c.id}
+                onDragStart={(e) => {
+                  if (drag.armed !== c.id) { e.preventDefault(); return; }
+                  setDrag(d => ({ ...d, from: c.id, over: null, mode: null }));
+                  try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.id); } catch { /* Safari */ }
+                }}
+                onDragOver={(e) => {
+                  if (!drag.from || drag.from === c.id || movable === false) return;
+                  e.preventDefault();
+                  try { e.dataTransfer.dropEffect = "move"; } catch { /* Safari */ }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const mode = (e.clientY - rect.top) < rect.height / 2 ? "before" : "after";
+                  if (drag.over !== c.id || drag.mode !== mode) setDrag(d => ({ ...d, over: c.id, mode }));
+                }}
+                onDragLeave={(e) => {
+                  if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+                  if (drag.over === c.id) setDrag(d => ({ ...d, over: null, mode: null }));
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  moveCategory(drag.from, c.id, drag.mode || "before");
+                  setDrag({ armed: null, from: null, over: null, mode: null });
+                }}
+                onDragEnd={() => setDrag({ armed: null, from: null, over: null, mode: null })}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+                  borderBottom: `1px solid ${HAIRLINE}`, flexWrap: "wrap",
+                  opacity: drag.from === c.id ? 0.4 : 1,
+                  // Le repère de dépôt est un trait DANS la ligne visée : une
+                  // ligne insérée entre deux ferait sauter toute la liste.
+                  boxShadow: drag.over === c.id
+                    ? (drag.mode === "after" ? `inset 0 -2px 0 0 ${T.brand}` : `inset 0 2px 0 0 ${T.brand}`)
+                    : "none",
+                }}
+              >
+                {movable ? (
+                  <span
+                    className="tr4de-cat-grip"
+                    title="Glisser pour déplacer"
+                    onPointerDown={() => setDrag(d => ({ ...d, armed: c.id }))}
+                    onPointerUp={() => setDrag(d => (d.from ? d : { ...d, armed: null }))}
+                    style={{
+                      display: "inline-flex", alignItems: "center", color: T.textMut,
+                      cursor: "grab", flexShrink: 0, marginLeft: -4,
+                    }}
+                  >
+                    <GripVertical size={14} />
+                  </span>
+                ) : (
+                  <span style={{ width: 10, flexShrink: 0 }} />
+                )}
                 <ColorPicker
                   value={c.color}
                   label={`Couleur de « ${categoryLabel(c.id)} »`}
@@ -436,7 +544,7 @@ export default function ActivityRulesPage({ setPage }) {
                           border: "none", fontFamily: "inherit", cursor: "pointer",
                           background: on ? `color-mix(in srgb, ${o.color} 18%, transparent)` : FIELD_BG,
                           color: on ? T.text : T.textSub,
-                          boxShadow: on ? dotRing(o.color) : "none",
+                          boxShadow: "none",
                         }}
                       >
                         {o.label}
@@ -444,17 +552,24 @@ export default function ActivityRulesPage({ setPage }) {
                     );
                   })}
                 </div>
-                {mine ? (
-                  <IconButton
-                    tone="danger"
-                    aria-label={`Supprimer « ${categoryLabel(c.id)} »`}
-                    onClick={() => removeCategory(c)}
-                  >
-                    <Trash2 size={14} />
-                  </IconButton>
-                ) : edited[c.id] ? (
-                  <PillButton compact variant="ghost" onClick={() => resetCategory(c)}>Réinitialiser</PillButton>
-                ) : null}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {!mine && (edited[c.id]?.label || edited[c.id]?.color) && (
+                    <PillButton compact variant="ghost" onClick={() => resetCategory(c)}>Réinitialiser</PillButton>
+                  )}
+                  {/* « Non classé » n'est pas une catégorie mais la file d'attente
+                      du classement : la retirer n'aurait aucun sens. */}
+                  {c.id !== "other" && (
+                    <span className="tr4de-cat-del">
+                      <IconButton
+                        tone="danger"
+                        aria-label={`Supprimer « ${categoryLabel(c.id)} »`}
+                        onClick={() => removeCategory(c)}
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -476,6 +591,19 @@ export default function ActivityRulesPage({ setPage }) {
             <Plus size={13} /> Créer
           </PillButton>
         </div>
+
+        {hidden.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 4, borderTop: `1px solid ${HAIRLINE}` }}>
+            <span style={{ fontSize: 11, color: T.textSub }}>
+              Retirées — ce qu’elles classaient est retourné dans la file :
+            </span>
+            {hidden.map(c => (
+              <PillButton key={c.id} compact variant="ghost" onClick={() => restoreCategory(c.id)}>
+                <RotateCcw size={12} /> {c.label}
+              </PillButton>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Règles ── */}

@@ -260,6 +260,45 @@ describe("page Catégories & règles", () => {
     expect(screen.getByText("Trading & marchés")).toBeInTheDocument();
   });
 
+  it("retire une catégorie livrée et la rétablit", () => {
+    render(<ActivityRulesPage setPage={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText(/Supprimer « Jeux »/));
+    // La ligne a disparu du vocabulaire…
+    expect(screen.queryByLabelText(/Supprimer « Jeux »/)).not.toBeInTheDocument();
+    // …mais une livrée est masquée, pas effacée : le catalogue y range des
+    // centaines d'applications, il faut pouvoir revenir en arrière.
+    expect(screen.getByText(/Retirées/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Jeux"));
+    expect(screen.getByLabelText(/Supprimer « Jeux »/)).toBeInTheDocument();
+  });
+
+  it("réordonne les catégories au glisser-déposer", () => {
+    const { container } = render(<ActivityRulesPage setPage={vi.fn()} />);
+    const rows = () => [...container.querySelectorAll(".tr4de-cat-row")];
+    // Dans une ligne : la pastille de couleur, puis le nom (un bouton qui
+    // devient un champ au clic).
+    const names = () => rows().map(r => (r.querySelectorAll("button")[1]?.textContent || "").trim());
+    const before = names();
+    expect(before[0]).toBe("Développement");
+
+    /* On saisit la troisième ligne par sa poignée et on la dépose sur la
+       première. jsdom rend des rectangles à zéro : le point de dépôt tombe donc
+       dans la moitié BASSE de la ligne visée, soit « après » — la catégorie
+       déplacée doit arriver en deuxième position. */
+    const third = rows()[2];
+    const label = names()[2];
+    fireEvent.pointerDown(third.querySelector(".tr4de-cat-grip")!);
+    fireEvent.dragStart(third);
+    fireEvent.dragOver(rows()[0], { clientY: 0 });
+    fireEvent.drop(rows()[0]);
+    expect(names().indexOf(label)).toBe(1);
+    expect(names()[0]).toBe(before[0]);
+
+    // « Non classé » ferme la liste quoi qu'il arrive : elle n'a pas de poignée.
+    const last = rows()[rows().length - 1];
+    expect(last.querySelector(".tr4de-cat-grip")).toBeNull();
+  });
+
   it("propose de classer les applications inconnues", () => {
     const base = new Date();
     base.setHours(14, 0, 0, 0);

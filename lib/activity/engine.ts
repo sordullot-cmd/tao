@@ -80,6 +80,8 @@ export interface ActivitySettings {
   customCategories: CustomCategory[];
   /** Nom et couleur revus sur les catégories livrées avec l'app. */
   categoryEdits: Record<string, CategoryEdit>;
+  /** Ordre choisi par l'utilisateur (identifiants). Les absents suivent. */
+  categoryOrder: string[];
 }
 
 export const DEFAULT_SETTINGS: ActivitySettings = {
@@ -98,6 +100,7 @@ export const DEFAULT_SETTINGS: ActivitySettings = {
   productivity: {},
   customCategories: [],
   categoryEdits: {},
+  categoryOrder: [],
 };
 
 /** Ce que l'interface affiche « en direct », en haut de la page Activité. */

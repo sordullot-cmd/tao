@@ -480,7 +480,7 @@ export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, boxShadow: dotRing(color), flexShrink: 0, marginTop: 5 }} />
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 5 }} />
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
           <span style={{ fontSize: 16, fontWeight: 600, color: T.text }}>{categoryLabel(block.cat)}</span>
           <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
@@ -797,8 +797,15 @@ export const CATEGORY_SWATCHES = [
   HUE.moonJelly, HUE.beluga, HUE.seaSponge, HUE.anchovy,
 ];
 
-/** Pastille de couleur cliquable, ouvrant le nuancier. */
-export function ColorPicker({ value, onPick, label = "Couleur" }) {
+/**
+ * Pastille de couleur cliquable, ouvrant le nuancier.
+ *
+ * `size` est la taille de la PASTILLE, pas celle de la cible : le bouton garde
+ * 24 px de côté quoi qu'il arrive. Une pastille de couleur est un repère (elle
+ * doit peser autant que les autres puces de la liste, soit une dizaine de
+ * pixels), pas un bouton — mais elle doit rester cliquable au premier essai.
+ */
+export function ColorPicker({ value, onPick, label = "Couleur", size = 14 }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
   return (
@@ -810,20 +817,23 @@ export function ColorPicker({ value, onPick, label = "Couleur" }) {
         aria-label={label}
         title={label}
         style={{
-          width: 26, height: 26, borderRadius: "50%", border: "none", flexShrink: 0,
-          background: value, boxShadow: dotRing(value), cursor: "pointer", padding: 0,
+          width: 24, height: 24, borderRadius: "50%", border: "none", flexShrink: 0,
+          background: "transparent", cursor: "pointer", padding: 0,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
         }}
-      />
+      >
+        <span style={{ width: size, height: size, borderRadius: "50%", background: value }} />
+      </button>
       <Popover
         anchorRef={ref}
         open={open}
         onClose={() => setOpen(false)}
         gap={6}
-        minWidth={228}
+        minWidth={196}
         className="anim-pop"
         style={{ background: T.white, borderRadius: 12, boxShadow: "var(--elev-overlay)", border: `1px solid ${T.border}`, padding: 10 }}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 7 }}>
           {CATEGORY_SWATCHES.map(c => (
             <button
               key={c}
@@ -831,9 +841,9 @@ export function ColorPicker({ value, onPick, label = "Couleur" }) {
               onClick={() => { onPick?.(c); setOpen(false); }}
               aria-label={c}
               style={{
-                width: 20, height: 20, borderRadius: "50%", border: "none", padding: 0,
+                width: 16, height: 16, borderRadius: "50%", border: "none", padding: 0,
                 background: c, cursor: "pointer",
-                boxShadow: c === value ? `0 0 0 2px ${T.text}` : dotRing(c),
+                boxShadow: c === value ? `0 0 0 2px ${T.text}` : "none",
               }}
             />
           ))}
@@ -874,7 +884,7 @@ export function CategoryPicker({ cat, onPick, label, align = "end" }) {
           transition: "background 120ms ease", maxWidth: 200,
         }}
       >
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, boxShadow: dotRing(color), flexShrink: 0 }} />
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {label ?? categoryLabel(cat)}
         </span>
@@ -907,7 +917,7 @@ export function CategoryPicker({ cat, onPick, label, align = "end" }) {
                 onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = T.rowHighlight; }}
                 onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}
               >
-                <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, boxShadow: dotRing(c.color), flexShrink: 0 }} />
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {categoryLabel(c.id)}
                 </span>
@@ -1059,7 +1069,7 @@ export function SessionRows({ sessions }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {sessions.map(s => (
         <div key={s.start} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: categoryColor(s.cat), boxShadow: dotRing(categoryColor(s.cat)), flexShrink: 0 }} />
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: categoryColor(s.cat), flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
             {fmtClock(s.start)} – {fmtClock(s.end)}
           </span>
