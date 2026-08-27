@@ -12,7 +12,7 @@
    les couleurs de CATÉGORIE, qui sont des données (cf. lib/activity/categories).
    ========================================================================== */
 
-import React, { useRef, useState, useSyncExternalStore } from "react";
+import React, { useRef, useMemo, useState, useSyncExternalStore } from "react";
 import { Activity, ChevronDown, MonitorSmartphone, TriangleAlert, Pause, X } from "lucide-react";
 import { CARD, FIELD_BG, HAIRLINE, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { BTN } from "@/lib/ui/buttons";
@@ -564,9 +564,136 @@ export function HourBars({ hourly, height = 96, fromHour = 0, toHour = 23 }) {
   );
 }
 
+/* ─── Temps d'écran, jour par jour ───────────────────────────────────────── */
+
+const WEEKDAY_LETTER = ["D", "L", "M", "M", "J", "V", "S"];
+
+/**
+ * Une colonne par jour : le temps d'écran de la semaine, d'un coup d'œil.
+ *
+ * Une journée seule ne dit pas si elle est longue — « 6 h 12 » n'a de sens que
+ * posé à côté des six précédentes. La colonne empile la NATURE du temps
+ * (productif, neutre, distraction) plutôt que les catégories : sur 40 px de
+ * large, six teintes ne se distinguent pas, et c'est de toute façon la question
+ * qu'on se pose en comparant des jours.
+ *
+ * Chaque colonne est cliquable — c'est le raccourci naturel pour aller lire la
+ * journée qu'on vient de repérer.
+ */
+export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPick, height = 260 }) {
+  const max = Math.max(1, ...days.map(d => d.activeMs), goalMs, medianMs);
+  const px = (ms) => (ms / max) * height;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height, position: "relative" }}>
+        {goalMs > 0 && goalMs <= max && (
+          <div
+            title={`Objectif : ${fmtDur(goalMs)}`}
+            style={{
+              position: "absolute", left: 0, right: 0, bottom: px(goalMs),
+              borderTop: `1px dotted ${T.border2}`, pointerEvents: "none",
+            }}
+          />
+        )}
+        {/* La médiane plutôt que la moyenne : une seule journée de quinze heures
+            tire une moyenne hebdomadaire vers le haut et fait passer une semaine
+            calme pour une semaine chargée. La médiane dit la journée ORDINAIRE. */}
+        {medianMs > 0 && (
+          <div
+            title={`Usage médian : ${fmtDur(medianMs)}`}
+            style={{
+              position: "absolute", left: 0, right: 0, bottom: px(medianMs),
+              borderTop: `1px dashed ${T.textMut}`, pointerEvents: "none",
+            }}
+          >
+            <span style={{
+              position: "absolute", right: 0, top: -14, fontSize: 10, color: T.textMut,
+              background: T.white, padding: "0 4px",
+            }}>
+              médiane
+            </span>
+          </div>
+        )}
+        {days.map(d => {
+          const on = d.date === selected;
+          const neutral = Math.max(0, d.activeMs - d.productiveMs - d.distractingMs);
+          const parts = [
+            { id: "d", ms: d.distractingMs, color: PALETTE.red },
+            { id: "n", ms: neutral, color: GREY.grey500 },
+            { id: "p", ms: d.productiveMs, color: PALETTE.green },
+          ].filter(p => p.ms > 0);
+          return (
+            <div
+              key={d.date}
+              onClick={onPick ? () => onPick(d.date) : undefined}
+              title={`${new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })} — ${fmtDur(d.activeMs)}`}
+              style={{
+                flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "flex-end",
+                cursor: onPick ? "pointer" : "default",
+                // Le jour lu se distingue par la NETTETÉ, pas par une couleur de
+                // plus : les autres reculent, lui reste au premier plan.
+                opacity: !selected || on ? 1 : 0.55,
+              }}
+            >
+              {/* La barre est plus étroite que sa colonne : c'est la colonne qui
+                  reste cliquable sur toute sa largeur (une cible de 26 px se
+                  rate), et le dessin qui s'affine. */}
+              <div style={{
+                width: "84%", maxWidth: 48, height: "100%", display: "flex",
+                flexDirection: "column", justifyContent: "flex-end",
+              }}>
+                {parts.length === 0 ? (
+                  <div style={{ height: 2, background: FIELD_BG, borderRadius: 999 }} />
+                ) : (
+                  parts.map((p, i) => (
+                    <div key={p.id} style={{
+                      height: Math.max(2, px(p.ms)), background: p.color,
+                      borderRadius: i === 0 ? "4px 4px 0 0" : 0,
+                    }} />
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 14 }}>
+        {days.map(d => {
+          const jd = new Date(`${d.date}T00:00:00`);
+          const on = d.date === selected;
+          /* L'initiale du jour, et rien d'autre : « L25 M26 M27 » demandait de
+             lire un nombre pour retrouver un jour qu'une lettre suffit à nommer.
+             Le jour affiché se reconnaît à sa graisse, pas à une mention. */
+          return (
+            <span
+              key={d.date}
+              style={{
+                flex: 1, minWidth: 0, textAlign: "center", fontSize: 10,
+                color: on ? T.text : T.textSub, fontWeight: on ? 600 : 400,
+                fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden",
+              }}
+            >
+              {WEEKDAY_LETTER[jd.getDay()]}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Listes ─────────────────────────────────────────────────────────────── */
 
-/** Ligne « pastille · nom · barre · durée » — la forme commune aux répartitions. */
+/**
+ * Ligne « nom · barre · durée » — la forme commune aux répartitions.
+ *
+ * Sans pastille à gauche. Elle disait la couleur de la catégorie, mais la BARRE
+ * la dit déjà, sur toute la largeur de la ligne et en plus grand : deux fois la
+ * même information, dont l'une prenait le début de chaque nom. Le lien avec
+ * l'anneau tient par la barre.
+ */
 export function BarRow({ color, label, ms, pct, sub, right, onClick }) {
   return (
     <div
@@ -575,7 +702,6 @@ export function BarRow({ color, label, ms, pct, sub, right, onClick }) {
         display: "flex", alignItems: "center", gap: 10, padding: "7px 0", cursor: onClick ? "pointer" : "default",
       }}
     >
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: dotRing(color), flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
           <span style={{ fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
@@ -712,10 +838,42 @@ export function CategoryPicker({ cat, onPick, label, align = "end" }) {
   );
 }
 
-/** Répartition par application / site. `onPick` rend chaque ligne corrigeable. */
-export function AppRows({ apps, limit = 8, onPick, empty }) {
+/**
+ * Part arrondie, sans jamais écrire « 0 % » sur un temps qui existe : une
+ * application vue trois minutes sur six heures vaut « <1 % », pas rien.
+ */
+function pctLabel(pct) {
+  if (pct <= 0) return null;
+  return pct < 1 ? "<1 %" : `${Math.round(pct)} %`;
+}
+
+/**
+ * Répartition par application / site. `onPick` rend chaque ligne corrigeable.
+ *
+ * `minMs` écarte les miettes — les applications ouvertes deux minutes qu'une
+ * journée normale accumule par dizaines. Elles ne sont pas repoussées derrière
+ * « voir plus », elles sont RETIRÉES : une liste qu'on déplie pour y trouver
+ * trente lignes d'une minute n'apprend rien, et la longueur du dépliage laisse
+ * croire qu'il y a quelque chose à y lire.
+ *
+ * Le tri ne s'applique qu'au-delà de `limit`, c'est-à-dire exactement quand un
+ * « voir plus » apparaîtrait. En deçà, tout tient déjà à l'écran et il n'y a
+ * rien à nettoyer — masquer une ligne sur quatre serait de la perte sèche.
+ */
+export function AppRows({ apps, limit = 8, onPick = null, empty = null, minMs = 0 }) {
   const [all, setAll] = useState(false);
-  const shown = all ? apps : apps.slice(0, limit);
+
+  const kept = useMemo(() => {
+    if (!minMs || apps.length <= limit) return apps;
+    const long = apps.filter(a => a.ms >= minMs);
+    /* Une journée entière faite de miettes existe : tout retirer afficherait
+       « rien à afficher » sur des heures bien réelles. Dans ce cas, la liste
+       brute vaut mieux que le vide. */
+    return long.length ? long : apps;
+  }, [apps, limit, minMs]);
+
+  const hidden = apps.length - kept.length;
+  const shown = all ? kept : kept.slice(0, limit);
   if (!apps.length) {
     return <span style={{ fontSize: 12, color: T.textSub, padding: "8px 0" }}>{empty ?? "Rien à afficher."}</span>;
   }
@@ -730,6 +888,9 @@ export function AppRows({ apps, limit = 8, onPick, empty }) {
               </span>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                 {fmtDur(a.ms)}
+                {/* La part du temps suivi : « 1 h 00 » ne dit pas si c'est la
+                    moitié de la journée ou un dixième. */}
+                <span style={{ color: T.textSub, fontWeight: 500 }}> · {pctLabel(a.pct)}</span>
               </span>
             </div>
             <div style={{ height: 4, borderRadius: 999, background: FIELD_BG, overflow: "hidden" }}>
@@ -741,19 +902,30 @@ export function AppRows({ apps, limit = 8, onPick, empty }) {
               </span>
             )}
           </div>
-          {onPick
-            ? <CategoryPicker cat={a.cat} onPick={(c) => onPick(a, c)} />
-            : <span style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap" }}>{categoryLabel(a.cat)}</span>}
+          {/* La catégorie n'est répétée à droite que là où elle se CHANGE. En
+              lecture seule elle ne servait à rien : la couleur de la barre la
+              dit déjà, l'anneau juste au-dessus la dit en grand, et le nom
+              répété rognait la place du titre de fenêtre — la seule ligne qui
+              apprenne quelque chose. */}
+          {onPick && <CategoryPicker cat={a.cat} onPick={(c) => onPick(a, c)} />}
         </div>
       ))}
-      {apps.length > limit && (
+      {kept.length > limit && (
         <button
           type="button"
           onClick={() => setAll(v => !v)}
           style={{ alignSelf: "flex-start", marginTop: 4, border: "none", background: "transparent", color: T.textSub, fontSize: 12, fontFamily: "inherit", padding: 0, cursor: "pointer" }}
         >
-          {all ? "Voir moins" : `Voir les ${apps.length - limit} autres`}
+          {all ? "Voir moins" : `Voir les ${kept.length - limit} autres`}
         </button>
+      )}
+      {/* Ce qui a été retiré est DIT, en une ligne. Sans elle, les parts ne
+          totalisent plus cent pour cent sans qu'on sache pourquoi, et la
+          différence passe pour une erreur de mesure. */}
+      {hidden > 0 && (
+        <span style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>
+          {hidden} sous {fmtDur(minMs)} masquée{hidden > 1 ? "s" : ""}.
+        </span>
       )}
     </div>
   );
@@ -819,11 +991,11 @@ export function ActivityHeader({ page, setPage, live, right }) {
  * qui pesaient autant à l'œil que le dessin de la journée. Ici la mesure n'est
  * qu'un bloc de texte, posé dans la carte de la journée avec les autres.
  */
-export function Metric({ label, value, sub, color, valueMs, goalMs, size = 28 }) {
+export function Metric({ label, value, sub, color, valueMs, goalMs, size = 28, labelSize = 13, subSize = 12 }) {
   const pct = goalMs > 0 && valueMs != null ? Math.min(100, (valueMs / goalMs) * 100) : null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: "1 1 132px" }}>
-      <span style={{ fontSize: 12, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+      <span style={{ fontSize: labelSize, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
       <span style={{ fontSize: size, fontWeight: 600, lineHeight: 1, letterSpacing: -0.6, color: color || T.text, fontVariantNumeric: "tabular-nums" }}>
         {value}
       </span>
@@ -832,7 +1004,7 @@ export function Metric({ label, value, sub, color, valueMs, goalMs, size = 28 })
           <div style={{ width: `${pct}%`, height: "100%", background: color || T.brand, transition: "width 300ms var(--ease-out, ease)" }} />
         </div>
       )}
-      {sub && <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}
+      {sub && <span style={{ fontSize: subSize, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}
     </div>
   );
 }

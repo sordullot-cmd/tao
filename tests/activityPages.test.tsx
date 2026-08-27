@@ -126,6 +126,28 @@ describe("page Activité (journée)", () => {
     expect(screen.getAllByText("Temps actif").length).toBeGreaterThan(0);
   });
 
+  it("montre le temps d'écran de la semaine et mène au jour cliqué", () => {
+    seedToday();
+    /* Le lundi de la semaine en cours : toujours dans la grille, et jamais dans
+       le futur — le test ne dépend donc pas du jour où il tourne. (Si on EST
+       lundi, c'est aujourd'hui, et cette graine-ci remplace celle du dessus.) */
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const mKey = getLocalDateString(monday);
+    const at = (h: number) => { const d = new Date(monday); d.setHours(h, 0, 0, 0); return d.getTime(); };
+    saveDay({
+      date: mKey, awayMs: 0, updatedAt: Date.now(),
+      segments: [{ s: at(14), e: at(16), app: "Code", label: "VS Code", title: "lundi.ts", cat: "dev" }],
+    });
+    render(<ActivityPage setPage={vi.fn()} />);
+    expect(screen.getByText("Utilisation quotidienne")).toBeInTheDocument();
+
+    const label = new Date(`${mKey}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+    fireEvent.click(screen.getByTitle(`${label} — 2 h 00`));
+    // La page a basculé sur cette journée-là : ses deux heures sont en tête.
+    expect(screen.getAllByText("2 h 00").length).toBeGreaterThan(0);
+  });
+
   it("navigue vers les rapports depuis les onglets", () => {
     const setPage = vi.fn();
     render(<ActivityPage setPage={setPage} />);

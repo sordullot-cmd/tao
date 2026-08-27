@@ -66,6 +66,15 @@ describe("classement", () => {
     expect(classifyDetailed("Code", "", [{ id: "r", match: "code", category: "fun" }]).via).toBe("user");
   });
 
+  it("devine le nom du site même quand une accroche suit le titre", () => {
+    // « … | Anime-Sama - Streaming et catalogage d'animes et scans. » : le dernier
+    // morceau est une phrase, pas un nom. Sans remonter d'un cran, la ligne
+    // restait sous le nom du navigateur — donc impossible à ranger d'un clic.
+    const res = classifyDetailed("Arc", "Hunter x Hunter - Scans | Anime-Sama - Streaming et catalogage d'animes et scans.", []);
+    expect(res.label).toBe("Anime-Sama");
+    expect(res.category).toBe("fun");
+  });
+
   it("nomme un site inconnu au lieu de le laisser sous le nom du navigateur", () => {
     // C'est ce nom qui rend la file d'attente cliquable : « Marmiton », et non
     // « Google Chrome » répété douze fois.

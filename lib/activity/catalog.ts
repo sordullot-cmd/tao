@@ -501,6 +501,13 @@ export const CATALOG: CatalogEntry[] = [
     { name: "6play", app: [], web: ["6play.fr"] },
     { name: "TF1+", app: [], web: ["tf1.fr", "mytf1.tf1.fr"] },
     { name: "Crunchyroll", app: [], web: ["crunchyroll.com"] },
+    { name: "Anime-Sama", app: [], web: ["anime-sama.fr"], title: ["anime sama"] },
+    { name: "Neko-Sama", app: [], web: ["neko-sama.fr"], title: ["neko sama"] },
+    { name: "Voiranime", app: [], web: ["voiranime.com"] },
+    { name: "MangaDex", app: [], web: ["mangadex.org"] },
+    { name: "Japscan", app: [], web: ["japscan.lol", "japscan.ws", "japscan.me"] },
+    { name: "Webtoon", app: [], web: ["webtoons.com"] },
+    { name: "Wakanim", app: [], web: ["wakanim.tv"] },
     { name: "ADN", app: [], web: ["animationdigitalnetwork.fr", "animationdigitalnetwork.com"] },
     { name: "Dailymotion", app: [], web: ["dailymotion.com"] },
     { name: "Vimeo", app: [], web: ["vimeo.com"] },
@@ -812,7 +819,7 @@ const TLD = new Set([
   "edu", "gov", "eu", "uk", "de", "es", "it", "be", "ch", "ca", "nl", "pl", "pt",
   "se", "no", "fi", "dk", "at", "ie", "cz", "ru", "jp", "cn", "br", "in", "au",
   "kr", "mx", "ar", "tr", "ua", "ro", "gr", "hu", "sk", "si", "hr", "bg", "lt",
-  "lv", "ee", "is", "lu", "md", "to", "sh", "fm", "am", "im", "re", "gouv",
+  "lv", "ee", "is", "lu", "md", "to", "sh", "fm", "am", "im", "re", "gouv", "lol",
 ]);
 
 /**
@@ -874,7 +881,15 @@ export function guessSiteName(title: string): string | null {
   }
   const parts = t.split(/\s+[-—–|·•:]\s+/).map(p => p.trim()).filter(Boolean);
   if (parts.length < 2) return null;
-  const last = parts[parts.length - 1];
-  if (last.length > 32 || last.split(/\s+/).length > 4) return null;
-  return last;
+  /* On remonte les morceaux depuis la fin. Le site est le plus souvent le
+     dernier — mais beaucoup de pages ajoutent une accroche derrière lui
+     (« … | Anime-Sama - Streaming et catalogage d'animes et scans. ») : s'arrêter
+     au dernier morceau ne donnait alors AUCUN nom, et la ligne restait sous le
+     nom du navigateur, impossible à ranger d'un clic. Le premier morceau qui a
+     la taille d'un nom fait l'affaire. */
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const seg = parts[i];
+    if (seg.length <= 32 && seg.split(/\s+/).length <= 4) return seg;
+  }
+  return null;
 }

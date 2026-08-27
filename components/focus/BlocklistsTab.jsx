@@ -12,7 +12,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Copy, Pencil, ShieldOff, Infinity as InfinityIcon } from "lucide-react";
-import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
+import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CARD, PillButton, SectionTitle } from "@/components/ui/da";
 import { CATALOG_BY_ID, listSize, newId } from "@/lib/focus/model";
@@ -119,43 +119,16 @@ export default function BlocklistsTab({ store, setStore, actionSlot }) {
                   </span>
                 </div>
 
-                {/* Deux repères sur la même ligne : ce qu'une liste inverse, et
-                    si elle tourne sans qu'on l'ait lancée. Le second est le plus
-                    important à voir d'un coup d'œil — c'est le seul qui agit
-                    pendant qu'on ne pense pas à lui — et c'est aussi celui qu'on
-                    vient chercher. Il est donc l'INTERRUPTEUR lui-même : couper
-                    un site pour de bon ne doit pas demander d'ouvrir un éditeur
-                    et d'y trouver une case. */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  {list.mode === "allow" && (
-                    <span style={{
-                      padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-                      background: `color-mix(in srgb, ${PALETTE.orange} 14%, transparent)`, color: PALETTE.orange,
-                    }}>
-                      Seuls autorisés
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => togglePermanent(list.id)}
-                    aria-pressed={!!list.always}
-                    title={list.always
-                      ? "Cette liste coupe en permanence. Cliquez pour la rendre à ses sessions."
-                      : "Couper cette liste en permanence, sans session ni horaire."}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer",
-                      padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-                      fontFamily: "inherit", transition: "var(--tr-ui)",
-                      border: list.always ? "none" : `1px solid ${HAIRLINE}`,
-                      background: list.always
-                        ? `color-mix(in srgb, ${PALETTE.green} 14%, transparent)`
-                        : "transparent",
-                      color: list.always ? PALETTE.green : T.textMut,
-                    }}
-                  >
-                    <InfinityIcon size={11} /> {list.always ? "Permanent" : "Rendre permanent"}
-                  </button>
-                </div>
+                {/* Ce qu'une liste inverse — un repère, pas une commande : ça ne
+                    se change qu'à l'éditeur, où la conséquence est expliquée. */}
+                {list.mode === "allow" && (
+                  <span style={{
+                    alignSelf: "flex-start", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                    background: `color-mix(in srgb, ${PALETTE.orange} 14%, transparent)`, color: PALETTE.orange,
+                  }}>
+                    Seuls autorisés
+                  </span>
+                )}
 
                 <Preview list={list} />
 
@@ -169,7 +142,23 @@ export default function BlocklistsTab({ store, setStore, actionSlot }) {
                   </div>
                 ) : null}
 
-                <div style={{ display: "flex", gap: 6, marginTop: "auto" }}>
+                <div style={{ display: "flex", gap: 6, marginTop: "auto", flexWrap: "wrap" }}>
+                  {/* Couper pour de bon ne doit pas demander d'ouvrir un éditeur
+                      et d'y trouver une case : c'est ce qu'on vient chercher.
+                      Un bouton et non une pastille — dans cette DA, un tag
+                      affiche, un bouton agit — et son état porte la réponse :
+                      plein, la liste coupe tout le temps. */}
+                  <PillButton
+                    compact
+                    variant={list.always ? "primary" : "ghost"}
+                    onClick={() => togglePermanent(list.id)}
+                    aria-pressed={!!list.always}
+                    title={list.always
+                      ? "Cette liste coupe en permanence. Cliquez pour la rendre à ses sessions."
+                      : "Couper cette liste en permanence, sans session ni horaire."}
+                  >
+                    <InfinityIcon size={12} /> {list.always ? "Permanent" : "Rendre permanent"}
+                  </PillButton>
                   <PillButton compact onClick={() => setEditing({ list })}><Pencil size={12} /> Modifier</PillButton>
                   <PillButton compact variant="ghost" onClick={() => duplicate(list)} title="Dupliquer">
                     <Copy size={12} />

@@ -267,7 +267,7 @@ export default function ActivityReportsPage({ setPage }) {
 
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
             <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-              <BlockTitle right={`${stats.byCategory.length} catégories`}>Répartition de la période</BlockTitle>
+              <BlockTitle>Répartition de la période</BlockTitle>
               <AllocationChart
                 kind="ring"
                 parts={parts}
@@ -284,7 +284,7 @@ export default function ActivityReportsPage({ setPage }) {
             </div>
 
             <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>
-              <BlockTitle right={`${stats.byApp.length} au total`}>Applications & sites</BlockTitle>
+              <BlockTitle>Applications & sites</BlockTitle>
               <AppRows apps={stats.byApp} limit={10} />
             </div>
           </div>

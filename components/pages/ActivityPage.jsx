@@ -30,18 +30,19 @@
    ========================================================================== */
 
 import React, { useMemo, useState } from "react";
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Minus, RefreshCw } from "lucide-react";
+import { Activity, ArrowRight, RefreshCw } from "lucide-react";
 import { AllocationChart, CARD, HAIRLINE, PeriodPills, StepperPill, PillButton } from "@/components/ui/da";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { T } from "@/lib/ui/tokens";
 import { PALETTE, GREY } from "@/lib/ui/palette";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
+import { loadRange } from "@/lib/activity/engine";
 import { categoryLabel, isBrowser } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
   ActivityHeader, AppRows, BlockDetail, BlockTitle, CategoryRows, DayColumn, Disclosure,
-  HourBars, Metric, SessionRows, SourceNotice, StackedBar, TrackingPill,
+  HourBars, ScreenTimeBars, SessionRows, SourceNotice, StackedBar, TrackingPill,
 } from "@/components/activity/ActivityChrome";
 
 const TODAY = () => getLocalDateString();
@@ -66,49 +67,6 @@ function dateLabel(date) {
   });
 }
 
-/** Écart avec la veille — la seule comparaison qui a du sens sur une journée. */
-function Delta({ ms, refMs }) {
-  if (refMs <= 0) return null;
-  const diff = ms - refMs;
-  const pct = Math.round((diff / refMs) * 100);
-  if (Math.abs(pct) < 3) {
-    return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: T.textSub }}>
-        <Minus size={11} /> comme hier
-      </span>
-    );
-  }
-  const up = diff > 0;
-  const Icon = up ? ArrowUpRight : ArrowDownRight;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: T.textSub }}>
-      <Icon size={11} /> {up ? "+" : ""}{pct} % vs hier
-    </span>
-  );
-}
-
-/**
- * La journée en une phrase.
- *
- * Un total ne dit pas ce qu'a été la journée : « 6 h 12 » est vrai d'une journée
- * pleine comme d'une journée hachée. On nomme donc ce qui a dominé, quand on a
- * été bon, et ce qui a coûté — trois faits, pas un jugement.
- */
-function headline(stats) {
-  const bits = [];
-  const top = stats.byCategory[0];
-  if (top) bits.push(`${top.label} en tête (${Math.round(top.pct)} %)`);
-  const best = stats.hourly.reduce((b, h) => (h.productiveMs > b.productiveMs ? h : b), stats.hourly[0]);
-  if (best?.productiveMs > 0) bits.push(`meilleure heure ${best.hour} h`);
-  if (stats.focusSessions.length) {
-    bits.push(`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} de focus`);
-  } else {
-    bits.push("aucune session de focus");
-  }
-  if (stats.switchesPerHour >= 20) bits.push(`${Math.round(stats.switchesPerHour)} bascules par heure`);
-  return bits.join(" · ");
-}
-
 export default function ActivityPage({ setPage }) {
   const [settings, setSettings] = useActivitySettings();
   const live = useActivityLive();
@@ -125,16 +83,59 @@ export default function ActivityPage({ setPage }) {
   const [openBlock, setOpenBlock] = useState(null);
 
   const day = useDayLog(date);
-  const prevDay = useDayLog(shiftDate(date, -1));
 
   const stats = useMemo(() => dayStats(day, settings), [day, settings]);
-  const prev = useMemo(() => dayStats(prevDay, settings), [prevDay, settings]);
 
   const isToday = date === TODAY();
   const workGoalMs = settings.workGoalHours * 3600_000;
-  const focusGoalMs = settings.focusGoalHours * 3600_000;
 
   const block = openBlock == null ? null : stats.blocks.find(b => b.start === openBlock) ?? null;
+
+  /* La SEMAINE du jour affiché, du lundi au dimanche — et non les sept derniers
+     jours glissants : on compare sa semaine à ses habitudes de semaine, un
+     samedi doit tomber sous la colonne du samedi. Les jours à venir restent des
+     colonnes vides, ce qui montre aussi ce qu'il reste de la semaine.
+
+     Relire sept journées à chaque échantillon (toutes les 5 s) coûterait cher
+     pour des colonnes qui ne bougent pas à l'œil : le mémo ne se rouvre qu'à la
+     minute. */
+  const minuteTick = useMemo(() => {
+    const last = day.segments[day.segments.length - 1];
+    return last ? Math.floor(last.e / 60_000) : 0;
+  }, [day]);
+
+  const weekStart = useMemo(() => {
+    const d = new Date(`${date}T00:00:00`);
+    // Lundi = 0 : `getDay()` compte à partir du dimanche.
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return getLocalDateString(d);
+  }, [date]);
+
+  const week = useMemo(() => {
+    void minuteTick;
+    return loadRange(weekStart, shiftDate(weekStart, 6)).map(l => dayStats(l, settings));
+  }, [weekStart, settings, minuteTick]);
+
+  const weekLabel = useMemo(() => {
+    const a = new Date(`${weekStart}T00:00:00`);
+    const b = new Date(`${shiftDate(weekStart, 6)}T00:00:00`);
+    const sameMonth = a.getMonth() === b.getMonth();
+    const start = a.toLocaleDateString(undefined, sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" });
+    const end = b.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+    return `du ${start} au ${end}`;
+  }, [weekStart]);
+
+  /* Usage quotidien : la MÉDIANE des journées déjà écoulées de la semaine, les
+     journées vides comprises — une journée sans écran est une donnée, pas un
+     trou. On prend la médiane et non la moyenne : un samedi de quinze heures
+     tire une moyenne vers le haut et ferait passer une semaine calme pour une
+     semaine chargée ; la médiane dit la journée ORDINAIRE. */
+  const weekMedianMs = useMemo(() => {
+    const past = week.filter(d => d.date <= TODAY()).map(d => d.activeMs).sort((a, b) => a - b);
+    if (!past.length) return 0;
+    const mid = Math.floor(past.length / 2);
+    return past.length % 2 ? past[mid] : Math.round((past[mid - 1] + past[mid]) / 2);
+  }, [week]);
 
   const parts = useMemo(
     () => stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms })),
@@ -240,13 +241,6 @@ export default function ActivityPage({ setPage }) {
 
             {/* ── 1. Le calendrier ── */}
             <div style={{ ...CARD, flex: "3 1 0", minWidth: 320, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13, color: T.textSub }}>{headline(stats)}</span>
-                <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
-                  {stats.firstAt ? `${fmtClock(stats.firstAt)} → ${fmtClock(stats.lastAt)}` : ""}
-                </span>
-              </div>
-
               <DayColumn
                 blocks={stats.blocks}
                 date={date}
@@ -254,60 +248,20 @@ export default function ActivityPage({ setPage }) {
                 onPickBlock={(b) => setOpenBlock(cur => (cur === b.start ? null : b.start))}
                 onClear={() => setOpenBlock(null)}
               />
-              <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.45 }}>
-                Un pavé = une matière tant qu’elle dure, à la couleur de sa catégorie ; les blancs sont
-                les pauses. Clique un pavé pour voir, à droite, tout ce qui a été ouvert pendant ce laps de temps.
-                Pour refermer : Échap, un clic dans le vide de la grille, ou le pavé lui-même — un autre pavé
-                passe simplement la sélection dessus.
-              </span>
 
-              {/* Les quatre chiffres APRÈS le dessin : la grille dit ce que la
-                  journée a été, ces quatre-là la résument. On lit donc le fait
-                  puis le bilan, et non l'inverse. */}
-              <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))" }}>
-                <Metric
-                  label="Temps actif"
-                  value={fmtDur(stats.activeMs)}
-                  valueMs={stats.activeMs}
-                  goalMs={workGoalMs}
-                  size={30}
-                  sub={<Delta ms={stats.activeMs} refMs={prev.activeMs} />}
-                />
-                <Metric
-                  label="Temps de focus"
-                  value={fmtDur(stats.focusMs)}
-                  valueMs={stats.focusMs}
-                  goalMs={focusGoalMs}
-                  size={30}
-                  color={PALETTE.green}
-                  sub={`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} · plus longue ${fmtDur(stats.longestFocusMs)}`}
-                />
-                <Metric
-                  label="Distractions"
-                  value={fmtDur(stats.distractingMs)}
-                  size={30}
-                  color={stats.distractingMs > 0 ? PALETTE.red : T.text}
-                  sub={`${Math.round(stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0)} % du temps actif`}
-                />
-                <Metric
-                  label="Qualité"
-                  value={`${stats.focusScore}`}
-                  valueMs={stats.focusScore}
-                  goalMs={100}
-                  size={30}
-                  color={stats.focusScore >= 70 ? PALETTE.green : stats.focusScore >= 45 ? PALETTE.yellow : PALETTE.red}
-                  sub="part du focus et stabilité, sur 100"
-                />
-              </div>
-
+              {/* Les quatre chiffres de la journée, sur une seule ligne au pied
+                  de la grille. Ils tenaient la rangée de grandes tuiles qui
+                  était ici : à cette taille-là ils prenaient le pas sur le
+                  dessin, qui est ce qu'on vient lire. Le détail chiffré vit de
+                  toute façon dans les onglets Applications et Rapports. */}
               <div style={{
-                display: "flex", flexWrap: "wrap", gap: "6px 18px", paddingTop: 12,
-                borderTop: `1px solid ${HAIRLINE}`, fontSize: 11, color: T.textSub,
+                display: "flex", flexWrap: "wrap", gap: "6px 18px",
+                fontSize: 12, color: T.textSub,
               }}>
-                <span>Amplitude <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.spanMs)}</strong></span>
-                <span>Pauses <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.breakMs)}</strong> ({stats.breaks.length})</span>
-                <span>Absence au poste <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.awayMs)}</strong></span>
-                <span>Bascules d’app <strong style={{ color: T.text, fontWeight: 600 }}>{stats.switches}</strong> ({stats.switchesPerHour.toFixed(1)} / h)</span>
+                <span>Temps actif <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{fmtDur(stats.activeMs)}</strong></span>
+                <span>Temps de focus <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{fmtDur(stats.focusMs)}</strong> ({stats.focusSessions.length} session{stats.focusSessions.length > 1 ? "s" : ""})</span>
+                <span>Distractions <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{fmtDur(stats.distractingMs)}</strong> ({Math.round(stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0)} % du temps actif)</span>
+                <span>Qualité <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{stats.focusScore}</strong> / 100</span>
               </div>
             </div>
 
@@ -329,18 +283,26 @@ export default function ActivityPage({ setPage }) {
                 <>
                   {/* ── 2. La répartition ── */}
                   <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-                    <BlockTitle right={`${stats.byCategory.length} catégorie${stats.byCategory.length > 1 ? "s" : ""}`}>
+                    <BlockTitle>
                       Répartition
                     </BlockTitle>
                     {/* L'anneau et ses catégories CÔTE À CÔTE : l'un sous
-                        l'autre, la liste passait sous le pli. */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                        l'autre, la liste passait sous le pli.
+
+                        L'anneau est la LECTURE du bloc — la liste ne fait que
+                        le détailler. À 136 px il se lisait comme une vignette
+                        posée à gauche du vrai contenu ; à 188 il redevient ce
+                        qu'on regarde en premier, et son centre porte le total
+                        sans le serrer. La liste garde sa largeur minimale, donc
+                        c'est la place perdue à droite qui est reprise, pas la
+                        sienne. */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
                       <AllocationChart
                         kind="ring"
                         parts={parts}
                         scale={100}
-                        size={136}
-                        thickness={17}
+                        size={188}
+                        thickness={23}
                         ariaLabel="Répartition du temps par catégorie"
                         centreLabel="Temps actif"
                         centreValue={stats.activeMs}
@@ -358,11 +320,50 @@ export default function ActivityPage({ setPage }) {
 
                   {/* ── 3. Les applications ── */}
                   <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <BlockTitle right={`${stats.byApp.length} au total`}>Applications & sites</BlockTitle>
-                    <AppRows apps={stats.byApp} limit={5} />
+                    <BlockTitle>Applications & sites</BlockTitle>
+                    {/* Sous cinq minutes, une application n'a rien à dire d'une
+                        journée : elle a été ouverte, pas utilisée. Retirées
+                        plutôt que repoussées derrière « voir plus » — dès lors
+                        qu'il y a plus de cinq lignes, celles-là ne sont que du
+                        bruit à faire défiler. */}
+                    <AppRows apps={stats.byApp} limit={5} minMs={5 * 60_000} />
                   </div>
                 </>
               )}
+            </div>
+          </div>
+
+          {/* ═══ Le temps d'écran, jour par jour ═════════════════════════════
+              Une journée seule ne dit pas si elle est longue : « 6 h 12 » ne
+              prend son sens qu'à côté des autres jours de la semaine. Les
+              colonnes sont cliquables — c'est le chemin le plus court vers la
+              journée qu'on vient de repérer. */}
+          <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Pas de titre à gauche : la mesure EST le titre. « Utilisation
+                quotidienne » et son chiffre disent à la fois de quoi parle le
+                graphe et ce qu'il faut en retenir. */}
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                <span style={{ fontSize: 12, color: T.textSub }}>Utilisation quotidienne</span>
+                <span style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.1, letterSpacing: -0.4, color: T.text, fontVariantNumeric: "tabular-nums" }}>
+                  {fmtDur(weekMedianMs)}
+                </span>
+                <span style={{ fontSize: 11, color: T.textMut }}>semaine {weekLabel}</span>
+              </div>
+            </div>
+            <ScreenTimeBars
+              days={week}
+              goalMs={workGoalMs}
+              medianMs={weekMedianMs}
+              selected={date}
+              // Un jour à venir n'a rien à montrer : sa colonne reste inerte.
+              onPick={(d) => { if (d <= TODAY()) { setOpenBlock(null); setDate(d); } }}
+            />
+            <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textSub, flexWrap: "wrap" }}>
+              <span><span style={dotStyle(PALETTE.green)} />productif</span>
+              <span><span style={dotStyle(GREY.grey500)} />neutre</span>
+              <span><span style={dotStyle(PALETTE.red)} />distraction</span>
+              {workGoalMs > 0 && <span style={{ color: T.textMut }}>le pointillé fin marque l’objectif de {fmtDur(workGoalMs)}</span>}
             </div>
           </div>
 
