@@ -60,10 +60,10 @@ export interface AppBucket extends Bucket {
  *
  * Ce n'est PAS un segment : un segment change à chaque bascule d'application, et
  * une journée en compte des centaines — posés tels quels sur une grille horaire,
- * ce sont des traits de deux pixels illisibles. Un pavé regroupe ce qui relève
- * d'une même MATIÈRE (la catégorie) tant qu'elle se poursuit, et absorbe les
- * miettes : un aller-retour d'une minute sur Discord au milieu d'une heure de
- * code ne casse pas le pavé, il s'y fond.
+ * ce sont des traits de deux pixels illisibles. Un pavé couvre un nombre entier
+ * de créneaux d'une demi-heure, chacun attribué à la matière qui l'a le plus
+ * occupé (cf. `dayBlocks`) : il fait donc au minimum trente minutes, et il
+ * s'agrandit par demi-heures tant que la matière tient.
  */
 export interface DayBlock {
   start: number;
@@ -219,23 +219,68 @@ function buildFocusSessions(segments: Segment[], settings: ActivitySettings): Fo
 /**
  * Les segments d'une journée regroupés en pavés posables sur un calendrier.
  *
- * Deux réglages, et deux seulement :
- *   • `gapMs` — au-delà de ce trou, la matière a été interrompue : nouveau pavé
- *     (et le trou devient une pause, qui se VOIT sur la grille) ;
- *   • `crumbMs` — en dessous de cette durée, un passage sur autre chose entre
- *     deux moments de la même matière est une miette : elle est absorbée, sinon
- *     une heure de travail ressort en dix-sept pavés d'une minute.
+ * La journée est découpée en CRÉNEAUX d'une demi-heure, calés sur l'horloge
+ * (00, 30). Chaque créneau revient à la matière qui l'a le plus occupé, et deux
+ * créneaux voisins qui reviennent à la même matière ne font qu'un pavé — qui
+ * s'agrandit donc par demi-heures, indéfiniment tant que la matière tient.
+ *
+ * Pourquoi un pas fixe plutôt qu'un regroupement au fil des segments : une
+ * journée réelle n'est pas une suite de blocs propres. On code, on répond à un
+ * message, on revient, on regarde un graphique, on revient — posé tel quel, ça
+ * donne une colonne de traits de quelques pixels qu'aucun œil ne lit, et le
+ * calendrier ne sait plus dire à quoi la matinée est passée. Le créneau tranche
+ * : sur une demi-heure, il n'y a qu'un gagnant, et c'est lui qu'on affiche.
+ *
+ * Ce que ça coûte, et qui est assumé : un vrai quart d'heure de messagerie au
+ * milieu d'une demi-heure de code n'apparaît plus en propre. Il n'est pas perdu
+ * pour autant — il reste dans `apps`, donc dans l'infobulle du pavé et dans le
+ * détail qu'ouvre un clic, et les totaux de la journée le comptent exactement.
+ * Le calendrier dit la FORME de la journée ; les chiffres, eux, sont ailleurs.
+ *
+ * `ms` reste le temps RÉELLEMENT mesuré : un pavé de 9 h à 10 h qui n'a vu que
+ * cinquante minutes d'activité affiche cinquante minutes. Ce sont `start` et
+ * `end` qui s'alignent sur les créneaux, pas la mesure.
+ *
+ * Deux réglages :
+ *   • `slotMs` — la longueur du créneau, donc la hauteur minimale d'un pavé ;
+ *   • `minSlotMs` — en dessous de cette mesure, un créneau reste VIDE. Sans ce
+ *     plancher, trente secondes d'activité à 3 h du matin réserveraient une
+ *     demi-heure entière sur la grille et se liraient comme une nuit de travail.
  */
 export function dayBlocks(
   segments: Segment[],
-  opts: { gapMs?: number; crumbMs?: number } = {}
+  opts: { slotMs?: number; minSlotMs?: number } = {}
 ): DayBlock[] {
-  const gapMs = opts.gapMs ?? 3 * 60_000;
-  /* Quatre minutes : en dessous, le pavé ferait moins de quatre pixels de haut
-     sur la grille — il ne porterait ni nom ni heure, et couperait en trois une
-     matière qui n'a pas été interrompue pour autant. Ce qu'il contenait reste
-     nommé dans l'infobulle du pavé qui l'absorbe. */
-  const crumbMs = opts.crumbMs ?? 4 * 60_000;
+  const slotMs = Math.max(60_000, opts.slotMs ?? 30 * 60_000);
+  /* Trois minutes sur trente : assez pour qu'un vrai passage compte, assez pour
+     qu'un relevé isolé ne peuple pas la grille. */
+  const minSlotMs = opts.minSlotMs ?? Math.round(slotMs / 10);
+  if (!segments.length) return [];
+
+  /* Les créneaux se calent sur minuit LOCAL, et non sur un multiple de l'époque
+     Unix : c'est l'horloge de l'utilisateur qui doit tomber juste (9 h 00,
+     9 h 30), et certains fuseaux sont décalés d'une demi-heure ou d'un quart. */
+  const midnight = new Date(segments[0].s);
+  midnight.setHours(0, 0, 0, 0);
+  const base = midnight.getTime();
+  const indexOf = (ms: number) => Math.floor((ms - base) / slotMs);
+  const startOf = (i: number) => base + i * slotMs;
+
+  interface Slot {
+    i: number;
+    ms: number;
+    byCat: Map<string, number>;
+    apps: Map<string, BlockApp>;
+    /** Applications dans l'ordre où elles sont venues, doublons consécutifs ôtés. */
+    seq: string[];
+  }
+  const slots = new Map<number, Slot>();
+
+  const slotAt = (i: number): Slot => {
+    let s = slots.get(i);
+    if (!s) { s = { i, ms: 0, byCat: new Map(), apps: new Map(), seq: [] }; slots.set(i, s); }
+    return s;
+  };
 
   const addTitle = (a: BlockApp, title: string, ms: number) => {
     if (!title) return;
@@ -243,72 +288,83 @@ export function dayBlocks(
     if (found) found.ms += ms;
     else a.titles.push({ title, ms });
   };
-  const appOf = (seg: Segment, ms: number): BlockApp => ({
-    label: seg.label, cat: seg.cat, ms, app: seg.app, isSite: isBrowser(seg.app),
-    titles: seg.title ? [{ title: seg.title, ms }] : [],
-  });
-  const addSeg = (b: DayBlock, seg: Segment, ms: number) => {
-    const found = b.apps.find(a => a.label === seg.label);
-    if (!found) { b.apps.push(appOf(seg, ms)); return; }
-    found.ms += ms;
-    addTitle(found, seg.title, ms);
+
+  const addToSlot = (slot: Slot, seg: Segment, ms: number) => {
+    slot.ms += ms;
+    slot.byCat.set(seg.cat, (slot.byCat.get(seg.cat) || 0) + ms);
+    const found = slot.apps.get(seg.label);
+    if (found) {
+      found.ms += ms;
+      addTitle(found, seg.title, ms);
+    } else {
+      slot.apps.set(seg.label, {
+        label: seg.label, cat: seg.cat, ms, app: seg.app, isSite: isBrowser(seg.app),
+        titles: seg.title ? [{ title: seg.title, ms }] : [],
+      });
+    }
+    if (slot.seq[slot.seq.length - 1] !== seg.label) slot.seq.push(seg.label);
   };
+
+  // 1. Le temps mesuré tombe dans les créneaux qu'il traverse, découpé s'il faut.
+  for (const seg of segments) {
+    if (msOf(seg) <= 0) continue;
+    const first = indexOf(seg.s);
+    const last = indexOf(seg.e - 1);
+    for (let i = first; i <= last; i++) {
+      const from = Math.max(seg.s, startOf(i));
+      const to = Math.min(seg.e, startOf(i + 1));
+      if (to > from) addToSlot(slotAt(i), seg, to - from);
+    }
+  }
+
+  // 2. Un créneau, une matière : celle qui l'a le plus occupé.
+  const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+  const kept = [...slots.values()]
+    .filter(s => s.ms >= minSlotMs)
+    .sort((a, b) => a.i - b.i);
+
+  // 3. Les créneaux voisins de même matière s'assemblent en un seul pavé.
+  const blocks: DayBlock[] = [];
+  let seq: string[] = [];
+  let prevIndex = Number.NaN;
+  let prevCat = "";
+
   const mergeApp = (b: DayBlock, a: BlockApp) => {
     const found = b.apps.find(x => x.label === a.label);
     if (!found) { b.apps.push({ ...a, titles: a.titles.map(t => ({ ...t })) }); return; }
     found.ms += a.ms;
     for (const t of a.titles) addTitle(found, t.title, t.ms);
   };
-  const absorb = (into: DayBlock, b: DayBlock) => {
-    into.end = Math.max(into.end, b.end);
-    into.ms += b.ms;
-    into.switches += b.switches + 1;
-    for (const a of b.apps) mergeApp(into, a);
-  };
 
-  // 1. Une suite de segments de même catégorie, sans trou notable = un pavé.
-  const raw: DayBlock[] = [];
-  for (const seg of segments) {
-    const ms = msOf(seg);
-    if (ms <= 0) continue;
-    const last = raw[raw.length - 1];
-    if (last && last.cat === seg.cat && seg.s - last.end <= gapMs) {
-      if (last.apps[last.apps.length - 1]?.label !== seg.label) last.switches += 1;
-      last.end = Math.max(last.end, seg.e);
-      last.ms += ms;
-      addSeg(last, seg, ms);
-      continue;
+  for (const slot of kept) {
+    const cat = top(slot.byCat);
+    const open = blocks[blocks.length - 1];
+    const continues = open && slot.i === prevIndex + 1 && cat === prevCat;
+
+    if (!continues) {
+      blocks.push({
+        start: startOf(slot.i), end: startOf(slot.i + 1), ms: 0,
+        cat, label: "", apps: [], switches: 0,
+      });
+      seq = [];
     }
-    raw.push({
-      start: seg.s, end: seg.e, ms, cat: seg.cat, label: seg.label,
-      apps: [appOf(seg, ms)], switches: 0,
-    });
+    const b = blocks[blocks.length - 1];
+    b.end = startOf(slot.i + 1);
+    b.ms += slot.ms;
+    for (const a of slot.apps.values()) mergeApp(b, a);
+    for (const label of slot.seq) if (seq[seq.length - 1] !== label) seq.push(label);
+    b.switches = Math.max(0, seq.length - 1);
+
+    prevIndex = slot.i;
+    prevCat = cat;
   }
 
-  // 2. Les miettes prises entre deux pavés de même matière disparaissent dedans.
-  const merged: DayBlock[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const b = raw[i];
-    const prev = merged[merged.length - 1];
-    const next = raw[i + 1];
-    if (
-      prev && next && b.ms < crumbMs && next.cat === prev.cat &&
-      b.start - prev.end <= gapMs && next.start - b.end <= gapMs
-    ) {
-      absorb(prev, b);
-      absorb(prev, next);
-      i += 1;
-      continue;
-    }
-    merged.push({ ...b, apps: b.apps.map(a => ({ ...a, titles: a.titles.map(t => ({ ...t })) })) });
-  }
-
-  for (const b of merged) {
+  for (const b of blocks) {
     b.apps.sort((a, c) => c.ms - a.ms);
     for (const a of b.apps) a.titles.sort((x, y) => y.ms - x.ms);
-    b.label = b.apps[0]?.label ?? b.label;
+    b.label = b.apps[0]?.label ?? "";
   }
-  return merged;
+  return blocks;
 }
 
 export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {

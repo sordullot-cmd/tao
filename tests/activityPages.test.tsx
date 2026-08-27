@@ -109,6 +109,23 @@ describe("page Activité (journée)", () => {
     expect(screen.getAllByText("Temps actif").length).toBeGreaterThan(0);
   });
 
+  it("referme la sélection d'un pavé avec Échap", () => {
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    const at = (min: number) => base.getTime() + min * 60_000;
+    saveDay({
+      date: today, awayMs: 0, updatedAt: Date.now(),
+      segments: [{ s: at(0), e: at(40), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" }],
+    });
+    render(<ActivityPage setPage={vi.fn()} />);
+    fireEvent.click(screen.getByTitle(/VS Code 40 min/));
+    expect(screen.getByText(/1 application/)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    // Le résumé a repris la place du détail.
+    expect(screen.getAllByText("Temps actif").length).toBeGreaterThan(0);
+  });
+
   it("navigue vers les rapports depuis les onglets", () => {
     const setPage = vi.fn();
     render(<ActivityPage setPage={setPage} />);

@@ -253,43 +253,46 @@ const pad2 = (n) => String(n).padStart(2, "0");
  * dira jamais : la FORME de la journée, et surtout ses TROUS.
  *
  * On ne pose pas les segments bruts (des centaines de traits de deux pixels)
- * mais les pavés de `dayBlocks` : une matière, tant qu'elle dure.
+ * mais les pavés de `dayBlocks` : la journée est découpée en créneaux d'une
+ * demi-heure, chacun revient à la matière qui l'a le plus occupé, et les
+ * créneaux voisins de même matière n'en font qu'un. Un pavé fait donc au moins
+ * trente minutes — de quoi porter son nom et son heure — et s'agrandit par
+ * demi-heures tant que la matière tient.
  *
- * La grille ne montre que les heures utiles (première activité − 1 h → dernière
- * + 1 h, plus l'heure courante) : vingt-quatre heures dont dix-huit vides sont
- * dix-huit heures de défilement pour rien.
+ * La grille porte les vingt-quatre heures et défile, comme celle de l'agenda :
+ * on n'a pas seulement la fin de sa journée sous les yeux, on peut remonter au
+ * matin. Elle s'ouvre sur l'heure courante — ou sur la première activité quand
+ * on regarde un jour passé.
  */
 export function DayColumn({
   blocks, date, onPickBlock, selected,
-  /* La grille couvre la JOURNÉE ENTIÈRE, comme celle de l'agenda, et défile.
-     Elle ne montrait que les heures utiles : c'était plus compact, mais on ne
-     pouvait pas remonter voir le matin, et une journée à peine commencée tenait
-     en trois heures. On voit maintenant onze heures d'un coup — la place que
-     `visibleHours` réserve — et on se déplace librement dans les autres. */
-  height = "max(760px, calc(100vh - 160px))",
-  visibleHours = 11,
-  /* Plancher de la hauteur d'une heure (celle de l'agenda). Au-delà, l'heure
-     s'étire pour que les onze tiennent pile dans le cadre : sur un grand écran
-     la grille respire au lieu de laisser du vide en bas. */
+  /* Refermer la sélection. Trois gestes y mènent, et il en faut trois : le
+     deuxième clic sur le pavé ouvert se devine mal quand le détail s'est
+     affiché ailleurs, et rien n'indiquait qu'on pouvait en sortir. */
+  onClear,
+  /* La grille couvre la JOURNÉE ENTIÈRE, comme celle de l'agenda, et défile :
+     on remonte voir le matin, on descend sur le soir. Ce qu'on en voit d'un coup
+     est ce qui règle sa taille — le cadre fait exactement `visibleHours` heures,
+     ni plus (il mangeait la page) ni moins (on ne situait plus rien). */
+  visibleHours = 10,
+  /** Hauteur d'une heure — celle de l'agenda, pour que les deux grilles se
+   *  lisent à la même échelle. */
   hourH = 68,
 }) {
   const nowMs = useNowMinute();
   const scrollRef = useRef(null);
   const doneRef = useRef(null);
-  /* Hauteur réelle du cadre. Elle vient d'une mesure et non d'un calcul : c'est
-     `height` qui la fixe, mais `calc(100vh …)` n'est connu que du navigateur.
-     (Le cadre porte bien une hauteur DÉFINIE — avec un simple `maxHeight`, il
-     se réglait sur son contenu, la mesure valait toujours la hauteur de la
-     grille, et l'étirement ne se déclenchait jamais.) */
-  const [boxH, setBoxH] = useState(0);
+
+  /* Échap referme la sélection — la touche qu'on essaie d'instinct devant un
+     panneau ouvert. L'écouteur n'existe que pendant qu'un pavé est ouvert : une
+     page qui capte Échap en permanence finit par voler la touche à autre chose
+     (une modale, un champ en cours de saisie). */
   React.useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setBoxH(el.clientHeight));
-    ro.observe(el);
-    setBoxH(el.clientHeight);
-    return () => ro.disconnect();
-  }, []);
+    if (selected == null || !onClear) return;
+    const onKey = (e) => { if (e.key === "Escape") onClear(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, onClear]);
 
   const today = new Date();
   const isToday = date === `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
@@ -297,7 +300,8 @@ export function DayColumn({
 
   const fromH = 0;
   const toH = 24;
-  const rowH = Math.max(hourH, boxH ? boxH / visibleHours : 0);
+  const rowH = hourH;
+  const boxH = visibleHours * rowH;
 
   const hours = Array.from({ length: toH - fromH }, (_, i) => fromH + i);
   const gridH = hours.length * rowH;
@@ -306,21 +310,17 @@ export function DayColumn({
   /* Arrivée directe sur l'heure courante (ou sur le début de la journée quand
      on regarde un jour passé) : avant la première peinture, sans animation —
      on vient voir la fin de la journée, pas la voir défiler depuis 8 h. */
-  /* La clé porte la hauteur d'heure : au premier rendu le cadre n'est pas encore
-     mesuré (`rowH` vaut son plancher), et sans ça la position calculée à 68 px
-     l'heure resterait figée une fois les heures étirées. */
-  const anchorKey = `${date}:${Math.round(rowH)}`;
   React.useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el || doneRef.current === anchorKey) return;
-    if (el.scrollHeight <= el.clientHeight) { doneRef.current = anchorKey; return; }
+    if (!el || doneRef.current === date) return;
+    if (el.scrollHeight <= el.clientHeight) { doneRef.current = date; return; }
     // Aujourd'hui : sur l'heure courante, avec un peu de contexte au-dessus.
     // Un jour passé : sur sa première activité — la nuit n'a rien à dire.
     const anchor = isToday
       ? nowMin
       : (blocks.length ? minutesOfDay(Math.min(...blocks.map(b => b.start))) : 8 * 60);
     el.scrollTop = Math.max(0, (anchor / 60) * rowH - rowH * 1.5);
-    doneRef.current = anchorKey;
+    doneRef.current = date;
   });
 
   // Trous d'au moins dix minutes : ce sont les pauses, et elles se nomment.
@@ -334,8 +334,10 @@ export function DayColumn({
     <div
       ref={scrollRef}
       style={{
-        height, maxHeight: height, overflowY: "auto", overscrollBehavior: "contain",
-        borderRadius: 10, border: `1px solid ${HAIRLINE}`, background: T.white,
+        /* Pas de cadre : la carte en tient déjà lieu, et un second contour à
+           l'intérieur du premier faisait une boîte dans une boîte. */
+        height: boxH, maxHeight: "calc(100vh - 190px)", overflowY: "auto",
+        overscrollBehavior: "contain", background: T.white,
       }}
     >
       <div style={{ display: "flex", position: "relative", height: gridH }}>
@@ -352,11 +354,23 @@ export function DayColumn({
           ))}
         </div>
 
-        {/* La colonne du jour */}
-        <div style={{
-          flex: 1, position: "relative", minWidth: 0, height: gridH,
-          backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent ${rowH - 1}px, ${HAIRLINE} ${rowH - 1}px, ${HAIRLINE} ${rowH}px)`,
-        }}>
+        {/* La colonne du jour.
+
+            Un clic dans son vide referme la sélection. La condition porte sur
+            `e.target === e.currentTarget` plutôt que sur un `stopPropagation`
+            posé dans chaque pavé : ici c'est le conteneur qui décide, et un
+            futur enfant cliquable n'aura pas à se souvenir de bloquer la
+            remontée. Les bandeaux de pause et le trait de l'heure courante sont
+            déjà en `pointerEvents: none`, donc un clic dessus tombe bien sur le
+            conteneur. */}
+        <div
+          onClick={onClear && selected != null
+            ? (e) => { if (e.target === e.currentTarget) onClear(); }
+            : undefined}
+          style={{
+            flex: 1, position: "relative", minWidth: 0, height: gridH,
+            backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent ${rowH - 1}px, ${HAIRLINE} ${rowH - 1}px, ${HAIRLINE} ${rowH}px)`,
+          }}>
           {gaps.map(g => {
             const top = y(g.start);
             const h = Math.max(0, y(g.end) - top);
@@ -578,8 +592,14 @@ export function BarRow({ color, label, ms, pct, sub, right, onClick }) {
   );
 }
 
-/** Répartition par catégorie, avec sa part de productivité. */
-export function CategoryRows({ buckets, limit, productivity }) {
+/**
+ * Répartition par catégorie.
+ *
+ * `showShare` coupe la ligne sous la barre (« 38 % du temps actif · productif »).
+ * Elle a sa place dans une liste qu'on vient éplucher ; à côté d'un anneau qui
+ * dit déjà les parts, elle triple la hauteur d'une ligne pour la répéter.
+ */
+export function CategoryRows({ buckets, limit, productivity, showShare = true }) {
   const [all, setAll] = useState(false);
   const shown = all || !limit ? buckets : buckets.slice(0, limit);
   return (
@@ -591,7 +611,9 @@ export function CategoryRows({ buckets, limit, productivity }) {
           label={b.label}
           ms={b.ms}
           pct={b.pct}
-          sub={`${Math.round(b.pct)} % du temps actif · ${PRODUCTIVITY_LABEL[resolveProductivity(b.id, productivity)]}`}
+          sub={showShare
+            ? `${Math.round(b.pct)} % du temps actif · ${PRODUCTIVITY_LABEL[resolveProductivity(b.id, productivity)]}`
+            : null}
         />
       ))}
       {limit && buckets.length > limit && (
@@ -836,28 +858,6 @@ export function StackedBar({ parts, height = 12, minPct = 1.2 }) {
             background: p.color, minWidth: 3,
           }}
         />
-      ))}
-    </div>
-  );
-}
-
-/** Légende d'une barre : pastille, nom, durée — sur une seule ligne qui passe. */
-export function BarLegend({ parts, limit = 8, onPick }) {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px" }}>
-      {parts.slice(0, limit).map(p => (
-        <span
-          key={p.id}
-          onClick={onPick ? () => onPick(p) : undefined}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textSub,
-            cursor: onPick ? "pointer" : "default", maxWidth: "100%",
-          }}
-        >
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0 }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.label}</span>
-          <span style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{fmtDur(p.ms, { short: true })}</span>
-        </span>
       ))}
     </div>
   );

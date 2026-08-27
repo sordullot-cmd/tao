@@ -211,12 +211,49 @@ describe("pavés de la journée", () => {
     expect(blocks[1].start - blocks[0].end).toBe(60 * M);
   });
 
-  it("garde les deux pavés quand l'interruption est longue", () => {
+  it("donne le créneau à la matière qui l'a le plus occupé", () => {
+    // Sur la demi-heure de 9 h 30, vingt minutes de messagerie contre dix de
+    // code : c'est la messagerie qui prend le créneau, en entier.
     const blocks = dayBlocks([
       seg([9, 0], [9, 30], "Code", "dev"),
       seg([9, 30], [9, 50], "Discord", "comms"),
       seg([9, 50], [10, 0], "Code", "dev"),
     ]);
-    expect(blocks.map(b => b.cat)).toEqual(["dev", "comms", "dev"]);
+    expect(blocks.map(b => b.cat)).toEqual(["dev", "comms"]);
+    // Les dix minutes de code perdues par le créneau ne sont pas perdues tout
+    // court : elles restent nommées dans le détail du pavé.
+    expect(blocks[1].apps.map(a => a.label)).toEqual(["Discord", "Code"]);
+  });
+
+  it("ne descend jamais sous la demi-heure, même pour dix minutes mesurées", () => {
+    const blocks = dayBlocks([seg([9, 0], [9, 10], "Code", "dev")]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].end - blocks[0].start).toBe(30 * M);
+    // La mesure, elle, reste la vraie : le pavé occupe une demi-heure et dit
+    // dix minutes.
+    expect(blocks[0].ms).toBe(10 * M);
+  });
+
+  it("cale les pavés sur l'horloge, pas sur la première activité", () => {
+    const blocks = dayBlocks([seg([9, 12], [9, 40], "Code", "dev")]);
+    expect(blocks).toHaveLength(1);
+    expect(new Date(blocks[0].start).getMinutes()).toBe(0);
+    expect(new Date(blocks[0].end).getMinutes()).toBe(0);
+    expect(blocks[0].end - blocks[0].start).toBe(60 * M);
+  });
+
+  it("agrandit le même pavé tant que la matière tient, demi-heure après demi-heure", () => {
+    const blocks = dayBlocks([seg([9, 0], [11, 30], "Code", "dev")]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].end - blocks[0].start).toBe(150 * M);
+  });
+
+  it("laisse le créneau vide quand il n'a presque rien vu", () => {
+    // Une minute à 3 h du matin ne réserve pas une demi-heure sur la grille.
+    const blocks = dayBlocks([
+      seg([3, 0], [3, 1], "Safari", "other"),
+      seg([9, 0], [9, 30], "Code", "dev"),
+    ]);
+    expect(blocks.map(b => b.cat)).toEqual(["dev"]);
   });
 });

@@ -31,7 +31,7 @@
 
 import React, { useMemo, useState } from "react";
 import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Minus, RefreshCw } from "lucide-react";
-import { CARD, HAIRLINE, PeriodPills, StepperPill, PillButton } from "@/components/ui/da";
+import { AllocationChart, CARD, HAIRLINE, PeriodPills, StepperPill, PillButton } from "@/components/ui/da";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { T } from "@/lib/ui/tokens";
 import { PALETTE, GREY } from "@/lib/ui/palette";
@@ -40,7 +40,7 @@ import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
 import { categoryLabel, isBrowser } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, AppRows, BarLegend, BlockDetail, CategoryRows, DayColumn, Disclosure,
+  ActivityHeader, AppRows, BlockDetail, BlockTitle, CategoryRows, DayColumn, Disclosure,
   HourBars, Metric, SessionRows, SourceNotice, StackedBar, TrackingPill,
 } from "@/components/activity/ActivityChrome";
 
@@ -136,6 +136,11 @@ export default function ActivityPage({ setPage }) {
 
   const block = openBlock == null ? null : stats.blocks.find(b => b.start === openBlock) ?? null;
 
+  const parts = useMemo(
+    () => stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms })),
+    [stats.byCategory]
+  );
+
   const other = stats.byCategory.find(b => b.id === "other");
   const pendingApps = useMemo(() => stats.byApp.filter(a => a.cat === "other"), [stats.byApp]);
 
@@ -219,107 +224,145 @@ export default function ActivityPage({ setPage }) {
         </div>
       ) : (
         <>
-          {/* ═══ 1. La journée ═══════════════════════════════════════════════
-              À gauche, la journée DESSINÉE : la même grille horaire que le
-              calendrier de l'agenda, parce que c'est le même objet mental — des
-              heures, des pavés, et des trous. À droite, ce que ces pavés font
-              une fois additionnés. Le dessin ne prend qu'un tiers de la carte :
-              il montre la forme, il ne remplace pas les nombres. */}
-          <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, color: T.textSub }}>{headline(stats)}</span>
-              <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
-                {stats.firstAt ? `${fmtClock(stats.firstAt)} → ${fmtClock(stats.lastAt)}` : ""}
-              </span>
-            </div>
+          {/* ═══ 1 · 2 · 3 — la journée, sa répartition, ses applications ═════
+              Trois cartes et non une : elles répondent à trois questions
+              différentes (« à quoi a ressemblé ma journée ? », « en quoi est-ce
+              passé ? », « dans quoi précisément ? »), et une seule carte les
+              donnait d'un bloc sans qu'on sache où commencer. La grille garde la
+              largeur — c'est le dessin qu'on vient lire ; les deux autres
+              s'empilent à sa droite, à hauteur de lecture.
 
-            {/* `stretch` + `space-between` : le résumé s'aligne sur la hauteur de
-                la grille et sa dernière ligne se pose à son pied, au lieu de
-                laisser un vide sous une colonne deux fois plus haute. */}
-            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "stretch" }}>
-              {/* La journée, heure par heure — la moitié de la carte : c'est le
-                  dessin qu'on vient regarder, pas une vignette. */}
-              <div style={{ flex: "1 1 380px", minWidth: 300, display: "flex", flexDirection: "column", gap: 6 }}>
-                <DayColumn
-                  blocks={stats.blocks}
-                  date={date}
-                  selected={openBlock}
-                  onPickBlock={(b) => setOpenBlock(cur => (cur === b.start ? null : b.start))}
-                />
-                <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.45 }}>
-                  Un pavé = une matière tant qu’elle dure, à la couleur de sa catégorie ; les blancs sont
-                  les pauses. Clique un pavé pour voir, à droite, tout ce qui a été ouvert pendant ce laps de temps.
+              Le partage se fait en `flex-grow` sur une base nulle (3 contre 2)
+              et non en pourcentages : c'est le seul réglage qui donne exactement
+              60/40 une fois l'espace entre les colonnes retiré. Les `minWidth`
+              gardent le repli — sous ~630 px, tout passe en une colonne. */}
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+
+            {/* ── 1. Le calendrier ── */}
+            <div style={{ ...CARD, flex: "3 1 0", minWidth: 320, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, color: T.textSub }}>{headline(stats)}</span>
+                <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+                  {stats.firstAt ? `${fmtClock(stats.firstAt)} → ${fmtClock(stats.lastAt)}` : ""}
                 </span>
               </div>
 
-              {/* À droite : le résumé de la journée — ou, dès qu'un pavé est
-                  ouvert, ce qu'il contient. Le détail prend la place du résumé
-                  au lieu de s'ajouter dessous : c'est la même question posée à
-                  deux échelles, et deux panneaux côte à côte obligeraient à
-                  chercher lequel répond à quoi. */}
-              <div style={{ flex: "1 1 380px", minWidth: 288, display: "flex", flexDirection: "column", gap: 16, justifyContent: "space-between" }}>
-                {block ? (
+              <DayColumn
+                blocks={stats.blocks}
+                date={date}
+                selected={openBlock}
+                onPickBlock={(b) => setOpenBlock(cur => (cur === b.start ? null : b.start))}
+                onClear={() => setOpenBlock(null)}
+              />
+              <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.45 }}>
+                Un pavé = une matière tant qu’elle dure, à la couleur de sa catégorie ; les blancs sont
+                les pauses. Clique un pavé pour voir, à droite, tout ce qui a été ouvert pendant ce laps de temps.
+                Pour refermer : Échap, un clic dans le vide de la grille, ou le pavé lui-même — un autre pavé
+                passe simplement la sélection dessus.
+              </span>
+
+              {/* Les quatre chiffres APRÈS le dessin : la grille dit ce que la
+                  journée a été, ces quatre-là la résument. On lit donc le fait
+                  puis le bilan, et non l'inverse. */}
+              <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))" }}>
+                <Metric
+                  label="Temps actif"
+                  value={fmtDur(stats.activeMs)}
+                  valueMs={stats.activeMs}
+                  goalMs={workGoalMs}
+                  size={30}
+                  sub={<Delta ms={stats.activeMs} refMs={prev.activeMs} />}
+                />
+                <Metric
+                  label="Temps de focus"
+                  value={fmtDur(stats.focusMs)}
+                  valueMs={stats.focusMs}
+                  goalMs={focusGoalMs}
+                  size={30}
+                  color={PALETTE.green}
+                  sub={`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} · plus longue ${fmtDur(stats.longestFocusMs)}`}
+                />
+                <Metric
+                  label="Distractions"
+                  value={fmtDur(stats.distractingMs)}
+                  size={30}
+                  color={stats.distractingMs > 0 ? PALETTE.red : T.text}
+                  sub={`${Math.round(stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0)} % du temps actif`}
+                />
+                <Metric
+                  label="Qualité"
+                  value={`${stats.focusScore}`}
+                  valueMs={stats.focusScore}
+                  goalMs={100}
+                  size={30}
+                  color={stats.focusScore >= 70 ? PALETTE.green : stats.focusScore >= 45 ? PALETTE.yellow : PALETTE.red}
+                  sub="part du focus et stabilité, sur 100"
+                />
+              </div>
+
+              <div style={{
+                display: "flex", flexWrap: "wrap", gap: "6px 18px", paddingTop: 12,
+                borderTop: `1px solid ${HAIRLINE}`, fontSize: 11, color: T.textSub,
+              }}>
+                <span>Amplitude <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.spanMs)}</strong></span>
+                <span>Pauses <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.breakMs)}</strong> ({stats.breaks.length})</span>
+                <span>Absence au poste <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.awayMs)}</strong></span>
+                <span>Bascules d’app <strong style={{ color: T.text, fontWeight: 600 }}>{stats.switches}</strong> ({stats.switchesPerHour.toFixed(1)} / h)</span>
+              </div>
+            </div>
+
+            {/* ── 2 et 3, empilées à droite. Un pavé ouvert les remplace toutes
+                   les deux par son détail : c'est la même question posée à une
+                   autre échelle, deux réponses côte à côte obligeraient à
+                   chercher laquelle répond à quoi. ── */}
+            <div style={{ flex: "2 1 0", minWidth: 288, display: "flex", flexDirection: "column", gap: 14 }}>
+              {block ? (
+                <div style={{ ...CARD }}>
                   <BlockDetail
                     block={block}
                     activeMs={stats.activeMs}
                     onClose={() => setOpenBlock(null)}
                     onPick={onPick}
                   />
-                ) : (
+                </div>
+              ) : (
                 <>
-                <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))" }}>
-                  <Metric
-                    label="Temps actif"
-                    value={fmtDur(stats.activeMs)}
-                    valueMs={stats.activeMs}
-                    goalMs={workGoalMs}
-                    size={30}
-                    sub={<Delta ms={stats.activeMs} refMs={prev.activeMs} />}
-                  />
-                  <Metric
-                    label="Temps de focus"
-                    value={fmtDur(stats.focusMs)}
-                    valueMs={stats.focusMs}
-                    goalMs={focusGoalMs}
-                    size={30}
-                    color={PALETTE.green}
-                    sub={`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} · plus longue ${fmtDur(stats.longestFocusMs)}`}
-                  />
-                  <Metric
-                    label="Distractions"
-                    value={fmtDur(stats.distractingMs)}
-                    size={30}
-                    color={stats.distractingMs > 0 ? PALETTE.red : T.text}
-                    sub={`${Math.round(stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0)} % du temps actif`}
-                  />
-                  <Metric
-                    label="Qualité"
-                    value={`${stats.focusScore}`}
-                    valueMs={stats.focusScore}
-                    goalMs={100}
-                    size={30}
-                    color={stats.focusScore >= 70 ? PALETTE.green : stats.focusScore >= 45 ? PALETTE.yellow : PALETTE.red}
-                    sub="part du focus et stabilité, sur 100"
-                  />
-                </div>
+                  {/* ── 2. La répartition ── */}
+                  <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
+                    <BlockTitle right={`${stats.byCategory.length} catégorie${stats.byCategory.length > 1 ? "s" : ""}`}>
+                      Répartition
+                    </BlockTitle>
+                    {/* L'anneau et ses catégories CÔTE À CÔTE : l'un sous
+                        l'autre, la liste passait sous le pli. */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                      <AllocationChart
+                        kind="ring"
+                        parts={parts}
+                        scale={100}
+                        size={136}
+                        thickness={17}
+                        ariaLabel="Répartition du temps par catégorie"
+                        centreLabel="Temps actif"
+                        centreValue={stats.activeMs}
+                        formatValue={(v) => fmtDur(v, { short: true })}
+                        showPct={false}
+                      />
+                      {/* Sans la ligne « 38 % · productif » sous chaque barre :
+                          l'anneau dit déjà les parts, et la nature se règle dans
+                          « Catégories & règles ». */}
+                      <div style={{ flex: "1 1 190px", minWidth: 176 }}>
+                        <CategoryRows buckets={stats.byCategory} limit={6} showShare={false} />
+                      </div>
+                    </div>
+                  </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <StackedBar parts={stats.byCategory} height={12} />
-                  <BarLegend parts={stats.byCategory} limit={7} />
-                </div>
-
-                <div style={{
-                  display: "flex", flexWrap: "wrap", gap: "6px 18px", paddingTop: 12,
-                  borderTop: `1px solid ${HAIRLINE}`, fontSize: 11, color: T.textSub,
-                }}>
-                  <span>Amplitude <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.spanMs)}</strong></span>
-                  <span>Pauses <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.breakMs)}</strong> ({stats.breaks.length})</span>
-                  <span>Absence au poste <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.awayMs)}</strong></span>
-                  <span>Bascules d’app <strong style={{ color: T.text, fontWeight: 600 }}>{stats.switches}</strong> ({stats.switchesPerHour.toFixed(1)} / h)</span>
-                </div>
+                  {/* ── 3. Les applications ── */}
+                  <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <BlockTitle right={`${stats.byApp.length} au total`}>Applications & sites</BlockTitle>
+                    <AppRows apps={stats.byApp} limit={5} />
+                  </div>
                 </>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
