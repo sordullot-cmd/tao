@@ -24,6 +24,7 @@ import ReadingListPage from "@/components/pages/ReadingListPage";
 import NotesPage from "@/components/pages/NotesPage";
 import RevisionsPage from "@/components/pages/RevisionsPage";
 import FocusPage from "@/components/pages/FocusPage";
+import FocusSentinel from "@/components/focus/FocusSentinel";
 import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import ActivityPage from "@/components/pages/ActivityPage";
@@ -831,6 +832,11 @@ export default function App() {
       <style>{css}</style>
       <AlertToast />
       <CommandPalette />
+      {/* Blocage et programmes tournent ici, dans la coquille, et non dans la
+          page Focus : un engagement pris pour la journée ne doit pas s'arrêter
+          parce qu'on est allé voir ses trades. Ne rend que son écran de blocage,
+          quand il y a lieu. */}
+      <FocusSentinel />
       {/* `--shell-left` : la place tenue par la barre latérale (sa largeur + sa
           gouttière de 12 px). Elle n'est plus dans le flux — c'est ce padding
           qui la remplace, appliqué au conteneur SCROLLABLE et non au cadre :

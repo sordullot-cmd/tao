@@ -9,8 +9,8 @@
  */
 
 import {
-  CATEGORIES, categoryColor, categoryLabel, resolveProductivity, classify,
-  type Productivity,
+  CATEGORIES, categoryColor, categoryLabel, resolveProductivity, classifyDetailed,
+  type ClassifySource, type Productivity,
 } from "@/lib/activity/categories";
 import type { ActivitySettings, DayLog, Segment } from "@/lib/activity/engine";
 
@@ -47,6 +47,12 @@ export interface AppBucket extends Bucket {
   cat: string;
   /** Titres les plus vus pour cette app, du plus long au plus court. */
   titles: { title: string; ms: number }[];
+  /** Nom brut relevé par l'OS — c'est lui qu'une règle doit viser. */
+  app: string;
+  /** Vrai s'il s'agit d'un site vu dans un navigateur (règle sur le titre). */
+  isSite: boolean;
+  /** Ce qui a décidé du classement, pour pouvoir l'expliquer et le corriger. */
+  via: ClassifySource;
 }
 
 export interface FocusSession {
@@ -95,14 +101,18 @@ export interface DayStats {
 /* ─── Journée ───────────────────────────────────────────────────────────── */
 
 /**
- * Recalcule la catégorie de chaque segment avec les règles COURANTES.
+ * Recalcule la catégorie ET le nom de chaque segment avec les règles COURANTES.
+ *
  * Sans ça, corriger une règle ne changerait que l'avenir, et la page afficherait
- * deux vérités selon le jour regardé.
+ * deux vérités selon le jour regardé. Le NOM est relu pour la même raison :
+ * l'ancien classement enregistrait « Google Chrome » là où le catalogue sait
+ * maintenant lire « YouTube », et l'historique doit en profiter aussi.
  */
 export function recategorize(day: DayLog, settings: ActivitySettings): Segment[] {
   return day.segments.map(seg => {
-    const { category } = classify(seg.app, seg.title, settings.rules);
-    return category === seg.cat ? seg : { ...seg, cat: category };
+    const { category, label } = classifyDetailed(seg.app, seg.title, settings.rules);
+    if (category === seg.cat && label === seg.label) return seg;
+    return { ...seg, cat: category, label };
   });
 }
 
@@ -170,7 +180,10 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
   const activeMs = segments.reduce((n, s) => n + msOf(s), 0);
 
   const catMs = new Map<string, number>();
-  const appMs = new Map<string, { ms: number; cat: string; titles: Map<string, number> }>();
+  const appMs = new Map<string, {
+    ms: number; cat: string; app: string; isSite: boolean; via: ClassifySource;
+    titles: Map<string, number>;
+  }>();
   const perProd: Record<Productivity, number> = { productive: 0, neutral: 0, distracting: 0 };
   const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, ms: 0, productiveMs: 0, distractingMs: 0 }));
 
@@ -179,8 +192,18 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
     catMs.set(seg.cat, (catMs.get(seg.cat) || 0) + ms);
     perProd[resolveProductivity(seg.cat, settings.productivity)] += ms;
 
-    const app = appMs.get(seg.label) || { ms: 0, cat: seg.cat, titles: new Map<string, number>() };
+    const app = appMs.get(seg.label) || (() => {
+      // Le « pourquoi » du classement se relit sur le segment : c'est ce qui
+      // permet à la liste des applications de proposer la bonne correction
+      // (une règle sur le titre pour un site, sur l'app sinon).
+      const d = classifyDetailed(seg.app, seg.title, settings.rules);
+      return {
+        ms: 0, cat: seg.cat, app: seg.app, isSite: d.isSite, via: d.via,
+        titles: new Map<string, number>(),
+      };
+    })();
     app.ms += ms;
+    app.cat = seg.cat;
     if (seg.title) app.titles.set(seg.title, (app.titles.get(seg.title) || 0) + ms);
     appMs.set(seg.label, app);
 
@@ -215,6 +238,9 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
       label,
       color: categoryColor(v.cat),
       cat: v.cat,
+      app: v.app,
+      isSite: v.isSite,
+      via: v.via,
       ms: v.ms,
       pct: pct(v.ms),
       titles: [...v.titles.entries()].map(([title, ms]) => ({ title, ms })).sort((a, b) => b.ms - a.ms).slice(0, 6),
@@ -307,12 +333,12 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
   const distractingMs = days.reduce((n, d) => n + d.distractingMs, 0);
 
   const catMs = new Map<string, number>();
-  const appMs = new Map<string, { ms: number; cat: string }>();
+  const appMs = new Map<string, { ms: number; cat: string; app: string; isSite: boolean; via: ClassifySource }>();
   for (const d of days) {
     for (const b of d.byCategory) catMs.set(b.id, (catMs.get(b.id) || 0) + b.ms);
     for (const a of d.byApp) {
-      const prev = appMs.get(a.label) || { ms: 0, cat: a.cat };
-      appMs.set(a.label, { ms: prev.ms + a.ms, cat: prev.cat });
+      const prev = appMs.get(a.label) || { ms: 0, cat: a.cat, app: a.app, isSite: a.isSite, via: a.via };
+      appMs.set(a.label, { ...prev, ms: prev.ms + a.ms });
     }
   }
   const pct = (ms: number) => (activeMs > 0 ? (ms / activeMs) * 100 : 0);
@@ -338,7 +364,10 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
       .filter(b => b.ms > 0)
       .sort((a, b) => b.ms - a.ms),
     byApp: [...appMs.entries()]
-      .map(([label, v]) => ({ id: label, label, color: categoryColor(v.cat), cat: v.cat, ms: v.ms, pct: pct(v.ms), titles: [] }))
+      .map(([label, v]) => ({
+        id: label, label, color: categoryColor(v.cat), cat: v.cat, app: v.app,
+        isSite: v.isSite, via: v.via, ms: v.ms, pct: pct(v.ms), titles: [],
+      }))
       .sort((a, b) => b.ms - a.ms),
     avgActiveMs: measured.length ? activeMs / measured.length : 0,
     avgFocusMs: measured.length ? focusMs / measured.length : 0,
@@ -348,25 +377,38 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
   };
 }
 
-/** Applications jamais classées : la file d'attente de la page « Règles ». */
-export function unclassified(logs: DayLog[]): AppBucket[] {
-  const map = new Map<string, { ms: number; app: string; titles: Map<string, number> }>();
+/**
+ * Applications jamais classées : la file d'attente de la page « Règles ».
+ *
+ * Le classement est REFAIT avec les règles courantes, il n'est pas relu dans
+ * l'historique : une application rangée hier (ou reconnue depuis par le
+ * catalogue) doit disparaître de la file, pas y rester jusqu'à la fin des
+ * trente jours.
+ */
+export function unclassified(logs: DayLog[], settings: ActivitySettings): AppBucket[] {
+  const map = new Map<string, {
+    ms: number; app: string; isSite: boolean; titles: Map<string, number>;
+  }>();
   for (const log of logs) {
     for (const seg of log.segments) {
-      if (seg.cat !== "other") continue;
-      const cur = map.get(seg.label) || { ms: 0, app: seg.app, titles: new Map<string, number>() };
+      const d = classifyDetailed(seg.app, seg.title, settings.rules);
+      if (d.category !== "other") continue;
+      const cur = map.get(d.label) || { ms: 0, app: seg.app, isSite: d.isSite, titles: new Map<string, number>() };
       cur.ms += Math.max(0, seg.e - seg.s);
       if (seg.title) cur.titles.set(seg.title, (cur.titles.get(seg.title) || 0) + Math.max(0, seg.e - seg.s));
-      map.set(seg.label, cur);
+      map.set(d.label, cur);
     }
   }
   const total = [...map.values()].reduce((n, v) => n + v.ms, 0);
   return [...map.entries()]
     .map(([label, v]) => ({
-      id: v.app || label,
+      id: label,
       label,
       color: categoryColor("other"),
       cat: "other",
+      app: v.app,
+      isSite: v.isSite,
+      via: "none" as ClassifySource,
       ms: v.ms,
       pct: total ? (v.ms / total) * 100 : 0,
       titles: [...v.titles.entries()].map(([title, ms]) => ({ title, ms })).sort((a, b) => b.ms - a.ms).slice(0, 3),

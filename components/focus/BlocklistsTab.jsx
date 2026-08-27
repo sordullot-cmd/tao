@@ -10,7 +10,8 @@
  */
 
 import React, { useState } from "react";
-import { Plus, Copy, Pencil, ShieldOff } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Plus, Copy, Pencil, ShieldOff, Infinity as InfinityIcon } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CARD, PillButton, SectionTitle } from "@/components/ui/da";
@@ -33,7 +34,7 @@ function Preview({ list }) {
   );
 }
 
-export default function BlocklistsTab({ store, setStore }) {
+export default function BlocklistsTab({ store, setStore, actionSlot }) {
   const [editing, setEditing] = useState(null); // { list } | { create: true }
 
   const save = (list) => setStore(prev => {
@@ -66,14 +67,18 @@ export default function BlocklistsTab({ store, setStore }) {
     ...store.schedules.filter(s => s.blocklistIds.includes(id)).map(s => s.name),
   ];
 
+  /* Aligné sur les onglets plutôt qu'au-dessus des cartes : même raison que
+     dans SessionStart — créer une liste est une action de la page. */
+  const newList = (
+    <PillButton variant="primary" compact onClick={() => setEditing({ create: true })}>
+      <Plus size={13} /> Nouvelle liste
+    </PillButton>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <SectionTitle size="sm">Listes de blocage</SectionTitle>
-        <PillButton variant="primary" compact onClick={() => setEditing({ create: true })}>
-          <Plus size={13} /> Nouvelle liste
-        </PillButton>
-      </div>
+      {actionSlot ? createPortal(newList, actionSlot) : newList}
+      <SectionTitle size="sm">Listes de blocage</SectionTitle>
 
       {store.blocklists.length === 0 ? (
         <div style={{ ...CARD, padding: 26, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
@@ -106,22 +111,43 @@ export default function BlocklistsTab({ store, setStore }) {
                   </span>
                 </div>
 
-                {list.mode === "allow" && (
-                  <span style={{
-                    alignSelf: "flex-start", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-                    background: `color-mix(in srgb, ${PALETTE.orange} 14%, transparent)`, color: PALETTE.orange,
-                  }}>
-                    Seuls autorisés
-                  </span>
+                {/* Deux repères sur la même ligne : ce qu'une liste inverse, et
+                    si elle tourne sans qu'on l'ait lancée. Le second est le
+                    plus important à voir d'un coup d'œil — c'est le seul qui
+                    agit pendant qu'on ne pense pas à lui. */}
+                {(list.mode === "allow" || list.always) && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {list.mode === "allow" && (
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                        background: `color-mix(in srgb, ${PALETTE.orange} 14%, transparent)`, color: PALETTE.orange,
+                      }}>
+                        Seuls autorisés
+                      </span>
+                    )}
+                    {list.always && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                        background: `color-mix(in srgb, ${PALETTE.green} 14%, transparent)`, color: PALETTE.green,
+                      }}>
+                        <InfinityIcon size={11} /> Permanent
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 <Preview list={list} />
 
-                {used.length > 0 && (
+                {used.length > 0 ? (
                   <div style={{ fontSize: 11, color: T.textMut }}>
                     Utilisée par {used.join(", ")}
                   </div>
-                )}
+                ) : list.always ? (
+                  <div style={{ fontSize: 11, color: T.textMut }}>
+                    Aucun preset — elle s&apos;applique quand même, tout le temps.
+                  </div>
+                ) : null}
 
                 <div style={{ display: "flex", gap: 6, marginTop: "auto" }}>
                   <PillButton compact onClick={() => setEditing({ list })}><Pencil size={12} /> Modifier</PillButton>

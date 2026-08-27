@@ -13,10 +13,10 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { Flame, ShieldCheck, Clock, MonitorOff } from "lucide-react";
+import { Flame, ShieldCheck, Clock, ShieldBan } from "lucide-react";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
-import { CARD, PeriodPills, SectionTitle } from "@/components/ui/da";
+import { CARD, Field, Input, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { MODES, targetLabel } from "@/lib/focus/model";
 import {
   DAY_MS, MIN_MS, byBlocklist, daySeries, dayTotals, fmtDur, focusScore, hourHistogram,
@@ -94,7 +94,39 @@ function RankRow({ label, value, ratio, color }) {
   );
 }
 
-export default function InsightsTab({ store, now }) {
+/**
+ * Objectif quotidien — le réglage qui gouverne les chiffres de cette page.
+ *
+ * Il vivait dans un onglet « Réglages » qu'on n'ouvrait jamais. Il est ici
+ * parce que c'est lui qui décide de la série (les jours où il est atteint) et
+ * du score (qui s'en sert de référence) : on le trouve au moment exact où l'on
+ * juge la série sévère ou le score flatteur.
+ *
+ * Rendu AUSSI quand rien n'a encore été mesuré — c'est même le seul moment où
+ * l'on a une raison d'y toucher avant d'avoir vu un seul résultat.
+ */
+function GoalCard({ store, setStore }) {
+  return (
+    <div style={{ ...CARD, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Objectif quotidien</div>
+        <div style={{ fontSize: 12, color: T.textSub, marginTop: 3, lineHeight: 1.5 }}>
+          Le temps concentré visé par jour. C&apos;est lui qui décide de la série et du score.
+        </div>
+      </div>
+      <Field label="Minutes" style={{ width: 120 }}>
+        <Input
+          type="number" min={5} step={15} value={store.settings.dailyGoalMin}
+          onChange={e => setStore(prev => ({
+            ...prev, settings: { ...prev.settings, dailyGoalMin: Math.max(5, Number(e.target.value) || 0) },
+          }))}
+        />
+      </Field>
+    </div>
+  );
+}
+
+export default function InsightsTab({ store, setStore, now }) {
   const [range, setRange] = useState("7");
   const days = RANGES.find(r => r.id === range)?.days || 7;
   const sinceMs = days * DAY_MS;
@@ -110,7 +142,10 @@ export default function InsightsTab({ store, now }) {
 
   const periodMs = series.reduce((s, d) => s + d.focusedMs, 0);
   const periodSessions = series.reduce((s, d) => s + d.sessions, 0);
-  const aways = targets.find(t => t.target === "away")?.count || 0;
+  /* Les sorties de l'app ne sont plus comptées — travailler ailleurs n'est pas
+     une faute. Les journaux d'AVANT en contiennent encore : on les écarte du
+     décompte plutôt que de les afficher, sans quoi le bilan de la semaine
+     dernière et celui de cette semaine ne mesureraient pas la même chose. */
   const blocked = targets.filter(t => t.target !== "away");
   const blockedTotal = blocked.reduce((s, t) => s + t.count, 0);
   const maxHour = Math.max(...hours, 1);
@@ -118,12 +153,15 @@ export default function InsightsTab({ store, now }) {
 
   if (store.log.length === 0) {
     return (
-      <div style={{ ...CARD, padding: 26, textAlign: "center" }}>
-        <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>Rien à mesurer encore</div>
-        <div style={{ fontSize: 13, color: T.textSub, marginTop: 8, lineHeight: 1.6, maxWidth: 440, margin: "8px auto 0" }}>
-          Le bilan se remplit à la première session terminée : temps tenu, série, ce qui
-          a été tenté pendant. Rien n&apos;est compté avant.
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ ...CARD, padding: 26, textAlign: "center" }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>Rien à mesurer encore</div>
+          <div style={{ fontSize: 13, color: T.textSub, marginTop: 8, lineHeight: 1.6, maxWidth: 440, margin: "8px auto 0" }}>
+            Le bilan se remplit à la première session terminée : temps tenu, série, ce qui
+            a été tenté pendant. Rien n&apos;est compté avant.
+          </div>
         </div>
+        <GoalCard store={store} setStore={setStore} />
       </div>
     );
   }
@@ -143,8 +181,13 @@ export default function InsightsTab({ store, now }) {
         />
         <Kpi icon={<Flame size={13} />} label="Série" value={`${sk.current} j`} hint={`record ${sk.best} j`} />
         <Kpi icon={<Clock size={13} />} label="Aujourd'hui" value={fmtDur(today.focusedMs)} hint={`objectif ${fmtDur(goalMs)}`} />
-        <Kpi icon={<MonitorOff size={13} />} label="Écarts" value={aways} hint={`${blockedTotal} blocage${blockedTotal > 1 ? "s" : ""}`} />
+        <Kpi
+          icon={<ShieldBan size={13} />} label="Blocages" value={blockedTotal}
+          hint={blocked[0] ? `surtout ${targetLabel(blocked[0].target, store)}` : "sur la période"}
+        />
       </div>
+
+      <GoalCard store={store} setStore={setStore} />
 
       <div style={{ ...CARD, padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -193,6 +236,8 @@ export default function InsightsTab({ store, now }) {
           </div>
         )}
       </div>
+
+      <GoalCard store={store} setStore={setStore} />
 
       <div style={{ ...CARD, padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>

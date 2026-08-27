@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   CATCH_UP_MIN, EXIT_PHRASE, MODES, appVerdictFor, canPause, closeSession, dayKey, emptyStore,
   focusedMs, hostOf, isDone, listApps, listSize, matchesApp, matchesDomain, nextRun,
-  isBrowserApp, normalizeStore, pause, progress, remainingMs, resume, sessionFromPreset,
-  sessionFromSchedule,
+  alwaysBlocklistIds, isBrowserApp, normalizeStore, pause, progress, remainingMs, resume,
+  sessionFromPreset, sessionFromSchedule,
   shouldFire, startSession, targetLabel, verdictFor, weekday,
   type FocusSchedule, type FocusStore, type SessionLog,
 } from "@/lib/focus/model";
@@ -179,6 +179,42 @@ describe("verdict d'application", () => {
     const v = appVerdictFor("Photoshop", "sans titre", withApp, ["l"]);
     expect(v.blocked).toBe(true);
     expect(targetLabel(v.target!, withApp)).toBe("Photoshop");
+  });
+});
+
+/* ── Listes permanentes ───────────────────────────────────────────────────── */
+
+describe("listes permanentes", () => {
+  it("ne retient que les listes marquées, et les rend triées", () => {
+    const store = emptyStore();
+    expect(alwaysBlocklistIds(store)).toEqual([]);
+
+    const withAlways: FocusStore = {
+      ...store,
+      blocklists: store.blocklists.map(b => (
+        b.id === "bl-video" || b.id === "bl-social" ? { ...b, always: true } : b
+      )),
+    };
+    /* Trié, et c'est un contrat : la valeur sert de clé de dépendance au garde,
+       où deux mêmes identifiants dans un autre ordre passeraient pour un
+       changement et reposeraient les écouteurs à chaque rendu. */
+    expect(alwaysBlocklistIds(withAlways)).toEqual(["bl-social", "bl-video"]);
+  });
+
+  it("garde le drapeau à la relecture du magasin", () => {
+    const raw = {
+      blocklists: [{ id: "l", name: "Jeux", color: "red", itemIds: [], custom: [], mode: "block", always: true }],
+    };
+    expect(normalizeStore(raw).blocklists[0].always).toBe(true);
+  });
+
+  it("ne rend permanent que ce qui l'est explicitement", () => {
+    // Une liste d'avant cette option n'a pas de drapeau : elle ne doit pas se
+    // mettre à couper toute la journée à la faveur d'une mise à jour.
+    const raw = {
+      blocklists: [{ id: "l", name: "Vieille", color: "red", itemIds: [], custom: [], mode: "block" }],
+    };
+    expect(normalizeStore(raw).blocklists[0].always).toBe(false);
   });
 });
 

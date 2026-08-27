@@ -9,14 +9,28 @@
  * (une catégorie, comme une classe d'actif), donc des hex qui ne bougent pas
  * avec le thème — deux catégories voisines doivent rester distinguables.
  *
- * Le classement est du texte contre du texte : le nom de l'application et le
- * titre de la fenêtre, en minuscules, comparés à des fragments. C'est volontaire
- * — aucune API ne dit « ceci est du développement », et un fragment reste
- * lisible et corrigeable par l'utilisateur (page Règles).
+ * ── Comment le classement décide ──────────────────────────────────────────
+ * Le SAVOIR (quelles apps, quels sites) vit dans lib/activity/catalog. Ici vit
+ * la DÉCISION, et elle est ordonnée par fiabilité décroissante :
+ *
+ *   1. une règle de l'utilisateur — elle gagne toujours, c'est le principe ;
+ *   2. le domaine lu dans le titre d'un navigateur (« youtube.com ») ;
+ *   3. le nom d'application reconnu à l'identique (« leagueclient ») ;
+ *   4. un mot du nom d'application (« Adobe Photoshop 2024 ») ;
+ *   5. un nom de site reconnu dans le titre (« … — YouTube ») ;
+ *   6. rien : « Non classé », mais avec un NOM propre (le site deviné), pour
+ *      qu'un clic suffise à le ranger.
+ *
+ * Chaque décision garde sa raison (`via`) : la page « Catégories & règles »
+ * l'affiche, et un classement qu'on ne peut pas expliquer ne se corrige pas.
  */
 
-import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
+import { PALETTE, PALETTE_DARK, GREY, HUE } from "@/lib/ui/palette";
 import { getLang } from "@/lib/i18n";
+import {
+  CATALOG, domainInTitle, guessSiteName, isBrowserApp, matchAppExact, matchAppWord,
+  matchDomain, matchTitle, norm, type CatalogEntry, type CatalogHit,
+} from "@/lib/activity/catalog";
 
 export type Productivity = "productive" | "neutral" | "distracting";
 
@@ -26,24 +40,32 @@ export interface ActivityCategory {
   labelEn: string;
   color: string;
   productivity: Productivity;
+  /** Une phrase : ce qui entre dans cette catégorie, et ce qui n'y entre pas. */
+  hint: string;
 }
 
-/* Douze catégories : au-delà, l'anneau du jour devient illisible et le réglage
-   des règles ne se fait plus. Les catégories « métier » de tao trade (trading)
-   ont la leur — c'est le propos de l'app. */
+/* Quatorze catégories. Deux sont nouvelles et répondent à un défaut de mesure,
+   pas à une envie de nuance :
+     • « Jeux » — ils étaient soit dans « Divertissement » (à côté d'un film,
+       alors qu'on ne les règle pas pareil), soit, le plus souvent, dans « Non
+       classé » ;
+     • « Achats » — Amazon et Leboncoin comptaient comme du divertissement,
+       ce qui rendait le total de « Divertissement » illisible. */
 export const CATEGORIES: ActivityCategory[] = [
-  { id: "dev",       label: "Développement",     labelEn: "Development",   color: PALETTE.blue,        productivity: "productive" },
-  { id: "trading",   label: "Trading & marchés", labelEn: "Trading",       color: PALETTE.green,       productivity: "productive" },
-  { id: "writing",   label: "Écriture & notes",  labelEn: "Writing",       color: PALETTE.purple,      productivity: "productive" },
-  { id: "design",    label: "Design",            labelEn: "Design",        color: PALETTE.pink,        productivity: "productive" },
-  { id: "research",  label: "Recherche & lecture", labelEn: "Research",    color: PALETTE.brown,       productivity: "productive" },
-  { id: "admin",     label: "Admin & gestion",   labelEn: "Admin",         color: PALETTE_DARK.blue,   productivity: "productive" },
-  { id: "meetings",  label: "Réunions",          labelEn: "Meetings",      color: PALETTE.orange,      productivity: "neutral" },
-  { id: "comms",     label: "Communication",     labelEn: "Communication", color: PALETTE.yellow,      productivity: "neutral" },
-  { id: "utilities", label: "Utilitaires",       labelEn: "Utilities",     color: PALETTE_DARK.green,  productivity: "neutral" },
-  { id: "social",    label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting" },
-  { id: "fun",       label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting" },
-  { id: "other",     label: "Non classé",        labelEn: "Uncategorized", color: GREY.grey500,        productivity: "neutral" },
+  { id: "dev",       label: "Développement",      labelEn: "Development",   color: PALETTE.blue,        productivity: "productive",  hint: "Éditeurs, terminaux, docs techniques, dépôts." },
+  { id: "trading",   label: "Trading & marchés",  labelEn: "Trading",       color: PALETTE.green,       productivity: "productive",  hint: "Plateformes, graphiques, journal de trades, prop firms." },
+  { id: "writing",   label: "Écriture & notes",   labelEn: "Writing",       color: PALETTE.purple,      productivity: "productive",  hint: "Traitement de texte, prise de notes, rédaction." },
+  { id: "design",    label: "Design & création",  labelEn: "Design",        color: PALETTE.pink,        productivity: "productive",  hint: "Image, vidéo, son, 3D, maquettes." },
+  { id: "research",  label: "Recherche & lecture",labelEn: "Research",      color: PALETTE.brown,       productivity: "productive",  hint: "IA, encyclopédies, cours, presse, documentation." },
+  { id: "admin",     label: "Admin & gestion",    labelEn: "Admin",         color: PALETTE_DARK.blue,   productivity: "productive",  hint: "Tableurs, agenda, fichiers, démarches, gestion de projet." },
+  { id: "meetings",  label: "Réunions",           labelEn: "Meetings",      color: PALETTE.orange,      productivity: "neutral",     hint: "Visioconférence et appels." },
+  { id: "comms",     label: "Communication",      labelEn: "Communication", color: PALETTE.yellow,      productivity: "neutral",     hint: "Messageries et courrier." },
+  { id: "utilities", label: "Utilitaires & système", labelEn: "Utilities",  color: PALETTE_DARK.green,  productivity: "neutral",     hint: "Fichiers, réglages, mots de passe, bureau du système." },
+  { id: "shopping",  label: "Achats",             labelEn: "Shopping",      color: HUE.moonJelly,       productivity: "neutral",     hint: "Boutiques en ligne, petites annonces, livraison." },
+  { id: "social",    label: "Réseaux sociaux",    labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux et communautés." },
+  { id: "games",     label: "Jeux",               labelEn: "Games",         color: PALETTE_DARK.pink,   productivity: "distracting", hint: "Jeux, lanceurs et sites de jeu." },
+  { id: "fun",       label: "Divertissement",     labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, musique, séries, sport." },
+  { id: "other",     label: "Non classé",         labelEn: "Uncategorized", color: GREY.grey500,        productivity: "neutral",     hint: "Ce que l'app n'a pas su reconnaître. À ranger en un clic." },
 ];
 
 export const CATEGORY_BY_ID: Record<string, ActivityCategory> = Object.fromEntries(
@@ -51,6 +73,9 @@ export const CATEGORY_BY_ID: Record<string, ActivityCategory> = Object.fromEntri
 );
 
 export const OTHER = "other";
+
+/** Les catégories qu'on peut CHOISIR (« Non classé » n'est pas un choix). */
+export const ASSIGNABLE = CATEGORIES.filter(c => c.id !== OTHER);
 
 /** Libellé de la catégorie dans la langue de l'interface. */
 export function categoryLabel(id: string): string {
@@ -84,11 +109,11 @@ export function resolveProductivity(
   return productivityOf(id);
 }
 
-/* ─── Règles ──────────────────────────────────────────────────────────────
+/* ─── Règles de l'utilisateur ────────────────────────────────────────────
    Une règle = un fragment cherché dans le nom de l'app (`app`) ou dans le titre
-   de la fenêtre (`title`), et la catégorie qui en découle. Les règles de
-   l'utilisateur passent AVANT celles-ci : c'est ce qui rend le classement
-   corrigeable sans toucher au code.
+   de la fenêtre (`title`), et la catégorie qui en découle. Elles passent AVANT
+   le catalogue : c'est ce qui rend le classement corrigeable sans toucher au
+   code, et sans attendre une mise à jour.
    ---------------------------------------------------------------------- */
 
 export interface ClassifyRule {
@@ -102,219 +127,165 @@ export interface ClassifyRule {
 }
 
 /** Navigateurs : leur titre de fenêtre porte le vrai sujet, pas leur nom. */
-export const BROWSERS = [
-  "chrome", "chromium", "safari", "firefox", "edge", "msedge", "brave",
-  "opera", "arc", "vivaldi", "orion", "zen browser",
-];
-
 export function isBrowser(app: string): boolean {
-  const a = app.toLowerCase();
-  return BROWSERS.some(b => a.includes(b));
+  return isBrowserApp(app);
 }
 
-/* Sites reconnus dans un titre de fenêtre de navigateur. Le titre est tout ce
-   qu'on a : la WebView ne lit pas l'URL des AUTRES navigateurs, et aucune API
-   système ne la donne. On cherche donc le nom du site, que la plupart des pages
-   posent dans leur titre (« … — YouTube », « … · GitHub »). */
-export const SITE_RULES: ClassifyRule[] = [
-  // Développement
-  { id: "s-github",    match: "github",        field: "title", category: "dev" },
-  { id: "s-gitlab",    match: "gitlab",        field: "title", category: "dev" },
-  { id: "s-stack",     match: "stack overflow",field: "title", category: "dev" },
-  { id: "s-vercel",    match: "vercel",        field: "title", category: "dev" },
-  { id: "s-supabase",  match: "supabase",      field: "title", category: "dev" },
-  { id: "s-localhost", match: "localhost",     field: "title", category: "dev" },
-  { id: "s-mdn",       match: "mdn web docs",  field: "title", category: "dev" },
-  { id: "s-npm",       match: "npm",           field: "title", category: "dev" },
-  // Trading
-  { id: "s-tv",        match: "tradingview",   field: "title", category: "trading" },
-  { id: "s-investing", match: "investing.com", field: "title", category: "trading" },
-  { id: "s-binance",   match: "binance",       field: "title", category: "trading" },
-  { id: "s-apex",      match: "apex trader",   field: "title", category: "trading" },
-  { id: "s-ftmo",      match: "ftmo",          field: "title", category: "trading" },
-  { id: "s-tradezella",match: "tradezella",    field: "title", category: "trading" },
-  { id: "s-tao",       match: "tao trade",     field: "title", category: "trading" },
-  { id: "s-boursorama",match: "boursorama",    field: "title", category: "trading" },
-  // Réunions
-  { id: "s-meet",      match: "google meet",   field: "title", category: "meetings" },
-  { id: "s-zoom-web",  match: "zoom",          field: "title", category: "meetings" },
-  { id: "s-whereby",   match: "whereby",       field: "title", category: "meetings" },
-  // Communication
-  { id: "s-gmail",     match: "gmail",         field: "title", category: "comms" },
-  { id: "s-mail",      match: "boîte de réception", field: "title", category: "comms" },
-  { id: "s-outlook",   match: "outlook",       field: "title", category: "comms" },
-  { id: "s-whatsapp",  match: "whatsapp",      field: "title", category: "comms" },
-  { id: "s-messenger", match: "messenger",     field: "title", category: "comms" },
-  // Écriture & organisation
-  { id: "s-notion",    match: "notion",        field: "title", category: "writing" },
-  { id: "s-docs",      match: "google docs",   field: "title", category: "writing" },
-  { id: "s-obsidian-w",match: "obsidian",      field: "title", category: "writing" },
-  { id: "s-claude",    match: "claude",        field: "title", category: "research" },
-  { id: "s-chatgpt",   match: "chatgpt",       field: "title", category: "research" },
-  { id: "s-wikipedia", match: "wikipédia",     field: "title", category: "research" },
-  { id: "s-wikipedia2",match: "wikipedia",     field: "title", category: "research" },
-  { id: "s-medium",    match: "medium",        field: "title", category: "research" },
-  { id: "s-arxiv",     match: "arxiv",         field: "title", category: "research" },
-  // Admin
-  { id: "s-sheets",    match: "google sheets", field: "title", category: "admin" },
-  { id: "s-drive",     match: "google drive",  field: "title", category: "admin" },
-  { id: "s-calendar",  match: "google agenda", field: "title", category: "admin" },
-  { id: "s-calendar2", match: "google calendar",field: "title", category: "admin" },
-  { id: "s-linear",    match: "linear",        field: "title", category: "admin" },
-  { id: "s-jira",      match: "jira",          field: "title", category: "admin" },
-  { id: "s-impots",    match: "impots.gouv",   field: "title", category: "admin" },
-  // Design
-  { id: "s-figma-w",   match: "figma",         field: "title", category: "design" },
-  { id: "s-dribbble",  match: "dribbble",      field: "title", category: "design" },
-  { id: "s-behance",   match: "behance",       field: "title", category: "design" },
-  // Réseaux sociaux
-  { id: "s-x",         match: "twitter",       field: "title", category: "social" },
-  { id: "s-x2",        match: "/ x",           field: "title", category: "social" },
-  { id: "s-insta",     match: "instagram",     field: "title", category: "social" },
-  { id: "s-tiktok",    match: "tiktok",        field: "title", category: "social" },
-  { id: "s-reddit",    match: "reddit",        field: "title", category: "social" },
-  { id: "s-linkedin",  match: "linkedin",      field: "title", category: "social" },
-  { id: "s-facebook",  match: "facebook",      field: "title", category: "social" },
-  { id: "s-discord-w", match: "discord",       field: "title", category: "comms" },
-  // Divertissement
-  { id: "s-youtube",   match: "youtube",       field: "title", category: "fun" },
-  { id: "s-netflix",   match: "netflix",       field: "title", category: "fun" },
-  { id: "s-twitch",    match: "twitch",        field: "title", category: "fun" },
-  { id: "s-primevideo",match: "prime video",   field: "title", category: "fun" },
-  { id: "s-disney",    match: "disney+",       field: "title", category: "fun" },
-  { id: "s-spotify-w", match: "spotify",       field: "title", category: "fun" },
-  { id: "s-amazon",    match: "amazon",        field: "title", category: "fun" },
-  { id: "s-leboncoin", match: "leboncoin",     field: "title", category: "fun" },
-];
+/* ─── Classement ─────────────────────────────────────────────────────────── */
 
-/** Applications de bureau reconnues, par nom de processus / d'app. */
-export const APP_RULES: ClassifyRule[] = [
-  // Développement
-  { id: "a-code",      match: "code",          category: "dev" },
-  { id: "a-cursor",    match: "cursor",        category: "dev" },
-  { id: "a-webstorm",  match: "webstorm",      category: "dev" },
-  { id: "a-intellij",  match: "intellij",      category: "dev" },
-  { id: "a-pycharm",   match: "pycharm",       category: "dev" },
-  { id: "a-xcode",     match: "xcode",         category: "dev" },
-  { id: "a-androidst", match: "android studio",category: "dev" },
-  { id: "a-sublime",   match: "sublime",       category: "dev" },
-  { id: "a-vim",       match: "neovim",        category: "dev" },
-  { id: "a-terminal",  match: "terminal",      category: "dev" },
-  { id: "a-iterm",     match: "iterm",         category: "dev" },
-  { id: "a-warp",      match: "warp",          category: "dev" },
-  { id: "a-alacritty", match: "alacritty",     category: "dev" },
-  { id: "a-powershell",match: "powershell",    category: "dev" },
-  { id: "a-cmd",       match: "windowsterminal",category: "dev" },
-  { id: "a-docker",    match: "docker",        category: "dev" },
-  { id: "a-postman",   match: "postman",       category: "dev" },
-  { id: "a-tableplus", match: "tableplus",     category: "dev" },
-  { id: "a-sourcetree",match: "sourcetree",    category: "dev" },
-  { id: "a-github-d",  match: "github desktop",category: "dev" },
-  // Trading
-  { id: "a-mt4",       match: "metatrader",    category: "trading" },
-  { id: "a-mt5",       match: "terminal64",    category: "trading" },
-  { id: "a-ninja",     match: "ninjatrader",   category: "trading" },
-  { id: "a-tradovate", match: "tradovate",     category: "trading" },
-  { id: "a-quantower", match: "quantower",     category: "trading" },
-  { id: "a-ctrader",   match: "ctrader",       category: "trading" },
-  { id: "a-tws",       match: "trader workstation", category: "trading" },
-  { id: "a-tv-app",    match: "tradingview",   category: "trading" },
-  { id: "a-sierra",    match: "sierra chart",  category: "trading" },
-  // Écriture & notes
-  { id: "a-obsidian",  match: "obsidian",      category: "writing" },
-  { id: "a-notion-app",match: "notion",        category: "writing" },
-  { id: "a-word",      match: "winword",       category: "writing" },
-  { id: "a-word2",     match: "microsoft word",category: "writing" },
-  { id: "a-pages",     match: "pages",         category: "writing" },
-  { id: "a-notes",     match: "notes",         category: "writing" },
-  { id: "a-bear",      match: "bear",          category: "writing" },
-  { id: "a-textedit",  match: "textedit",      category: "writing" },
-  // Design
-  { id: "a-figma",     match: "figma",         category: "design" },
-  { id: "a-photoshop", match: "photoshop",     category: "design" },
-  { id: "a-illustrator",match:"illustrator",   category: "design" },
-  { id: "a-affinity",  match: "affinity",      category: "design" },
-  { id: "a-sketch",    match: "sketch",        category: "design" },
-  { id: "a-blender",   match: "blender",       category: "design" },
-  { id: "a-canva",     match: "canva",         category: "design" },
-  { id: "a-premiere",  match: "premiere",      category: "design" },
-  { id: "a-davinci",   match: "resolve",       category: "design" },
-  // Réunions
-  { id: "a-zoom",      match: "zoom",          category: "meetings" },
-  { id: "a-teams",     match: "teams",         category: "meetings" },
-  { id: "a-facetime",  match: "facetime",      category: "meetings" },
-  { id: "a-webex",     match: "webex",         category: "meetings" },
-  // Communication
-  { id: "a-slack",     match: "slack",         category: "comms" },
-  { id: "a-discord",   match: "discord",       category: "comms" },
-  { id: "a-mail",      match: "mail",          category: "comms" },
-  { id: "a-outlook-a", match: "outlook",       category: "comms" },
-  { id: "a-thunderbird",match:"thunderbird",   category: "comms" },
-  { id: "a-messages",  match: "messages",      category: "comms" },
-  { id: "a-whatsapp-a",match: "whatsapp",      category: "comms" },
-  { id: "a-telegram",  match: "telegram",      category: "comms" },
-  { id: "a-signal",    match: "signal",        category: "comms" },
-  // Admin & gestion
-  { id: "a-excel",     match: "excel",         category: "admin" },
-  { id: "a-numbers",   match: "numbers",       category: "admin" },
-  { id: "a-calendar-a",match: "calendar",      category: "admin" },
-  { id: "a-agenda",    match: "agenda",        category: "admin" },
-  { id: "a-preview",   match: "preview",       category: "admin" },
-  { id: "a-acrobat",   match: "acrobat",       category: "admin" },
-  { id: "a-powerpoint",match: "powerpnt",      category: "admin" },
-  { id: "a-keynote",   match: "keynote",       category: "admin" },
-  // Utilitaires
-  { id: "a-finder",    match: "finder",        category: "utilities" },
-  { id: "a-explorer",  match: "explorer",      category: "utilities" },
-  { id: "a-settings",  match: "systemsettings",category: "utilities" },
-  { id: "a-prefs",     match: "réglages",      category: "utilities" },
-  { id: "a-activity",  match: "activity monitor", category: "utilities" },
-  { id: "a-taskmgr",   match: "taskmgr",       category: "utilities" },
-  { id: "a-1password", match: "1password",     category: "utilities" },
-  { id: "a-raycast",   match: "raycast",       category: "utilities" },
-  { id: "a-alfred",    match: "alfred",        category: "utilities" },
-  { id: "a-calc",      match: "calculator",    category: "utilities" },
-  // Divertissement
-  { id: "a-spotify",   match: "spotify",       category: "fun" },
-  { id: "a-music",     match: "music",         category: "fun" },
-  { id: "a-vlc",       match: "vlc",           category: "fun" },
-  { id: "a-steam",     match: "steam",         category: "fun" },
-  { id: "a-epic",      match: "epicgames",     category: "fun" },
-  { id: "a-riot",      match: "riotclient",    category: "fun" },
-  { id: "a-photos",    match: "photos",        category: "fun" },
-  { id: "a-tv",        match: "apple tv",      category: "fun" },
-];
+/** Ce qui a décidé du classement — affiché tel quel dans « Règles ». */
+export type ClassifySource = "user" | "web" | "app" | "word" | "title" | "none";
 
-/** Noms d'app rendus lisibles (le système donne des noms de binaires). */
+export interface Classification {
+  category: string;
+  /** Nom à afficher : le site pour un navigateur, l'application sinon. */
+  label: string;
+  /** Ce qui a décidé. */
+  via: ClassifySource;
+  /** Le fragment qui a été reconnu (« youtube.com », « leagueclient »…). */
+  matched: string | null;
+  /** Vrai quand le temps est celui d'un site vu dans un navigateur. */
+  isSite: boolean;
+  /** 0 à 1 : sert à signaler les classements fragiles, pas à les cacher. */
+  confidence: number;
+}
+
+const CONFIDENCE: Record<ClassifySource, number> = {
+  user: 1, web: 0.95, app: 0.9, word: 0.75, title: 0.6, none: 0,
+};
+
+function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: string): Classification {
+  return {
+    category: hit.entry.cat,
+    label,
+    via: hit.via,
+    matched,
+    isSite,
+    confidence: CONFIDENCE[hit.via],
+  };
+}
+
+/** Première règle de l'utilisateur qui reconnaît ce relevé (la plus récente). */
+function userHit(rules: ClassifyRule[], app: string, title: string): { category: string; match: string } | null {
+  const al = (app || "").toLowerCase();
+  const tl = (title || "").toLowerCase();
+  // Écrite en dernier = consultée en premier : corriger une erreur ne demande
+  // pas de supprimer l'ancienne règle.
+  for (let i = rules.length - 1; i >= 0; i--) {
+    const r = rules[i];
+    if (!r?.match) continue;
+    const needle = r.match.toLowerCase();
+    const hay = r.field === "title" ? tl : al;
+    if (hay.includes(needle)) return { category: r.category, match: r.match };
+  }
+  return null;
+}
+
+/**
+ * Classe un instantané (app + titre), en disant POURQUOI.
+ *
+ * Deux chemins, parce que ce sont deux mondes : dans un navigateur, le nom de
+ * l'application ne dit rien (« Google Chrome » n'est pas une activité) et tout
+ * se joue dans le titre ; ailleurs, c'est l'inverse.
+ */
+export function classifyDetailed(
+  app: string,
+  title: string,
+  userRules: ClassifyRule[] = []
+): Classification {
+  const browser = isBrowserApp(app);
+
+  /* Le nom d'abord : il est utile MÊME quand rien n'est classé, et c'est lui
+     qui fait la différence entre une file de « Google Chrome » identiques et
+     une liste de sites qu'on peut ranger. */
+  const domain = browser ? domainInTitle(title) : null;
+  const siteHit = browser
+    ? (domain ? matchDomain(domain) : null) ?? matchTitle(title)
+    : null;
+  const label = browser
+    ? (siteHit?.entry.name ?? guessSiteName(title) ?? appLabel(app))
+    : (matchAppExact(app)?.entry.name ?? matchAppWord(app)?.entry.name ?? appLabel(app));
+
+  const mine = userHit(userRules, app, title);
+  if (mine) {
+    return { category: mine.category, label, via: "user", matched: mine.match, isSite: browser, confidence: 1 };
+  }
+
+  if (browser) {
+    /* Une page qu'on ne reconnaît pas reste NON CLASSÉE, jamais rangée d'office
+       dans une catégorie productive : sinon tout le web inconnu gonflerait le
+       temps de focus, ce qu'un suivi ne doit précisément pas faire. */
+    if (siteHit) return fromHit(siteHit, label, true, domain ?? siteHit.entry.name);
+    return { category: OTHER, label, via: "none", matched: null, isSite: true, confidence: 0 };
+  }
+
+  const exact = matchAppExact(app);
+  if (exact) return fromHit(exact, label, false, norm(app));
+
+  const word = matchAppWord(app);
+  if (word) return fromHit(word, label, false, word.entry.name);
+
+  /* Dernier recours : le titre d'une application de bureau. Une app inconnue
+     ouvrant un PDF de compta, un Electron dont le processus s'appelle
+     « Electron » — le titre est alors la seule chose qui parle. */
+  const byTitle = matchTitle(title) ?? (() => {
+    const d = domainInTitle(title);
+    return d ? matchDomain(d) : null;
+  })();
+  if (byTitle) return fromHit(byTitle, label, false, byTitle.entry.name);
+
+  return { category: OTHER, label, via: "none", matched: null, isSite: false, confidence: 0 };
+}
+
+/**
+ * Classement, forme courte — c'est ce que le moteur écrit dans chaque segment.
+ */
+export function classify(
+  app: string,
+  title: string,
+  userRules: ClassifyRule[] = []
+): { category: string; label: string } {
+  const { category, label } = classifyDetailed(app, title, userRules);
+  return { category, label };
+}
+
+/* ─── Noms ───────────────────────────────────────────────────────────────── */
+
+/** Noms d'app rendus lisibles quand le catalogue ne les connaît pas. */
 const APP_LABELS: Record<string, string> = {
-  code: "VS Code",
-  "code - insiders": "VS Code Insiders",
   msedge: "Microsoft Edge",
   chrome: "Google Chrome",
-  winword: "Word",
-  powerpnt: "PowerPoint",
-  excel: "Excel",
+  firefox: "Firefox",
   explorer: "Explorateur de fichiers",
   taskmgr: "Gestionnaire des tâches",
-  terminal64: "MetaTrader 5",
-  windowsterminal: "Terminal",
   systemsettings: "Réglages système",
-  riotclient: "Riot Client",
-  epicgameslauncher: "Epic Games",
+  loginwindow: "Écran de verrouillage",
+  dwm: "Bureau Windows",
+  javaw: "Java",
 };
 
 /** Nom d'application présentable, à partir du nom brut donné par l'OS. */
 export function appLabel(app: string): string {
   const raw = (app || "").trim();
   if (!raw) return "Inconnu";
-  const mapped = APP_LABELS[raw.toLowerCase()];
+  const key = norm(raw);
+  const known = appIndexName(key);
+  if (known) return known;
+  const mapped = APP_LABELS[key];
   if (mapped) return mapped;
   // « visual studio code » → « Visual Studio Code » ; les noms déjà capitalisés
   // par le système (macOS) ressortent inchangés.
-  if (raw === raw.toLowerCase()) {
-    return raw.replace(/\b\p{L}/gu, c => c.toUpperCase());
+  const clean = raw.replace(/\.(exe|app)$/i, "");
+  if (clean === clean.toLowerCase()) {
+    return clean.replace(/\b\p{L}/gu, c => c.toUpperCase());
   }
-  return raw;
+  return clean;
+}
+
+/** Le nom du catalogue pour un nom d'app normalisé, s'il y en a un. */
+function appIndexName(normalized: string): string | null {
+  const hit = matchAppExact(normalized);
+  return hit ? hit.entry.name : null;
 }
 
 /**
@@ -322,64 +293,51 @@ export function appLabel(app: string): string {
  * à part entière (c'est ainsi qu'on lit son temps : « YouTube », pas « Chrome »).
  */
 export function siteOf(title: string): string | null {
-  const tl = (title || "").toLowerCase();
-  for (const r of SITE_RULES) {
-    if (r.match.length > 2 && tl.includes(r.match)) {
-      return appLabel(r.match.replace(/\.(com|gouv|fr|org)$/, ""));
-    }
+  const domain = domainInTitle(title);
+  const hit = (domain ? matchDomain(domain) : null) ?? matchTitle(title);
+  return hit?.entry.name ?? guessSiteName(title);
+}
+
+/* ─── Suggestion ─────────────────────────────────────────────────────────── */
+
+/** Indices FAIBLES : ils proposent, ils ne classent pas. */
+const CLUES: { cat: string; re: RegExp }[] = [
+  { cat: "games",    re: /\b(jeu|jeux|game|gaming|gameplay|serveur|server|mod(s|pack)?|patch notes|ranked|elo)\b/ },
+  { cat: "fun",      re: /\b(film|serie|episode|saison|streaming|vostfr|vf|replay|bande annonce|trailer|clip|album|playlist)\b/ },
+  { cat: "shopping", re: /\b(panier|livraison|promo|soldes|acheter|prix|commande|boutique|shop|checkout)\b/ },
+  { cat: "research", re: /\b(wiki|documentation|tutoriel|tutorial|guide|cours|lecon|article|actualites|journal)\b/ },
+  { cat: "dev",      re: /\b(api|sdk|github|npm|typescript|javascript|python|docker|erreur|error|stack trace|compil)\b/ },
+  { cat: "trading",  re: /\b(trading|bourse|forex|crypto|btc|eth|nasdaq|cac ?40|sp ?500|chandelier|backtest)\b/ },
+  { cat: "admin",    re: /\b(facture|devis|impots|urssaf|banque|releve|contrat|assurance|rendez ?vous)\b/ },
+];
+
+/**
+ * Catégorie PROPOSÉE pour un relevé que rien n'a su classer.
+ *
+ * Elle ne classe jamais toute seule : elle s'affiche dans la file d'attente, à
+ * côté du nom et du titre, et il faut un clic pour l'accepter. Un suivi qui
+ * devine en silence est un suivi qu'on cesse de croire — mais une file de
+ * quarante lignes où chaque ligne demande de choisir parmi treize catégories
+ * est une file qu'on ne vide jamais.
+ */
+export function suggestCategory(app: string, title: string): string | null {
+  const hay = `${norm(app)} ${norm(title)}`;
+  // Un domaine en .gg est, à une exception près, un site de jeu.
+  const domain = domainInTitle(title);
+  if (domain && /\.gg$/.test(domain)) return "games";
+  for (const c of CLUES) {
+    if (c.re.test(hay)) return c.cat;
   }
   return null;
 }
 
-/**
- * Classe un instantané (app + titre) en catégorie.
- *
- * Ordre : règles de l'utilisateur (les plus récentes d'abord, une correction
- * doit l'emporter), puis le titre pour les navigateurs, puis l'application,
- * puis le titre en dernier recours — un titre parle parfois d'un sujet que
- * l'application ne dit pas (un PDF de compta ouvert dans Preview).
- */
-export function classify(
-  app: string,
-  title: string,
-  userRules: ClassifyRule[] = []
-): { category: string; label: string } {
-  const al = (app || "").toLowerCase();
-  const tl = (title || "").toLowerCase();
+/* ─── Le catalogue, vu de l'interface ────────────────────────────────────── */
 
-  const hit = (rules: ClassifyRule[]): string | null => {
-    for (const r of rules) {
-      if (!r.match) continue;
-      const hay = r.field === "title" ? tl : al;
-      if (hay.includes(r.match.toLowerCase())) return r.category;
-    }
-    return null;
-  };
-
-  const browser = isBrowser(al);
-  const site = browser ? siteOf(title) : null;
-  const label = site ?? appLabel(app);
-
-  // 1. L'utilisateur d'abord (dernière règle écrite = première consultée).
-  const mine = hit([...userRules].reverse());
-  if (mine) return { category: mine, label };
-
-  /* 2. Navigateur : le titre porte le sujet. Une page qu'on ne reconnaît pas
-        reste NON CLASSÉE et non « recherche » : la ranger d'office dans une
-        catégorie productive gonflerait le temps de focus de tout ce qu'on ne
-        sait pas lire, et c'est précisément ce qu'un suivi ne doit pas faire.
-        Elle remonte alors dans la file « applications non classées », où deux
-        clics lui donnent sa catégorie. */
-  if (browser) {
-    const bySite = hit(SITE_RULES);
-    return { category: bySite ?? OTHER, label };
+/** Nombre d'applications et de sites connus, par catégorie. */
+export function catalogSize(): { total: number; byCategory: Record<string, number> } {
+  const byCategory: Record<string, number> = {};
+  for (const e of CATALOG as CatalogEntry[]) {
+    byCategory[e.cat] = (byCategory[e.cat] || 0) + 1;
   }
-
-  // 3. L'application, puis son titre.
-  const byApp = hit(APP_RULES);
-  if (byApp) return { category: byApp, label };
-  const byTitle = hit(SITE_RULES);
-  if (byTitle) return { category: byTitle, label };
-
-  return { category: OTHER, label };
+  return { total: CATALOG.length, byCategory };
 }

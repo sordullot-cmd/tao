@@ -83,7 +83,7 @@ import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
 import { CARD, SectionTitle } from "@/components/ui/da";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { deepen, dotRing } from "@/lib/ui/color";
+import { deepen, dotRing, vignette as vignetteStyle } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
 import { Field as DAField, Modal as DAModal, FIELD as DA_FIELD, FIELD_AREA as DA_FIELD_AREA } from "@/components/ui/form";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
@@ -1045,12 +1045,13 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
          seules marges sont internes. Un gap les sépare franchement. */
       style={{ ...CARD, overflow: "visible", padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {/* Vignette ronde : fond à la couleur de la carte, telle quelle, glyphe
-            en blanc — la règle commune aux trois pages qui posent ce genre de
-            vignette (Cashflow, Habitudes, Quête de soi). Le trait est épaissi
-            d'un cran : sur un aplat, un 1,75 se dissout. */}
-        <div style={{ width: 34, height: 34, borderRadius: "50%", background: cat.color, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <CatIcon name={cat.icon} size={17} strokeWidth={2} color="#FFFFFF" />
+        {/* Vignette ronde : voile de la couleur de la carte sur le disque,
+            glyphe dans cette même couleur — celle des pages Focus et Sport,
+            tenue par `vignette` (lib/ui/color). */}
+        <div style={{ width: 34, height: 34, borderRadius: "50%", ...vignetteStyle(cat.color), display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {/* Aucune couleur passée ici : le glyphe hérite du `color` de la
+              vignette (`currentColor`), donc une seule source de vérité. */}
+          <CatIcon name={cat.icon} size={17} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Rang de l'objectif : il y en a trois, et celui-ci est le n°X. */}

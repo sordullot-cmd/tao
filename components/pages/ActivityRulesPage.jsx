@@ -27,14 +27,15 @@ import { PALETTE, GREY } from "@/lib/ui/palette";
 import { dotRing } from "@/lib/ui/color";
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
-  CATEGORIES, categoryLabel, isBrowser, resolveProductivity,
+  ASSIGNABLE, CATEGORIES, CATEGORY_BY_ID, catalogSize, categoryLabel, isBrowser,
+  resolveProductivity, suggestCategory,
 } from "@/lib/activity/categories";
 import { clearAll, listDays, loadRange } from "@/lib/activity/engine";
-import { fmtDur, unclassified } from "@/lib/activity/stats";
+import { fmtDur, recategorize, unclassified } from "@/lib/activity/stats";
 import { hasNativeTracking, snapshot } from "@/lib/activity/native";
 import { useActivityLive, useActivitySettings } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, BlockTitle, SourceNotice, Toggle,
+  ActivityHeader, BlockTitle, CategoryPicker, SourceNotice, Toggle,
 } from "@/components/activity/ActivityChrome";
 
 const NATURE_OPTIONS = [
@@ -92,17 +93,21 @@ export default function ActivityRulesPage({ setPage }) {
     return loadRange(getLocalDateString(from), today);
   }, [today, version]);
 
-  const pending = useMemo(() => unclassified(logs), [logs]);
+  const pending = useMemo(() => unclassified(logs, settings), [logs, settings]);
 
+  /* Reclassé avec les règles COURANTES : sinon la colonne des durées contredit
+     la file d'attente juste en dessous, qui, elle, est à jour. */
   const categoryTotals = useMemo(() => {
     const map = new Map();
     for (const log of logs) {
-      for (const seg of log.segments) {
+      for (const seg of recategorize(log, settings)) {
         map.set(seg.cat, (map.get(seg.cat) || 0) + Math.max(0, seg.e - seg.s));
       }
     }
     return map;
-  }, [logs]);
+  }, [logs, settings]);
+
+  const catalog = useMemo(() => catalogSize(), []);
 
   const segmentCount = useMemo(() => logs.reduce((n, l) => n + l.segments.length, 0), [logs]);
 
@@ -260,6 +265,7 @@ export default function ActivityRulesPage({ setPage }) {
         <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
           La nature d’une catégorie décide de ce qui compte comme focus et comme distraction.
           « Réunions » est du travail pour l’un, du temps subi pour l’autre : c’est à toi de trancher.
+          {" "}L’app reconnaît {catalog.total} applications et sites d’elle-même ; tes règles passent avant.
         </span>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {CATEGORIES.map(c => {
@@ -271,7 +277,12 @@ export default function ActivityRulesPage({ setPage }) {
                 borderBottom: `1px solid ${HAIRLINE}`, flexWrap: "wrap",
               }}>
                 <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.color, boxShadow: dotRing(c.color), flexShrink: 0 }} />
-                <span style={{ flex: 1, minWidth: 120, fontSize: 13, color: T.text }}>{categoryLabel(c.id)}</span>
+                <span style={{ flex: 1, minWidth: 160, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ fontSize: 13, color: T.text }}>{categoryLabel(c.id)}</span>
+                  <span style={{ fontSize: 11, color: T.textSub }}>
+                    {c.hint}{catalog.byCategory[c.id] ? ` · ${catalog.byCategory[c.id]} connues` : ""}
+                  </span>
+                </span>
                 <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums", minWidth: 70, textAlign: "right" }}>
                   {ms > 0 ? fmtDur(ms) : "—"}
                 </span>
@@ -332,7 +343,7 @@ export default function ActivityRulesPage({ setPage }) {
               onChange={(e) => patch(s => ({ ...s, rules: s.rules.map(x => x.id === r.id ? { ...x, category: e.target.value } : x) }))}
               style={{ width: 190 }}
             >
-              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
+              {ASSIGNABLE.map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
             </Select>
             <IconButton
               tone="danger"
@@ -357,7 +368,7 @@ export default function ActivityRulesPage({ setPage }) {
             <option value="title">dans le titre</option>
           </Select>
           <Select value={draft.category} onChange={(e) => setDraft(d => ({ ...d, category: e.target.value }))} style={{ width: 190 }}>
-            {CATEGORIES.map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
+            {ASSIGNABLE.map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
           </Select>
           <PillButton
             compact
@@ -370,7 +381,11 @@ export default function ActivityRulesPage({ setPage }) {
         </div>
       </div>
 
-      {/* ── File d'attente ── */}
+      {/* ── File d'attente ──
+          La file décide de la crédibilité du suivi : ce qui reste ici ne compte
+          ni comme travail ni comme distraction, et fausse donc TOUTES les autres
+          mesures. Elle doit se vider en un clic par ligne, pas en réfléchissant
+          à un fragment de texte et à un champ. */}
       <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
         <BlockTitle right={`${pending.length} à classer`}>Applications non classées</BlockTitle>
         {pending.length === 0 ? (
@@ -378,36 +393,69 @@ export default function ActivityRulesPage({ setPage }) {
             <Check size={14} color={PALETTE.green} /> Tout ce qui a été mesuré ces 30 jours est classé.
           </span>
         ) : (
-          pending.slice(0, 20).map(a => (
-            <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${HAIRLINE}`, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 160, display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontSize: 13, color: T.text }}>{a.label}</span>
-                {a.titles[0] && (
-                  <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 420 }}>
-                    {a.titles[0].title}
-                  </span>
-                )}
-              </div>
-              <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>{fmtDur(a.ms)}</span>
-              <Select
-                value=""
-                onChange={(e) => {
-                  const cat = e.target.value;
-                  if (!cat) return;
-                  /* Un site vu dans un navigateur ne se reconnaît qu'à son titre :
-                     une règle sur « chrome » classerait TOUT le navigateur. */
-                  const viaTitle = isBrowser(a.id);
-                  addRule(viaTitle ? a.label : a.id, viaTitle ? "title" : "app", cat);
-                }}
-                style={{ width: 200 }}
-              >
-                <option value="">Classer dans…</option>
-                {CATEGORIES.filter(c => c.id !== "other").map(c => (
-                  <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>
-                ))}
-              </Select>
-            </div>
-          ))
+          <>
+            <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
+              Choisis une catégorie : la règle est écrite pour toi, sur le bon champ (le titre pour un
+              site, le nom pour une application), et les 30 derniers jours se reclassent aussitôt.
+            </span>
+            {pending.slice(0, 25).map(a => {
+              /* Un site vu dans un navigateur ne se reconnaît qu'à son titre :
+                 une règle sur « chrome » classerait TOUT le navigateur. */
+              const viaTitle = a.isSite;
+              const target = viaTitle ? a.label : (a.app || a.label);
+              const risky = viaTitle && isBrowser(a.label);
+              const suggestion = suggestCategory(a.app, a.titles[0]?.title || "");
+              return (
+                <div key={a.label} style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "9px 0",
+                  borderBottom: `1px solid ${HAIRLINE}`, flexWrap: "wrap",
+                }}>
+                  <div style={{ flex: 1, minWidth: 160, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 13, color: T.text }}>{a.label}</span>
+                    {/* Le nom brut n'est répété que s'il apprend quelque chose :
+                        « BidulePro » sous « BidulePro » ne dit rien. */}
+                    {(a.titles[0]?.title || (viaTitle ? "page sans titre" : a.app)) !== a.label && (
+                      <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
+                        {a.titles[0]?.title || (viaTitle ? "page sans titre" : a.app)}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>{fmtDur(a.ms)}</span>
+                  {suggestion && !risky && (
+                    <button
+                      type="button"
+                      onClick={() => addRule(target, viaTitle ? "title" : "app", suggestion)}
+                      title={`Créer la règle « ${target} » → ${categoryLabel(suggestion)}`}
+                      style={{
+                        ...BTN.sm, border: "none", fontFamily: "inherit", cursor: "pointer",
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        background: FIELD_BG, color: T.text,
+                      }}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: CATEGORY_BY_ID[suggestion]?.color, flexShrink: 0 }} />
+                      {categoryLabel(suggestion)} ?
+                    </button>
+                  )}
+                  {risky ? (
+                    <span style={{ fontSize: 11, color: T.textSub, maxWidth: 260 }}>
+                      Page sans nom de site : écris une règle « dans le titre » sur un mot de ce titre.
+                    </span>
+                  ) : (
+                    <CategoryPicker
+                      cat="other"
+                      label="Classer dans…"
+                      onPick={(cat) => addRule(target, viaTitle ? "title" : "app", cat)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+            {pending.length > 25 && (
+              <span style={{ fontSize: 11, color: T.textSub }}>
+                {pending.length - 25} autres, plus courtes, ne sont pas listées : elles remonteront si tu y passes du temps.
+              </span>
+            )}
+          </>
         )}
       </div>
 

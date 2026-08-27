@@ -15,7 +15,7 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Search } from "lucide-react";
+import { Plus, Trash2, Search, ChevronRight, AppWindow } from "lucide-react";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CheckBox, Field, Input, Modal, PillButton } from "@/components/ui/da";
@@ -54,7 +54,31 @@ function cleanTarget(raw) {
   return { name: app, domain: "", app };
 }
 
-function Row({ label, sub, on, partial, color, onToggle, action }) {
+/**
+ * Repère « appli » — cette entrée couvre aussi un logiciel installé.
+ *
+ * Sans lui, rien à l'écran ne distingue Discord, qui a une application de
+ * bureau et sera vraiment coupé, de Instagram, qui n'existe que sur le web.
+ * C'est la question qu'on se pose en composant une liste, et elle n'avait pas
+ * de réponse visible.
+ */
+function AppTag({ entry }) {
+  if (!entry.apps?.length) return null;
+  return (
+    <span
+      title={`Couvre aussi l'application ${entry.apps[0]}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+        fontSize: 10, fontWeight: 500, color: T.textMut,
+        padding: "2px 7px", borderRadius: 999, background: FIELD_BG,
+      }}
+    >
+      <AppWindow size={10} /> appli
+    </span>
+  );
+}
+
+function Row({ label, sub, on, partial, color, onToggle, action, lead }) {
   return (
     <div
       onClick={onToggle}
@@ -65,6 +89,7 @@ function Row({ label, sub, on, partial, color, onToggle, action }) {
       onMouseEnter={e => { e.currentTarget.style.background = FIELD_BG; }}
       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
     >
+      {lead}
       {onToggle && <CheckBox on={on} partial={partial} color={color} />}
       <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {label}
@@ -79,8 +104,22 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
   const [name, setName] = useState(list?.name || "");
   const [color, setColor] = useState(list?.color || "purple");
   const [mode, setMode] = useState(list?.mode || "block");
+  const [always, setAlways] = useState(list?.always === true);
   const [itemIds, setItemIds] = useState(() => new Set(list?.itemIds || []));
   const [custom, setCustom] = useState(list?.custom || []);
+  /* Catégories fermées au départ, toutes.
+   *
+   * Quarante-et-une entrées déroulées d'un coup, ce n'est pas une liste, c'est
+   * un mur : on la parcourt à la molette au lieu de la lire. Fermées, les huit
+   * familles tiennent à l'écran d'un seul regard, chacune avec son compte
+   * (« 3/9 »), ce qui suffit à savoir où aller. Et pour chercher un service
+   * précis, le champ au-dessus va plus vite que n'importe quel dépliage. */
+  const [openCats, setOpenCats] = useState(() => new Set());
+  const toggleCat = (id) => setOpenCats(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
 
@@ -127,6 +166,7 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
       name: name.trim() || "Liste sans nom",
       color,
       mode,
+      always,
       itemIds: [...itemIds],
       custom,
     });
@@ -199,7 +239,35 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
           </div>
         </Field>
 
-        <Field label="Applis et sites">
+        <Field label="Quand">
+          <div
+            onClick={() => setAlways(v => !v)}
+            style={{
+              display: "flex", gap: 10, padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+              background: always ? `color-mix(in srgb, ${hue} 10%, transparent)` : FIELD_BG,
+              boxShadow: always ? `inset 0 0 0 1px ${hue}` : "none",
+            }}
+          >
+            <CheckBox on={always} color={hue} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: T.text }}>Bloquer en permanence</div>
+              <div style={{ fontSize: 12, color: T.textSub, marginTop: 2, lineHeight: 1.5 }}>
+                {/* La phrase dit l'usage, pas le mécanisme : une liste permanente
+                    ne se lance pas, on l'oublie — et c'est à ce moment-là
+                    qu'elle sert. La contrepartie doit être dite aussi
+                    franchement, sinon on la découvre en la subissant. */}
+                Sans session, tout le temps. Pour ce dont on a décidé de ne plus rien vouloir —
+                le jeu réinstallé trois fois, le site où l&apos;on ne retourne pas. Décoché,
+                la liste ne s&apos;applique que pendant les sessions qui l&apos;incluent.
+              </div>
+            </div>
+          </div>
+        </Field>
+
+        <Field
+          label="Applis et sites"
+          hint="Cocher une entrée coupe son site — et son application de bureau quand elle en a une, signalée par le repère « appli »."
+        >
           <div style={{ position: "relative", marginBottom: 8 }}>
             <Search size={14} color={T.textMut} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
             <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Chercher dans le catalogue" style={{ paddingLeft: 32 }} />
@@ -210,7 +278,7 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
               filtered.length ? filtered.map(e => (
                 <Row
                   key={e.id} label={e.name} sub={e.domains[0]} on={itemIds.has(e.id)}
-                  color={hue} onToggle={() => toggle(e.id)}
+                  color={hue} onToggle={() => toggle(e.id)} action={<AppTag entry={e} />}
                 />
               )) : (
                 <div style={{ fontSize: 12, color: T.textMut, padding: "10px 4px" }}>
@@ -221,6 +289,7 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
               CATEGORIES.map(cat => {
                 const entries = catalogOf(cat.id);
                 const on = entries.filter(e => itemIds.has(e.id)).length;
+                const open = openCats.has(cat.id);
                 return (
                   <div key={cat.id} style={{ marginBottom: 6 }}>
                     <Row
@@ -230,12 +299,30 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
                       partial={on > 0 && on < entries.length}
                       color={PALETTE[cat.color]}
                       onToggle={() => toggleCategory(cat.id)}
+                      /* Le chevron ouvre, la ligne coche : deux gestes voisins
+                         mais distincts, d'où l'arrêt de propagation — sans lui,
+                         déplier une famille la cocherait tout entière. */
+                      lead={
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); toggleCat(cat.id); }}
+                          aria-expanded={open}
+                          aria-label={`${open ? "Replier" : "Déplier"} ${cat.label}`}
+                          style={{
+                            background: "none", border: "none", padding: 2, cursor: "pointer",
+                            color: T.textMut, display: "inline-flex", flexShrink: 0,
+                            transform: open ? "rotate(90deg)" : "none", transition: "var(--tr-ui)",
+                          }}
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      }
                     />
-                    <div style={{ paddingLeft: 22, borderLeft: `1px solid ${HAIRLINE}`, marginLeft: 14 }}>
+                    <div style={{ paddingLeft: 22, borderLeft: `1px solid ${HAIRLINE}`, marginLeft: 14, display: open ? "block" : "none" }}>
                       {entries.map(e => (
                         <Row
                           key={e.id} label={e.name} sub={e.domains[0]} on={itemIds.has(e.id)}
-                          color={hue} onToggle={() => toggle(e.id)}
+                          color={hue} onToggle={() => toggle(e.id)} action={<AppTag entry={e} />}
                         />
                       ))}
                     </div>

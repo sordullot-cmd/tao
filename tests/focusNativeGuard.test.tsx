@@ -44,8 +44,12 @@ const session = sessionFromPreset(
   new Date()
 );
 
-function Harness({ onHit }: { onHit: (h: GuardHit) => void }) {
-  useFocusGuard(session, store, onHit);
+function Harness({ onHit, store: s = store, session: r = session }: {
+  onHit: (h: GuardHit) => void;
+  store?: typeof store;
+  session?: typeof session | null;
+}) {
+  useFocusGuard(r, s, onHit);
   return null;
 }
 
@@ -67,7 +71,8 @@ describe("garde natif", () => {
     frontTab.mockReset();
     frontTab.mockResolvedValue({ app: "", url: "", ok: false, error: "not-scriptable" });
     reclaimFocus.mockClear();
-    redirectTab.mockClear();
+    redirectTab.mockReset();
+    redirectTab.mockResolvedValue(true);
   });
   afterEach(() => vi.useRealTimers());
 
@@ -126,7 +131,11 @@ describe("garde natif", () => {
     expect(hits[0].kind).toBe("site");
     expect(hits[0].target).toBe("youtube");
     expect(hits[0].url).toBe("https://m.youtube.com/watch?v=x");
-    expect(reclaimFocus).toHaveBeenCalled();
+    // La page de blocage a pris la place de l'onglet : la personne a tout sous
+    // les yeux, là où elle est. La ramener dans l'app par-dessus n'ajouterait
+    // qu'une interruption.
+    expect(reclaimFocus).not.toHaveBeenCalled();
+    expect(hits[0].handled).toBe(true);
 
     // L'onglet part sur la page de blocage de l'app, qui porte tout ce qu'elle
     // affiche : le site coupé, la liste, la session, le rang de la tentative.
@@ -164,9 +173,78 @@ describe("garde natif", () => {
     expect(redirectTab).not.toHaveBeenCalled();
   });
 
+  it("reprend la main quand le renvoi de l'onglet a échoué", async () => {
+    showBrowser("Mix — YouTube", "https://youtube.com/watch?v=x");
+    redirectTab.mockResolvedValue(false);
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} />);
+    await advance(0);
+
+    // Rien ne s'est vu dans le navigateur : il faut bien que quelque chose se
+    // voie, donc l'écran de blocage de l'app reprend son rôle.
+    expect(reclaimFocus).toHaveBeenCalled();
+    expect(hits[0].handled).toBe(false);
+  });
+
+  it("reprend la main pour une appli, qui n'a pas de page à remplacer", async () => {
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} />);
+    await advance(0);
+
+    expect(reclaimFocus).toHaveBeenCalled();
+    expect(redirectTab).not.toHaveBeenCalled();
+    expect(hits[0].handled).toBe(false);
+  });
+
   it("ne demande pas d'URL à une appli qui n'est pas un navigateur", async () => {
     render(<Harness onHit={() => {}} />);
     await advance(0);
     expect(frontTab).not.toHaveBeenCalled();
+  });
+
+  it("coupe une appli sans aucune session quand la liste est permanente", async () => {
+    /* C'est tout l'objet du drapeau : ce qu'on a décidé une fois pour toutes
+       n'a pas à être relancé chaque matin. */
+    const always = {
+      ...store,
+      blocklists: store.blocklists.map(b => (b.id === "bl-msg" ? { ...b, always: true } : b)),
+    };
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} store={always} session={null} />);
+    await advance(0);
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].target).toBe("discord");
+    expect(reclaimFocus).toHaveBeenCalled();
+  });
+
+  it("ne coupe rien hors session quand aucune liste n'est permanente", async () => {
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} session={null} />);
+    await advance(0);
+
+    expect(hits).toHaveLength(0);
+    expect(frontSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("ajoute le permanent à ce que la session coupe, sans le remplacer", async () => {
+    /* Deux décisions prises à deux moments n'ont pas à s'annuler : la session
+       ne couvre que la messagerie, la liste permanente que la vidéo, et les
+       deux tiennent en même temps. */
+    const always = {
+      ...store,
+      blocklists: store.blocklists.map(b => (b.id === "bl-video" ? { ...b, always: true } : b)),
+    };
+    const msgOnly = sessionFromPreset(
+      { id: "p2", name: "Msg", durationMin: 30, blocklistIds: ["bl-msg"], mode: "normal", color: "blue", icon: "timer" },
+      new Date()
+    );
+    showBrowser("Mix — YouTube", "https://youtube.com/watch?v=x");
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} store={always} session={msgOnly} />);
+    await advance(0);
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].target).toBe("youtube");
   });
 });

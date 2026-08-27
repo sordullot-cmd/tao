@@ -212,20 +212,20 @@ export default function SchedulesTab({ store, setStore }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <SectionTitle size="sm">Programmes</SectionTitle>
-        <PillButton variant="primary" compact onClick={() => setEditing({ create: true })}>
-          <Plus size={13} /> Nouveau programme
-        </PillButton>
-      </div>
+      <SectionTitle size="sm">Programmes</SectionTitle>
 
       {/* La limite, dite une fois, en haut : le blocage n'existe que quand l'app
-          tourne. Mieux vaut le lire ici qu'à la première session manquée. */}
+          tourne. Mieux vaut le lire ici qu'à la première session manquée.
+          Aucun interrupteur ici : un programme qu'il faut penser à activer
+          n'est plus un programme, c'est un rappel. Il part tout seul, et son
+          seul réglage est sa propre case « actif », sur sa ligne. */}
       <div style={{ ...CARD, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
         <Info size={15} color={T.textMut} style={{ flexShrink: 0, marginTop: 1 }} />
         <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
-          Un programme démarre quand l&apos;on ouvre l&apos;app à l&apos;heure prévue, avec cinq minutes de
-          rattrapage. Gardez l&apos;onglet ouvert (ou l&apos;app de bureau lancée) pour qu&apos;il parte tout seul.
+          Un programme part tout seul à l&apos;heure prévue, où que vous soyez dans l&apos;app, avec cinq
+          minutes de rattrapage si elle était fermée. Il faut qu&apos;elle TOURNE : dans un navigateur,
+          un onglet fermé n&apos;exécute rien. L&apos;app de bureau, elle, démarre à la session et reste
+          dans la barre d&apos;état — les programmes y partent même fenêtre fermée.
         </div>
       </div>
 
@@ -289,6 +289,21 @@ export default function SchedulesTab({ store, setStore }) {
               </div>
             );
           })}
+
+          {/* L'ajout en bas de liste, et non en bouton d'en-tête : on crée un
+              programme après avoir regardé ceux qui existent, pas avant. C'est
+              aussi ce qui garde l'en-tête à un seul objet — son titre. */}
+          <button
+            type="button"
+            onClick={() => setEditing({ create: true })}
+            style={{
+              ...CARD, padding: 14, display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+              color: T.textSub, borderStyle: "dashed", width: "100%",
+            }}
+          >
+            <Plus size={14} /> Nouveau programme
+          </button>
         </div>
       )}
 

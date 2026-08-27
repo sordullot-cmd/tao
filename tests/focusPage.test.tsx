@@ -2,18 +2,29 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-/* La page Focus tient tout son état dans une clé de `useCloudState` : on la
-   remplace par un état React local, comme les autres tests de page. */
+/* La page Focus tient tout son état dans une clé de `useCloudState`.
+   Le remplaçant RELAIE entre ses instances, comme le vrai hook : la page et la
+   sentinelle appellent chacune le leur, et une session lancée d'un côté doit
+   être vue de l'autre. Un mock à état purement local les laisserait diverger —
+   et ferait passer pour cassé ce qui marche. */
 const cloudStore = new Map<string, unknown>();
+const cloudListeners = new Map<string, Set<() => void>>();
 vi.mock("@/lib/hooks/useCloudState", () => ({
   useCloudState: (k: string, _c: string, d: unknown) => {
-    const [v, setV] = React.useState(() => (cloudStore.has(k) ? cloudStore.get(k) : d));
-    const set = (u: unknown) => setV((prev: unknown) => {
-      const next = typeof u === "function" ? (u as (p: unknown) => unknown)(prev) : u;
-      cloudStore.set(k, next);
-      return next;
-    });
-    return [v, set, true];
+    const [, force] = React.useReducer((x: number) => x + 1, 0);
+    React.useEffect(() => {
+      const set = cloudListeners.get(k) ?? new Set<() => void>();
+      set.add(force);
+      cloudListeners.set(k, set);
+      return () => { set.delete(force); };
+    }, [k, force]);
+
+    const read = () => (cloudStore.has(k) ? cloudStore.get(k) : d);
+    const set = (u: unknown) => {
+      cloudStore.set(k, typeof u === "function" ? (u as (p: unknown) => unknown)(read()) : u);
+      cloudListeners.get(k)?.forEach(fn => fn());
+    };
+    return [read(), set, true];
   },
 }));
 
@@ -28,6 +39,15 @@ vi.mock("@/lib/notify", () => ({
 }));
 
 import FocusPage from "@/components/pages/FocusPage";
+import FocusSentinel from "@/components/focus/FocusSentinel";
+
+/* En production, la page et la sentinelle sont montées ensemble — la première
+   dans la zone de contenu, la seconde dans la coquille. Les monter séparément
+   ici testerait une combinaison qui n'existe pas : c'est la sentinelle qui tient
+   le blocage, la page qui le donne à voir. */
+function Focus() {
+  return <><FocusSentinel /><FocusPage /></>;
+}
 import { EXIT_PHRASE } from "@/lib/focus/model";
 
 /** Lien externe posé dans le document, comme n'importe quel lien de l'app. */
@@ -44,7 +64,7 @@ describe("Page Focus", () => {
   beforeEach(() => cloudStore.clear());
 
   it("propose les presets d'origine et lance une session", () => {
-    render(<FocusPage />);
+    render(<Focus />);
 
     expect(screen.getByText("Deep work")).toBeTruthy();
     expect(screen.getByText("Pomodoro")).toBeTruthy();
@@ -59,7 +79,7 @@ describe("Page Focus", () => {
   });
 
   it("intercepte un lien coupé, le compte, et laisse revenir au focus", () => {
-    render(<FocusPage />);
+    render(<Focus />);
     fireEvent.click(screen.getAllByText("Démarrer")[0]);
 
     clickLink("https://www.instagram.com/reels");
@@ -77,7 +97,7 @@ describe("Page Focus", () => {
   });
 
   it("laisse passer ce qu'aucune liste ne retient", () => {
-    render(<FocusPage />);
+    render(<Focus />);
     fireEvent.click(screen.getAllByText("Démarrer")[0]);
 
     clickLink("https://arxiv.org/abs/1234");
@@ -86,7 +106,7 @@ describe("Page Focus", () => {
   });
 
   it("exige la phrase pour quitter une session en mode profond", () => {
-    render(<FocusPage />);
+    render(<Focus />);
     fireEvent.click(screen.getAllByText("Démarrer")[0]);
 
     fireEvent.click(screen.getByText("Arrêter"));
@@ -101,24 +121,76 @@ describe("Page Focus", () => {
 
     fireEvent.click(screen.getByText("Arrêter maintenant"));
 
-    // Retour au lancement, avec le compte rendu de ce qui vient de se passer.
-    expect(screen.getByText("Session interrompue")).toBeTruthy();
-    expect(screen.getByText("Deep work")).toBeTruthy();
+    /* Retour au lancement, sans bandeau de compte rendu : ce qui vient de se
+       passer se lit au Bilan, pas en travers de l'écran suivant. Le repère est
+       donc le retour des presets. */
+    expect(screen.getAllByText("Démarrer").length).toBeGreaterThan(0);
+    expect(screen.queryByText("restant")).toBeNull();
   });
 
   it("garde une session en cours d'un rendu à l'autre", () => {
-    const first = render(<FocusPage />);
+    const first = render(<Focus />);
     fireEvent.click(screen.getAllByText("Démarrer")[0]);
     first.unmount();
 
     // Nouveau montage : la session vit dans le magasin, pas dans l'écran.
-    render(<FocusPage />);
+    render(<Focus />);
     expect(screen.getByText("Profond")).toBeTruthy();
     expect(screen.getByText("restant")).toBeTruthy();
   });
 
+  it("laisse circuler dans les autres onglets pendant une session", () => {
+    /* Une session en cours n'accapare plus la page : le blocage tient pendant
+       qu'on retouche une liste, et rien n'oblige à l'arrêter pour aller voir
+       ailleurs. */
+    render(<Focus />);
+    fireEvent.click(screen.getAllByText("Démarrer")[0]);
+    expect(screen.getByText("restant")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Listes"));
+    expect(screen.getByText("Listes de blocage")).toBeTruthy();
+
+    // La session n'a pas bougé : on la retrouve telle quelle en revenant.
+    fireEvent.click(screen.getByText("Session"));
+    expect(screen.getByText("restant")).toBeTruthy();
+  });
+
+  it("tient le blocage même quand la page Focus n'est pas affichée", () => {
+    /* C'est tout l'objet de la sentinelle : un engagement pris pour la journée
+       ne s'arrête pas parce qu'on est allé voir ses trades. On lance la session
+       depuis la page, puis on la démonte — la coquille, elle, reste. */
+    const page = render(<Focus />);
+    fireEvent.click(screen.getAllByText("Démarrer")[0]);
+    page.unmount();
+
+    render(<FocusSentinel />);
+    clickLink("https://www.instagram.com/reels");
+    expect(screen.getByText("Instagram est coupé")).toBeTruthy();
+  });
+
+  it("garde les programmes dans l'onglet Session, avec ou sans session", () => {
+    /* Lancer maintenant et lancer à neuf heures sont la même intention à deux
+       moments : elles se décident au même endroit. Et pendant une session, on
+       peut encore planifier la semaine sans interrompre l'heure en cours. */
+    render(<Focus />);
+    expect(screen.getByText("Programmes")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByText("Démarrer")[0]);
+    expect(screen.getByText("Programmes")).toBeTruthy();
+  });
+
+  it("n'a plus ni onglet Réglages ni écran de sortie d'app", () => {
+    render(<Focus />);
+    expect(screen.queryByText("Réglages")).toBeNull();
+
+    // L'objectif quotidien, lui, n'a pas disparu : il a suivi les chiffres
+    // qu'il gouverne.
+    fireEvent.click(screen.getByText("Bilan"));
+    expect(screen.queryByText("Objectif quotidien")).not.toBeNull();
+  });
+
   it("compose une liste et la retrouve dans l'onglet Listes", () => {
-    render(<FocusPage />);
+    render(<Focus />);
     fireEvent.click(screen.getByText("Listes"));
 
     expect(screen.getByText("Réseaux sociaux")).toBeTruthy();

@@ -641,7 +641,10 @@ function GlobalsSection() {
     if (typeof window === "undefined") return "USD";
     return localStorage.getItem("tr4de_base_currency") || "USD";
   });
-  const [lang, setLangState] = useState(() => (typeof window === "undefined" ? "en" : getLang()));
+  /* `getLang()` répond déjà pour le rendu serveur : dupliquer la valeur par
+     défaut ici, c'est afficher « anglais » dans le sélecteur d'une app qui
+     démarre en français. */
+  const [lang, setLangState] = useState(() => getLang());
   const [theme, setThemeState] = useState(() => {
     if (typeof window === "undefined") return "system";
     try { return localStorage.getItem("tr4de_theme") || "system"; } catch { return "system"; }

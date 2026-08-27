@@ -4,18 +4,30 @@
  * Page « Focus » — sessions de concentration et blocage des distractions.
  *
  * L'équivalent de ce que fait Opal, porté dans l'app : on décide À FROID de ce
- * qui sera inaccessible À CHAUD. Cinq onglets, un seul objet vivant :
+ * qui sera inaccessible À CHAUD. Trois onglets, un seul objet vivant :
  *
- *   Session      lancer, et pendant qu'elle tourne, l'écran de session
- *   Listes       le vocabulaire du blocage (applis et sites, par paquets)
- *   Programmes   les sessions récurrentes, que l'horloge déclenche
- *   Bilan        temps tenu, série, ce qui a été tenté
- *   Réglages     objectif, notifications, délai de grâce
+ *   Session   lancer maintenant, ou programmer pour plus tard
+ *   Listes    ce qui est coupé
+ *   Bilan     temps tenu, série, score, ce qui a été tenté
+ *
+ * Il y en avait cinq. « Programmes » a rejoint « Session » — lancer maintenant
+ * et lancer à neuf heures sont la même intention, à deux moments — et
+ * « Réglages » a disparu : ses quatre réglages sont partis vivre là où leur
+ * effet se voit, l'objectif au Bilan qu'il gouverne, la remise à zéro sous les
+ * listes qu'elle remet ; les deux automatismes ont été supprimés, un programme
+ * qu'il faut penser à activer n'étant plus un programme mais un rappel. Un
+ * onglet qu'on n'ouvre qu'une fois pour régler quelque chose qu'on ne voit pas
+ * est un onglet de trop.
  *
  * Le magasin entier tient dans une clé de `useCloudState` : il part dans la
  * table générique `user_productivity`, sans migration SQL. Une session en cours
  * y est incluse — c'est ce qui lui permet de survivre à un rechargement de page,
  * première condition pour qu'un blocage veuille dire quelque chose.
+ *
+ * Cette page MONTRE et RÈGLE ; elle ne surveille pas. Le blocage, les programmes
+ * et l'écran de blocage vivent dans `FocusSentinel`, monté une fois dans la
+ * coquille de l'app : montés ici, ils s'arrêtaient dès qu'on allait voir ses
+ * trades, c'est-à-dire au moment précis où ils servent.
  *
  * Sur ce que le blocage tient VRAIMENT (et ce qu'il ne peut pas tenir depuis un
  * navigateur), tout est dit dans lib/focus/guard.ts, et résumé à l'écran : une
@@ -24,67 +36,32 @@
  */
 
 import React, { useCallback, useMemo, useState } from "react";
-import { Info, Flame, Clock, ShieldCheck, RotateCcw } from "lucide-react";
-import { useCloudState } from "@/lib/hooks/useCloudState";
+import { Info, RotateCcw } from "lucide-react";
 import { notify, ensureNotifyPermission } from "@/lib/notify";
-import { T, FIELD_BG } from "@/lib/ui/tokens";
-import { PALETTE } from "@/lib/ui/palette";
-import { CARD, CheckBox, Field, Input, PeriodPills, PillButton, SectionTitle } from "@/components/ui/da";
-import {
-  closeSession, emptyStore, isDone, normalizeStore, pause, resume,
-} from "@/lib/focus/model";
-import { useFocusGuard, useScheduleRunner, useTicker, useNativeGuardStatus } from "@/lib/focus/guard";
-import { MIN_MS, dayTotals, fmtDur, focusScore, streak } from "@/lib/focus/stats";
+import { useFocusStore } from "@/lib/focus/useFocusStore";
+import { T } from "@/lib/ui/tokens";
+import { CARD, PeriodPills, PillButton } from "@/components/ui/da";
+import { closeSession, emptyStore, pause, resume } from "@/lib/focus/model";
+import { useTicker, useNativeGuardStatus } from "@/lib/focus/guard";
+import { MIN_MS, fmtDur } from "@/lib/focus/stats";
 import SessionStart from "@/components/focus/SessionStart";
 import SessionRunner from "@/components/focus/SessionRunner";
-import BlockShield from "@/components/focus/BlockShield";
 import BlocklistsTab from "@/components/focus/BlocklistsTab";
 import SchedulesTab from "@/components/focus/SchedulesTab";
 import InsightsTab from "@/components/focus/InsightsTab";
 
-const STORAGE_KEY = "tr4de_focus_block";
-const CLOUD_KEY = "focus_blocker";
-
 const TABS = [
   { id: "session", label: "Session" },
   { id: "lists", label: "Listes" },
-  { id: "schedules", label: "Programmes" },
   { id: "insights", label: "Bilan" },
-  { id: "settings", label: "Réglages" },
 ];
 
-/** Repère compact de l'en-tête : trois chiffres, pas un tableau de bord. */
-function HeadStat({ icon, label, value }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ width: 28, height: 28, borderRadius: 8, background: FIELD_BG, display: "grid", placeItems: "center", color: T.textSub }}>
-        {icon}
-      </span>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums", lineHeight: 1.2 }}>{value}</div>
-        <div style={{ fontSize: 11, color: T.textMut }}>{label}</div>
-      </div>
-    </div>
-  );
-}
-
 export default function FocusPage() {
-  const [raw, setRaw] = useCloudState(STORAGE_KEY, CLOUD_KEY, emptyStore());
+  const [store, setStore] = useFocusStore();
   const [tab, setTab] = useState("session");
-  const [shield, setShield] = useState(null);
+  /** Nœud d'accueil des boutons d'action, dans la barre d'onglets. */
+  const [actionSlot, setActionSlot] = useState(null);
   const native = useNativeGuardStatus();
-  /** Dernière session fermée, gardée le temps de l'annoncer. */
-  const [finished, setFinished] = useState(null);
-
-  /* Le magasin lu du stockage peut venir d'une version antérieure : on le
-     complète à la lecture plutôt qu'en écrivant une migration. */
-  const store = useMemo(() => normalizeStore(raw), [raw]);
-  const setStore = useCallback((updater) => {
-    setRaw(prev => {
-      const base = normalizeStore(prev);
-      return typeof updater === "function" ? updater(base) : updater;
-    });
-  }, [setRaw]);
 
   const running = store.running;
 
@@ -93,16 +70,10 @@ export default function FocusPage() {
   const tick = useTicker(Boolean(running) && !running?.pausedAt);
   const now = useMemo(() => new Date(), [tick, running?.pausedAt, running?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const goalMs = Math.max(1, store.settings.dailyGoalMin) * MIN_MS;
-  const today = useMemo(() => dayTotals(store.log, now), [store.log, now]);
-  const sk = useMemo(() => streak(store.log, goalMs, now), [store.log, goalMs, now]);
-  const score = useMemo(() => focusScore(store.log, store.settings, now), [store.log, store.settings, now]);
-
   /* ── Cycle de vie d'une session ────────────────────────────────────────── */
 
   const start = useCallback((session) => {
     setStore(prev => ({ ...prev, running: session }));
-    setFinished(null);
     if (store.settings.notify) {
       ensureNotifyPermission().then(() => notify("Session lancée", {
         body: session.plannedMs
@@ -121,21 +92,11 @@ export default function FocusPage() {
        arrêtée — c'est ce qui rend une sortie de secours lisible au bilan. */
     const entry = { ...closeSession(current, new Date()), endedBy: reason };
     setStore(prev => (prev.running ? { ...prev, running: null, log: [...prev.log, entry] } : prev));
-    setShield(null);
-    setFinished(entry);
-    if (store.settings.notify && reason === "completed") {
-      notify("Session terminée", { body: `${entry.name} — ${fmtDur(entry.focusedMs)} de concentration.` });
-    }
-  }, [setStore, running, store.settings.notify]);
+  }, [setStore, running]);
 
-  /* Fin automatique quand la durée visée est atteinte : c'est le minuteur qui
-     décide, pas un clic. Sans ça, une session finie continuerait de compter du
-     temps de concentration qui n'en est plus. */
-  const done = running ? isDone(running, now) : false;
-  React.useEffect(() => {
-    if (done) end("completed");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
+  /* La fin AUTOMATIQUE, elle, appartient à la sentinelle : le minuteur ne doit
+     pas dépendre de l'onglet ouvert. Ce qui reste ici ne se déclenche que sur
+     un clic — arrêter, ou la sortie de secours d'un mode verrouillé. */
 
   const onPause = useCallback(() => setStore(prev => (prev.running ? { ...prev, running: pause(prev.running) } : prev)), [setStore]);
   const onResume = useCallback(() => setStore(prev => (prev.running ? { ...prev, running: resume(prev.running) } : prev)), [setStore]);
@@ -143,193 +104,107 @@ export default function FocusPage() {
     prev.running ? { ...prev, running: { ...prev.running, plannedMs: prev.running.plannedMs + min * MIN_MS } } : prev
   )), [setStore]);
 
-  /* ── Blocage et écarts ─────────────────────────────────────────────────── */
-
-  const onHit = useCallback((hit) => {
-    setStore(prev => (prev.running ? {
-      ...prev,
-      running: {
-        ...prev.running,
-        attempts: [...prev.running.attempts, {
-          target: hit.target, at: new Date().toISOString(), kind: hit.kind, awayMs: hit.awayMs,
-        }],
-      },
-    } : prev));
-    setShield(hit);
-  }, [setStore]);
-
-  useFocusGuard(running, store, onHit);
-
-  useScheduleRunner(store, useCallback((session, schedule) => {
-    setStore(prev => ({
-      ...prev,
-      running: session,
-      schedules: prev.schedules.map(s => (s.id === schedule.id ? { ...s, lastFired: schedule.lastFired } : s)),
-    }));
-    if (store.settings.notify) {
-      notify("Programme déclenché", { body: `${session.name} — ${fmtDur(session.plannedMs)}.` });
-    }
-  }, [setStore, store.settings.notify]));
-
   /* ── Rendu ─────────────────────────────────────────────────────────────── */
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {/* Les onglets à gauche, l'action de l'onglet courant à droite, sur la
+          MÊME ligne. Les trois chiffres qui vivaient là (temps du jour, série,
+          score) sont partis au Bilan, où ils sont expliqués : en en-tête, ils
+          demandaient une place permanente pour un coup d'œil qu'on ne donne
+          qu'après coup. La place ainsi libérée revient au geste qu'on fait
+          vraiment depuis cette barre — créer un preset, créer une liste.
+
+          `ref={setActionSlot}` et non une `useRef` : le nœud n'existe pas au
+          premier rendu, et un portail a besoin d'un rendu de plus pour le voir.
+          Une référence muette ne le déclencherait pas. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <PeriodPills value={tab} onChange={setTab} options={TABS} track size={13} />
-        <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-          <HeadStat icon={<Clock size={14} />} label="aujourd'hui" value={fmtDur(today.focusedMs)} />
-          <HeadStat icon={<Flame size={14} />} label="série" value={`${sk.current} j`} />
-          <HeadStat icon={<ShieldCheck size={14} />} label="score" value={score} />
-        </div>
+        <div ref={setActionSlot} style={{ display: "flex", alignItems: "center", gap: 8 }} />
       </div>
 
-      {/* Une session en cours prend TOUTE la page, quel que soit l'onglet : c'est
-          le seul moment où l'écran n'a qu'une chose à dire. */}
-      {running ? (
-        <>
-          <SessionRunner
-            session={running}
-            store={store}
-            now={now}
-            onPause={onPause}
-            onResume={onResume}
-            onEnd={end}
-            onExtend={onExtend}
-          />
-          <BlockShield
-            hit={shield}
-            session={running}
-            store={store}
-            now={now}
-            onBack={() => setShield(null)}
-            onEnd={() => end("abandoned")}
-          />
-        </>
-      ) : (
-        <>
-          {finished && (
-            <div style={{ ...CARD, padding: 16, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <span style={{
-                width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center", flexShrink: 0,
-                background: `color-mix(in srgb, ${finished.completed ? PALETTE.green : PALETTE.orange} 14%, transparent)`,
-                color: finished.completed ? PALETTE.green : PALETTE.orange,
-              }}>
-                <ShieldCheck size={17} />
-              </span>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>
-                  {finished.completed ? "Session terminée" : "Session interrompue"}
-                </div>
-                <div style={{ fontSize: 12, color: T.textSub, marginTop: 2 }}>
-                  {finished.name} — {fmtDur(finished.focusedMs)} de concentration
-                  {finished.attempts?.length ? `, ${finished.attempts.length} interruption${finished.attempts.length > 1 ? "s" : ""}` : ", sans interruption"}.
-                </div>
-              </div>
-              <PillButton compact variant="ghost" onClick={() => setFinished(null)}>Fermer</PillButton>
+      {/* Une session en cours occupe SON onglet, pas toute la page : le blocage
+          continue de tenir pendant qu'on retouche une liste ou qu'on relit le
+          bilan, et rien n'oblige à l'arrêter pour aller voir ailleurs. */}
+      {tab === "session" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+          {running ? (
+            <SessionRunner
+              session={running}
+              store={store}
+              now={now}
+              onPause={onPause}
+              onResume={onResume}
+              onEnd={end}
+              onExtend={onExtend}
+            />
+          ) : (
+            <SessionStart store={store} setStore={setStore} onStart={start} actionSlot={actionSlot} />
+          )}
+
+          {/* Les programmes sous les presets : lancer maintenant et lancer à
+              neuf heures sont la même intention à deux moments, et les séparer
+              obligeait à changer d'onglet pour la reprendre. Ils restent
+              visibles pendant une session — on planifie la semaine sans avoir à
+              interrompre l'heure en cours. */}
+          <SchedulesTab store={store} setStore={setStore} />
+          {/* Ce que le blocage tient réellement. Dit une fois, en bas, sans
+              alarme : c'est une limite, pas une panne. */}
+          <div style={{ ...CARD, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <Info size={15} color={T.textMut} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
+              {native.available
+                ? native.reading
+                  ? <>Blocage système actif : une appli listée qui passe devant repasse derrière, et
+                      un onglet ouvert sur un site coupé est renvoyé sur la page de blocage.
+                      Rien n&apos;est fermé.</>
+                  /* L'app de bureau est là, mais macOS n'a pas accordé l'accès
+                     « Accessibilité ». Sans cette ligne, le blocage semble simplement ne pas
+                     marcher, et on cherche la panne du mauvais côté. */
+                  : <>App de bureau détectée, mais le poste n&apos;est pas lisible
+                      ({native.error || "cause inconnue"}) : seuls les liens de l&apos;app sont
+                      interceptés. Sur macOS, autorisez tao trade dans Réglages Système →
+                      Confidentialité et sécurité → Accessibilité.</>
+                /* Le cas qui trompe le plus : une app installée depuis le navigateur a son
+                   icône et sa fenêtre, donc tout dit « application » — alors qu'à l'intérieur
+                   c'est une page web, qui ne voit rien du reste du poste. Le dire ici, une
+                   fois, vaut mieux que de laisser chercher pourquoi Discord passe encore. */
+                : native.installedWeb
+                  ? <>App installée depuis le web : sa fenêtre est à elle, mais son blocage reste
+                      celui d&apos;une page — seuls les liens de l&apos;app vers un site coupé sont
+                      interceptés. Couper une appli ou un onglet ouvert ailleurs demande l&apos;app
+                      de bureau.</>
+                  : <>Blocage au niveau du navigateur : seuls les liens de l&apos;app vers un site
+                      coupé sont interceptés. Couper une appli ou un onglet ouvert ailleurs demande
+                      l&apos;app de bureau.</>}
             </div>
-          )}
-
-          {tab === "session" && (
-            <>
-              <SessionStart store={store} setStore={setStore} onStart={start} />
-              {/* Ce que le blocage tient réellement. Dit une fois, en bas, sans
-                  alarme : c'est une limite, pas une panne. */}
-              <div style={{ ...CARD, padding: "12px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <Info size={15} color={T.textMut} style={{ flexShrink: 0, marginTop: 1 }} />
-                <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
-                  {native.available
-                    ? native.reading
-                      ? <>Blocage système actif : une appli listée qui passe devant repasse derrière, et
-                          un onglet ouvert sur un site coupé est renvoyé sur la page de blocage.
-                          Rien n&apos;est fermé.</>
-                      /* L'app de bureau est là, mais macOS n'a pas accordé l'accès
-                         « Accessibilité ». Sans cette ligne, le blocage semble simplement ne pas
-                         marcher, et on cherche la panne du mauvais côté. */
-                      : <>App de bureau détectée, mais le poste n&apos;est pas lisible
-                          ({native.error || "cause inconnue"}) : seuls les liens de l&apos;app sont
-                          interceptés. Sur macOS, autorisez tao trade dans Réglages Système →
-                          Confidentialité et sécurité → Accessibilité.</>
-                    /* Le cas qui trompe le plus : une app installée depuis le navigateur a son
-                       icône et sa fenêtre, donc tout dit « application » — alors qu'à l'intérieur
-                       c'est une page web, qui ne voit rien du reste du poste. Le dire ici, une
-                       fois, vaut mieux que de laisser chercher pourquoi Discord passe encore. */
-                    : native.installedWeb
-                      ? <>App installée depuis le web : sa fenêtre est à elle, mais son blocage reste
-                          celui d&apos;une page — les liens de l&apos;app vers un site coupé sont
-                          interceptés, et toute sortie est comptée comme un écart. Couper une appli ou
-                          un onglet ouvert ailleurs demande l&apos;app de bureau.</>
-                      : <>Blocage au niveau du navigateur : les liens de l&apos;app vers un site coupé
-                          sont interceptés, et toute sortie de l&apos;app pendant une session est comptée
-                          comme un écart. Couper une appli demande l&apos;app de bureau.</>}
-                </div>
-              </div>
-            </>
-          )}
-
-          {tab === "lists" && <BlocklistsTab store={store} setStore={setStore} />}
-          {tab === "schedules" && <SchedulesTab store={store} setStore={setStore} />}
-          {tab === "insights" && <InsightsTab store={store} now={now} />}
-
-          {tab === "settings" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <SectionTitle size="sm">Réglages</SectionTitle>
-
-              <div style={{ ...CARD, padding: 18, display: "flex", flexDirection: "column", gap: 16, maxWidth: 520 }}>
-                <Field label="Objectif quotidien (min)" hint="C'est lui qui décide de la série et du score.">
-                  <Input
-                    type="number" min={15} step={15} value={store.settings.dailyGoalMin}
-                    onChange={e => setStore(prev => ({
-                      ...prev, settings: { ...prev.settings, dailyGoalMin: Math.max(5, Number(e.target.value) || 0) },
-                    }))}
-                  />
-                </Field>
-
-                <Field label="Écart compté après (secondes)" hint="Le temps qu'on peut passer hors de l'app sans que ce soit noté.">
-                  <Input
-                    type="number" min={0} step={5} value={store.settings.awayGraceSec}
-                    onChange={e => setStore(prev => ({
-                      ...prev, settings: { ...prev.settings, awayGraceSec: Math.max(0, Number(e.target.value) || 0) },
-                    }))}
-                  />
-                </Field>
-
-                {[
-                  { key: "notify", label: "Notifier au début et à la fin d'une session" },
-                  { key: "autoSchedule", label: "Lancer les programmes automatiquement" },
-                ].map(opt => (
-                  <div
-                    key={opt.key}
-                    onClick={() => setStore(prev => ({
-                      ...prev, settings: { ...prev.settings, [opt.key]: !prev.settings[opt.key] },
-                    }))}
-                    style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
-                  >
-                    <CheckBox on={store.settings[opt.key]} color={T.text} />
-                    <span style={{ fontSize: 13, color: T.text }}>{opt.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ ...CARD, padding: 18, display: "flex", flexDirection: "column", gap: 12, maxWidth: 520 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Repartir de zéro</div>
-                  <div style={{ fontSize: 12, color: T.textSub, marginTop: 4, lineHeight: 1.6 }}>
-                    Remet les listes et les presets d&apos;origine. Le journal des sessions est conservé :
-                    c&apos;est le seul contenu de cette page qu&apos;on ne peut pas refaire.
-                  </div>
-                </div>
-                <PillButton
-                  compact
-                  onClick={() => setStore(prev => ({ ...emptyStore(), log: prev.log, settings: prev.settings }))}
-                >
-                  <RotateCcw size={13} /> Réinitialiser listes et presets
-                </PillButton>
-              </div>
-            </div>
-          )}
-        </>
+          </div>
+        </div>
       )}
+
+      {tab === "lists" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+          <BlocklistsTab store={store} setStore={setStore} actionSlot={actionSlot} />
+
+          <div style={{ ...CARD, padding: 18, display: "flex", flexDirection: "column", gap: 12, maxWidth: 520 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Repartir de zéro</div>
+              <div style={{ fontSize: 12, color: T.textSub, marginTop: 4, lineHeight: 1.6 }}>
+                Remet les listes et les presets d&apos;origine. Le journal des sessions est conservé :
+                c&apos;est le seul contenu de cette page qu&apos;on ne peut pas refaire.
+              </div>
+            </div>
+            <PillButton
+              compact
+              onClick={() => setStore(prev => ({ ...emptyStore(), log: prev.log, settings: prev.settings }))}
+            >
+              <RotateCcw size={13} /> Réinitialiser listes et presets
+            </PillButton>
+          </div>
+        </div>
+      )}
+
+      {tab === "insights" && <InsightsTab store={store} setStore={setStore} now={now} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * L'icône d'un poste de dépense, sur une pastille RONDE de sa couleur.
+ * L'icône d'un poste de dépense, sur une vignette RONDE de sa couleur.
  *
  * Remplace la pastille ronde qui tenait ce rôle : une gommette de 10 px ne dit
  * QUE « ce poste a une couleur », et il faut lire le nom à côté pour savoir
@@ -10,28 +10,19 @@
  * est la même que dans l'anneau et le diagramme de flux, est conservée : c'est
  * elle qui relie la ligne du tableau à sa part dans les graphiques.
  *
- * ── Un disque PLEIN, le glyphe en blanc ─────────────────────────────────────
- * Même traitement que les pastilles d'habitudes : la couleur du poste en aplat,
- * le dessin en blanc par dessus. Les deux pages posent la même vignette ronde
- * devant un libellé, elles ne doivent pas la peindre chacune à sa façon.
+ * ── Un disque pâle, le glyphe dans la teinte ────────────────────────────────
+ * La règle est celle de `vignette` (lib/ui/color) : voile de la teinte à 14 %
+ * sur le disque, glyphe dans cette même teinte. C'est la vignette des pages
+ * Focus et Sport, partagée ici avec les habitudes et les catégories
+ * d'objectifs — une seule famille d'un bout à l'autre de l'app.
  *
- * Un état antérieur faisait l'inverse — cercle quasi blanc, teinte pure dans le
- * glyphe — pour que vingt-huit postes restent distinguables les uns des autres à
- * cette taille : c'est ce que l'aplat coûte, des teintes voisines s'y confondent
- * plus vite. Le gain, lui, est la parenté d'un bout à l'autre de l'app.
- *
- * ── La couleur du poste, telle qu'elle est dans le diagramme ────────────────
- * Le disque porte la couleur du poste SANS aucune correction — la même que sa
- * barre dans le Sankey et sa part dans l'anneau —, et le glyphe est blanc. Une
- * seule règle, sur les trois pages qui posent ce genre de vignette (Cashflow,
- * Habitudes, Quête de soi) : fond = la couleur du sujet, dessin = blanc.
- *
- * Deux réglages plus prudents ont été essayés et écartés : assombrir le disque
- * pour que le blanc tienne 3:1 (il ternissait l'ambre et le cyan), puis noircir
- * le GLYPHE sur les teintes trop claires (deux encres au lieu d'une, et la
- * parenté avec les autres pages se perdait). La palette des postes est en bonne
- * partie pastel, donc le blanc s'y lit inégalement — c'est assumé : la vignette
- * colore et situe, le NOM du poste est juste à côté et porte l'information.
+ * L'état précédent faisait l'inverse — aplat saturé, glyphe blanc. Deux raisons
+ * de l'avoir abandonné. La palette des postes est en bonne partie pastel, donc
+ * le blanc y tenait inégalement ; et ces trois pages finissaient par former une
+ * famille à part au milieu d'une app qui pose partout ailleurs de l'encre
+ * colorée sur un fond calme. Le voile rend au passage vingt-huit postes
+ * distinguables à cette taille, ce que l'aplat coûtait — des teintes voisines
+ * s'y confondaient plus vite.
  *
  * Le choix des icônes est de la PRÉSENTATION, pas du classement : il vit donc
  * ici et non dans `lib/bank/categories`, qui décide des postes et de leurs
@@ -46,7 +37,7 @@ import {
   Sparkles, Ticket, TrainFront, UtensilsCrossed, Wallet, Zap,
 } from "lucide-react";
 import { categoryColor } from "@/lib/bank/categories";
-import { T } from "@/lib/ui/tokens";
+import { vignette } from "@/lib/ui/color";
 
 
 /* Une icône par poste de `SPENDING_CATEGORIES`. Le critère est ce que le poste
@@ -91,8 +82,8 @@ const ICONS = {
  *
  *  Le glyphe occupe un peu plus de la moitié du disque : plus gros, il touche le
  *  bord et la pastille cesse de se lire comme une vignette ; plus petit, il se
- *  perd dans l'aplat. Le trait est épaissi d'un cran par rapport aux icônes de
- *  l'interface — sur fond plein, un trait de 1,75 disparaît. */
+ *  perd dedans. Le trait n'est pas réglé ici — c'est celui de lucide par défaut,
+ *  comme sur les vignettes des pages Focus et Sport. */
 export default function CategoryIcon({ category, size = 32 }) {
   const Icon = ICONS[category] || Shapes;
   const color = categoryColor(category);
@@ -102,10 +93,10 @@ export default function CategoryIcon({ category, size = 32 }) {
       style={{
         width: size, height: size, flexShrink: 0, borderRadius: 999,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        background: color, color: T.onSolid,
+        ...vignette(color),
       }}
     >
-      <Icon size={Math.round(size * 0.52)} strokeWidth={2} />
+      <Icon size={Math.round(size * 0.52)} />
     </span>
   );
 }

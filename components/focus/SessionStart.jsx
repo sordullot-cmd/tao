@@ -10,12 +10,14 @@
  */
 
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Play, Plus, Pencil, Brain, Timer, Target, Moon, Sparkles, Coffee, BookOpen, Dumbbell,
 } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { BTN } from "@/lib/ui/buttons";
 import { PALETTE } from "@/lib/ui/palette";
+import { cardGrid } from "@/lib/ui/cardGrid";
 import { CARD, CheckBox, Field, Input, Modal, PillButton, SectionTitle } from "@/components/ui/da";
 import { MODES, listSize, newId, sessionFromPreset, startSession } from "@/lib/focus/model";
 import { fmtDur } from "@/lib/focus/stats";
@@ -162,7 +164,7 @@ function PresetEditor({ preset, store, onSave, onDelete, onClose }) {
   );
 }
 
-export default function SessionStart({ store, setStore, onStart }) {
+export default function SessionStart({ store, setStore, onStart, actionSlot }) {
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(false);
 
@@ -183,16 +185,25 @@ export default function SessionStart({ store, setStore, onStart }) {
 
   const toggleList = (id) => setLists(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
 
+  /* Le bouton de création vit dans la barre d'onglets, aligné sur elle, et non
+     au-dessus de la grille : c'est une action de la PAGE, pas de la section.
+     Le portail laisse son état où il est — l'éditeur qu'il ouvre appartient à
+     ce composant — tout en le rendant ailleurs dans l'arbre du DOM. */
+  const newPreset = (
+    <PillButton variant="primary" compact onClick={() => setEditing({ create: true })}>
+      <Plus size={13} /> Preset
+    </PillButton>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <SectionTitle size="sm">Lancer une session</SectionTitle>
-        <PillButton compact onClick={() => setEditing({ create: true })}>
-          <Plus size={13} /> Preset
-        </PillButton>
-      </div>
+      {actionSlot ? createPortal(newPreset, actionSlot) : newPreset}
+      <SectionTitle size="sm">Lancer une session</SectionTitle>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+      {/* Les presets remplissent la largeur : quatre cartes côte à côte qui
+          tiennent la ligne, plutôt que quatre cartes étroites et un vide à
+          droite. Au-delà de six, la grille passe à la ligne toute seule. */}
+      <div className="card-grid" style={cardGrid(store.presets.length)}>
         {store.presets.map(p => {
           const hue = PALETTE[p.color] || PALETTE.purple;
           const Icon = PRESET_ICONS[p.icon] || Timer;

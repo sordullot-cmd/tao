@@ -3,6 +3,12 @@
 /**
  * Application du blocage — ce qui est réellement tenu, et par quoi.
  *
+ * Le garde tourne dès qu'une liste est active, avec ou sans session : celles
+ * d'une session en cours, et celles marquées permanentes (`Blocklist.always`),
+ * qui s'appliquent sans qu'on ait rien à lancer. Le reste de ce fichier ne fait
+ * pas la différence entre les deux — un blocage est un blocage, seule change la
+ * raison pour laquelle il est là.
+ *
  * Il faut être honnête sur la portée, sinon la page promet ce qu'elle ne peut
  * pas faire. Deux couches, et elles ne bloquent pas la même chose.
  *
@@ -12,29 +18,37 @@
  *      intercepté avant la navigation (capture, donc avant les gestionnaires de
  *      la page), `window.open` compris. C'est la fuite la plus fréquente : on ne
  *      décide pas d'aller sur YouTube, on clique un lien qui y mène.
- *   2. LES ÉCARTS. Quitter l'app pendant une session — changer d'onglet,
- *      basculer sur une autre fenêtre — est mesuré, et au-delà d'un délai de
- *      grâce, compté comme un écart.
- *   3. LA SORTIE DE PAGE. Une session ferme avec un avertissement natif du
+ *   2. LA SORTIE DE PAGE. Une session ferme avec un avertissement natif du
  *      navigateur, la seule friction qu'il concède avant de laisser partir.
+ *
+ * Ce que cette couche NE fait plus : compter les sorties de l'app. Quitter la
+ * fenêtre pendant une session concentrée n'est pas un écart — c'est le travail
+ * lui-même, qui se fait dans un terminal, un graphique, un carnet. Le seul
+ * signal qu'une page web sait produire là-dessus mesurait donc l'attention à
+ * l'endroit exact où elle n'a pas à l'être, et chaque retour ouvrait un écran
+ * pour reprocher une absence légitime.
  *
  * DANS L'APP DE BUREAU — la couche qui manquait, et la raison d'être de la
  * coquille Tauri :
  *
- *   4. LES APPLIS. Le poste est relevé toutes les deux secondes ; si
+ *   3. LES APPLIS. Le poste est relevé toutes les deux secondes ; si
  *      l'application au premier plan est coupée par une liste active, la fenêtre
  *      de tao trade reprend la main et l'écran de blocage s'affiche. Rien n'est
  *      tué ni fermé — la friction est le retour forcé, pas la perte de travail
  *      (cf. src-tauri/src/blocker.rs).
- *   5. LES SITES OUVERTS AILLEURS. Un navigateur n'est jamais coupé en bloc —
+ *   4. LES SITES OUVERTS AILLEURS. Un navigateur n'est jamais coupé en bloc —
  *      c'est un contenant, pas une distraction. On lui demande l'URL de son
  *      onglet actif, et c'est `verdictFor` qui trace : les mêmes règles que pour
  *      un lien cliqué dans l'app, sous-domaines et mode « seuls autorisés »
  *      compris. Un onglet coupé est renvoyé vers la page de blocage de l'app
- *      (`/blocked`), et RIEN n'est fermé : un retour arrière ramène la page. C'est ce qui rattrape le
+ *      (`/blocked`), et RIEN n'est fermé : un retour arrière ramène la page.
+ *      La fenêtre de tao trade, elle, NE REPREND PAS le premier plan — la page
+ *      de blocage dit déjà tout, là où le geste a eu lieu, et déplacer en plus
+ *      la personne hors de son navigateur ajouterait une interruption sans
+ *      ajouter une information. C'est ce qui rattrape le
  *      YouTube ouvert hors de l'app, là où la couche web, enfermée dans son
  *      propre onglet, ne voit rien.
- *   6. À DÉFAUT, LE TITRE. Firefox n'expose pas ses URLs, Windows n'a pas
+ *   5. À DÉFAUT, LE TITRE. Firefox n'expose pas ses URLs, Windows n'a pas
  *      d'équivalent d'AppleScript, et l'autorisation d'automatisation peut être
  *      refusée. Le garde retombe alors sur le titre de la fenêtre : il repère
  *      encore le site et reprend la main, mais ne renvoie pas l'onglet et ne
@@ -47,10 +61,11 @@
  * hosts — donc par une élévation de privilèges que cette app ne demande pas.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
-  appVerdictFor, dayKey, isBrowserApp, remainingMs, sessionFromSchedule, shouldFire, targetLabel,
-  verdictFor, type FocusSchedule, type FocusStore, type RunningSession,
+  alwaysBlocklistIds, appVerdictFor, dayKey, isBrowserApp, remainingMs, sessionFromSchedule,
+  shouldFire, targetLabel, verdictFor,
+  type FocusSchedule, type FocusStore, type RunningSession,
 } from "./model";
 import {
   frontSnapshot, frontTab, nativeAvailable, reclaimFocus, redirectTab, webAppInstalled,
@@ -63,13 +78,12 @@ export interface GuardHit {
   /**
    * Ce qui a été coupé. `url` pour une navigation depuis l'app, `site` pour un
    * onglet ouvert ailleurs et reconnu à son URL, `window` pour le même onglet
-   * deviné à son seul titre, `app` pour une application passée au premier plan,
-   * `away` pour une sortie de l'app.
+   * deviné à son seul titre, `app` pour une application passée au premier plan.
    *
    * L'écran de blocage ne dit pas la même chose dans tous les cas : un lien
    * refusé n'a mené nulle part, un onglet renvoyé était déjà ouvert.
    */
-  kind?: "url" | "site" | "app" | "window" | "away";
+  kind?: "url" | "site" | "app" | "window";
   /** URL refusée, quand c'est une navigation. */
   url?: string;
   /** Nom de l'application relevée, tel que l'OS le rapporte. */
@@ -78,8 +92,16 @@ export interface GuardHit {
   windowTitle?: string;
   /** Nom de la liste qui a tranché. */
   listName?: string;
-  /** Durée de l'absence, pour un écart (ms). */
-  awayMs?: number;
+  /**
+   * Le blocage a déjà été montré LÀ OÙ il s'est produit — pour un site, la page
+   * de blocage a bien pris la place de l'onglet.
+   *
+   * La page n'a plus alors à ouvrir son propre écran par-dessus : la tentative
+   * part au journal, mais la personne n'est ni ramenée ni interrompue une
+   * seconde fois. Faux quand le renvoi a échoué : il faut bien que quelque
+   * chose se voie.
+   */
+  handled?: boolean;
 }
 
 /** Cadence du relevé du poste. Deux secondes : assez court pour que la reprise
@@ -87,13 +109,18 @@ export interface GuardHit {
  *  page « Activité » échantillonne au même ordre de grandeur. */
 const NATIVE_POLL_MS = 2_000;
 
-/** Délai minimal entre deux reprises de main sur la MÊME cible. Sans lui, un
- *  utilisateur qui insiste déclencherait une reprise toutes les deux secondes :
- *  le poste devient inutilisable au lieu d'être protégé. */
-const RECLAIM_COOLDOWN_MS = 6_000;
+/** Délai minimal entre deux INTERVENTIONS sur la même cible — renvoi d'onglet
+ *  ou reprise de main. Sans lui, un utilisateur qui insiste en déclencherait une
+ *  toutes les deux secondes : le poste devient inutilisable au lieu d'être
+ *  protégé. */
+const ACT_COOLDOWN_MS = 6_000;
 
 /** Délai minimal entre deux tentatives notées au journal pour la même cible.
- *  Une insistance de trente secondes est UNE tentative, pas quinze. */
+ *  Une insistance de trente secondes est UNE tentative, pas quinze.
+ *
+ *  Il est plus long que le précédent, et c'est ce qui garantit qu'une tentative
+ *  notée vient toujours d'un tour où l'on a VRAIMENT agi : l'état de ce qui a
+ *  été montré ne peut donc pas être périmé au moment où on le rapporte. */
 const ATTEMPT_COOLDOWN_MS = 25_000;
 
 /** État du garde natif, tel qu'il s'affiche dans la page. */
@@ -198,13 +225,26 @@ export function useFocusGuard(
     runningRef.current = running;
   });
 
-  const active = Boolean(running) && !running?.pausedAt;
-  const blocklistIds = running?.blocklistIds;
-  const graceMs = Math.max(0, (store.settings.awayGraceSec || 0) * 1000);
+  /* Ce qui est coupé À CET INSTANT : les listes de la session en cours, plus
+     celles qui sont marquées permanentes. Les deux s'ajoutent — une décision
+     prise une fois pour toutes n'a pas à être reprise dans chaque session, et
+     une session n'a pas à desserrer ce qui a été coupé pour de bon.
+     Le garde tourne donc dès qu'il y a quelque chose à tenir, session ou non :
+     c'est ce qui rend un blocage permanent... permanent.
+
+     La clé est une chaîne TRIÉE, et non le tableau : deux tableaux de mêmes
+     identifiants sont deux objets différents à chaque rendu, et les écouteurs
+     seraient reposés en boucle. */
+  const idsKey = useMemo(() => {
+    const session = running && !running.pausedAt ? running.blocklistIds : [];
+    return [...new Set([...alwaysBlocklistIds(store), ...session])].sort().join(",");
+  }, [store, running]);
+  const blocklistIds = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
+  const active = blocklistIds.length > 0;
 
   /* ── Liens et fenêtres ─────────────────────────────────────────────────── */
   useEffect(() => {
-    if (!active || !blocklistIds) return;
+    if (!active) return;
 
     const check = (url: string) => verdictFor(url, storeRef.current, blocklistIds);
 
@@ -244,14 +284,16 @@ export function useFocusGuard(
 
   /* ── Applications et sites : ce que seule l'app de bureau voit ────────── */
   useEffect(() => {
-    if (!active || !blocklistIds || !nativeAvailable()) return;
+    if (!active || !nativeAvailable()) return;
 
     let alive = true;
-    /* Dernière reprise et dernière tentative notée, PAR CIBLE. Deux horloges
-       distinctes et non une seule : la reprise de main doit rester serrée pour
-       être une friction, le journal doit rester lisible. */
-    const lastReclaim = new Map<string, number>();
+    /* Dernière intervention et dernière tentative notée, PAR CIBLE. Deux
+       horloges distinctes et non une seule : l'intervention doit rester serrée
+       pour être une friction, le journal doit rester lisible. `lastShown` retient
+       ce que cette intervention a réussi à montrer sur place. */
+    const lastAct = new Map<string, number>();
     const lastAttempt = new Map<string, number>();
+    const lastShown = new Map<string, boolean>();
     /* Un relevé peut mettre plus de deux secondes à revenir (AppleScript passe
        par System Events). Sans ce verrou, les appels s'empileraient. */
     let busy = false;
@@ -270,21 +312,24 @@ export function useFocusGuard(
 
         const now = Date.now();
 
-        /* La reprise de main d'abord, l'onglet ensuite : c'est l'ordre dans
-           lequel l'utilisateur le vit — la fenêtre passe devant, et la page
-           qu'il vient de quitter est déjà partie quand il y retourne. */
-        if (now - (lastReclaim.get(hit.target) || 0) >= RECLAIM_COOLDOWN_MS) {
-          lastReclaim.set(hit.target, now);
-          await reclaimFocus();
-          if (hit.kind === "site") {
-            await redirectTab(snap.app, blockedUrl(hit, storeRef.current, runningRef.current));
-          }
+        if (now - (lastAct.get(hit.target) || 0) >= ACT_COOLDOWN_MS) {
+          lastAct.set(hit.target, now);
+          /* Un onglet se remplace ; une appli, non. D'où deux gestes qui ne se
+             cumulent pas : quand la page de blocage a pris la place du site, la
+             personne a déjà tout sous les yeux et reste où elle est. La reprise
+             de main n'intervient que faute de mieux — une appli, ou un renvoi
+             qui n'a pas abouti. */
+          const shown = hit.kind === "site"
+            ? await redirectTab(snap.app, blockedUrl(hit, storeRef.current, runningRef.current))
+            : false;
+          if (!shown) await reclaimFocus();
+          lastShown.set(hit.target, shown);
         }
         if (!alive) return;
 
         if (now - (lastAttempt.get(hit.target) || 0) < ATTEMPT_COOLDOWN_MS) return;
         lastAttempt.set(hit.target, now);
-        onHitRef.current(hit);
+        onHitRef.current({ ...hit, handled: lastShown.get(hit.target) === true });
       } finally {
         busy = false;
       }
@@ -294,55 +339,6 @@ export function useFocusGuard(
     const id = setInterval(() => { void tick(); }, NATIVE_POLL_MS);
     return () => { alive = false; clearInterval(id); };
   }, [active, blocklistIds]);
-
-  /* ── Écarts : l'attention qui part ailleurs ────────────────────────────── */
-  useEffect(() => {
-    if (!active) return;
-
-    /* Deux signaux, et il en FAUT deux.
-     *
-     * `visibilitychange` ne dit que la visibilité : il se déclenche pour un
-     * onglet passé à l'arrière-plan ou une fenêtre réduite, jamais pour une
-     * fenêtre restée à l'écran qu'on a simplement cessé de regarder. Dans une
-     * app installée depuis le web, c'est le cas ORDINAIRE — la fenêtre est
-     * seule dans son cadre, elle reste visible à côté de celle où l'on est
-     * parti, et l'écart n'était jamais compté. C'est le `blur` de la fenêtre
-     * qui le voit.
-     *
-     * On est donc « ici » quand la page est visible ET tient le focus, et on
-     * repart de cette seule question à chaque signal : deux écouteurs qui
-     * décident chacun de leur côté finiraient par compter deux fois le même
-     * départ, ou par en oublier un au retour.
-     */
-    let leftAt: number | null = null;
-    const here = () => !document.hidden && document.hasFocus();
-
-    const settle = () => {
-      if (!here()) {
-        if (leftAt === null) leftAt = Date.now();
-        return;
-      }
-      if (leftAt === null) return;
-      const away = Date.now() - leftAt;
-      leftAt = null;
-      if (away >= graceMs) onHitRef.current({ kind: "away", target: "away", awayMs: away });
-    };
-
-    /* Un `blur` peut n'être qu'un déplacement de focus INTERNE — une iframe, la
-       console du navigateur. Le document garde alors le focus : on laisse le
-       navigateur le poser avant de trancher, sinon chaque champ intégré à la
-       page compterait comme une sortie. */
-    const onBlur = () => { setTimeout(settle, 0); };
-
-    document.addEventListener("visibilitychange", settle);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("focus", settle);
-    return () => {
-      document.removeEventListener("visibilitychange", settle);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("focus", settle);
-    };
-  }, [active, graceMs]);
 
   /* ── Fermeture de la page ──────────────────────────────────────────────── */
   useEffect(() => {

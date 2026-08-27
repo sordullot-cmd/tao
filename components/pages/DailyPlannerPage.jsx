@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 
 import { T } from "@/lib/ui/tokens";
+import { vignette } from "@/lib/ui/color";
 import { CARD, StepperPill, FIELD_BG } from "@/components/ui/da";
 import Popover from "@/components/ui/Popover";
 import { FIELD_BG as DA_FIELD_BG, WRITING_BG as DA_WRITING_BG, HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
@@ -785,19 +786,21 @@ export default function DailyPlannerPage() {
                       const ed = e.currentTarget.querySelector("[data-habit-edit]"); if (ed) ed.style.opacity = 0;
                     }}
                   >
-                    {/* Pastille d'icône — la règle commune aux trois pages qui
-                        posent ce genre de vignette (Cashflow, Habitudes, Quête
-                        de soi) : fond à la couleur du sujet, telle quelle, et
-                        glyphe blanc. Une fois l'habitude cochée, la pastille
-                        retombe sur le gris neutre. */}
+                    {/* Vignette d'icône — celle des pages Focus et Sport,
+                        tenue par `vignette` (lib/ui/color) : voile de la couleur
+                        du sujet sur le disque, glyphe dans cette même couleur.
+                        Une fois l'habitude cochée, elle retombe sur le gris
+                        neutre. */}
                     <div style={{
                       width: 34, height: 34, borderRadius: "50%",
-                      background: done ? T.accentBg : (color || T.accentBg),
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      flexShrink: 0, color: done ? T.textMut : (color ? "#FFFFFF" : T.text),
+                      flexShrink: 0,
+                      ...(done
+                        ? { background: T.accentBg, color: T.textMut }
+                        : (color ? vignette(color) : { background: T.accentBg, color: T.text })),
                       transition: "background .15s ease, color .15s ease",
                     }}>
-                      <Ico size={15} strokeWidth={2} />
+                      <Ico size={15} />
                     </div>
 
                     {/* Content (non cliquable) */}

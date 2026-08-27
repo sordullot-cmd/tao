@@ -60,13 +60,28 @@ describe("page Activité (journée)", () => {
   it("affiche les mesures de la journée quand elle a été mesurée", () => {
     seedToday();
     render(<ActivityPage setPage={vi.fn()} />);
-    // « Temps actif » apparaît deux fois : la mesure et le centre de l’anneau.
     expect(screen.getAllByText("Temps actif").length).toBeGreaterThan(0);
     // 75 + 20 + 45 = 2 h 20 mesurées.
     expect(screen.getAllByText("2 h 20").length).toBeGreaterThan(0);
     // Les deux plages de code font deux sessions de focus (20 min de YouTube au
-    // milieu, soit plus que l'interruption tolérée).
-    expect(screen.getByText(/2 sessions/)).toBeInTheDocument();
+    // milieu, soit plus que l'interruption tolérée) — la phrase de tête et la
+    // mesure le disent toutes les deux.
+    expect(screen.getAllByText(/2 sessions/).length).toBeGreaterThan(0);
+  });
+
+  it("range une application depuis sa ligne, sans passer par les règles", () => {
+    const base = new Date();
+    base.setHours(10, 0, 0, 0);
+    saveDay({
+      date: today, awayMs: 0, updatedAt: Date.now(),
+      segments: [{ s: base.getTime(), e: base.getTime() + 40 * 60_000, app: "BidulePro", label: "BidulePro", title: "", cat: "other" }],
+    });
+    render(<ActivityPage setPage={vi.fn()} />);
+    fireEvent.click(screen.getByText("Applications"));
+    // La ligne porte sa catégorie, et cette pastille est le bouton qui la change.
+    fireEvent.click(screen.getByRole("button", { name: /Catégorie : Non classé/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Jeux" }));
+    expect(screen.getByRole("button", { name: /Catégorie : Jeux/ })).toBeInTheDocument();
   });
 
   it("navigue vers les rapports depuis les onglets", () => {

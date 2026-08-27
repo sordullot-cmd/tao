@@ -12,13 +12,15 @@
    les couleurs de CATÉGORIE, qui sont des données (cf. lib/activity/categories).
    ========================================================================== */
 
-import React, { useMemo, useState, useSyncExternalStore } from "react";
-import { Activity, MonitorSmartphone, TriangleAlert, Pause } from "lucide-react";
+import React, { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Activity, ChevronDown, MonitorSmartphone, TriangleAlert, Pause } from "lucide-react";
 import { CARD, FIELD_BG, HAIRLINE, PeriodPills, SectionTitle } from "@/components/ui/da";
+import { BTN } from "@/lib/ui/buttons";
+import Popover from "@/components/ui/Popover";
 import { T } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
-import { categoryColor, categoryLabel, resolveProductivity } from "@/lib/activity/categories";
+import { ASSIGNABLE, categoryColor, categoryLabel, resolveProductivity } from "@/lib/activity/categories";
 import { fmtClock, fmtDur } from "@/lib/activity/stats";
 
 /* ─── Horloge ────────────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ export function LiveBadge({ live }) {
   const color = !running ? GREY.grey500 : broken ? PALETTE.red : away ? PALETTE.yellow : (live?.cat ? categoryColor(live.cat) : PALETTE.green);
 
   const text = !running
-    ? "Suivi arrêté"
+    ? "Suivi en pause"
     : broken
       ? "Capteur indisponible"
       : away
@@ -230,33 +232,6 @@ export function KpiTile({ label, value, sub, color, goalMs, valueMs }) {
         </div>
       )}
       {sub && <span style={{ fontSize: 11, color: T.textSub }}>{sub}</span>}
-    </div>
-  );
-}
-
-/** Cadran du score de focus (0–100). */
-export function ScoreDial({ value, size = 132, label = "Score de focus" }) {
-  const r = (size - 18) / 2;
-  const c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, value || 0));
-  const color = pct >= 70 ? PALETTE.green : pct >= 45 ? PALETTE.yellow : PALETTE.red;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-      <div style={{ position: "relative", width: size, height: size }}>
-        <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }} role="img" aria-label={`${label} : ${pct} sur 100`}>
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={FIELD_BG} strokeWidth={12} />
-          <circle
-            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={12}
-            strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)}
-            style={{ transition: "stroke-dashoffset 400ms var(--ease-out, ease)" }}
-          />
-        </svg>
-        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: 28, fontWeight: 600, lineHeight: 1, color: T.text, fontVariantNumeric: "tabular-nums" }}>{pct}</span>
-          <span style={{ fontSize: 11, color: T.textSub }}>/ 100</span>
-        </div>
-      </div>
-      <span style={{ fontSize: 12, color: T.textSub }}>{label}</span>
     </div>
   );
 }
@@ -435,27 +410,122 @@ export const PRODUCTIVITY_LABEL = {
   distracting: "distraction",
 };
 
-/** Répartition par application / site. */
-export function AppRows({ apps, limit = 8 }) {
+/* ─── Choisir une catégorie ──────────────────────────────────────────────── */
+
+/**
+ * La pastille qui porte la catégorie d'une ligne — et qui la CHANGE.
+ *
+ * C'est la pièce qui manquait : jusqu'ici, corriger un classement demandait
+ * d'aller dans une autre page, de deviner quel fragment de texte écrire, et de
+ * choisir un champ (« dans l'app » / « dans le titre »). Personne ne le faisait,
+ * et « Non classé » restait la première catégorie de la journée. Ici, la
+ * correction se fait là où l'erreur se voit, en deux clics, et la règle écrite
+ * derrière vise le bon champ toute seule.
+ */
+export function CategoryPicker({ cat, onPick, label, align = "end" }) {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+  const color = categoryColor(cat);
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+        aria-expanded={open}
+        aria-label={`Catégorie : ${categoryLabel(cat)}. Changer.`}
+        style={{
+          ...BTN.sm, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
+          border: "none", background: open ? T.rowHighlight : FIELD_BG, color: T.text,
+          fontFamily: "inherit", fontSize: 12, cursor: "pointer",
+          transition: "background 120ms ease", maxWidth: 200,
+        }}
+      >
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, boxShadow: dotRing(color), flexShrink: 0 }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {label ?? categoryLabel(cat)}
+        </span>
+        <ChevronDown size={11} style={{ flexShrink: 0, opacity: 0.6, transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms var(--ease-out, ease)" }} />
+      </button>
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={() => setOpen(false)}
+        align={align}
+        gap={6}
+        minWidth={232}
+        maxHeight={320}
+        className="anim-pop"
+        style={{ background: T.white, borderRadius: 12, boxShadow: "var(--elev-overlay)", border: `1px solid ${T.border}`, padding: 6 }}
+      >
+        <>
+          {ASSIGNABLE.map(c => {
+            const on = c.id === cat;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => { onPick?.(c.id); setOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 10px",
+                  borderRadius: 8, border: "none", background: on ? T.rowHighlight : "transparent",
+                  color: T.text, fontFamily: "inherit", fontSize: 13, textAlign: "left", cursor: "pointer",
+                }}
+                onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = T.rowHighlight; }}
+                onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}
+              >
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, boxShadow: dotRing(c.color), flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {categoryLabel(c.id)}
+                </span>
+              </button>
+            );
+          })}
+        </>
+      </Popover>
+    </>
+  );
+}
+
+/** Répartition par application / site. `onPick` rend chaque ligne corrigeable. */
+export function AppRows({ apps, limit = 8, onPick, empty }) {
   const [all, setAll] = useState(false);
   const shown = all ? apps : apps.slice(0, limit);
+  if (!apps.length) {
+    return <span style={{ fontSize: 12, color: T.textSub, padding: "8px 0" }}>{empty ?? "Rien à afficher."}</span>;
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {shown.map(a => (
-        <BarRow
-          key={a.id}
-          color={a.color}
-          label={a.label}
-          ms={a.ms}
-          pct={a.pct}
-          sub={a.titles?.[0]?.title ? `${categoryLabel(a.cat)} · ${a.titles[0].title}` : categoryLabel(a.cat)}
-        />
+        <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+              <span style={{ fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {a.label}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                {fmtDur(a.ms)}
+              </span>
+            </div>
+            <div style={{ height: 4, borderRadius: 999, background: FIELD_BG, overflow: "hidden" }}>
+              <div style={{ width: `${Math.max(1, Math.min(100, a.pct))}%`, height: "100%", background: a.color }} />
+            </div>
+            {a.titles?.[0]?.title && (
+              <span title={a.titles[0].title} style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {a.titles[0].title}
+              </span>
+            )}
+          </div>
+          {onPick
+            ? <CategoryPicker cat={a.cat} onPick={(c) => onPick(a, c)} />
+            : <span style={{ fontSize: 11, color: T.textSub, whiteSpace: "nowrap" }}>{categoryLabel(a.cat)}</span>}
+        </div>
       ))}
       {apps.length > limit && (
         <button
           type="button"
           onClick={() => setAll(v => !v)}
-          style={{ alignSelf: "flex-start", marginTop: 4, border: "none", background: "transparent", color: T.textSub, fontSize: 12, fontFamily: "inherit", padding: 0 }}
+          style={{ alignSelf: "flex-start", marginTop: 4, border: "none", background: "transparent", color: T.textSub, fontSize: 12, fontFamily: "inherit", padding: 0, cursor: "pointer" }}
         >
           {all ? "Voir moins" : `Voir les ${apps.length - limit} autres`}
         </button>
@@ -512,6 +582,138 @@ export function ActivityHeader({ page, setPage, live, right }) {
         {right}
       </div>
     </div>
+  );
+}
+
+/* ─── Briques de la vue « Journée » ──────────────────────────────────────── */
+
+/**
+ * Une mesure, sans carte autour.
+ *
+ * La page en portait six, chacune dans sa carte : six boîtes pour six nombres,
+ * qui pesaient autant à l'œil que le dessin de la journée. Ici la mesure n'est
+ * qu'un bloc de texte, posé dans la carte de la journée avec les autres.
+ */
+export function Metric({ label, value, sub, color, valueMs, goalMs, size = 28 }) {
+  const pct = goalMs > 0 && valueMs != null ? Math.min(100, (valueMs / goalMs) * 100) : null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: "1 1 132px" }}>
+      <span style={{ fontSize: 12, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+      <span style={{ fontSize: size, fontWeight: 600, lineHeight: 1, letterSpacing: -0.6, color: color || T.text, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </span>
+      {pct != null && (
+        <div style={{ height: 4, borderRadius: 999, background: FIELD_BG, overflow: "hidden", maxWidth: 168 }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: color || T.brand, transition: "width 300ms var(--ease-out, ease)" }} />
+        </div>
+      )}
+      {sub && <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}
+    </div>
+  );
+}
+
+/**
+ * Une barre à 100 % : la répartition lue d'un coup d'œil, sans légende à
+ * traverser. Elle remplace l'anneau — un anneau demande de comparer des angles
+ * et vole 170 px de hauteur pour dire ce qu'une barre dit sur une ligne.
+ */
+export function StackedBar({ parts, height = 12, minPct = 1.2 }) {
+  const shown = parts.filter(p => p.pct > 0);
+  const total = shown.reduce((n, p) => n + p.pct, 0) || 1;
+  return (
+    <div style={{ display: "flex", gap: 2, height, width: "100%", borderRadius: 999, overflow: "hidden", background: FIELD_BG }}>
+      {shown.map(p => (
+        <div
+          key={p.id}
+          title={`${p.label} · ${fmtDur(p.ms)} · ${Math.round(p.pct)} %`}
+          style={{
+            // Une part d'une minute doit rester visible : sans plancher, elle
+            // disparaît et la barre ment par omission.
+            width: `${Math.max(minPct, (p.pct / total) * 100)}%`,
+            background: p.color, minWidth: 3,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Légende d'une barre : pastille, nom, durée — sur une seule ligne qui passe. */
+export function BarLegend({ parts, limit = 8, onPick }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px" }}>
+      {parts.slice(0, limit).map(p => (
+        <span
+          key={p.id}
+          onClick={onPick ? () => onPick(p) : undefined}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textSub,
+            cursor: onPick ? "pointer" : "default", maxWidth: "100%",
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0 }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.label}</span>
+          <span style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{fmtDur(p.ms, { short: true })}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Bloc repliable : ce qu'on consulte parfois ne doit pas peser tous les jours. */
+export function Disclosure({ title, right, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ ...CARD, padding: 0, display: "flex", flexDirection: "column" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          padding: 16, border: "none", background: "transparent", cursor: "pointer",
+          fontFamily: "inherit", textAlign: "left", width: "100%",
+        }}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <ChevronDown
+            size={15}
+            style={{ color: T.textSub, transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 140ms var(--ease-out, ease)" }}
+          />
+          <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{title}</span>
+        </span>
+        {right && <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>{right}</span>}
+      </button>
+      {open && <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 16 }}>{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * L'interrupteur du suivi, en pastille d'en-tête.
+ *
+ * Il occupait une carte pleine largeur en haut de la page : la commande qu'on
+ * touche une fois par mois avait le même poids que la journée qu'on vient lire.
+ */
+export function TrackingPill({ enabled, onChange, hint }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      onClick={() => onChange?.(!enabled)}
+      title={hint}
+      style={{
+        ...BTN.sm, display: "inline-flex", alignItems: "center", gap: 7,
+        border: "none", background: FIELD_BG, color: T.text,
+        fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap",
+      }}
+    >
+      {enabled
+        ? <span style={{ width: 8, height: 8, borderRadius: "50%", background: PALETTE.green, boxShadow: dotRing(PALETTE.green) }} />
+        : <Pause size={12} style={{ color: T.textSub }} />}
+      {enabled ? "Suivi actif" : "Suivi en pause"}
+    </button>
   );
 }
 

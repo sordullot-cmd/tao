@@ -184,6 +184,20 @@ export interface Blocklist {
    * quand on ne sait pas d'avance par où la distraction va arriver.
    */
   mode: "block" | "allow";
+  /**
+   * Liste appliquée EN PERMANENCE, sans session ni horaire.
+   *
+   * C'est un autre usage que le reste de la page. Une session coupe ce qui
+   * distrait pendant qu'on travaille ; une liste permanente coupe ce dont on a
+   * décidé de ne plus rien vouloir du tout — le jeu qu'on a désinstallé trois
+   * fois, le site sur lequel on ne retourne pas. La différence tient en une
+   * phrase : on ne la lance pas, on l'oublie, et c'est justement à ce
+   * moment-là qu'elle sert.
+   *
+   * Elle s'ajoute à ce qu'une session coupe, elle ne le remplace pas : deux
+   * décisions prises à deux moments différents n'ont pas à s'annuler.
+   */
+  always?: boolean;
 }
 
 /* ── Niveaux de fermeté ───────────────────────────────────────────────────── */
@@ -282,6 +296,10 @@ export interface FocusAttempt {
   kind?: "url" | "site" | "app" | "window" | "away";
   /** Temps passé dehors, pour un écart (ms). */
   awayMs?: number;
+  /* `away` et `awayMs` ne sont plus jamais ÉCRITS : les sorties de l'app ne sont
+     plus comptées, parce qu'elles ne sont pas des fautes — on travaille aussi
+     hors de cette fenêtre. Les deux champs restent LUS, pour que les sessions
+     déjà au journal continuent de s'afficher au lieu de perdre leur contenu. */
 }
 
 export interface RunningSession {
@@ -331,8 +349,6 @@ export interface FocusSettings {
   notify: boolean;
   /** Lancer les programmes tout seuls quand l'app est ouverte. */
   autoSchedule: boolean;
-  /** Compter une sortie de l'app comme un écart au-delà de ce délai (secondes). */
-  awayGraceSec: number;
 }
 
 /* ── Magasin ──────────────────────────────────────────────────────────────── */
@@ -392,7 +408,7 @@ export function emptyStore(): FocusStore {
     schedules: [],
     running: null,
     log: [],
-    settings: { dailyGoalMin: 120, notify: true, autoSchedule: true, awayGraceSec: 25 },
+    settings: { dailyGoalMin: 120, notify: true, autoSchedule: true },
   };
 }
 
@@ -433,6 +449,7 @@ function normalizeBlocklist(b: Blocklist): Blocklist {
     itemIds: Array.isArray(b.itemIds) ? b.itemIds : [],
     custom: Array.isArray(b.custom) ? b.custom : [],
     mode: b.mode === "allow" ? "allow" : "block",
+    always: b.always === true,
   };
 }
 
@@ -608,6 +625,7 @@ export function listApps(b: Blocklist): string[] {
 
 /** Nom lisible d'une cible, pour l'écran de blocage et les statistiques. */
 export function targetLabel(target: string, store: FocusStore): string {
+  // Plus jamais produit, mais encore présent dans les journaux d'avant.
   if (target === "away") return "Sortie de l'app";
   const entry = CATALOG_BY_ID[target];
   if (entry) return entry.name;
@@ -830,6 +848,17 @@ export function appVerdictFor(
     if (hit) return { blocked: true, list: b, target: hit, via: "window" };
   }
   return { blocked: false };
+}
+
+/**
+ * Listes appliquées en permanence, hors de toute session.
+ *
+ * Rendu trié : la valeur sert de clé de dépendance au garde, et deux tableaux
+ * de mêmes identifiants dans un ordre différent y passeraient pour un
+ * changement.
+ */
+export function alwaysBlocklistIds(store: FocusStore): string[] {
+  return store.blocklists.filter(b => b.always).map(b => b.id).sort();
 }
 
 /** Nombre de cibles d'une liste — ce qui s'affiche sous son nom. */

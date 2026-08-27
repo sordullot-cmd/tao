@@ -1156,51 +1156,26 @@ export default function AgendaPage() {
   // On réarme l'intention à chaque changement de vue/date…
   const scrollRef = React.useRef(null);
   const didScrollRef = React.useRef(false);
-  const animTimerRef = React.useRef(null);
-  const animRafRef = React.useRef(0);
   React.useEffect(() => { didScrollRef.current = false; }, [view, cursor, isMobile]);
-  // …puis on applique le scroll dès que la grille est effectivement montée.
-  // ⚠️ Pas de cleanup ici : un re-rendu (ex. chargement async des évènements)
-  // déclencherait sinon le cleanup et annulerait le timer avant l'animation.
-  // On annule uniquement au démontage (effet dédié plus bas).
-  React.useEffect(() => {
+  // …puis on positionne la grille dès qu'elle est montée, AVANT la première
+  // peinture : on arrive directement sur l'heure actuelle. (Il y avait ici une
+  // animation de défilement depuis 00h ; elle faisait attendre ~1,1 s la vue
+  // qu'on venait chercher, et repartait de zéro à chaque changement de jour.)
+  React.useLayoutEffect(() => {
     // Sur mobile la grille (3 jours) est toujours affichée ; sinon seulement
     // en vue jour/semaine.
     if (!isMobile && view !== "day" && view !== "week") return;
-    if (didScrollRef.current || !scrollRef.current) return;
+    if (didScrollRef.current) return;
+    const el = scrollRef.current;
+    // Tant que la grille n'a pas sa hauteur (rendu asynchrone), on n'a rien à
+    // faire défiler : on retente au rendu suivant plutôt que de se figer en haut.
+    if (!el || el.scrollHeight <= el.clientHeight) return;
     didScrollRef.current = true;
-    clearTimeout(animTimerRef.current);
-    cancelAnimationFrame(animRafRef.current);
-    // Animation maison (le scrollTo natif "smooth" est trop court/saccadé) :
-    // la grille s'affiche à 00h, puis défile en douceur jusqu'à l'heure
-    // actuelle avec une courbe easeInOutCubic sur ~900 ms.
     // Cible : ligne « maintenant » placée avec ~2h de contexte au-dessus
     // (le navigateur clampe scrollTop si on dépasse le bas de la grille).
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const target = Math.max(0, (nowMinutes / 60) * HOUR_H - 2 * HOUR_H);
-    animTimerRef.current = setTimeout(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-      // Sur mobile : pas d'animation de défilement, on positionne directement.
-      if (isMobile) { el.scrollTop = target; return; }
-      const start = el.scrollTop;
-      const dist = target - start;
-      const duration = 900;
-      const t0 = performance.now();
-      const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-      const step = (now) => {
-        const p = Math.min(1, (now - t0) / duration);
-        el.scrollTop = start + dist * ease(p);
-        if (p < 1) animRafRef.current = requestAnimationFrame(step);
-      };
-      animRafRef.current = requestAnimationFrame(step);
-    }, 200);
+    el.scrollTop = Math.max(0, (nowMinutes / 60) * HOUR_H - 2 * HOUR_H);
   });
-  // Nettoyage uniquement au démontage du composant.
-  React.useEffect(() => () => {
-    clearTimeout(animTimerRef.current);
-    cancelAnimationFrame(animRafRef.current);
-  }, []);
 
   /* ─────────────── Header ─────────────── */
   /* Sélecteur de vues : la brique de la page Calendrier. Cette page en portait

@@ -96,6 +96,38 @@ export function deepen(color: string, max = WHITE_SAFE): string {
   return out;
 }
 
+/**
+ * Vignette d'identité : le disque PÂLE, le glyphe dans la teinte.
+ *
+ * C'est la forme que prend une icône de sujet partout dans l'app — un poste de
+ * dépense, une habitude, une catégorie d'objectif. Elle n'invente rien : elle
+ * met un nom sur la règle déjà écrite à la main une quinzaine de fois, des
+ * pages Focus et Sport aux bandeaux de session (`components/focus/*`,
+ * `FocusPage`, `SessionRunner`) — voile de la teinte à 14 %, glyphe dans cette
+ * même teinte, telle quelle.
+ *
+ * L'inverse — aplat saturé, glyphe blanc — a été essayé sur trois pages et
+ * écarté : ces vignettes se lisaient comme une famille à part au milieu d'une
+ * interface qui pose partout ailleurs de l'encre colorée sur un fond calme.
+ *
+ * Le fond est un `color-mix` vers `transparent` et non une teinte mélangée vers
+ * le blanc : il se compose avec le fond réel, donc il reste discret sur une
+ * carte claire comme sur le thème sombre, là où un mélange vers le blanc ferait
+ * une pastille lumineuse.
+ *
+ * Ce que ça coûte, et qui est assumé parce que c'est la règle de l'app : sur les
+ * teintes les plus claires de la palette, le glyphe pris tel quel descend sous
+ * 3:1 contre son propre disque. Le voile est trop léger pour éloigner beaucoup
+ * les deux, et le NOM est toujours juste à côté — la vignette colore et situe,
+ * elle ne porte pas l'information seule.
+ */
+export function vignette(color: string): { background: string; color: string } {
+  return {
+    background: `color-mix(in srgb, ${color} 14%, transparent)`,
+    color,
+  };
+}
+
 /** Contraste WCAG entre deux couleurs, de 1 (identiques) à 21 (noir sur blanc). */
 export function contrast(a: string, b: string): number {
   const la = luminance(a);

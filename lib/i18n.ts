@@ -10,13 +10,22 @@ import { useEffect, useState } from "react";
 
 export type Lang = "fr" | "en";
 
+/**
+ * Langue courante — le français par défaut.
+ *
+ * Le choix explicite de l'utilisateur prime, et lui seul : la valeur par défaut
+ * ne sert qu'à ceux qui n'ont jamais tranché. Le rendu serveur répond la même
+ * chose que le premier rendu client, sinon React verrait deux arbres différents
+ * et râlerait sur l'hydratation — c'est aussi pourquoi on ne lit PAS
+ * `navigator.language` ici : il n'existe pas côté serveur.
+ */
 export function getLang(): Lang {
-  if (typeof window === "undefined") return "en";
+  if (typeof window === "undefined") return "fr";
   try {
     const v = localStorage.getItem("tr4de_lang");
     if (v === "en" || v === "fr") return v;
-    return "en";
-  } catch { return "en"; }
+    return "fr";
+  } catch { return "fr"; }
 }
 
 export function setLang(lang: Lang) {

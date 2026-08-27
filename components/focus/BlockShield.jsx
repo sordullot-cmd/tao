@@ -15,7 +15,7 @@
  */
 
 import React from "react";
-import { ShieldCheck, MonitorOff, AppWindow } from "lucide-react";
+import { ShieldCheck, AppWindow } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { Modal, PillButton } from "@/components/ui/da";
@@ -33,29 +33,29 @@ const LINES = [
 ];
 
 export default function BlockShield({ hit, session, store, now, onBack, onEnd }) {
-  if (!hit || !session) return null;
+  /* Pas de session requise : une liste permanente coupe hors de toute session,
+     et c'est même son intérêt. L'écran s'adapte — sans session, il n'y a ni
+     temps restant à annoncer, ni session à arrêter. */
+  if (!hit) return null;
 
-  const away = hit.target === "away";
-  /* Quatre situations, et elles ne se racontent pas pareil : un lien refusé n'a
+  /* Trois situations, et elles ne se racontent pas pareil : un lien refusé n'a
      mené nulle part, une appli coupée était déjà ouverte et vient de repasser
-     derrière, un onglet coupé vient d'être renvoyé ailleurs. Dire « bloqué »
-     partout laisserait chercher ce qui a bien pu se passer. */
+     derrière, un onglet coupé n'a pas pu être renvoyé. Dire « bloqué » partout
+     laisserait chercher ce qui a bien pu se passer. */
   const isApp = hit.kind === "app";
   const isSite = hit.kind === "site";
   const isWindow = hit.kind === "window";
-  const left = remainingMs(session, now);
-  const count = session.attempts.length;
+  const left = session ? remainingMs(session, now) : null;
+  const count = session ? session.attempts.length : 1;
   const line = LINES[Math.min(count, LINES.length) - 1] || LINES[0];
-  const mode = MODES[session.mode];
-  const accent = away ? PALETTE.orange : PALETTE.green;
-  const Icon = away ? MonitorOff : isApp ? AppWindow : ShieldCheck;
+  const mode = session ? MODES[session.mode] : null;
+  const accent = PALETTE.green;
+  const Icon = isApp ? AppWindow : ShieldCheck;
 
-  const title = away ? "Écart constaté" : isApp ? "Application coupée" : "Site bloqué";
-  const heading = away
-    ? `${fmtDur(hit.awayMs || 0)} hors de l'app`
-    : isApp
-      ? `${hit.appName || targetLabel(hit.target, store)} est coupé`
-      : `${targetLabel(hit.target, store)} est coupé`;
+  const title = isApp ? "Application coupée" : "Site bloqué";
+  const heading = isApp
+    ? `${hit.appName || targetLabel(hit.target, store)} est coupé`
+    : `${targetLabel(hit.target, store)} est coupé`;
 
   /* Ce qui vient d'être fait à l'appareil, en une phrase, avant la liste
      responsable. Absent pour un lien intercepté : il ne s'est rien passé
@@ -63,7 +63,10 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
   const done = isApp
     ? "La fenêtre est repassée derrière celle-ci. Rien n'a été fermé."
     : isSite
-      ? "L'onglet a été renvoyé sur la page de blocage — un retour arrière le ramène. Rien n'a été fermé."
+      /* Un site n'arrive ici que si le renvoi a ÉCHOUÉ : autrement, la page de
+         blocage a pris la place de l'onglet et cet écran ne s'ouvre pas. Le
+         dire, plutôt que d'annoncer un renvoi qui n'a pas eu lieu. */
+      ? "Le site a été reconnu, mais l'onglet n'a pas pu être renvoyé : il est resté ouvert."
       : isWindow
         ? `Repéré au titre de la fenêtre ${hit.appName || "du navigateur"}, dont l'URL n'est pas lisible : l'onglet est resté ouvert.`
         : null;
@@ -83,17 +86,13 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
             {heading}
           </div>
           <div style={{ fontSize: 13, color: T.textSub, marginTop: 6, lineHeight: 1.6 }}>
-            {away
-              ? "L'écart est noté au journal de la session. Il ne l'annule pas."
-              : <>
-                  {/* Dit une fois, ici : rien n'a été fermé. Sans cette phrase,
-                      on referme l'écran en craignant d'avoir perdu ce qui était
-                      en cours de l'autre côté. */}
-                  {done && <>{done} </>}
-                  {hit.listName
-                    ? <>Liste « {hit.listName} », active jusqu&apos;à la fin de la session.</>
-                    : "Coupé par la session en cours."}
-                </>}
+            {/* Dit une fois, ici : rien n'a été fermé. Sans cette phrase, on
+                referme l'écran en craignant d'avoir perdu ce qui était en cours
+                de l'autre côté. */}
+            {done && <>{done} </>}
+            {hit.listName
+              ? <>Liste « {hit.listName} », active jusqu&apos;à la fin de la session.</>
+              : "Coupé par la session en cours."}
           </div>
         </div>
 
@@ -105,9 +104,13 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
         </div>
 
         <div style={{ fontSize: 12, color: T.textMut }}>
-          {left === null
-            ? `Session « ${session.name} » en cours`
-            : <>Il reste <strong style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{fmtDur(left)}</strong> sur « {session.name} »</>}
+          {!session
+            /* Sans session, il n'y a pas de fin à annoncer — et c'est le
+               message : ce blocage-là ne s'arrête pas tout seul. */
+            ? "Blocage permanent, actif sans session"
+            : left === null
+              ? `Session « ${session.name} » en cours`
+              : <>Il reste <strong style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{fmtDur(left)}</strong> sur « {session.name} »</>}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
@@ -118,7 +121,7 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
               profond ou en verrouillé, elle vit sur l'écran de session, derrière
               sa phrase à recopier : la proposer ici serait offrir la porte au
               moment exact où l'on est le moins en état de la refuser. */}
-          {mode.exit === "free" && (
+          {mode?.exit === "free" && (
             <PillButton variant="ghost" onClick={onEnd} style={{ width: "100%" }}>
               Arrêter la session
             </PillButton>

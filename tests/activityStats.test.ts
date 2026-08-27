@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 /* Le suivi d'activité mesure des durées : une erreur de découpage ne se voit pas
    à l'écran (le total « a l'air » plausible), elle se voit ici. */
 
-import { classify, resolveProductivity } from "@/lib/activity/categories";
+import { classify, classifyDetailed, resolveProductivity } from "@/lib/activity/categories";
 import { DEFAULT_SETTINGS, type DayLog } from "@/lib/activity/engine";
 import { dayStats, fmtDur, unclassified } from "@/lib/activity/stats";
 
@@ -25,7 +25,51 @@ describe("classement", () => {
   it("classe un navigateur par le titre de sa page, pas par son nom", () => {
     const res = classify("Google Chrome", "Lofi beats - YouTube", []);
     expect(res.category).toBe("fun");
-    expect(res.label).toBe("Youtube");
+    expect(res.label).toBe("YouTube");
+  });
+
+  it("reconnaît les jeux, y compris sous leur nom de processus", () => {
+    // Le défaut le plus visible de l'ancien classement : tout ceci tombait
+    // dans « Non classé », qui finissait première catégorie de la journée.
+    expect(classify("LeagueClientUx", "League of Legends", []).category).toBe("games");
+    expect(classify("RiotClientServices", "Riot Client", []).category).toBe("games");
+    expect(classify("VALORANT-Win64-Shipping", "VALORANT", []).category).toBe("games");
+    expect(classify("steamwebhelper", "Steam", []).category).toBe("games");
+    expect(classify("javaw", "Minecraft 1.20.4", []).label).toBe("Minecraft");
+  });
+
+  it("reconnaît tao trade, dont le processus s'appelle « tao »", () => {
+    const res = classify("tao", "tao", []);
+    expect(res.category).toBe("trading");
+    expect(res.label).toBe("tao trade");
+  });
+
+  it("lit le domaine posé dans le titre d'un navigateur", () => {
+    expect(classify("Google Chrome", "op.gg — stats", []).category).toBe("games");
+    expect(classify("Google Chrome", "Amazon.fr : chaussures", []).category).toBe("shopping");
+  });
+
+  it("ne prend pas un nom de site croisé dans une phrase pour ce site", () => {
+    // « le monde » traînait dans le titre : la page finissait dans la presse.
+    expect(classify("Safari", "Un site inconnu de tout le monde", []).category).toBe("other");
+  });
+
+  it("range le bruit du système au lieu de le laisser en « non classé »", () => {
+    expect(classify("dwm", "", []).category).toBe("utilities");
+    expect(classify("LockApp", "", []).category).toBe("utilities");
+  });
+
+  it("dit ce qui a décidé du classement", () => {
+    expect(classifyDetailed("Google Chrome", "Lofi beats - YouTube", []).via).toBe("title");
+    expect(classifyDetailed("Code", "", []).via).toBe("app");
+    expect(classifyDetailed("Adobe Photoshop 2024", "affiche.psd", []).via).toBe("word");
+    expect(classifyDetailed("Code", "", [{ id: "r", match: "code", category: "fun" }]).via).toBe("user");
+  });
+
+  it("nomme un site inconnu au lieu de le laisser sous le nom du navigateur", () => {
+    // C'est ce nom qui rend la file d'attente cliquable : « Marmiton », et non
+    // « Google Chrome » répété douze fois.
+    expect(classify("Google Chrome", "Recette de crêpes | Marmiton", []).label).toBe("Marmiton");
   });
 
   it("fait primer une règle de l'utilisateur, la plus récente d'abord", () => {
@@ -106,13 +150,20 @@ describe("statistiques d'une journée", () => {
 });
 
 describe("file des applications non classées", () => {
+  it("oublie une application que les règles courantes savent classer", () => {
+    // L'historique garde « other » ; c'est le classement du jour qui décide.
+    const log = day([seg([9, 0], [9, 30], "BidulePro", "other")]);
+    const rules = [{ id: "r", match: "bidulepro", category: "dev" }];
+    expect(unclassified([log], { ...DEFAULT_SETTINGS, rules })).toHaveLength(0);
+  });
+
   it("remonte les applications inconnues, la plus longue d'abord", () => {
     const log = day([
       seg([9, 0], [9, 30], "BidulePro", "other"),
       seg([9, 30], [10, 30], "MachinApp", "other"),
       seg([10, 30], [11, 0], "Code", "dev"),
     ]);
-    expect(unclassified([log]).map(a => a.label)).toEqual(["MachinApp", "BidulePro"]);
+    expect(unclassified([log], DEFAULT_SETTINGS).map(a => a.label)).toEqual(["MachinApp", "BidulePro"]);
   });
 });
 
