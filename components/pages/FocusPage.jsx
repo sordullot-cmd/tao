@@ -241,8 +241,8 @@ export default function FocusPage() {
                   {native.available
                     ? native.reading
                       ? <>Blocage système actif : une appli listée qui passe devant repasse derrière, et
-                          un onglet ouvert sur un site coupé est renvoyé vers une page vide. Rien
-                          n&apos;est fermé.</>
+                          un onglet ouvert sur un site coupé est renvoyé sur la page de blocage.
+                          Rien n&apos;est fermé.</>
                       /* L'app de bureau est là, mais macOS n'a pas accordé l'accès
                          « Accessibilité ». Sans cette ligne, le blocage semble simplement ne pas
                          marcher, et on cherche la panne du mauvais côté. */

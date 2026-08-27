@@ -12,14 +12,14 @@ const frontSnapshot = vi.fn(async () => snap);
 const reclaimFocus = vi.fn(async () => true);
 type Tab = { app: string; url: string; ok: boolean; error: string | null };
 const frontTab = vi.fn(async (app: string): Promise<Tab> => ({ app, url: "", ok: false, error: "not-scriptable" }));
-const redirectTab = vi.fn(async (_app: string) => true);
+const redirectTab = vi.fn(async (_app: string, _url?: string) => true);
 
 vi.mock("@/lib/focus/native", () => ({
   nativeAvailable: () => true,
   frontSnapshot: () => frontSnapshot(),
   reclaimFocus: () => reclaimFocus(),
   frontTab: (app: string) => frontTab(app),
-  redirectTab: (app: string) => redirectTab(app),
+  redirectTab: (app: string, url?: string) => redirectTab(app, url),
 }));
 
 /** Le poste montre un navigateur, sur l'URL donnée. `null` = URL illisible
@@ -126,8 +126,18 @@ describe("garde natif", () => {
     expect(hits[0].kind).toBe("site");
     expect(hits[0].target).toBe("youtube");
     expect(hits[0].url).toBe("https://m.youtube.com/watch?v=x");
-    expect(redirectTab).toHaveBeenCalledWith("Google Chrome");
     expect(reclaimFocus).toHaveBeenCalled();
+
+    // L'onglet part sur la page de blocage de l'app, qui porte tout ce qu'elle
+    // affiche : le site coupé, la liste, la session, le rang de la tentative.
+    const [app, url] = redirectTab.mock.calls[0];
+    expect(app).toBe("Google Chrome");
+    const dest = new URL(url!);
+    expect(dest.origin).toBe(window.location.origin);
+    expect(dest.pathname).toBe("/blocked");
+    expect(dest.searchParams.get("t")).toBe("YouTube");
+    expect(dest.searchParams.get("l")).toBe("Vidéo & streaming");
+    expect(dest.searchParams.get("n")).toBe("1");
   });
 
   it("ne touche pas à un onglet que rien ne retient, même sur un titre trompeur", async () => {

@@ -113,17 +113,22 @@ export async function frontTab(app: string): Promise<TabInfo | null> {
 }
 
 /**
- * Renvoie l'onglet actif vers une page vide.
+ * Renvoie l'onglet actif vers `url`, ou vers une page vide à défaut.
+ *
+ * L'adresse est refiltrée côté Rust avant d'entrer dans un script — on ne se
+ * repose pas sur le fait qu'elle a été construite ici. Une adresse refusée ne
+ * fait pas échouer l'appel : l'onglet quitte le site quand même, ce qui est la
+ * seule chose qui ne doit dépendre d'aucun paramètre.
  *
  * Ne jette jamais, pour la même raison que `reclaimFocus` : un onglet qu'on n'a
  * pas su renvoyer ne doit pas emporter la boucle de surveillance avec lui. Rend
  * `false` quand rien n'a été fait — c'est au garde de décider s'il le dit.
  */
-export async function redirectTab(app: string): Promise<boolean> {
+export async function redirectTab(app: string, url?: string): Promise<boolean> {
   if (!isTauri() || !app) return false;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    return (await invoke<boolean>("redirect_tab", { app })) === true;
+    return (await invoke<boolean>("redirect_tab", { app, url: url || null })) === true;
   } catch {
     return false;
   }

@@ -29,11 +29,20 @@ deux commandes suivantes, et le choix qu'elles portent :
     La différence n'est pas cosmétique : sur un titre, « youtube » se devine ;
     sur une URL, `matchesDomain` tranche pour de bon, sous-domaines compris, et
     le mode « seuls autorisés » redevient jugeable.
-  • `redirect_tab` renvoie cet onglet vers une page vide. Renvoyer plutôt que
-    fermer : un onglet fermé emporte ce qu'on y avait tapé, et une page de
-    blocage qui coûte un panier ou un formulaire se fait désinstaller. Ici, un
-    retour arrière suffit à retrouver la page — ce qu'on vise est la friction,
-    pas la punition.
+  • `redirect_tab` renvoie cet onglet vers la page de blocage de l'app
+    (`/blocked`), ou vers une page vide à défaut. Renvoyer plutôt que fermer :
+    un onglet fermé emporte ce qu'on y avait tapé, et une page de blocage qui
+    coûte un panier ou un formulaire se fait désinstaller. Ici, un retour
+    arrière suffit à retrouver la page — ce qu'on vise est la friction, pas la
+    punition.
+
+L'adresse de destination vient du front, donc de la page web : elle est filtrée
+ici avant d'entrer dans un script. Le filtre est volontairement borné à ce qui
+peut EXISTER dans une URL bien formée — `https:`, pas de guillemet, pas
+d'antislash, pas de caractère de contrôle — ce qui rend l'échappement inutile
+plutôt que délicat. Un refus retombe sur la page vide : l'onglet quitte le site
+dans tous les cas, c'est la seule chose qui ne doit jamais dépendre d'un
+paramètre.
 
 Le prix à payer est une autorisation « Automatisation » par navigateur, demandée
 par macOS au premier pilotage. Refusée, la lecture d'URL échoue proprement et le
@@ -110,10 +119,11 @@ pub fn front_tab(app: String) -> TabSnapshot {
   imp::front_tab(&app)
 }
 
-/// Renvoie l'onglet actif vers une page vide. Rien n'est fermé.
+/// Renvoie l'onglet actif vers `url`, ou vers une page vide si elle est refusée.
+/// Rien n'est fermé.
 #[tauri::command]
-pub fn redirect_tab(app: String) -> Result<bool, String> {
-  imp::redirect_tab(&app)
+pub fn redirect_tab(app: String, url: Option<String>) -> Result<bool, String> {
+  imp::redirect_tab(&app, url.as_deref().unwrap_or(""))
 }
 
 /* ─── macOS : pilotage des navigateurs par AppleScript ───────────────────── */
@@ -123,14 +133,29 @@ mod imp {
   use super::TabSnapshot;
   use std::process::Command;
 
-  /// La page où atterrit un onglet coupé.
+  /// Où atterrit un onglet coupé quand rien de mieux n'est fourni.
   ///
-  /// Une page vide, et non une page de blocage à nous : un navigateur refuse
-  /// une navigation de premier niveau vers une `data:` URL, et l'envoyer sur
-  /// notre site le ferait charger une deuxième fois hors de l'app. Le vide est
-  /// sans ambiguïté, et l'explication est de toute façon à l'écran, dans
-  /// l'app, qui vient de reprendre le premier plan.
+  /// Le vide est sans ambiguïté et ne dépend d'aucun réseau : c'est ce qui en
+  /// fait le bon repli, y compris quand le site est injoignable et que la page
+  /// de blocage ne chargerait pas.
   const BLANK: &str = "about:blank";
+
+  /// Adresse acceptable dans un script — et le filtre tient lieu d'échappement.
+  ///
+  /// Une URL construite par `URLSearchParams` est déjà encodée : ni guillemet,
+  /// ni antislash, ni saut de ligne ne peuvent s'y trouver. Les refuser purement
+  /// et simplement est donc sans effet de bord, et laisse une règle qui se
+  /// vérifie à l'œil au lieu d'un échappement à faire confiance.
+  fn safe_url(url: &str) -> Option<&str> {
+    let u = url.trim();
+    if !u.starts_with("https://") || u.len() > 2048 {
+      return None;
+    }
+    if u.chars().any(|c| c.is_control() || c == '"' || c == '\\') {
+      return None;
+    }
+    Some(u)
+  }
 
   /// Navigateurs pilotables, et dialecte de chacun.
   ///
@@ -203,14 +228,15 @@ mod imp {
     }
   }
 
-  pub fn redirect_tab(app: &str) -> Result<bool, String> {
+  pub fn redirect_tab(app: &str, url: &str) -> Result<bool, String> {
     let Some(chromium) = dialect(app) else {
       return Ok(false);
     };
+    let dest = safe_url(url).unwrap_or(BLANK);
     let script = if chromium {
-      format!(r#"tell application "{app}" to set URL of active tab of front window to "{BLANK}""#)
+      format!(r#"tell application "{app}" to set URL of active tab of front window to "{dest}""#)
     } else {
-      format!(r#"tell application "{app}" to set URL of front document to "{BLANK}""#)
+      format!(r#"tell application "{app}" to set URL of front document to "{dest}""#)
     };
     osascript(&script)?;
     Ok(true)
@@ -236,7 +262,7 @@ mod imp {
     }
   }
 
-  pub fn redirect_tab(_app: &str) -> Result<bool, String> {
+  pub fn redirect_tab(_app: &str, _url: &str) -> Result<bool, String> {
     Ok(false)
   }
 }

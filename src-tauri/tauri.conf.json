@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "tao trade",
+  "productName": "tao",
   "version": "0.1.0",
   "identifier": "app.taotrade.desktop",
   "build": {
@@ -18,7 +18,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "tao trade",
+        "title": "tao",
         "width": 1280,
         "height": 800,
         "minWidth": 960,

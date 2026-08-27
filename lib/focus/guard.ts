@@ -30,8 +30,8 @@
  *      c'est un contenant, pas une distraction. On lui demande l'URL de son
  *      onglet actif, et c'est `verdictFor` qui trace : les mêmes règles que pour
  *      un lien cliqué dans l'app, sous-domaines et mode « seuls autorisés »
- *      compris. Un onglet coupé est renvoyé vers une page vide, et RIEN n'est
- *      fermé : un retour arrière ramène la page. C'est ce qui rattrape le
+ *      compris. Un onglet coupé est renvoyé vers la page de blocage de l'app
+ *      (`/blocked`), et RIEN n'est fermé : un retour arrière ramène la page. C'est ce qui rattrape le
  *      YouTube ouvert hors de l'app, là où la couche web, enfermée dans son
  *      propre onglet, ne voit rien.
  *   6. À DÉFAUT, LE TITRE. Firefox n'expose pas ses URLs, Windows n'a pas
@@ -49,8 +49,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  appVerdictFor, dayKey, isBrowserApp, sessionFromSchedule, shouldFire, verdictFor,
-  type FocusSchedule, type FocusStore, type RunningSession,
+  appVerdictFor, dayKey, isBrowserApp, remainingMs, sessionFromSchedule, shouldFire, targetLabel,
+  verdictFor, type FocusSchedule, type FocusStore, type RunningSession,
 } from "./model";
 import {
   frontSnapshot, frontTab, nativeAvailable, reclaimFocus, redirectTab, webAppInstalled,
@@ -187,7 +187,16 @@ export function useFocusGuard(
      `react-hooks/refs`. */
   const onHitRef = useRef(onHit);
   const storeRef = useRef(store);
-  useEffect(() => { onHitRef.current = onHit; storeRef.current = store; });
+  /* La session tenue en référence elle aussi : les écouteurs sont posés une fois
+     par session, mais son contenu bouge en cours de route — les tentatives
+     s'accumulent, la durée peut être rallongée — et l'adresse de la page de
+     blocage doit porter l'état du moment, pas celui du départ. */
+  const runningRef = useRef(running);
+  useEffect(() => {
+    onHitRef.current = onHit;
+    storeRef.current = store;
+    runningRef.current = running;
+  });
 
   const active = Boolean(running) && !running?.pausedAt;
   const blocklistIds = running?.blocklistIds;
@@ -267,7 +276,9 @@ export function useFocusGuard(
         if (now - (lastReclaim.get(hit.target) || 0) >= RECLAIM_COOLDOWN_MS) {
           lastReclaim.set(hit.target, now);
           await reclaimFocus();
-          if (hit.kind === "site") await redirectTab(snap.app);
+          if (hit.kind === "site") {
+            await redirectTab(snap.app, blockedUrl(hit, storeRef.current, runningRef.current));
+          }
         }
         if (!alive) return;
 
@@ -345,6 +356,38 @@ export function useFocusGuard(
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [running]);
+}
+
+/**
+ * Adresse de la page qui remplace le site coupé.
+ *
+ * Tout ce que la page affiche tient ici : elle est atteinte dans un navigateur
+ * qui n'est peut-être pas connecté, et rien ne doit dépendre d'une session ou
+ * d'un appel réseau. D'où le choix de ce qui voyage — le nom du site, celui de
+ * la liste, celui de la session, l'heure de fin, le rang de la tentative — et
+ * de ce qui ne voyage PAS : cette adresse atterrit dans l'historique du
+ * navigateur, et rien de plus intime n'a à s'y trouver.
+ *
+ * Elle est sur le domaine de l'app, que `verdictFor` laisse toujours passer :
+ * l'onglet renvoyé ne peut donc pas se faire couper à son tour, et la boucle
+ * ne se mord pas la queue au relevé suivant.
+ */
+function blockedUrl(
+  hit: GuardHit, store: FocusStore, s: RunningSession | null
+): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const p = new URLSearchParams({ t: targetLabel(hit.target, store) });
+  if (hit.listName) p.set("l", hit.listName);
+
+  if (s) {
+    p.set("s", s.name);
+    p.set("n", String(s.attempts.length + 1));
+    const left = remainingMs(s);
+    // Une heure de fin plutôt qu'une durée : la page peut alors décompter
+    // toute seule, sans savoir depuis combien de temps elle est ouverte.
+    if (left !== null) p.set("u", String(Date.now() + left));
+  }
+  return `${window.location.origin}/blocked?${p.toString()}`;
 }
 
 /** Verdict sur une application qui n'est pas un navigateur. */

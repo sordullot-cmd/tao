@@ -7,7 +7,7 @@
  *  - APIs (/api/*) : pas de cache (toujours réseau)
  */
 
-const VERSION = "v3";
+const VERSION = "v4";
 const SHELL_CACHE = `tao-shell-${VERSION}`;
 const RUNTIME_CACHE = `tao-runtime-${VERSION}`;
 
@@ -15,6 +15,11 @@ const SHELL_URLS = [
   "/",
   "/dashboard",
   "/login",
+  // Page de blocage : elle s'affiche dans un onglet qu'on vient de couper, sur
+  // un poste qui n'est pas forcément en ligne. La pré-cacher est ce qui la rend
+  // sûre — une page de blocage qui n'arrive pas laisse l'onglet sur une erreur
+  // de réseau, et le site coupé à un retour arrière.
+  "/blocked",
   "/manifest.webmanifest",
   "/logo.svg",   // logo affiché dans l'interface (écran de chargement hors-ligne)
   "/favicon.svg",

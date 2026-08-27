@@ -63,7 +63,7 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
   const done = isApp
     ? "La fenêtre est repassée derrière celle-ci. Rien n'a été fermé."
     : isSite
-      ? "L'onglet a été renvoyé vers une page vide — un retour arrière le ramène. Rien n'a été fermé."
+      ? "L'onglet a été renvoyé sur la page de blocage — un retour arrière le ramène. Rien n'a été fermé."
       : isWindow
         ? `Repéré au titre de la fenêtre ${hit.appName || "du navigateur"}, dont l'URL n'est pas lisible : l'onglet est resté ouvert.`
         : null;
