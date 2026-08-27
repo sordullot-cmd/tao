@@ -84,6 +84,31 @@ describe("page Activité (journée)", () => {
     expect(screen.getByRole("button", { name: /Catégorie : Jeux/ })).toBeInTheDocument();
   });
 
+  it("ouvre le détail d'un pavé au clic et liste ce qui y a été ouvert", () => {
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    const at = (min: number) => base.getTime() + min * 60_000;
+    saveDay({
+      date: today, awayMs: 0, updatedAt: Date.now(),
+      segments: [
+        { s: at(0), e: at(40), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
+        { s: at(40), e: at(60), app: "Chrome", label: "GitHub", title: "PR · github.com/tr4de", cat: "dev" },
+      ],
+    });
+    render(<ActivityPage setPage={vi.fn()} />);
+    // Un seul pavé : les deux segments sont de la même matière, sans trou.
+    // L'infobulle du pavé est la seule à détailler ce qu'il contient.
+    fireEvent.click(screen.getByTitle(/VS Code 40 min/));
+    expect(screen.getByText("2 applications")).toBeInTheDocument();
+    expect(screen.getByText("VS Code")).toBeInTheDocument();
+    expect(screen.getByText("GitHub")).toBeInTheDocument();
+    // La fenêtre vue est nommée : c'est elle qui dit ce qu'on faisait.
+    expect(screen.getByText(/engine\.ts/)).toBeInTheDocument();
+    // Et on revient au résumé.
+    fireEvent.click(screen.getByRole("button", { name: /Revenir au résumé/ }));
+    expect(screen.getAllByText("Temps actif").length).toBeGreaterThan(0);
+  });
+
   it("navigue vers les rapports depuis les onglets", () => {
     const setPage = vi.fn();
     render(<ActivityPage setPage={setPage} />);

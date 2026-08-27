@@ -13,7 +13,7 @@
    ========================================================================== */
 
 import React, { useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Activity, ChevronDown, MonitorSmartphone, TriangleAlert, Pause } from "lucide-react";
+import { Activity, ChevronDown, MonitorSmartphone, TriangleAlert, Pause, X } from "lucide-react";
 import { CARD, FIELD_BG, HAIRLINE, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { BTN } from "@/lib/ui/buttons";
 import Popover from "@/components/ui/Popover";
@@ -260,7 +260,7 @@ const pad2 = (n) => String(n).padStart(2, "0");
  * dix-huit heures de défilement pour rien.
  */
 export function DayColumn({
-  blocks, date, onPickBlock,
+  blocks, date, onPickBlock, selected,
   /* Exactement la grille de l'agenda : même hauteur utile (`calc(100vh - 210px)`)
      et même hauteur d'heure (68 px). Les deux pages montrent une journée sur des
      heures — les lire à deux échelles différentes obligeait à recalibrer l'œil
@@ -272,6 +272,20 @@ export function DayColumn({
   const nowMs = useNowMinute();
   const scrollRef = useRef(null);
   const doneRef = useRef(null);
+  /* Hauteur réelle de la boîte : la grille ne montre que les heures utiles, donc
+     une journée de quatre heures faisait 270 px dans un cadre qui en offrait
+     700 — un calendrier trois fois trop court, avec du vide dessous. Les heures
+     s'étirent maintenant pour REMPLIR le cadre, jusqu'à trois fois la hauteur
+     d'heure de l'agenda ; au-delà de ce qui tient, la grille défile comme avant. */
+  const [boxH, setBoxH] = useState(0);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setBoxH(el.clientHeight));
+    ro.observe(el);
+    setBoxH(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
 
   const today = new Date();
   const isToday = date === `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
@@ -293,8 +307,9 @@ export function DayColumn({
   }, [blocks, isToday, nowMin]);
 
   const hours = Array.from({ length: toH - fromH }, (_, i) => fromH + i);
-  const gridH = hours.length * hourH;
-  const y = (ms) => ((minutesOfDay(ms) - fromH * 60) / 60) * hourH;
+  const rowH = Math.min(hourH * 3, Math.max(hourH, boxH ? boxH / hours.length : 0));
+  const gridH = hours.length * rowH;
+  const y = (ms) => ((minutesOfDay(ms) - fromH * 60) / 60) * rowH;
 
   /* Arrivée directe sur l'heure courante (ou sur le début de la journée quand
      on regarde un jour passé) : avant la première peinture, sans animation —
@@ -303,7 +318,7 @@ export function DayColumn({
     const el = scrollRef.current;
     if (!el || doneRef.current === date) return;
     if (el.scrollHeight <= el.clientHeight) { doneRef.current = date; return; }
-    const target = isToday ? ((nowMin - fromH * 60) / 60) * hourH - hourH * 1.5 : 0;
+    const target = isToday ? ((nowMin - fromH * 60) / 60) * rowH - rowH * 1.5 : 0;
     el.scrollTop = Math.max(0, target);
     doneRef.current = date;
   });
@@ -327,7 +342,7 @@ export function DayColumn({
         {/* Gouttière des heures */}
         <div style={{ width: 44, flexShrink: 0 }}>
           {hours.map((h, i) => (
-            <div key={h} style={{ height: hourH, position: "relative" }}>
+            <div key={h} style={{ height: rowH, position: "relative" }}>
               {i !== 0 && (
                 <span style={{ position: "absolute", top: -7, right: 8, fontSize: 10, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
                   {pad2(h)}:00
@@ -340,7 +355,7 @@ export function DayColumn({
         {/* La colonne du jour */}
         <div style={{
           flex: 1, position: "relative", minWidth: 0, height: gridH,
-          backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent ${hourH - 1}px, ${HAIRLINE} ${hourH - 1}px, ${HAIRLINE} ${hourH}px)`,
+          backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent ${rowH - 1}px, ${HAIRLINE} ${rowH - 1}px, ${HAIRLINE} ${rowH}px)`,
         }}>
           {gaps.map(g => {
             const top = y(g.start);
@@ -370,18 +385,23 @@ export function DayColumn({
             const color = categoryColor(b.cat);
             // Teinte posée sur un fond blanc OPAQUE : sinon les lignes d'heures
             // transparaissent à travers le pavé.
-            const tint = `${color}30`;
+            const on = selected === b.start;
+            // Sélection : le pavé se cerne de sa propre couleur et se remplit un
+            // peu plus. Pas d'ombre portée — elle décollerait un pavé de la
+            // grille et ferait croire qu'on peut le déplacer.
+            const tint = `${color}${on ? "4D" : "30"}`;
             return (
               <div
                 key={b.start}
                 onClick={onPickBlock ? () => onPickBlock(b) : undefined}
+                aria-pressed={onPickBlock ? on : undefined}
                 title={`${fmtClock(b.start)} – ${fmtClock(b.end)} · ${categoryLabel(b.cat)} · ${fmtDur(b.ms)}\n${b.apps.map(a => `${a.label} ${fmtDur(a.ms, { short: true })}`).join("\n")}`}
                 style={{
                   position: "absolute", top, height: h, left: 2, right: 2,
                   backgroundColor: T.white, backgroundImage: `linear-gradient(${tint}, ${tint})`,
-                  borderLeft: `2px solid ${color}`, borderRadius: "var(--radius-field)",
+                  borderLeft: `${on ? 3 : 2}px solid ${color}`, borderRadius: "var(--radius-field)",
                   padding: h > 16 ? "2px 6px" : "0 6px", overflow: "hidden",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.10)",
+                  boxShadow: on ? `0 0 0 2px ${color}` : "0 1px 3px rgba(0,0,0,0.10)",
                   display: "flex", flexDirection: h >= 34 ? "column" : "row",
                   alignItems: h >= 34 ? "stretch" : "center", gap: h >= 34 ? 0 : 6,
                   cursor: onPickBlock ? "pointer" : "default",
@@ -404,12 +424,96 @@ export function DayColumn({
           })}
 
           {isToday && nowMin >= fromH * 60 && nowMin <= toH * 60 && (
-            <div style={{ position: "absolute", top: ((nowMin - fromH * 60) / 60) * hourH, left: 0, right: 0, height: 0, zIndex: 7, pointerEvents: "none" }}>
+            <div style={{ position: "absolute", top: ((nowMin - fromH * 60) / 60) * rowH, left: 0, right: 0, height: 0, zIndex: 7, pointerEvents: "none" }}>
               <div style={{ position: "absolute", left: -3, top: -3, width: 6, height: 6, borderRadius: "50%", background: T.red }} />
               <div style={{ position: "absolute", left: 1, right: 0, top: -1, height: 2, background: T.red }} />
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Le détail d'un pavé : tout ce qui a été ouvert pendant ce laps de temps.
+ *
+ * C'est la réponse à la question qu'on se pose en regardant la grille — « cette
+ * heure et demie, c'était quoi au juste ? ». Le pavé porte une matière et une
+ * app dominante ; ici on ouvre la boîte : chaque application, chaque site, avec
+ * son temps, sa part du pavé, et les fenêtres qu'on y a eues. Chaque ligne se
+ * range depuis là, comme dans l'onglet « Applications » — c'est souvent en
+ * lisant un pavé qu'on repère un classement faux.
+ */
+export function BlockDetail({ block, activeMs, onClose, onPick }) {
+  const color = categoryColor(block.cat);
+  const share = activeMs > 0 ? (block.ms / activeMs) * 100 : 0;
+  // Le pavé absorbe les passages courts sur autre chose : ils gardent LEUR
+  // couleur dans la liste, sinon le détail dirait le contraire du classement.
+  const strays = block.apps.filter(a => a.cat !== block.cat).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, boxShadow: dotRing(color), flexShrink: 0, marginTop: 5 }} />
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 16, fontWeight: 600, color: T.text }}>{categoryLabel(block.cat)}</span>
+          <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+            {fmtClock(block.start)} – {fmtClock(block.end)} · {fmtDur(block.ms)} mesurées · {Math.round(share)} % de la journée
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Revenir au résumé de la journée"
+          style={{
+            ...BTN.sm, border: "none", background: FIELD_BG, color: T.text,
+            fontFamily: "inherit", fontSize: 12, cursor: "pointer", display: "inline-flex",
+            alignItems: "center", gap: 6, flexShrink: 0,
+          }}
+        >
+          <X size={13} /> Résumé
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", fontSize: 11, color: T.textSub }}>
+        <span>{block.apps.length} application{block.apps.length > 1 ? "s" : ""}</span>
+        <span>{block.switches} bascule{block.switches > 1 ? "s" : ""}</span>
+        <span>Durée d’horloge <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(block.end - block.start)}</strong></span>
+        {strays > 0 && <span style={{ color: T.textMut }}>dont {strays} passage{strays > 1 ? "s" : ""} d’une autre catégorie</span>}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", overflowY: "auto", minHeight: 0 }}>
+        {block.apps.map(a => {
+          const pct = block.ms > 0 ? (a.ms / block.ms) * 100 : 0;
+          const appColor = categoryColor(a.cat);
+          return (
+            <div key={a.label} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                    {fmtDur(a.ms)}
+                  </span>
+                </div>
+                <div style={{ height: 4, borderRadius: 999, background: FIELD_BG, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.max(1, Math.min(100, pct))}%`, height: "100%", background: appColor }} />
+                </div>
+                {/* Les fenêtres vues : c'est ce qui dit ce qu'on FAISAIT, pas
+                    seulement dans quoi on le faisait. */}
+                {a.titles.slice(0, 3).map(t => (
+                  <span key={t.title} title={t.title} style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t.title} <span style={{ color: T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtDur(t.ms, { short: true })}</span>
+                  </span>
+                ))}
+                {a.titles.length > 3 && (
+                  <span style={{ fontSize: 11, color: T.textMut }}>+ {a.titles.length - 3} autre{a.titles.length - 3 > 1 ? "s" : ""} fenêtre{a.titles.length - 3 > 1 ? "s" : ""}</span>
+                )}
+              </div>
+              {onPick && <CategoryPicker cat={a.cat} onPick={(c) => onPick(a, c)} />}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

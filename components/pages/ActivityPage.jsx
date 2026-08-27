@@ -40,8 +40,8 @@ import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
 import { categoryLabel, isBrowser } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, AppRows, BarLegend, CategoryRows, DayColumn, Disclosure, HourBars,
-  Metric, SessionRows, SourceNotice, StackedBar, TrackingPill,
+  ActivityHeader, AppRows, BarLegend, BlockDetail, CategoryRows, DayColumn, Disclosure,
+  HourBars, Metric, SessionRows, SourceNotice, StackedBar, TrackingPill,
 } from "@/components/activity/ActivityChrome";
 
 const TODAY = () => getLocalDateString();
@@ -118,6 +118,11 @@ export default function ActivityPage({ setPage }) {
      dans une autre page pour ranger deux applications, on lui montre les
      applications concernées, ici. */
   const [onlyPending, setOnlyPending] = useState(false);
+  /* Pavé ouvert dans le panneau de droite, repéré par son heure de début. Le
+     découpage en pavés se refait à chaque changement de règle : on garde donc un
+     instant, pas un objet — et si le pavé a fondu dans un autre, on retombe
+     simplement sur le résumé. */
+  const [openBlock, setOpenBlock] = useState(null);
 
   const day = useDayLog(date);
   const prevDay = useDayLog(shiftDate(date, -1));
@@ -128,6 +133,8 @@ export default function ActivityPage({ setPage }) {
   const isToday = date === TODAY();
   const workGoalMs = settings.workGoalHours * 3600_000;
   const focusGoalMs = settings.focusGoalHours * 3600_000;
+
+  const block = openBlock == null ? null : stats.blocks.find(b => b.start === openBlock) ?? null;
 
   const other = stats.byCategory.find(b => b.id === "other");
   const pendingApps = useMemo(() => stats.byApp.filter(a => a.cat === "other"), [stats.byApp]);
@@ -180,14 +187,14 @@ export default function ActivityPage({ setPage }) {
             />
             <StepperPill
               label={dateLabel(date)}
-              onPrev={() => setDate(d => shiftDate(d, -1))}
-              onNext={() => setDate(d => shiftDate(d, 1))}
+              onPrev={() => { setOpenBlock(null); setDate(d => shiftDate(d, -1)); }}
+              onNext={() => { setOpenBlock(null); setDate(d => shiftDate(d, 1)); }}
               nextDisabled={isToday}
               prevLabel="Jour précédent"
               nextLabel="Jour suivant"
             />
             {!isToday && (
-              <PillButton compact variant="ghost" onClick={() => setDate(TODAY())}>
+              <PillButton compact variant="ghost" onClick={() => { setOpenBlock(null); setDate(TODAY()); }}>
                 <RefreshCw size={13} /> Aujourd’hui
               </PillButton>
             )}
@@ -233,15 +240,33 @@ export default function ActivityPage({ setPage }) {
               {/* La journée, heure par heure — la moitié de la carte : c'est le
                   dessin qu'on vient regarder, pas une vignette. */}
               <div style={{ flex: "1 1 380px", minWidth: 300, display: "flex", flexDirection: "column", gap: 6 }}>
-                <DayColumn blocks={stats.blocks} date={date} />
+                <DayColumn
+                  blocks={stats.blocks}
+                  date={date}
+                  selected={openBlock}
+                  onPickBlock={(b) => setOpenBlock(cur => (cur === b.start ? null : b.start))}
+                />
                 <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.45 }}>
                   Un pavé = une matière tant qu’elle dure, à la couleur de sa catégorie ; les blancs sont
-                  les pauses. Survole un pavé pour voir ce qu’il contient.
+                  les pauses. Clique un pavé pour voir, à droite, tout ce qui a été ouvert pendant ce laps de temps.
                 </span>
               </div>
 
-              {/* Le résumé de la journée, à sa droite et de même largeur. */}
+              {/* À droite : le résumé de la journée — ou, dès qu'un pavé est
+                  ouvert, ce qu'il contient. Le détail prend la place du résumé
+                  au lieu de s'ajouter dessous : c'est la même question posée à
+                  deux échelles, et deux panneaux côte à côte obligeraient à
+                  chercher lequel répond à quoi. */}
               <div style={{ flex: "1 1 380px", minWidth: 288, display: "flex", flexDirection: "column", gap: 16, justifyContent: "space-between" }}>
+                {block ? (
+                  <BlockDetail
+                    block={block}
+                    activeMs={stats.activeMs}
+                    onClose={() => setOpenBlock(null)}
+                    onPick={onPick}
+                  />
+                ) : (
+                <>
                 <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))" }}>
                   <Metric
                     label="Temps actif"
@@ -292,6 +317,8 @@ export default function ActivityPage({ setPage }) {
                   <span>Absence au poste <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.awayMs)}</strong></span>
                   <span>Bascules d’app <strong style={{ color: T.text, fontWeight: 600 }}>{stats.switches}</strong> ({stats.switchesPerHour.toFixed(1)} / h)</span>
                 </div>
+                </>
+                )}
               </div>
             </div>
           </div>

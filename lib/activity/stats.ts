@@ -9,7 +9,7 @@
  */
 
 import {
-  CATEGORIES, categoryColor, categoryLabel, resolveProductivity, classifyDetailed,
+  CATEGORIES, categoryColor, categoryLabel, isBrowser, resolveProductivity, classifyDetailed,
   type ClassifySource, type Productivity,
 } from "@/lib/activity/categories";
 import type { ActivitySettings, DayLog, Segment } from "@/lib/activity/engine";
@@ -74,7 +74,27 @@ export interface DayBlock {
   /** Application dominante, celle qui nomme le pavé. */
   label: string;
   /** Ce qu'il y a eu dedans, de la plus longue à la plus courte. */
-  apps: { label: string; ms: number }[];
+  apps: BlockApp[];
+  /** Bascules d'application à l'intérieur du pavé. */
+  switches: number;
+}
+
+/**
+ * Une application (ou un site) vue à l'intérieur d'un pavé.
+ *
+ * Elle porte de quoi être RANGÉE depuis là où on la lit : le nom brut relevé par
+ * l'OS et la nature de la cible (un site se corrige par son titre, une app par
+ * son nom) — les mêmes champs qu'un `AppBucket`, pour que le même geste marche
+ * dans la liste des applications et dans le détail d'un pavé.
+ */
+export interface BlockApp {
+  label: string;
+  cat: string;
+  ms: number;
+  app: string;
+  isSite: boolean;
+  /** Titres de fenêtre les plus vus, du plus long au plus court. */
+  titles: { title: string; ms: number }[];
 }
 
 export interface FocusSession {
@@ -217,15 +237,33 @@ export function dayBlocks(
      nommé dans l'infobulle du pavé qui l'absorbe. */
   const crumbMs = opts.crumbMs ?? 4 * 60_000;
 
-  const addApp = (b: DayBlock, label: string, ms: number) => {
-    const found = b.apps.find(a => a.label === label);
+  const addTitle = (a: BlockApp, title: string, ms: number) => {
+    if (!title) return;
+    const found = a.titles.find(t => t.title === title);
     if (found) found.ms += ms;
-    else b.apps.push({ label, ms });
+    else a.titles.push({ title, ms });
+  };
+  const appOf = (seg: Segment, ms: number): BlockApp => ({
+    label: seg.label, cat: seg.cat, ms, app: seg.app, isSite: isBrowser(seg.app),
+    titles: seg.title ? [{ title: seg.title, ms }] : [],
+  });
+  const addSeg = (b: DayBlock, seg: Segment, ms: number) => {
+    const found = b.apps.find(a => a.label === seg.label);
+    if (!found) { b.apps.push(appOf(seg, ms)); return; }
+    found.ms += ms;
+    addTitle(found, seg.title, ms);
+  };
+  const mergeApp = (b: DayBlock, a: BlockApp) => {
+    const found = b.apps.find(x => x.label === a.label);
+    if (!found) { b.apps.push({ ...a, titles: a.titles.map(t => ({ ...t })) }); return; }
+    found.ms += a.ms;
+    for (const t of a.titles) addTitle(found, t.title, t.ms);
   };
   const absorb = (into: DayBlock, b: DayBlock) => {
     into.end = Math.max(into.end, b.end);
     into.ms += b.ms;
-    for (const a of b.apps) addApp(into, a.label, a.ms);
+    into.switches += b.switches + 1;
+    for (const a of b.apps) mergeApp(into, a);
   };
 
   // 1. Une suite de segments de même catégorie, sans trou notable = un pavé.
@@ -235,12 +273,16 @@ export function dayBlocks(
     if (ms <= 0) continue;
     const last = raw[raw.length - 1];
     if (last && last.cat === seg.cat && seg.s - last.end <= gapMs) {
+      if (last.apps[last.apps.length - 1]?.label !== seg.label) last.switches += 1;
       last.end = Math.max(last.end, seg.e);
       last.ms += ms;
-      addApp(last, seg.label, ms);
+      addSeg(last, seg, ms);
       continue;
     }
-    raw.push({ start: seg.s, end: seg.e, ms, cat: seg.cat, label: seg.label, apps: [{ label: seg.label, ms }] });
+    raw.push({
+      start: seg.s, end: seg.e, ms, cat: seg.cat, label: seg.label,
+      apps: [appOf(seg, ms)], switches: 0,
+    });
   }
 
   // 2. Les miettes prises entre deux pavés de même matière disparaissent dedans.
@@ -258,11 +300,12 @@ export function dayBlocks(
       i += 1;
       continue;
     }
-    merged.push({ ...b, apps: b.apps.map(a => ({ ...a })) });
+    merged.push({ ...b, apps: b.apps.map(a => ({ ...a, titles: a.titles.map(t => ({ ...t })) })) });
   }
 
   for (const b of merged) {
     b.apps.sort((a, c) => c.ms - a.ms);
+    for (const a of b.apps) a.titles.sort((x, y) => y.ms - x.ms);
     b.label = b.apps[0]?.label ?? b.label;
   }
   return merged;
