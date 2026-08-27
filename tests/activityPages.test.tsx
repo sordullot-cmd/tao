@@ -216,7 +216,7 @@ describe("page Rapports", () => {
   it("agrège la période mesurée", () => {
     seedToday();
     render(<ActivityReportsPage setPage={vi.fn()} />);
-    expect(screen.getByText("Jour par jour")).toBeInTheDocument();
+    expect(screen.getByText("Régularité")).toBeInTheDocument();
     // Trente jours par défaut : le bloc parle d'habitude, pas de la semaine en
     // cours (celle-là est dans l'onglet « Journée »).
     expect(screen.getByText(/1 jour sur 30/)).toBeInTheDocument();
@@ -235,6 +235,29 @@ describe("page Catégories & règles", () => {
     expect(screen.getByText("1 règle")).toBeInTheDocument();
     // Le fragment est normalisé en minuscules : la comparaison l'est aussi.
     expect((screen.getByDisplayValue("blender") as HTMLInputElement)).toBeInTheDocument();
+  });
+
+  it("crée une catégorie, la nomme, et la propose au classement", () => {
+    render(<ActivityRulesPage setPage={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/Nouvelle catégorie/i), { target: { value: "Musculation" } });
+    fireEvent.click(screen.getByText("Créer"));
+    expect(screen.getByText("Musculation")).toBeInTheDocument();
+    // Elle rejoint le vocabulaire : les règles peuvent y renvoyer.
+    fireEvent.click(screen.getByText("Mes règles de classement"));
+    const options = screen.getAllByRole("option").map(o => o.textContent);
+    expect(options).toContain("Musculation");
+  });
+
+  it("renomme une catégorie livrée avec l'app", () => {
+    render(<ActivityRulesPage setPage={vi.fn()} />);
+    fireEvent.click(screen.getByText("Trading & marchés"));
+    const field = screen.getByDisplayValue("Trading & marchés");
+    fireEvent.change(field, { target: { value: "Marchés" } });
+    fireEvent.blur(field);
+    expect(screen.getByText("Marchés")).toBeInTheDocument();
+    // Et on peut revenir au nom d'origine.
+    fireEvent.click(screen.getByText("Réinitialiser"));
+    expect(screen.getByText("Trading & marchés")).toBeInTheDocument();
   });
 
   it("propose de classer les applications inconnues", () => {

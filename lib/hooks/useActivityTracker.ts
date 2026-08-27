@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { notify } from "@/lib/notify";
-import { resolveProductivity } from "@/lib/activity/categories";
+import { applyCategorySettings, resolveProductivity } from "@/lib/activity/categories";
 import {
   DEFAULT_SETTINGS, getDay, getLive, isRunning, startTracker, stopTracker, subscribe,
   type ActivitySettings, type DayLog, type LiveState,
@@ -33,12 +33,24 @@ export function useActivitySettings(): [ActivitySettings, (updater: ActivitySett
   /* Fusion avec les valeurs par défaut : un réglage ajouté par une version
      ultérieure manque dans l'enregistrement d'un utilisateur déjà installé, et
      `undefined` désactiverait la fonction au lieu de lui donner sa valeur. */
-  const settings = useMemo<ActivitySettings>(() => ({
-    ...DEFAULT_SETTINGS,
-    ...(raw || {}),
-    rules: Array.isArray(raw?.rules) ? raw!.rules! : [],
-    productivity: (raw?.productivity && typeof raw.productivity === "object") ? raw.productivity : {},
-  }), [raw]);
+  const settings = useMemo<ActivitySettings>(() => {
+    const merged: ActivitySettings = {
+      ...DEFAULT_SETTINGS,
+      ...(raw || {}),
+      rules: Array.isArray(raw?.rules) ? raw!.rules! : [],
+      productivity: (raw?.productivity && typeof raw.productivity === "object") ? raw.productivity : {},
+      customCategories: Array.isArray(raw?.customCategories) ? raw!.customCategories! : [],
+      categoryEdits: (raw?.categoryEdits && typeof raw.categoryEdits === "object") ? raw.categoryEdits : {},
+    };
+    /* Le vocabulaire des catégories est relu ICI, pendant le rendu et non dans
+       un effet : `categoryLabel()` est appelé par des composants qui ne
+       reçoivent pas les réglages, et un effet ne s'exécuterait qu'APRÈS leur
+       premier rendu — le temps d'une image, une catégorie renommée aurait
+       encore son ancien nom. L'écriture est idempotente (mêmes réglages, même
+       registre), donc rejouable sans dommage. */
+    applyCategorySettings(merged);
+    return merged;
+  }, [raw]);
 
   const set = useCallback((updater: ActivitySettings | ((prev: ActivitySettings) => ActivitySettings)) => {
     setRaw(prev => {
@@ -47,6 +59,8 @@ export function useActivitySettings(): [ActivitySettings, (updater: ActivitySett
         ...(prev || {}),
         rules: Array.isArray(prev?.rules) ? prev!.rules! : [],
         productivity: (prev?.productivity && typeof prev.productivity === "object") ? prev.productivity : {},
+        customCategories: Array.isArray(prev?.customCategories) ? prev!.customCategories! : [],
+        categoryEdits: (prev?.categoryEdits && typeof prev.categoryEdits === "object") ? prev.categoryEdits : {},
       };
       return typeof updater === "function" ? (updater as (p: ActivitySettings) => ActivitySettings)(base) : updater;
     });

@@ -40,23 +40,36 @@ function shiftDate(date, days) {
 }
 
 /**
- * Les journées, calées sur des semaines entières : la première colonne est un
- * LUNDI.
+ * Les journées calées sur des semaines entières : la première colonne est le
+ * LUNDI de la semaine où la première mesure a eu lieu.
  *
  * Une fenêtre de trente jours commence n'importe quel jour ; les colonnes se
  * lisaient alors comme une file continue, où rien ne disait où une semaine
- * finissait. En coupant le début jusqu'au premier lundi, les colonnes vont de
- * lundi à dimanche, puis recommencent — et deux mardis se retrouvent toujours
- * à sept colonnes l'un de l'autre.
+ * finissait. En partant du lundi, elles vont de lundi à dimanche puis
+ * recommencent, et deux mardis se retrouvent toujours à sept colonnes l'un de
+ * l'autre.
  *
- * On coupe au lieu de compléter : les jours ajoutés devant seraient des jours
- * qu'on n'a pas mesurés, et une colonne vide inventée ment autant qu'un chiffre
- * faux. (Les mesures, elles, portent bien sur toute la fenêtre : ce sont les
- * seules colonnes qui commencent au lundi.)
+ * On part de la première DONNÉE, pas du bord de la fenêtre : commencer au
+ * premier lundi de la fenêtre coupait les jours mesurés d'avant (une mesure
+ * qui existe ne doit disparaître d'aucune figure), et commencer au bord donnait
+ * une semaine amputée. Quand ce lundi précède la fenêtre, les quelques jours
+ * manquants sont ajoutés à VIDE : ils appartiennent à la semaine affichée, et
+ * rien n'y a été mesuré — c'est exactement ce que dit une colonne à zéro.
  */
 function fromMonday(days) {
-  const first = days.findIndex(d => new Date(`${d.date}T00:00:00`).getDay() === 1);
-  return first <= 0 ? days : days.slice(first);
+  if (!days.length) return days;
+  const firstMeasured = days.findIndex(d => d.activeMs > 0);
+  if (firstMeasured < 0) return days;
+
+  const start = new Date(`${days[firstMeasured].date}T00:00:00`);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const startKey = getLocalDateString(start);
+
+  const pad = [];
+  for (const d = new Date(start); getLocalDateString(d) < days[0].date; d.setDate(d.getDate() + 1)) {
+    pad.push({ date: getLocalDateString(d), activeMs: 0, focusMs: 0, byCategory: [] });
+  }
+  return [...pad, ...days.filter(d => d.date >= startKey)];
 }
 
 /**
@@ -248,7 +261,7 @@ export default function ActivityReportsPage({ setPage }) {
   const focusGoalMs = settings.focusGoalHours * 3600_000;
   const goalDays = stats.days.filter(d => d.focusMs >= focusGoalMs).length;
 
-  // Les colonnes commencent au lundi et se lisent par semaines entières.
+  // Les colonnes commencent au lundi de la semaine de la première mesure.
   const chartDays = useMemo(() => fromMonday(stats.days), [stats.days]);
 
   /* La régularité, chiffrée — c'est le propos du bloc, et l'œil ne compte pas
@@ -268,6 +281,11 @@ export default function ActivityReportsPage({ setPage }) {
     }
     return { met, best };
   }, [stats.days, workGoalMs]);
+
+  const bestHour = useMemo(() => {
+    const best = stats.hourly.reduce((b, h) => (h.productiveMs > b.productiveMs ? h : b), stats.hourly[0]);
+    return best?.productiveMs > 0 ? best : null;
+  }, [stats.hourly]);
 
   const parts = stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms }));
 
@@ -350,7 +368,7 @@ export default function ActivityReportsPage({ setPage }) {
           </div>
 
           <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-            <BlockTitle right={`${fmtDur(stats.activeMs)} sur ${range.days} jours`}>Jour par jour</BlockTitle>
+            <BlockTitle right={`${fmtDur(stats.activeMs)} sur ${range.days} jours`}>Régularité</BlockTitle>
             <DailyBars days={chartDays} categories={stats.byCategory} goalMs={workGoalMs} />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, paddingTop: 4, borderTop: `1px solid ${HAIRLINE}` }}>
               {stats.byCategory.slice(0, 6).map(b => (
@@ -385,7 +403,7 @@ export default function ActivityReportsPage({ setPage }) {
 
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
             <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-              <BlockTitle>Répartition de la période</BlockTitle>
+              <BlockTitle right={`${stats.byCategory.length} catégorie${stats.byCategory.length > 1 ? "s" : ""}`}>Répartition</BlockTitle>
               <AllocationChart
                 kind="ring"
                 parts={parts}
@@ -402,13 +420,13 @@ export default function ActivityReportsPage({ setPage }) {
             </div>
 
             <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>
-              <BlockTitle>Applications & sites</BlockTitle>
+              <BlockTitle right={`${stats.byApp.length} au total`}>Applications & sites</BlockTitle>
               <AppRows apps={stats.byApp} limit={10} />
             </div>
           </div>
 
           <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-            <BlockTitle>Quand la semaine travaille</BlockTitle>
+            <BlockTitle right="heures × jours de la semaine">Semaine type</BlockTitle>
             <WeekHeatmap days={stats.days} />
             <span style={{ fontSize: 11, color: T.textSub }}>
               Intensité = temps productif cumulé sur la période, par jour de la semaine et par heure.
@@ -416,7 +434,7 @@ export default function ActivityReportsPage({ setPage }) {
           </div>
 
           <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-            <BlockTitle>Rythme moyen de la journée</BlockTitle>
+            <BlockTitle right={bestHour ? `meilleure heure : ${bestHour.hour} h` : null}>Journée type</BlockTitle>
             <HourBars hourly={stats.hourly} height={110} />
           </div>
         </>

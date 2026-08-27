@@ -19,7 +19,10 @@
  */
 
 import { getLocalDateString } from "@/lib/dateUtils";
-import { classify, type ClassifyRule, type Productivity } from "@/lib/activity/categories";
+import {
+  classify,
+  type CategoryEdit, type ClassifyRule, type CustomCategory, type Productivity,
+} from "@/lib/activity/categories";
 import { snapshot, type Snapshot } from "@/lib/activity/native";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -73,6 +76,10 @@ export interface ActivitySettings {
   rules: ClassifyRule[];
   /** Nature d'une catégorie revue par l'utilisateur (id → productif/neutre/distraction). */
   productivity: Record<string, Productivity>;
+  /** Catégories créées par l'utilisateur. */
+  customCategories: CustomCategory[];
+  /** Nom et couleur revus sur les catégories livrées avec l'app. */
+  categoryEdits: Record<string, CategoryEdit>;
 }
 
 export const DEFAULT_SETTINGS: ActivitySettings = {
@@ -89,6 +96,8 @@ export const DEFAULT_SETTINGS: ActivitySettings = {
   notifications: true,
   rules: [],
   productivity: {},
+  customCategories: [],
+  categoryEdits: {},
 };
 
 /** Ce que l'interface affiche « en direct », en haut de la page Activité. */

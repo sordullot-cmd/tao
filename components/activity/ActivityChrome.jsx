@@ -19,9 +19,9 @@ import { BTN } from "@/lib/ui/buttons";
 import Popover from "@/components/ui/Popover";
 import { T } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
-import { PALETTE, GREY } from "@/lib/ui/palette";
+import { HUE, PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
 import {
-  ASSIGNABLE, categoryColor, categoryLabel, PRODUCTIVITY_COLOR, resolveProductivity,
+  assignableCategories, categoryColor, categoryLabel, PRODUCTIVITY_COLOR, resolveProductivity,
 } from "@/lib/activity/categories";
 import { fmtClock, fmtDur } from "@/lib/activity/stats";
 
@@ -782,6 +782,67 @@ export const PRODUCTIVITY_LABEL = {
   distracting: "distraction",
 };
 
+/* ─── Choisir une couleur ────────────────────────────────────────────────── */
+
+/**
+ * Le nuancier des catégories : les teintes PUBLIÉES de la charte, et elles
+ * seules (cf. lib/ui/palette). Pas de sélecteur libre — une couleur choisie au
+ * hasard sort de la charte, et deux catégories voisines finissent
+ * indiscernables dans un anneau de 136 px.
+ */
+export const CATEGORY_SWATCHES = [
+  ...Object.values(PALETTE),
+  ...Object.values(PALETTE_DARK),
+  ...Object.values(PALETTE_LIGHT),
+  HUE.moonJelly, HUE.beluga, HUE.seaSponge, HUE.anchovy,
+];
+
+/** Pastille de couleur cliquable, ouvrant le nuancier. */
+export function ColorPicker({ value, onPick, label = "Couleur" }) {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-label={label}
+        title={label}
+        style={{
+          width: 26, height: 26, borderRadius: "50%", border: "none", flexShrink: 0,
+          background: value, boxShadow: dotRing(value), cursor: "pointer", padding: 0,
+        }}
+      />
+      <Popover
+        anchorRef={ref}
+        open={open}
+        onClose={() => setOpen(false)}
+        gap={6}
+        minWidth={228}
+        className="anim-pop"
+        style={{ background: T.white, borderRadius: 12, boxShadow: "var(--elev-overlay)", border: `1px solid ${T.border}`, padding: 10 }}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 8 }}>
+          {CATEGORY_SWATCHES.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => { onPick?.(c); setOpen(false); }}
+              aria-label={c}
+              style={{
+                width: 20, height: 20, borderRadius: "50%", border: "none", padding: 0,
+                background: c, cursor: "pointer",
+                boxShadow: c === value ? `0 0 0 2px ${T.text}` : dotRing(c),
+              }}
+            />
+          ))}
+        </div>
+      </Popover>
+    </>
+  );
+}
+
 /* ─── Choisir une catégorie ──────────────────────────────────────────────── */
 
 /**
@@ -831,7 +892,7 @@ export function CategoryPicker({ cat, onPick, label, align = "end" }) {
         style={{ background: T.white, borderRadius: 12, boxShadow: "var(--elev-overlay)", border: `1px solid ${T.border}`, padding: 6 }}
       >
         <>
-          {ASSIGNABLE.map(c => {
+          {assignableCategories().map(c => {
             const on = c.id === cat;
             return (
               <button

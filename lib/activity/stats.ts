@@ -9,7 +9,7 @@
  */
 
 import {
-  CATEGORIES, categoryColor, categoryLabel, isBrowser, resolveProductivity, classifyDetailed,
+  allCategories, categoryColor, categoryLabel, isBrowser, resolveProductivity, classifyDetailed,
   type ClassifySource, type Productivity,
 } from "@/lib/activity/categories";
 import type { ActivitySettings, DayLog, Segment } from "@/lib/activity/engine";
@@ -422,7 +422,7 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
 
   const pct = (ms: number) => (activeMs > 0 ? (ms / activeMs) * 100 : 0);
 
-  const byCategory: Bucket[] = CATEGORIES
+  const byCategory: Bucket[] = allCategories()
     .map(c => ({ id: c.id, label: categoryLabel(c.id), color: c.color, ms: catMs.get(c.id) || 0, pct: pct(catMs.get(c.id) || 0) }))
     .filter(b => b.ms > 0)
     .sort((a, b) => b.ms - a.ms);

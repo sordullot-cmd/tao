@@ -79,7 +79,7 @@ export interface ActivityCategory {
        classé » ;
      • « Achats » — Amazon et Leboncoin comptaient comme du divertissement,
        ce qui rendait le total de « Divertissement » illisible. */
-export const CATEGORIES: ActivityCategory[] = [
+export const BUILTIN_CATEGORIES: ActivityCategory[] = [
   { id: "dev",       label: "Développement",      labelEn: "Development",   color: PALETTE.blue,        productivity: "productive",  hint: "Éditeurs, terminaux, docs techniques, dépôts." },
   { id: "trading",   label: "Trading & marchés",  labelEn: "Trading",       color: PALETTE.green,       productivity: "productive",  hint: "Plateformes, graphiques, journal de trades, prop firms." },
   { id: "writing",   label: "Écriture & notes",   labelEn: "Writing",       color: PALETTE.purple,      productivity: "productive",  hint: "Traitement de texte, prise de notes, rédaction." },
@@ -96,28 +96,131 @@ export const CATEGORIES: ActivityCategory[] = [
   { id: "other",     label: "Non classé",         labelEn: "Uncategorized", color: GREY.grey500,        productivity: "neutral",     hint: "Ce que l'app n'a pas su reconnaître. À ranger en un clic." },
 ];
 
-export const CATEGORY_BY_ID: Record<string, ActivityCategory> = Object.fromEntries(
-  CATEGORIES.map(c => [c.id, c])
-);
-
 export const OTHER = "other";
 
+/* ─── Les catégories de CET utilisateur ──────────────────────────────────
+   Les quatorze ci-dessus sont un point de départ, pas une liste fermée : le
+   vocabulaire d'une journée appartient à celui qui la mesure. Il peut en
+   renommer une (« Trading & marchés » → « Marchés »), la recolorer, en créer
+   (« Cours », « Musculation »), et décider de la nature de chacune.
+
+   ── Pourquoi un registre de module et non un contexte React ─────────────
+   `categoryLabel(id)` et `categoryColor(id)` sont appelés depuis une trentaine
+   d'endroits qui ne connaissent qu'un identifiant de catégorie : une liste de
+   pavés, une pastille en direct, une ligne de session. Les faire tous passer
+   par un contexte demanderait de traverser sept composants avec une prop qui
+   ne les concerne pas. Le registre est donc ici, et `useActivitySettings` le
+   met à jour PENDANT le rendu, avant que quoi que ce soit ne l'ait lu — l'écrire
+   est idempotent (mêmes réglages, même registre), ce qui le rend sûr à relire
+   plusieurs fois.
+   --------------------------------------------------------------------- */
+
+/** Ce que l'utilisateur change sur une catégorie livrée avec l'app. */
+export interface CategoryEdit {
+  label?: string;
+  color?: string;
+}
+
+/** Une catégorie créée de toutes pièces. */
+export interface CustomCategory {
+  id: string;
+  label: string;
+  color: string;
+}
+
+interface CategorySettings {
+  customCategories?: CustomCategory[] | null;
+  categoryEdits?: Record<string, CategoryEdit> | null;
+}
+
+let REGISTRY: ActivityCategory[] = BUILTIN_CATEGORIES;
+let BY_ID: Record<string, ActivityCategory> = Object.fromEntries(
+  BUILTIN_CATEGORIES.map(c => [c.id, c])
+);
+/** Empreinte des réglages déjà appliqués : reconstruire à chaque rendu est inutile. */
+let SIGNATURE = "";
+
+/**
+ * Recalcule le registre à partir des réglages. Appelé par `useActivitySettings`.
+ *
+ * « Non classé » reste en dernier, quoi qu'il arrive : c'est la file d'attente
+ * du classement, pas une catégorie parmi d'autres.
+ */
+export function applyCategorySettings(settings: CategorySettings | null | undefined): void {
+  const custom = Array.isArray(settings?.customCategories) ? settings!.customCategories! : [];
+  const edits = (settings?.categoryEdits && typeof settings.categoryEdits === "object")
+    ? settings.categoryEdits
+    : {};
+  const signature = JSON.stringify([custom, edits]);
+  if (signature === SIGNATURE) return;
+  SIGNATURE = signature;
+
+  const edited = BUILTIN_CATEGORIES.map(c => {
+    const e = edits[c.id];
+    if (!e) return c;
+    return {
+      ...c,
+      label: e.label?.trim() || c.label,
+      labelEn: e.label?.trim() || c.labelEn,
+      color: e.color || c.color,
+    };
+  });
+
+  const mine: ActivityCategory[] = custom
+    .filter(c => c && typeof c.id === "string" && c.id)
+    .map(c => ({
+      id: c.id,
+      label: c.label || c.id,
+      labelEn: c.label || c.id,
+      color: c.color || GREY.grey500,
+      // La nature d'une catégorie créée se règle comme celle des autres, par
+      // `settings.productivity` ; neutre est le seul défaut qui ne présume rien.
+      productivity: "neutral" as Productivity,
+      hint: "Catégorie que tu as créée.",
+    }));
+
+  const withoutOther = edited.filter(c => c.id !== OTHER);
+  const other = edited.find(c => c.id === OTHER)!;
+  REGISTRY = [...withoutOther, ...mine, other];
+  BY_ID = Object.fromEntries(REGISTRY.map(c => [c.id, c]));
+}
+
+/** Toutes les catégories : celles de l'app, corrigées, plus celles de l'utilisateur. */
+export function allCategories(): ActivityCategory[] {
+  return REGISTRY;
+}
+
 /** Les catégories qu'on peut CHOISIR (« Non classé » n'est pas un choix). */
-export const ASSIGNABLE = CATEGORIES.filter(c => c.id !== OTHER);
+export function assignableCategories(): ActivityCategory[] {
+  return REGISTRY.filter(c => c.id !== OTHER);
+}
+
+export function categoryById(id: string): ActivityCategory | undefined {
+  return BY_ID[id];
+}
+
+/** Identifiant d'une catégorie créée : stable, lisible, et jamais celui d'une livrée. */
+export function newCategoryId(label: string): string {
+  const base = norm(label).replace(/ /g, "-").slice(0, 24) || "categorie";
+  let id = `u-${base}`;
+  let n = 2;
+  while (BY_ID[id]) id = `u-${base}-${n++}`;
+  return id;
+}
 
 /** Libellé de la catégorie dans la langue de l'interface. */
 export function categoryLabel(id: string): string {
-  const c = CATEGORY_BY_ID[id];
+  const c = BY_ID[id];
   if (!c) return id;
   return getLang() === "en" ? c.labelEn : c.label;
 }
 
 export function categoryColor(id: string): string {
-  return CATEGORY_BY_ID[id]?.color ?? GREY.grey500;
+  return BY_ID[id]?.color ?? GREY.grey500;
 }
 
 export function productivityOf(id: string): Productivity {
-  return CATEGORY_BY_ID[id]?.productivity ?? "neutral";
+  return BY_ID[id]?.productivity ?? "neutral";
 }
 
 /**

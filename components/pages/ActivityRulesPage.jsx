@@ -32,15 +32,16 @@ import { PALETTE } from "@/lib/ui/palette";
 import { dotRing } from "@/lib/ui/color";
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
-  ASSIGNABLE, CATEGORIES, CATEGORY_BY_ID, catalogSize, categoryLabel, isBrowser,
-  PRODUCTIVITY_COLOR, resolveProductivity, suggestCategory,
+  allCategories, assignableCategories, categoryById, catalogSize, categoryLabel,
+  isBrowser, newCategoryId, PRODUCTIVITY_COLOR, resolveProductivity, suggestCategory,
 } from "@/lib/activity/categories";
 import { clearAll, listDays, loadRange } from "@/lib/activity/engine";
 import { fmtDur, recategorize, unclassified } from "@/lib/activity/stats";
 import { hasNativeTracking, snapshot } from "@/lib/activity/native";
 import { useActivityLive, useActivitySettings } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, BlockTitle, CategoryPicker, Disclosure, SourceNotice, Toggle,
+  ActivityHeader, BlockTitle, CATEGORY_SWATCHES, CategoryPicker, ColorPicker, Disclosure,
+  SourceNotice, Toggle,
 } from "@/components/activity/ActivityChrome";
 
 const NATURE_OPTIONS = [
@@ -126,6 +127,9 @@ export default function ActivityRulesPage({ setPage }) {
   const [probe, setProbe] = useState(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [draft, setDraft] = useState({ match: "", field: "app", category: "dev" });
+  /** Catégorie en cours de renommage (une seule à la fois). */
+  const [editCat, setEditCat] = useState(null);
+  const [draftCat, setDraftCat] = useState({ label: "", color: CATEGORY_SWATCHES[0] });
   const [version, setVersion] = useState(0);
 
   const patch = (fn) => setSettings(s => fn({ ...s }));
@@ -161,6 +165,76 @@ export default function ActivityRulesPage({ setPage }) {
   }, [logs, settings]);
 
   const catalog = useMemo(() => catalogSize(), []);
+
+  /* Les catégories TELLES QUE l'utilisateur les a réglées : le registre est
+     reconstruit par `useActivitySettings` avant ce rendu, on le relit donc à
+     chaque changement de réglages. */
+  const categories = useMemo(() => { void settings; return allCategories(); }, [settings]);
+  const edited = settings.categoryEdits || {};
+
+  const editCategory = (c, patchEdit) => patch(s => ({
+    ...s,
+    categoryEdits: { ...s.categoryEdits, [c.id]: { ...s.categoryEdits?.[c.id], ...patchEdit } },
+  }));
+
+  const renameCategory = (c, label) => {
+    const clean = (label || "").trim();
+    if (!clean || clean === categoryLabel(c.id)) return;
+    if (c.id.startsWith("u-")) {
+      patch(s => ({
+        ...s,
+        customCategories: s.customCategories.map(x => x.id === c.id ? { ...x, label: clean } : x),
+      }));
+      return;
+    }
+    editCategory(c, { label: clean });
+  };
+
+  const setCategoryColor = (c, color) => {
+    if (c.id.startsWith("u-")) {
+      patch(s => ({
+        ...s,
+        customCategories: s.customCategories.map(x => x.id === c.id ? { ...x, color } : x),
+      }));
+      return;
+    }
+    editCategory(c, { color });
+  };
+
+  /** Rendre à une catégorie livrée son nom et sa couleur d'origine. */
+  const resetCategory = (c) => patch(s => {
+    const next = { ...s.categoryEdits };
+    delete next[c.id];
+    return { ...s, categoryEdits: next };
+  });
+
+  const addCategory = () => {
+    const label = draftCat.label.trim();
+    if (!label) return;
+    const id = newCategoryId(label);
+    patch(s => ({ ...s, customCategories: [...s.customCategories, { id, label, color: draftCat.color }] }));
+    // Une couleur suivante différente : deux catégories créées à la file avec la
+    // même teinte seraient impossibles à distinguer dans l'anneau.
+    setDraftCat({
+      label: "",
+      color: CATEGORY_SWATCHES[(CATEGORY_SWATCHES.indexOf(draftCat.color) + 1) % CATEGORY_SWATCHES.length],
+    });
+  };
+
+  /* Supprimer une catégorie créée emporte ce qui n'a plus de sens sans elle :
+     les règles qui y renvoyaient (elles classeraient dans le vide) et son
+     jugement. Les journées déjà mesurées, elles, se reclassent toutes seules —
+     rien n'est perdu, ce temps retourne simplement à « Non classé ». */
+  const removeCategory = (c) => patch(s => {
+    const productivity = { ...s.productivity };
+    delete productivity[c.id];
+    return {
+      ...s,
+      customCategories: s.customCategories.filter(x => x.id !== c.id),
+      rules: s.rules.filter(r => r.category !== c.id),
+      productivity,
+    };
+  });
 
   const segmentCount = useMemo(() => logs.reduce((n, l) => n + l.segments.length, 0), [logs]);
 
@@ -256,7 +330,7 @@ export default function ActivityRulesPage({ setPage }) {
                         background: FIELD_BG, color: T.text,
                       }}
                     >
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: CATEGORY_BY_ID[suggestion]?.color, flexShrink: 0 }} />
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: categoryById(suggestion)?.color, flexShrink: 0 }} />
                       {categoryLabel(suggestion)} ?
                     </button>
                   )}
@@ -286,26 +360,62 @@ export default function ActivityRulesPage({ setPage }) {
         )}
       </div>
 
-      {/* ── Catégories ── */}
+      {/* ── Catégories ──
+          Le vocabulaire de la section, et il appartient à celui qui mesure ses
+          journées : les quatorze livrées sont un point de départ, pas une liste
+          fermée. On peut renommer (« Trading & marchés » → « Marchés »),
+          recolorer, en créer, et trancher la nature de chacune. Ce qu'on ne peut
+          pas supprimer, ce sont les livrées : le catalogue y range des centaines
+          d'applications, et les retirer laisserait ce temps sans nom. */}
       <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-        <BlockTitle right="30 derniers jours">Catégories</BlockTitle>
+        <BlockTitle right={`${categories.length} · 30 derniers jours`}>Catégories</BlockTitle>
         <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
           La nature d’une catégorie décide de ce qui compte comme focus et comme distraction.
           « Réunions » est du travail pour l’un, du temps subi pour l’autre : c’est à toi de trancher.
           {" "}L’app reconnaît {catalog.total} applications et sites d’elle-même ; tes règles passent avant.
         </span>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {CATEGORIES.map(c => {
+          {categories.map(c => {
             const nature = resolveProductivity(c.id, settings.productivity);
             const ms = categoryTotals.get(c.id) || 0;
+            const mine = c.id.startsWith("u-");
+            const editing = editCat === c.id;
             return (
               <div key={c.id} style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
                 borderBottom: `1px solid ${HAIRLINE}`, flexWrap: "wrap",
               }}>
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.color, boxShadow: dotRing(c.color), flexShrink: 0 }} />
+                <ColorPicker
+                  value={c.color}
+                  label={`Couleur de « ${categoryLabel(c.id)} »`}
+                  onPick={(color) => setCategoryColor(c, color)}
+                />
                 <span style={{ flex: 1, minWidth: 160, display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 13, color: T.text }}>{categoryLabel(c.id)}</span>
+                  {editing ? (
+                    <Input
+                      compact
+                      autoFocus
+                      defaultValue={categoryLabel(c.id)}
+                      onBlur={(e) => { renameCategory(c, e.target.value); setEditCat(null); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") setEditCat(null);
+                      }}
+                      style={{ maxWidth: 260 }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditCat(c.id)}
+                      title="Renommer"
+                      style={{
+                        alignSelf: "flex-start", border: "none", background: "transparent", padding: 0,
+                        fontFamily: "inherit", fontSize: 13, color: T.text, cursor: "text", textAlign: "left",
+                      }}
+                    >
+                      {categoryLabel(c.id)}
+                    </button>
+                  )}
                   <span style={{ fontSize: 11, color: T.textSub }}>
                     {c.hint}{catalog.byCategory[c.id] ? ` · ${catalog.byCategory[c.id]} connues` : ""}
                   </span>
@@ -334,9 +444,37 @@ export default function ActivityRulesPage({ setPage }) {
                     );
                   })}
                 </div>
+                {mine ? (
+                  <IconButton
+                    tone="danger"
+                    aria-label={`Supprimer « ${categoryLabel(c.id)} »`}
+                    onClick={() => removeCategory(c)}
+                  >
+                    <Trash2 size={14} />
+                  </IconButton>
+                ) : edited[c.id] ? (
+                  <PillButton compact variant="ghost" onClick={() => resetCategory(c)}>Réinitialiser</PillButton>
+                ) : null}
               </div>
             );
           })}
+        </div>
+
+        {/* Créer : le champ est toujours là, pas derrière un bouton « + » qui
+            ouvrirait un formulaire pour deux mots et une couleur. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
+          <ColorPicker value={draftCat.color} label="Couleur de la nouvelle catégorie" onPick={(color) => setDraftCat(d => ({ ...d, color }))} />
+          <Input
+            compact
+            placeholder="Nouvelle catégorie (ex. « Cours », « Musculation »)"
+            value={draftCat.label}
+            onChange={(e) => setDraftCat(d => ({ ...d, label: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === "Enter") addCategory(); }}
+            style={{ flex: 1, minWidth: 220 }}
+          />
+          <PillButton compact variant="primary" disabled={!draftCat.label.trim()} onClick={addCategory}>
+            <Plus size={13} /> Créer
+          </PillButton>
         </div>
       </div>
 
@@ -372,7 +510,7 @@ export default function ActivityRulesPage({ setPage }) {
               onChange={(e) => patch(s => ({ ...s, rules: s.rules.map(x => x.id === r.id ? { ...x, category: e.target.value } : x) }))}
               style={{ width: 190 }}
             >
-              {ASSIGNABLE.map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
+              {assignableCategories().map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
             </Select>
             <IconButton
               tone="danger"
@@ -397,7 +535,7 @@ export default function ActivityRulesPage({ setPage }) {
             <option value="title">dans le titre</option>
           </Select>
           <Select value={draft.category} onChange={(e) => setDraft(d => ({ ...d, category: e.target.value }))} style={{ width: 190 }}>
-            {ASSIGNABLE.map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
+            {assignableCategories().map(c => <option key={c.id} value={c.id}>{categoryLabel(c.id)}</option>)}
           </Select>
           <PillButton
             compact
