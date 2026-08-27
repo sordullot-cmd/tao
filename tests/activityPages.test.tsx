@@ -148,6 +148,16 @@ describe("page Activité (journée)", () => {
     expect(screen.getAllByText("2 h 00").length).toBeGreaterThan(0);
   });
 
+  it("recule d'une semaine avec le sélecteur", () => {
+    seedToday();
+    render(<ActivityPage setPage={vi.fn()} />);
+    expect(screen.getByText("Cette semaine")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Semaine précédente"));
+    expect(screen.getByText("Semaine dernière")).toBeInTheDocument();
+    // Le jour lu a suivi : plus rien de mesuré sept jours plus tôt.
+    expect(screen.getByText(/Rien de mesuré ce jour-là/i)).toBeInTheDocument();
+  });
+
   it("navigue vers les rapports depuis les onglets", () => {
     const setPage = vi.fn();
     render(<ActivityPage setPage={setPage} />);

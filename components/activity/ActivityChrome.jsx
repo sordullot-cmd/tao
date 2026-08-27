@@ -641,7 +641,7 @@ export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPic
                   reste cliquable sur toute sa largeur (une cible de 26 px se
                   rate), et le dessin qui s'affine. */}
               <div style={{
-                width: "84%", maxWidth: 48, height: "100%", display: "flex",
+                width: "92%", maxWidth: 56, height: "100%", display: "flex",
                 flexDirection: "column", justifyContent: "flex-end",
               }}>
                 {parts.length === 0 ? (

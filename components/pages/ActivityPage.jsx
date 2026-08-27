@@ -41,7 +41,7 @@ import { loadRange } from "@/lib/activity/engine";
 import { categoryLabel, isBrowser } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, AppRows, BlockDetail, BlockTitle, CategoryRows, DayColumn, Disclosure,
+  ActivityHeader, AppRows, BlockDetail, CategoryRows, DayColumn, Disclosure,
   HourBars, ScreenTimeBars, SessionRows, SourceNotice, StackedBar, TrackingPill,
 } from "@/components/activity/ActivityChrome";
 
@@ -56,6 +56,13 @@ const VIEWS = [
 function shiftDate(date, days) {
   const d = new Date(`${date}T00:00:00`);
   d.setDate(d.getDate() + days);
+  return getLocalDateString(d);
+}
+
+/** Le lundi de la semaine d'une date. `getDay()` comptant du dimanche, lundi = 0. */
+function mondayOf(date) {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return getLocalDateString(d);
 }
 
@@ -104,12 +111,8 @@ export default function ActivityPage({ setPage }) {
     return last ? Math.floor(last.e / 60_000) : 0;
   }, [day]);
 
-  const weekStart = useMemo(() => {
-    const d = new Date(`${date}T00:00:00`);
-    // Lundi = 0 : `getDay()` compte à partir du dimanche.
-    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    return getLocalDateString(d);
-  }, [date]);
+  const weekStart = useMemo(() => mondayOf(date), [date]);
+  const thisWeekStart = mondayOf(TODAY());
 
   const week = useMemo(() => {
     void minuteTick;
@@ -117,13 +120,26 @@ export default function ActivityPage({ setPage }) {
   }, [weekStart, settings, minuteTick]);
 
   const weekLabel = useMemo(() => {
+    if (weekStart === thisWeekStart) return "Cette semaine";
+    if (weekStart === shiftDate(thisWeekStart, -7)) return "Semaine dernière";
     const a = new Date(`${weekStart}T00:00:00`);
     const b = new Date(`${shiftDate(weekStart, 6)}T00:00:00`);
     const sameMonth = a.getMonth() === b.getMonth();
     const start = a.toLocaleDateString(undefined, sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" });
     const end = b.toLocaleDateString(undefined, { day: "numeric", month: "long" });
-    return `du ${start} au ${end}`;
-  }, [weekStart]);
+    return `${start} – ${end}`;
+  }, [weekStart, thisWeekStart]);
+
+  /* Changer de semaine, c'est déplacer le jour lu de sept jours : la grille du
+     haut et les colonnes parlent toujours du même jour. On ne dépasse pas
+     aujourd'hui — il n'y a rien à y voir. */
+  const shiftWeek = (weeks) => {
+    setOpenBlock(null);
+    setDate(d => {
+      const next = shiftDate(d, weeks * 7);
+      return next > TODAY() ? TODAY() : next;
+    });
+  };
 
   /* Usage quotidien : la MÉDIANE des journées déjà écoulées de la semaine, les
      journées vides comprises — une journée sans écran est une donnée, pas un
@@ -256,7 +272,7 @@ export default function ActivityPage({ setPage }) {
                   toute façon dans les onglets Applications et Rapports. */}
               <div style={{
                 display: "flex", flexWrap: "wrap", gap: "6px 18px",
-                fontSize: 12, color: T.textSub,
+                fontSize: 13, color: T.textSub,
               }}>
                 <span>Temps actif <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{fmtDur(stats.activeMs)}</strong></span>
                 <span>Temps de focus <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{fmtDur(stats.focusMs)}</strong> ({stats.focusSessions.length} session{stats.focusSessions.length > 1 ? "s" : ""})</span>
@@ -283,9 +299,6 @@ export default function ActivityPage({ setPage }) {
                 <>
                   {/* ── 2. La répartition ── */}
                   <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-                    <BlockTitle>
-                      Répartition
-                    </BlockTitle>
                     {/* L'anneau et ses catégories CÔTE À CÔTE : l'un sous
                         l'autre, la liste passait sous le pli.
 
@@ -320,7 +333,6 @@ export default function ActivityPage({ setPage }) {
 
                   {/* ── 3. Les applications ── */}
                   <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <BlockTitle>Applications & sites</BlockTitle>
                     {/* Sous cinq minutes, une application n'a rien à dire d'une
                         journée : elle a été ouverte, pas utilisée. Retirées
                         plutôt que repoussées derrière « voir plus » — dès lors
@@ -333,23 +345,38 @@ export default function ActivityPage({ setPage }) {
             </div>
           </div>
 
-          {/* ═══ Le temps d'écran, jour par jour ═════════════════════════════
-              Une journée seule ne dit pas si elle est longue : « 6 h 12 » ne
-              prend son sens qu'à côté des autres jours de la semaine. Les
-              colonnes sont cliquables — c'est le chemin le plus court vers la
-              journée qu'on vient de repérer. */}
+        </>
+      )}
+
+      {/* ═══ Le temps d'écran, jour par jour ═══════════════════════════════
+          Une journée seule ne dit pas si elle est longue : « 6 h 12 » ne prend
+          son sens qu'à côté des autres jours de la semaine. Les colonnes sont
+          cliquables — c'est le chemin le plus court vers la journée qu'on vient
+          de repérer.
+
+          Cette carte est HORS du test « la journée est-elle mesurée ? » : une
+          semaine se lit même quand le jour affiché est vide, et c'est justement
+          là qu'on a besoin du sélecteur pour en sortir. */}
           <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
-            {/* Pas de titre à gauche : la mesure EST le titre. « Utilisation
+            {/* Pas de titre de carte : la mesure EST le titre. « Utilisation
                 quotidienne » et son chiffre disent à la fois de quoi parle le
-                graphe et ce qu'il faut en retenir. */}
-            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "flex-start", gap: 12 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                graphe et ce qu'il faut en retenir ; la semaine lue se choisit en
+                face, comme le jour se choisit en haut de page. */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 12, color: T.textSub }}>Utilisation quotidienne</span>
                 <span style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.1, letterSpacing: -0.4, color: T.text, fontVariantNumeric: "tabular-nums" }}>
                   {fmtDur(weekMedianMs)}
                 </span>
-                <span style={{ fontSize: 11, color: T.textMut }}>semaine {weekLabel}</span>
               </div>
+              <StepperPill
+                label={weekLabel}
+                onPrev={() => shiftWeek(-1)}
+                onNext={() => shiftWeek(1)}
+                nextDisabled={weekStart === thisWeekStart}
+                prevLabel="Semaine précédente"
+                nextLabel="Semaine suivante"
+              />
             </div>
             <ScreenTimeBars
               days={week}
@@ -367,6 +394,8 @@ export default function ActivityPage({ setPage }) {
             </div>
           </div>
 
+      {stats.activeMs > 0 && (
+        <>
           {/* ═══ 2. Où est passé le temps ════════════════════════════════════
               Trois lectures du même temps, dans une seule carte : on choisit
               l'angle au lieu de faire défiler trois blocs. */}
