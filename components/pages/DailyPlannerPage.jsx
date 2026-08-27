@@ -470,7 +470,8 @@ export default function DailyPlannerPage() {
      passées pour qu'un cache partiel (habitudes en place, journée absente)
      n'ouvre PAS sur un squelette — il y a déjà de quoi peindre. */
   if (useFirstLoad(plannerReady, STORAGE_PLANNER, STORAGE_HABITS)) {
-    return <PageSkeleton variant="list" label={t("nav.dailyPlanner")} />;
+    /* Sélecteur de jour à gauche (`StepperPill`), avancement et ajout à droite. */
+    return <PageSkeleton variant="list" label={t("nav.dailyPlanner")} gap={24} toolbarLeft={[210]} toolbarRight={[96, 140]} />;
   }
 
   return (

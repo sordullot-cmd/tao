@@ -42,7 +42,7 @@ import { debtTotals, loanStats } from "@/lib/loans";
 import { bankAccountToAsset, isBankAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { assetValue, classBySlug, netWorth, usePatrimoine, PATRIMOINE_LOCAL_KEY } from "@/lib/patrimoine";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
-import { PageSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonSectionTitle, Skeleton } from "@/components/ui/Skeleton";
 
 export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId }) {
   useLang();
@@ -107,7 +107,17 @@ export default function PatrimoineLiabilitiesPage({ setPage, setSelectedAssetId 
     }));
 
   if (useFirstLoad(storeReady, PATRIMOINE_LOCAL_KEY)) {
-    return <PageSkeleton variant="list" />;
+    return (
+      <SkeletonScreen gap={24}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 0 }}><SkeletonSectionTitle subtitle /></div>
+            <Skeleton width={148} height={34} radius={999} />
+          </div>
+          <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
+        </div>
+      </SkeletonScreen>
+    );
   }
 
   return (

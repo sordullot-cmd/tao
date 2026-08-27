@@ -27,7 +27,7 @@ import { t, useLang } from "@/lib/i18n";
 import { fmtInt } from "@/lib/ui/format";
 import { CARD, HeroAmount, PeriodPills, StepperPill, TILE_HOVER } from "@/components/ui/da";
 import { useApp } from "@/lib/contexts/AppContext";
-import { SkeletonScreen, SkeletonCard, SkeletonHeader, Skeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 
 const WEEKDAY_KEYS = ["wd.monday", "wd.tuesday", "wd.wednesday", "wd.thursday", "wd.friday", "wd.saturday", "wd.sunday"];
 
@@ -389,20 +389,62 @@ export default function CalendarPage({ trades = [], setPage }) {
   );
 
   /* La grille se remplit avec les trades : sans garde, on peint un mois
-     entièrement vide, puis on le recolore — le calendrier « clignote ». */
+     entièrement vide, puis on le recolore — le calendrier « clignote ».
+
+     Le squelette reprend l'ossature de `renderDayGrid` case pour case, jusqu'au
+     nombre de jours du mois affiché et à ses cases vides de début de semaine.
+     Ce n'est pas du zèle : une grille approchée saute au moment où la vraie
+     arrive, et on aurait échangé une attente contre un sursaut. `view` vaut
+     toujours « day » ici — il n'est pas persisté, et le squelette ne se montre
+     qu'au tout premier rendu. */
   const { tradesLoading } = useApp();
-  if (tradesLoading && trades.length === 0) {
+  if (showSkeleton(tradesLoading && trades.length === 0)) {
+    const firstDay = new Date(year, month, 1).getDay();
+    const leading = firstDay === 0 ? 6 : firstDay - 1;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const GRID = { display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 8 };
+
     return (
       <SkeletonScreen label={t("nav.calendar")} gap={48}>
-        <SkeletonHeader />
-        <SkeletonCard>
-          {/* Sept colonnes, six rangées : la grille du mois, à sa vraie taille. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
-            {Array.from({ length: 42 }).map((_, i) => (
-              <Skeleton key={i} height={83} radius={10} />
-            ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24, width: "100%" }}>
+          {/* En-tête : période + montant héros à gauche, commandes à droite —
+              les mêmes 34 px de haut que `StepperPill` et `PeriodPills`. */}
+          <div className="tr4de-cal-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, maxWidth: 364 }}>
+              <Skeleton width={132} height={18} />
+              <Skeleton width={216} height={31} radius={8} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <Skeleton width={190} height={34} radius={999} />
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {[76, 82, 74].map((w, i) => <Skeleton key={i} width={w} height={34} radius={999} />)}
+              </div>
+            </div>
           </div>
-        </SkeletonCard>
+
+          <div style={{ ...CARD, padding: 0 }}>
+            <div style={{ padding: 16 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* Les sept en-têtes de jours portent 12 px de marge tout autour
+                    et une ligne de 17 px : c'est cette hauteur-là qu'il faut
+                    tenir, pas celle du texte seul. */}
+                <div style={GRID}>
+                  {WEEKDAY_KEYS.map(key => (
+                    <div key={key} style={{ padding: 12, minWidth: 0 }}>
+                      <Skeleton height={17} width="70%" />
+                    </div>
+                  ))}
+                </div>
+                <div style={GRID}>
+                  {Array.from({ length: leading }, (_, i) => <div key={`lead-${i}`} aria-hidden />)}
+                  {Array.from({ length: daysInMonth }, (_, i) => (
+                    <Skeleton key={i} height={83} radius={8} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </SkeletonScreen>
     );
   }

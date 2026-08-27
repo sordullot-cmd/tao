@@ -27,7 +27,7 @@ import { TAG_COLORS, STRATEGY_COLOR_DEFAULT } from "@/lib/ui/tradingColors";
 import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
 import { useApp } from "@/lib/contexts/AppContext";
-import { SkeletonScreen, SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
+import { SkeletonScreen, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 import { fmt } from "@/lib/ui/format";
 import {
   CARD, TH, DirectionTag, SymbolCell, TableFilter, symbolLabel,
@@ -1072,11 +1072,35 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
      seul écran du site où l'utilisateur risque de croire ses données perdues.
      Le squelette reprend la forme du tableau, pas celle de l'état vide. */
   const { tradesLoading } = useApp();
-  if (tradesLoading && (!trades || trades.length === 0)) {
+  if (showSkeleton(tradesLoading && (!trades || trades.length === 0))) {
     if (embedded) return null;
+    /* Le tableau ne trace pas de filets : ses lignes sont des blocs blancs
+       séparés par les 8 px de `borderSpacing`, à 12 px de marge verticale.
+       Le squelette reprend ce rythme-là, sinon la liste se resserre d'un coup
+       quand elle arrive. */
+    const CELLS = [182, 96, 88, 104, 76, 92, 84];
     return (
-      <SkeletonScreen label={t("trades.title")} gap={24}>
-        <SkeletonCard><SkeletonTable rows={maxRows || 10} cols={6} /></SkeletonCard>
+      <SkeletonScreen label={t("trades.title")} gap={48}>
+        <div style={{ marginBottom: -30 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 26, padding: "0 28px", flexWrap: "wrap" }}>
+            {[104, 84, 76, 128].map((w, i) => <Skeleton key={i} width={w} height={16} />)}
+            <Skeleton width={132} height={34} radius={999} style={{ marginLeft: "auto", marginRight: -28 }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ ...CARD, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", padding: 16, gap: 12 }}>
+            <div style={{ display: "flex", gap: 12, paddingBottom: 10, borderBottom: `1px solid ${T.border}` }}>
+              {CELLS.map((w, i) => <Skeleton key={i} width={w} height={13} />)}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {Array.from({ length: 10 }).map((_, r) => (
+                <div key={r} style={{ display: "flex", gap: 12, padding: "12px 6px", borderRadius: 12 }}>
+                  {CELLS.map((w, i) => <Skeleton key={i} width={w} height={13} />)}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </SkeletonScreen>
     );
   }

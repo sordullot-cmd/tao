@@ -7,11 +7,16 @@
  * sans trou volontaire : les trous SONT l'information (pause, poste quitté, app
  * fermée), et les statistiques les lisent comme telles.
  *
- * Où vivent les données : dans le localStorage de CE poste, un enregistrement
- * par jour. C'est délibéré et non une facilité — l'activité mesurée est celle
- * d'une machine ; la remonter dans le cloud mélangerait deux postes dans la
- * même journée et ferait des totaux faux. Seuls les RÉGLAGES (règles, objectifs)
- * sont synchronisés, eux étant les mêmes partout (cf. useActivitySettings).
+ * Où vivent les données : dans le localStorage de CE poste — lecture immédiate,
+ * écriture sans réseau — ET dans le compte, une ligne par jour, une tranche par
+ * poste (cf. lib/activity/cloud). Le local est le cache du poste qui mesure ; le
+ * compte est la mémoire. On peut donc relire sa journée depuis le téléphone ou
+ * un autre poste, et la mesure survit au changement de machine.
+ *
+ * Ce que ça imposait de régler, et qui l'est : deux postes ne s'écrasent pas (ils
+ * écrivent chacun leur tranche), leurs minutes communes ne comptent qu'une fois
+ * (les chevauchements sont rognés à la lecture), et SEUL un poste de bureau
+ * mesure — le navigateur et le téléphone ne voient rien du système, ils lisent.
  *
  * Le moteur est un singleton hors React : le suivi doit continuer quand on
  * quitte la page « Activité », et deux boucles d'échantillonnage compteraient
@@ -24,6 +29,8 @@ import {
   type CategoryEdit, type ClassifyRule, type CustomCategory, type Productivity,
 } from "@/lib/activity/categories";
 import { snapshot, type Snapshot } from "@/lib/activity/native";
+import { device, fetchDays, forgetDevice, pushDay, type CloudDay } from "@/lib/activity/cloud";
+import { mergeSlices } from "@/lib/activity/merge";
 import { frontTab } from "@/lib/focus/native";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -190,6 +197,7 @@ export function saveDay(day: DayLog): void {
   } catch {
     /* Quota atteint : on préfère perdre l'échantillon que casser l'app. */
   }
+  schedulePush(day.date);
 }
 
 export function deleteDay(date: string): void {
@@ -199,13 +207,22 @@ export function deleteDay(date: string): void {
   } catch {}
 }
 
-/** Efface tout l'historique d'activité de ce poste. */
+/**
+ * Efface l'historique de CE poste, ici et dans le compte.
+ *
+ * La tranche des autres postes n'est pas touchée : effacer son historique n'a
+ * jamais voulu dire effacer celui d'une autre machine.
+ */
 export function clearAll(): void {
-  for (const d of readIndex()) {
+  const dates = readIndex();
+  for (const d of dates) {
     try { localStorage.removeItem(DAY_KEY(d)); } catch {}
   }
   writeIndex([]);
   cache = null;
+  pushQueue.clear();
+  void forgetDevice(dates);
+  for (const d of dates) remote.delete(d);
   emit();
 }
 
@@ -214,12 +231,134 @@ export function loadRange(fromDate: string, toDate: string): DayLog[] {
   const out: DayLog[] = [];
   const from = new Date(`${fromDate}T00:00:00`);
   const to = new Date(`${toDate}T00:00:00`);
-  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    const key = getLocalDateString(d);
+  const dates: string[] = [];
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) dates.push(getLocalDateString(d));
+  // Une seule requête pour tout l'intervalle : trente jours demandés un par un
+  // seraient trente allers-retours.
+  pull(dates);
+  for (const key of dates) {
     // Le jour courant peut n'être qu'en mémoire (pas encore vidé sur disque).
-    out.push(key === cache?.date ? { ...cache } : loadDay(key));
+    out.push(withRemote(key === cache?.date ? { ...cache } : loadDay(key)));
   }
   return out;
+}
+
+/* ─── Le compte ──────────────────────────────────────────────────────────
+   Le local est le cache de CE poste ; le compte est la mémoire commune. Deux
+   mouvements, jamais mélangés :
+
+     • on VERSE la tranche de ce poste, en différé (une journée bouge toutes les
+       quelques secondes, la verser à chaque échantillon serait une requête par
+       échantillon) ;
+     • on TIRE les journées demandées, une fois par session, et on prévient les
+       pages quand elles arrivent — c'est ce qui fait apparaître une journée
+       mesurée ailleurs sans avoir à recharger.
+   -------------------------------------------------------------------- */
+
+/**
+ * La synchronisation ne s'allume qu'une fois un compte connu.
+ *
+ * Sans ce drapeau, chaque lecture de journée lançait une requête — même sans
+ * personne de connecté, où il n'y a par définition rien à lire ni à écrire. Elle
+ * est donc armée par le branchement React (`useActivityTracker`), qui est le
+ * seul à savoir s'il y a un utilisateur.
+ */
+let cloudOn = false;
+
+export function setCloudSync(on: boolean): void {
+  cloudOn = on;
+}
+
+/** Journées du compte déjà tirées, par date. */
+const remote = new Map<string, CloudDay>();
+const pulling = new Set<string>();
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+const pushQueue = new Set<string>();
+
+/** Délai avant de verser : assez long pour regrouper, assez court pour ne rien
+ *  perdre si l'app se ferme (le versement est aussi tenté à la fermeture). */
+const PUSH_DELAY_MS = 20_000;
+
+function schedulePush(date: string): void {
+  if (!cloudOn) return;
+  pushQueue.add(date);
+  if (pushTimer) return;
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    const dates = [...pushQueue];
+    pushQueue.clear();
+    for (const d of dates) {
+      const day = d === cache?.date ? cache : loadDay(d);
+      if (day.segments.length === 0 && !day.awayMs) continue;
+      void pushDay(day).then(ok => { if (!ok) pushQueue.add(d); });
+    }
+  }, PUSH_DELAY_MS);
+}
+
+/** Verse tout de suite ce qui attend (fermeture de l'app, onglet masqué). */
+export function syncNow(): void {
+  if (!cloudOn) return;
+  if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+  const dates = [...pushQueue];
+  pushQueue.clear();
+  for (const d of dates) {
+    const day = d === cache?.date ? cache : loadDay(d);
+    void pushDay(day);
+  }
+}
+
+/**
+ * Va chercher au compte les journées demandées, une seule fois chacune.
+ * Les pages ne l'appellent pas : c'est la lecture qui la déclenche.
+ */
+function pull(dates: string[]): void {
+  if (!cloudOn) return;
+  const missing = dates.filter(d => !remote.has(d) && !pulling.has(d));
+  if (!missing.length || typeof window === "undefined") return;
+  for (const d of missing) pulling.add(d);
+  void fetchDays(missing).then(rows => {
+    // Une date sans ligne est une réponse : on la mémorise vide pour ne pas la
+    // redemander à chaque rendu.
+    for (const d of missing) remote.set(d, { date: d, devices: {} });
+    for (const row of rows) remote.set(row.date, row);
+    for (const d of missing) pulling.delete(d);
+    emit();
+  }).catch(() => { for (const d of missing) pulling.delete(d); });
+}
+
+/**
+ * La journée telle que le COMPTE la connaît : ce poste, plus les tranches des
+ * autres postes. `mergeSegments` rogne les minutes communes — deux machines
+ * allumées ensemble ne font pas deux fois la même heure.
+ */
+function withRemote(local: DayLog): DayLog {
+  const row = remote.get(local.date);
+  const me = device().id;
+  const others = row ? Object.entries(row.devices).filter(([id]) => id !== me) : [];
+  if (!others.length) return local;
+  return {
+    ...local,
+    segments: mergeSlices([
+      { kind: device().kind, segments: local.segments },
+      ...others.map(([, slice]) => ({ kind: slice.kind ?? "desktop", segments: slice.segments })),
+    ]),
+    awayMs: (local.awayMs || 0) + others.reduce((n, [, slice]) => n + (slice.awayMs || 0), 0),
+  };
+}
+
+/** Les postes qui ont mesuré cette journée, pour que la page puisse le dire. */
+export function daySources(date: string): { id: string; label: string; ms: number }[] {
+  const row = remote.get(date);
+  const me = device();
+  const out: { id: string; label: string; ms: number }[] = [];
+  const localDay = date === cache?.date ? cache : loadDay(date);
+  const localMs = localDay.segments.reduce((n, s) => n + Math.max(0, s.e - s.s), 0);
+  if (localMs > 0) out.push({ id: me.id, label: me.label, ms: localMs });
+  for (const [id, slice] of Object.entries(row?.devices ?? {})) {
+    if (id === me.id) continue;
+    out.push({ id, label: slice.label, ms: slice.segments.reduce((n, s) => n + Math.max(0, s.e - s.s), 0) });
+  }
+  return out.sort((a, b) => b.ms - a.ms);
 }
 
 /* ─── Boucle d'échantillonnage ──────────────────────────────────────────── */
@@ -253,10 +392,11 @@ export function getLive(): LiveState {
   return live;
 }
 
-/** Le jour courant, mémoire comprise (l'écriture disque est différée). */
+/** Le jour courant, mémoire ET compte compris (l'écriture disque est différée). */
 export function getDay(date: string): DayLog {
-  if (cache && cache.date === date) return cache;
-  return loadDay(date);
+  pull([date]);
+  const local = cache && cache.date === date ? cache : loadDay(date);
+  return withRemote(local);
 }
 
 function flush(): void {
@@ -373,6 +513,14 @@ async function tick(): Promise<void> {
   const elapsed = lastTickAt ? Math.min(now - lastTickAt, poll * 2) : poll;
   lastTickAt = now;
 
+  /* Chaque appareil mesure ce qu'il VOIT : l'app de bureau tout le poste, une
+     page web le seul temps passé dans tao trade. Aucun ne se tait — une soirée
+     passée sur le téléphone, poste éteint, n'a que le téléphone pour la
+     raconter. Ce qui est arbitré, c'est le CHEVAUCHEMENT, à la lecture et non à
+     l'écriture : l'appareil le mieux renseigné garde la minute (cf.
+     lib/activity/merge). Écrire ici « le poste a raison » aurait demandé de
+     savoir, au moment de mesurer, ce qu'une autre machine était en train de
+     faire. */
   const away = !snap.ok || snap.idleSeconds >= Math.max(30, settings.afkSeconds);
 
   if (away) {
@@ -443,9 +591,9 @@ export function startTracker(read: () => ActivitySettings): void {
     unloadWired = true;
     // Dernière écriture avant fermeture : sinon les 20 dernières secondes de la
     // journée partent avec la fenêtre.
-    window.addEventListener("beforeunload", flush);
+    window.addEventListener("beforeunload", () => { flush(); syncNow(); });
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") flush();
+      if (document.visibilityState === "hidden") { flush(); syncNow(); }
     });
   }
 }

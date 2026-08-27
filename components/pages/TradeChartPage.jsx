@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "@/lib/ui/tokens";
 import { FIELD } from "@/components/ui/form";
 import { useApp } from "@/lib/contexts/AppContext";
-import { SkeletonScreen, SkeletonCard, SkeletonChart, Skeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonChart, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 
 /**
  * TradeChartPage — visualise un trade importé sur un graphique OHLC (Yahoo Finance).
@@ -211,11 +211,20 @@ export default function TradeChartPage({ trades = [] }) {
   /* Le sélecteur de trade est vide tant que les trades n'ont pas atterri :
      on montrerait « aucun trade importé » à quelqu'un qui en a mille. */
   const { tradesLoading } = useApp();
-  if (tradesLoading && !sortedTrades.length) {
+  if (showSkeleton(tradesLoading && !sortedTrades.length)) {
+    /* Chapô, sélecteur de trade, puis le cadre du graphique — bordure, rayon
+       et 12 px de marge intérieure comme celui du dessous, pour que la surface
+       ne se décale pas d'un pixel à l'arrivée des bougies. */
     return (
-      <SkeletonScreen label="Chargement" style={{ maxWidth: 1200, margin: "0 auto" }}>
-        <Skeleton width={320} height={36} radius={8} />
-        <SkeletonCard><SkeletonChart height={480} bars={24} /></SkeletonCard>
+      <SkeletonScreen label="Loading" gap={16} style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <Skeleton width={280} height={16} />
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <Skeleton width={320} height={38} radius={8} />
+          <Skeleton width={220} height={16} />
+        </div>
+        <div style={{ border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", background: T.surface, padding: 12 }}>
+          <SkeletonChart height={480} bars={28} />
+        </div>
       </SkeletonScreen>
     );
   }

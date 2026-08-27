@@ -152,8 +152,8 @@ export function SourceNotice({ live }) {
   const rows = [];
   if (web) rows.push({
     icon: MonitorSmartphone,
-    title: "Suivi limité à cet onglet",
-    body: "Le navigateur ne peut pas voir les autres applications. Installe l'app de bureau tao trade pour mesurer tout le poste (apps, fenêtres, inactivité clavier).",
+    title: "Sur cet appareil, seul tao trade est mesuré",
+    body: "Une page web ne voit pas les autres applications : le temps passé ici est enregistré, le reste échappe à la mesure. Ta journée réunit tous tes appareils, et l'app de bureau passe devant quand deux d'entre eux tournaient en même temps — c'est la seule à savoir nommer l'application.",
   });
   if (denied) rows.push({
     icon: TriangleAlert,

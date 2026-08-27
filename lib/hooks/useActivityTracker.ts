@@ -13,12 +13,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { notify } from "@/lib/notify";
 import { applyCategorySettings, resolveProductivity } from "@/lib/activity/categories";
 import {
-  DEFAULT_SETTINGS, getDay, getLive, isRunning, startTracker, stopTracker, subscribe,
-  type ActivitySettings, type DayLog, type LiveState,
+  DEFAULT_SETTINGS, getDay, getLive, isRunning, setCloudSync, startTracker, stopTracker,
+  subscribe, syncNow, type ActivitySettings, type DayLog, type LiveState,
 } from "@/lib/activity/engine";
 import { fmtDur } from "@/lib/activity/stats";
 
@@ -105,6 +106,19 @@ export function useDayLog(date: string): DayLog {
  */
 export function useActivityTracker(): { live: LiveState; settings: ActivitySettings } {
   const [settings] = useActivitySettings();
+  const { user } = useAuth();
+
+  /* Le moteur vit hors de React et ne connaît pas la session : c'est ici qu'on
+     lui dit s'il y a un compte où verser les journées. Sans utilisateur, il ne
+     touche pas au réseau — ni pour lire, ni pour écrire. */
+  useEffect(() => {
+    setCloudSync(Boolean(user));
+    return () => {
+      // On verse ce qui attend avant de perdre le compte (déconnexion).
+      if (user) syncNow();
+      setCloudSync(false);
+    };
+  }, [user]);
   const settingsRef = useRef(settings);
   // Écrit dans un effet et non pendant le rendu : le moteur lit ce ref hors du
   // cycle React, mais y toucher pendant le rendu casse le mode concurrent.

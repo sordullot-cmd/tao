@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
-import { PageSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList, Skeleton } from "@/components/ui/Skeleton";
 import { useAudioRecorder } from "@/lib/hooks/useAudioRecorder";
 import { useEloquenceAudio } from "@/lib/hooks/useEloquenceAudio";
 import { decodeAudioBlob, analyzeAudioBuffer, deriveAudioScores, encodeWav } from "@/lib/eloquenceAudioAnalysis";
@@ -2057,7 +2057,22 @@ export default function EloquencePage() {
   };
 
   if (useFirstLoad(hydrated, ELOQ_STORAGE_KEY)) {
-    return <PageSkeleton variant="stats" stats={3} />;
+    return (
+      <SkeletonScreen gap={28}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            {/* Le score tient sur une ligne de 22 px, pas sur la boîte de 28. */}
+            <Skeleton width={148} height={22} radius={8} />
+            <Skeleton width={210} height={16} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {[104, 96, 118].map((w, i) => <Skeleton key={i} width={w} height={34} radius={999} />)}
+          </div>
+        </div>
+        <SkeletonStats count={4} />
+        <SkeletonCard><SkeletonList rows={4} avatar={false} /></SkeletonCard>
+      </SkeletonScreen>
+    );
   }
 
   return (

@@ -36,7 +36,7 @@ import {
 // un lien [[…]] doit viser exactement ce nom pour rester valide dans Obsidian.
 import { noteTitle } from "@/lib/notes/markdown";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
-import { SkeletonScreen, SkeletonCard, SkeletonList, Skeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonToolbar, Skeleton } from "@/components/ui/Skeleton";
 
 // KaTeX (~280 ko) n'est téléchargé qu'à la première ouverture de l'aperçu.
 const NotePreview = dynamic(() => import("@/components/notes/NotePreview"), {
@@ -816,14 +816,31 @@ export default function NotesPage() {
   if (booting) {
     return (
       <SkeletonScreen label={t("nav.notes")} gap={16} style={{ height: "calc(100vh - 120px)" }}>
-        <Skeleton width={240} height={34} radius={999} />
-        {/* Deux colonnes : la liste à gauche, l'éditeur à droite — la même
-            répartition que la page réelle, pour qu'elle ne se réagence pas. */}
-        <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
-          <div style={{ width: 280, flexShrink: 0 }}>
-            <SkeletonCard style={{ height: "100%" }}><SkeletonList rows={7} avatar={false} /></SkeletonCard>
+        <SkeletonToolbar right={[132, 128]} gap={8} />
+        {/* La MÊME grille que la page : `minmax(240px, 320px) 1fr`. Une largeur
+            fixe à sa place décalerait l'éditeur au moment où les notes
+            arrivent — le pire endroit, puisque c'est là que l'œil se pose. */}
+        <div className="tr4de-notes-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 12, flex: 1, minHeight: 0 }}>
+          <div style={{ ...CARD, padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            {/* Champ de recherche, dans son bandeau à filet dilué. */}
+            <div style={{ padding: 12, borderBottom: `1px solid ${HAIRLINE}` }}>
+              <Skeleton height={34} radius={999} />
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} style={{ padding: "10px 12px", borderBottom: `1px solid ${HAIRLINE}` }}>
+                  <Skeleton width="72%" height={13} />
+                  <div style={{ marginTop: 6 }}><Skeleton width={64} height={11} /></div>
+                </div>
+              ))}
+            </div>
           </div>
-          <SkeletonCard style={{ flex: 1, minWidth: 0 }}><SkeletonList rows={9} avatar={false} /></SkeletonCard>
+          <div style={{ ...CARD, padding: 24, display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
+            <Skeleton width="46%" height={20} radius={8} />
+            {[100, 96, 88, 100, 72, 94, 100, 60].map((w, i) => (
+              <Skeleton key={i} width={`${w}%`} height={13} />
+            ))}
+          </div>
         </div>
       </SkeletonScreen>
     );

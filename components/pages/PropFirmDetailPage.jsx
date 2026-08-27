@@ -53,7 +53,7 @@ import { assignSeriesColors, firmBrandColor } from "@/lib/ui/brandColors";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
-import { PageSkeleton } from "@/components/ui/Skeleton";
+import { PageSkeleton, showSkeleton } from "@/components/ui/Skeleton";
 import {
   AccountModal,
   AttachAccountsModal,
@@ -343,8 +343,8 @@ export default function PropFirmDetailPage({
   /* Les firmes arrivent avec les comptes : « firme introuvable » avant leur
      réponse est faux, et c'est le message que voit tout lien profond ouvert
      depuis un rechargement de page. */
-  if (accountsLoading && firms.length === 0) {
-    return <PageSkeleton variant="detail" label={t("nav.accounts")} />;
+  if (showSkeleton(accountsLoading && firms.length === 0)) {
+    return <PageSkeleton variant="detail" label={t("nav.accounts")} gap={24} stats={4} />;
   }
 
   if (!firm) {

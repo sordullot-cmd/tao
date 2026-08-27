@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { showSkeleton } from "@/lib/ui/skeletonPreview";
 
 /**
  * useFirstLoad — « faut-il montrer un squelette ? » pour un écran adossé à
@@ -41,5 +42,5 @@ export function useFirstLoad(hydrated: boolean, ...storageKeys: string[]): boole
       }
     });
   });
-  return coldStart && !hydrated;
+  return showSkeleton(coldStart && !hydrated);
 }

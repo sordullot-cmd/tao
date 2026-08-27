@@ -8,7 +8,7 @@ import { fmt } from "@/lib/ui/format";
 import { periodStart } from "@/lib/ui/period";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { parseAccountSize } from "@/lib/propFirms";
-import { Skeleton, SkeletonRows } from "@/components/ui/Skeleton";
+import { Skeleton, SkeletonCard, SkeletonList, SkeletonStats, SkeletonToolbar, SkeletonScreen, showSkeleton } from "@/components/ui/Skeleton";
 import { useApp } from "@/lib/contexts/AppContext";
 import {
   GRID_COLUMN_STOPS, GRID_TICKS, AreaDotsDefs, areaDotsFill,
@@ -275,15 +275,44 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // Pendant que les trades arrivent depuis Supabase, afficher un skeleton
   // plutôt que l'état vide (évite le flash "Aucun trade" puis re-render).
   const { tradesLoading } = useApp();
-  if (tradesLoading && (!trades || trades.length === 0)) {
+  if (showSkeleton(tradesLoading && (!trades || trades.length === 0))) {
+    /* La page ouvre sur une bande de 112 px qui empile libellé, montant héros et
+       variation, avec les pastilles de période à droite — et la courbe se glisse
+       DESSOUS, à fond perdu, sur 310 px de tracé. Les trois barres empilées qui
+       tenaient lieu de squelette ici faisaient trois fois moins haut : tout le
+       reste de la page remontait pendant le chargement, puis redescendait d'un
+       coup. Le squelette tient maintenant la bande et le graphe à leur hauteur
+       réelle.
+
+       Ces mesures sont REDITES ici : les constantes de la bande vivent plus bas
+       dans le composant, après ce garde, et les lire à cet endroit lèverait une
+       ReferenceError (zone morte du `const`). Elles portent donc le même nom en
+       commentaire, pour que les deux se retrouvent le jour où la maquette
+       bouge. */
+    const PAD_TOP = 20;                    // TOPBAR_H
+    const BAND = PAD_TOP + 112;            // HEAD_BAND
     return (
-      <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1" aria-busy="true" aria-live="polite">
-        <Skeleton width={90} height={14} />
-        <Skeleton width={220} height={40} />
-        <div style={{background:T.white,borderRadius:12,boxShadow:T.elevCard,padding:16}}>
-          <SkeletonRows rows={6} height={32} />
+      <SkeletonScreen gap={48}>
+        <div style={{ position: "relative" }}>
+          <div style={{
+            position: "relative", zIndex: 1, height: BAND, paddingTop: PAD_TOP,
+            display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16,
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <Skeleton width={104} height={18} />
+              <Skeleton width={232} height={31} radius={8} />
+              <Skeleton width={148} height={18} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              {[54, 54, 54, 54, 60].map((w, i) => <Skeleton key={i} width={w} height={34} radius={999} />)}
+            </div>
+          </div>
+          {/* Le tracé et sa gouttière basse : 310 + 20, la mesure du vrai SVG. */}
+          <Skeleton height={330} radius={12} />
         </div>
-      </div>
+        <SkeletonStats count={4} />
+        <SkeletonCard><SkeletonList rows={6} /></SkeletonCard>
+      </SkeletonScreen>
     );
   }
   if (!trades || trades.length === 0) {

@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import { ChevronDown, Plus, Check, ArrowRight, Trash2 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
-import { PageSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonStats, SkeletonCard, SkeletonList, Skeleton } from "@/components/ui/Skeleton";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { t, useLang } from "@/lib/i18n";
@@ -46,7 +46,17 @@ export default function ScalingPage({ onGeneratePlan }) {
   const activeCount = accounts.filter(a => a.status !== "failed").length;
 
   if (useFirstLoad(accountsReady, STORAGE_KEY)) {
-    return <PageSkeleton variant="stats" stats={3} />;
+    /* Pas de rangée de commandes ici : la page ouvre directement sur ses trois
+       tuiles, en grille FIXE de trois colonnes (et non auto-fit). */
+    return (
+      <SkeletonScreen gap={20}>
+        <SkeletonStats count={3} minWidth={0} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Skeleton width={104} height={17} />
+          <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
+        </div>
+      </SkeletonScreen>
+    );
   }
 
   return (

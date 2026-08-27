@@ -33,7 +33,7 @@ import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { firmLogo } from "@/lib/accountBrand";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
-import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList, SkeletonHeader } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonHero, SkeletonToolbar, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 
 const BROKER_LOGOS = {
   "tradovate":           "/trado.png",
@@ -601,12 +601,23 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   /* Comptes et firmes arrivent de Supabase après l'authentification. L'état
      vide de cette page est une invitation à créer un premier compte : la
      montrer à quelqu'un qui en possède déjà est le contresens à éviter. */
-  if (accountsLoading && accounts.length === 0) {
+  if (showSkeleton(accountsLoading && accounts.length === 0)) {
     return (
       <SkeletonScreen label={t("nav.accounts")} gap={24}>
-        <SkeletonHeader />
-        <SkeletonStats count={3} />
-        <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
+        {/* La page ouvre comme une fiche de compte : le total en 40 px, une
+            ligne de repères dessous, puis les comptes eux-mêmes. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <SkeletonHero />
+            <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+              {[110, 96, 128].map((w, i) => <Skeleton key={i} width={w} height={16} />)}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <SkeletonToolbar left={[140]} right={[132]} />
+            <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
+          </div>
+        </div>
       </SkeletonScreen>
     );
   }

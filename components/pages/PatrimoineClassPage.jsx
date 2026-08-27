@@ -52,7 +52,7 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
   /* Le store est lu depuis le cloud : « introuvable » avant sa réponse est
      une erreur affichée à tort, sur une page ouverte par un lien direct. */
   if (useFirstLoad(storeReady, PATRIMOINE_LOCAL_KEY)) {
-    return <PageSkeleton variant="detail" />;
+    return <PageSkeleton variant="detail" gap={28} stats={3} />;
   }
 
   if (!cls) {

@@ -23,7 +23,7 @@ import { accountBrand, firmLogo } from "@/lib/accountBrand";
 import { AccountModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
-import { PageSkeleton } from "@/components/ui/Skeleton";
+import { PageSkeleton, showSkeleton } from "@/components/ui/Skeleton";
 
 /* ---------------------------------------------------------------------------
    Page « détail d'un compte » — portée depuis la maquette Figma
@@ -372,8 +372,8 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
   /* Avant le garde du dessous : sans compte chargé, `account` est introuvable
      et la page annonce « compte introuvable » — un message d'erreur pour ce
      qui n'est qu'une requête en cours. */
-  if (accountsLoading && accounts.length === 0) {
-    return <PageSkeleton variant="detail" label={t("nav.accounts")} />;
+  if (showSkeleton(accountsLoading && accounts.length === 0)) {
+    return <PageSkeleton variant="detail" label={t("nav.accounts")} gap={24} stats={4} />;
   }
 
   // Vue normale sans compte, ou vue archivée sans aucun compte archivé.

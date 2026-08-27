@@ -11,7 +11,7 @@
  */
 
 import React, { useState } from "react";
-import { Play, ShieldCheck, Lock, Brain, Plus, Coffee, AlertTriangle } from "lucide-react";
+import { Play, ShieldCheck, Lock, Brain, Plus, Coffee } from "lucide-react";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CARD, Input, PillButton } from "@/components/ui/da";
@@ -79,12 +79,11 @@ export default function SessionRunner({ session, store, now, onPause, onResume, 
 
   /* Ce qu'il faut pour sortir avant la fin, par cran de fermeté. La session
      terminée se ferme toujours d'un clic : la friction protège la session, pas
-     l'écran de fin. */
-  const emergenciesLeft = Math.max(0, mode.emergencies - session.emergencies);
+     l'écran de fin. En verrouillé, il n'y a rien à demander — on ne sort pas. */
+  const sealed = mode.exit === "none" && !done;
   const canExitNow = done
     || mode.exit === "free"
-    || (mode.exit === "typed" && typed.trim().toLowerCase() === EXIT_PHRASE)
-    || (mode.exit === "emergency" && emergenciesLeft > 0);
+    || (mode.exit === "typed" && typed.trim().toLowerCase() === EXIT_PHRASE);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -144,13 +143,28 @@ export default function SessionRunner({ session, store, now, onPause, onResume, 
               {Boolean(session.plannedMs) && (
                 <PillButton onClick={() => onExtend(15)}><Plus size={14} /> 15 min</PillButton>
               )}
-              <PillButton variant="ghost" onClick={() => setExiting(v => !v)}>Arrêter</PillButton>
+              {/* Verrouillé : pas de bouton « Arrêter » du tout. Un bouton
+                  désactivé serait une porte fermée qu'on continue de pousser —
+                  et la seule chose qu'on ait à décider ici est déjà décidée. */}
+              {!sealed && (
+                <PillButton variant="ghost" onClick={() => setExiting(v => !v)}>Arrêter</PillButton>
+              )}
             </>
           )}
         </div>
 
+        {sealed && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 999,
+            background: FIELD_BG, fontSize: 12, color: T.textSub,
+          }}>
+            <Lock size={13} style={{ flexShrink: 0 }} />
+            Verrouillée jusqu’au bout — il reste {fmtDur(left || 0)}. Ni pause, ni arrêt.
+          </div>
+        )}
+
         {/* La sortie ne s'ouvre qu'à la demande, et elle porte son prix. */}
-        {exiting && !done && (
+        {exiting && !done && !sealed && (
           <div style={{
             width: "100%", maxWidth: 460, padding: 16, borderRadius: 12,
             background: FIELD_BG, display: "flex", flexDirection: "column", gap: 10,
@@ -168,21 +182,13 @@ export default function SessionRunner({ session, store, now, onPause, onResume, 
                 <Input value={typed} onChange={e => setTyped(e.target.value)} placeholder={EXIT_PHRASE} autoFocus />
               </>
             )}
-            {mode.exit === "emergency" && (
-              <div style={{ fontSize: 13, color: emergenciesLeft ? T.textSub : PALETTE.red, lineHeight: 1.6, display: "flex", gap: 8 }}>
-                <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-                {emergenciesLeft
-                  ? `Mode verrouillé : une seule sortie de secours, et elle sera notée au journal. Il reste ${fmtDur(left || 0)}.`
-                  : "Sortie de secours déjà utilisée. La session ira jusqu'au bout."}
-              </div>
-            )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <PillButton variant="ghost" compact onClick={() => { setExiting(false); setTyped(""); }}>
                 Continuer la session
               </PillButton>
               <PillButton
                 variant="danger" compact disabled={!canExitNow}
-                onClick={() => onEnd(mode.exit === "emergency" ? "emergency" : "abandoned")}
+                onClick={() => onEnd("abandoned")}
               >
                 Arrêter maintenant
               </PillButton>

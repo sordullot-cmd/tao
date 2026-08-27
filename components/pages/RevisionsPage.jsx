@@ -266,7 +266,7 @@ export default function RevisionsPage() {
     );
   }
 
-  if (booting) return <PageSkeleton variant="list" />;
+  if (booting) return <PageSkeleton variant="list" gap={18} toolbarLeft={[74, 82, 96]} toolbarRight={[140]} />;
 
   /* ── Page ──────────────────────────────────────────────────────────────── */
 

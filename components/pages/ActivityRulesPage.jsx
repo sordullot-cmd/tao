@@ -34,7 +34,8 @@ import {
   allCategories, assignableCategories, BUILTIN_CATEGORIES, categoryById, catalogSize, categoryLabel,
   isBrowser, newCategoryId, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain, suggestCategory,
 } from "@/lib/activity/categories";
-import { clearAll, listDays, loadRange } from "@/lib/activity/engine";
+import { clearAll, daySources, listDays, loadRange, syncNow } from "@/lib/activity/engine";
+import { device, renameDevice } from "@/lib/activity/cloud";
 import { fmtDur, recategorize, unclassified } from "@/lib/activity/stats";
 import { hasNativeTracking, snapshot } from "@/lib/activity/native";
 import { useActivityLive, useActivitySettings } from "@/lib/hooks/useActivityTracker";
@@ -285,6 +286,7 @@ export default function ActivityRulesPage({ setPage }) {
   );
 
   const segmentCount = useMemo(() => logs.reduce((n, l) => n + l.segments.length, 0), [logs]);
+  const sources = useMemo(() => { void version; return daySources(today); }, [today, version]);
 
   const addRule = (match, field, category) => {
     const clean = (match || "").trim().toLowerCase();
@@ -803,14 +805,42 @@ export default function ActivityRulesPage({ setPage }) {
       {/* ── Données ── */}
       <Disclosure title="Mes données" right={`${days.length} jour${days.length > 1 ? "s" : ""} enregistré${days.length > 1 ? "s" : ""}`}>
         <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
-          Les mesures restent sur CE poste (stockage local du navigateur / de l’app), et ne
-          partent sur aucun serveur : une activité est celle d’une machine, la mélanger avec
-          celle d’une autre fausserait les totaux. Seuls les réglages et les règles ci-dessus
-          sont synchronisés avec ton compte. Les journées de plus de 120 jours sont effacées
-          automatiquement. {segmentCount > 0 && `${segmentCount} segments sur les 30 derniers jours.`}
+          Les journées sont enregistrées <strong style={{ color: T.text, fontWeight: 600 }}>sur ton compte</strong>,
+          une ligne par jour et une tranche par poste : tu retrouves ta journée depuis le téléphone
+          ou un autre ordinateur, et elle survit au changement de machine. Ce poste en garde une
+          copie locale pour la lire sans réseau. Deux postes qui mesurent le même jour ne s’écrasent
+          pas, et leurs minutes communes ne comptent qu’une fois.
+          {" "}Chaque appareil mesure ce qu’il voit : l’app de bureau tout le poste, une page web le
+          seul temps passé dans tao trade. Quand deux d’entre eux tournaient à la même minute,
+          <strong style={{ color: T.text, fontWeight: 600 }}> l’app de bureau passe devant</strong> —
+          c’est la seule à savoir nommer l’application, donc à classer juste.
+          {" "}Les journées de plus de 120 jours sont effacées de ce poste automatiquement.
+          {segmentCount > 0 && ` ${segmentCount} segments sur les 30 derniers jours.`}
         </span>
+
+        {/* Le nom de ce poste : il s'affiche à côté d'une journée dès qu'une
+            autre machine mesure aussi. « Poste » et « Poste » ne se distinguent
+            pas — d'où un nom qu'on peut donner. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: T.textSub }}>Nom de ce poste</span>
+          <Input
+            compact
+            defaultValue={device().label}
+            onBlur={(e) => { renameDevice(e.target.value); setVersion(v => v + 1); }}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+            style={{ maxWidth: 200 }}
+          />
+          {sources.length > 1 && (
+            <span style={{ fontSize: 11, color: T.textMut }}>
+              {sources.length} postes ont mesuré aujourd’hui : {sources.map(x => x.label).join(", ")}.
+            </span>
+          )}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <PillButton compact onClick={exportCsv} disabled={days.length === 0}>Exporter en CSV</PillButton>
+          {/* Le versement au compte est différé de vingt secondes : ce bouton
+              n'existe que pour ne pas avoir à attendre avant de fermer. */}
+          <PillButton compact variant="ghost" onClick={() => syncNow()}>Verser au compte maintenant</PillButton>
           {confirmWipe ? (
             <>
               <PillButton
@@ -824,7 +854,7 @@ export default function ActivityRulesPage({ setPage }) {
             </>
           ) : (
             <PillButton compact variant="danger" onClick={() => setConfirmWipe(true)} disabled={days.length === 0}>
-              <Trash2 size={13} /> Effacer l’historique
+              <Trash2 size={13} /> Effacer l’historique de ce poste
             </PillButton>
           )}
         </div>

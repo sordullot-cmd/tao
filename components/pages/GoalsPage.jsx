@@ -668,7 +668,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
   }, [goals, trades]);
 
   if (useFirstLoad(goalsReady, STORAGE_KEY)) {
-    return <PageSkeleton variant="list" label={t("nav.goals")} />;
+    return <PageSkeleton variant="list" label={t("nav.goals")} gap={16} stats={4} toolbarRight={[152]} />;
   }
 
   return (

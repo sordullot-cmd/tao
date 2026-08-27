@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
-import { PageSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonStats, Skeleton } from "@/components/ui/Skeleton";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 
 import MiniCalendar from "@/components/ui/MiniCalendar";
@@ -825,7 +825,24 @@ export default function LifeRpgPage() {
   const openGoalForm = () => createGoalRef.current?.();
 
   if (useFirstLoad(stateReady, STORAGE_KEY)) {
-    return <PageSkeleton variant="stats" label={t("nav.lifeRpg")} stats={3} />;
+    return (
+      <SkeletonScreen label={t("nav.lifeRpg")} gap={28}>
+        {/* Libellé + millésime à gauche, jauge d'XP et action à droite —
+            alignés en haut, comme la vraie ligne de tête. */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <Skeleton width={188} height={17} />
+            <Skeleton width={72} height={24} radius={8} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <Skeleton width={200} height={12} radius={999} />
+            <Skeleton width={148} height={34} radius={999} />
+          </div>
+        </div>
+        <SkeletonStats count={3} />
+        <SkeletonCard><SkeletonList rows={5} /></SkeletonCard>
+      </SkeletonScreen>
+    );
   }
 
   return (

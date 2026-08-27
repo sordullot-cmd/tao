@@ -5,6 +5,10 @@ import { T } from "@/lib/ui/tokens";
 import { CARD } from "@/components/ui/da";
 import { t } from "@/lib/i18n";
 
+/* Réexporté ici pour que les pages n'aient qu'un import à faire : le drapeau
+   lui-même vit dans une feuille sans dépendance (cf. le fichier). */
+export { showSkeleton } from "@/lib/ui/skeletonPreview";
+
 /**
  * Squelettes de chargement — la forme du contenu à venir, pas un sablier.
  *
@@ -120,15 +124,40 @@ export function SkeletonCard({
  * pages. `minWidth` reprend la grille auto-fit du site pour se replier pareil
  * en mobile.
  */
-export function SkeletonStats({ count = 4, minWidth = 160 }: { count?: number; minWidth?: number }) {
+export function SkeletonStats({
+  count = 4,
+  minWidth = 160,
+  flat = false,
+}: { count?: number; minWidth?: number; flat?: boolean }) {
+  const cell = (i: number) => (
+    <div
+      key={i}
+      style={flat
+        ? { background: T.white, padding: 16, display: "flex", flexDirection: "column", gap: 10 }
+        : { ...CARD, display: "flex", flexDirection: "column", gap: 10 }}
+    >
+      <Skeleton width="55%" height={11} />
+      <Skeleton width="75%" height={24} radius={8} />
+    </div>
+  );
+  /* `flat` : la variante « bandeau », où les tuiles sont collées dans un seul
+     cadre et séparées par un filet obtenu au `gap` de 1 px sur fond bordure
+     (page Minuteur). Quatre cartes détachées à sa place décaleraient tout ce
+     qui suit de la hauteur de leurs ombres. */
+  if (flat) {
+    return (
+      <div style={{
+        display: "grid", gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: 1,
+        background: T.border, border: `1px solid ${T.border}`,
+        borderRadius: "var(--radius-card)", overflow: "hidden",
+      }}>
+        {Array.from({ length: count }).map((_, i) => cell(i))}
+      </div>
+    );
+  }
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${minWidth}px, 1fr))`, gap: 12 }}>
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Skeleton width="55%" height={11} />
-          <Skeleton width="75%" height={24} radius={8} />
-        </div>
-      ))}
+      {Array.from({ length: count }).map((_, i) => cell(i))}
     </div>
   );
 }
@@ -263,62 +292,156 @@ const SR_ONLY: React.CSSProperties = {
   border: 0,
 };
 
-/** Titre de page + éventuel sous-titre, gabarit commun à tous les écrans. */
-export function SkeletonHeader({ subtitle = true }: { subtitle?: boolean }) {
+/**
+ * SkeletonPill — un contrôle de la rangée de commandes.
+ *
+ * 34 px, rayon 999 : la hauteur unique de tous les boutons et pastilles du site
+ * (`PillButton`, `StepperPill`, `PeriodPills`). Un squelette qui pose un
+ * rectangle de 26 px à leur place fait sauter la ligne entière à l'arrivée.
+ */
+export function SkeletonPill({ width = 120, height = 34 }: { width?: number | string; height?: number }) {
+  return <Skeleton width={width} height={height} radius={999} />;
+}
+
+/** Groupe d'onglets `PeriodPills` : même gouttière de 4 px que la vraie brique. */
+export function SkeletonPills({ widths = [72, 72, 72] }: { widths?: number[] }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <Skeleton width={200} height={26} radius={8} />
-      {subtitle && <Skeleton width={300} height={13} />}
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      {widths.map((w, i) => <SkeletonPill key={i} width={w} />)}
     </div>
   );
 }
 
 /**
- * PageSkeleton — écran complet prêt à l'emploi, décliné selon le gabarit de la
- * page. C'est ce que doit appeler une page qui n'a rien de particulier à
- * montrer : quatre variantes couvrent tout le site, et une page n'a donc pas
- * à composer son squelette à la main pour ressembler à ses voisines.
+ * SkeletonToolbar — la rangée de tête, celle que TOUTES les pages du site
+ * portent à la place d'un titre.
  *
- * - `stats`  : tuiles chiffrées + graphique (tableau de bord, rapports)
- * - `table`  : tuiles + tableau (trades, transactions)
- * - `list`   : liste de lignes (notes, lecture, fichiers, agenda)
- * - `detail` : en-tête + deux colonnes de cartes (fiche compte, fiche actif)
+ * C'est le point où les premiers squelettes se trompaient : ils dessinaient un
+ * titre de 26 px suivi d'un sous-titre, alors qu'aucune page n'en a — la barre
+ * latérale dit déjà où l'on est. Ce que la page pose en tête, ce sont des
+ * commandes de 34 px, le plus souvent poussées à droite.
+ */
+export function SkeletonToolbar({
+  left = [],
+  right = [],
+  gap = 12,
+}: {
+  left?: number[];
+  right?: number[];
+  gap?: number;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap, flexWrap: "wrap" }}>
+      {left.map((w, i) => <SkeletonPill key={`l${i}`} width={w} />)}
+      {right.length > 0 && (
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {right.map((w, i) => <SkeletonPill key={`r${i}`} width={w} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * SkeletonHero — le bloc « libellé + grand nombre » des pages qui en portent un
+ * (Calendrier, Objectifs de l'année, Éloquence). `size` est la taille du
+ * chiffre : sa boîte fait environ 0,775 fois cette valeur, comme `HeroAmount`.
+ */
+export function SkeletonHero({
+  label = 132,
+  value = 216,
+  size = 40,
+}: { label?: number; value?: number; size?: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+      <Skeleton width={label} height={18} />
+      <Skeleton width={value} height={Math.round(size * 0.775)} radius={8} />
+    </div>
+  );
+}
+
+/** Titre de SECTION (`SectionTitle`, 24 px) et son éventuel chapô. */
+export function SkeletonSectionTitle({ subtitle = false }: { subtitle?: boolean }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Skeleton width={220} height={26} radius={8} />
+      {subtitle && <Skeleton width="min(620px, 90%)" height={18} />}
+    </div>
+  );
+}
+
+/**
+ * SkeletonBackLink — le lien de remontée en tête des pages de détail.
+ * Cible de 32 px, ramenée dans la gouttière par la même marge négative que
+ * `BackLink` : sans elle, tout ce qui suit descend de sept pixels à l'arrivée.
+ */
+export function SkeletonBackLink() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
+      <Skeleton width={104} height={32} radius={999} />
+    </div>
+  );
+}
+
+/**
+ * PageSkeleton — écran complet prêt à l'emploi, pour une page dont le gabarit
+ * est l'un des quatre du site. Une page à l'ossature particulière (le
+ * calendrier et sa grille de sept colonnes, les notes et leurs deux colonnes)
+ * compose le sien : le but est de tenir la MÊME place, pas d'être générique.
+ *
+ * - `stats` : commandes + tuiles chiffrées + graphique
+ * - `table` : commandes + tableau
+ * - `list`   : commandes + liste de lignes
+ * - `grid`   : commandes + grille de cartes
+ * - `detail` : lien de retour + montant héros + cartes (fiche compte, actif…)
  */
 export function PageSkeleton({
   variant = "stats",
   label,
   stats = 4,
+  gap = 16,
+  toolbarLeft,
+  toolbarRight = [148],
 }: {
-  variant?: "stats" | "table" | "list" | "detail";
+  variant?: "stats" | "table" | "list" | "grid" | "detail";
   label?: string;
   stats?: number;
+  gap?: number;
+  toolbarLeft?: number[];
+  toolbarRight?: number[];
 }) {
   return (
-    <SkeletonScreen label={label}>
-      <SkeletonHeader subtitle={variant !== "list"} />
+    <SkeletonScreen label={label} gap={gap}>
+      {variant === "detail"
+        ? <SkeletonBackLink />
+        : <SkeletonToolbar left={toolbarLeft} right={toolbarRight} />}
       {variant === "stats" && (
         <>
           <SkeletonStats count={stats} />
           <SkeletonCard><SkeletonChart /></SkeletonCard>
         </>
       )}
-      {variant === "table" && (
-        <>
-          <SkeletonStats count={stats} />
-          <SkeletonCard><SkeletonTable /></SkeletonCard>
-        </>
-      )}
-      {variant === "list" && (
-        <SkeletonCard><SkeletonList /></SkeletonCard>
-      )}
       {variant === "detail" && (
         <>
-          <SkeletonStats count={3} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-            <SkeletonCard><SkeletonText lines={4} /></SkeletonCard>
-            <SkeletonCard><SkeletonList rows={4} avatar={false} /></SkeletonCard>
-          </div>
+          <SkeletonHero label={112} value={188} size={32} />
+          <SkeletonStats count={stats} />
+          <SkeletonCard><SkeletonList rows={5} /></SkeletonCard>
         </>
+      )}
+      {variant === "table" && <SkeletonCard><SkeletonTable /></SkeletonCard>}
+      {variant === "list" && <SkeletonCard><SkeletonList /></SkeletonCard>}
+      {variant === "grid" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: 12 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <Skeleton width="65%" height={16} />
+                <SkeletonText lines={2} lineHeight={12} />
+                <Skeleton height={6} radius={999} />
+              </div>
+            </SkeletonCard>
+          ))}
+        </div>
       )}
     </SkeletonScreen>
   );

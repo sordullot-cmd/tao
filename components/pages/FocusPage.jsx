@@ -109,7 +109,7 @@ export default function FocusPage() {
   /* ── Rendu ─────────────────────────────────────────────────────────────── */
 
   if (useFirstLoad(storeReady, FOCUS_STORAGE_KEY)) {
-    return <PageSkeleton variant="list" />;
+    return <PageSkeleton variant="list" gap={18} toolbarLeft={[78, 92, 86]} toolbarRight={[132]} />;
   }
 
   return (

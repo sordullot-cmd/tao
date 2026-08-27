@@ -329,7 +329,7 @@ export default function BudgetPage() {
   const allocated = chartParts.reduce((s, p) => s + p.amount, 0);
 
   if (useFirstLoad(budgetReady, BUDGET_STORAGE_KEY)) {
-    return <PageSkeleton variant="stats" label={t("nav.budget")} stats={3} />;
+    return <PageSkeleton variant="stats" label={t("nav.budget")} stats={3} gap={28} toolbarLeft={[220]} toolbarRight={[96, 112, 96]} />;
   }
 
   return (

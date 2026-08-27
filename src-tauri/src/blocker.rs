@@ -57,6 +57,8 @@ mais jamais silencieux.
 use tauri::{AppHandle, Manager};
 
 /// Combien de temps la fenêtre reste au-dessus des autres après une reprise.
+/// Notion de bureau : sur mobile, rien ne se superpose (cf. `focus_reclaim`).
+#[cfg(desktop)]
 const ON_TOP_MS: u64 = 1_200;
 
 /// Ramène la fenêtre principale devant, quelle que soit l'appli qui l'occupait.
@@ -72,16 +74,24 @@ pub fn focus_reclaim(app: AppHandle) -> Result<bool, String> {
 
   // La croix ✕ cache la fenêtre dans le tray (cf. lib.rs) : une session peut
   // donc tourner sans fenêtre visible, et il faut la rendre avant de la viser.
-  let _ = w.unminimize();
   w.show().map_err(|e| e.to_string())?;
-  let _ = w.set_always_on_top(true);
   w.set_focus().map_err(|e| e.to_string())?;
 
-  let w2 = w.clone();
-  std::thread::spawn(move || {
-    std::thread::sleep(std::time::Duration::from_millis(ON_TOP_MS));
-    let _ = w2.set_always_on_top(false);
-  });
+  /* Le maintien au-dessus des autres fenêtres est une notion de BUREAU : sur
+     Android il n'y a pas de fenêtres empilées, c'est l'activité au premier plan
+     qui occupe l'écran, et la ramener devant se fait côté natif. `show` et
+     `set_focus` suffisent donc là-bas, et les trois appels qui suivent
+     n'existent même pas dans la build mobile. */
+  #[cfg(desktop)]
+  {
+    let _ = w.unminimize();
+    let _ = w.set_always_on_top(true);
+    let w2 = w.clone();
+    std::thread::spawn(move || {
+      std::thread::sleep(std::time::Duration::from_millis(ON_TOP_MS));
+      let _ = w2.set_always_on_top(false);
+    });
+  }
 
   Ok(true)
 }

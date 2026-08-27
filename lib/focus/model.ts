@@ -207,18 +207,31 @@ export type FocusMode = "normal" | "deep" | "locked";
 /**
  * Ce qu'il faut faire pour interrompre une session, par cran.
  *
- * `friction` n'est pas de la décoration : c'est la seule variable qui décide si
- * la session tient. Le geste doit coûter plus cher que l'envie qui le motive,
- * sans devenir un piège — d'où le nombre limité de sorties de secours en mode
- * verrouillé plutôt qu'aucune.
+ * La friction n'est pas de la décoration : c'est la seule variable qui décide si
+ * la session tient. Le geste doit coûter plus cher que l'envie qui le motive.
+ *
+ * ── Verrouillé veut dire verrouillé ───────────────────────────────────────
+ * Ce cran donnait une « sortie de secours » unique. Une porte de sortie, même
+ * unique, transforme la question « est-ce que je continue ? » en « est-ce que
+ * j'utilise MA sortie ? » — et cette question-là se pose, se négocie, et se
+ * perd. Il n'y en a donc plus aucune : la session va jusqu'au bout. C'est le
+ * seul cran qui promette quelque chose, et une promesse avec une exception n'en
+ * est pas une.
+ *
+ * Ce que ce cran ne prétend PAS faire : empêcher de quitter l'app ou d'éteindre
+ * la machine. Aucun logiciel ne le peut. Il empêche de l'annuler DEPUIS l'app,
+ * là où l'envie se présente.
  */
 export const MODES: Record<FocusMode, {
   id: FocusMode;
   label: string;
   hint: string;
-  /** Comment on arrête avant la fin. */
-  exit: "free" | "typed" | "emergency";
-  /** Nombre de sorties de secours autorisées (mode verrouillé). */
+  /** Comment on arrête avant la fin — `none` : on n'arrête pas. */
+  exit: "free" | "typed" | "none";
+  /**
+   * Sorties de secours autorisées. Plus aucun cran n'en donne (cf. ci-dessus) ;
+   * le champ reste pour lire les sessions et les journaux déjà enregistrés.
+   */
   emergencies: number;
   /** Pauses autorisées dans la session. */
   breaks: number;
@@ -235,8 +248,8 @@ export const MODES: Record<FocusMode, {
     color: "purple",
   },
   locked: {
-    id: "locked", label: "Verrouillé", exit: "emergency", emergencies: 1, breaks: 0,
-    hint: "Aucun arrêt, sauf une sortie de secours unique. La session décide, pas vous.",
+    id: "locked", label: "Verrouillé", exit: "none", emergencies: 0, breaks: 0,
+    hint: "Aucun arrêt, aucune pause : la session va jusqu'au bout. À ne choisir qu'en le voulant vraiment.",
     color: "red",
   },
 };

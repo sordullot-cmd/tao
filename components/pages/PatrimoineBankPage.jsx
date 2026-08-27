@@ -24,7 +24,7 @@ import { RoundLogo } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { bankLogo, bankMatchKey } from "@/lib/bank/bankLogos";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
-import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonHeader } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonSectionTitle, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 import { useFavoriteBanks } from "@/lib/bank/useFavoriteBanks";
 import { startBankConnection } from "@/lib/bank/startConnection";
 import { BankFormModal } from "@/components/modals/PatrimoineModals";
@@ -116,11 +116,16 @@ export default function PatrimoineBankPage({ setPage }) {
   /* `loading` du hook ne vaut vrai QU'À VIDE (une relecture par-dessus des
      comptes déjà affichés passe par `revalidating`) : le squelette ne peut donc
      pas remplacer une liste déjà peinte. */
-  if (loading) {
+  if (showSkeleton(loading)) {
     return (
       <SkeletonScreen gap={24}>
-        <SkeletonHeader />
-        <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
+        <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 0 }}><SkeletonSectionTitle subtitle /></div>
+            <Skeleton width={168} height={34} radius={999} />
+          </div>
+          <SkeletonCard><SkeletonList rows={3} /></SkeletonCard>
+        </div>
       </SkeletonScreen>
     );
   }

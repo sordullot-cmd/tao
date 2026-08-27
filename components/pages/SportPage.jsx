@@ -626,7 +626,7 @@ export default function SportPage() {
   }, [filteredSessions]);
 
   if (useFirstLoad(sessionsReady, "tr4de_sport_sessions")) {
-    return <PageSkeleton variant="stats" stats={3} />;
+    return <PageSkeleton variant="stats" stats={3} gap={24} toolbarLeft={[124, 88]} toolbarRight={[148]} />;
   }
 
   return (

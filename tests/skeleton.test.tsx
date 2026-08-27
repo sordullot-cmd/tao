@@ -3,7 +3,7 @@ import React from "react";
 import { render, screen, cleanup, act } from "@testing-library/react";
 
 import {
-  Skeleton, SkeletonList, SkeletonScreen, SkeletonChart, PageSkeleton,
+  Skeleton, SkeletonList, SkeletonScreen, SkeletonChart, PageSkeleton, SkeletonToolbar,
 } from "@/components/ui/Skeleton";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
 
@@ -50,6 +50,26 @@ describe("Squelettes de chargement", () => {
   it("retombe sur le libellé traduit quand l'appelant n'en donne pas", () => {
     render(<PageSkeleton variant="list" />);
     expect(screen.getByRole("status").textContent).toBe("Loading...");
+  });
+
+  it("ouvre sur une rangée de commandes à 34 px, et non sur un titre de page", () => {
+    /* Le contrat de FORME. Aucune page du site n'a de titre — la barre latérale
+       dit déjà où l'on est ; ce qu'elles posent en tête, ce sont des boutons de
+       34 px, la hauteur unique de tous les contrôles. Un squelette qui dessine
+       un titre de 26 px suivi d'un sous-titre fait sauter toute la page d'une
+       trentaine de pixels au moment où le contenu arrive. */
+    const { container } = render(<PageSkeleton variant="list" toolbarRight={[152]} />);
+    const bars = [...container.querySelectorAll(".anim-shimmer")] as HTMLElement[];
+    expect(bars[0].style.height).toBe("34px");
+    expect(bars[0].style.borderRadius).toBe("999px");
+  });
+
+  it("pousse les commandes de droite à droite, comme les vraies barres", () => {
+    const { container } = render(<SkeletonToolbar left={[80]} right={[120]} />);
+    const row = container.firstElementChild as HTMLElement;
+    const [leftBar, rightGroup] = [...row.children] as HTMLElement[];
+    expect(leftBar.classList.contains("anim-shimmer")).toBe(true);
+    expect(rightGroup.style.marginLeft).toBe("auto");
   });
 
   it("garde les mêmes hauteurs de colonnes d'un rendu à l'autre", () => {

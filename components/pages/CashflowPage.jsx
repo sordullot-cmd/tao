@@ -74,7 +74,7 @@ import {
 } from "@/lib/bank/transactions";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { useCloudState } from "@/lib/hooks/useCloudState";
-import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList, showSkeleton } from "@/components/ui/Skeleton";
 import { fmt } from "@/lib/ui/format";
 
 /* Trois fenêtres, et une saisie libre. La semaine et le semestre sont partis :
@@ -411,7 +411,7 @@ export default function CashflowPage({ setPage }) {
   /* Synchronisation bancaire en cours et rien en cache : la carte « connecte
      une banque » proposerait de brancher ce qui est justement en train de se
      brancher. Le squelette dit « ça arrive » sans proposer d'action fausse. */
-  if (bank.loading && noBank) {
+  if (showSkeleton(bank.loading && noBank)) {
     return (
       <SkeletonScreen label={t("patrimoine.spending.loading")} gap={28}>
         {header}

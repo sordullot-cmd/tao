@@ -180,7 +180,10 @@ export default function BlueprintPage() {
   };
 
   if (useFirstLoad(blueprintsReady, BLUEPRINT_STORAGE_KEY)) {
-    return <PageSkeleton variant="list" label={t("nav.blueprint")} />;
+    /* Grille de cartes de plan, et non une liste : c'est ce que la page rend
+       dès qu'elle a un plan. Le chapô de gauche est un texte de 12 px, pas une
+       pastille — d'où la largeur donnée en `toolbarLeft`. */
+    return <PageSkeleton variant="grid" label={t("nav.blueprint")} gap={16} toolbarLeft={[420]} toolbarRight={[140]} />;
   }
 
   return (

@@ -58,7 +58,7 @@ export default function PatrimoineHoldingPage({ selection, setPage, setSelectedA
   /* Le store est lu depuis le cloud : « introuvable » avant sa réponse est
      une erreur affichée à tort, sur une page ouverte par un lien direct. */
   if (useFirstLoad(storeReady, PATRIMOINE_LOCAL_KEY)) {
-    return <PageSkeleton variant="detail" />;
+    return <PageSkeleton variant="detail" gap={28} stats={3} />;
   }
 
   if (!asset || !holding) {

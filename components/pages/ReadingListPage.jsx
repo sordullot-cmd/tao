@@ -101,7 +101,7 @@ export default function ReadingListPage() {
   }, 0);
 
   if (useFirstLoad(booksReady, STORAGE_KEY)) {
-    return <PageSkeleton variant="list" label={t("nav.reading")} />;
+    return <PageSkeleton variant="list" label={t("nav.reading")} gap={16} toolbarRight={[152]} />;
   }
 
   return (

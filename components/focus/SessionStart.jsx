@@ -12,7 +12,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Play, Plus, Pencil, Brain, Timer, Target, Moon, Sparkles, Coffee, BookOpen, Dumbbell,
+  Play, Plus, Pencil, Brain, Timer, Target, Moon, Sparkles, Coffee, BookOpen, Dumbbell, Lock,
 } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { BTN } from "@/lib/ui/buttons";
@@ -184,6 +184,19 @@ export default function SessionStart({ store, setStore, onStart, actionSlot }) {
 
   const toggleList = (id) => setLists(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
 
+  /* Session verrouillée en attente de confirmation.
+
+     Le cran verrouillé ne donne plus AUCUNE sortie : la session va jusqu'au
+     bout. Ce qui se paie une fois lancé doit donc se décider avant — un clic de
+     travers sur « Verrouillé · 2 h » ne peut pas être irréversible. C'est le
+     seul cran qui demande à confirmer, et c'est exactement la raison pour
+     laquelle il tient. */
+  const [pending, setPending] = useState(null);
+  const launch = (session) => {
+    if (session.mode === "locked") { setPending(session); return; }
+    onStart(session);
+  };
+
   /* Le bouton de création vit dans la barre d'onglets, aligné sur elle, et non
      au-dessus de la grille : c'est une action de la PAGE, pas de la section.
      Le portail laisse son état où il est — l'éditeur qu'il ouvre appartient à
@@ -236,7 +249,7 @@ export default function SessionStart({ store, setStore, onStart, actionSlot }) {
                   : "Aucune liste : minuteur seul."}
               </div>
 
-              <PillButton variant="primary" onClick={() => onStart(sessionFromPreset(p))} style={{ width: "100%" }}>
+              <PillButton variant="primary" onClick={() => launch(sessionFromPreset(p))} style={{ width: "100%" }}>
                 <Play size={14} /> Démarrer
               </PillButton>
             </div>
@@ -340,7 +353,7 @@ export default function SessionStart({ store, setStore, onStart, actionSlot }) {
             <div>
               <PillButton
                 variant="primary"
-                onClick={() => onStart(startSession({
+                onClick={() => launch(startSession({
                   name: duration ? `Session ${duration} min` : "Chronomètre",
                   durationMin: duration,
                   blocklistIds: lists,
@@ -353,6 +366,38 @@ export default function SessionStart({ store, setStore, onStart, actionSlot }) {
           </div>
         )}
       </div>
+
+      {/* La confirmation du verrou : ce qu'on s'engage à tenir, en toutes
+          lettres, avec le mot exact de ce qui devient impossible. */}
+      {pending && (
+        <Modal
+          open
+          onClose={() => setPending(null)}
+          title="Verrouiller cette session ?"
+          footer={
+            <>
+              <PillButton variant="ghost" onClick={() => setPending(null)}>Revenir</PillButton>
+              <PillButton
+                variant="primary"
+                onClick={() => { const s = pending; setPending(null); onStart(s); }}
+              >
+                <Lock size={14} /> Je verrouille
+              </PillButton>
+            </>
+          }
+        >
+          <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.7 }}>
+            <strong style={{ color: T.text }}>
+              {pending.plannedMs ? fmtDur(pending.plannedMs) : "Durée libre"}
+            </strong>{" "}
+            sans arrêt possible : ni pause, ni annulation depuis l’app. Le bouton « Arrêter »
+            n’existera pas tant que le minuteur n’est pas au bout.
+            <br />
+            Ce que ça ne fait pas : t’empêcher de fermer l’app ou d’éteindre la machine — aucun
+            logiciel ne le peut. Ça empêche de l’annuler là où l’envie se présente.
+          </div>
+        </Modal>
+      )}
 
       {editing && (
         <PresetEditor

@@ -36,7 +36,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { T } from "@/lib/ui/tokens";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
-import { loadRange } from "@/lib/activity/engine";
+import { daySources, loadRange } from "@/lib/activity/engine";
 import {
   categoryLabel, isBrowser, PRODUCTIVITY_COLOR, rootDomain,
 } from "@/lib/activity/categories";
@@ -158,6 +158,12 @@ export default function ActivityPage({ setPage }) {
     () => stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms })),
     [stats.byCategory]
   );
+
+  /* Les postes qui ont mesuré ce jour-là. Tant qu'il n'y en a qu'un, on ne dit
+     rien : nommer la machine n'apprend rien à qui n'en a qu'une. Dès qu'il y en
+     a deux, il FAUT le dire — sinon la journée paraît avoir été vécue d'un seul
+     endroit, et les minutes communes (rognées à la lecture) semblent perdues. */
+  const sources = useMemo(() => { void day; return daySources(date); }, [date, day]);
 
   const other = stats.byCategory.find(b => b.id === "other");
   const pendingApps = useMemo(() => stats.byApp.filter(a => a.cat === "other"), [stats.byApp]);
@@ -301,6 +307,16 @@ export default function ActivityPage({ setPage }) {
                 <span>Temps de focus <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{fmtDur(stats.focusMs)}</strong> ({stats.focusSessions.length} session{stats.focusSessions.length > 1 ? "s" : ""})</span>
                 <span>Distractions <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{fmtDur(stats.distractingMs)}</strong> ({Math.round(stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0)} % du temps actif)</span>
                 <span>Qualité <strong style={{ color: T.text, fontWeight: 600, marginLeft: 4 }}>{stats.focusScore}</strong> / 100</span>
+                {/* Tant qu'un seul poste a mesuré, on ne le nomme pas : ça
+                    n'apprend rien à qui n'en a qu'un. Dès qu'il y en a deux, il
+                    FAUT le dire — sinon la journée paraît avoir été vécue d'un
+                    seul endroit, et les minutes communes (comptées une fois
+                    seulement) semblent avoir disparu. */}
+                {sources.length > 1 && (
+                  <span title={sources.map(x => `${x.label} · ${fmtDur(x.ms)}`).join("\n")} style={{ color: T.textMut }}>
+                    Mesurée sur {sources.length} postes
+                  </span>
+                )}
               </div>
             </div>
 

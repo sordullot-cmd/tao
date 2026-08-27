@@ -128,6 +128,50 @@ describe("Page Focus", () => {
     expect(screen.queryByText("restant")).toBeNull();
   });
 
+  /* Le « Démarrer » de la session LIBRE — celui de la carte qui porte le
+     sélecteur de fermeté. Les presets et les programmes en ont un aussi. */
+  const freeStart = () => {
+    // On remonte depuis l'étiquette « Fermeté » jusqu'au premier ancêtre qui
+    // contienne un bouton « Démarrer » : c'est la carte de la session libre.
+    let el: HTMLElement | null = screen.getByText("Fermeté");
+    while (el) {
+      const btn = [...el.querySelectorAll("button")].find(b => /Démarrer/.test(b.textContent || ""));
+      if (btn) return btn as HTMLButtonElement;
+      el = el.parentElement;
+    }
+    throw new Error("bouton « Démarrer » de la session libre introuvable");
+  };
+
+  it("ne laisse aucune sortie à une session verrouillée", () => {
+    render(<Focus />);
+    // Session libre → cran « Verrouillé ».
+    fireEvent.click(screen.getByText(/durée, listes et fermeté/));
+    fireEvent.click(screen.getByText("Verrouillé"));
+    fireEvent.click(freeStart());
+
+    /* Le verrou se confirme AVANT de partir : ce qui n'a plus de sortie doit se
+       décider en connaissance de cause. (Le titre de la modale vit dans son
+       `aria-label`, pas dans un nœud de texte.) */
+    expect(screen.getByRole("dialog", { name: "Verrouiller cette session ?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Je verrouille"));
+
+    // Une fois lancée : ni arrêt, ni pause.
+    expect(screen.getByText(/Verrouillée jusqu’au bout/)).toBeInTheDocument();
+    expect(screen.queryByText("Arrêter")).toBeNull();
+    expect(screen.queryByText("Arrêter maintenant")).toBeNull();
+    const pause = screen.getByText(/Pause/).closest("button") as HTMLButtonElement;
+    expect(pause.disabled).toBe(true);
+  });
+
+  it("laisse revenir sans lancer quand on refuse le verrou", () => {
+    render(<Focus />);
+    fireEvent.click(screen.getByText(/durée, listes et fermeté/));
+    fireEvent.click(screen.getByText("Verrouillé"));
+    fireEvent.click(freeStart());
+    fireEvent.click(screen.getByText("Revenir"));
+    expect(screen.queryByText("restant")).toBeNull();
+  });
+
   it("garde une session en cours d'un rendu à l'autre", () => {
     const first = render(<Focus />);
     fireEvent.click(screen.getAllByText("Démarrer")[0]);

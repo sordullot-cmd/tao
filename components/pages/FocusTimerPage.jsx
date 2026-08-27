@@ -14,7 +14,7 @@ const saveTimer = (s) => {
 import { Play, Pause, RotateCcw, SkipForward, Square, Coffee, Focus, Flame, CheckCircle2, Pencil, Check, X } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
-import { PageSkeleton } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonStats, SkeletonList, Skeleton } from "@/components/ui/Skeleton";
 import { notify, ensureNotifyPermission } from "@/lib/notify";
 import { Stat } from "@/components/ui/Stat";
 import { PeriodPills } from "@/components/ui/da";
@@ -258,7 +258,23 @@ export default function FocusTimerPage() {
   })();
 
   if (useFirstLoad(sessionsReady, LOG_KEY)) {
-    return <PageSkeleton variant="stats" label={t("nav.focus")} />;
+    return (
+      <SkeletonScreen label={t("nav.focus")} gap={16}>
+        <SkeletonStats count={4} flat />
+        {/* Le minuteur à gauche (1.2fr), l'historique à droite (1fr) : la même
+            grille que la page, sinon les deux colonnes changent de largeur. */}
+        <div className="tr4de-focus-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
+          <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+            <Skeleton width={220} height={34} radius={999} />
+            <Skeleton width={220} height={220} radius="50%" />
+            <Skeleton width={160} height={34} radius={999} />
+          </div>
+          <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16 }}>
+            <SkeletonList rows={6} avatar={false} />
+          </div>
+        </div>
+      </SkeletonScreen>
+    );
   }
 
   return (

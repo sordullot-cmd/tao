@@ -15,7 +15,7 @@ import { useDailySessionNotes } from "@/lib/hooks/useDailySessionNotes";
 import { exportJournalPdf } from "@/lib/export/journalPdf";
 import DictatableTextarea from "@/components/MicDictateButton";
 import { useApp } from "@/lib/contexts/AppContext";
-import { SkeletonScreen, SkeletonCard, SkeletonHeader, SkeletonList } from "@/components/ui/Skeleton";
+import { SkeletonScreen, SkeletonCard, SkeletonToolbar, SkeletonList, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 
 /* ---------------------------------------------------------------------------
    Page « Journal » — portée dans la direction artistique des pages récentes
@@ -133,12 +133,24 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
   /* Le journal se DÉDUIT des trades : tant qu'ils n'ont pas fini d'arriver,
      « aucune journée » ne veut rien dire d'autre que « pas encore reçu ». */
   const { tradesLoading } = useApp();
-  if (tradesLoading && allDays.length === 0) {
+  if (showSkeleton(tradesLoading && allDays.length === 0)) {
     return (
       <SkeletonScreen label={t("journal.title")} gap={24}>
-        <SkeletonHeader />
-        <SkeletonCard><SkeletonList rows={4} /></SkeletonCard>
-        <SkeletonCard><SkeletonList rows={3} /></SkeletonCard>
+        {/* Fenêtre de lecture à gauche, export à droite : la page n'a pas de
+            titre, elle ouvre sur cette rangée-là. */}
+        <SkeletonToolbar left={[56, 56, 56, 56, 62]} right={[110]} gap={16} />
+        {/* Une carte par journée : en-tête de date + P&L, puis ses trades. */}
+        {[3, 2].map((rows, i) => (
+          <SkeletonCard key={i}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <Skeleton width={168} height={18} />
+                <Skeleton width={96} height={18} />
+              </div>
+              <SkeletonList rows={rows} />
+            </div>
+          </SkeletonCard>
+        ))}
       </SkeletonScreen>
     );
   }

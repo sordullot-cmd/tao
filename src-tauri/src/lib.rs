@@ -1,11 +1,23 @@
 mod blocker;
+mod phone;
 mod tracker;
 
+/* `Manager` n'apporte `get_webview_window` que là où il y a des fenêtres à
+   aller chercher : le tray et le relais de deep link, tous deux de bureau. */
+#[cfg(desktop)]
+use tauri::Manager;
+/* Le plateau système, les menus, le démarrage au login et la fenêtre qui se
+   cache dans le tray n'ont pas d'équivalent sur Android : ces symboles
+   n'existent tout simplement pas dans la build mobile de Tauri. D'où les
+   `#[cfg(desktop)]` qui suivent — ce ne sont pas des précautions, c'est ce qui
+   fait que la caisse compile pour les deux mondes. */
+#[cfg(desktop)]
 use tauri::{
   menu::{Menu, MenuItem},
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-  Manager, WindowEvent,
+  WindowEvent,
 };
+#[cfg(desktop)]
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_fs::FsExt;
 
@@ -44,20 +56,31 @@ pub fn run() {
     }));
   }
 
+  // Démarrage automatique au login : une notion de bureau. Sur Android, une app
+  // ne se lance pas au démarrage, elle est réveillée par le système.
+  #[cfg(desktop)]
+  {
+    builder = builder.plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None));
+  }
+
   builder
     // OAuth : ouverture du navigateur système + capture du retour deep link.
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_deep_link::init())
     // Notifications natives (relayées depuis la Web Notification API du site).
     .plugin(tauri_plugin_notification::init())
-    // Démarrage automatique au login.
-    .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
     // Notes en .md dans un vault Obsidian : sélection du dossier + accès disque.
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
+    // Suivi d'activité du téléphone (Android). Inerte ailleurs — cf. src/phone.rs.
+    .plugin(phone::init())
     .invoke_handler(tauri::generate_handler![
       allow_vault_dir,
       tracker::activity_snapshot,
+      phone::phone_usage_access,
+      phone::phone_open_usage_settings,
+      phone::phone_snapshot,
+      phone::phone_segments,
       blocker::focus_reclaim,
       blocker::focus_blocking_supported,
       blocker::front_tab,
@@ -81,6 +104,8 @@ pub fn run() {
         )?;
       }
 
+      #[cfg(desktop)]
+      {
       // Active le démarrage auto de Windows au premier lancement.
       let _ = app.autolaunch().enable();
 
@@ -118,14 +143,21 @@ pub fn run() {
           }
         })
         .build(app)?;
+      }
 
       Ok(())
     })
     .on_window_event(|window, event| {
       // La croix ✕ cache la fenêtre dans le tray au lieu de quitter l'app.
+      #[cfg(desktop)]
       if let WindowEvent::CloseRequested { api, .. } = event {
         let _ = window.hide();
         api.prevent_close();
+      }
+      #[cfg(mobile)]
+      {
+        // Sur mobile, c'est le système qui décide de la vie de la fenêtre.
+        let _ = (window, event);
       }
     })
     .run(tauri::generate_context!())
