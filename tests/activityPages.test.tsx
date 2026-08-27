@@ -183,6 +183,9 @@ describe("page Rapports", () => {
 describe("page Catégories & règles", () => {
   it("ajoute une règle de classement", () => {
     render(<ActivityRulesPage setPage={vi.fn()} />);
+    // Les règles vivent dans un tiroir : on y vient pour relire ou corriger, la
+    // file d'attente les écrit toute seule.
+    fireEvent.click(screen.getByText("Mes règles de classement"));
     const input = screen.getByPlaceholderText(/Fragment cherché/i);
     fireEvent.change(input, { target: { value: "Blender" } });
     fireEvent.click(screen.getByText("Ajouter"));

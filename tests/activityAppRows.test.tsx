@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-import { AppRows } from "@/components/activity/ActivityChrome";
+import { AppRows, HourBars } from "@/components/activity/ActivityChrome";
+import { PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
 
 const MIN = 60_000;
 
@@ -72,5 +73,28 @@ describe("répartition par application", () => {
 
     fireEvent.click(screen.getByText(/Voir les/));
     expect(screen.getByText("F")).toBeTruthy();
+  });
+});
+
+/* ── Graphes de nature ────────────────────────────────────────────────────── */
+
+describe("graphes empilés par nature", () => {
+  it("peint le rythme moyen avec les couleurs des trois natures", () => {
+    /* Ces barres empilent productif / neutre / distraction. Elles portaient les
+       couleurs écrites en dur, si bien qu'un changement de palette ne les
+       atteignait pas — c'est exactement la dérive que ce cas empêche. */
+    const hourly = [{ hour: 9, ms: 60 * MIN, productiveMs: 30 * MIN, distractingMs: 20 * MIN }];
+    const { container } = render(<HourBars hourly={hourly} />);
+    /* jsdom rend les couleurs en `rgb(...)` : on compare donc sur cette forme
+       plutôt que sur l'hexadécimal écrit dans la charte. */
+    const rgb = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+    };
+    const styles = [...container.querySelectorAll("div")].map(d => (d as HTMLElement).style.background);
+
+    for (const c of Object.values(PRODUCTIVITY_COLOR)) {
+      expect(styles).toContain(rgb(c));
+    }
   });
 });

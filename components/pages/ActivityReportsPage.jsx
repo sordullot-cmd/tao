@@ -19,6 +19,7 @@ import { PALETTE, GREY } from "@/lib/ui/palette";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { loadRange } from "@/lib/activity/engine";
 import { fmtDur, rangeStats } from "@/lib/activity/stats";
+import { PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
   ActivityHeader, AppRows, BlockTitle, CategoryRows, HourBars, KpiTile, SourceNotice,
@@ -132,7 +133,7 @@ function WeekHeatmap({ days }) {
                   flex: 1, minWidth: 12, height: 16, borderRadius: 3,
                   background: pct === 0
                     ? "var(--color-hover-bg, #F0F0F0)"
-                    : `color-mix(in srgb, ${PALETTE.green} ${Math.max(12, pct)}%, transparent)`,
+                    : `color-mix(in srgb, ${PRODUCTIVITY_COLOR.productive} ${Math.max(12, pct)}%, transparent)`,
                 }}
               />
             );
@@ -244,7 +245,7 @@ export default function ActivityReportsPage({ setPage }) {
             <KpiTile
               label="Distractions"
               value={fmtDur(stats.distractingMs)}
-              color={stats.distractingMs > 0 ? PALETTE.red : T.text}
+              color={stats.distractingMs > 0 ? PRODUCTIVITY_COLOR.distracting : T.text}
               sub={stats.bestDay ? `Meilleur jour : ${new Date(`${stats.bestDay.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}` : null}
             />
           </div>

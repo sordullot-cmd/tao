@@ -1,9 +1,10 @@
+import { PALETTE } from "@/lib/ui/palette";
 import { describe, it, expect } from "vitest";
 
 /* Le suivi d'activité mesure des durées : une erreur de découpage ne se voit pas
    à l'écran (le total « a l'air » plausible), elle se voit ici. */
 
-import { classify, classifyDetailed, resolveProductivity } from "@/lib/activity/categories";
+import { classify, classifyDetailed, resolveProductivity, PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
 import { DEFAULT_SETTINGS, type DayLog } from "@/lib/activity/engine";
 import { dayBlocks, dayStats, fmtDur, unclassified } from "@/lib/activity/stats";
 
@@ -264,5 +265,33 @@ describe("pavés de la journée", () => {
       seg([9, 0], [9, 30], "Code", "dev"),
     ]);
     expect(blocks.map(b => b.cat)).toEqual(["dev"]);
+  });
+});
+
+/* ── Couleurs des natures ─────────────────────────────────────────────────── */
+
+describe("couleurs des natures", () => {
+  it("donne une couleur distincte à chacune des trois", () => {
+    /* Elles se lisent CÔTE À CÔTE dans le même anneau : deux natures de la même
+       teinte y seraient un seul arc. */
+    const values = Object.values(PRODUCTIVITY_COLOR);
+    expect(new Set(values).size).toBe(3);
+  });
+
+  it("garde le productif hors du vert de la marque", () => {
+    /* Le vert félicite ; une heure productive est une mesure, pas une
+       récompense. Il reste disponible pour ce qu'il désigne ailleurs — un
+       objectif atteint, une progression. */
+    expect(PRODUCTIVITY_COLOR.productive).not.toBe(PALETTE.green);
+  });
+
+  it("laisse le neutre plus clair que les deux autres", () => {
+    // Le temps qui ne se juge pas doit reculer, pas peser autant que le reste.
+    const lum = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114;
+    };
+    expect(lum(PRODUCTIVITY_COLOR.neutral)).toBeGreaterThan(lum(PRODUCTIVITY_COLOR.productive));
+    expect(lum(PRODUCTIVITY_COLOR.neutral)).toBeGreaterThan(lum(PRODUCTIVITY_COLOR.distracting));
   });
 });

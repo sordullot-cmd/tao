@@ -34,11 +34,10 @@ import { Activity, ArrowRight, RefreshCw } from "lucide-react";
 import { AllocationChart, CARD, HAIRLINE, PeriodPills, StepperPill, PillButton } from "@/components/ui/da";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { T } from "@/lib/ui/tokens";
-import { PALETTE, GREY } from "@/lib/ui/palette";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
 import { loadRange } from "@/lib/activity/engine";
-import { categoryLabel, isBrowser } from "@/lib/activity/categories";
+import { categoryLabel, isBrowser, PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
   ActivityHeader, AppRows, BlockDetail, CategoryRows, DayColumn, Disclosure,
@@ -299,6 +298,12 @@ export default function ActivityPage({ setPage }) {
                 <>
                   {/* ── 2. La répartition ── */}
                   <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 12 }}>
+                    {/* Le titre seul, à la casse et à la couleur des en-têtes de
+                        Patrimoine — sans le chiffre ni le repère qui
+                        l'accompagnent là-bas : ici la figure les dit déjà, et
+                        les répéter en tête revenait à lire deux fois la même
+                        chose avant d'arriver au dessin. */}
+                    <span style={{ fontSize: 13, color: T.textSub }}>Répartition</span>
                     {/* L'anneau et ses catégories CÔTE À CÔTE : l'un sous
                         l'autre, la liste passait sous le pli.
 
@@ -333,6 +338,10 @@ export default function ActivityPage({ setPage }) {
 
                   {/* ── 3. Les applications ── */}
                   <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Même titre nu que la carte du dessus : deux cartes
+                        voisines de formes différentes obligent à réapprendre à
+                        lire en passant de l'une à l'autre. */}
+                    <span style={{ fontSize: 13, color: T.textSub }}>Applications &amp; sites</span>
                     {/* Sous cinq minutes, une application n'a rien à dire d'une
                         journée : elle a été ouverte, pas utilisée. Retirées
                         plutôt que repoussées derrière « voir plus » — dès lors
@@ -387,9 +396,9 @@ export default function ActivityPage({ setPage }) {
               onPick={(d) => { if (d <= TODAY()) { setOpenBlock(null); setDate(d); } }}
             />
             <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textSub, flexWrap: "wrap" }}>
-              <span><span style={dotStyle(PALETTE.green)} />productif</span>
-              <span><span style={dotStyle(GREY.grey500)} />neutre</span>
-              <span><span style={dotStyle(PALETTE.red)} />distraction</span>
+              <span><span style={dotStyle(PRODUCTIVITY_COLOR.productive)} />productif</span>
+              <span><span style={dotStyle(PRODUCTIVITY_COLOR.neutral)} />neutre</span>
+              <span><span style={dotStyle(PRODUCTIVITY_COLOR.distracting)} />distraction</span>
               {workGoalMs > 0 && <span style={{ color: T.textMut }}>le pointillé fin marque l’objectif de {fmtDur(workGoalMs)}</span>}
             </div>
           </div>
@@ -423,15 +432,15 @@ export default function ActivityPage({ setPage }) {
                   <StackedBar
                     height={10}
                     parts={[
-                      { id: "p", label: "Productif", color: PALETTE.green, ms: stats.productiveMs, pct: stats.activeMs ? (stats.productiveMs / stats.activeMs) * 100 : 0 },
-                      { id: "n", label: "Neutre", color: GREY.grey500, ms: stats.neutralMs, pct: stats.activeMs ? (stats.neutralMs / stats.activeMs) * 100 : 0 },
-                      { id: "d", label: "Distraction", color: PALETTE.red, ms: stats.distractingMs, pct: stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0 },
+                      { id: "p", label: "Productif", color: PRODUCTIVITY_COLOR.productive, ms: stats.productiveMs, pct: stats.activeMs ? (stats.productiveMs / stats.activeMs) * 100 : 0 },
+                      { id: "n", label: "Neutre", color: PRODUCTIVITY_COLOR.neutral, ms: stats.neutralMs, pct: stats.activeMs ? (stats.neutralMs / stats.activeMs) * 100 : 0 },
+                      { id: "d", label: "Distraction", color: PRODUCTIVITY_COLOR.distracting, ms: stats.distractingMs, pct: stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0 },
                     ]}
                   />
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", fontSize: 11, color: T.textSub }}>
-                    <span><span style={dotStyle(PALETTE.green)} />Productif {fmtDur(stats.productiveMs)}</span>
-                    <span><span style={dotStyle(GREY.grey500)} />Neutre {fmtDur(stats.neutralMs)}</span>
-                    <span><span style={dotStyle(PALETTE.red)} />Distraction {fmtDur(stats.distractingMs)}</span>
+                    <span><span style={dotStyle(PRODUCTIVITY_COLOR.productive)} />Productif {fmtDur(stats.productiveMs)}</span>
+                    <span><span style={dotStyle(PRODUCTIVITY_COLOR.neutral)} />Neutre {fmtDur(stats.neutralMs)}</span>
+                    <span><span style={dotStyle(PRODUCTIVITY_COLOR.distracting)} />Distraction {fmtDur(stats.distractingMs)}</span>
                     <span style={{ color: T.textMut }}>La nature d’une catégorie se règle dans « Catégories & règles ».</span>
                   </div>
                 </div>
@@ -486,9 +495,9 @@ export default function ActivityPage({ setPage }) {
               <>
                 <HourBars hourly={stats.hourly} height={120} />
                 <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textSub, flexWrap: "wrap" }}>
-                  <span><span style={dotStyle(PALETTE.green)} />productif</span>
-                  <span><span style={dotStyle(GREY.grey500)} />neutre</span>
-                  <span><span style={dotStyle(PALETTE.red)} />distraction</span>
+                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.productive)} />productif</span>
+                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.neutral)} />neutre</span>
+                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.distracting)} />distraction</span>
                   <span style={{ color: T.textMut }}>
                     Un segment à cheval sur deux heures est réparti au prorata : une session de 11 h 50 à 12 h 40
                     ne se lit pas entièrement à 11 h.

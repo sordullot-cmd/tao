@@ -20,7 +20,9 @@ import Popover from "@/components/ui/Popover";
 import { T } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
-import { ASSIGNABLE, categoryColor, categoryLabel, resolveProductivity } from "@/lib/activity/categories";
+import {
+  ASSIGNABLE, categoryColor, categoryLabel, PRODUCTIVITY_COLOR, resolveProductivity,
+} from "@/lib/activity/categories";
 import { fmtClock, fmtDur } from "@/lib/activity/stats";
 
 /* ─── Horloge ────────────────────────────────────────────────────────────
@@ -550,9 +552,9 @@ export function HourBars({ hourly, height = 96, fromHour = 0, toHour = 23 }) {
               title={`${h.hour}h — ${fmtDur(h.ms)} (dont ${fmtDur(h.productiveMs)} productif)`}
               style={{ width: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", height: height - 16 }}
             >
-              <div style={{ height: px(h.distractingMs), background: PALETTE.red, borderRadius: "3px 3px 0 0" }} />
-              <div style={{ height: px(neutral), background: GREY.grey500 }} />
-              <div style={{ height: px(h.productiveMs), background: PALETTE.green, borderRadius: h.distractingMs || neutral ? 0 : "3px 3px 0 0" }} />
+              <div style={{ height: px(h.distractingMs), background: PRODUCTIVITY_COLOR.distracting, borderRadius: "3px 3px 0 0" }} />
+              <div style={{ height: px(neutral), background: PRODUCTIVITY_COLOR.neutral }} />
+              <div style={{ height: px(h.productiveMs), background: PRODUCTIVITY_COLOR.productive, borderRadius: h.distractingMs || neutral ? 0 : "3px 3px 0 0" }} />
             </div>
             <span style={{ fontSize: 10, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
               {h.hour % 3 === 0 ? h.hour : ""}
@@ -619,9 +621,9 @@ export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPic
           const on = d.date === selected;
           const neutral = Math.max(0, d.activeMs - d.productiveMs - d.distractingMs);
           const parts = [
-            { id: "d", ms: d.distractingMs, color: PALETTE.red },
-            { id: "n", ms: neutral, color: GREY.grey500 },
-            { id: "p", ms: d.productiveMs, color: PALETTE.green },
+            { id: "d", ms: d.distractingMs, color: PRODUCTIVITY_COLOR.distracting },
+            { id: "n", ms: neutral, color: PRODUCTIVITY_COLOR.neutral },
+            { id: "p", ms: d.productiveMs, color: PRODUCTIVITY_COLOR.productive },
           ].filter(p => p.ms > 0);
           return (
             <div

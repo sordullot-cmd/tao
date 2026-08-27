@@ -25,7 +25,7 @@
  * l'affiche, et un classement qu'on ne peut pas expliquer ne se corrige pas.
  */
 
-import { PALETTE, PALETTE_DARK, GREY, HUE } from "@/lib/ui/palette";
+import { PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY, HUE } from "@/lib/ui/palette";
 import { getLang } from "@/lib/i18n";
 import {
   CATALOG, domainInTitle, guessSiteName, isBrowserApp, matchAppExact, matchAppWord,
@@ -33,6 +33,34 @@ import {
 } from "@/lib/activity/catalog";
 
 export type Productivity = "productive" | "neutral" | "distracting";
+
+/**
+ * Couleur des trois natures de temps — SOURCE UNIQUE.
+ *
+ * Elle était recopiée dans les trois pages « Activité » : un vert, un gris, un
+ * rouge écrits à la main partout, si bien qu'en changer un demandait de les
+ * retrouver tous. Ce qui suit est le seul endroit à modifier.
+ *
+ * Le choix des teintes n'est pas décoratif :
+ *
+ *   • PRODUCTIF en BLEU CLAIR, et non en vert. Le vert de cette charte est
+ *     celui de la marque et de la réussite — il félicite. Or une heure
+ *     productive n'est pas une récompense, c'est une mesure : le bleu la
+ *     rapporte sans la commenter, et rend le vert à ce qu'il désigne ailleurs
+ *     (un objectif atteint, une progression).
+ *   • NEUTRE en GRIS PÂLE. Le gris moyen d'avant pesait autant à l'œil que les
+ *     deux autres, alors qu'il désigne précisément le temps qui ne se juge pas.
+ *     Pâle, il recule — ce qui est exactement ce qu'on veut lui voir faire.
+ *   • DISTRACTION en ORANGE plutôt qu'en rouge franc. Le rouge de la charte est
+ *     celui des pertes et des erreurs ; une demi-heure de vidéo n'est ni l'un
+ *     ni l'autre. L'orange alerte sans accuser, et c'est ce qui fait qu'on
+ *     regarde le chiffre au lieu de fermer la page.
+ */
+export const PRODUCTIVITY_COLOR: Record<Productivity, string> = {
+  productive: PALETTE_LIGHT.blue,
+  neutral: GREY.grey300,
+  distracting: PALETTE.orange,
+};
 
 export interface ActivityCategory {
   id: string;
