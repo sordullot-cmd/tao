@@ -18,10 +18,11 @@ import { getLocalDateString } from "@/lib/dateUtils";
 import { notify } from "@/lib/notify";
 import { applyCategorySettings, resolveProductivity } from "@/lib/activity/categories";
 import {
-  DEFAULT_SETTINGS, getDay, getLive, isRunning, setCloudSync, startTracker, stopTracker,
+  DEFAULT_SETTINGS, importPhoneDay, getDay, getLive, isRunning, setCloudSync, startTracker, stopTracker,
   subscribe, syncNow, type ActivitySettings, type DayLog, type LiveState,
 } from "@/lib/activity/engine";
 import { fmtDur } from "@/lib/activity/stats";
+import { usageAccess } from "@/lib/activity/phone";
 
 /** Réglages du suivi, complétés par les valeurs par défaut. */
 export function useActivitySettings(): [ActivitySettings, (updater: ActivitySettings | ((prev: ActivitySettings) => ActivitySettings)) => void] {
@@ -124,16 +125,45 @@ export function useActivityTracker(): { live: LiveState; settings: ActivitySetti
   // cycle React, mais y toucher pendant le rendu casse le mode concurrent.
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
+  /* Sur ANDROID, personne n'échantillonne : le système tient déjà le journal
+     des passages au premier plan, et on le relit (cf. lib/activity/phone).
+     C'est la seule voie tenable — le WebView est gelé dès que tao passe en
+     arrière-plan, donc une boucle s'arrêterait exactement quand il y aurait
+     quelque chose à mesurer.
+
+     La reconstruction est faite à l'ouverture, puis à intervalle LENT tant que
+     l'app est visible : la journée ne bouge que si on a utilisé le téléphone,
+     et pendant ce temps-là on ne regarde pas tao. */
+  const [phoneMode, setPhoneMode] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void usageAccess().then(a => { if (alive) setPhoneMode(a.supported); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!phoneMode || !settings.enabled) return;
+    let alive = true;
+    const pull = () => { if (alive) void importPhoneDay(getLocalDateString()); };
+    pull();
+    const onVisible = () => { if (document.visibilityState === "visible") pull(); };
+    document.addEventListener("visibilitychange", onVisible);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") pull();
+    }, 60_000);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [phoneMode, settings.enabled]);
+
   // Le moteur relit les réglages à chaque échantillon : seuls l'activation et
   // la période d'échantillonnage exigent de relancer la boucle.
   useEffect(() => {
-    if (!settings.enabled) {
+    if (phoneMode || !settings.enabled) {
       stopTracker();
       return;
     }
     startTracker(() => settingsRef.current);
     return () => stopTracker();
-  }, [settings.enabled, settings.pollSeconds]);
+  }, [phoneMode, settings.enabled, settings.pollSeconds]);
 
   /* Rappels déjà émis — un par « épisode », sinon la notification repartirait à
      chaque échantillon (toutes les 5 secondes). */

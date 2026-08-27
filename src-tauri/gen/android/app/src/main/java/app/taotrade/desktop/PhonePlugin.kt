@@ -62,6 +62,10 @@ class PhonePlugin(private val activity: android.app.Activity) : Plugin(activity)
    * la LIT donc, et l'interface renvoie vers le bon écran (`openUsageSettings`)
    * au lieu de faire semblant de la demander.
    */
+  /* Les deux formes de la vérification sont marquées obsolètes par le SDK 36,
+     sans remplacement : lire un app-op reste la seule façon de savoir si une
+     permission spéciale a été accordée. */
+  @Suppress("DEPRECATION")
   private fun granted(): Boolean {
     val ops = activity.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
     val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

@@ -453,6 +453,50 @@ export function classify(
   return { category, label };
 }
 
+/**
+ * Classement d'une application de TÉLÉPHONE.
+ *
+ * Pourquoi une porte séparée plutôt que `classifyDetailed` : sur un poste, un
+ * navigateur au premier plan veut dire « une page », et tout le classement se
+ * joue alors dans le titre de la fenêtre. Android ne donne aucun titre (cf.
+ * PhonePlugin.kt) — passer « Chrome » dans le chemin navigateur reviendrait donc
+ * à chercher un site dans une chaîne vide, et à laisser chaque navigateur
+ * éternellement non classé. Ici, un navigateur est une APPLICATION comme une
+ * autre : c'est moins précis, et c'est tout ce que la plateforme permet.
+ *
+ * Deux noms arrivent pour la même chose — « YouTube » et
+ * « com.google.android.youtube ». Les deux sont essayés, et une règle de
+ * l'utilisateur peut viser l'un ou l'autre : le paquet est stable, le nom
+ * lisible est ce qu'on a sous les yeux.
+ */
+export function classifyPhoneApp(
+  label: string,
+  packageName: string,
+  userRules: ClassifyRule[] = []
+): Classification {
+  const shown = (label || packageName || "").trim();
+
+  /* Les règles d'abord, et sur les DEUX noms : `app` porte le paquet (c'est
+     l'identifiant que l'OS donne, comme un nom de processus ailleurs), `title`
+     porte le nom lisible. Une règle « dans l'application » sur « youtube »
+     attrape donc le paquet, une règle « dans le titre » sur « YouTube » aussi. */
+  const mine = userHit(userRules, packageName, shown);
+  if (mine) {
+    return {
+      category: settle(mine.category), label: shown, via: "user",
+      matched: mine.match, isSite: false, confidence: 1,
+    };
+  }
+
+  for (const candidate of [shown, packageName]) {
+    if (!candidate) continue;
+    const hit = matchAppExact(candidate) ?? matchAppWord(candidate);
+    if (hit) return fromHit(hit, shown, false, norm(candidate));
+  }
+
+  return { category: OTHER, label: shown, via: "none", matched: null, isSite: false, confidence: 0 };
+}
+
 /* --- Hote ----------------------------------------------------------------- */
 
 /** L'hote d'une URL, sans `www.` -- ou la chaine vide si ce n'en est pas une. */

@@ -32,6 +32,7 @@ import { snapshot, type Snapshot } from "@/lib/activity/native";
 import { device, fetchDays, forgetDevice, pushDay, type CloudDay } from "@/lib/activity/cloud";
 import { mergeSlices } from "@/lib/activity/merge";
 import { frontTab } from "@/lib/focus/native";
+import { phoneDay } from "@/lib/activity/phone";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -439,6 +440,32 @@ function append(startMs: number, endMs: number, app: string, label: string, titl
   }
   dirtyTicks += 1;
   if (dirtyTicks >= 4) flush();
+}
+
+/* ─── Le téléphone ───────────────────────────────────────────────────────── */
+
+/**
+ * Remplace le journal d'un jour par ce que le système du téléphone a enregistré.
+ *
+ * On ÉCRASE au lieu de fusionner, et c'est le point important : le système est
+ * la source de vérité sur Android, pas nous. Fusionner reviendrait à empiler
+ * plusieurs reconstructions de la même journée à chaque ouverture de l'app, et
+ * à compter le même temps deux fois.
+ *
+ * Rend le nombre de segments repris, ou `null` quand il n'y avait rien à lire
+ * (hors Android, autorisation refusée) — dans ce cas le journal existant n'est
+ * pas touché.
+ */
+export async function importPhoneDay(date: string): Promise<number | null> {
+  const segments = await phoneDay(date, getSettings().rules);
+  if (!segments) return null;
+
+  flush();
+  const day: DayLog = { date, segments, awayMs: 0, updatedAt: Date.now() };
+  if (cache?.date === date) cache = day;
+  saveDay(day);
+  emit();
+  return segments.length;
 }
 
 /* ─── L'hôte de l'onglet ─────────────────────────────────────────────────── */

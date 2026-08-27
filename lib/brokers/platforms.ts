@@ -27,6 +27,12 @@ export const PLATFORMS: Platform[] = [
   { id: "alphafutures", name: "Alpha Futures",       format: "csv",  iconPath: "/brokers/alpha%20futur.svg", propFirm: true },
   { id: "tradeify",     name: "Tradeify",            format: "csv",  iconPath: "/brokers/Tradeify.png",      propFirm: true },
   { id: "lucid",        name: "Lucid Trading",       format: "csv",  iconPath: "/brokers/lucid.png",         propFirm: true },
+  /* Sans `iconPath` : aucun fichier n'est embarqué pour ces deux maisons, et un
+     chemin pointant sur un fichier absent afficherait une image cassée là où
+     `RoundLogo` sait déjà poser les initiales de la marque. Déposer le logo
+     dans /public/brokers/ et ajouter la ligne suffit à le brancher. */
+  { id: "traday",       name: "Traday",              format: "csv",                                          propFirm: true },
+  { id: "myfundedfutures", name: "MyFundedFutures",  format: "csv",                                          propFirm: true },
   // Prop firms forex / CFD
   { id: "ftmo",         name: "FTMO",                format: "csv",  iconPath: "/brokers/ftmo.png",          propFirm: true },
   // Plateformes
@@ -50,7 +56,12 @@ export function resolvePlatformIcon(value: unknown): string | null {
   if (!value) return null;
   const key = String(value).trim().toLowerCase();
   const hit = PLATFORMS.find((p) => p.id === key || p.name.toLowerCase() === key);
-  if (hit?.iconPath) return hit.iconPath;
+  /* Une correspondance EXACTE fait loi, même sans logo : c'est `null` qu'il faut
+     rendre, pas la suite. Sans ce `return`, une maison identifiée mais sans
+     fichier embarqué (Traday, MyFundedFutures) retombait dans la recherche
+     approchante en dessous, et pouvait hériter du logo d'une autre marque dont
+     le nom la contient — un logo faux étant pire que pas de logo du tout. */
+  if (hit) return hit.iconPath || null;
   // Correspondances partielles (données historiques saisies à la main).
   const partial = PLATFORMS.find(
     (p) => key.includes(p.id) || key.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(key)
