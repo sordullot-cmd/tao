@@ -35,8 +35,6 @@ import ReviewSession from "@/components/revisions/ReviewSession";
 import NoteEditor from "@/components/revisions/NoteEditor";
 import Workshop from "@/components/revisions/Workshop";
 import DeckBrowser from "@/components/revisions/DeckBrowser";
-import RevisionStats from "@/components/revisions/RevisionStats";
-import RevisionSettings from "@/components/revisions/RevisionSettings";
 
 const STORAGE_KEY = "tr4de_srs";
 
@@ -45,13 +43,15 @@ const STORAGE_KEY = "tr4de_srs";
 const DECK_COLORS = ["blue", "green", "orange", "purple", "red", "yellow", "pink", "brown"];
 
 /* `PeriodPills` n'affiche que le libellé : pas d'icône ici, elle rétrécirait
-   le texte sans rien ajouter sur un groupe de cinq onglets. */
+   le texte sans rien ajouter.
+
+   Trois onglets, et non cinq : « Statistiques » et « Réglages » ont été
+   retirés. La page ne garde que ce qu'on vient y FAIRE — réviser, tenir ses
+   paquets, fabriquer des cartes. */
 const TABS = [
   { id: "today", label: "Aujourd'hui" },
   { id: "decks", label: "Paquets" },
   { id: "workshop", label: "Atelier" },
-  { id: "stats", label: "Statistiques" },
-  { id: "settings", label: "Réglages" },
 ];
 
 /* La prose d'accueil vit ici, hors de l'arbre de rendu : c'est le texte qui
@@ -362,8 +362,9 @@ export default function RevisionsPage() {
             </div>
           )}
 
-          {/* Série et travail du jour : deux repères, pas un tableau de bord.
-              Le reste vit dans l'onglet Statistiques. */}
+          {/* Série et travail du jour : trois repères, pas un tableau de bord.
+              C'est tout ce que la page chiffre depuis que l'onglet
+              « Statistiques » a été retiré. */}
           {store.cards.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
               {[
@@ -439,16 +440,6 @@ export default function RevisionsPage() {
           books={books}
           onCommit={commitDrafts}
           onCreateDeck={() => setTab("decks")}
-        />
-      )}
-
-      {tab === "stats" && <RevisionStats store={store} cards={store.cards} />}
-
-      {tab === "settings" && (
-        <RevisionSettings
-          store={store}
-          setStore={setStore}
-          onRestore={(restored) => setRaw(normalizeStore(restored))}
         />
       )}
 

@@ -236,81 +236,168 @@ export function KpiTile({ label, value, sub, color, goalMs, valueMs }) {
   );
 }
 
-/* ─── Bandeau de la journée ──────────────────────────────────────────────── */
+/* ─── La journée en calendrier ───────────────────────────────────────────── */
+
+/** Minutes écoulées depuis minuit, pour poser un instant sur la grille. */
+function minutesOfDay(ms) {
+  const d = new Date(ms);
+  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+}
+
+const pad2 = (n) => String(n).padStart(2, "0");
 
 /**
- * La journée en une ligne : chaque segment mesuré posé à sa place réelle, à sa
- * couleur de catégorie. Les TROUS sont l'information la plus utile du dessin —
- * ce sont les pauses et les absences, qu'aucun total ne montre.
+ * La journée mesurée, posée sur une grille horaire — la même que le calendrier
+ * de « Agenda », volontairement : c'est le même objet mental (une journée, des
+ * heures, des pavés), il doit se lire pareil. Ce qu'on y voit et qu'un total ne
+ * dira jamais : la FORME de la journée, et surtout ses TROUS.
+ *
+ * On ne pose pas les segments bruts (des centaines de traits de deux pixels)
+ * mais les pavés de `dayBlocks` : une matière, tant qu'elle dure.
+ *
+ * La grille ne montre que les heures utiles (première activité − 1 h → dernière
+ * + 1 h, plus l'heure courante) : vingt-quatre heures dont dix-huit vides sont
+ * dix-huit heures de défilement pour rien.
  */
-export function TimelineBand({ segments, date, height = 46 }) {
-  const now = useNowMinute();
-  const { from, to } = useMemo(() => {
-    const base = new Date(`${date}T00:00:00`);
-    if (!segments.length) {
-      const d = new Date(base); d.setHours(8, 0, 0, 0);
-      const e = new Date(base); e.setHours(20, 0, 0, 0);
-      return { from: d.getTime(), to: e.getTime() };
+export function DayColumn({ blocks, date, height = 452, hourH = 56, onPickBlock }) {
+  const nowMs = useNowMinute();
+  const scrollRef = useRef(null);
+  const doneRef = useRef(null);
+
+  const today = new Date();
+  const isToday = date === `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+  const nowMin = minutesOfDay(nowMs);
+
+  const { fromH, toH } = useMemo(() => {
+    if (!blocks.length) return { fromH: 8, toH: 20 };
+    const first = Math.min(...blocks.map(b => minutesOfDay(b.start))) / 60;
+    const last = Math.max(...blocks.map(b => minutesOfDay(b.end))) / 60;
+    let a = Math.max(0, Math.floor(first) - 1);
+    let b = Math.min(24, Math.ceil(last) + 1);
+    // Le repère « maintenant » doit rester dans la grille : sans ça, la ligne
+    // rouge se pose au bord et ment sur l'heure qu'il est.
+    if (isToday) {
+      a = Math.min(a, Math.max(0, Math.floor(nowMin / 60) - 1));
+      b = Math.max(b, Math.min(24, Math.ceil(nowMin / 60) + 1));
     }
-    const first = new Date(Math.min(...segments.map(s => s.s)));
-    const last = new Date(Math.max(...segments.map(s => s.e)));
-    first.setMinutes(0, 0, 0);
-    const end = new Date(last);
-    end.setMinutes(0, 0, 0);
-    end.setHours(end.getHours() + 1);
-    return { from: first.getTime(), to: end.getTime() };
-  }, [segments, date]);
+    return { fromH: a, toH: Math.max(a + 3, b) };
+  }, [blocks, isToday, nowMin]);
 
-  const span = Math.max(1, to - from);
-  const hours = [];
-  for (let t = from; t <= to; t += 3600_000) hours.push(t);
-  // Une graduation toutes les heures sature en dessous de ~900 px : on en saute
-  // une sur deux dès que la journée dépasse dix heures.
-  const step = hours.length > 10 ? 2 : 1;
+  const hours = Array.from({ length: toH - fromH }, (_, i) => fromH + i);
+  const gridH = hours.length * hourH;
+  const y = (ms) => ((minutesOfDay(ms) - fromH * 60) / 60) * hourH;
 
-  const showNow = now > 0 && now >= from && now <= to;
+  /* Arrivée directe sur l'heure courante (ou sur le début de la journée quand
+     on regarde un jour passé) : avant la première peinture, sans animation —
+     on vient voir la fin de la journée, pas la voir défiler depuis 8 h. */
+  React.useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || doneRef.current === date) return;
+    if (el.scrollHeight <= el.clientHeight) { doneRef.current = date; return; }
+    const target = isToday ? ((nowMin - fromH * 60) / 60) * hourH - hourH * 1.5 : 0;
+    el.scrollTop = Math.max(0, target);
+    doneRef.current = date;
+  });
+
+  // Trous d'au moins dix minutes : ce sont les pauses, et elles se nomment.
+  const gaps = [];
+  for (let i = 1; i < blocks.length; i++) {
+    const ms = blocks[i].start - blocks[i - 1].end;
+    if (ms >= 10 * 60_000) gaps.push({ start: blocks[i - 1].end, end: blocks[i].start, ms });
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ position: "relative", height, borderRadius: 8, background: FIELD_BG, overflow: "hidden" }}>
-        {hours.map((t, i) => i % step === 0 && (
-          <div key={t} style={{
-            position: "absolute", top: 0, bottom: 0, left: `${((t - from) / span) * 100}%`,
-            width: 1, background: HAIRLINE,
-          }} />
-        ))}
-        {segments.map((s, i) => {
-          const left = ((s.s - from) / span) * 100;
-          const width = ((s.e - s.s) / span) * 100;
-          return (
-            <div
-              key={`${s.s}-${i}`}
-              title={`${fmtClock(s.s)} – ${fmtClock(s.e)} · ${s.label} · ${categoryLabel(s.cat)} · ${fmtDur(s.e - s.s)}`}
-              style={{
-                position: "absolute", top: 0, bottom: 0,
-                left: `${left}%`, width: `max(2px, ${width}%)`,
-                background: categoryColor(s.cat),
-                opacity: 0.92,
-              }}
-            />
-          );
-        })}
-        {showNow && (
-          <div style={{
-            position: "absolute", top: 0, bottom: 0, left: `${((now - from) / span) * 100}%`,
-            width: 2, background: T.text, opacity: 0.55,
-          }} />
-        )}
-      </div>
-      <div style={{ position: "relative", height: 14 }}>
-        {hours.map((t, i) => i % step === 0 && (
-          <span key={t} style={{
-            position: "absolute", left: `${((t - from) / span) * 100}%`, transform: "translateX(-50%)",
-            fontSize: 11, color: T.textSub, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
-          }}>
-            {new Date(t).getHours()}h
-          </span>
-        ))}
+    <div
+      ref={scrollRef}
+      style={{
+        overflowY: "auto", maxHeight: height, borderRadius: 10,
+        border: `1px solid ${HAIRLINE}`, background: T.white,
+      }}
+    >
+      <div style={{ display: "flex", position: "relative", height: gridH }}>
+        {/* Gouttière des heures */}
+        <div style={{ width: 44, flexShrink: 0 }}>
+          {hours.map((h, i) => (
+            <div key={h} style={{ height: hourH, position: "relative" }}>
+              {i !== 0 && (
+                <span style={{ position: "absolute", top: -7, right: 8, fontSize: 10, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                  {pad2(h)}:00
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* La colonne du jour */}
+        <div style={{
+          flex: 1, position: "relative", minWidth: 0, height: gridH,
+          backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent ${hourH - 1}px, ${HAIRLINE} ${hourH - 1}px, ${HAIRLINE} ${hourH}px)`,
+        }}>
+          {gaps.map(g => {
+            const top = y(g.start);
+            const h = Math.max(0, y(g.end) - top);
+            return (
+              <div
+                key={g.start}
+                title={`Pause · ${fmtClock(g.start)} – ${fmtClock(g.end)} · ${fmtDur(g.ms)}`}
+                style={{
+                  position: "absolute", top, height: h, left: 2, right: 2,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                {h >= 20 && (
+                  <span style={{ fontSize: 10, color: T.textMut, background: T.white, padding: "0 6px" }}>
+                    pause {fmtDur(g.ms, { short: true })}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+
+          {blocks.map(b => {
+            const top = y(b.start);
+            const h = Math.max(y(b.end) - top, 5);
+            const color = categoryColor(b.cat);
+            // Teinte posée sur un fond blanc OPAQUE : sinon les lignes d'heures
+            // transparaissent à travers le pavé.
+            const tint = `${color}30`;
+            const others = b.apps.length - 1;
+            return (
+              <div
+                key={b.start}
+                onClick={onPickBlock ? () => onPickBlock(b) : undefined}
+                title={`${fmtClock(b.start)} – ${fmtClock(b.end)} · ${categoryLabel(b.cat)} · ${fmtDur(b.ms)}\n${b.apps.map(a => `${a.label} ${fmtDur(a.ms, { short: true })}`).join("\n")}`}
+                style={{
+                  position: "absolute", top, height: h, left: 2, right: 2,
+                  backgroundColor: T.white, backgroundImage: `linear-gradient(${tint}, ${tint})`,
+                  borderLeft: `2px solid ${color}`, borderRadius: "var(--radius-field)",
+                  padding: h > 16 ? "2px 6px" : "0 6px", overflow: "hidden",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.10)",
+                  display: "flex", flexDirection: h >= 34 ? "column" : "row",
+                  alignItems: h >= 34 ? "stretch" : "center", gap: h >= 34 ? 0 : 6,
+                  cursor: onPickBlock ? "pointer" : "default",
+                }}
+              >
+                <span style={{ fontSize: 10, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: h >= 34 ? "none" : 1 }}>
+                  {b.label}{others > 0 && h >= 34 ? ` +${others}` : ""}
+                </span>
+                {h >= 24 && (
+                  <span style={{ fontSize: 10, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {h >= 34 ? `${fmtClock(b.start)} – ${fmtClock(b.end)} · ${fmtDur(b.ms, { short: true })}` : fmtDur(b.ms, { short: true })}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+
+          {isToday && nowMin >= fromH * 60 && nowMin <= toH * 60 && (
+            <div style={{ position: "absolute", top: ((nowMin - fromH * 60) / 60) * hourH, left: 0, right: 0, height: 0, zIndex: 7, pointerEvents: "none" }}>
+              <div style={{ position: "absolute", left: -3, top: -3, width: 6, height: 6, borderRadius: "50%", background: T.red }} />
+              <div style={{ position: "absolute", left: 1, right: 0, top: -1, height: 2, background: T.red }} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

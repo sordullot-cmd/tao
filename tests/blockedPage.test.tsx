@@ -47,6 +47,13 @@ describe("page de blocage", () => {
     expect(screen.getByText(/Session de focus en cours/)).toBeInTheDocument();
   });
 
+  it("renomme l'onglet par ce qu'il bloque", () => {
+    /* L'onglet s'appelait « YouTube » ; il ne doit pas s'appeler « tao trade »,
+       qui ne dit rien de ce qui vient de se passer et se rouvre par curiosité. */
+    show("t=YouTube");
+    expect(document.title).toBe("YouTube est coupé");
+  });
+
   it("n'offre aucune sortie vers le site coupé", () => {
     /* La sortie vit dans l'app, derrière la friction du mode de session : la
        proposer ici la contournerait. Le seul lien ramène à l'app. */

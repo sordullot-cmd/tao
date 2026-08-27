@@ -17,7 +17,6 @@ import {
 import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { BTN } from "@/lib/ui/buttons";
 import { PALETTE } from "@/lib/ui/palette";
-import { cardGrid } from "@/lib/ui/cardGrid";
 import { CARD, CheckBox, Field, Input, Modal, PillButton, SectionTitle } from "@/components/ui/da";
 import { MODES, listSize, newId, sessionFromPreset, startSession } from "@/lib/focus/model";
 import { fmtDur } from "@/lib/focus/stats";
@@ -200,10 +199,7 @@ export default function SessionStart({ store, setStore, onStart, actionSlot }) {
       {actionSlot ? createPortal(newPreset, actionSlot) : newPreset}
       <SectionTitle size="sm">Lancer une session</SectionTitle>
 
-      {/* Les presets remplissent la largeur : quatre cartes côte à côte qui
-          tiennent la ligne, plutôt que quatre cartes étroites et un vide à
-          droite. Au-delà de six, la grille passe à la ligne toute seule. */}
-      <div className="card-grid" style={cardGrid(store.presets.length)}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
         {store.presets.map(p => {
           const hue = PALETTE[p.color] || PALETTE.purple;
           const Icon = PRESET_ICONS[p.icon] || Timer;

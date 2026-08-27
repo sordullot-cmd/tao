@@ -55,6 +55,28 @@ export interface AppBucket extends Bucket {
   via: ClassifySource;
 }
 
+/**
+ * Un pavé de la journée, tel qu'on le pose sur un calendrier.
+ *
+ * Ce n'est PAS un segment : un segment change à chaque bascule d'application, et
+ * une journée en compte des centaines — posés tels quels sur une grille horaire,
+ * ce sont des traits de deux pixels illisibles. Un pavé regroupe ce qui relève
+ * d'une même MATIÈRE (la catégorie) tant qu'elle se poursuit, et absorbe les
+ * miettes : un aller-retour d'une minute sur Discord au milieu d'une heure de
+ * code ne casse pas le pavé, il s'y fond.
+ */
+export interface DayBlock {
+  start: number;
+  end: number;
+  /** Temps réellement mesuré dedans — les micro-trous n'y sont pas comptés. */
+  ms: number;
+  cat: string;
+  /** Application dominante, celle qui nomme le pavé. */
+  label: string;
+  /** Ce qu'il y a eu dedans, de la plus longue à la plus courte. */
+  apps: { label: string; ms: number }[];
+}
+
 export interface FocusSession {
   start: number;
   end: number;
@@ -96,6 +118,8 @@ export interface DayStats {
   /** 0 à 100 : part du temps actif passée en session de focus, moins l'éparpillement. */
   focusScore: number;
   segments: Segment[];
+  /** La journée en pavés, pour la grille horaire. */
+  blocks: DayBlock[];
 }
 
 /* ─── Journée ───────────────────────────────────────────────────────────── */
@@ -170,6 +194,78 @@ function buildFocusSessions(segments: Segment[], settings: ActivitySettings): Fo
       return { start, end, ms, cat: top(byCat), label: top(byApp), switches: Math.max(0, run.length - 1) };
     })
     .filter(s => s.ms >= minMs);
+}
+
+/**
+ * Les segments d'une journée regroupés en pavés posables sur un calendrier.
+ *
+ * Deux réglages, et deux seulement :
+ *   • `gapMs` — au-delà de ce trou, la matière a été interrompue : nouveau pavé
+ *     (et le trou devient une pause, qui se VOIT sur la grille) ;
+ *   • `crumbMs` — en dessous de cette durée, un passage sur autre chose entre
+ *     deux moments de la même matière est une miette : elle est absorbée, sinon
+ *     une heure de travail ressort en dix-sept pavés d'une minute.
+ */
+export function dayBlocks(
+  segments: Segment[],
+  opts: { gapMs?: number; crumbMs?: number } = {}
+): DayBlock[] {
+  const gapMs = opts.gapMs ?? 3 * 60_000;
+  /* Quatre minutes : en dessous, le pavé ferait moins de quatre pixels de haut
+     sur la grille — il ne porterait ni nom ni heure, et couperait en trois une
+     matière qui n'a pas été interrompue pour autant. Ce qu'il contenait reste
+     nommé dans l'infobulle du pavé qui l'absorbe. */
+  const crumbMs = opts.crumbMs ?? 4 * 60_000;
+
+  const addApp = (b: DayBlock, label: string, ms: number) => {
+    const found = b.apps.find(a => a.label === label);
+    if (found) found.ms += ms;
+    else b.apps.push({ label, ms });
+  };
+  const absorb = (into: DayBlock, b: DayBlock) => {
+    into.end = Math.max(into.end, b.end);
+    into.ms += b.ms;
+    for (const a of b.apps) addApp(into, a.label, a.ms);
+  };
+
+  // 1. Une suite de segments de même catégorie, sans trou notable = un pavé.
+  const raw: DayBlock[] = [];
+  for (const seg of segments) {
+    const ms = msOf(seg);
+    if (ms <= 0) continue;
+    const last = raw[raw.length - 1];
+    if (last && last.cat === seg.cat && seg.s - last.end <= gapMs) {
+      last.end = Math.max(last.end, seg.e);
+      last.ms += ms;
+      addApp(last, seg.label, ms);
+      continue;
+    }
+    raw.push({ start: seg.s, end: seg.e, ms, cat: seg.cat, label: seg.label, apps: [{ label: seg.label, ms }] });
+  }
+
+  // 2. Les miettes prises entre deux pavés de même matière disparaissent dedans.
+  const merged: DayBlock[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const b = raw[i];
+    const prev = merged[merged.length - 1];
+    const next = raw[i + 1];
+    if (
+      prev && next && b.ms < crumbMs && next.cat === prev.cat &&
+      b.start - prev.end <= gapMs && next.start - b.end <= gapMs
+    ) {
+      absorb(prev, b);
+      absorb(prev, next);
+      i += 1;
+      continue;
+    }
+    merged.push({ ...b, apps: b.apps.map(a => ({ ...a })) });
+  }
+
+  for (const b of merged) {
+    b.apps.sort((a, c) => c.ms - a.ms);
+    b.label = b.apps[0]?.label ?? b.label;
+  }
+  return merged;
 }
 
 export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
@@ -298,6 +394,7 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
     hourly,
     focusScore,
     segments,
+    blocks: dayBlocks(segments),
   };
 }
 

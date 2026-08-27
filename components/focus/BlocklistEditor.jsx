@@ -15,7 +15,7 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Search, ChevronRight, AppWindow } from "lucide-react";
+import { Plus, Trash2, Search, ChevronRight, AppWindow, AlertTriangle } from "lucide-react";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CheckBox, Field, Input, Modal, PillButton } from "@/components/ui/da";
@@ -260,6 +260,26 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
                 le jeu réinstallé trois fois, le site où l&apos;on ne retourne pas. Décoché,
                 la liste ne s&apos;applique que pendant les sessions qui l&apos;incluent.
               </div>
+              {/* Les deux réglages se combinent en un piège : « seuls autorisés »
+                  coupe tout ce qui n'est pas listé, et « en permanence » ne
+                  s'arrête jamais. Ensemble, ils coupent Internet pour de bon.
+                  C'est un choix défendable, mais il doit être fait les yeux
+                  ouverts — pas découvert le lendemain. */}
+              {always && mode === "allow" && (
+                <div style={{
+                  display: "flex", gap: 8, alignItems: "flex-start", marginTop: 10,
+                  padding: "8px 10px", borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+                  background: `color-mix(in srgb, ${PALETTE.orange} 12%, transparent)`,
+                  color: T.text,
+                }}>
+                  <AlertTriangle size={14} color={PALETTE.orange} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>
+                    Avec « seuls autorisés », cette liste coupe <strong>tout ce qui n&apos;y figure
+                    pas</strong>, et sans fin. Vérifiez que ce dont vous avez besoin pour travailler
+                    y est bien.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </Field>

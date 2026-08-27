@@ -46,9 +46,9 @@ describe("Page Révisions — montage", () => {
     expect(screen.getByText("Réviser au bon moment")).toBeInTheDocument();
   });
 
-  it("rend les cinq onglets sans exception", () => {
+  it("rend les trois onglets sans exception", () => {
     render(<RevisionsPage />);
-    for (const tab of ["Paquets", "Atelier", "Statistiques", "Réglages", "Aujourd'hui"]) {
+    for (const tab of ["Paquets", "Atelier", "Aujourd'hui"]) {
       fireEvent.click(screen.getByRole("button", { name: tab }));
     }
     // On revient sur « Aujourd'hui » : si un onglet avait explosé, le rendu
@@ -145,21 +145,10 @@ describe("Page Révisions — montage", () => {
     expect(screen.getByText(/Séance terminée|Revue dans/)).toBeInTheDocument();
   });
 
-  it("affiche les statistiques sur un paquet réel", () => {
+  it("n'expose plus les onglets Statistiques et Réglages", () => {
     render(<RevisionsPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Paquets" }));
-    createDeck("Trading");
-    fireEvent.click(screen.getByRole("button", { name: "Statistiques" }));
-    expect(screen.getByText("Rétention constatée")).toBeInTheDocument();
-    expect(screen.getByText("Prévision de charge")).toBeInTheDocument();
-  });
-
-  it("refuse d'optimiser tant que l'historique est trop mince", () => {
-    render(<RevisionsPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Réglages" }));
-    const button = screen.getByRole("button", { name: /Optimiser les poids/ });
-    expect(button).toBeDisabled();
-    expect(screen.getByText(/il faut au moins 100 révisions/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Statistiques" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Réglages" })).toBeNull();
   });
 
   it("rend l'atelier et invite à créer un paquet quand il n'y en a aucun", () => {

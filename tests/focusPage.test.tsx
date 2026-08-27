@@ -168,6 +168,39 @@ describe("Page Focus", () => {
     expect(screen.getByText("Instagram est coupé")).toBeTruthy();
   });
 
+  it("coupe un site en permanence, sans qu'aucune session ne tourne", () => {
+    /* Le cœur du blocage permanent : aucune session, aucun minuteur, et
+       pourtant la coupure tient. On marque une liste puis on démonte la page —
+       seule la sentinelle reste, comme dans la coquille. */
+    const page = render(<Focus />);
+    fireEvent.click(screen.getByText("Listes"));
+    // La première carte est « Réseaux sociaux », celle qui couvre Instagram.
+    fireEvent.click(screen.getAllByText("Modifier")[0]);
+    fireEvent.click(screen.getByText("Bloquer en permanence"));
+    fireEvent.click(screen.getByText("Enregistrer"));
+    page.unmount();
+
+    render(<FocusSentinel />);
+    clickLink("https://www.instagram.com/reels");
+    expect(screen.getByText("Instagram est coupé")).toBeTruthy();
+    // Pas de session : l'écran le dit au lieu d'annoncer un temps restant.
+    expect(screen.getByRole("dialog").textContent).toContain("Blocage permanent");
+  });
+
+  it("rend une liste permanente d'un seul clic depuis sa carte", () => {
+    /* La case existe dans l'éditeur, mais on ne va pas ouvrir un éditeur pour
+       couper un site pour de bon : le repère de la carte EST l'interrupteur. */
+    render(<Focus />);
+    fireEvent.click(screen.getByText("Listes"));
+    fireEvent.click(screen.getAllByText("Rendre permanent")[0]);
+
+    expect(screen.getAllByText("Permanent").length).toBeGreaterThan(0);
+
+    // Et ça coupe tout de suite, sans session ni rien à relancer.
+    clickLink("https://www.instagram.com/reels");
+    expect(screen.getByText("Instagram est coupé")).toBeTruthy();
+  });
+
   it("garde les programmes dans l'onglet Session, avec ou sans session", () => {
     /* Lancer maintenant et lancer à neuf heures sont la même intention à deux
        moments : elles se décident au même endroit. Et pendant une session, on

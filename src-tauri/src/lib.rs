@@ -61,7 +61,8 @@ pub fn run() {
       blocker::focus_reclaim,
       blocker::focus_blocking_supported,
       blocker::front_tab,
-      blocker::redirect_tab
+      blocker::redirect_tab,
+      blocker::close_app
     ])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime

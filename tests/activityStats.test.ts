@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 
 import { classify, classifyDetailed, resolveProductivity } from "@/lib/activity/categories";
 import { DEFAULT_SETTINGS, type DayLog } from "@/lib/activity/engine";
-import { dayStats, fmtDur, unclassified } from "@/lib/activity/stats";
+import { dayBlocks, dayStats, fmtDur, unclassified } from "@/lib/activity/stats";
 
 const DATE = "2026-03-02";
 /** 2026-03-02 à h heures m minutes, en heure locale. */
@@ -172,5 +172,51 @@ describe("format des durées", () => {
     expect(fmtDur(3 * 3600_000 + 24 * 60_000)).toBe("3 h 24");
     expect(fmtDur(24 * 60_000)).toBe("24 min");
     expect(fmtDur(48_000)).toBe("48 s");
+  });
+});
+
+describe("pavés de la journée", () => {
+  const M = 60_000;
+
+  it("regroupe une suite de segments de même matière en un seul pavé", () => {
+    const blocks = dayBlocks([
+      seg([9, 0], [9, 20], "Code", "dev"),
+      seg([9, 20], [9, 50], "Cursor", "dev"),
+    ]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].ms).toBe(50 * M);
+    // Le pavé porte le nom de ce qui l'a occupé le plus longtemps.
+    expect(blocks[0].label).toBe("Cursor");
+    expect(blocks[0].apps.map(a => a.label)).toEqual(["Cursor", "Code"]);
+  });
+
+  it("absorbe une miette prise entre deux moments de la même matière", () => {
+    // Une minute sur Discord au milieu d'une heure de code ne fait pas trois
+    // pavés : sinon la grille horaire est illisible.
+    const blocks = dayBlocks([
+      seg([9, 0], [9, 30], "Code", "dev"),
+      seg([9, 30], [9, 31], "Discord", "comms"),
+      seg([9, 31], [10, 0], "Code", "dev"),
+    ]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].ms).toBe(60 * M);
+  });
+
+  it("coupe sur un vrai trou — c'est lui qui dessine la pause", () => {
+    const blocks = dayBlocks([
+      seg([9, 0], [10, 0], "Code", "dev"),
+      seg([11, 0], [11, 30], "Code", "dev"),
+    ]);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[1].start - blocks[0].end).toBe(60 * M);
+  });
+
+  it("garde les deux pavés quand l'interruption est longue", () => {
+    const blocks = dayBlocks([
+      seg([9, 0], [9, 30], "Code", "dev"),
+      seg([9, 30], [9, 50], "Discord", "comms"),
+      seg([9, 50], [10, 0], "Code", "dev"),
+    ]);
+    expect(blocks.map(b => b.cat)).toEqual(["dev", "comms", "dev"]);
   });
 });

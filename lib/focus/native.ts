@@ -1,7 +1,7 @@
 /**
  * Pont vers le blocage natif — ce que seule l'app de bureau peut faire.
  *
- * Trois choses, et trois seulement :
+ * Quatre choses, et quatre seulement :
  *
  *   • SAVOIR ce qui est devant. La lecture de l'application au premier plan
  *     passe par le même relevé que la page « Activité » (`lib/activity/native`),
@@ -9,7 +9,11 @@
  *     de code : deux sondes du même poste finiraient par se contredire.
  *
  *   • REPRENDRE la main. `focus_reclaim` ramène la fenêtre devant l'appli
- *     distrayante. Rien n'est tué, rien n'est fermé (cf. src-tauri/src/blocker.rs).
+ *     distrayante.
+ *
+ *   • FERMER une application. `closeApp` lui demande de QUITTER — la fermeture
+ *     que l'app comprend, celle qui lui laisse enregistrer — et non un signal
+ *     qui la termine sur place (cf. src-tauri/src/blocker.rs).
  *
  *   • LIRE ET RENVOYER UN ONGLET. Sur un navigateur, savoir quelle appli est
  *     devant ne dit rien : c'est l'URL qui compte. `frontTab` la lit,
@@ -129,6 +133,25 @@ export async function redirectTab(app: string, url?: string): Promise<boolean> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     return (await invoke<boolean>("redirect_tab", { app, url: url || null })) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Demande à une application de quitter.
+ *
+ * Rend `true` seulement si la fermeture a bien été demandée ET acceptée. Faux
+ * dans tous les autres cas — hors app de bureau, nom refusé, autorisation
+ * d'automatisation absente, application qui pose une question avant de fermer.
+ * C'est au garde d'en tirer la conséquence : quand ça n'a pas fermé, il reprend
+ * le premier plan, ce qui vaut mieux que rien.
+ */
+export async function closeApp(app: string): Promise<boolean> {
+  if (!isTauri() || !app) return false;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<boolean>("close_app", { app })) === true;
   } catch {
     return false;
   }

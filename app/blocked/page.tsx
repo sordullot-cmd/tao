@@ -60,6 +60,21 @@ function Blocked() {
   const attempt = Number(params.get("n")) || 1;
   const line = LINES[Math.min(attempt, LINES.length) - 1] || LINES[0];
 
+  /* Le nom de l'onglet, et pas seulement celui de la page.
+   *
+   * Cette page est atteinte dans un navigateur, souvent parmi douze onglets, et
+   * elle a remplacé un onglet qui s'appelait « YouTube ». Sans cette ligne, il
+   * s'appellerait maintenant « tao trade » — un nom qui ne dit rien de ce qui
+   * vient de se passer, et qu'on rouvre par curiosité. Nommé par ce qu'il
+   * bloque, il se lit dans la barre d'onglets sans même y aller.
+   *
+   * Écrit à la main plutôt que par le `metadata` de Next : la page est un
+   * composant client, et le titre dépend de l'adresse, donc de rien que le
+   * serveur connaisse. */
+  useEffect(() => {
+    document.title = `${target} est coupé`;
+  }, [target]);
+
   /* Le compte à rebours ne vit que dans le rendu : l'état, c'est l'heure de
      fin, passée dans l'adresse. Le minuteur ne sert qu'à redemander l'heure,
      et il s'arrête dès qu'il n'y a plus rien à décompter. */

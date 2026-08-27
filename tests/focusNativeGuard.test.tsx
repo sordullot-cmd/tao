@@ -13,6 +13,7 @@ const reclaimFocus = vi.fn(async () => true);
 type Tab = { app: string; url: string; ok: boolean; error: string | null };
 const frontTab = vi.fn(async (app: string): Promise<Tab> => ({ app, url: "", ok: false, error: "not-scriptable" }));
 const redirectTab = vi.fn(async (_app: string, _url?: string) => true);
+const closeApp = vi.fn(async (_app: string) => true);
 
 vi.mock("@/lib/focus/native", () => ({
   nativeAvailable: () => true,
@@ -20,6 +21,7 @@ vi.mock("@/lib/focus/native", () => ({
   reclaimFocus: () => reclaimFocus(),
   frontTab: (app: string) => frontTab(app),
   redirectTab: (app: string, url?: string) => redirectTab(app, url),
+  closeApp: (app: string) => closeApp(app),
 }));
 
 /** Le poste montre un navigateur, sur l'URL donnée. `null` = URL illisible
@@ -73,6 +75,8 @@ describe("garde natif", () => {
     reclaimFocus.mockClear();
     redirectTab.mockReset();
     redirectTab.mockResolvedValue(true);
+    closeApp.mockReset();
+    closeApp.mockResolvedValue(true);
   });
   afterEach(() => vi.useRealTimers());
 
@@ -81,9 +85,13 @@ describe("garde natif", () => {
     render(<Harness onHit={h => hits.push(h)} />);
     await advance(0);
 
+    // L'appli est fermée, puis le premier plan revient sur l'explication : une
+    // app qui disparaît sans un mot passe pour un plantage.
+    expect(closeApp).toHaveBeenCalledWith("Discord");
     expect(reclaimFocus).toHaveBeenCalled();
     expect(hits).toHaveLength(1);
     expect(hits[0].kind).toBe("app");
+    expect(hits[0].closed).toBe(true);
     expect(hits[0].target).toBe("discord");
     expect(hits[0].appName).toBe("Discord");
     expect(hits[0].listName).toBe("Messagerie");
@@ -246,5 +254,28 @@ describe("garde natif", () => {
 
     expect(hits).toHaveLength(1);
     expect(hits[0].target).toBe("youtube");
+  });
+
+  it("ne ferme jamais un navigateur, qui se juge onglet par onglet", async () => {
+    /* Fermer Chrome parce qu'un onglet est sur YouTube emporterait tout le
+       reste — la documentation, le brouillon, les onze autres onglets. */
+    showBrowser("Mix — YouTube", "https://youtube.com/watch?v=x");
+    render(<Harness onHit={() => {}} />);
+    await advance(0);
+
+    expect(closeApp).not.toHaveBeenCalled();
+    expect(redirectTab).toHaveBeenCalled();
+  });
+
+  it("retombe sur la reprise de main quand l'appli refuse de fermer", async () => {
+    /* Autorisation manquante, ou question posée avant de quitter : on ne
+       prétend pas l'avoir fermée, et le blocage vaut quand même mieux que rien. */
+    closeApp.mockResolvedValue(false);
+    const hits: GuardHit[] = [];
+    render(<Harness onHit={h => hits.push(h)} />);
+    await advance(0);
+
+    expect(hits[0].closed).toBe(false);
+    expect(reclaimFocus).toHaveBeenCalled();
   });
 });

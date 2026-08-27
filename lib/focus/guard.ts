@@ -32,10 +32,13 @@
  * coquille Tauri :
  *
  *   3. LES APPLIS. Le poste est relevé toutes les deux secondes ; si
- *      l'application au premier plan est coupée par une liste active, la fenêtre
- *      de tao trade reprend la main et l'écran de blocage s'affiche. Rien n'est
- *      tué ni fermé — la friction est le retour forcé, pas la perte de travail
- *      (cf. src-tauri/src/blocker.rs).
+ *      l'application au premier plan est coupée par une liste active, on lui
+ *      demande de QUITTER, puis la fenêtre de tao trade reprend la main et
+ *      l'écran de blocage explique pourquoi elle vient de disparaître — sans
+ *      quoi on cherche un plantage. Demander de quitter, et non tuer : l'app
+ *      enregistre ce qu'elle a à enregistrer (cf. src-tauri/src/blocker.rs).
+ *      Un navigateur n'est JAMAIS fermé ainsi : il se juge onglet par onglet,
+ *      et le fermer en entier pour un onglet emporterait tout le reste.
  *   4. LES SITES OUVERTS AILLEURS. Un navigateur n'est jamais coupé en bloc —
  *      c'est un contenant, pas une distraction. On lui demande l'URL de son
  *      onglet actif, et c'est `verdictFor` qui trace : les mêmes règles que pour
@@ -68,7 +71,7 @@ import {
   type FocusSchedule, type FocusStore, type RunningSession,
 } from "./model";
 import {
-  frontSnapshot, frontTab, nativeAvailable, reclaimFocus, redirectTab, webAppInstalled,
+  closeApp, frontSnapshot, frontTab, nativeAvailable, reclaimFocus, redirectTab, webAppInstalled,
 } from "./native";
 
 /** Un blocage constaté, tel qu'il remonte à l'interface. */
@@ -88,6 +91,10 @@ export interface GuardHit {
   url?: string;
   /** Nom de l'application relevée, tel que l'OS le rapporte. */
   appName?: string;
+  /** L'application a bien été fermée. Faux quand elle a refusé ou n'a pas pu
+   *  l'être — l'écran de blocage ne doit pas annoncer une fermeture qui n'a pas
+   *  eu lieu. */
+  closed?: boolean;
   /** Titre de la fenêtre relevée. */
   windowTitle?: string;
   /** Nom de la liste qui a tranché. */
@@ -311,6 +318,7 @@ export function useFocusGuard(
         if (!alive || !hit) return;
 
         const now = Date.now();
+        let closed = false;
 
         if (now - (lastAct.get(hit.target) || 0) >= ACT_COOLDOWN_MS) {
           lastAct.set(hit.target, now);
@@ -322,6 +330,11 @@ export function useFocusGuard(
           const shown = hit.kind === "site"
             ? await redirectTab(snap.app, blockedUrl(hit, storeRef.current, runningRef.current))
             : false;
+          /* Une appli se ferme ; un onglet se remplace ; un navigateur, jamais
+             en entier. La fermeture d'abord, la reprise de main ensuite : le
+             premier plan revient alors sur l'écran qui explique la disparition,
+             au lieu de la laisser passer pour un plantage. */
+          if (hit.kind === "app") closed = await closeApp(snap.app);
           if (!shown) await reclaimFocus();
           lastShown.set(hit.target, shown);
         }
@@ -329,7 +342,7 @@ export function useFocusGuard(
 
         if (now - (lastAttempt.get(hit.target) || 0) < ATTEMPT_COOLDOWN_MS) return;
         lastAttempt.set(hit.target, now);
-        onHitRef.current({ ...hit, handled: lastShown.get(hit.target) === true });
+        onHitRef.current({ ...hit, closed, handled: lastShown.get(hit.target) === true });
       } finally {
         busy = false;
       }

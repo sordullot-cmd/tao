@@ -2297,31 +2297,3 @@ body.tr4de-scroll-locked {
   }
   .tr4de-tab[data-active] { outline: 1px solid var(--accent); outline-offset: -3px; }
 }
-
-/* Grille de cartes à colonnes comptées.
-   Les cartes doivent occuper toute la LARGEUR, quel qu'en soit le nombre :
-   quatre presets côte à côte qui remplissent la ligne, plutôt que quatre cartes
-   étroites et un vide à droite. Une grille `auto-fill` ne sait pas faire ça —
-   elle garde ses colonnes vides et laisse les cartes à leur largeur minimale.
-
-   D'où des colonnes comptées : le composant sait combien de cartes il a et le
-   dit en `--cols`. Au-delà de six, il plafonne et les suivantes passent à la
-   ligne — six cartes sur une rangée est déjà la limite au-delà de laquelle on
-   ne lit plus une carte, on lit une frise.
-
-   Les deux paliers étroits viennent du composant eux aussi (`--cols-md`,
-   `--cols-sm`) : `repeat()` veut un entier, pas un `min()`, donc le plafond ne
-   peut pas se calculer ici. */
-.card-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
-}
-
-@media (max-width: 900px) {
-  .card-grid { grid-template-columns: repeat(var(--cols-md, 1), minmax(0, 1fr)); }
-}
-
-@media (max-width: 560px) {
-  .card-grid { grid-template-columns: repeat(var(--cols-sm, 1), minmax(0, 1fr)); }
-}

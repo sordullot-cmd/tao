@@ -61,7 +61,14 @@ export default function BlockShield({ hit, session, store, now, onBack, onEnd })
      responsable. Absent pour un lien intercepté : il ne s'est rien passé
      ailleurs, et l'annoncer inventerait un geste. */
   const done = isApp
-    ? "La fenêtre est repassée derrière celle-ci. Rien n'a été fermé."
+    ? hit.closed
+      /* Nommer la fermeture, et dire qu'elle a été propre : une app qui
+         disparaît sans explication passe pour un plantage, et on la relance
+         pour vérifier — ce qui relance aussi la distraction. */
+      ? "L'application a été fermée — proprement, elle a eu le temps d'enregistrer."
+      /* Elle a refusé : autorisation manquante, ou question posée avant de
+         quitter. On ne prétend pas l'avoir fermée. */
+      : "L'application n'a pas pu être fermée : la fenêtre est simplement repassée derrière celle-ci."
     : isSite
       /* Un site n'arrive ici que si le renvoi a ÉCHOUÉ : autrement, la page de
          blocage a pris la place de l'onglet et cet écran ne s'ouvre pas. Le

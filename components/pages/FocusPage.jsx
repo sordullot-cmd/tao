@@ -155,9 +155,9 @@ export default function FocusPage() {
             <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.6 }}>
               {native.available
                 ? native.reading
-                  ? <>Blocage système actif : une appli listée qui passe devant repasse derrière, et
-                      un onglet ouvert sur un site coupé est renvoyé sur la page de blocage.
-                      Rien n&apos;est fermé.</>
+                  ? <>Blocage système actif : une appli listée qui passe devant est fermée — on lui
+                      demande de quitter, elle a le temps d&apos;enregistrer — et un onglet ouvert sur un
+                      site coupé est renvoyé sur la page de blocage.</>
                   /* L'app de bureau est là, mais macOS n'a pas accordé l'accès
                      « Accessibilité ». Sans cette ligne, le blocage semble simplement ne pas
                      marcher, et on cherche la panne du mauvais côté. */

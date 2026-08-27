@@ -40,8 +40,8 @@ import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
 import { categoryLabel, isBrowser } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, AppRows, BarLegend, CategoryRows, Disclosure, HourBars, Metric,
-  SessionRows, SourceNotice, StackedBar, TimelineBand, TrackingPill,
+  ActivityHeader, AppRows, BarLegend, CategoryRows, DayColumn, Disclosure, HourBars,
+  Metric, SessionRows, SourceNotice, StackedBar, TrackingPill,
 } from "@/components/activity/ActivityChrome";
 
 const TODAY = () => getLocalDateString();
@@ -213,9 +213,12 @@ export default function ActivityPage({ setPage }) {
       ) : (
         <>
           {/* ═══ 1. La journée ═══════════════════════════════════════════════
-              Une carte, et c'est tout ce qu'il faut avoir lu pour savoir à quoi
-              la journée a ressemblé. */}
-          <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 16 }}>
+              À gauche, la journée DESSINÉE : la même grille horaire que le
+              calendrier de l'agenda, parce que c'est le même objet mental — des
+              heures, des pavés, et des trous. À droite, ce que ces pavés font
+              une fois additionnés. Le dessin ne prend qu'un tiers de la carte :
+              il montre la forme, il ne remplace pas les nombres. */}
+          <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <span style={{ fontSize: 13, color: T.textSub }}>{headline(stats)}</span>
               <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
@@ -223,54 +226,69 @@ export default function ActivityPage({ setPage }) {
               </span>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-              <Metric
-                label="Temps actif"
-                value={fmtDur(stats.activeMs)}
-                valueMs={stats.activeMs}
-                goalMs={workGoalMs}
-                size={32}
-                sub={<Delta ms={stats.activeMs} refMs={prev.activeMs} />}
-              />
-              <Metric
-                label="Temps de focus"
-                value={fmtDur(stats.focusMs)}
-                valueMs={stats.focusMs}
-                goalMs={focusGoalMs}
-                color={PALETTE.green}
-                sub={`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} · plus longue ${fmtDur(stats.longestFocusMs)}`}
-              />
-              <Metric
-                label="Distractions"
-                value={fmtDur(stats.distractingMs)}
-                color={stats.distractingMs > 0 ? PALETTE.red : T.text}
-                sub={`${Math.round(stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0)} % du temps actif`}
-              />
-              <Metric
-                label="Qualité"
-                value={`${stats.focusScore}`}
-                valueMs={stats.focusScore}
-                goalMs={100}
-                color={stats.focusScore >= 70 ? PALETTE.green : stats.focusScore >= 45 ? PALETTE.yellow : PALETTE.red}
-                sub="part du focus et stabilité, sur 100"
-              />
-            </div>
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "flex-start" }}>
+              {/* La journée, heure par heure */}
+              <div style={{ flex: "0 1 304px", minWidth: 244, display: "flex", flexDirection: "column", gap: 6 }}>
+                <DayColumn blocks={stats.blocks} date={date} />
+                <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.45 }}>
+                  Un pavé = une matière tant qu’elle dure, à la couleur de sa catégorie ; les blancs sont
+                  les pauses. Survole un pavé pour voir ce qu’il contient.
+                </span>
+              </div>
 
-            {/* Le bandeau : les TROUS y sont l'information la plus utile — ce
-                sont les pauses et les absences, qu'aucun total ne montre. */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <TimelineBand segments={stats.segments} date={date} height={38} />
-              <BarLegend parts={stats.byCategory} limit={7} />
-            </div>
+              {/* Le résumé de la journée */}
+              <div style={{ flex: "1 1 336px", minWidth: 268, display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))" }}>
+                  <Metric
+                    label="Temps actif"
+                    value={fmtDur(stats.activeMs)}
+                    valueMs={stats.activeMs}
+                    goalMs={workGoalMs}
+                    size={30}
+                    sub={<Delta ms={stats.activeMs} refMs={prev.activeMs} />}
+                  />
+                  <Metric
+                    label="Temps de focus"
+                    value={fmtDur(stats.focusMs)}
+                    valueMs={stats.focusMs}
+                    goalMs={focusGoalMs}
+                    size={30}
+                    color={PALETTE.green}
+                    sub={`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} · plus longue ${fmtDur(stats.longestFocusMs)}`}
+                  />
+                  <Metric
+                    label="Distractions"
+                    value={fmtDur(stats.distractingMs)}
+                    size={30}
+                    color={stats.distractingMs > 0 ? PALETTE.red : T.text}
+                    sub={`${Math.round(stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0)} % du temps actif`}
+                  />
+                  <Metric
+                    label="Qualité"
+                    value={`${stats.focusScore}`}
+                    valueMs={stats.focusScore}
+                    goalMs={100}
+                    size={30}
+                    color={stats.focusScore >= 70 ? PALETTE.green : stats.focusScore >= 45 ? PALETTE.yellow : PALETTE.red}
+                    sub="part du focus et stabilité, sur 100"
+                  />
+                </div>
 
-            <div style={{
-              display: "flex", flexWrap: "wrap", gap: "6px 18px", paddingTop: 12,
-              borderTop: `1px solid ${HAIRLINE}`, fontSize: 11, color: T.textSub,
-            }}>
-              <span>Amplitude <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.spanMs)}</strong></span>
-              <span>Pauses <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.breakMs)}</strong> ({stats.breaks.length})</span>
-              <span>Absence au poste <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.awayMs)}</strong></span>
-              <span>Bascules d’app <strong style={{ color: T.text, fontWeight: 600 }}>{stats.switches}</strong> ({stats.switchesPerHour.toFixed(1)} / h)</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <StackedBar parts={stats.byCategory} height={12} />
+                  <BarLegend parts={stats.byCategory} limit={7} />
+                </div>
+
+                <div style={{
+                  display: "flex", flexWrap: "wrap", gap: "6px 18px", paddingTop: 12,
+                  borderTop: `1px solid ${HAIRLINE}`, fontSize: 11, color: T.textSub,
+                }}>
+                  <span>Amplitude <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.spanMs)}</strong></span>
+                  <span>Pauses <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.breakMs)}</strong> ({stats.breaks.length})</span>
+                  <span>Absence au poste <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(stats.awayMs)}</strong></span>
+                  <span>Bascules d’app <strong style={{ color: T.text, fontWeight: 600 }}>{stats.switches}</strong> ({stats.switchesPerHour.toFixed(1)} / h)</span>
+                </div>
+              </div>
             </div>
           </div>
 

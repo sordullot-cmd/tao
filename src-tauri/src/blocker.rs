@@ -6,15 +6,19 @@ la lui donne, et `lib/focus/model.ts` décide si elle est coupée. Ce qu'une pag
 web ne peut pas faire, en revanche, c'est reprendre le premier plan à une autre
 application. C'est tout ce que ce module ajoute, et il n'ajoute rien d'autre :
 
-  • pas de processus tué — on ne fait pas perdre un travail non enregistré pour
-    punir un coup d'œil ;
+  • pas de processus TUÉ. `close_app` demande à l'application de QUITTER, ce
+    qui n'est pas la même chose : l'app reçoit la demande, enregistre ce qu'elle
+    a à enregistrer, ferme ses fichiers. Un `SIGKILL` ferait perdre le travail
+    en cours, et une page de blocage qui coûte un document se fait
+    désinstaller ;
   • pas de fenêtre d'autrui manipulée — cela réclame des autorisations
     d'automatisation par app sur macOS, et un blocage qui s'effondre parce que
     l'utilisateur a refusé une boîte de dialogue ne bloque rien.
 
-Ce qui reste est la friction utile : l'appli distrayante passe DERRIÈRE, et
-l'écran de blocage (BlockShield) prend sa place, avec la phrase à lire et le
-temps qu'il reste. La tentative est notée au journal de la session.
+Le reste de la friction : l'appli distrayante est fermée, la fenêtre de tao
+trade reprend le premier plan, et l'écran de blocage (BlockShield) explique
+pourquoi elle vient de disparaître — sans quoi on cherche un plantage. La
+tentative est notée au journal de la session.
 
 Le maintien au premier plan est volontairement bref. Il sert à passer devant
 l'appli qu'on vient de quitter, pas à coller la fenêtre au-dessus de tout le
@@ -263,6 +267,130 @@ mod imp {
   }
 
   pub fn redirect_tab(_app: &str, _url: &str) -> Result<bool, String> {
+    Ok(false)
+  }
+}
+
+/* ─── Fermeture d'une application ────────────────────────────────────────── */
+
+/// Demande à une application de quitter.
+///
+/// QUITTER, et non tuer : l'app reçoit la demande par les voies normales du
+/// système et fait ce qu'elle fait toujours en fermant — enregistrer, poser sa
+/// question « voulez-vous enregistrer ? », relâcher ses fichiers. Un blocage
+/// qui fait perdre une heure de travail ne protège de rien, il se fait
+/// désinstaller.
+///
+/// Conséquence à assumer : une app qui pose une question au moment de quitter
+/// reste ouverte tant qu'on n'y répond pas. C'est le prix de la propreté, et le
+/// front le sait — il reprend le premier plan de toute façon, si bien qu'un
+/// refus de fermeture retombe sur le comportement d'avant plutôt que sur rien.
+///
+/// Rend `false` quand rien n'a été tenté (nom refusé), une erreur quand la
+/// tentative a échoué.
+#[tauri::command]
+pub fn close_app(app: String) -> Result<bool, String> {
+  let name = app.trim();
+  if !closable(name) {
+    return Ok(false);
+  }
+  imp_close::close(name)
+}
+
+/// Ce qu'on ne ferme JAMAIS, quoi qu'en dise l'appelant.
+///
+/// Le front filtre déjà (cf. `SYSTEM_APPS` dans lib/focus/model.ts), et cette
+/// liste ne fait pas confiance à ce filtre : fermer le Finder, l'explorateur ou
+/// tao trade lui-même rendrait le poste inutilisable ou couperait la seule
+/// interface qui permet de desserrer le blocage. Une commande destructrice se
+/// vérifie des deux côtés.
+fn closable(name: &str) -> bool {
+  if name.is_empty() || name.len() > 128 {
+    return false;
+  }
+  // Rien qui puisse s'échapper d'une chaîne de script ou d'un argument.
+  if name.chars().any(|c| c.is_control() || c == '"' || c == '\\') {
+    return false;
+  }
+  const NEVER: [&str; 10] = [
+    "finder", "dock", "systemuiserver", "windowserver", "loginwindow",
+    "explorer", "tao trade", "taotrade", "app", "systemsettings",
+  ];
+  let lower = name.to_lowercase();
+  let lower = lower.strip_suffix(".exe").unwrap_or(&lower);
+  !NEVER.contains(&lower)
+}
+
+#[cfg(target_os = "macos")]
+mod imp_close {
+  use std::process::Command;
+
+  pub fn close(name: &str) -> Result<bool, String> {
+    /* AppleScript d'abord : c'est la fermeture que l'application elle-même
+       comprend, celle qui lui laisse enregistrer. Elle réclame l'autorisation
+       « Automatisation » pour cette app-là. */
+    let script = format!(r#"tell application "{name}" to quit"#);
+    let out = Command::new("osascript")
+      .arg("-e")
+      .arg(&script)
+      .output()
+      .map_err(|e| e.to_string())?;
+    if out.status.success() {
+      return Ok(true);
+    }
+
+    /* Refusée ou non scriptable, on retombe sur un SIGTERM — le même signal
+       qu'un « quitter » du système, pas un SIGKILL : l'app garde la main sur sa
+       propre fermeture. `-x` exige le nom EXACT, sans quoi « Notes » emporterait
+       tout ce qui contient « notes ». */
+    let killed = Command::new("pkill")
+      .args(["-x", "-TERM", name])
+      .status()
+      .map_err(|e| e.to_string())?;
+    if killed.success() {
+      return Ok(true);
+    }
+
+    let err = String::from_utf8_lossy(&out.stderr);
+    Err(if err.contains("-1743") {
+      "automation-denied".into()
+    } else if err.trim().is_empty() {
+      "quit-refused".into()
+    } else {
+      err.trim().to_string()
+    })
+  }
+}
+
+#[cfg(target_os = "windows")]
+mod imp_close {
+  use std::process::Command;
+
+  pub fn close(name: &str) -> Result<bool, String> {
+    /* `taskkill` SANS `/F` : la demande de fermeture passe par la file de
+       messages de la fenêtre, exactement comme un clic sur la croix. Avec `/F`,
+       le processus est terminé sur place et tout ce qui n'était pas enregistré
+       part avec lui. */
+    let image = if name.to_lowercase().ends_with(".exe") {
+      name.to_string()
+    } else {
+      format!("{name}.exe")
+    };
+    let out = Command::new("taskkill")
+      .args(["/IM", &image])
+      .output()
+      .map_err(|e| e.to_string())?;
+    if out.status.success() {
+      return Ok(true);
+    }
+    let err = String::from_utf8_lossy(&out.stderr);
+    Err(if err.trim().is_empty() { "close-refused".into() } else { err.trim().to_string() })
+  }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+mod imp_close {
+  pub fn close(_name: &str) -> Result<bool, String> {
     Ok(false)
   }
 }
