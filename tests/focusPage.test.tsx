@@ -175,7 +175,9 @@ describe("Page Focus", () => {
     const page = render(<Focus />);
     fireEvent.click(screen.getByText("Listes"));
     // La première carte est « Réseaux sociaux », celle qui couvre Instagram.
-    fireEvent.click(screen.getAllByText("Modifier")[0]);
+    // Le crayon a remplacé le compte de cibles dans le coin de la carte : plus
+    // de libellé, on le vise donc par son nom accessible.
+    fireEvent.click(screen.getByLabelText("Modifier Réseaux sociaux"));
     fireEvent.click(screen.getByText("Bloquer en permanence"));
     fireEvent.click(screen.getByText("Enregistrer"));
     page.unmount();
@@ -228,7 +230,7 @@ describe("Page Focus", () => {
 
     expect(screen.getByText("Réseaux sociaux")).toBeTruthy();
     expect(screen.getByText("Cours & paris")).toBeTruthy();
-    // Les listes d'origine annoncent leur nombre de cibles.
-    expect(screen.getAllByText("Modifier").length).toBeGreaterThan(0);
+    // Chaque carte porte son crayon, en icône seule dans le coin.
+    expect(screen.getByLabelText("Modifier Cours & paris")).toBeTruthy();
   });
 });

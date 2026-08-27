@@ -109,6 +109,27 @@ describe("page Activité (journée)", () => {
     expect(screen.getAllByText("Temps actif").length).toBeGreaterThan(0);
   });
 
+  it("laisse hors du détail d'un pavé ce qui a duré moins de quatre minutes", () => {
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    const at = (min: number) => base.getTime() + min * 60_000;
+    saveDay({
+      date: today, awayMs: 0, updatedAt: Date.now(),
+      segments: [
+        { s: at(0), e: at(27), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
+        // Deux minutes : effleuré, pas utilisé.
+        { s: at(27), e: at(29), app: "Chrome", label: "Twitter", title: "Accueil", cat: "social" },
+        { s: at(29), e: at(30), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
+      ],
+    });
+    render(<ActivityPage setPage={vi.fn()} />);
+    fireEvent.click(screen.getByTitle(/VS Code 28 min/));
+    expect(screen.getByText("VS Code")).toBeInTheDocument();
+    expect(screen.queryByText("Twitter")).toBeNull();
+    // Rien n'est masqué en silence.
+    expect(screen.getByText(/1 sous 4 min/)).toBeInTheDocument();
+  });
+
   it("referme la sélection d'un pavé avec Échap", () => {
     const base = new Date();
     base.setHours(9, 0, 0, 0);
@@ -158,6 +179,26 @@ describe("page Activité (journée)", () => {
     expect(screen.getByText(/Rien de mesuré ce jour-là/i)).toBeInTheDocument();
   });
 
+  it("mène aux règles quand une page de navigateur n'a pas de nom de site", () => {
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    const at = (min: number) => base.getTime() + min * 60_000;
+    saveDay({
+      date: today, awayMs: 0, updatedAt: Date.now(),
+      // Titre sans domaine ni séparateur : aucun nom de site n'en sort, la
+      // ligne reste sous le nom du navigateur.
+      segments: [{ s: at(0), e: at(40), app: "Arc", label: "Arc", title: "Sans titre", cat: "other" }],
+    });
+    const setPage = vi.fn();
+    render(<ActivityPage setPage={setPage} />);
+    fireEvent.click(screen.getByRole("button", { name: /Applications/ }));
+
+    // Pas de sélecteur muet : la ligne dit qu'elle est à régler, et y mène.
+    const action = screen.getByRole("button", { name: "À régler…" });
+    fireEvent.click(action);
+    expect(setPage).toHaveBeenCalledWith("activity-rules");
+  });
+
   it("navigue vers les rapports depuis les onglets", () => {
     const setPage = vi.fn();
     render(<ActivityPage setPage={setPage} />);
@@ -176,7 +217,9 @@ describe("page Rapports", () => {
     seedToday();
     render(<ActivityReportsPage setPage={vi.fn()} />);
     expect(screen.getByText("Jour par jour")).toBeInTheDocument();
-    expect(screen.getByText(/1 jour sur 7/)).toBeInTheDocument();
+    // Trente jours par défaut : le bloc parle d'habitude, pas de la semaine en
+    // cours (celle-là est dans l'onglet « Journée »).
+    expect(screen.getByText(/1 jour sur 30/)).toBeInTheDocument();
   });
 });
 

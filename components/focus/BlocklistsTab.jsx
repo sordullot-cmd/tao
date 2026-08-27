@@ -11,11 +11,12 @@
 
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Copy, Pencil, ShieldOff, Infinity as InfinityIcon } from "lucide-react";
+import { Plus, Pencil, ShieldOff, Infinity as InfinityIcon } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
+import { TYPE } from "@/lib/ui/type";
 import { PALETTE } from "@/lib/ui/palette";
-import { CARD, PillButton, SectionTitle } from "@/components/ui/da";
-import { CATALOG_BY_ID, listSize, newId } from "@/lib/focus/model";
+import { CARD, IconButton, PillButton, SectionTitle } from "@/components/ui/da";
+import { CATALOG_BY_ID } from "@/lib/focus/model";
 import BlocklistEditor from "./BlocklistEditor";
 
 /** Les premiers noms d'une liste, pour qu'on la reconnaisse sans l'ouvrir. */
@@ -65,11 +66,6 @@ export default function BlocklistsTab({ store, setStore, actionSlot }) {
     schedules: prev.schedules.map(s => ({ ...s, blocklistIds: s.blocklistIds.filter(x => x !== id) })),
   }));
 
-  const duplicate = (list) => save({
-    ...list, id: newId("bl"), name: `${list.name} (copie)`,
-    custom: list.custom.map(c => ({ ...c, id: newId("c") })),
-  });
-
   const usedBy = (id) => [
     ...store.presets.filter(p => p.blocklistIds.includes(id)).map(p => p.name),
     ...store.schedules.filter(s => s.blocklistIds.includes(id)).map(s => s.name),
@@ -114,21 +110,60 @@ export default function BlocklistsTab({ store, setStore, actionSlot }) {
                   <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {list.name}
                   </span>
-                  <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
-                    {listSize(list)}
-                  </span>
+                  {/* Le compte de cibles vivait ici — il se lit déjà sous le
+                      titre, dans l'aperçu qui NOMME ce qui est coupé. Un chiffre
+                      nu par-dessus disait moins et prenait le seul coin où l'on
+                      cherche une action. */}
+                  <IconButton
+                    onClick={() => setEditing({ list })}
+                    aria-label={`Modifier ${list.name}`}
+                    title="Modifier"
+                  >
+                    <Pencil size={13} />
+                  </IconButton>
                 </div>
 
-                {/* Ce qu'une liste inverse — un repère, pas une commande : ça ne
-                    se change qu'à l'éditeur, où la conséquence est expliquée. */}
-                {list.mode === "allow" && (
-                  <span style={{
-                    alignSelf: "flex-start", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
-                    background: `color-mix(in srgb, ${PALETTE.orange} 14%, transparent)`, color: PALETTE.orange,
-                  }}>
-                    Seuls autorisés
-                  </span>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {/* Couper pour de bon ne doit pas demander d'ouvrir un éditeur
+                      et d'y trouver une case : c'est ce qu'on vient chercher, et
+                      c'est donc sous le titre que ça se décide. Vert une fois
+                      actif — la seule couleur qui dise « ça tourne » sans avoir
+                      à lire le mot. */}
+                  <PillButton
+                    compact
+                    variant="ghost"
+                    onClick={() => togglePermanent(list.id)}
+                    aria-pressed={!!list.always}
+                    title={list.always
+                      ? "Cette liste coupe en permanence. Cliquez pour la rendre à ses sessions."
+                      : "Couper cette liste en permanence, sans session ni horaire."}
+                    /* Plus bas que la métrique commune des boutons, et c'est
+                       délibéré : celui-ci vit sur la ligne des repères, à côté
+                       d'une pastille de 11 px. À 34 px il pesait plus que le
+                       titre qu'il commente. Il reste un bouton — texte, curseur,
+                       état pressé — simplement à la hauteur de sa rangée. */
+                    style={{
+                      minHeight: 26, padding: "4px 10px", fontSize: TYPE.caption.fontSize,
+                      ...(list.always
+                        ? { background: `color-mix(in srgb, ${PALETTE.green} 15%, transparent)`, color: PALETTE.green }
+                        : null),
+                    }}
+                  >
+                    <InfinityIcon size={12} /> {list.always ? "Permanent" : "Rendre permanent"}
+                  </PillButton>
+
+                  {/* Ce qu'une liste inverse — un repère, pas une commande : ça
+                      ne se change qu'à l'éditeur, où la conséquence est
+                      expliquée. */}
+                  {list.mode === "allow" && (
+                    <span style={{
+                      padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                      background: `color-mix(in srgb, ${PALETTE.orange} 14%, transparent)`, color: PALETTE.orange,
+                    }}>
+                      Seuls autorisés
+                    </span>
+                  )}
+                </div>
 
                 <Preview list={list} />
 
@@ -142,28 +177,6 @@ export default function BlocklistsTab({ store, setStore, actionSlot }) {
                   </div>
                 ) : null}
 
-                <div style={{ display: "flex", gap: 6, marginTop: "auto", flexWrap: "wrap" }}>
-                  {/* Couper pour de bon ne doit pas demander d'ouvrir un éditeur
-                      et d'y trouver une case : c'est ce qu'on vient chercher.
-                      Un bouton et non une pastille — dans cette DA, un tag
-                      affiche, un bouton agit — et son état porte la réponse :
-                      plein, la liste coupe tout le temps. */}
-                  <PillButton
-                    compact
-                    variant={list.always ? "primary" : "ghost"}
-                    onClick={() => togglePermanent(list.id)}
-                    aria-pressed={!!list.always}
-                    title={list.always
-                      ? "Cette liste coupe en permanence. Cliquez pour la rendre à ses sessions."
-                      : "Couper cette liste en permanence, sans session ni horaire."}
-                  >
-                    <InfinityIcon size={12} /> {list.always ? "Permanent" : "Rendre permanent"}
-                  </PillButton>
-                  <PillButton compact onClick={() => setEditing({ list })}><Pencil size={12} /> Modifier</PillButton>
-                  <PillButton compact variant="ghost" onClick={() => duplicate(list)} title="Dupliquer">
-                    <Copy size={12} />
-                  </PillButton>
-                </div>
               </div>
             );
           })}

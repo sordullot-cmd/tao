@@ -12,7 +12,7 @@
 
 import React, { useMemo, useState } from "react";
 import { CalendarRange } from "lucide-react";
-import { CARD, AllocationChart, PeriodPills, HAIRLINE } from "@/components/ui/da";
+import { CARD, AllocationChart, FIELD_BG, PeriodPills, HAIRLINE } from "@/components/ui/da";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { T } from "@/lib/ui/tokens";
 import { PALETTE, GREY } from "@/lib/ui/palette";
@@ -22,7 +22,7 @@ import { fmtDur, rangeStats } from "@/lib/activity/stats";
 import { PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, AppRows, BlockTitle, CategoryRows, HourBars, KpiTile, SourceNotice,
+  ActivityHeader, AppRows, BlockTitle, CategoryRows, HourBars, Metric, SourceNotice,
 } from "@/components/activity/ActivityChrome";
 
 const RANGES = [
@@ -39,48 +39,102 @@ function shiftDate(date, days) {
   return getLocalDateString(d);
 }
 
-/** Barres empilées par jour : la régularité se voit là, pas dans une moyenne. */
+/**
+ * Les journées, calées sur des semaines entières : la première colonne est un
+ * LUNDI.
+ *
+ * Une fenêtre de trente jours commence n'importe quel jour ; les colonnes se
+ * lisaient alors comme une file continue, où rien ne disait où une semaine
+ * finissait. En coupant le début jusqu'au premier lundi, les colonnes vont de
+ * lundi à dimanche, puis recommencent — et deux mardis se retrouvent toujours
+ * à sept colonnes l'un de l'autre.
+ *
+ * On coupe au lieu de compléter : les jours ajoutés devant seraient des jours
+ * qu'on n'a pas mesurés, et une colonne vide inventée ment autant qu'un chiffre
+ * faux. (Les mesures, elles, portent bien sur toute la fenêtre : ce sont les
+ * seules colonnes qui commencent au lundi.)
+ */
+function fromMonday(days) {
+  const first = days.findIndex(d => new Date(`${d.date}T00:00:00`).getDay() === 1);
+  return first <= 0 ? days : days.slice(first);
+}
+
+/**
+ * Barres empilées par jour : la régularité se voit là, pas dans une moyenne.
+ *
+ * Même dessin que le temps d'écran de l'onglet « Journée » — colonnes larges,
+ * sommet arrondi, gouttière franche — parce que c'est la même figure : des jours
+ * en colonnes. Elles se lisaient ici en traits de quatre pixels collés les uns
+ * aux autres, là en barres respirées : deux styles pour un même objet obligent à
+ * réapprendre le graphe en changeant d'onglet. Ce qui est empilé, en revanche, ne
+ * change pas : ici les CATÉGORIES (une période sert à voir ce qui revient), là
+ * la nature du temps.
+ */
 function DailyBars({ days, categories, goalMs }) {
   const max = Math.max(1, ...days.map(d => d.activeMs), goalMs || 0);
-  const height = 150;
+  const height = 260;
   const top = categories.slice(0, 6).map(c => c.id);
+  /* La gouttière suit le nombre de jours : quatorze pixels entre trente colonnes
+     ne laisseraient rien pour les colonnes elles-mêmes. */
+  const gap = days.length <= 10 ? 14 : days.length <= 31 ? 5 : 2;
+  const barW = days.length <= 31 ? "92%" : "100%";
+  const barMax = days.length <= 10 ? 56 : 34;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height, position: "relative" }}>
-        {goalMs > 0 && (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap, height, position: "relative" }}>
+        {goalMs > 0 && goalMs <= max && (
           <div
             title={`Objectif : ${fmtDur(goalMs)}`}
             style={{
               position: "absolute", left: 0, right: 0, bottom: (goalMs / max) * height,
-              borderTop: `1px dashed ${T.border2}`, pointerEvents: "none",
+              borderTop: `1px dotted ${T.border2}`, pointerEvents: "none",
             }}
           />
         )}
-        {days.map(d => {
+        {days.map((d, i) => {
           const stacks = d.byCategory
             // Les catégories hors du haut du classement finissent dans une part
             // grise : six teintes suffisent à lire une colonne, douze la brouillent.
             .map(b => ({ ...b, color: top.includes(b.id) ? b.color : GREY.grey300 }))
             .sort((a, b) => b.ms - a.ms);
           return (
-            <div key={d.date} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", height, gap: 0 }}
-              title={`${new Date(`${d.date}T00:00:00`).toLocaleDateString()} — ${fmtDur(d.activeMs)} actif, ${fmtDur(d.focusMs)} de focus`}
+            <div
+              key={d.date}
+              title={`${new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })} — ${fmtDur(d.activeMs)} actif, ${fmtDur(d.focusMs)} de focus`}
+              style={{
+                flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "flex-end",
+                // Une respiration avant chaque lundi : c'est elle qui fait lire
+                // « lundi → dimanche, puis on recommence ».
+                marginLeft: i > 0 && new Date(`${d.date}T00:00:00`).getDay() === 1 ? gap : 0,
+              }}
             >
-              {stacks.map((b, i) => (
-                <div key={b.id} style={{
-                  height: (b.ms / max) * height,
-                  background: b.color,
-                  borderRadius: i === 0 ? "3px 3px 0 0" : 0,
-                  minHeight: b.ms > 0 ? 1 : 0,
-                }} />
-              ))}
+              {/* La barre est plus étroite que sa colonne, comme dans l'onglet
+                  « Journée » : c'est la colonne qui porte le survol. */}
+              <div style={{
+                width: barW, maxWidth: barMax, height: "100%", display: "flex",
+                flexDirection: "column", justifyContent: "flex-end",
+              }}>
+                {stacks.length === 0 ? (
+                  <div style={{ height: 2, background: FIELD_BG, borderRadius: 999 }} />
+                ) : (
+                  stacks.map((b, i) => (
+                    <div key={b.id} style={{
+                      height: (b.ms / max) * height,
+                      background: b.color,
+                      borderRadius: i === 0 ? "4px 4px 0 0" : 0,
+                      minHeight: b.ms > 0 ? 1 : 0,
+                    }} />
+                  ))
+                )}
+              </div>
             </div>
           );
         })}
       </div>
-      <div style={{ display: "flex", gap: 4 }}>
-        {days.map(d => {
+      <div style={{ display: "flex", gap }}>
+        {days.map((d, i) => {
           const jd = new Date(`${d.date}T00:00:00`);
           const weekend = jd.getDay() === 0 || jd.getDay() === 6;
           return (
@@ -88,8 +142,12 @@ function DailyBars({ days, categories, goalMs }) {
               flex: 1, minWidth: 0, textAlign: "center", fontSize: 10,
               color: weekend ? T.textMut : T.textSub, fontVariantNumeric: "tabular-nums",
               overflow: "hidden", whiteSpace: "nowrap",
+              marginLeft: i > 0 && jd.getDay() === 1 ? gap : 0,
             }}>
-              {days.length <= 14 ? `${WEEKDAYS[(jd.getDay() + 6) % 7][0]}${jd.getDate()}` : (jd.getDate() % 5 === 0 ? jd.getDate() : "")}
+              {/* L'initiale du jour tant qu'elle tient ; au-delà, seul le lundi
+                  est nommé, par son quantième — les groupes de sept suffisent
+                  alors à situer les autres. */}
+              {days.length <= 35 ? WEEKDAYS[(jd.getDay() + 6) % 7][0] : (jd.getDay() === 1 ? jd.getDate() : "")}
             </span>
           );
         })}
@@ -158,7 +216,11 @@ function DeltaLine({ label, ms, refMs }) {
 export default function ActivityReportsPage({ setPage }) {
   const [settings] = useActivitySettings();
   const live = useActivityLive();
-  const [rangeId, setRangeId] = useState("7");
+  /* Trente jours par défaut, et non sept : ce bloc-ci répond à « est-ce que je
+     tiens dans la durée ? ». Sur sept jours il redisait la semaine que l'onglet
+     « Journée » montre déjà, en moins bien — une habitude ne se lit pas sur
+     cinq colonnes. */
+  const [rangeId, setRangeId] = useState("30");
   const range = RANGES.find(r => r.id === rangeId) || RANGES[0];
 
   const today = getLocalDateString();
@@ -186,6 +248,27 @@ export default function ActivityReportsPage({ setPage }) {
   const focusGoalMs = settings.focusGoalHours * 3600_000;
   const goalDays = stats.days.filter(d => d.focusMs >= focusGoalMs).length;
 
+  // Les colonnes commencent au lundi et se lisent par semaines entières.
+  const chartDays = useMemo(() => fromMonday(stats.days), [stats.days]);
+
+  /* La régularité, chiffrée — c'est le propos du bloc, et l'œil ne compte pas
+     seul une série de colonnes. Une moyenne de 4 h par jour décrit aussi bien
+     quatre journées de 4 h qu'une de 16 h suivie de trois à zéro ; la série de
+     jours tenus, elle, ne peut pas mentir là-dessus. */
+  const rhythm = useMemo(() => {
+    let best = 0;
+    let run = 0;
+    let met = 0;
+    for (const d of stats.days) {
+      const held = workGoalMs > 0 && d.activeMs >= workGoalMs;
+      if (!held) { run = 0; continue; }
+      met += 1;
+      run += 1;
+      if (run > best) best = run;
+    }
+    return { met, best };
+  }, [stats.days, workGoalMs]);
+
   const parts = stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms }));
 
   return (
@@ -210,49 +293,65 @@ export default function ActivityReportsPage({ setPage }) {
         </div>
       ) : (
         <>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(158px, 1fr))" }}>
-            <KpiTile
+          {/* ── Les mesures de la période ──
+              Six cartes blanches de 158 px alignées sur deux rangs : six objets
+              de même poids pour six nombres, et autant de bords à traverser des
+              yeux. C'est UNE carte — les mesures ne sont pas six sujets, elles
+              sont les six faces du même. Les deux qui se comparent (actif,
+              focus) portent leur écart avec la période précédente ; les deux qui
+              se visent (moyennes, score) portent leur jauge. */}
+          <div style={{ ...CARD, display: "grid", gap: 18, gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))" }}>
+            <Metric
               label="Temps actif"
               value={fmtDur(stats.activeMs)}
+              size={30}
               sub={<DeltaLine label="Actif" ms={stats.activeMs} refMs={prevStats.activeMs} />}
             />
-            <KpiTile
+            <Metric
               label="Temps de focus"
               value={fmtDur(stats.focusMs)}
+              size={30}
               color={PALETTE.green}
               sub={<DeltaLine label="Focus" ms={stats.focusMs} refMs={prevStats.focusMs} />}
             />
-            <KpiTile
+            <Metric
               label="Moyenne par jour mesuré"
               value={fmtDur(stats.avgActiveMs)}
               valueMs={stats.avgActiveMs}
               goalMs={workGoalMs}
+              size={30}
               sub={`${stats.activeDays} jour${stats.activeDays > 1 ? "s" : ""} sur ${range.days}`}
             />
-            <KpiTile
+            <Metric
               label="Focus moyen"
               value={fmtDur(stats.avgFocusMs)}
               valueMs={stats.avgFocusMs}
               goalMs={focusGoalMs}
+              size={30}
               color={PALETTE.green}
-              sub={`Objectif atteint ${goalDays} fois`}
+              sub={`objectif atteint ${goalDays} fois`}
             />
-            <KpiTile
+            <Metric
               label="Score moyen"
               value={`${stats.avgScore}`}
-              sub="Sur 100, jours mesurés uniquement"
+              valueMs={stats.avgScore}
+              goalMs={100}
+              size={30}
+              color={stats.avgScore >= 70 ? PALETTE.green : stats.avgScore >= 45 ? PALETTE.yellow : PALETTE.red}
+              sub="sur 100, jours mesurés seulement"
             />
-            <KpiTile
+            <Metric
               label="Distractions"
               value={fmtDur(stats.distractingMs)}
+              size={30}
               color={stats.distractingMs > 0 ? PRODUCTIVITY_COLOR.distracting : T.text}
-              sub={stats.bestDay ? `Meilleur jour : ${new Date(`${stats.bestDay.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}` : null}
+              sub={stats.bestDay ? `meilleur jour : ${new Date(`${stats.bestDay.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric" })}` : null}
             />
           </div>
 
           <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
             <BlockTitle right={`${fmtDur(stats.activeMs)} sur ${range.days} jours`}>Jour par jour</BlockTitle>
-            <DailyBars days={stats.days} categories={stats.byCategory} goalMs={workGoalMs} />
+            <DailyBars days={chartDays} categories={stats.byCategory} goalMs={workGoalMs} />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12, paddingTop: 4, borderTop: `1px solid ${HAIRLINE}` }}>
               {stats.byCategory.slice(0, 6).map(b => (
                 <span key={b.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textSub }}>
@@ -262,6 +361,24 @@ export default function ActivityReportsPage({ setPage }) {
               ))}
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textSub }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: GREY.grey300 }} /> autres
+              </span>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", fontSize: 11, color: T.textSub }}>
+              <span>
+                <strong style={{ color: T.text, fontWeight: 600 }}>{stats.activeDays}</strong> jour{stats.activeDays > 1 ? "s" : ""} mesuré{stats.activeDays > 1 ? "s" : ""} sur {range.days}
+              </span>
+              {workGoalMs > 0 && (
+                <>
+                  <span>
+                    Objectif de {fmtDur(workGoalMs)} tenu <strong style={{ color: T.text, fontWeight: 600 }}>{rhythm.met}</strong> fois
+                  </span>
+                  <span>
+                    Meilleure série <strong style={{ color: T.text, fontWeight: 600 }}>{rhythm.best}</strong> jour{rhythm.best > 1 ? "s" : ""} d’affilée
+                  </span>
+                </>
+              )}
+              <span style={{ color: T.textMut }}>
+                Une moyenne ne dit pas si les jours se ressemblent : c’est ce que ces colonnes montrent.
               </span>
             </div>
           </div>

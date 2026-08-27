@@ -461,12 +461,21 @@ export function DayColumn({
  * range depuis là, comme dans l'onglet « Applications » — c'est souvent en
  * lisant un pavé qu'on repère un classement faux.
  */
-export function BlockDetail({ block, activeMs, onClose, onPick }) {
+/* Sous quatre minutes, une application n'a rien à dire d'un pavé : elle a été
+   effleurée, pas utilisée. Un pavé d'une demi-heure en compte facilement dix de
+   ce genre, et elles enterrent les deux ou trois qui portent vraiment le
+   moment. Le seuil vaut pour l'AFFICHAGE seul : ce temps reste compté dans
+   `block.ms`, dans les totaux du jour et dans la liste des applications. */
+const BLOCK_APP_MIN_MS = 4 * 60_000;
+
+export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
   const color = categoryColor(block.cat);
   const share = activeMs > 0 ? (block.ms / activeMs) * 100 : 0;
+  const apps = block.apps.filter(a => a.ms >= BLOCK_APP_MIN_MS);
+  const hidden = block.apps.length - apps.length;
   // Le pavé absorbe les passages courts sur autre chose : ils gardent LEUR
   // couleur dans la liste, sinon le détail dirait le contraire du classement.
-  const strays = block.apps.filter(a => a.cat !== block.cat).length;
+  const strays = apps.filter(a => a.cat !== block.cat).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
@@ -493,14 +502,24 @@ export function BlockDetail({ block, activeMs, onClose, onPick }) {
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", fontSize: 11, color: T.textSub }}>
-        <span>{block.apps.length} application{block.apps.length > 1 ? "s" : ""}</span>
+        <span>{apps.length} application{apps.length > 1 ? "s" : ""}</span>
         <span>{block.switches} bascule{block.switches > 1 ? "s" : ""}</span>
         <span>Durée d’horloge <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(block.end - block.start)}</strong></span>
         {strays > 0 && <span style={{ color: T.textMut }}>dont {strays} passage{strays > 1 ? "s" : ""} d’une autre catégorie</span>}
+        {/* Ce qui est masqué se DIT : une liste tronquée en silence se lit
+            comme une liste complète. */}
+        {hidden > 0 && (
+          <span style={{ color: T.textMut }}>{hidden} sous 4 min, non listée{hidden > 1 ? "s" : ""}</span>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", overflowY: "auto", minHeight: 0 }}>
-        {block.apps.map(a => {
+        {apps.length === 0 && (
+          <span style={{ fontSize: 12, color: T.textSub, padding: "8px 0" }}>
+            Rien n’a dépassé quatre minutes sur ce pavé — le temps s’y est éparpillé.
+          </span>
+        )}
+        {apps.map(a => {
           const pct = block.ms > 0 ? (a.ms / block.ms) * 100 : 0;
           const appColor = categoryColor(a.cat);
           return (
@@ -526,7 +545,7 @@ export function BlockDetail({ block, activeMs, onClose, onPick }) {
                   <span style={{ fontSize: 11, color: T.textMut }}>+ {a.titles.length - 3} autre{a.titles.length - 3 > 1 ? "s" : ""} fenêtre{a.titles.length - 3 > 1 ? "s" : ""}</span>
                 )}
               </div>
-              {onPick && <CategoryPicker cat={a.cat} onPick={(c) => onPick(a, c)} />}
+              {onPick && <PickCell app={a} onPick={onPick} blocked={blocked} />}
             </div>
           );
         })}
@@ -862,7 +881,39 @@ function pctLabel(pct) {
  * « voir plus » apparaîtrait. En deçà, tout tient déjà à l'écran et il n'y a
  * rien à nettoyer — masquer une ligne sur quatre serait de la perte sèche.
  */
-export function AppRows({ apps, limit = 8, onPick = null, empty = null, minMs = 0 }) {
+/**
+ * Le sélecteur de catégorie d'une ligne — ou, quand la ligne ne peut pas être
+ * rangée d'un clic, ce qui le DIT.
+ *
+ * Le cas existe et n'était pas traité : une page de navigateur dont le titre ne
+ * livre aucun nom de site n'a rien sur quoi poser une règle sûre (le seul texte
+ * disponible est « Arc », et une règle dessus classerait TOUTE la navigation).
+ * Le clic était alors ignoré en silence — on choisissait une catégorie et rien
+ * ne bougeait, sans un mot d'explication.
+ *
+ * `blocked(app)` rend la raison, ou `null`. Quand il y a une raison, le clic
+ * appelle `onPick(app, null)` : à l'appelant d'emmener là où le cas se règle.
+ */
+function PickCell({ app, onPick, blocked }) {
+  const why = blocked ? blocked(app) : null;
+  if (!why) return <CategoryPicker cat={app.cat} onPick={(c) => onPick(app, c)} />;
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(app, null)}
+      title={why}
+      style={{
+        ...BTN.sm, border: `1px solid ${HAIRLINE}`, background: "transparent",
+        color: T.textSub, fontFamily: "inherit", fontSize: 12, cursor: "pointer",
+        whiteSpace: "nowrap", flexShrink: 0,
+      }}
+    >
+      À régler…
+    </button>
+  );
+}
+
+export function AppRows({ apps, limit = 8, onPick = null, blocked = null, empty = null, minMs = 0 }) {
   const [all, setAll] = useState(false);
 
   const kept = useMemo(() => {
@@ -909,7 +960,7 @@ export function AppRows({ apps, limit = 8, onPick = null, empty = null, minMs = 
               dit déjà, l'anneau juste au-dessus la dit en grand, et le nom
               répété rognait la place du titre de fenêtre — la seule ligne qui
               apprenne quelque chose. */}
-          {onPick && <CategoryPicker cat={a.cat} onPick={(c) => onPick(a, c)} />}
+          {onPick && <PickCell app={a} onPick={onPick} blocked={blocked} />}
         </div>
       ))}
       {kept.length > limit && (

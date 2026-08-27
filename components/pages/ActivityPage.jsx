@@ -186,9 +186,19 @@ export default function ActivityPage({ setPage }) {
   /* Une page de navigateur sans nom de site reconnaissable ne peut pas donner
      de règle sûre : le seul texte disponible est celui du navigateur lui-même,
      et une règle dessus classerait TOUTE la navigation. Ces lignes-là se règlent
-     dans « Catégories & règles », sur un fragment choisi à la main. */
+     dans « Catégories & règles », sur un fragment du titre choisi à la main.
+
+     Le clic y était IGNORÉ en silence : on choisissait une catégorie, rien ne
+     changeait, et rien ne disait pourquoi. La ligne porte maintenant « À
+     régler… » et mène à l'endroit où c'est possible. */
   const canAssign = (a) => !(a.isSite && isBrowser(a.label));
-  const onPick = (a, c) => { if (canAssign(a)) assign(a, c); };
+  const blocked = (a) => (canAssign(a)
+    ? null
+    : "Page sans nom de site : la règle doit porter sur un mot de son titre. Ouvre « Catégories & règles » pour le choisir.");
+  const onPick = (a, c) => {
+    if (c == null) { setPage?.("activity-rules"); return; }
+    if (canAssign(a)) assign(a, c);
+  };
 
   const apps = onlyPending ? pendingApps : stats.byApp;
   const bestHour = stats.hourly.reduce((b, h) => (h.productiveMs > b.productiveMs ? h : b), stats.hourly[0]);
@@ -292,6 +302,7 @@ export default function ActivityPage({ setPage }) {
                     activeMs={stats.activeMs}
                     onClose={() => setOpenBlock(null)}
                     onPick={onPick}
+                    blocked={blocked}
                   />
                 </div>
               ) : (
@@ -484,6 +495,7 @@ export default function ActivityPage({ setPage }) {
                 )}
                 <AppRows
                   apps={apps}
+                  blocked={blocked}
                   limit={onlyPending ? 20 : 10}
                   onPick={onPick}
                   empty="Tout est classé sur cette journée."

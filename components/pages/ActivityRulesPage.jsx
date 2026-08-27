@@ -72,6 +72,54 @@ function NumberField({ label, hint, value, onChange, min = 0, max = 999, suffix 
   );
 }
 
+/**
+ * Classer une page de navigateur dont le titre ne donne aucun nom de site.
+ *
+ * Ces lignes-là étaient un cul-de-sac : l'interface disait « écris une règle
+ * sur un mot de ce titre » et n'offrait aucun endroit pour le faire, alors que
+ * la file d'attente promet juste au-dessus qu'une catégorie suffit.
+ *
+ * Le champ part du titre relevé, à l'utilisateur de le RÉDUIRE au mot qui
+ * reviendra — « anime-sama » plutôt que « Épisode 12 | Anime-Sama ». On ne le
+ * réduit pas à sa place : le mot distinctif dépend de ce qu'il y a autour, et
+ * un mauvais découpage écrirait une règle qui classe de travers sans le dire.
+ *
+ * Un titre vide n'est pas un choix mais une PANNE (autorisation d'accessibilité
+ * refusée sur macOS, cf. lib/activity/native) : on le dit plutôt que de
+ * proposer un champ qui ne peut rien produire.
+ */
+function TitleRuleRow({ title, onAdd }) {
+  const [frag, setFrag] = useState("");
+  const value = frag || title;
+
+  if (!title) {
+    return (
+      <span style={{ fontSize: 11, color: T.textSub, maxWidth: 260 }}>
+        Titre de fenêtre illisible : sans lui, rien ne distingue cette page du
+        navigateur. Autorise « Accessibilité » pour l’app de bureau.
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <Input
+        compact
+        value={value}
+        onChange={(e) => setFrag(e.target.value)}
+        aria-label="Mot à reconnaître dans le titre"
+        placeholder="mot du titre"
+        style={{ width: 200 }}
+      />
+      <CategoryPicker
+        cat="other"
+        label="Classer dans…"
+        onPick={(cat) => { const v = value.trim(); if (v) onAdd(v, cat); }}
+      />
+    </div>
+  );
+}
+
 export default function ActivityRulesPage({ setPage }) {
   const [settings, setSettings] = useActivitySettings();
   const live = useActivityLive();
@@ -213,9 +261,12 @@ export default function ActivityRulesPage({ setPage }) {
                     </button>
                   )}
                   {risky ? (
-                    <span style={{ fontSize: 11, color: T.textSub, maxWidth: 260 }}>
-                      Page sans nom de site : écris une règle « dans le titre » sur un mot de ce titre.
-                    </span>
+                    /* Page dont le titre ne livre aucun nom de site : la règle
+                       ne peut porter que sur un MOT de ce titre, et lequel est
+                       un choix humain — « Arc » classerait toute la navigation.
+                       La ligne pose donc la question au lieu de renvoyer
+                       l'utilisateur écrire la règle ailleurs à la main. */
+                    <TitleRuleRow title={a.titles[0]?.title || ""} onAdd={(frag, cat) => addRule(frag, "title", cat)} />
                   ) : (
                     <CategoryPicker
                       cat="other"

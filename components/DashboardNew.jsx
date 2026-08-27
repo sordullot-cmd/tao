@@ -664,24 +664,25 @@ export default function App() {
       items: [
         { id: "daily-planner", icon: LucideCalendarDays, label: t("nav.dailyPlanner") },
         { id: "agenda",        icon: LucideCalendarClock, label: t("nav.agenda") },
+        /* « Activité » suit immédiatement le calendrier : les deux disent le
+           même sujet — le temps — mais celle-ci le MESURE au lieu de le
+           prévoir. On y va pour vérifier ce que la journée prévue est devenue,
+           donc juste après l'avoir regardée. */
+        { id: "activity",      icon: LucideActivity,     label: t("nav.activity") },
         /* « Objectifs » a fusionné dans « Quête de soi » : une seule entrée,
            la page porte les catégories PUIS la liste des objectifs. */
         { id: "life-rpg",      icon: Mountain,           label: t("nav.lifeRpg") },
-        /* « Activité » suit le planificateur et l'agenda : les trois disent le
-           même sujet — le temps — mais celle-ci le MESURE au lieu de le prévoir.
-           C'est la place où l'on va vérifier ce que la journée est devenue. */
-        { id: "activity",      icon: LucideActivity,     label: t("nav.activity") },
+        /* « Focus » suit les objectifs : c'est la page qui PROTÈGE le temps
+           qu'on vient de se fixer. On l'ouvre pour pouvoir travailler à ce qui
+           précède, pas pour y consulter quelque chose — un interrupteur posé
+           contre son objet, et non une destination. */
+        { id: "focus",         icon: LucideShieldOff,    label: t("nav.focus") },
         { id: "sport",         icon: LucideDumbbell,     label: "Sport" },
         { id: "notes",         icon: LucideFileText,     label: t("nav.notes") },
         /* « Révisions » suit « Notes » : c'est là qu'on écrit ce qu'on veut
            retenir, et l'atelier des révisions part précisément de ces notes. */
         { id: "revisions",     icon: LucideBrain,        label: t("nav.revisions") },
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
-        /* « Focus » ferme la section : c'est la page qui PROTÈGE les autres.
-           On y va pour pouvoir travailler sur les précédentes, pas pour
-           consulter quelque chose — sa place est au bout, comme un interrupteur
-           et non comme une destination. */
-        { id: "focus",         icon: LucideShieldOff,    label: t("nav.focus") },
       ],
     },
     /* Finance — l'argent personnel, à distinguer du capital de trading qui vit
