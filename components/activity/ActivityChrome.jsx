@@ -259,7 +259,16 @@ const pad2 = (n) => String(n).padStart(2, "0");
  * + 1 h, plus l'heure courante) : vingt-quatre heures dont dix-huit vides sont
  * dix-huit heures de défilement pour rien.
  */
-export function DayColumn({ blocks, date, height = 452, hourH = 56, onPickBlock }) {
+export function DayColumn({
+  blocks, date, onPickBlock,
+  /* Exactement la grille de l'agenda : même hauteur utile (`calc(100vh - 210px)`)
+     et même hauteur d'heure (68 px). Les deux pages montrent une journée sur des
+     heures — les lire à deux échelles différentes obligeait à recalibrer l'œil
+     en passant de l'une à l'autre. Conséquence assumée : la carte du jour occupe
+     la hauteur de l'écran, et le reste de la page se lit en défilant. */
+  height = "calc(100vh - 210px)",
+  hourH = 68,
+}) {
   const nowMs = useNowMinute();
   const scrollRef = useRef(null);
   const doneRef = useRef(null);
@@ -362,7 +371,6 @@ export function DayColumn({ blocks, date, height = 452, hourH = 56, onPickBlock 
             // Teinte posée sur un fond blanc OPAQUE : sinon les lignes d'heures
             // transparaissent à travers le pavé.
             const tint = `${color}30`;
-            const others = b.apps.length - 1;
             return (
               <div
                 key={b.start}
@@ -379,8 +387,12 @@ export function DayColumn({ blocks, date, height = 452, hourH = 56, onPickBlock 
                   cursor: onPickBlock ? "pointer" : "default",
                 }}
               >
+                {/* La CATÉGORIE nomme le pavé, pas l'application : la grille
+                    répond à « qu'est-ce que j'ai fait de cette heure-là », et
+                    « VS Code » ne le dit qu'à celui qui sait déjà. Le détail des
+                    applications reste dans l'infobulle. */}
                 <span style={{ fontSize: 10, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: h >= 34 ? "none" : 1 }}>
-                  {b.label}{others > 0 && h >= 34 ? ` +${others}` : ""}
+                  {categoryLabel(b.cat)}
                 </span>
                 {h >= 24 && (
                   <span style={{ fontSize: 10, color: T.textSub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>

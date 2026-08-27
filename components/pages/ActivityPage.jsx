@@ -226,9 +226,13 @@ export default function ActivityPage({ setPage }) {
               </span>
             </div>
 
-            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "flex-start" }}>
-              {/* La journée, heure par heure */}
-              <div style={{ flex: "0 1 304px", minWidth: 244, display: "flex", flexDirection: "column", gap: 6 }}>
+            {/* `stretch` + `space-between` : le résumé s'aligne sur la hauteur de
+                la grille et sa dernière ligne se pose à son pied, au lieu de
+                laisser un vide sous une colonne deux fois plus haute. */}
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "stretch" }}>
+              {/* La journée, heure par heure — la moitié de la carte : c'est le
+                  dessin qu'on vient regarder, pas une vignette. */}
+              <div style={{ flex: "1 1 380px", minWidth: 300, display: "flex", flexDirection: "column", gap: 6 }}>
                 <DayColumn blocks={stats.blocks} date={date} />
                 <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.45 }}>
                   Un pavé = une matière tant qu’elle dure, à la couleur de sa catégorie ; les blancs sont
@@ -236,8 +240,8 @@ export default function ActivityPage({ setPage }) {
                 </span>
               </div>
 
-              {/* Le résumé de la journée */}
-              <div style={{ flex: "1 1 336px", minWidth: 268, display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Le résumé de la journée, à sa droite et de même largeur. */}
+              <div style={{ flex: "1 1 380px", minWidth: 288, display: "flex", flexDirection: "column", gap: 16, justifyContent: "space-between" }}>
                 <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))" }}>
                   <Metric
                     label="Temps actif"
