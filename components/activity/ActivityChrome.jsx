@@ -12,7 +12,7 @@
    les couleurs de CATÉGORIE, qui sont des données (cf. lib/activity/categories).
    ========================================================================== */
 
-import React, { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useRef, useState, useSyncExternalStore } from "react";
 import { Activity, ChevronDown, MonitorSmartphone, TriangleAlert, Pause, X } from "lucide-react";
 import { CARD, FIELD_BG, HAIRLINE, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { BTN } from "@/lib/ui/buttons";
@@ -261,22 +261,26 @@ const pad2 = (n) => String(n).padStart(2, "0");
  */
 export function DayColumn({
   blocks, date, onPickBlock, selected,
-  /* Exactement la grille de l'agenda : même hauteur utile (`calc(100vh - 210px)`)
-     et même hauteur d'heure (68 px). Les deux pages montrent une journée sur des
-     heures — les lire à deux échelles différentes obligeait à recalibrer l'œil
-     en passant de l'une à l'autre. Conséquence assumée : la carte du jour occupe
-     la hauteur de l'écran, et le reste de la page se lit en défilant. */
-  height = "calc(100vh - 210px)",
+  /* La grille couvre la JOURNÉE ENTIÈRE, comme celle de l'agenda, et défile.
+     Elle ne montrait que les heures utiles : c'était plus compact, mais on ne
+     pouvait pas remonter voir le matin, et une journée à peine commencée tenait
+     en trois heures. On voit maintenant onze heures d'un coup — la place que
+     `visibleHours` réserve — et on se déplace librement dans les autres. */
+  height = "max(760px, calc(100vh - 160px))",
+  visibleHours = 11,
+  /* Plancher de la hauteur d'une heure (celle de l'agenda). Au-delà, l'heure
+     s'étire pour que les onze tiennent pile dans le cadre : sur un grand écran
+     la grille respire au lieu de laisser du vide en bas. */
   hourH = 68,
 }) {
   const nowMs = useNowMinute();
   const scrollRef = useRef(null);
   const doneRef = useRef(null);
-  /* Hauteur réelle de la boîte : la grille ne montre que les heures utiles, donc
-     une journée de quatre heures faisait 270 px dans un cadre qui en offrait
-     700 — un calendrier trois fois trop court, avec du vide dessous. Les heures
-     s'étirent maintenant pour REMPLIR le cadre, jusqu'à trois fois la hauteur
-     d'heure de l'agenda ; au-delà de ce qui tient, la grille défile comme avant. */
+  /* Hauteur réelle du cadre. Elle vient d'une mesure et non d'un calcul : c'est
+     `height` qui la fixe, mais `calc(100vh …)` n'est connu que du navigateur.
+     (Le cadre porte bien une hauteur DÉFINIE — avec un simple `maxHeight`, il
+     se réglait sur son contenu, la mesure valait toujours la hauteur de la
+     grille, et l'étirement ne se déclenchait jamais.) */
   const [boxH, setBoxH] = useState(0);
   React.useEffect(() => {
     const el = scrollRef.current;
@@ -291,36 +295,32 @@ export function DayColumn({
   const isToday = date === `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
   const nowMin = minutesOfDay(nowMs);
 
-  const { fromH, toH } = useMemo(() => {
-    if (!blocks.length) return { fromH: 8, toH: 20 };
-    const first = Math.min(...blocks.map(b => minutesOfDay(b.start))) / 60;
-    const last = Math.max(...blocks.map(b => minutesOfDay(b.end))) / 60;
-    let a = Math.max(0, Math.floor(first) - 1);
-    let b = Math.min(24, Math.ceil(last) + 1);
-    // Le repère « maintenant » doit rester dans la grille : sans ça, la ligne
-    // rouge se pose au bord et ment sur l'heure qu'il est.
-    if (isToday) {
-      a = Math.min(a, Math.max(0, Math.floor(nowMin / 60) - 1));
-      b = Math.max(b, Math.min(24, Math.ceil(nowMin / 60) + 1));
-    }
-    return { fromH: a, toH: Math.max(a + 3, b) };
-  }, [blocks, isToday, nowMin]);
+  const fromH = 0;
+  const toH = 24;
+  const rowH = Math.max(hourH, boxH ? boxH / visibleHours : 0);
 
   const hours = Array.from({ length: toH - fromH }, (_, i) => fromH + i);
-  const rowH = Math.min(hourH * 3, Math.max(hourH, boxH ? boxH / hours.length : 0));
   const gridH = hours.length * rowH;
   const y = (ms) => ((minutesOfDay(ms) - fromH * 60) / 60) * rowH;
 
   /* Arrivée directe sur l'heure courante (ou sur le début de la journée quand
      on regarde un jour passé) : avant la première peinture, sans animation —
      on vient voir la fin de la journée, pas la voir défiler depuis 8 h. */
+  /* La clé porte la hauteur d'heure : au premier rendu le cadre n'est pas encore
+     mesuré (`rowH` vaut son plancher), et sans ça la position calculée à 68 px
+     l'heure resterait figée une fois les heures étirées. */
+  const anchorKey = `${date}:${Math.round(rowH)}`;
   React.useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el || doneRef.current === date) return;
-    if (el.scrollHeight <= el.clientHeight) { doneRef.current = date; return; }
-    const target = isToday ? ((nowMin - fromH * 60) / 60) * rowH - rowH * 1.5 : 0;
-    el.scrollTop = Math.max(0, target);
-    doneRef.current = date;
+    if (!el || doneRef.current === anchorKey) return;
+    if (el.scrollHeight <= el.clientHeight) { doneRef.current = anchorKey; return; }
+    // Aujourd'hui : sur l'heure courante, avec un peu de contexte au-dessus.
+    // Un jour passé : sur sa première activité — la nuit n'a rien à dire.
+    const anchor = isToday
+      ? nowMin
+      : (blocks.length ? minutesOfDay(Math.min(...blocks.map(b => b.start))) : 8 * 60);
+    el.scrollTop = Math.max(0, (anchor / 60) * rowH - rowH * 1.5);
+    doneRef.current = anchorKey;
   });
 
   // Trous d'au moins dix minutes : ce sont les pauses, et elles se nomment.
@@ -334,8 +334,8 @@ export function DayColumn({
     <div
       ref={scrollRef}
       style={{
-        overflowY: "auto", maxHeight: height, borderRadius: 10,
-        border: `1px solid ${HAIRLINE}`, background: T.white,
+        height, maxHeight: height, overflowY: "auto", overscrollBehavior: "contain",
+        borderRadius: 10, border: `1px solid ${HAIRLINE}`, background: T.white,
       }}
     >
       <div style={{ display: "flex", position: "relative", height: gridH }}>
