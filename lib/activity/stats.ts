@@ -520,6 +520,7 @@ export interface RangeStats {
   activeMs: number;
   focusMs: number;
   productiveMs: number;
+  neutralMs: number;
   distractingMs: number;
   byCategory: Bucket[];
   byApp: AppBucket[];
@@ -540,6 +541,11 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
   const activeMs = days.reduce((n, d) => n + d.activeMs, 0);
   const focusMs = days.reduce((n, d) => n + d.focusMs, 0);
   const productiveMs = days.reduce((n, d) => n + d.productiveMs, 0);
+  /* Le neutre est SOMMÉ et non déduit de `activeMs` : le temps non classé
+     (catégorie « other ») n'est ni productif, ni neutre, ni distraction, et une
+     soustraction le ferait passer pour du neutre — soit exactement l'inverse de
+     ce que la file « à classer » cherche à faire remarquer. */
+  const neutralMs = days.reduce((n, d) => n + d.neutralMs, 0);
   const distractingMs = days.reduce((n, d) => n + d.distractingMs, 0);
 
   const catMs = new Map<string, number>();
@@ -569,6 +575,7 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
     activeMs,
     focusMs,
     productiveMs,
+    neutralMs,
     distractingMs,
     byCategory: [...catMs.entries()]
       .map(([id, ms]) => ({ id, label: categoryLabel(id), color: categoryColor(id), ms, pct: pct(ms) }))

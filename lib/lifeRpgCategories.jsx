@@ -122,16 +122,16 @@ export const MAX_YEAR_GOALS = 3;
 export const DEFAULT_CATEGORIES = [];
 
 // Modèles proposés dans l'emplacement vide : un point de départ cliquable
-// (nom + couleur + icône + intention), immédiatement modifiable ensuite.
+// (nom + couleur + icône), immédiatement modifiable ensuite.
 export const YEAR_GOAL_TEMPLATES = [
-  { label: "Forme physique", color: PALETTE.orange,   icon: "dumbbell",   identity: "Je prends soin de mon corps et je m'entraîne régulièrement.",   outcome: "" },
+  { label: "Forme physique", color: PALETTE.orange,   icon: "dumbbell",   outcome: "" },
   // Vert comme la catégorie « Trading » de la page Objectifs : une carte créée
   // depuis ce modèle doit s'accorder aux objectifs chiffrés qu'on y rattachera.
-  { label: "Trading",        color: PALETTE.green,    icon: "trending",   identity: "Je respecte mon plan et ma discipline chaque jour.",            outcome: "" },
-  { label: "Finances",       color: PALETTE.green,    icon: "wallet",     identity: "Je gère mon argent avec sagesse et sérénité.",                  outcome: "" },
-  { label: "Savoir",         color: PALETTE.blue,     icon: "graduation", identity: "J'apprends quelque chose de nouveau chaque jour.",              outcome: "" },
-  { label: "Relations",      color: PALETTE.purple,   icon: "users",      identity: "Je cultive des relations sincères et profondes.",               outcome: "" },
-  { label: "Sérénité",       color: PALETTE.pink,     icon: "heart",      identity: "Je cultive le calme, la gratitude et la présence.",             outcome: "" },
+  { label: "Trading",        color: PALETTE.green,    icon: "trending",   outcome: "" },
+  { label: "Finances",       color: PALETTE.green,    icon: "wallet",     outcome: "" },
+  { label: "Savoir",         color: PALETTE.blue,     icon: "graduation", outcome: "" },
+  { label: "Relations",      color: PALETTE.purple,   icon: "users",      outcome: "" },
+  { label: "Sérénité",       color: PALETTE.pink,     icon: "heart",      outcome: "" },
 ];
 
 // Sélectionne les objectifs à CONSERVER lors de la migration depuis l'ancien
@@ -162,6 +162,37 @@ export function yearProgress(year = currentYear(), now = new Date()) {
   const daysDone = Math.max(0, Math.floor((t - start) / 86400000));
   return { pct, daysLeft, daysDone, totalDays: Math.round((end - start) / 86400000) };
 }
+/**
+ * Repère de temps d'UNE carte : la part écoulée entre le jour où l'objectif a
+ * été défini et son échéance.
+ *
+ * C'est ce qui remplace « % de l'année écoulée » pour juger une carte en avance
+ * ou en retard. Comparer un objectif défini en septembre aux 70 % de l'année
+ * déjà passés le déclarait en retard avant son premier jour — et comme les
+ * trois cartes sont refaites chaque année, tout le monde était toujours en
+ * retard. On part donc du plus TARDIF entre le 1er janvier et la naissance de
+ * la carte (son id porte l'horodatage de création : `cat_1725...`).
+ */
+export function categoryTimeProgress(cat, year = currentYear(), now = new Date()) {
+  const yearStart = new Date(year, 0, 1).getTime();
+  const m = /^cat_(\d{10,})$/.exec(String(cat?.id || ""));
+  const born = m ? Number(m[1]) : NaN;
+  const start = Number.isFinite(born) ? Math.max(yearStart, born) : yearStart;
+  const dl = String(cat?.deadline || yearDeadline(cat?.year || year)).split("-").map(Number);
+  const end = dl.length === 3 && dl[0]
+    ? new Date(dl[0], dl[1] - 1, dl[2], 23, 59, 59).getTime()
+    : new Date(year + 1, 0, 1).getTime();
+  const total = end - start;
+  // Une carte créée le jour même de son échéance n'a pas de durée : on la dit
+  // à 0 % de temps écoulé plutôt que de diviser par zéro.
+  if (total <= 0) return { pct: 0, daysLeft: 0 };
+  const t = Math.min(Math.max(now.getTime(), start), end);
+  return {
+    pct: ((t - start) / total) * 100,
+    daysLeft: Math.max(0, Math.ceil((end - now.getTime()) / 86400000)),
+  };
+}
+
 // Jours restants avant une échéance "YYYY-MM-DD" (négatif si dépassée). Même
 // convention que la page Objectifs : le jour en cours compte, l'échéance court
 // jusqu'à sa fin de journée.

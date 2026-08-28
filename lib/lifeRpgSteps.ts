@@ -50,9 +50,21 @@ export const newStepId = (): string =>
     ? `step_${crypto.randomUUID()}`
     : `step_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-/** Les étapes d'une carte, quelle que soit son ancienneté : une carte créée
- *  avant cette fonctionnalité n'a pas de champ `steps`. */
-export function readSteps(cat: { steps?: unknown } | null | undefined): LifeStep[] {
+/**
+ * Les étapes sont-elles actives sur cette carte ?
+ *
+ * Drapeau NÉGATIF (`stepsEnabled === false`) exprès : les cartes existantes ne
+ * portent rien et gardent donc leurs jalons, sans migration. Éteindre ne
+ * supprime rien — les étapes dorment et reviennent telles quelles au rallumage.
+ */
+export function stepsEnabledOf(cat: { stepsEnabled?: boolean } | null | undefined): boolean {
+  return cat?.stepsEnabled !== false;
+}
+
+/** Les étapes telles qu'elles sont STOCKÉES, drapeau ignoré. Réservé aux
+ *  écritures : patcher la liste à partir de la version filtrée l'effacerait
+ *  d'un coup sur une carte dont les étapes sont éteintes. */
+export function readStepsRaw(cat: { steps?: unknown } | null | undefined): LifeStep[] {
   const raw = cat && Array.isArray(cat.steps) ? cat.steps : [];
   return raw
     .filter((s): s is Partial<LifeStep> => Boolean(s) && typeof s === "object")
@@ -63,6 +75,20 @@ export function readSteps(cat: { steps?: unknown } | null | undefined): LifeStep
       done: Boolean(s.done),
       doneAt: s.doneAt ? String(s.doneAt) : null,
     }));
+}
+
+/**
+ * Les étapes d'une carte, quelle que soit son ancienneté : une carte créée
+ * avant cette fonctionnalité n'a pas de champ `steps`.
+ *
+ * Le filtre du drapeau est ICI, et non chez les appelants : XP, jalons de la
+ * frise, avancement de la carte et affichage lisent tous cette fonction. Une
+ * carte dont les étapes sont éteintes doit disparaître de TOUS ces calculs à la
+ * fois — un gel à moitié appliqué donnerait un pourcentage qu'aucun écran
+ * n'explique.
+ */
+export function readSteps(cat: { steps?: unknown; stepsEnabled?: boolean } | null | undefined): LifeStep[] {
+  return stepsEnabledOf(cat) ? readStepsRaw(cat) : [];
 }
 
 /* ── Objectifs chiffrés rattachés aux étapes ───────────────────────────── */

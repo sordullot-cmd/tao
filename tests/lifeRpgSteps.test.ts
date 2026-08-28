@@ -16,6 +16,7 @@ import {
   groupGoalPctsByStep,
   isStepDone,
   readSteps,
+  readStepsRaw,
   removeStep,
   sortSteps,
   stepCompletion,
@@ -23,6 +24,7 @@ import {
   stepsProgress,
   toggleStep,
   updateStep,
+  stepsEnabledOf,
   yearMarkers,
   yearPosition,
   type LifeStep,
@@ -276,5 +278,30 @@ describe("frise de l'année", () => {
   it("ignore les étapes sans date : elles n'ont pas de place sur l'axe", () => {
     const cats = [{ id: "a", label: "Forme", steps: [step({ id: "libre" })] }];
     expect(yearMarkers(cats, 2026)).toEqual([]);
+  });
+});
+
+describe("interrupteur des étapes", () => {
+  const cat = { steps: [step({ id: "a" }), step({ id: "b" })] };
+
+  it("laisse les étapes actives sur une carte qui ne dit rien", () => {
+    // Rétrocompatibilité : aucune carte existante ne porte le drapeau, et
+    // toutes doivent garder leurs jalons.
+    expect(stepsEnabledOf(cat)).toBe(true);
+    expect(readSteps(cat)).toHaveLength(2);
+  });
+
+  it("retire les étapes de TOUS les calculs quand elles sont éteintes", () => {
+    const off = { ...cat, stepsEnabled: false };
+    expect(stepsEnabledOf(off)).toBe(false);
+    expect(readSteps(off)).toEqual([]);
+    // …mais l'avancement ne retombe pas sur des jalons fantômes.
+    expect(cardProgress({ steps: readSteps(off), levelPct: 40, today: TODAY }).source).toBe("level");
+  });
+
+  it("garde les jalons en sommeil : éteindre ne supprime rien", () => {
+    const off = { ...cat, stepsEnabled: false };
+    expect(readStepsRaw(off)).toHaveLength(2);
+    expect(readSteps({ ...off, stepsEnabled: true })).toHaveLength(2);
   });
 });

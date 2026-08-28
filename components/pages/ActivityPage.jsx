@@ -8,8 +8,11 @@
         ce qu'on vient chercher en ouvrant la page tient dans cette carte.
      2. OÙ EST PASSÉ LE TEMPS : une seule zone, trois lectures au choix
         (catégories, applications, rythme). C'est le même temps regardé sous
-        trois angles — pas trois blocs à empiler.
-     3. LE DÉTAIL : sessions de focus et pauses, replié par défaut.
+        trois angles — pas trois blocs à empiler. À l'échelle de la SEMAINE
+        affichée : dans quoi passe le temps est une habitude, et une journée
+        seule ne dit que ce qu'on a fait ce jour-là.
+     3. LE DÉTAIL : sessions de focus et pauses de la journée, replié par
+        défaut.
 
    ── Pourquoi ce n'est plus dix blocs ──────────────────────────────────────
    La page alignait six tuiles de mesure, un bandeau, un anneau, un cadran, deux
@@ -35,7 +38,7 @@ import { AllocationChart, CARD, HAIRLINE, PeriodPills, StepperPill, PillButton }
 import { EmptyState } from "@/components/ui/EmptyState";
 import { T } from "@/lib/ui/tokens";
 import { getLocalDateString } from "@/lib/dateUtils";
-import { dayStats, fmtClock, fmtDur } from "@/lib/activity/stats";
+import { dayStats, fmtClock, fmtDur, rangeStats } from "@/lib/activity/stats";
 import { daySources, loadRange } from "@/lib/activity/engine";
 import {
   categoryLabel, isBrowser, PRODUCTIVITY_COLOR, rootDomain,
@@ -115,10 +118,15 @@ export default function ActivityPage({ setPage }) {
   const weekStart = useMemo(() => mondayOf(date), [date]);
   const thisWeekStart = mondayOf(TODAY());
 
-  const week = useMemo(() => {
+  /* Les sept journées sont lues UNE fois et agrégées UNE fois : les colonnes du
+     temps d'écran (jour par jour) et la carte « où est passé le temps » (la
+     semaine entière) sortent du même `rangeStats`, sinon on relit sept journaux
+     deux fois par minute pour les mêmes chiffres. */
+  const weekAgg = useMemo(() => {
     void minuteTick;
-    return loadRange(weekStart, shiftDate(weekStart, 6)).map(l => dayStats(l, settings));
+    return rangeStats(loadRange(weekStart, shiftDate(weekStart, 6)), settings);
   }, [weekStart, settings, minuteTick]);
+  const week = weekAgg.days;
 
   const weekLabel = useMemo(() => {
     if (weekStart === thisWeekStart) return "Cette semaine";
@@ -165,8 +173,11 @@ export default function ActivityPage({ setPage }) {
      endroit, et les minutes communes (rognées à la lecture) semblent perdues. */
   const sources = useMemo(() => { void day; return daySources(date); }, [date, day]);
 
-  const other = stats.byCategory.find(b => b.id === "other");
-  const pendingApps = useMemo(() => stats.byApp.filter(a => a.cat === "other"), [stats.byApp]);
+  /* Ce qui reste à classer se compte sur la SEMAINE, comme la carte qui le
+     montre : une application ouverte lundi et jamais rouverte disparaîtrait de
+     la file dès mardi si on la cherchait dans la seule journée affichée. */
+  const other = weekAgg.byCategory.find(b => b.id === "other");
+  const pendingApps = useMemo(() => weekAgg.byApp.filter(a => a.cat === "other"), [weekAgg.byApp]);
 
   /**
    * Ranger une application depuis sa ligne : on écrit la règle de l'utilisateur
@@ -220,8 +231,11 @@ export default function ActivityPage({ setPage }) {
     if (canAssign(a)) assign(a, c);
   };
 
-  const apps = onlyPending ? pendingApps : stats.byApp;
-  const bestHour = stats.hourly.reduce((b, h) => (h.productiveMs > b.productiveMs ? h : b), stats.hourly[0]);
+  const apps = onlyPending ? pendingApps : weekAgg.byApp;
+  /* La meilleure heure d'une seule journée ne dit rien : c'est l'heure où on a
+     travaillé ce jour-là, pas celle où on travaille. Sur sept jours cumulés,
+     elle devient un trait de caractère. */
+  const bestHour = weekAgg.hourly.reduce((b, h) => (h.productiveMs > b.productiveMs ? h : b), weekAgg.hourly[0]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -444,137 +458,158 @@ export default function ActivityPage({ setPage }) {
             </div>
           </div>
 
-      {stats.activeMs > 0 && (
-        <>
-          {/* ═══ 2. Où est passé le temps ════════════════════════════════════
-              Trois lectures du même temps, dans une seule carte : on choisit
-              l'angle au lieu de faire défiler trois blocs. */}
-          <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      {/* ═══ 2. Où est passé le temps ════════════════════════════════════════
+          Trois lectures du même temps, dans une seule carte : on choisit
+          l'angle au lieu de faire défiler trois blocs.
+
+          Ces trois lectures parlent de la SEMAINE affichée, pas du jour. Une
+          journée seule ne dit pas dans quoi passe le temps : elle dit ce qu'on a
+          fait ce jour-là. « 40 min de réseaux sociaux » n'est un travers qu'une
+          fois répété — et une application vue vingt minutes lundi tombait sous
+          le seuil des listes tous les jours de la semaine tout en pesant deux
+          heures au total. La journée garde ce qui n'a de sens qu'à sa maille :
+          la grille des heures, les sessions de focus et les pauses.
+
+          Le bloc suit donc la carte du temps d'écran (même semaine, même
+          sélecteur) et vit HORS du test « la journée est-elle mesurée ? » : une
+          semaine se lit même depuis un dimanche vide. */}
+      {weekAgg.activeMs > 0 && (
+        <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <PeriodPills value={view} onChange={(v) => { setView(v); if (v !== "apps") setOnlyPending(false); }} options={VIEWS} track size={13} />
-              <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
-                {view === "apps"
-                  ? `${apps.length} application${apps.length > 1 ? "s" : ""}`
-                  : view === "cats"
-                    ? `${stats.byCategory.length} catégorie${stats.byCategory.length > 1 ? "s" : ""}`
-                    : bestHour?.productiveMs > 0 ? `meilleure heure : ${bestHour.hour} h` : null}
-              </span>
+              {/* La portée est écrite à côté des onglets, pas devinée : les
+                  chiffres du dessus sont ceux du jour, ceux-ci ceux de la
+                  semaine, et rien d'autre ne le distingue. */}
+              <span style={{ fontSize: 12, color: T.textSub }}>{weekLabel.toLowerCase()}</span>
             </div>
-
-            {view === "cats" && (
-              <>
-                <StackedBar parts={stats.byCategory} height={14} />
-                <CategoryRows buckets={stats.byCategory} limit={6} productivity={settings.productivity} />
-
-                {/* La nature du temps, sous la répartition : c'est la même
-                    matière regroupée en trois, et c'est elle qui décide du
-                    score. Elle n'avait pas besoin d'une carte à part. */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12, borderTop: `1px solid ${HAIRLINE}` }}>
-                  <StackedBar
-                    height={10}
-                    parts={[
-                      { id: "p", label: "Productif", color: PRODUCTIVITY_COLOR.productive, ms: stats.productiveMs, pct: stats.activeMs ? (stats.productiveMs / stats.activeMs) * 100 : 0 },
-                      { id: "n", label: "Neutre", color: PRODUCTIVITY_COLOR.neutral, ms: stats.neutralMs, pct: stats.activeMs ? (stats.neutralMs / stats.activeMs) * 100 : 0 },
-                      { id: "d", label: "Distraction", color: PRODUCTIVITY_COLOR.distracting, ms: stats.distractingMs, pct: stats.activeMs ? (stats.distractingMs / stats.activeMs) * 100 : 0 },
-                    ]}
-                  />
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", fontSize: 11, color: T.textSub }}>
-                    <span><span style={dotStyle(PRODUCTIVITY_COLOR.productive)} />Productif {fmtDur(stats.productiveMs)}</span>
-                    <span><span style={dotStyle(PRODUCTIVITY_COLOR.neutral)} />Neutre {fmtDur(stats.neutralMs)}</span>
-                    <span><span style={dotStyle(PRODUCTIVITY_COLOR.distracting)} />Distraction {fmtDur(stats.distractingMs)}</span>
-                    <span style={{ color: T.textMut }}>La nature d’une catégorie se règle dans « Catégories & règles ».</span>
-                  </div>
-                </div>
-
-                {other && other.pct >= 5 && (
-                  <button
-                    type="button"
-                    onClick={() => { setView("apps"); setOnlyPending(true); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10,
-                      border: "none", background: T.amberBg, color: T.text, fontFamily: "inherit",
-                      fontSize: 12, textAlign: "left", cursor: "pointer",
-                    }}
-                  >
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <strong style={{ fontWeight: 600 }}>{fmtDur(other.ms)} non classés</strong>{" "}
-                      sur {pendingApps.length} application{pendingApps.length > 1 ? "s" : ""} — tant qu’elles ne sont pas rangées,
-                      elles ne comptent ni comme travail ni comme distraction.
-                    </span>
-                    <ArrowRight size={14} style={{ flexShrink: 0 }} />
-                  </button>
-                )}
-              </>
-            )}
-
-            {view === "apps" && (
-              <>
-                {pendingApps.length > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <PillButton
-                      compact
-                      variant={onlyPending ? "primary" : "ghost"}
-                      onClick={() => setOnlyPending(v => !v)}
-                    >
-                      {onlyPending ? "Tout afficher" : `${pendingApps.length} à classer`}
-                    </PillButton>
-                    <span style={{ fontSize: 11, color: T.textSub }}>
-                      Change la pastille d’une ligne : la règle est écrite pour toi et tout l’historique se reclasse.
-                    </span>
-                  </div>
-                )}
-                <AppRows
-                  apps={apps}
-                  blocked={blocked}
-                  limit={onlyPending ? 20 : 10}
-                  onPick={onPick}
-                  empty="Tout est classé sur cette journée."
-                />
-              </>
-            )}
-
-            {view === "rhythm" && (
-              <>
-                <HourBars hourly={stats.hourly} height={120} />
-                <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textSub, flexWrap: "wrap" }}>
-                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.productive)} />productif</span>
-                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.neutral)} />neutre</span>
-                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.distracting)} />distraction</span>
-                  <span style={{ color: T.textMut }}>
-                    Un segment à cheval sur deux heures est réparti au prorata : une session de 11 h 50 à 12 h 40
-                    ne se lit pas entièrement à 11 h.
-                  </span>
-                </div>
-              </>
-            )}
+            <span style={{ fontSize: 12, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+              {view === "apps"
+                ? `${apps.length} application${apps.length > 1 ? "s" : ""}`
+                : view === "cats"
+                  ? `${weekAgg.byCategory.length} catégorie${weekAgg.byCategory.length > 1 ? "s" : ""}`
+                  : bestHour?.productiveMs > 0 ? `meilleure heure : ${bestHour.hour} h` : null}
+            </span>
           </div>
 
-          {/* ═══ 3. Le détail ════════════════════════════════════════════════ */}
-          <Disclosure
-            title="Sessions de focus et pauses"
-            right={`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} · ${stats.breaks.length} pause${stats.breaks.length > 1 ? "s" : ""}`}
-          >
-            <SessionRows sessions={stats.focusSessions} />
-            {stats.breaks.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 2 }}>Pauses</div>
-                {stats.breaks.map(b => (
-                  <div key={b.start} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.textSub, padding: "4px 0" }}>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtClock(b.start)} – {fmtClock(b.end)}</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtDur(b.ms)}</span>
-                  </div>
-                ))}
+          {view === "cats" && (
+            <>
+              <StackedBar parts={weekAgg.byCategory} height={14} />
+              <CategoryRows buckets={weekAgg.byCategory} limit={6} productivity={settings.productivity} />
+
+              {/* La nature du temps, sous la répartition : c'est la même
+                  matière regroupée en trois, et c'est elle qui décide du
+                  score. Elle n'avait pas besoin d'une carte à part. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12, borderTop: `1px solid ${HAIRLINE}` }}>
+                <StackedBar
+                  height={10}
+                  parts={[
+                    { id: "p", label: "Productif", color: PRODUCTIVITY_COLOR.productive, ms: weekAgg.productiveMs, pct: weekAgg.activeMs ? (weekAgg.productiveMs / weekAgg.activeMs) * 100 : 0 },
+                    { id: "n", label: "Neutre", color: PRODUCTIVITY_COLOR.neutral, ms: weekAgg.neutralMs, pct: weekAgg.activeMs ? (weekAgg.neutralMs / weekAgg.activeMs) * 100 : 0 },
+                    { id: "d", label: "Distraction", color: PRODUCTIVITY_COLOR.distracting, ms: weekAgg.distractingMs, pct: weekAgg.activeMs ? (weekAgg.distractingMs / weekAgg.activeMs) * 100 : 0 },
+                  ]}
+                />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", fontSize: 11, color: T.textSub }}>
+                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.productive)} />Productif {fmtDur(weekAgg.productiveMs)}</span>
+                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.neutral)} />Neutre {fmtDur(weekAgg.neutralMs)}</span>
+                  <span><span style={dotStyle(PRODUCTIVITY_COLOR.distracting)} />Distraction {fmtDur(weekAgg.distractingMs)}</span>
+                  <span style={{ color: T.textMut }}>La nature d’une catégorie se règle dans « Catégories & règles ».</span>
+                </div>
               </div>
-            )}
-            <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.5 }}>
-              Une session de focus est une plage productive d’au moins {settings.focusMinMinutes} min, qu’une
-              interruption de moins de {settings.focusGapMinutes} min ne casse pas. Le score pèse la part du temps
-              passée en session et la stabilité (bascules d’app par heure) : une journée hachée le fait tomber même
-              quand le total est bon.
-              {stats.focusSessions.length > 0 && ` Catégorie dominante de la plus longue : ${categoryLabel(stats.focusSessions.reduce((b, s) => (s.ms > b.ms ? s : b), stats.focusSessions[0]).cat)}.`}
+
+              {other && other.pct >= 5 && (
+                <button
+                  type="button"
+                  onClick={() => { setView("apps"); setOnlyPending(true); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10,
+                    border: "none", background: T.amberBg, color: T.text, fontFamily: "inherit",
+                    fontSize: 12, textAlign: "left", cursor: "pointer",
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ fontWeight: 600 }}>{fmtDur(other.ms)} non classés</strong>{" "}
+                    sur {pendingApps.length} application{pendingApps.length > 1 ? "s" : ""} — tant qu’elles ne sont pas rangées,
+                    elles ne comptent ni comme travail ni comme distraction.
+                  </span>
+                  <ArrowRight size={14} style={{ flexShrink: 0 }} />
+                </button>
+              )}
+            </>
+          )}
+
+          {view === "apps" && (
+            <>
+              {pendingApps.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <PillButton
+                    compact
+                    variant={onlyPending ? "primary" : "ghost"}
+                    onClick={() => setOnlyPending(v => !v)}
+                  >
+                    {onlyPending ? "Tout afficher" : `${pendingApps.length} à classer`}
+                  </PillButton>
+                  <span style={{ fontSize: 11, color: T.textSub }}>
+                    Change la pastille d’une ligne : la règle est écrite pour toi et tout l’historique se reclasse.
+                  </span>
+                </div>
+              )}
+              <AppRows
+                apps={apps}
+                blocked={blocked}
+                limit={onlyPending ? 20 : 10}
+                onPick={onPick}
+                empty="Tout est classé sur cette semaine."
+              />
+            </>
+          )}
+
+          {view === "rhythm" && (
+            <>
+              <HourBars hourly={weekAgg.hourly} height={120} />
+              <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textSub, flexWrap: "wrap" }}>
+                <span><span style={dotStyle(PRODUCTIVITY_COLOR.productive)} />productif</span>
+                <span><span style={dotStyle(PRODUCTIVITY_COLOR.neutral)} />neutre</span>
+                <span><span style={dotStyle(PRODUCTIVITY_COLOR.distracting)} />distraction</span>
+                <span style={{ color: T.textMut }}>
+                  Les sept jours sont cumulés heure par heure — une barre haute est une habitude, pas une journée.
+                  Un segment à cheval sur deux heures est réparti au prorata : une session de 11 h 50 à 12 h 40
+                  ne se lit pas entièrement à 11 h.
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ═══ 3. Le détail ══════════════════════════════════════════════════
+          Le tiroir reste au JOUR : une session de focus a une heure de début et
+          une durée, elle ne s'additionne pas d'un jour sur l'autre. */}
+      {stats.activeMs > 0 && (
+        <Disclosure
+          title="Sessions de focus et pauses"
+          right={`${stats.focusSessions.length} session${stats.focusSessions.length > 1 ? "s" : ""} · ${stats.breaks.length} pause${stats.breaks.length > 1 ? "s" : ""}`}
+        >
+          <SessionRows sessions={stats.focusSessions} />
+          {stats.breaks.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 2 }}>Pauses</div>
+              {stats.breaks.map(b => (
+                <div key={b.start} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.textSub, padding: "4px 0" }}>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtClock(b.start)} – {fmtClock(b.end)}</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtDur(b.ms)}</span>
+                </div>
+              ))}
             </div>
-          </Disclosure>
-        </>
+          )}
+          <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.5 }}>
+            Une session de focus est une plage productive d’au moins {settings.focusMinMinutes} min, qu’une
+            interruption de moins de {settings.focusGapMinutes} min ne casse pas. Le score pèse la part du temps
+            passée en session et la stabilité (bascules d’app par heure) : une journée hachée le fait tomber même
+            quand le total est bon.
+            {stats.focusSessions.length > 0 && ` Catégorie dominante de la plus longue : ${categoryLabel(stats.focusSessions.reduce((b, s) => (s.ms > b.ms ? s : b), stats.focusSessions[0]).cat)}.`}
+          </div>
+        </Disclosure>
       )}
     </div>
   );

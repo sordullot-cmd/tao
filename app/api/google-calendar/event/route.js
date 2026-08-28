@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { getOAuthClient } from "@/lib/google/calendar";
+import { remindersToGoogle } from "@/lib/agendaReminders";
 
 export const dynamic = "force-dynamic";
 
@@ -83,14 +84,16 @@ export async function POST(req) {
         // 'opaque' = Occupé · 'transparent' = Disponible
         transparency: event.transparency || undefined,
         visibility: event.visibility && event.visibility !== "default" ? event.visibility : undefined,
+        // Rappels : une liste (jusqu'à 5 `overrides`, limite Google). `event.reminder`
+        // au singulier reste accepté — l'ancien format scalaire du formulaire.
+        // Rien d'envoyé = champ absent du patch : on ne veut pas effacer les
+        // rappels existants d'un évènement modifié par glisser-déposer.
         reminders:
-          event.reminder === "default"
-            ? { useDefault: true }
-            : event.reminder === "none"
-              ? { useDefault: false, overrides: [] }
-              : typeof event.reminder === "number"
-                ? { useDefault: false, overrides: [{ method: "popup", minutes: event.reminder }] }
-                : undefined,
+          event.reminders !== undefined
+            ? remindersToGoogle(event.reminders)
+            : event.reminder !== undefined
+              ? remindersToGoogle(event.reminder)
+              : undefined,
         // Marqueur "tâche" tr4de (un évènement-tâche avec état terminé/non).
         extendedProperties: event.isTask
           ? { private: { tr4deKind: "task", tr4deDone: event.done ? "1" : "0" } }

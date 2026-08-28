@@ -199,6 +199,32 @@ describe("page Activité (journée)", () => {
     expect(setPage).toHaveBeenCalledWith("activity-rules");
   });
 
+  it("cumule la semaine dans les trois lectures, pas la seule journée affichée", () => {
+    /* Mercredi figé : sans date fixe, « lundi » tomberait un jour dans le futur
+       une semaine sur sept et le test ne prouverait plus rien. */
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2024-06-05T10:00:00"));
+    try {
+      saveDay({
+        date: "2024-06-03", awayMs: 0, updatedAt: Date.now(),
+        segments: [{ s: new Date("2024-06-03T14:00:00").getTime(), e: new Date("2024-06-03T16:00:00").getTime(), app: "Figma", label: "Figma", title: "", cat: "work" }],
+      });
+      saveDay({
+        date: "2024-06-05", awayMs: 0, updatedAt: Date.now(),
+        segments: [{ s: new Date("2024-06-05T09:00:00").getTime(), e: new Date("2024-06-05T10:00:00").getTime(), app: "Code", label: "VS Code", title: "stats.ts", cat: "dev" }],
+      });
+      render(<ActivityPage setPage={vi.fn()} />);
+      fireEvent.click(screen.getByRole("button", { name: /Applications/ }));
+      // Lundi n'est pas le jour affiché : sans le cumul hebdomadaire, Figma
+      // n'apparaîtrait nulle part dans cette carte.
+      expect(screen.getByText("Figma")).toBeInTheDocument();
+      // Le jour affiché reste lisible par ailleurs : mercredi a sa propre liste.
+      expect(screen.getAllByText("VS Code").length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("navigue vers les rapports depuis les onglets", () => {
     const setPage = vi.fn();
     render(<ActivityPage setPage={setPage} />);

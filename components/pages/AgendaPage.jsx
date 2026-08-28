@@ -23,6 +23,10 @@ import {
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
 } from "@/lib/lifeRpgCategories";
 import { GCAL_COLORS, DEFAULT_EVENT_COLOR, nearestGcalColorId } from "@/lib/gcalColors";
+import {
+  MAX_REMINDERS, normalizeReminders, remindersFromEvent,
+  reminderLabel, addReminder, removeReminder,
+} from "@/lib/agendaReminders";
 import { FIELD as DA_FIELD } from "@/components/ui/form";
 import { HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
@@ -136,15 +140,6 @@ function summarizeWhen(form) {
   return `${formatDateLong(form.date)}  ${form.startTime} – ${form.endTime}`;
 }
 
-/** Déduit le champ `reminder` (minutes | "default" | "none") depuis l'évènement. */
-function reminderFromEvent(ev) {
-  const r = ev.reminders;
-  if (!r) return 10;
-  if (r.useDefault) return "default";
-  if (Array.isArray(r.overrides) && r.overrides.length) return r.overrides[0].minutes;
-  return "none";
-}
-
 /** Form vierge pour la création. */
 function blankForm(day, startTime = "09:00", endTime = "10:00") {
   const dk = typeof day === "string" ? day : dateKey(day);
@@ -155,7 +150,7 @@ function blankForm(day, startTime = "09:00", endTime = "10:00") {
     recur: { preset: "once" }, // récurrence : une seule fois par défaut
     masterId: null, masterStart: null, // série (event récurrent) : renseignés à l'édition
     location: "", description: "", guests: "", addMeet: false, hadMeet: false,
-    colorId: null, transparency: "opaque", visibility: "default", reminder: 10,
+    colorId: null, transparency: "opaque", visibility: "default", reminders: [10],
     rpgCategories: [], // cartes Vie RPG liées (tâche) : XP à la complétion
     pendingTasks: [], // tâches Google à créer à l'enregistrement (nouvel évènement)
   };
@@ -171,7 +166,7 @@ function formFromEvent(ev) {
     guests: (ev.guests || []).join(", "),
     addMeet: !!ev.hangoutLink, hadMeet: !!ev.hangoutLink,
     transparency: ev.transparency || "opaque", visibility: ev.visibility || "default",
-    reminder: reminderFromEvent(ev),
+    reminders: remindersFromEvent(ev),
     recur: { preset: "once" }, masterId: null, masterStart: null,
   };
   if (ev.allDay) {
@@ -197,7 +192,7 @@ function payloadFromForm(form) {
     hadMeet: !!form.hadMeet,
     transparency: form.transparency || "opaque",
     visibility: form.visibility || "default",
-    reminder: form.reminder,
+    reminders: normalizeReminders(form.reminders),
     isTask: form.kind === "task",
     done: !!form.done,
   };
@@ -263,7 +258,9 @@ function formFromTaskItem(item, times) {
     startTime: t?.startTime || "09:00", endTime: t?.endTime || "10:00",
     location: "", description: item.description || "",
     guests: "", addMeet: false, hadMeet: false, colorId: item.colorId || null,
-    transparency: "opaque", visibility: "default", reminder: 10,
+    transparency: "opaque", visibility: "default",
+    // Google Tasks n'a pas de rappels : ils vivent avec l'heure, côté tr4de.
+    reminders: normalizeReminders(t?.reminders),
     rpgCategories: [], // renseigné par openEdit depuis le store `taskRpg`
   };
 }
@@ -286,15 +283,16 @@ const VIEWS = [
   { id: "year", label: "Année" },
 ];
 
-const REMINDER_OPTS = [
-  { v: "none", label: "Aucune notification" },
-  { v: 0, label: "À l'heure de l'évènement" },
-  { v: 5, label: "5 minutes avant" },
-  { v: 10, label: "10 minutes avant" },
-  { v: 30, label: "30 minutes avant" },
-  { v: 60, label: "1 heure avant" },
-  { v: 1440, label: "1 jour avant" },
-  { v: "default", label: "Notifications par défaut" },
+/* Choix rapides de rappel, en minutes. « Aucune » et « par défaut » n'en font
+   pas partie : ce sont deux réglages exclusifs qui remplacent toute la liste,
+   pas des cases à cocher qui s'ajouteraient aux minutes déjà retenues. */
+const REMINDER_PRESETS = [0, 5, 10, 30, 60, 1440];
+
+/* Unités de l'ajout personnalisé → minutes. */
+const REMINDER_UNITS = [
+  { id: "min", label: "minutes", mul: 1 },
+  { id: "h", label: "heures", mul: 60 },
+  { id: "d", label: "jours", mul: 1440 },
 ];
 
 const HOUR_H = 68; // hauteur d'une heure (px) dans le time-grid
@@ -552,6 +550,9 @@ export default function AgendaPage() {
   const [colorOpen, setColorOpen] = React.useState(false);
   const [remindOpen, setRemindOpen] = React.useState(false);
   const [recurOpen, setRecurOpen] = React.useState(false);
+  // Délai libre du menu de notifications (valeur + unité), avant ajout.
+  const [customRemind, setCustomRemind] = React.useState("2");
+  const [customRemindUnit, setCustomRemindUnit] = React.useState("h");
   const [timeEdit, setTimeEdit] = React.useState(false);
   const dragRef = React.useRef(null);
   const [dragBox, setDragBox] = React.useState(null); // { dayKey, a, b } en minutes
@@ -581,6 +582,20 @@ export default function AgendaPage() {
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
   }, [colorOpen, remindOpen, recurOpen]);
+
+  /* Rappels du formulaire. Toujours lus normalisés : un item enregistré avant
+     le passage au multiple porte encore un scalaire (`reminder: 10`). */
+  const reminderList = React.useMemo(() => normalizeReminders(modal?.reminders), [modal]);
+  // Seuls les délais explicites comptent dans la limite Google — « par défaut »
+  // n'est pas un override, et le cocher ne doit pas griser les choix rapides.
+  const reminderCount = reminderList.filter((v) => typeof v === "number").length;
+  const setReminders = (next) => setModal((m) => (m ? { ...m, reminders: normalizeReminders(next) } : m));
+  const addCustomReminder = () => {
+    const n = Number(customRemind);
+    if (!Number.isFinite(n) || n < 0) return;
+    const unit = REMINDER_UNITS.find((u) => u.id === customRemindUnit) || REMINDER_UNITS[0];
+    setReminders(addReminder(reminderList, Math.round(n * unit.mul)));
+  };
 
   // Focalise le titre à l'ouverture du formulaire SANS faire défiler la page.
   // `autoFocus` natif force un scrollIntoView qui remontait le conteneur en haut ;
@@ -1047,13 +1062,16 @@ export default function AgendaPage() {
         else { const r = await createTask(payload); taskId = r?.task?.id; }
         // Jour de planification + heure conservés côté tr4de : Google Tasks ne
         // stocke que la date limite (`due`), pas le jour où l'on pose la tâche.
+        // Les rappels suivent le même chemin : l'API Tasks n'en a pas, ils sont
+        // programmés localement par `useAgendaReminders`.
         if (taskId) {
           const finalTimeId = taskId;
+          const rem = normalizeReminders(modal.reminders);
           setTaskTimes((prevTimes) => ({
             ...prevTimes,
             [finalTimeId]: modal.allDay
-              ? { day: modal.date, colorId: modal.colorId || null }
-              : { day: modal.date, startTime: modal.startTime, endTime: modal.endTime, colorId: modal.colorId || null },
+              ? { day: modal.date, colorId: modal.colorId || null, reminders: rem }
+              : { day: modal.date, startTime: modal.startTime, endTime: modal.endTime, colorId: modal.colorId || null, reminders: rem },
           }));
           // Liaison aux cartes Vie RPG : on (dé)pose le lien et on préserve un
           // éventuel horodatage de complétion déjà connu (sinon on l'amorce
@@ -1933,37 +1951,100 @@ export default function AgendaPage() {
                 </div>
               </FormRow>
 
-              {/* Notification — bouton moderne + menu */}
-              <FormRow icon={Bell}>
-                <div ref={remindAnchor} data-menu-root style={{ position: "relative" }}>
-                  <button type="button" onClick={() => { setRemindOpen((o) => !o); setColorOpen(false); }} style={pillBtn}>
-                    {REMINDER_OPTS.find((r) => String(r.v) === String(modal.reminder))?.label || "Notification"}
-                    <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
-                  </button>
-                  <Popover
-                    anchorRef={remindAnchor}
-                    open={remindOpen}
-                    closeOnOutside={false}
-                    gap={4}
-                    minWidth={200}
-                    maxHeight={300}
-                    style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
-                  >
-                    <>
-                      {REMINDER_OPTS.map((r) => {
-                        const selected = String(r.v) === String(modal.reminder);
-                        return (
-                          <button key={String(r.v)} type="button"
-                            onClick={() => { setModal({ ...modal, reminder: r.v }); setRemindOpen(false); }}
-                            onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = T.bg; }}
-                            onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
-                            style={{ width: "100%", textAlign: "left", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize:13, color: T.text, background: selected ? T.accentBg : "transparent", fontWeight: 500}}>
-                            {r.label}
+              {/* Notifications — plusieurs rappels possibles sur le même item.
+                  Les rappels retenus sont affichés en pastilles retirables : sans
+                  ça, un menu à cases cochées oblige à l'ouvrir pour savoir ce qui
+                  est programmé. */}
+              <FormRow icon={Bell} top>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                  {reminderList.length === 0 && (
+                    <span style={{ fontSize: 13, color: T.textMut }}>Aucune notification</span>
+                  )}
+                  {reminderList.map((v) => (
+                    <span key={String(v)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 8px 6px 12px", minHeight: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500 }}>
+                      {reminderLabel(v)}
+                      <button type="button" onClick={() => setReminders(removeReminder(reminderList, v))}
+                        aria-label={`Retirer « ${reminderLabel(v)} »`} title="Retirer cette notification"
+                        style={{ border: "none", background: "transparent", cursor: "pointer", color: T.textMut, display: "inline-flex", alignItems: "center", padding: 2, borderRadius: 6 }}>
+                        <IconX size={13} strokeWidth={2} />
+                      </button>
+                    </span>
+                  ))}
+
+                  <div ref={remindAnchor} data-menu-root style={{ position: "relative" }}>
+                    <button type="button" onClick={() => { setRemindOpen((o) => !o); setColorOpen(false); setRecurOpen(false); }} style={pillBtn}>
+                      <Plus size={13} strokeWidth={2} color={T.textMut} />
+                      Notification
+                      <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
+                    </button>
+                    <Popover
+                      anchorRef={remindAnchor}
+                      open={remindOpen}
+                      closeOnOutside={false}
+                      gap={4}
+                      minWidth={240}
+                      maxHeight={340}
+                      style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+                    >
+                      <>
+                        {/* Réglages exclusifs : ils remplacent toute la liste. */}
+                        {[{ k: "none", label: "Aucune notification", on: reminderList.length === 0, apply: [] },
+                          { k: "default", label: "Notifications par défaut", on: reminderList[0] === "default", apply: ["default"] }].map((o) => (
+                          <button key={o.k} type="button"
+                            onClick={() => setReminders(o.apply)}
+                            onMouseEnter={(e) => { if (!o.on) e.currentTarget.style.background = T.bg; }}
+                            onMouseLeave={(e) => { if (!o.on) e.currentTarget.style.background = "transparent"; }}
+                            style={{ ...remindOptBtn, background: o.on ? T.accentBg : "transparent" }}>
+                            {o.label}
                           </button>
-                        );
-                      })}
-                    </>
-                  </Popover>
+                        ))}
+
+                        <div style={{ height: 1, background: T.border, margin: "6px 4px" }} />
+
+                        {REMINDER_PRESETS.map((m) => {
+                          const on = reminderList.includes(m);
+                          const full = !on && reminderCount >= MAX_REMINDERS;
+                          return (
+                            <button key={m} type="button" disabled={full}
+                              onClick={() => setReminders(on ? removeReminder(reminderList, m) : addReminder(reminderList, m))}
+                              onMouseEnter={(e) => { if (!on && !full) e.currentTarget.style.background = T.bg; }}
+                              onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}
+                              style={{ ...remindOptBtn, display: "flex", alignItems: "center", gap: 8, background: on ? T.accentBg : "transparent", cursor: full ? "not-allowed" : "pointer", opacity: full ? 0.45 : 1 }}>
+                              {on ? <CheckSquare size={14} strokeWidth={2} color={T.text} /> : <Square size={14} strokeWidth={1.8} color={T.textMut} />}
+                              {reminderLabel(m)}
+                            </button>
+                          );
+                        })}
+
+                        <div style={{ height: 1, background: T.border, margin: "6px 4px" }} />
+
+                        {/* Délai libre : les six choix rapides ne couvrent pas « 2 h avant ». */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px 2px" }}>
+                          <input type="number" min={0} value={customRemind}
+                            onChange={(e) => setCustomRemind(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomReminder(); } }}
+                            aria-label="Délai personnalisé"
+                            style={{ width: 60, padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: DA_FIELD_BG, border: "none", borderRadius: "var(--radius-field)", outline: "none" }} />
+                          <select value={customRemindUnit} onChange={(e) => setCustomRemindUnit(e.target.value)}
+                            aria-label="Unité du délai personnalisé"
+                            style={{ padding: "6px 8px", fontSize: 13, fontFamily: "inherit", color: T.text, background: DA_FIELD_BG, border: "none", borderRadius: "var(--radius-field)", outline: "none", cursor: "pointer" }}>
+                            {REMINDER_UNITS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+                          </select>
+                          <button type="button" onClick={addCustomReminder}
+                            disabled={reminderCount >= MAX_REMINDERS}
+                            style={{ ...ghostBtn(), opacity: reminderCount >= MAX_REMINDERS ? 0.45 : 1, cursor: reminderCount >= MAX_REMINDERS ? "not-allowed" : "pointer" }}>
+                            Ajouter
+                          </button>
+                        </div>
+                        {reminderCount >= MAX_REMINDERS && (
+                          <div style={{ fontSize: 11, color: T.textMut, padding: "6px 10px 2px" }}>
+                            {`Google Agenda accepte ${MAX_REMINDERS} notifications au maximum par évènement.`}
+                          </div>
+                        )}
+                      </>
+                    </Popover>
+                  </div>
                 </div>
               </FormRow>
 
@@ -2181,6 +2262,12 @@ const topIconBtn = {
   width: 32, height: 32, borderRadius: 999, border: "none", background: "transparent",
   color: T.textMut, cursor: "pointer", fontFamily: "inherit",
   transition: "background-color 120ms ease, color 120ms ease",
+};
+// Ligne d'un menu déroulant de notification (choix exclusif ou case à cocher).
+const remindOptBtn = {
+  width: "100%", textAlign: "left", border: "none", borderRadius: 8,
+  padding: "8px 10px", cursor: "pointer", fontFamily: "inherit",
+  fontSize: 13, color: T.text, fontWeight: 500,
 };
 const pillBtn = {
   display: "inline-flex", alignItems: "center", gap: 8,

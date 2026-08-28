@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   MAX_YEAR_GOALS, pickTopYearGoals,
-  currentYear, yearDeadline, yearProgress, daysUntil,
+  currentYear, yearDeadline, yearProgress, categoryTimeProgress, daysUntil,
 } from "@/lib/lifeRpgCategories";
 
 const cats = [
@@ -82,5 +82,41 @@ describe("repères de l'année", () => {
     expect(currentYear()).toBe(2026);
     expect(yearDeadline()).toBe("2026-12-31");
     expect(yearDeadline(2030)).toBe("2030-12-31");
+  });
+});
+
+describe("categoryTimeProgress", () => {
+  const at = (iso: string) => new Date(`${iso}T12:00:00`);
+  const born = (iso: string) => `cat_${new Date(`${iso}T09:00:00`).getTime()}`;
+
+  it("part de la naissance de la carte, pas du 1er janvier", () => {
+    // Objectif défini le 1er septembre, échéance au 31 décembre : au 1er octobre
+    // il n'a consommé qu'un mois de ses quatre — et non les trois quarts de
+    // l'année, qui l'auraient déclaré en retard avant son premier jour.
+    const cat = { id: born("2026-09-01"), deadline: "2026-12-31" };
+    expect(Math.round(categoryTimeProgress(cat, 2026, at("2026-10-01")).pct)).toBe(25);
+    expect(Math.round(yearProgress(2026, at("2026-10-01")).pct)).toBe(75);
+  });
+
+  it("repart du 1er janvier pour une carte née avant l'année", () => {
+    const cat = { id: born("2025-11-02"), deadline: "2026-12-31" };
+    expect(Math.round(categoryTimeProgress(cat, 2026, at("2026-07-02")).pct)).toBe(50);
+  });
+
+  it("repart du 1er janvier pour une carte héritée, dont l'id ne date de rien", () => {
+    const cat = { id: "trading", deadline: "2026-12-31" };
+    expect(Math.round(categoryTimeProgress(cat, 2026, at("2026-07-02")).pct)).toBe(50);
+  });
+
+  it("borne le repère à sa fenêtre et compte les jours restants", () => {
+    const cat = { id: born("2026-03-01"), deadline: "2026-06-30" };
+    expect(categoryTimeProgress(cat, 2026, at("2026-01-15")).pct).toBe(0);
+    expect(categoryTimeProgress(cat, 2026, at("2026-09-01")).pct).toBe(100);
+    expect(categoryTimeProgress(cat, 2026, at("2026-06-20")).daysLeft).toBe(11);
+  });
+
+  it("ne divise pas par zéro quand l'échéance tombe le jour de la création", () => {
+    const cat = { id: born("2026-06-30"), deadline: "2026-05-01" };
+    expect(categoryTimeProgress(cat, 2026, at("2026-07-01"))).toEqual({ pct: 0, daysLeft: 0 });
   });
 });

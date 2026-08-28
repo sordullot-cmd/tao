@@ -13,6 +13,18 @@ import { TimeField } from "./AgendaDateFields";
 import MiniCalendar from "@/components/ui/MiniCalendar";
 import { RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon, habitCategoryIds, CATEGORY_PALETTE } from "@/lib/lifeRpgCategories";
 import {
+  STORAGE_HABITS, STORAGE_HABITS_HISTORY, CLOUD_HABITS, CLOUD_HABITS_HISTORY,
+  GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, HABIT_AUTO_TYPE, HABIT_TARGET_DAYS,
+  countHabitDays, goalsForHabit, habitGoalHabitIds, habitGoalTargetDays,
+} from "@/lib/habitGoals";
+
+/* Avancement d'un objectif d'habitude, en pourcentage : sa cible est le nombre
+   de jours qui le séparent de son échéance, jamais un nombre saisi. */
+const habitGoalPct = (g, history) => {
+  const target = habitGoalTargetDays(g);
+  return target > 0 ? Math.round((countHabitDays(g, history) / target) * 100) : 0;
+};
+import {
   Plus, Check, Trash2,
   Battery, Flame, Clock, MapPin, Target as TargetIcon, X, Pencil,
   StickyNote, ChevronDown,
@@ -98,12 +110,12 @@ const primaryBtn = (small = false) => ({
 });
 
 const STORAGE_PLANNER = "tr4de_daily_planner";
-export const STORAGE_HABITS = "tr4de_habits";
-export const STORAGE_HABITS_HISTORY = "tr4de_habits_history";
-// Clés cloud (Supabase) des habitudes — partagées avec la page « Vie RPG »
-// pour que les deux pages lisent/écrivent la même source de vérité.
-export const CLOUD_HABITS = "habits";
-export const CLOUD_HABITS_HISTORY = "habits_history";
+/* Clés des habitudes (localStorage + Supabase) — partagées avec la page
+   « Vie RPG » pour que les deux pages lisent/écrivent la même source de vérité.
+   Elles vivent désormais dans `lib/habitGoals` : la page Objectifs doit les
+   lire elle aussi, et l'y laisser aurait créé un cycle d'import entre les deux
+   pages. On les ré-exporte ici pour ne casser aucun import existant. */
+export { STORAGE_HABITS, STORAGE_HABITS_HISTORY, CLOUD_HABITS, CLOUD_HABITS_HISTORY };
 
 const todayKey = () => {
   const d = new Date();
@@ -272,6 +284,36 @@ export const defaultHabits = () => {
   ];
 };
 
+/* Objectifs : l'arbre (objectifs + sous-objectifs) aplati, et une projection
+   qui applique une fonction à CHAQUE nœud. La page Objectifs a les siens ; on
+   n'en importe rien pour ne pas créer un cycle entre les deux pages. */
+const flattenGoals = (arr) => {
+  const out = [];
+  const walk = (list) => {
+    for (const g of list || []) {
+      out.push(g);
+      if (Array.isArray(g.subtasks) && g.subtasks.length) walk(g.subtasks);
+    }
+  };
+  walk(arr);
+  return out;
+};
+const mapGoalsDeep = (arr, fn) => {
+  let changed = false;
+  const out = (arr || []).map(g => {
+    let node = fn(g);
+    if (Array.isArray(node.subtasks) && node.subtasks.length) {
+      const subs = mapGoalsDeep(node.subtasks, fn);
+      if (subs !== node.subtasks) node = { ...node, subtasks: subs };
+    }
+    if (node !== g) changed = true;
+    return node;
+  });
+  // Identité conservée quand rien n'a bougé : `useCloudState` persiste TOUTE
+  // écriture, même identique — un tableau neuf déclencherait un upsert pour rien.
+  return changed ? out : (arr || []);
+};
+
 // === Helpers semaine ===
 // Lundi = début de semaine. Retourne l'ISO du lundi de la semaine contenant `iso`.
 const weekStartIso = (iso) => {
@@ -314,6 +356,47 @@ export default function DailyPlannerPage() {
   // Habits — synchronisées Supabase
   const [habits, setHabits] = useCloudState(STORAGE_HABITS, CLOUD_HABITS, defaultHabits());
   const [habitHistory, setHabitHistory] = useCloudState(STORAGE_HABITS_HISTORY, CLOUD_HABITS_HISTORY, {});
+
+  /* Objectifs chiffrés (page Objectifs), lus ET écrits ici : rattacher une
+     habitude à un objectif ordinaire depuis sa propre fiche évite l'aller-retour
+     entre les deux pages. La clé est la même des deux côtés — `useCloudState`
+     relaie entre instances, il n'y a donc qu'une source de vérité. */
+  const [goals, setGoals] = useCloudState(GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, []);
+  const flatGoals = useMemo(() => flattenGoals(Array.isArray(goals) ? goals : []), [goals]);
+  /* Objectifs rattachables : ceux que cocher l'habitude peut faire avancer.
+     Un objectif de trading se calcule à partir des trades — le rattacher n'aurait
+     aucun effet ; on ne le propose donc pas. */
+  const linkableGoals = useMemo(
+    () => flatGoals.filter(g => g.autoType === HABIT_AUTO_TYPE || g.autoType === "manual"),
+    [flatGoals],
+  );
+  /* Écrit le rattachement « habitude → objectifs » choisi dans la fiche.
+     Rattacher un objectif MANUEL le bascule sur la source « habitudes » (avec
+     l'année pleine pour cible s'il n'en avait pas) ; détacher la dernière
+     habitude le rend à son compteur manuel — le laisser sur une source sans
+     habitude le figerait à zéro sans que rien ne l'explique. */
+  const syncHabitGoalLinks = (habitId, selectedGoalIds) => {
+    const key = String(habitId);
+    const wanted = new Set((selectedGoalIds || []).map(String));
+    // Rien à rattacher ni à détacher : on n'écrit pas. Le plus fréquent des cas
+    // (enregistrer une habitude sans objectif) ne doit rien coûter au magasin.
+    const touches = flatGoals.some(g => habitGoalHabitIds(g).includes(key) !== wanted.has(String(g.id)));
+    if (!touches) return;
+    setGoals(prev => mapGoalsDeep(Array.isArray(prev) ? prev : [], g => {
+      const ids = habitGoalHabitIds(g);
+      const linked = ids.includes(key);
+      const want = wanted.has(String(g.id));
+      if (linked === want) return g;
+      if (want) {
+        // La cible d'un objectif d'habitude est sa deadline : on la recalcule
+        // plutôt que de garder le nombre saisi du temps où il était manuel.
+        const next = { ...g, autoType: HABIT_AUTO_TYPE, habitIds: [...ids, key] };
+        return { ...next, target: habitGoalTargetDays(next) };
+      }
+      const rest = ids.filter(x => x !== key);
+      return { ...g, habitIds: rest, autoType: rest.length ? HABIT_AUTO_TYPE : "manual" };
+    }));
+  };
 
   // Catégories (« cartes ») de la page Vie RPG — en lecture seule ici, pour
   // permettre de rattacher optionnellement une habitude à une carte. L'édition
@@ -370,17 +453,23 @@ export default function DailyPlannerPage() {
   const removeHabit = (id) => {
     const snapHabit = habits.find(h => h.id === id);
     const snapHistory = habitHistory[id];
+    // Les objectifs qu'elle nourrissait sont capturés tels quels : sans ça,
+    // annuler la suppression rendrait l'habitude mais pas ses rattachements.
+    const snapGoals = goals;
     setHabits(prev => prev.filter(h => h.id !== id));
     setHabitHistory(prev => { const n = { ...prev }; delete n[id]; return n; });
+    syncHabitGoalLinks(id, []);
     if (snapHabit) pushUndo({
       label: "Suppression de l'habitude",
       undo: async () => {
         setHabits(prev => [...prev, snapHabit]);
         if (snapHistory) setHabitHistory(prev => ({ ...prev, [id]: snapHistory }));
+        setGoals(snapGoals);
       },
       redo: async () => {
         setHabits(prev => prev.filter(h => h.id !== id));
         setHabitHistory(prev => { const n = { ...prev }; delete n[id]; return n; });
+        syncHabitGoalLinks(id, []);
       },
     });
   };
@@ -388,7 +477,7 @@ export default function DailyPlannerPage() {
   // Habit form (add + edit)
   const [habitFormOpen, setHabitFormOpen] = useState(false);
   const [editingHabitId, setEditingHabitId] = useState(null);
-  const emptyHabit = { name: "", description: "", time: "", location: "", icon: "", attributes: [] };
+  const emptyHabit = { name: "", description: "", time: "", location: "", icon: "", attributes: [], goalIds: [] };
   const [habitDraft, setHabitDraft] = useState(emptyHabit);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const iconPickerAnchor = React.useRef(null);
@@ -397,7 +486,7 @@ export default function DailyPlannerPage() {
   const [modalDragging, setModalDragging] = useState(false);
   const modalDragRef = React.useRef(null);
   const openCreateHabit = () => { setHabitDraft(emptyHabit); setEditingHabitId(null); setIconPickerOpen(false); setModalPos({ x: 0, y: 0 }); setHabitFormOpen(true); };
-  const openEditHabit = (h) => { setHabitDraft({ name: h.name, description: h.description || "", time: h.time || "", location: h.location || "", icon: h.icon || "", attributes: habitCategoryIds(h) }); setEditingHabitId(h.id); setIconPickerOpen(false); setModalPos({ x: 0, y: 0 }); setHabitFormOpen(true); };
+  const openEditHabit = (h) => { setHabitDraft({ name: h.name, description: h.description || "", time: h.time || "", location: h.location || "", icon: h.icon || "", attributes: habitCategoryIds(h), goalIds: goalsForHabit(flatGoals, h.id).map(g => String(g.id)) }); setEditingHabitId(h.id); setIconPickerOpen(false); setModalPos({ x: 0, y: 0 }); setHabitFormOpen(true); };
   const startModalDrag = (e) => {
     if (e.target.closest("button")) return; // pas de drag en cliquant un bouton
     e.preventDefault();
@@ -424,13 +513,38 @@ export default function DailyPlannerPage() {
     const desc = habitDraft.description.trim() || autoDescription(nm);
     const iconKey = habitDraft.icon && ICON_LIBRARY[habitDraft.icon] ? habitDraft.icon : "";
     const attributes = Array.isArray(habitDraft.attributes) ? habitDraft.attributes.filter(Boolean) : [];
+    // L'id sert aussi aux objectifs rattachés : il faut le connaître AVANT
+    // d'écrire les liens, y compris à la création.
+    const habitId = editingHabitId != null ? editingHabitId : Date.now();
     if (editingHabitId) {
       // `attribute: undefined` retire l'ancien champ unique hérité (rétrocompat).
       setHabits(prev => prev.map(h => h.id === editingHabitId ? { ...h, name: nm, description: desc, time: habitDraft.time, location: habitDraft.location.trim(), icon: iconKey, attributes, attribute: undefined } : h));
     } else {
-      setHabits(prev => [...prev, { id: Date.now(), name: nm, description: desc, time: habitDraft.time, location: habitDraft.location.trim(), icon: iconKey, attributes }]);
+      setHabits(prev => [...prev, { id: habitId, name: nm, description: desc, time: habitDraft.time, location: habitDraft.location.trim(), icon: iconKey, attributes }]);
     }
+    syncHabitGoalLinks(habitId, habitDraft.goalIds);
     setHabitFormOpen(false); setHabitDraft(emptyHabit); setEditingHabitId(null); setIconPickerOpen(false);
+  };
+  /* Raccourci « une habitude → un objectif de 365 jours ». L'objectif naît sur
+     la page Objectifs (même clé) et n'est rattaché qu'à l'enregistrement de la
+     fiche, comme les autres cases cochées ici. */
+  const createGoalForHabit = () => {
+    const nm = habitDraft.name.trim();
+    if (!nm) return;
+    const id = Date.now();
+    // Échéance à un an tout juste : c'est elle qui vaut cible (365 jours à
+    // tenir). Elle se déplace ensuite depuis la page Objectifs comme les autres.
+    const end = new Date(id);
+    end.setDate(end.getDate() + HABIT_TARGET_DAYS - 1);
+    const deadline = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+    setGoals(prev => [...(Array.isArray(prev) ? prev : []), {
+      id, createdAt: new Date(id).toISOString(),
+      label: nm, horizon: "year", level: "normal", category: "personal",
+      autoType: HABIT_AUTO_TYPE, target: HABIT_TARGET_DAYS,
+      habitIds: [], habitDays: [],
+      deadline, unit: "count", customUnit: "", manual: 0, subtasks: [],
+    }]);
+    setHabitDraft(d => ({ ...d, goalIds: [...(d.goalIds || []), String(id)] }));
   };
   const closeHabitForm = () => { setHabitFormOpen(false); setHabitDraft(emptyHabit); setEditingHabitId(null); setIconPickerOpen(false); };
   const deleteHabitFromForm = () => { if (editingHabitId != null) removeHabit(editingHabitId); closeHabitForm(); };
@@ -728,6 +842,49 @@ export default function DailyPlannerPage() {
                         : "Rattache cette habitude à un ou plusieurs objectifs de l'année (page « Objectifs ») : la cocher les fait progresser."}
                     </div>
                   </div>
+
+                  {/* Objectifs chiffrés — rattachement à des objectifs ORDINAIRES
+                      (page Objectifs), distincts des trois objectifs de l'année
+                      ci-dessus. Un objectif rattaché compte les jours cochés :
+                      365 jours = 100 %, et la cible se règle sur l'autre page. */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 500, color: T.textSub, display: "block", marginBottom: 6 }}>
+                      {"Objectifs"} <span style={{ color: T.textMut, fontWeight: 400 }}>· optionnel · plusieurs possibles</span>
+                    </label>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {linkableGoals.map((g) => {
+                        const sel = Array.isArray(habitDraft.goalIds) ? habitDraft.goalIds : [];
+                        const active = sel.includes(String(g.id));
+                        const toggle = () => setHabitDraft({
+                          ...habitDraft,
+                          goalIds: active ? sel.filter(x => x !== String(g.id)) : [...sel, String(g.id)],
+                        });
+                        return (
+                          <button key={g.id} type="button" onClick={toggle}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", boxShadow: active ? `inset 0 0 0 1px ${T.text}` : "none", background: active ? T.accentBg : DA_FIELD_BG, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                            {active
+                              ? <Check size={13} strokeWidth={2.5} color={T.text} />
+                              : <TargetIcon size={13} strokeWidth={1.9} color={T.textMut} />}
+                            {g.label}
+                            {g.autoType === HABIT_AUTO_TYPE && (
+                              <span style={{ fontSize: 11, color: T.textMut, fontWeight: 500 }}>{habitGoalPct(g, habitHistory)}%</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {editingHabitId != null && (
+                        <button type="button" onClick={createGoalForHabit} disabled={!habitDraft.name?.trim()}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px dashed ${DA_HAIRLINE}`, background: "transparent", color: T.textSub, fontSize: 13, fontWeight: 500, cursor: habitDraft.name?.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+                          <Plus size={13} strokeWidth={2} /> {`Objectif ${HABIT_TARGET_DAYS} jours`}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.textMut, marginTop: 6, lineHeight: 1.4 }}>
+                      {linkableGoals.length === 0
+                        ? "Aucun objectif rattachable — crées-en un sur la page « Objectifs », ou depuis cette fiche une fois l'habitude enregistrée."
+                        : "Un objectif rattaché compte les jours où cette habitude est cochée. Sa cible, sa fenêtre de dates et les jours retenus se règlent sur la page « Objectifs »."}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Pied */}
@@ -847,6 +1004,10 @@ export default function DailyPlannerPage() {
                           {h.description}
                         </div>
                       )}
+                      {/* Pas de rappel des objectifs nourris sous chaque ligne :
+                          la liste des habitudes sert à cocher, et l'avancement
+                          de l'objectif se lit là où il vit (page Objectifs,
+                          carte de l'année, fiche de l'habitude). */}
                     </div>
 
                     {/* Checkbox — collée au texte */}
@@ -906,7 +1067,9 @@ function HabitsChart({ habits, history }) {
       if (map[iso] && (firstIso === null || iso < firstIso)) firstIso = iso;
     }
   }
-  // Fallback : si rien n'est coché, on affiche les 7 derniers jours
+  /* Rien de coché : on démarre AUJOURD'HUI, pas sept jours en arrière. Une
+     fenêtre antérieure au premier cochage ne trace qu'une ligne à plat sur du
+     passé qui n'a jamais existé. */
   const today = new Date();
   let startDate;
   if (firstIso) {
@@ -914,7 +1077,6 @@ function HabitsChart({ habits, history }) {
     startDate = new Date(y, m - 1, d);
   } else {
     startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 6);
   }
   // Nombre de jours entre startDate et aujourd'hui (inclus)
   const msPerDay = 86400000;
@@ -936,7 +1098,7 @@ function HabitsChart({ habits, history }) {
   const chartW = VB_W - padL - padR;
   const chartH = VB_H - padT - padB;
   const points = days.map((d, i) => {
-    const x = padL + (i / Math.max(days.length - 1, 1)) * chartW;
+    const x = days.length === 1 ? padL + chartW / 2 : padL + (i / (days.length - 1)) * chartW;
     const y = padT + chartH - (d.pct / 100) * chartH;
     return { x, y, ...d };
   });
@@ -955,9 +1117,11 @@ function HabitsChart({ habits, history }) {
         Complétion des habitudes
       </div>
       <div style={CARD}>
-      {total === 0 ? (
+      {total === 0 || !firstIso ? (
         <div style={{ padding: "40px 0", textAlign: "center", color: T.textMut, fontSize: 13 }}>
-          Ajoute des habitudes pour voir ton graphique
+          {total === 0
+            ? "Ajoute des habitudes pour voir ton graphique"
+            : "Coche une habitude pour lancer la courbe — elle démarre aujourd'hui"}
         </div>
       ) : (
         <div
@@ -986,6 +1150,17 @@ function HabitsChart({ habits, history }) {
             )}
           </svg>
 
+
+          {points.length === 1 && (
+            <div style={{
+              position: "absolute",
+              left: `${(points[0].x / VB_W) * 100}%`,
+              top: `${(points[0].y / VB_H) * 100}%`,
+              transform: "translate(-50%, -50%)",
+              width: 9, height: 9, borderRadius: 999, background: T.kraken,
+              pointerEvents: "none",
+            }} />
+          )}
 
           {/* Point au survol + tooltip listant les habitudes cochées ce jour-là */}
           {hoverIdx !== null && points[hoverIdx] && (() => {

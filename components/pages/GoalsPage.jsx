@@ -6,7 +6,7 @@ import {
   Plus, Target, Trash2, Pencil, Copy, Pin, Check, X, TrendingUp, Heart,
   ChevronDown, ChevronRight, Calendar, AlertCircle, Flag, Sparkles,
   Dumbbell, BookOpen, Users, GraduationCap, Wallet, Briefcase, Activity, Code,
-  Clock, Trophy, Footprints,
+  Clock, Trophy, Footprints, MessageCircle,
 } from "lucide-react";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 // Coquille de modale et boutons de la nouvelle DA (pages Comptes / Calendrier) :
@@ -22,6 +22,13 @@ import {
   RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES as RPG_DEFAULT_CATEGORIES,
   CatIcon as RpgCatIcon,
 } from "@/lib/lifeRpgCategories";
+import {
+  GOALS_STORAGE_KEY, GOALS_CLOUD_KEY,
+  STORAGE_HABITS, STORAGE_HABITS_HISTORY, CLOUD_HABITS, CLOUD_HABITS_HISTORY,
+  HABIT_AUTO_TYPE, HABIT_WEEKDAYS,
+  HABIT_ONTRACK_RATE, countHabitDays, habitAssiduityOf, habitGoalHabitIds,
+  habitGoalRangeLabel, habitGoalTargetDays, habitGoalWindow, isHabitGoal,
+} from "@/lib/habitGoals";
 
 import { T as BaseT } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
@@ -33,8 +40,10 @@ import { FIELD_FOCUS_RING as DA_FOCUS_RING } from "@/components/ui/form";
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
 const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
 
-export const GOALS_STORAGE_KEY = "tr4de_goals_v2";
-export const GOALS_CLOUD_KEY = "goals";
+/* Les clés de stockage des objectifs vivent dans `lib/habitGoals` (module
+   neutre) : la page Habitudes doit pouvoir rattacher un objectif sans importer
+   cette page-ci, ce qui ferait un cycle. Ré-exportées telles quelles. */
+export { GOALS_STORAGE_KEY, GOALS_CLOUD_KEY };
 const STORAGE_KEY = GOALS_STORAGE_KEY;
 
 const HORIZONS = [
@@ -81,12 +90,17 @@ const CATEGORIES = [
   { id: "finance",   label: "Finances",      color: PALETTE_DARK.green, icon: Wallet },
   { id: "work",      label: "Travail",       color: PALETTE.brown, icon: Briefcase },
   { id: "code",      label: "Dev",           color: PALETTE_DARK.blue, icon: Code },
+  /* Douzième catégorie : les huit principales et trois de leurs crans sombres
+     étant pris, celle-ci prend le cran sombre de l'orange — le seul restant qui
+     ne se confonde ni avec Sport (orange vif) ni avec Travail (brun clair). */
+  { id: "communication", label: "Communication", color: PALETTE_DARK.orange, icon: MessageCircle },
 ];
 /* Catégorie d'un objectif — c'est elle qui porte son icône et sa couleur, et
-   qui teinte sa barre de progression dans la liste.
-   À l'INTÉRIEUR d'une carte de la Quête de soi, en revanche, toutes les barres
-   prennent la couleur de la carte : là-bas, l'unité de lecture est l'objectif
-   de l'année, pas la catégorie de chaque mesure qui le compose. */
+   qui teinte sa barre de progression partout où l'objectif apparaît : la liste
+   de cette page comme les cartes de la Quête de soi. Sur une carte annuelle,
+   seule la carte elle-même garde sa propre couleur (vignette, jauge globale,
+   jalons) ; les barres des objectifs qu'elle agrège disent, elles, de quel
+   domaine chaque mesure vient. */
 export function goalCategoryOf(g) {
   return CATEGORIES.find(c => c.id === g?.category) || CATEGORIES[0];
 }
@@ -95,6 +109,11 @@ export function goalCategoryOf(g) {
 // "Trading".
 const AUTO_TYPES = [
   { id: "manual",     label: "Manuel",              unit: "",  trading: false, group: "Général" },
+  /* Source « habitudes » : l'objectif compte les JOURS où l'une des habitudes
+     rattachées a été cochée (page Habitudes). 365 jours = une année tenue, d'où
+     la cible par défaut ; la fenêtre de dates et les jours de semaine comptés
+     se règlent dans le formulaire. */
+  { id: HABIT_AUTO_TYPE, label: "Habitudes cochées", unit: "", trading: false, group: "Général" },
   { id: "pnl",        label: "P&L (sur l'horizon)", unit: "$", trading: true,  group: "P&L" },
   { id: "pnl_day",    label: "P&L du jour",         unit: "$", trading: true,  group: "P&L", horizon: "day"   },
   { id: "pnl_week",   label: "P&L de la semaine",   unit: "$", trading: true,  group: "P&L", horizon: "week"  },
@@ -168,8 +187,11 @@ function rangeOf(horizon) {
 // Calcule { current, target, pct } d'un objectif. Pur : dépend uniquement de
 // l'objectif et des données passées (trades, comptes). Réutilisé tel quel par la
 // page « Vie RPG » pour dériver l'XP des catégories rattachées.
-export function computeGoalProgress(g, trades = [], accounts = []) {
-  const tgt = parseFloat(g.target) || 0;
+export function computeGoalProgress(g, trades = [], accounts = [], habitHistory = {}) {
+  /* Source habitudes : la cible n'est pas saisie, elle EST la deadline — le
+     nombre de jours comptables d'ici là. La recalculer plutôt que lire
+     `g.target` garde l'objectif juste quand l'échéance bouge. */
+  const tgt = isHabitGoal(g) ? habitGoalTargetDays(g) : (parseFloat(g.target) || 0);
   const at = AUTO_TYPES.find(a => a.id === g.autoType);
   const horizonForCompute = at?.horizon || g.horizon || "month";
   const { start, end } = rangeOf(horizonForCompute);
@@ -192,6 +214,8 @@ export function computeGoalProgress(g, trades = [], accounts = []) {
   }
   let current = 0;
   if (g.autoType === "manual") current = parseFloat(g.manual) || 0;
+  // Jours cochés (union des habitudes rattachées, un jour ne compte qu'une fois).
+  else if (g.autoType === HABIT_AUTO_TYPE) current = countHabitDays(g, habitHistory);
   else if (g.autoType === "pnl" || (g.autoType || "").startsWith("pnl_")) current = tradesInRange(scopedTrades, start, end).reduce((s, t) => s + (t.pnl || 0), 0);
   else if (g.autoType === "winrate") {
     const list = tradesInRange(scopedTrades, start, end);
@@ -218,6 +242,20 @@ export function computeGoalProgress(g, trades = [], accounts = []) {
   return { current, target: tgt, pct, rawPct };
 }
 
+/* Naissance d'un objectif. `createdAt` d'abord ; à défaut l'id, qui EST
+   l'horodatage de création — sauf pour les tout premiers objectifs, semés avec
+   les ids 1, 2 et 3 : `new Date(1)` donnait le 1er janvier 1970, soit un
+   objectif vieux de cinquante ans, donc en retard quoi qu'il arrive. */
+function goalStartDate(g) {
+  if (g?.createdAt) {
+    const d = new Date(g.createdAt);
+    if (!isNaN(d.getTime())) return d;
+  }
+  const n = Number(g?.id);
+  // 10^12 ms ≈ septembre 2001 : au-dessus, c'est bien un horodatage.
+  return Number.isFinite(n) && n > 1e12 ? new Date(n) : null;
+}
+
 // Statut de RYTHME (« pace ») d'un objectif : compare l'avancement réel à
 // l'avancement ATTENDU si l'on progressait linéairement sur la fenêtre de temps
 // de l'objectif. C'est ce qui transforme une cible passive en boussole : « suis-je
@@ -231,13 +269,30 @@ export function computeGoalPace(g, current, target, pct) {
   if (!g || g.autoType === "max_dd") return null;
   const at = AUTO_TYPES.find(a => a.id === g.autoType);
   let start, end;
-  // La DEADLINE fixée par l'utilisateur PRIME toujours : le rythme doit se
-  // calculer sur cette durée (« 10 000 € en 30 j » → / 30 j). Sinon, pour un
-  // objectif trading créé en fin de mois, on diviserait par les 2-3 jours
-  // restants de la fenêtre civile → rythme requis aberrant (≈ 3k/jour).
-  if (g.deadline) {
+  if (at?.horizon) {
+    /* Métrique à fenêtre FIXE (P&L du jour / de la semaine / du mois / de
+       l'année) : elle se remet à zéro avec sa période, et ne peut donc être
+       jugée que sur cette période. La confronter au temps qui reste jusqu'à une
+       échéance lointaine — le mois en cours contre l'année entière — la
+       déclarait en retard tous les jours de l'année. */
+    const r = rangeOf(at.horizon);
+    start = r.start; end = r.end;
+  } else if (isHabitGoal(g)) {
+    // Fenêtre de l'objectif d'habitude : de sa création à son échéance (une
+    // année pleine par défaut).
+    const w = habitGoalWindow(g);
+    start = new Date(w.from + "T00:00:00");
+    end = new Date(w.to + "T23:59:59");
+  } else if (g.deadline) {
+    // La DEADLINE fixée par l'utilisateur PRIME sur la fenêtre civile : le
+    // rythme doit se calculer sur cette durée (« 10 000 € en 30 j » → / 30 j).
+    // Sinon, pour un objectif trading créé en fin de mois, on diviserait par les
+    // 2-3 jours restants du mois → rythme requis aberrant (≈ 3k/jour).
     end = new Date(g.deadline + "T23:59:59");
-    start = g.createdAt ? new Date(g.createdAt) : new Date(g.id);
+    start = goalStartDate(g);
+    // Naissance inconnue : pas de fenêtre, donc pas de verdict. Mieux vaut ne
+    // rien dire que dater l'objectif de 1970 et le déclarer en retard à vie.
+    if (!start) return null;
   } else if (at?.trading) {
     const r = rangeOf(at.horizon || g.horizon || "month");
     start = r.start; end = r.end;
@@ -251,13 +306,17 @@ export function computeGoalPace(g, current, target, pct) {
   const now = Date.now();
   const timeFrac = Math.max(0, Math.min(1, (now - start.getTime()) / total));
   const progressFrac = target > 0 ? Math.max(0, Math.min(1, current / target)) : 0;
-  const expectedPct = Math.round(timeFrac * 100);
+  /* Repère « où je devrais en être » sur la barre. Pour une habitude, ce repère
+     vaudrait la perfection (un jour tenu par jour écoulé) : toujours devant la
+     barre, il redirait « en retard » en silence. On ne le pose donc pas. */
+  const expectedPct = isHabitGoal(g) ? 0 : Math.round(timeFrac * 100);
   const delta = progressFrac - timeFrac; // > 0 = en avance, < 0 = en retard
 
   // Rythme requis sur le temps restant pour atteindre la cible — seulement pour
   // les métriques ADDITIVES (un win rate ou un type de compte ne « s'accumule »
   // pas par jour, le rythme n'aurait aucun sens).
-  const additive = g.autoType === "manual" || g.autoType === "trades" || (g.autoType || "").startsWith("pnl");
+  const additive = g.autoType === "manual" || g.autoType === "trades"
+    || (g.autoType || "").startsWith("pnl");
   const isTrading = !!at?.trading || g.category === "trading";
   // En trading, les marchés sont fermés le week-end : on ne compte que les jours
   // OUVRÉS, une « semaine » = 5 jours de bourse et un « mois » ≈ 21. Hors trading,
@@ -282,6 +341,19 @@ export function computeGoalPace(g, current, target, pct) {
   let status, color, label;
   if (pct >= 100)            { status = "done";    color = PALETTE.green; label = "Atteint"; }
   else if (timeFrac >= 1)    { status = "ended";   color = PALETTE.red;      label = "Échéance passée"; }
+  else if (isHabitGoal(g)) {
+    /* Une habitude se juge à sa RÉGULARITÉ, pas au temps écoulé : voir
+       `habitGoalAssiduity`. En dessous du seuil, l'objectif décroche vraiment ;
+       au-dessus, un jour sauté ne mérite pas une alerte. */
+    const rate = habitAssiduityOf(current, g);
+    if (rate < HABIT_ONTRACK_RATE) {
+      status = "behind"; color = PALETTE.orange;
+      label = `Irrégulier · ${Math.round(rate * 100)}%`;
+    } else {
+      status = "ontrack"; color = PALETTE.blue;
+      label = `Régulier · ${Math.round(rate * 100)}%`;
+    }
+  }
   else if (delta >= 0.05)    { status = "ahead";   color = PALETTE.green; label = "En avance"; }
   else if (delta <= -0.05)   { status = "behind";  color = PALETTE.orange;   label = "En retard"; }
   else                       { status = "ontrack"; color = PALETTE.blue;     label = "Dans les temps"; }
@@ -291,6 +363,9 @@ export function computeGoalPace(g, current, target, pct) {
 
 // { prefix, suffix } pour formater la valeur d'un objectif (pur, exporté).
 export function goalUnitOf(g) {
+  // Source habitudes : on compte des jours, quelle que soit l'unité choisie
+  // avant de basculer la source.
+  if (g.autoType === HABIT_AUTO_TYPE) return { prefix: "", suffix: " j" };
   if (g.autoType !== "manual") {
     const u = AUTO_TYPES.find(a => a.id === g.autoType)?.unit || "";
     if (u === "$") return { prefix: getCurrencySymbol(), suffix: "" };
@@ -302,6 +377,15 @@ export function goalUnitOf(g) {
   if (unit.isCustom) return { prefix: "", suffix: g.customUnit ? ` ${g.customUnit}` : "" };
   return { prefix: "", suffix: unit.suffix };
 }
+/* Vrai quand la valeur d'un objectif se lit DÉJÀ comme un pourcentage : soit
+   son unité est le %, soit sa source est les habitudes (dont le nombre de jours
+   n'apprend rien de plus que la barre). Là où une barre porte déjà son %,
+   réafficher « 45 % / 60 % » ou « 128 j / 365 j » à côté fait doublon — les
+   cartes de la Quête de soi s'en servent pour ne montrer qu'un seul chiffre. */
+export function goalReadsAsPct(g) {
+  return isHabitGoal(g) || goalUnitOf(g).suffix === "%";
+}
+
 // Formate un nombre : au-delà de 10 000, on abrège en milliers avec « k »
 // (ex. 10000 -> « 10k », 12500 -> « 12,5k »). En dessous, valeur complète.
 function fmtGoalNum(x) {
@@ -461,6 +545,14 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
   const [goals, setGoals, goalsReady] = useCloudState(STORAGE_KEY, "goals", defaultGoals());
   const { pushUndo } = useUndo();
 
+  /* Habitudes + leur historique, en LECTURE seule : un objectif dont la source
+     est « Habitudes cochées » compte ses jours ici. L'écriture (cocher un jour)
+     reste l'affaire de la page Habitudes — deux écrivains sur la même clé
+     divergeraient. */
+  const [habitsRaw] = useCloudState(STORAGE_HABITS, CLOUD_HABITS, []);
+  const habits = useMemo(() => (Array.isArray(habitsRaw) ? habitsRaw : []), [habitsRaw]);
+  const [habitHistory] = useCloudState(STORAGE_HABITS_HISTORY, CLOUD_HABITS_HISTORY, {});
+
   // Catégories Vie RPG persistées (pour rattacher un objectif à une catégorie
   // et lui faire alimenter l'XP du RPG au prorata de l'avancement).
   const [rpgState] = useCloudState(RPG_STORAGE_KEY, RPG_CLOUD_KEY, { categories: RPG_DEFAULT_CATEGORIES });
@@ -496,7 +588,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
   };
 
   // Modal d'ajout/édition
-  const emptyForm = { label: "", level: "normal", category: "trading", autoType: "manual", target: "", deadline: "", unit: "count", customUnit: "", accountTypeFilter: "live", accountIdFilter: "all", rpgCategory: "", rpgXp: "" };
+  const emptyForm = { label: "", level: "normal", category: "trading", autoType: "manual", target: "", deadline: "", unit: "count", customUnit: "", accountTypeFilter: "live", accountIdFilter: "all", rpgCategory: "", rpgXp: "", habitIds: [], habitDays: [] };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -511,7 +603,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
     registerCreate?.(() => openCreateRef.current());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const openEdit = (g) => { setForm({ label: g.label, level: g.level || "normal", category: g.category || "trading", autoType: g.autoType || "manual", target: String(g.target), deadline: g.deadline || "", unit: g.unit || "count", customUnit: g.customUnit || "", accountTypeFilter: g.accountTypeFilter || "live", accountIdFilter: g.accountIdFilter || "all", rpgCategory: g.rpgCategory || "", rpgXp: g.rpgXp != null ? String(g.rpgXp) : "" }); setEditingId(g.id); setShowForm(true); };
+  const openEdit = (g) => { setForm({ label: g.label, level: g.level || "normal", category: g.category || "trading", autoType: g.autoType || "manual", target: String(g.target), deadline: g.deadline || "", unit: g.unit || "count", customUnit: g.customUnit || "", accountTypeFilter: g.accountTypeFilter || "live", accountIdFilter: g.accountIdFilter || "all", rpgCategory: g.rpgCategory || "", rpgXp: g.rpgXp != null ? String(g.rpgXp) : "", habitIds: habitGoalHabitIds(g), habitDays: Array.isArray(g.habitDays) ? g.habitDays : [] }); setEditingId(g.id); setShowForm(true); };
   const close = () => { setForm(emptyForm); setEditingId(null); setShowForm(false); };
 
   // Auto-save : dès qu'un champ change et qu'il y a assez d'infos, on enregistre
@@ -521,21 +613,37 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
     // Validation stricte avant insertion : évite les « objectifs fantômes » créés
     // par l'auto-save sur une saisie partielle. On exige un label ET une cible
     // numérique finie strictement positive (parseFloat filtre NaN / « 12ab »).
+    const habitSource = form.autoType === HABIT_AUTO_TYPE;
     const targetNum = parseFloat(form.target);
-    if (!form.label.trim() || !Number.isFinite(targetNum) || targetNum <= 0) return;
+    /* La source « habitudes » n'a pas de cible saisie — c'est sa deadline qui la
+       fixe. Lui réclamer un nombre ici interdirait purement et simplement de
+       l'enregistrer. */
+    if (!form.label.trim()) return;
+    if (!habitSource && (!Number.isFinite(targetNum) || targetNum <= 0)) return;
     const horizon = horizonFromDeadline(form.deadline);
     const handle = setTimeout(() => {
       // Lien Vie RPG : catégorie rattachée + XP versée (au prorata) à 100 %.
       const rpgCategory = form.rpgCategory || null;
+      // Réglages de la source « habitudes ». Écrits même quand la source est
+      // autre : on garde le rattachement sous le coude, pour qu'un aller-retour
+      // Manuel ↔ Habitudes ne le perde pas.
+      const habitFields = {
+        habitIds: Array.isArray(form.habitIds) ? form.habitIds.map(String) : [],
+        habitDays: Array.isArray(form.habitDays) ? form.habitDays : [],
+      };
       const rpgXp = rpgCategory ? Math.max(0, parseInt(form.rpgXp, 10) || 0) : 0;
       if (editingId) {
         setGoals(prev => updateGoalById(prev, editingId, g => ({
           ...g, label: form.label.trim(), horizon, level: form.level,
           category: form.category, autoType: form.autoType,
-          target: parseFloat(form.target), deadline: form.deadline, unit: form.unit,
+          target: habitSource
+            ? habitGoalTargetDays({ ...g, ...habitFields, deadline: form.deadline })
+            : parseFloat(form.target),
+          deadline: form.deadline, unit: form.unit,
           customUnit: form.customUnit || "",
           accountTypeFilter: form.accountTypeFilter,
           accountIdFilter: form.accountIdFilter,
+          ...habitFields,
           rpgCategory, rpgXp,
           // L'étape porteuse (« Quête de soi ») appartient à la carte quittée :
           // changer de carte, ou se détacher, la laisse pointer dans le vide.
@@ -544,14 +652,19 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
       } else {
         // Créer le nouveau goal et passer immédiatement en mode édition
         const id = Date.now();
+        const createdAt = new Date(id).toISOString();
         setGoals(prev => [...prev, {
-          id, createdAt: new Date(id).toISOString(),
+          id, createdAt,
           label: form.label.trim(), horizon, level: form.level,
           category: form.category, autoType: form.autoType,
-          target: parseFloat(form.target), deadline: form.deadline, unit: form.unit,
+          target: habitSource
+            ? habitGoalTargetDays({ ...habitFields, createdAt, deadline: form.deadline })
+            : parseFloat(form.target),
+          deadline: form.deadline, unit: form.unit,
           customUnit: form.customUnit || "",
           accountTypeFilter: form.accountTypeFilter,
           accountIdFilter: form.accountIdFilter,
+          ...habitFields,
           rpgCategory, rpgXp,
           manual: 0,
         }]);
@@ -648,7 +761,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
   };
 
   // Compute current/target/pct pour un goal — délègue au helper module pur.
-  const compute = (g) => computeGoalProgress(g, trades, accounts);
+  const compute = (g) => computeGoalProgress(g, trades, accounts, habitHistory);
   const unitOf = goalUnitOf;
   const fmtVal = fmtGoalVal;
 
@@ -821,35 +934,20 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
             onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
         </GoalField>
 
-        {/* Deadline : pilules de raccourci + champ date */}
+        {/* Échéance : une date, choisie au calendrier. Elle donne à l'objectif
+            sa fenêtre — donc son rythme requis, sa frise, et la cible d'un
+            objectif d'habitude. */}
         <DeadlineField value={form.deadline} onChange={(v) => setForm({ ...form, deadline: v })} />
 
-        {/* Priorité : quatre valeurs, donc des pilules plutôt qu'une liste
-            déroulante — tout se voit et se choisit d'un clic. */}
-        <GoalField label="Priorité">
-          <div role="radiogroup" aria-label="Priorité" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {LEVELS.map((lv) => {
-              const active = form.level === lv.id;
-              return (
-                <button key={lv.id} type="button" role="radio" aria-checked={active}
-                  onClick={() => setForm({ ...form, level: lv.id })}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", minHeight: 34, borderRadius: 999,
-                    border: `1px solid ${active ? lv.color : T.border}`,
-                    background: active ? `color-mix(in srgb, ${lv.color} 10%, transparent)` : T.white,
-                    color: active ? lv.color : T.text,
-                    fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                    transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
-                  }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: lv.color, boxShadow: dotRing(lv.color), flexShrink: 0 }} />
-                  {lv.label}
-                </button>
-              );
-            })}
-          </div>
-        </GoalField>
+        {/* Pas de champ de priorité : il se remplissait par réflexe (« Normale »
+            partout) sans rien décider. `form.level` reste dans l'état, relu à
+            l'édition et réécrit tel quel — les priorités déjà posées survivent
+            et continuent de trier la liste. */}
 
-        {/* Cible + son unité (ou l'unité imposée par la source de suivi) */}
+        {/* Cible + son unité (ou l'unité imposée par la source de suivi).
+            Masquée pour la source « habitudes » : sa cible se déduit de sa
+            fenêtre (le nombre de jours à tenir), elle ne se saisit pas. */}
+        {form.autoType !== HABIT_AUTO_TYPE && (
         <GoalField label="Cible">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input type="number" value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value })}
@@ -899,7 +997,8 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
               </div>
             ) : (() => {
               const a = AUTO_TYPES.find(x => x.id === form.autoType);
-              const label = a?.unit === "$" ? getCurrencySymbol() : a?.unit === "%" ? "%" : "trades";
+              const label = form.autoType === HABIT_AUTO_TYPE ? "jours"
+                : a?.unit === "$" ? getCurrencySymbol() : a?.unit === "%" ? "%" : "trades";
               return (
                 <span style={{ flexShrink: 0, padding: "9px 14px", borderRadius: 8, background: T.accentBg, color: T.textSub, fontSize: 13, fontWeight: 500 }}>
                   {label}
@@ -916,6 +1015,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
               onBlur={(e) => { e.currentTarget.style.boxShadow = "none"; }} />
           )}
         </GoalField>
+        )}
 
         {/* Catégorie — grille d'icônes (deux lignes) */}
         <GoalField label="Catégorie"
@@ -961,14 +1061,19 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
           </div>
         </GoalField>
 
-        {/* Source de suivi — visible uniquement pour Trading */}
-        {form.category === "trading" && (
-          <GoalField label="Source de suivi"
-            hint={form.autoType === "manual" ? "Manuel : c'est toi qui fais avancer le compteur." : "Calculée automatiquement à partir de tes trades."}>
+        {/* Source de suivi. Les métriques de trading restent réservées à la
+            catégorie Trading (elles n'ont de sens que là) ; « Manuel » et
+            « Habitudes cochées » valent pour toutes les catégories — c'est ce
+            qui permet à un objectif ordinaire de se nourrir des habitudes. */}
+        {/* Sans phrase d'explication sous le champ : le nom de chaque source
+            (« Manuel », « Habitudes cochées », « P&L du mois »…) dit déjà ce
+            qu'elle compte, et la ligne d'aide changeait à chaque choix — un
+            texte qui bouge se relit à chaque fois et ne s'apprend jamais. */}
+        <GoalField label="Source de suivi">
             <FancyDropdown
               variant="field"
               value={form.autoType}
-              options={AUTO_TYPES}
+              options={AUTO_TYPES.filter(a => form.category === "trading" || !a.trading)}
               onChange={(v) => setForm({ ...form, autoType: v })}
               renderValue={(a) => (
                 <span style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{a?.label}</span>
@@ -980,7 +1085,13 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                 </>
               )}
             />
-          </GoalField>
+        </GoalField>
+
+        {/* Réglages de la source « habitudes » : quelles habitudes, sur quelle
+            fenêtre de dates, et quels jours de la semaine comptent. */}
+        {form.autoType === HABIT_AUTO_TYPE && (
+          <HabitSourceField form={form} setForm={setForm} habits={habits} habitHistory={habitHistory}
+            goal={editingId ? goals.find(gg => gg.id === editingId) : null} />
         )}
 
         {/* Compte ciblé — pour les sources de perf (PnL / WR / Nb trades / DD) */}
@@ -1435,7 +1546,11 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: 11, color: T.textMut, overflow: "hidden", whiteSpace: "nowrap" }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{cat.label}</span>
               {(() => {
-                const lv = LEVELS.find(l => l.id === (g.level || "normal")) || LEVELS[1];
+                /* La priorité ne se saisit plus (champ retiré du formulaire) :
+                   afficher « Normale » sur tout objectif ne dirait plus rien.
+                   Seules celles posées du temps du champ restent visibles. */
+                const lv = g.level && g.level !== "normal" ? LEVELS.find(l => l.id === g.level) : null;
+                if (!lv) return null;
                 return (
                   <span style={{
                     fontSize: 10, fontWeight: 600,
@@ -1490,6 +1605,10 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
         </div>
 
         <div style={{ fontSize: 12, color: T.text }}>
+          {/* Objectif « habitudes » : pas de « 128 j / 365 j ». Le nombre de
+              jours ne dit rien que la barre ne dise mieux, et son pourcentage
+              est déjà à droite d'elle. */}
+          {!isHabitGoal(g) && (
           <span ref={valueRef}
             title={g.autoType === "manual" && !editing ? "Clic pour saisir · molette ↕ pour ajuster" : undefined}
             style={{
@@ -1523,7 +1642,8 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
             <span style={{ color: T.textMut, margin: "0 3px" }}>/</span>
             <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtVal(target, unit)}</span>
           </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: isHabitGoal(g) ? 0 : 10 }}>
             <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
               {/* Repère « où je devrais en être » : petit triangle POSÉ au-dessus de
                   la barre (ne la traverse pas), pointant vers le niveau attendu. */}
@@ -1704,104 +1824,64 @@ function EmptyState({ onClick }) {
 
 /* ---------- Tiny helpers ---------- */
 // Dropdown stylé (popover) — remplace les <select> natifs
-// Champ Deadline : dropdown de presets à gauche + popover calendrier custom
+/* Champ Échéance : la date, et rien d'autre.
+   Les six raccourcis (« Ce mois », « Dans 1 mois »… « Dans 1 an ») ont été
+   retirés : posés d'un clic, ils faisaient choisir une échéance ronde plutôt
+   que la vraie, et pesaient six pilules dans un formulaire qui en compte déjà
+   beaucoup. Qui veut une date la prend au calendrier. */
 function DeadlineField({ value, onChange }) {
-  const today = new Date();
-  const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const plusMonths = (n) => { const d = new Date(today); d.setMonth(d.getMonth() + n); return d; };
-  const plusYears = (n) => { const d = new Date(today); d.setFullYear(d.getFullYear() + n); return d; };
-
-  const presets = [
-    { id: toISO(endOfMonth),     label: "Ce mois" },
-    { id: toISO(plusMonths(1)),  label: "Dans 1 mois" },
-    { id: toISO(plusMonths(2)),  label: "Dans 2 mois" },
-    { id: toISO(plusMonths(3)),  label: "Dans 3 mois" },
-    { id: toISO(plusMonths(6)),  label: "Dans 6 mois" },
-    { id: toISO(plusYears(1)),   label: "Dans 1 an" },
-  ];
-  const activePreset = presets.find(p => p.id === value);
-
   const [calOpen, setCalOpen] = useState(false);
   const calBtnRef = React.useRef(null);
-  // Placement et fermeture : Popover. Le calendrier n'a plus besoin de se
-  // fermer au défilement — il suit désormais son déclencheur au lieu de rester
-  // figé où il avait été posé.
-
-  // État du mois affiché dans le popover
+  // Mois affiché dans le popover — celui de la date posée, sinon le mois courant.
   const [viewDate, setViewDate] = useState(() => {
     const d = value ? new Date(value + "T00:00:00") : new Date();
     return isNaN(d.getTime()) ? new Date() : d;
   });
 
-  /* Style de la modale : un champ bordé qui porte la date choisie et ouvre le
-     calendrier, puis une rangée de raccourcis. Les presets étaient enfermés
-     dans une liste déroulante alors qu'ils sont là pour être choisis d'un clic. */
   return (
-    <GoalField label="Deadline">
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <button ref={calBtnRef} type="button" onClick={() => setCalOpen(v => !v)}
-          style={{
-            ...goalInput(), flex: 1, minWidth: 0, cursor: "pointer", textAlign: "left",
-            display: "flex", alignItems: "center", gap: 8, minHeight: 38,
-            /* Ouvert = l'anneau de focus, pas une bordure assombrie : le champ
-               n'en a plus. */
-            boxShadow: calOpen ? DA_FOCUS_RING : "none",
-            color: value ? T.text : T.textMut,
-          }}>
-          <Calendar size={14} strokeWidth={1.75} color={T.textMut} style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {value
-              ? new Date(value + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
-              : "Choisir une date…"}
+    <GoalField label="Échéance" hint="Facultative — sans elle, l'objectif court sur un an.">
+      <button ref={calBtnRef} type="button" onClick={() => setCalOpen(v => !v)}
+        style={{
+          ...goalInput(), width: "100%", cursor: "pointer", textAlign: "left",
+          display: "flex", alignItems: "center", gap: 8, minHeight: 38,
+          /* Ouvert = l'anneau de focus, pas une bordure assombrie : le champ
+             n'en a plus. */
+          boxShadow: calOpen ? DA_FOCUS_RING : "none",
+          color: value ? T.text : T.textMut,
+        }}>
+        <Calendar size={14} strokeWidth={1.75} color={T.textMut} style={{ flexShrink: 0 }} />
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {value
+            ? new Date(value + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
+            : "Choisir une date…"}
+        </span>
+        {value && (
+          <span role="button" tabIndex={0} aria-label="Retirer l'échéance"
+            onClick={(e) => { e.stopPropagation(); onChange(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); onChange(""); } }}
+            style={{ display: "inline-flex", alignItems: "center", color: T.textMut, flexShrink: 0 }}>
+            <X size={13} strokeWidth={2} />
           </span>
-          {value && (
-            <span role="button" tabIndex={0} aria-label="Retirer la deadline"
-              onClick={(e) => { e.stopPropagation(); onChange(""); }}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); onChange(""); } }}
-              style={{ display: "inline-flex", alignItems: "center", color: T.textMut, flexShrink: 0 }}>
-              <X size={13} strokeWidth={2} />
-            </span>
-          )}
-        </button>
-        <Popover
-          anchorRef={calBtnRef}
-          open={calOpen}
-          onClose={() => setCalOpen(false)}
-          align="start"
-          maxHeight={360}
-          style={{
-            width: 280, background: T.white, border: "none",
-            borderRadius: "var(--radius-card)", boxShadow: "var(--elev-overlay)", padding: 12,
-          }}
-        >
-          <MiniCalendar
-            value={value}
-            viewDate={viewDate}
-            setViewDate={setViewDate}
-            onPick={(iso) => { onChange(iso); setCalOpen(false); }}
-          />
-        </Popover>
-      </div>
-      {/* Raccourcis : les échéances qu'on pose neuf fois sur dix. */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
-        {presets.map((p) => {
-          const active = activePreset?.id === p.id;
-          return (
-            <button key={p.id} type="button" onClick={() => onChange(p.id)}
-              style={{
-                padding: "8px 16px", minHeight: 34, borderRadius: 999,
-                border: `1px solid ${active ? T.brand : T.border}`,
-                background: active ? T.brand : T.white,
-                color: active ? T.onSolid : T.textSub,
-                fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
-              }}>
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
+        )}
+      </button>
+      <Popover
+        anchorRef={calBtnRef}
+        open={calOpen}
+        onClose={() => setCalOpen(false)}
+        align="start"
+        maxHeight={360}
+        style={{
+          width: 280, background: T.white, border: "none",
+          borderRadius: "var(--radius-card)", boxShadow: "var(--elev-overlay)", padding: 12,
+        }}
+      >
+        <MiniCalendar
+          value={value}
+          viewDate={viewDate}
+          setViewDate={setViewDate}
+          onPick={(iso) => { onChange(iso); setCalOpen(false); }}
+        />
+      </Popover>
     </GoalField>
   );
 }
@@ -2496,6 +2576,108 @@ function SubtasksField({ subtasks, onChange }) {
    contrôle. `aside` sert au rappel de valeur aligné à droite du libellé
    (la catégorie choisie, par exemple).
    ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------
+   Réglages de la source « Habitudes cochées ».
+
+   Trois questions, dans cet ordre : QUELLES habitudes, sur QUELLE fenêtre de
+   dates, et QUELS jours de la semaine comptent. Les deux dernières sont
+   facultatives — sans elles, tout l'historique compte, tous les jours — mais
+   elles sont ce qui rend la cible réglable : « 100 jours de sport entre janvier
+   et juin, week-ends exclus » se dit ici sans une ligne de code.
+   ------------------------------------------------------------------------ */
+function HabitSourceField({ form, setForm, habits, habitHistory, goal }) {
+  const selected = Array.isArray(form.habitIds) ? form.habitIds.map(String) : [];
+  const days = Array.isArray(form.habitDays) ? form.habitDays : [];
+  const toggleHabit = (id) => {
+    const key = String(id);
+    setForm({ ...form, habitIds: selected.includes(key) ? selected.filter(x => x !== key) : [...selected, key] });
+  };
+  const toggleDay = (d) => {
+    setForm({ ...form, habitDays: days.includes(d) ? days.filter(x => x !== d) : [...days, d] });
+  };
+  /* Aperçu : ce que l'objectif vaut AUJOURD'HUI avec les réglages en cours.
+     La cible n'étant plus saisie mais déduite de la deadline, c'est le seul
+     endroit où l'on voit ce que celle-ci coûte en jours à tenir. */
+  const preview = {
+    autoType: HABIT_AUTO_TYPE, habitIds: selected, habitDays: days,
+    createdAt: goal?.createdAt, id: goal?.id, deadline: form.deadline,
+  };
+  const counted = countHabitDays(preview, habitHistory);
+  const targetDays = habitGoalTargetDays(preview);
+  const pct = targetDays > 0 ? Math.round((counted / targetDays) * 100) : 0;
+
+  return (
+    <>
+      <GoalField label="Habitudes suivies"
+        hint={habits.length > 0
+          ? "À plusieurs habitudes, l'avancement est leur moyenne : il faut les tenir toutes pour aller à 100 %."
+          : undefined}>
+        {habits.length === 0 ? (
+          <div style={{ fontSize: 12, color: T.textMut, lineHeight: 1.5 }}>
+            {"Aucune habitude — crée-la d'abord sur la page « Habitudes »."}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {habits.map(h => {
+              const active = selected.includes(String(h.id));
+              return (
+                <button key={h.id} type="button" onClick={() => toggleHabit(h.id)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34,
+                    borderRadius: 999, border: `1px solid ${active ? T.brand : T.border}`,
+                    background: active ? `color-mix(in srgb, ${T.brand} 10%, transparent)` : T.white,
+                    color: active ? T.brand : T.text,
+                    fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                  }}>
+                  {active
+                    ? <Check size={13} strokeWidth={2.5} color={T.brand} />
+                    : <Clock size={13} strokeWidth={1.9} color={T.textMut} />}
+                  {h.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </GoalField>
+
+      <GoalField label="Jours comptés"
+        aside={<span style={{ fontSize: 11, fontWeight: 600, color: T.textMut }}>
+          {days.length === 0 || days.length === 7 ? "Tous les jours" : `${days.length} jour${days.length > 1 ? "s" : ""} / semaine`}
+        </span>}
+        hint="Aucun jour sélectionné = tous comptent.">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {HABIT_WEEKDAYS.map(d => {
+            const active = days.includes(d.id);
+            return (
+              <button key={d.id} type="button" onClick={() => toggleDay(d.id)}
+                title={d.full} aria-label={d.full} aria-pressed={active}
+                style={{
+                  width: 34, height: 34, borderRadius: "50%",
+                  border: `1px solid ${active ? T.brand : T.border}`,
+                  background: active ? `color-mix(in srgb, ${T.brand} 10%, transparent)` : T.white,
+                  color: active ? T.brand : T.textSub,
+                  fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}>
+                {d.label}
+              </button>
+            );
+          })}
+        </div>
+      </GoalField>
+
+      <div style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5, padding: "10px 14px", borderRadius: 10, background: T.accentBg }}>
+        {selected.length === 0
+          ? "Rattache au moins une habitude : sans elle, l'objectif reste à zéro."
+          : <>
+              <strong style={{ fontWeight: 600, color: T.text }}>{pct}%</strong>
+              {` — ${targetDays} jour${targetDays > 1 ? "s" : ""} à tenir ${habitGoalRangeLabel(preview)}`}
+              {selected.length > 1 ? ` (moyenne des ${selected.length} habitudes).` : "."}
+              {!form.deadline && " Sans échéance, l'objectif court sur un an."}
+            </>}
+      </div>
+    </>
+  );
+}
 function GoalField({ label, hint, aside, children }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

@@ -12,7 +12,7 @@
  * Chaque carte porte :
  *  - le résultat visé (`outcome`) et son échéance (`deadline`, 31 déc. par défaut) ;
  *  - son avancement, comparé au temps écoulé dans l'année (en avance / en retard) ;
- *  - l'identité visée (« qui je veux devenir ») et un modèle inspirant ;
+ *  - un modèle inspirant, et ce qu'on admire chez lui ;
  *  - ses objectifs chiffrés (page Objectifs), ses tâches (Agenda) et ses habitudes.
  *
  * Le socle de jeu reste identique : cocher une habitude, terminer une tâche
@@ -38,7 +38,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, X, Trash2, Pencil, Target, UserRound, Check,
-  CalendarClock, Flag, Milestone,
+  CalendarClock, ChevronRight, Flag,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
@@ -60,10 +60,11 @@ import {
   defaultHabits, autoDescription,
 } from "@/components/pages/DailyPlannerPage";
 import GoalsPage, {
-  GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, computeGoalProgress, goalUnitOf, fmtGoalVal,
+  GOALS_STORAGE_KEY, GOALS_CLOUD_KEY, computeGoalProgress, goalCategoryOf, goalReadsAsPct,
+  goalUnitOf, fmtGoalVal,
 } from "@/components/pages/GoalsPage";
 import {
-  addStep, cardProgress, goalPctsOf, groupGoalPctsByStep, isStepDone, readSteps,
+  addStep, cardProgress, goalPctsOf, groupGoalPctsByStep, isStepDone, readSteps, readStepsRaw, stepsEnabledOf,
   removeStep, sortSteps, stepCompletion, stepStatus, stepsProgress,
   toggleStep, updateStep, yearMarkers, STEP_XP,
 } from "@/lib/lifeRpgSteps";
@@ -79,15 +80,15 @@ import {
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
   DISCIPLINE_RULE_XP, resolveTradingCatId,
   MAX_YEAR_GOALS, YEAR_GOAL_TEMPLATES, pickTopYearGoals,
-  currentYear, yearDeadline, yearProgress, daysUntil,
+  currentYear, yearDeadline, yearProgress, categoryTimeProgress, daysUntil,
 } from "@/lib/lifeRpgCategories";
 import { useDisciplineTracking } from "@/lib/hooks/useDisciplineTracking";
 
 import { CARD, SectionTitle } from "@/components/ui/da";
-import { T as BaseT } from "@/lib/ui/tokens";
+import { T as BaseT, HAIRLINE, FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { deepen, dotRing, vignette as vignetteStyle } from "@/lib/ui/color";
 import { PALETTE, GREY } from "@/lib/ui/palette";
-import { Field as DAField, Modal as DAModal, FIELD as DA_FIELD, FIELD_AREA as DA_FIELD_AREA } from "@/components/ui/form";
+import { Field as DAField, FieldGroup as DAFieldGroup, Modal as DAModal, FIELD as DA_FIELD, FIELD_AREA as DA_FIELD_AREA } from "@/components/ui/form";
 // `bg` local (#F5F5F5) = fond subtil : mappé sur la var de survol pour suivre le
 // thème sombre (BaseT.bg vaut #FFFFFF, ce qui ferait perdre le gris léger).
 const T = { ...BaseT, bg: "var(--color-hover-bg, #F5F5F5)" };
@@ -225,7 +226,7 @@ function computeProgress(habits, history, goals = [], trades = [], accounts = []
   for (const g of flattenGoals(goals)) {
     const xpFull = Math.max(0, parseInt(g.rpgXp, 10) || 0);
     if (!g.rpgCategory || xpFull <= 0) continue;
-    const { pct } = computeGoalProgress(g, trades, accounts);
+    const { pct } = computeGoalProgress(g, trades, accounts, history);
     const gained = Math.round((pct / 100) * xpFull);
     if (gained <= 0) continue;
     totalXp += gained;
@@ -250,7 +251,7 @@ function computeProgress(habits, history, goals = [], trades = [], accounts = []
   // Une étape dont les objectifs rattachés sont tous atteints est franchie sans
   // avoir été cochée : elle doit rapporter le même XP, sinon le rattachement des
   // objectifs à une étape coûterait des points à qui s'en sert.
-  const goalPctsByStep = stepGoalPctsOf(categories, goals, trades, accounts);
+  const goalPctsByStep = stepGoalPctsOf(categories, goals, trades, accounts, history);
   for (const cat of (categories || [])) {
     for (const step of readSteps(cat)) {
       if (!isStepDone(step, goalPctsOf(goalPctsByStep, step.id))) continue;
@@ -287,7 +288,7 @@ function computeProgress(habits, history, goals = [], trades = [], accounts = []
    changement de catégorie, son `rpgStep` pointe vers un jalon qui ne le concerne
    plus, et le laisser peser sur cette étape-là créerait un avancement venu de
    nulle part. Il redevient alors un objectif libre de sa nouvelle carte. */
-function stepGoalPctsOf(categories, goals, trades, accounts) {
+function stepGoalPctsOf(categories, goals, trades, accounts, habitHistory = {}) {
   const out = {};
   const flat = flattenGoals(goals);
   for (const cat of (categories || [])) {
@@ -295,7 +296,7 @@ function stepGoalPctsOf(categories, goals, trades, accounts) {
     if (ids.length === 0) continue;
     const mine = flat.filter(g => g.rpgCategory === cat.id && g.rpgStep);
     Object.assign(out, groupGoalPctsByStep(
-      mine.map(g => ({ rpgStep: g.rpgStep, pct: computeGoalProgress(g, trades, accounts).pct })),
+      mine.map(g => ({ rpgStep: g.rpgStep, pct: computeGoalProgress(g, trades, accounts, habitHistory).pct })),
       ids,
     ));
   }
@@ -483,10 +484,20 @@ export default function LifeRpgPage() {
   const goalsByCat = useMemo(() => {
     const map = {};
     const toEntry = (g) => {
-      const { current, target, pct, rawPct } = computeGoalProgress(g, trades, accounts);
+      const { current, target, pct, rawPct } = computeGoalProgress(g, trades, accounts, habitHistory);
       const xpFull = Math.max(0, parseInt(g.rpgXp, 10) || 0);
       return {
         id: g.id, label: g.label, pct, rawPct: rawPct != null ? rawPct : pct, current, target, unit: goalUnitOf(g),
+        /* Une valeur qui se lit déjà en pourcentage (win rate, habitudes) ne
+           s'écrit pas à côté d'une barre qui porte son propre pourcentage :
+           deux pourcentages voisins font doublon. `pctOnly` remplace alors la
+           valeur par ce pourcentage là où il n'y en a pas déjà un (jalons,
+           sous-objectifs), et l'efface là où il y en a un (carte). */
+        pctOnly: goalReadsAsPct(g),
+        // Couleur de la catégorie de l'objectif (Trading, Sport…), pas celle de
+        // la carte : deux objectifs de domaines différents rangés sous le même
+        // combat de l'année se distinguent d'un coup d'œil.
+        color: goalCategoryOf(g).color,
         xpGained: Math.round((pct / 100) * xpFull), xpFull,
         // Étape porteuse, s'il y en a une : la carte range alors cet objectif
         // sous son jalon plutôt que dans la liste des objectifs libres.
@@ -501,12 +512,12 @@ export default function LifeRpgPage() {
       (map[g.rpgCategory] = map[g.rpgCategory] || []).push(entry);
     }
     return map;
-  }, [goalsList, trades, accounts]);
+  }, [goalsList, trades, accounts, habitHistory]);
   // Avancement des objectifs rattachés à une étape — la frise de l'année en a
   // besoin pour montrer franchis les jalons que leurs chiffres ont acquis.
   const stepGoalPcts = useMemo(
-    () => stepGoalPctsOf(categories, goalsList, trades, accounts),
-    [categories, goalsList, trades, accounts],
+    () => stepGoalPctsOf(categories, goalsList, trades, accounts, habitHistory),
+    [categories, goalsList, trades, accounts, habitHistory],
   );
   // Tâches liées, regroupées par catégorie (pour les afficher sur les cartes).
   // Dérivées de `taskRpg` (titre + état terminé) + `taskTimes` (jour planifié).
@@ -682,9 +693,9 @@ export default function LifeRpgPage() {
         outcome: (form.outcome || "").trim(),
         deadline: form.deadline || yearDeadline(YEAR),
         year: form.year || YEAR,
-        identity: (form.identity || "").trim(),
         roleModel: (form.roleModel || "").trim(),
         roleModelWhy: (form.roleModelWhy || "").trim(),
+        stepsEnabled: form.stepsEnabled !== false,
       };
       const exists = cats.some(c => c.id === form.id);
       if (exists) {
@@ -706,7 +717,7 @@ export default function LifeRpgPage() {
     setState(prev => ({
       ...prev,
       categories: (prev.categories || []).map(c =>
-        c.id === catId ? { ...c, steps: fn(readSteps(c)) } : c),
+        c.id === catId ? { ...c, steps: fn(readStepsRaw(c)) } : c),
     }));
   };
   const addStepTo = (catId, label) => patchSteps(catId, steps => addStep(steps, { label }));
@@ -716,7 +727,7 @@ export default function LifeRpgPage() {
   // effacée d'un clic emporte une intention qu'on a mis du temps à formuler.
   const deleteStepOf = (catId, stepId) => {
     const cat = (state.categories || []).find(c => c.id === catId);
-    const snapshot = readSteps(cat);
+    const snapshot = readStepsRaw(cat);
     patchSteps(catId, steps => removeStep(steps, stepId));
     pushUndo({
       label: "Suppression de l'étape",
@@ -759,13 +770,16 @@ export default function LifeRpgPage() {
       id: `cat_${Date.now()}`, isNew: true,
       label: tpl?.label || "", color: tpl?.color || CATEGORY_PALETTE[0], icon: tpl?.icon || "target",
       outcome: tpl?.outcome || "", deadline: yearDeadline(YEAR), year: YEAR,
-      identity: tpl?.identity || "", roleModel: "", roleModelWhy: "",
+      roleModel: "", roleModelWhy: "",
+      // Une carte neuve n'a pas de jalons : on n'allume pas un bloc vide.
+      stepsEnabled: false,
     });
   };
   const editCategory = (c) => setCategoryModal({
     id: c.id, isNew: false, label: c.label, color: c.color, icon: c.icon,
     outcome: c.outcome || "", deadline: c.deadline || yearDeadline(c.year || YEAR), year: c.year || YEAR,
-    identity: c.identity || "", roleModel: c.roleModel || "", roleModelWhy: c.roleModelWhy || "",
+    roleModel: c.roleModel || "", roleModelWhy: c.roleModelWhy || "",
+    stepsEnabled: stepsEnabledOf(c),
   });
 
   // Fermeture du formulaire : nettoie un objectif tout juste créé mais resté
@@ -912,12 +926,13 @@ export default function LifeRpgPage() {
         <SectionTitle size="sm">Mes {MAX_YEAR_GOALS} objectifs {YEAR}</SectionTitle>
         <div className="tr4de-rpg-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${MAX_YEAR_GOALS}, minmax(0, 1fr))`, gap: 12, alignItems: "start" }}>
             {categories.slice(0, MAX_YEAR_GOALS).map((cat, i) => (
-              <YearGoalCard key={cat.id} cat={cat} rank={i + 1} year={YEAR} yearPct={yp.pct}
+              <YearGoalCard key={cat.id} cat={cat} rank={i + 1} year={YEAR}
+                stepsEnabled={stepsEnabledOf(cat)}
+                onAddStep={(label) => addStepTo(cat.id, label)}
                 xp={progress.attributes[cat.id] || 0}
                 habits={habitsList.filter(h => habitCategoryIds(h).includes(cat.id))}
                 steps={readSteps(cat)}
                 today={todayKey}
-                onAddStep={(label) => addStepTo(cat.id, label)}
                 onToggleStep={(stepId) => toggleStepOf(cat.id, stepId)}
                 onRenameStep={(stepId, label) => renameStepOf(cat.id, stepId, label)}
                 onDeleteStep={(stepId) => deleteStepOf(cat.id, stepId)}
@@ -949,7 +964,14 @@ export default function LifeRpgPage() {
         <GoalsPage embedded registerCreate={(fn) => { createGoalRef.current = fn; }} />
       </div>
 
-      {categoryModal && <CategoryModal initial={categoryModal} onSave={upsertCategory} onClose={closeCategory} onGoToObjectives={() => { closeCategory(); openGoalForm(); }} />}
+      {categoryModal && (
+        <CategoryModal initial={categoryModal} onSave={upsertCategory} onClose={closeCategory}
+          onGoToObjectives={() => { closeCategory(); openGoalForm(); }}
+          /* Les étapes ne vivent pas dans le formulaire (`form`) mais sur la
+             catégorie enregistrée : elles se lisent et s'écrivent directement,
+             sans passer par la sauvegarde débouncée du reste de la modale. */
+          steps={readStepsRaw(categories.find(c => c.id === categoryModal.id))} />
+      )}
 
       {taskModal && (
         <CreateTaskModal cat={taskModal.cat} task={taskModal.task} gcal={gcal}
@@ -963,7 +985,15 @@ export default function LifeRpgPage() {
           Et la croix qui retire un objectif de sa carte : révélée au survol de
           l'objectif concerné (ou au focus clavier, sinon elle serait
           inatteignable sans souris). Le pointeur fin n'a pas de survol : là,
-          elle reste visible. */}
+          elle reste visible.
+
+          Même traitement pour le ✎ et la corbeille d'une carte : ce sont des
+          actions rares — l'une ouvre une modale, l'autre détruit un objectif de
+          l'année — et elles se tenaient en permanence à côté du titre, à demi
+          effacées mais toujours là. Elles ne se montrent plus qu'une fois la
+          carte survolée. Le `:focus-within` est ce qui les garde atteignables
+          au clavier : sans lui, tabuler dessus déplacerait le focus sur un
+          bouton invisible. */}
       <style>{`
         @media (max-width: 1180px) { .tr4de-rpg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
         @media (max-width: 760px)  { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } }
@@ -971,6 +1001,10 @@ export default function LifeRpgPage() {
         .tr4de-linked-goal:hover .tr4de-linked-goal-x,
         .tr4de-linked-goal-x:focus-visible { opacity: 1; }
         @media (hover: none) { .tr4de-linked-goal-x { opacity: 1; } }
+        .tr4de-year-goal-actions { opacity: 0; transition: opacity var(--dur-fast, .12s) var(--ease-out, ease); }
+        .tr4de-year-goal:hover .tr4de-year-goal-actions,
+        .tr4de-year-goal-actions:focus-within { opacity: 1; }
+        @media (hover: none) { .tr4de-year-goal-actions { opacity: 1; } }
       `}</style>
     </div>
   );
@@ -981,7 +1015,7 @@ export default function LifeRpgPage() {
 // dans cet ordre : où j'en suis (avancement confronté au temps écoulé), ce que
 // je vise (résultat + échéance, identité, modèle) et ce que je fais pour y
 // arriver (objectifs chiffrés, tâches, habitudes).
-function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onDeleteStep, onToggleObjective, onToggleStepObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
+function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = true, today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onDeleteStep, onToggleObjective, onToggleStepObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
   const cl = categoryLevel(xp);
   /* Répartition des objectifs chiffrés de la carte : ceux rangés sous une étape
      (ils la mesurent) et les autres, qui restent des objectifs de la carte.
@@ -1018,22 +1052,24 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
   const stepProg = stepsProgress(steps, today, stepPcts);
   const deadline = cat.deadline || yearDeadline(cat.year || year);
   const dLeft = daysUntil(deadline);
-  // Comparaison au calendrier : être à 40 % au mois de juin, c'est être en
-  // retard. C'est ce décalage qui fait agir, pas le pourcentage seul.
-  const delta = pct - yearPct;
+  /* Comparaison au calendrier — mais au calendrier DE CETTE CARTE : de sa
+     création à son échéance, jamais depuis le 1er janvier. Un objectif défini
+     en septembre était sinon comparé aux 70 % d'année déjà écoulés, donc
+     « en retard » avant d'avoir commencé. Une carte héritée, dont l'id ne
+     porte pas de date de naissance, repart du 1er janvier comme avant. */
+  const catTime = categoryTimeProgress(cat, cat.year || year);
+  const timePct = catTime.pct;
+  const delta = pct - timePct;
   const status = pct >= 100
     ? { label: "Atteint", color: T.green }
     : delta >= 5 ? { label: "En avance", color: T.green }
     : delta <= -10 ? { label: "En retard", color: T.red }
     : { label: "Dans les temps", color: T.textMut };
-  const [hover, setHover] = useState(false);
   const [taskAddHov, setTaskAddHov] = useState(false);
   // Survol des blocs d'exécution : chaque bloc ne révèle son bouton d'ajout que
   // lorsque la souris est SUR LUI (de son titre à sa dernière ligne), et non au
   // survol de la carte entière — trois boutons visibles en permanence par carte
   // pesaient plus que les objectifs eux-mêmes.
-  const [goalsHov, setGoalsHov] = useState(false);
-  const [tasksHov, setTasksHov] = useState(false);
   // Ajout de tâche INLINE : le bouton fait apparaître une ligne éditable vide
   // dans la carte (pas de modale). Enter/clic ailleurs → crée ; vide → annule.
   const [adding, setAdding] = useState(false);
@@ -1059,7 +1095,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
     }
   };
   return (
-    <div className="tr4de-year-goal" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    <div className="tr4de-year-goal"
       /* `overflow: visible` contre le réglage par défaut de CARD : le menu
          « Ajouter un objectif » s'ouvre en position absolue sous son
          déclencheur et serait sinon coupé par le bord de la carte. */
@@ -1081,8 +1117,10 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: cat.color, opacity: 0.9 }}>Objectif {rank} · {year}</div>
           <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.25, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{cat.label}</div>
         </div>
-        {/* Boutons modifier / supprimer : masqués, visibles au survol de la carte */}
-        <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hover ? 1 : 0.55, pointerEvents: "auto", transition: "opacity 120ms var(--ease-out)" }}>
+        {/* Boutons modifier / supprimer : masqués, révélés au survol de la
+            carte (règles dans le <style> de la page, comme la croix qui retire
+            un objectif — le focus clavier et le tactile les rouvrent). */}
+        <div className="tr4de-year-goal-actions" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
           <button onClick={onEdit} title="Modifier" aria-label={`Modifier ${cat.label}`} style={iconBtnSm()}><Pencil size={14} strokeWidth={1.75} /></button>
           {onDelete && <button onClick={onDelete} title="Supprimer" aria-label={`Supprimer ${cat.label}`} style={iconBtnSm()}><Trash2 size={14} strokeWidth={1.75} /></button>}
         </div>
@@ -1111,8 +1149,8 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           style={{ position: "relative", height: 8, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
           <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
           {/* Repère du calendrier : position du jour dans l'année. */}
-          <div title={`${Math.round(yearPct)} % de l'année écoulée`}
-            style={{ position: "absolute", top: -1, bottom: -1, left: `${Math.min(100, Math.max(0, yearPct))}%`, width: 2, background: T.text, opacity: 0.35, borderRadius: 999 }} />
+          <div title={`${Math.round(timePct)} % du temps écoulé pour cet objectif`}
+            style={{ position: "absolute", top: -1, bottom: -1, left: `${Math.min(100, Math.max(0, timePct))}%`, width: 2, background: T.text, opacity: 0.35, borderRadius: 999 }} />
         </div>
         {/* Ce qui compose le pourcentage, dit explicitement : sans cette ligne,
             un même chiffre pourrait venir des chiffres, des jalons ou du seul
@@ -1129,13 +1167,6 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           <span style={{ fontVariantNumeric: "tabular-nums" }}>Niveau {cl.level} · {xp} XP</span>
         </div>
       </div>
-
-      {/* Identité future : qui je veux devenir */}
-      {cat.identity ? (
-        <div style={{ fontSize: 13, color: T.textSub, fontStyle: "italic", lineHeight: 1.45, borderLeft: `3px solid ${cat.color}`, paddingLeft: 10 }}>« {cat.identity} »</div>
-      ) : (
-        <div style={{ fontSize: 12, color: T.textMut, fontStyle: "italic" }}>{"Aucune identité définie — cliquez sur ✎ pour décrire qui vous devenez en atteignant cet objectif."}</div>
-      )}
 
       {/* Personne à qui je veux ressembler (modèle) — couleur atténuée, moins visible que l'objectif */}
       {cat.roleModel && (
@@ -1154,13 +1185,14 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
       {/* Étapes — le chemin. Placées en tête des blocs d'EXÉCUTION (étapes,
           objectifs, tâches, habitudes), après ceux qui disent l'intention :
           c'est par où l'on passe qu'on répond à « où on va », avant de savoir
-          ce qu'on mesure et ce qu'on fait aujourd'hui. */}
-      {onAddStep && (
-        <StepsBlock cat={cat} steps={steps} today={today}
+          ce qu'on mesure et ce qu'on fait aujourd'hui. Le bloc ne se montre
+          qu'une fois des étapes posées (dans la modale ✎), et replié. */}
+      {onToggleStep && (
+        <StepsBlock cat={cat} steps={steps} enabled={stepsEnabled} onAdd={onAddStep} today={today}
           goalsByStep={goalsByStep} stepPcts={stepPcts}
           allObjectives={allObjectives} onToggleObjective={onToggleStepObjective}
           onCreateObjective={onCreateObjective}
-          onAdd={onAddStep} onToggle={onToggleStep} onRename={onRenameStep}
+          onToggle={onToggleStep} onRename={onRenameStep}
           onDelete={onDeleteStep} />
       )}
 
@@ -1170,7 +1202,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           Ceux qu'on a rangés sous une étape ne réapparaissent pas ici : ils sont
           affichés sur leur jalon, et les lister deux fois laisserait croire à
           deux objectifs distincts. */}
-      <div onMouseEnter={() => setGoalsHov(true)} onMouseLeave={() => setGoalsHov(false)}>
+      <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, marginBottom: 8 }}>Objectifs</div>
         {freeGoals.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1181,7 +1213,9 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                 <div key={g.id} className="tr4de-linked-goal">
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: reached ? T.green : T.textSub, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</span>
+                    {!g.pctOnly && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: reached ? T.green : T.textSub, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</span>
+                    )}
                     {onDetachObjective && (
                       /* Retrait : la croix ne se montre qu'au survol de SON
                          objectif (CSS ci-dessous). Une croix par objectif,
@@ -1197,7 +1231,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }} title={`+${g.xpGained} / ${g.xpFull} XP`}>
                     <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)}%`}
                       style={{ flex: 1, height: 6, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                      <div style={{ width: `${g.pct}%`, height: "100%", background: cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
+                      <div style={{ width: `${g.pct}%`, height: "100%", background: g.color || cat.color, borderRadius: 999, transition: "width var(--dur-slow) var(--ease-out)" }} />
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 600, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 32, textAlign: "right" }}>{reached ? "100%" : `${Math.round(g.rawPct)}%`}</span>
                   </div>
@@ -1213,9 +1247,11 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
                             <span style={{ flexShrink: 0, maxWidth: "42%", fontSize: 11, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sg.label}</span>
                             <div role="progressbar" aria-valuenow={Math.round(sg.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${sg.label} : ${Math.round(sg.rawPct)}%`}
                               style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                              <div style={{ width: `${sg.pct}%`, height: "100%", background: cat.color, borderRadius: 999, opacity: 0.75, transition: "width var(--dur-slow) var(--ease-out)" }} />
+                              <div style={{ width: `${sg.pct}%`, height: "100%", background: sg.color || cat.color, borderRadius: 999, opacity: 0.75, transition: "width var(--dur-slow) var(--ease-out)" }} />
                             </div>
-                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: sgNegative ? T.red : sgReached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtGoalVal(sg.current, sg.unit)} / {fmtGoalVal(sg.target, sg.unit)}</span>
+                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: sgNegative ? T.red : sgReached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                              {sg.pctOnly ? `${Math.round(sg.rawPct)}%` : <>{fmtGoalVal(sg.current, sg.unit)} / {fmtGoalVal(sg.target, sg.unit)}</>}
+                            </span>
                           </div>
                         );
                       })}
@@ -1231,9 +1267,8 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
             {/* Style échangé avec celui des tâches : l'objectif chiffré est ce
                 qui MESURE la carte, il porte donc l'invitation pleine largeur ;
                 la tâche du quotidien se contente d'un « + Ajouter » discret. */}
-            <ObjectiveMultiSelect objectives={allObjectives} catId={cat.id} color={cat.color}
-              onToggle={onToggleObjective} onCreate={onCreateObjective} revealed={goalsHov}
-              filled={freeGoals.length === 0} />
+            <ObjectiveMultiSelect objectives={allObjectives} color={cat.color}
+              onToggle={onToggleObjective} onCreate={onCreateObjective} />
           </div>
         )}
       </div>
@@ -1244,7 +1279,7 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           Le titre reste affiché même sans tâche : c'est lui qui donne au bloc
           une zone à survoler pour faire apparaître son bouton d'ajout. */}
       {onCreateTask && (
-        <div onMouseEnter={() => setTasksHov(true)} onMouseLeave={() => setTasksHov(false)}>
+        <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: T.textMut, marginBottom: 8 }}>Tâches</div>
           {(tasks.length > 0 || adding) && (
             <>
@@ -1276,14 +1311,15 @@ function YearGoalCard({ cat, rank, year, yearPct = 0, xp, habits, steps = [], to
           )}
           {taskErr && <div style={{ fontSize: 11, color: T.red, marginBottom: 8, lineHeight: 1.4 }}>{taskErr}</div>}
           {/* Lien discret « + Ajouter » dans tous les cas (le bouton pleine
-              largeur est passé aux objectifs), révélé au survol du bloc et
-              masqué pendant la saisie inline. Le focus clavier le révèle comme
-              le survol : sans cela, il serait inatteignable au clavier. */}
+              largeur est passé aux objectifs), masqué pendant la seule saisie
+              inline. Il ne se montrait qu'au survol du bloc : une action qu'il
+              faut survoler pour découvrir n'existe pas pour qui ne sait pas
+              déjà qu'elle est là — et pas du tout au doigt. Le survol ne fait
+              plus que l'appuyer (gris atténué → gris de texte). */}
           {!adding && (
             <button type="button" onClick={openAdd}
               onMouseEnter={() => setTaskAddHov(true)} onMouseLeave={() => setTaskAddHov(false)}
-              onFocus={() => setTasksHov(true)} onBlur={() => setTasksHov(false)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: taskAddHov ? T.textSub : T.textMut, opacity: tasksHov ? (taskAddHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: taskAddHov ? T.textSub : T.textMut, opacity: taskAddHov ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
               <Plus size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
               Ajouter
             </button>
@@ -1478,9 +1514,6 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
   const [hov, setHov] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(step.label);
-  // Le menu des objectifs est portalisé : sans cet état, sortir de la ligne pour
-  // aller le cliquer démonterait le déclencheur — et le menu avec lui.
-  const [pickerOpen, setPickerOpen] = useState(false);
   const tone = stepTone(status, cat.color);
   /* Une étape mesurée par des objectifs ne se coche plus à la main : elle vaut
      leur avancement, et se franchit quand ils sont tous atteints. Laisser la
@@ -1596,10 +1629,10 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
                   <span style={{ flexShrink: 0, maxWidth: "40%", fontSize: 11, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                   <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)} %`}
                     style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                    <div style={{ width: `${g.pct}%`, height: "100%", background: cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
+                    <div style={{ width: `${g.pct}%`, height: "100%", background: g.color || cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
                   </div>
                   <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
-                    {fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}
+                    {g.pctOnly ? `${Math.round(g.rawPct)}%` : <>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</>}
                   </span>
                   {onToggleObjective && (
                     <button onClick={() => onToggleObjective(g.id)}
@@ -1615,21 +1648,17 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
           </div>
         )}
 
-        {/* Rattacher un objectif chiffré à CE jalon. Ne se montre qu'au survol
-            tant que l'étape n'en a aucun : une frise de dix étapes afficherait
-            sinon dix invitations, et on ne verrait plus le chemin. Il reste
-            monté (opacité seule) — l'apparaître ferait sauter la frise sous le
-            curseur, et démonterait le menu ouvert en sortant de la ligne. */}
+        {/* Rattacher un objectif chiffré à CE jalon. Visible en permanence,
+            comme les autres boutons d'ajout de la carte : il ne se montrait
+            qu'au survol de l'étape tant qu'elle n'avait aucun objectif, ce qui
+            revenait à cacher le seul chemin pour en rattacher un. Le « + » gris
+            reste discret — c'est son rôle, pas son absence, qui l'empêche de
+            manger la frise. */}
         {onToggleObjective && (
-          <div style={{
-            marginTop: goals.length > 0 ? 4 : 2,
-            opacity: (hov || pickerOpen || goals.length > 0) ? 1 : 0,
-            pointerEvents: (hov || pickerOpen || goals.length > 0) ? "auto" : "none",
-            transition: "opacity .15s ease",
-          }}>
-            <ObjectiveMultiSelect objectives={allObjectives} catId={cat.id} stepId={step.id}
+          <div style={{ marginTop: goals.length > 0 ? 4 : 2 }}>
+            <ObjectiveMultiSelect objectives={allObjectives}
               color={cat.color} onToggle={onToggleObjective} onCreate={onCreateObjective}
-              onOpenChange={setPickerOpen} compact label="Objectif" />
+              compact label="Objectif" />
           </div>
         )}
       </div>
@@ -1638,63 +1667,63 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
 }
 
 /**
- * Bloc « Étapes » d'une carte : la frise, son avancement, et la saisie inline.
+ * Bloc « Étapes » d'une carte : la frise et son avancement, sous un en-tête
+ * qu'on déplie.
  *
- * Aucune modale : une étape se note en trois secondes ou ne se note pas. Le
- * bouton ouvre une ligne vide au bas de la frise ; Entrée valide et rouvre une
- * ligne (on en pose rarement une seule), Échap ou un champ vide referme.
+ * REPLIÉ par défaut, et absent tant qu'aucune étape n'existe. Trois cartes
+ * dépliant chacune sa frise repoussaient hors de l'écran les objectifs chiffrés
+ * — ce que la carte MESURE — et une carte sans jalon portait une invitation
+ * « Par où passer ? » qui pesait autant que son contenu. L'en-tête suffit à
+ * dire l'essentiel (combien de jalons franchis, combien en retard) ; on ouvre
+ * quand on vient précisément lire le chemin.
  *
- * Le bouton d'ajout ne s'affiche qu'au survol du bloc (de son titre au bas de
- * la frise) : trois cartes × trois blocs d'ajout, c'était neuf invitations
- * permanentes pour trois objectifs.
+ * Aucune saisie ici : une étape se POSE dans la modale de modification de la
+ * carte (le ✎ de l'en-tête), avec le reste de ce qui définit l'objectif de
+ * l'année. La carte, elle, sert à le PARCOURIR — cocher un jalon, y rattacher
+ * un objectif.
  */
-function StepsBlock({ cat, steps, today, goalsByStep = {}, stepPcts = {}, allObjectives = [], onToggleObjective, onCreateObjective, onAdd, onToggle, onRename, onDelete }) {
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [addHov, setAddHov] = useState(false);
-  const [blockHov, setBlockHov] = useState(false);
-  const submitted = useRef(false);
+function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}, stepPcts = {}, allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const [hov, setHov] = useState(false);
 
   const ordered = useMemo(() => sortSteps(steps), [steps]);
   const prog = stepsProgress(steps, today, stepPcts);
 
-  const submit = (keepOpen) => {
-    if (submitted.current) return;
-    const label = draft.trim();
-    if (!label) { setAdding(false); setDraft(""); return; }
-    submitted.current = true;
-    onAdd(label);
-    setDraft("");
-    submitted.current = false;
-    if (!keepOpen) setAdding(false);
-  };
-
-  const revealed = blockHov || adding;
+  /* Éteintes, les étapes disparaissent de la carte (l'interrupteur est dans la
+     modale ✎). Allumées mais vides, le bloc s'affiche quand même : sans lui, il
+     n'y aurait plus nulle part où poser le premier jalon. */
+  if (!enabled) return null;
 
   return (
-    <div onMouseEnter={() => setBlockHov(true)} onMouseLeave={() => setBlockHov(false)}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: T.textMut }}>Étapes</span>
-        {prog.total > 0 && (
-          <span style={{ fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
-            {prog.done}/{prog.total}
-          </span>
-        )}
+    <div>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: open ? 8 : 0 }}>
+        <ChevronRight size={12} strokeWidth={2.5} color={T.textMut}
+          style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform var(--dur-fast, .12s) var(--ease-out, ease)" }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: hov ? T.textSub : T.textMut, transition: "color .15s ease" }}>Étapes</span>
+        <span style={{ fontSize: 11, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+          {prog.done}/{prog.total}
+        </span>
         {/* Le retard est la seule alerte de ce bloc : une étape dépassée et
-            toujours ouverte est précisément ce qu'on vient chercher ici. */}
+            toujours ouverte est précisément ce qu'on vient chercher ici — elle
+            doit donc rester lisible SANS déplier. */}
         {prog.late > 0 && (
           <span style={{ fontSize: 11, fontWeight: 600, color: T.red }}>
             {prog.late} en retard
           </span>
         )}
-      </div>
+      </button>
 
-      {ordered.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", marginBottom: 8 }}>
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {ordered.length === 0 && (
+            <div style={{ fontSize: 11, color: T.textMut, marginBottom: 2 }}>{"Aucun jalon pour l'instant."}</div>
+          )}
           {ordered.map((s, i) => (
             <StepRow key={s.id} step={s} cat={cat}
               status={stepStatus(s, today, goalPctsOf(stepPcts, s.id))}
-              last={i === ordered.length - 1 && !adding}
+              last={i === ordered.length - 1}
               goals={goalsByStep[s.id] || []}
               allObjectives={allObjectives}
               onToggleObjective={onToggleObjective ? (goalId) => onToggleObjective(s.id, goalId) : null}
@@ -1703,44 +1732,9 @@ function StepsBlock({ cat, steps, today, goalsByStep = {}, stepPcts = {}, allObj
               onRename={(label) => onRename(s.id, label)}
               onDelete={() => onDelete(s.id)} />
           ))}
+          {onAdd && <StepAddRow onAdd={onAdd} />}
         </div>
       )}
-
-      {adding && (
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
-          <span style={{ width: 13, height: 13, borderRadius: "50%", flexShrink: 0, border: `1.5px dashed ${T.border}`, background: T.white }} />
-          <input autoFocus value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === "Enter") submit(true);
-              else if (e.key === "Escape") { submitted.current = true; setAdding(false); setDraft(""); submitted.current = false; }
-            }}
-            onBlur={() => submit(false)}
-            placeholder="Nouvelle étape…"
-            style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
-        </div>
-      )}
-
-      {!adding && (ordered.length > 0 ? (
-        <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
-          onMouseEnter={() => setAddHov(true)} onMouseLeave={() => setAddHov(false)}
-          onFocus={() => setBlockHov(true)} onBlur={() => setBlockHov(false)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: addHov ? T.textSub : T.textMut, opacity: revealed ? (addHov ? 1 : 0.65) : 0, transition: "color .15s ease, opacity .15s ease" }}>
-          <Plus size={13} strokeWidth={2} style={{ flexShrink: 0 }} />
-          Ajouter
-        </button>
-      ) : (
-        /* Aucune étape : l'invitation porte la question, pas le mot « ajouter ».
-           C'est le manque que la page vient combler — un objectif d'un an sans
-           point de passage ne se pilote pas. */
-        <button type="button" onClick={() => { setDraft(""); setAdding(true); }}
-          onFocus={() => setBlockHov(true)} onBlur={() => setBlockHov(false)}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px dashed color-mix(in srgb, ${cat.color} 40%, transparent)`, background: `color-mix(in srgb, ${cat.color} 5%, transparent)`, color: cat.color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: revealed ? 1 : 0, transition: "opacity .15s ease" }}
-          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 10%, transparent)`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${cat.color} 5%, transparent)`; }}>
-          <Milestone size={14} strokeWidth={2} /> Par où passer ?
-        </button>
-      ))}
     </div>
   );
 }
@@ -1780,16 +1774,25 @@ function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
   );
 }
 
-// Menu déroulant multi-sélection des objectifs (même principe que les émotions
-// du formulaire de trade) : un déclencheur, puis une liste cochable de TOUS les
-// objectifs. Cocher rattache à la catégorie, décocher détache. Ferme au clic
-// dehors. Dernière entrée : créer un objectif (redirige vers la page Objectifs).
-function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggle, onCreate, onOpenChange, compact = false, label = "Ajouter", revealed = true, filled = true }) {
+/**
+ * Menu déroulant d'ajout d'objectifs à une carte ou à l'un de ses jalons.
+ *
+ * Il ne liste que les objectifs ENCORE LIBRES : ni rattachés à une carte, ni
+ * rangés sous une étape. Un objectif ne mesure qu'une chose à la fois — le
+ * proposer une deuxième fois, fût-ce en le signalant « rattaché ailleurs »,
+ * invitait à le voler à la carte qui le porte, et faisait défiler une liste
+ * d'entrées que rien ne permettait de choisir.
+ *
+ * Le détacher se fait donc là où il s'affiche : la croix de sa ligne, sur la
+ * carte ou sur son jalon. Il réapparaît alors ici.
+ *
+ * Ferme au clic dehors. Dernière entrée : créer un objectif (page Objectifs).
+ */
+function ObjectiveMultiSelect({ objectives, color, onToggle, onCreate, onOpenChange, compact = false, label = "Ajouter" }) {
   const [open, setOpen] = useState(false);
   const [hov, setHov] = useState(false);
   // Focus clavier : il révèle le déclencheur comme le survol du bloc le fait,
   // sinon un bouton masqué serait inatteignable au clavier.
-  const [focused, setFocused] = useState(false);
   const ref = useRef(null);
   // Fermeture au clic extérieur : déléguée au Popover, dont le panneau est
   // portalisé et n'appartient donc plus à `ref`.
@@ -1800,15 +1803,17 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
   /* Deux déclencheurs, selon la place qu'occupe le sélecteur :
      • compact (sur une étape) — lien discret « + Objectif », qui ne s'illumine
        qu'au survol ou à l'ouverture ;
-     • pleine largeur (sur la carte) — pointillé à la couleur de l'objectif,
-       c'est lui qui porte l'invitation forte. Il reste en place (opacité seule)
-       pour que le révéler ne fasse pas sauter la carte, et ne s'efface pas tant
-       que la liste est ouverte.
-     Dès que la carte compte au moins un objectif (`filled` à faux), ce même
-     bouton perd son pointillé et son aplat : l'invitation a été entendue, il
-     n'a plus à crier. Il garde sa pleine largeur, son texte centré et sa
-     couleur — c'est le même bouton, en retrait. */
-  const show = revealed || open || focused;
+     • pleine largeur (sur la carte) — l'invitation forte, TOUJOURS visible.
+       Elle ne se montrait qu'au survol de la zone des objectifs : au doigt il
+       n'y a pas de survol, et à la souris il fallait deviner qu'il y avait
+       quelque chose à survoler pour trouver l'action principale de la carte.
+       Son aplat à la couleur de la carte est PERMANENT — survolé ou non, et
+       que la carte porte déjà des objectifs ou aucun : c'est ce fond qui le
+       fait lire comme un bouton sans avoir à le border. Le survol ne fait que
+       l'appuyer. */
+  /* `rpgCategory` = rattaché à une carte, `rpgStep` = rangé sous un jalon. Un
+     objectif qui porte l'un ou l'autre est déjà pris, ici comme ailleurs. */
+  const free = useMemo(() => objectives.filter(g => !g.rpgCategory && !g.rpgStep), [objectives]);
   return (
     <div ref={ref} style={{ position: "relative", fontFamily: "var(--font-sans)" }}>
       {compact ? (
@@ -1820,10 +1825,9 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
         </button>
       ) : (
         <button type="button" onClick={() => setOpen(o => !o)}
-          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: filled ? `1px dashed color-mix(in srgb, ${color} 40%, transparent)` : "1px solid transparent", background: filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent", color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", opacity: show ? 1 : 0, transition: "opacity .15s ease, background .12s ease" }}
-          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} ${filled ? 10 : 8}%, transparent)`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = filled ? `color-mix(in srgb, ${color} 5%, transparent)` : "transparent"; }}>
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "1px solid transparent", background: `color-mix(in srgb, ${color} 5%, transparent)`, color, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "background .12s ease" }}
+          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} 10%, transparent)`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = `color-mix(in srgb, ${color} 5%, transparent)`; }}>
           <Plus size={14} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
           Ajouter un objectif
         </button>
@@ -1839,31 +1843,29 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
         style={{ background: T.white, border: "none", borderRadius: "var(--radius-card)", padding: 6, boxShadow: "var(--elev-overlay)" }}
       >
         <>
-          {objectives.map(g => {
-            /* En mode étape, « ici » veut dire « rangé sous CE jalon » : un
-               objectif de la même carte mais posé ailleurs n'est pas coché, il
-               est seulement signalé — sinon on croirait qu'il mesure ce
-               jalon-ci. */
-            const here = stepId ? g.rpgStep === stepId : g.rpgCategory === catId;
-            const note = here ? null
-              : g.rpgCategory && g.rpgCategory !== catId ? "rattaché ailleurs"
-              : stepId && g.rpgStep ? "sur une autre étape"
-              : stepId && g.rpgCategory === catId ? "sur cette carte"
-              : null;
-            return (
-              <button key={g.id} type="button" onClick={() => onToggle(g.id)}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: "var(--radius-card)", background: here ? T.accentBg : "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
-                onMouseEnter={e => { if (!here) e.currentTarget.style.background = T.bg; }}
-                onMouseLeave={e => { if (!here) e.currentTarget.style.background = "transparent"; }}>
-                <span style={{ width: 16, height: 16, borderRadius: "var(--radius-field)", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${here ? deepen(color) : T.border}`, background: here ? deepen(color) : T.white, color: "#fff" }}>{here && <Check size={11} strokeWidth={3} />}</span>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label || "Objectif"}</span>
-                {note && <span style={{ fontSize: 10, color: T.textMut, flexShrink: 0 }}>{note}</span>}
-              </button>
-            );
-          })}
+          {free.map(g => (
+            /* Pas de case à cocher : rien n'est jamais coché dans cette liste,
+               puisqu'un objectif la quitte dès qu'on le prend. La pastille dit
+               en revanche de quel domaine il vient — même code couleur que sa
+               barre de progression. */
+            <button key={g.id} type="button" onClick={() => onToggle(g.id)}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "none", borderRadius: "var(--radius-card)", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+              onMouseEnter={e => { e.currentTarget.style.background = T.bg; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, marginLeft: 4, marginRight: 4, background: goalCategoryOf(g).color, boxShadow: dotRing(goalCategoryOf(g).color) }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label || "Objectif"}</span>
+            </button>
+          ))}
+          {/* Liste vide : le menu s'ouvrirait sur le seul « Créer un objectif »,
+              et on croirait n'en avoir aucun. On dit plutôt pourquoi. */}
+          {free.length === 0 && (
+            <div style={{ padding: "8px 10px", fontSize: 12, color: T.textMut }}>
+              {objectives.length === 0 ? "Aucun objectif pour l'instant." : "Tous vos objectifs sont déjà rattachés."}
+            </div>
+          )}
           {onCreate && (
             <button type="button" onClick={() => { setOpen(false); onCreate(); }}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginTop: objectives.length ? 4 : 0, borderTop: objectives.length ? `1px solid ${T.border}` : "none", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: T.textSub, fontSize:12, fontWeight: 500}}>
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", marginTop: 4, borderTop: `1px solid ${T.border}`, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: T.textSub, fontSize:12, fontWeight: 500}}>
               <Plus size={14} strokeWidth={2} /> Créer un objectif
             </button>
           )}
@@ -1875,17 +1877,21 @@ function ObjectiveMultiSelect({ objectives, catId, stepId = null, color, onToggl
 
 
 /* ---------- Modales ---------- */
-// Formulaire d'un objectif de l'année (création ou édition). Enregistrement
-// automatique à chaque frappe : il n'y a pas de bouton « Valider », seulement
-// « Fermer ».
-function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
+/* Formulaire d'un objectif de l'année (création ou édition). Enregistrement
+   automatique à chaque frappe : pas de bouton « Valider », seulement « Terminé ».
+
+   Une seule famille de formes, et c'est tout l'enjeu de cet écran : des champs
+   en pilule, des disques pour les choix (couleur, icône, rang d'étape, actions
+   d'icône), un aplat arrondi sans contour pour le seul panneau replié. Les
+   carrés cernés, les cercles bordés et les pilules mélangés donnaient huit
+   contours différents sur un écran qui pose six questions. */
+function CategoryModal({ initial, onSave, onClose, onGoToObjectives, steps = [] }) {
   const [form, setForm] = useState(initial);
-  // Sélecteur d'icône + couleur, déplié en cliquant sur l'icône à côté du nom.
+  // Sélecteur d'icône + couleur, déplié en cliquant sur la vignette du nom.
   const [showStyle, setShowStyle] = useState(false);
   // Sélecteur d'échéance (mini-calendrier portalisé, comme la modale de tâche).
   const [dueOpen, setDueOpen] = useState(false);
   const dueBtnRef = useRef(null);
-  const endOfYear = yearDeadline(form.year || currentYear());
   // Sauvegarde automatique : chaque modification est persistée (petit debounce).
   // Le tout premier rendu (valeurs initiales) est ignoré, et on « flush » la
   // dernière valeur à la fermeture pour ne rien perdre.
@@ -1899,67 +1905,113 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
     return () => clearTimeout(tid);
   }, [form]);
   useEffect(() => () => onSaveRef.current(formRef.current), []);
+
+  const stepsOn = form.stepsEnabled !== false;
+
   return (
-    <Overlay onClose={onClose} title={initial.isNew ? "Objectif de l'année" : "Modifier l'objectif de l'année"}>
-      <Field label="Objectif">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={() => setShowStyle(v => !v)} title="Changer l'icône et la couleur"
-            style={{ width: 40, height: 40, borderRadius: 10, background: `color-mix(in srgb, ${form.color} 10%, transparent)`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: showStyle ? `1.5px solid ${form.color}` : "1.5px solid transparent", padding: 0, cursor: "pointer" }}>
-            <CatIcon name={form.icon} size={18} strokeWidth={1.75} color={form.color} />
-          </button>
-          <input autoFocus value={form.label} onChange={e => setForm({ ...form, label: e.target.value })}
-            placeholder="ex : Trading rentable" style={input()} />
-        </div>
-      </Field>
+    <Overlay
+      title={initial.isNew ? "Objectif de l'année" : "Modifier l'objectif de l'année"}
+      onClose={onClose}
+      width={480}
+      footer={
+        <>
+          <span style={{ marginRight: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: T.textMut }}>
+            <Check size={13} strokeWidth={2.5} color={T.green} /> Enregistré automatiquement
+          </span>
+          <button onClick={onClose} style={btnPrimary()}>Terminé</button>
+        </>
+      }
+    >
+      {/* ── Identité : la vignette EST le bouton de style, et c'est un disque
+          teinté posé contre un champ en pilule — au lieu du carré cerné qu'on
+          y accolait. ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => setShowStyle(v => !v)}
+          aria-expanded={showStyle} aria-label="Changer l'icône et la couleur"
+          title="Changer l'icône et la couleur"
+          style={{
+            width: 44, height: 44, borderRadius: "50%", flexShrink: 0, padding: 0,
+            border: "none", cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            ...vignetteStyle(form.color),
+            boxShadow: showStyle ? `0 0 0 2px ${form.color}` : "none",
+            transition: "box-shadow .15s ease",
+          }}>
+          <CatIcon name={form.icon} size={19} strokeWidth={1.75} color={form.color} />
+        </button>
+        <input autoFocus value={form.label} onChange={e => setForm({ ...form, label: e.target.value })}
+          placeholder="ex : Trading rentable" aria-label="Nom de l'objectif"
+          style={{ ...input(), fontSize: 16, fontWeight: 600 }} />
+      </div>
 
       {showStyle && (
-        <div style={{ marginTop: -4, marginBottom: 14, padding: 12, borderRadius: 10, background: T.bg, border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 12 }}>
+        <DAFieldGroup style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <div style={objLbl}>Couleur</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {CATEGORY_PALETTE.map(c => (
-                <button key={c} onClick={() => setForm({ ...form, color: c })} title={c}
-                  style={{ width: 26, height: 26, borderRadius: "50%", background: c, border: form.color === c ? `2px solid ${T.text}` : `2px solid transparent`, cursor: "pointer", boxShadow: `0 0 0 1px ${T.border}` }} />
-              ))}
+              {CATEGORY_PALETTE.map(c => {
+                const active = form.color === c;
+                return (
+                  <button key={c} onClick={() => setForm({ ...form, color: c })} title={c}
+                    aria-label={`Couleur ${c}`} aria-pressed={active}
+                    style={{
+                      width: 26, height: 26, borderRadius: "50%", background: c, border: "none",
+                      cursor: "pointer", padding: 0,
+                      /* Sélection par un anneau POSÉ autour du disque, jamais
+                         par une bordure : une bordure mange la pastille et fait
+                         changer sa taille apparente d'un clic à l'autre. */
+                      boxShadow: active ? `0 0 0 2px ${T.white}, 0 0 0 4px ${c}` : "none",
+                    }} />
+                );
+              })}
             </div>
           </div>
           <div>
             <div style={objLbl}>Icône</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, justifyItems: "center" }}>
               {ICON_KEYS.map(key => {
                 const active = form.icon === key;
                 return (
                   <button key={key} onClick={() => setForm({ ...form, icon: key })}
-                    style={{ aspectRatio: "1", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-card)", border: `1px solid ${active ? form.color : T.border}`, background: active ? `color-mix(in srgb, ${form.color} 8%, transparent)` : T.white, cursor: "pointer" }}>
-                    <CatIcon name={key} size={15} strokeWidth={1.75} color={active ? form.color : T.textSub} />
+                    aria-label={`Icône ${key}`} aria-pressed={active}
+                    style={{
+                      width: 34, height: 34, borderRadius: "50%", border: "none", padding: 0,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      background: active ? form.color : T.white,
+                      color: active ? T.onSolid : T.textSub,
+                      cursor: "pointer",
+                      transition: "background .15s ease, color .15s ease",
+                    }}>
+                    <CatIcon name={key} size={16} strokeWidth={1.75} color={active ? T.onSolid : T.textSub} />
                   </button>
                 );
               })}
             </div>
           </div>
-        </div>
+        </DAFieldGroup>
       )}
 
-      <Field label="Résultat visé — à quoi ressemble la victoire ?">
+      <ModalSection title="Le cap" />
+
+      <DAField label="Résultat visé">
         <AutoTextarea value={form.outcome} onChange={e => setForm({ ...form, outcome: e.target.value })}
           placeholder="ex : Passer une prop firm 100 k et la tenir financée six mois."
           minRows={2} />
-      </Field>
+      </DAField>
 
-      <Field label="Échéance">
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button type="button" ref={dueBtnRef} onClick={() => setDueOpen(o => !o)}
-            style={{ ...input(), flex: 1, cursor: "pointer", textAlign: "left", textTransform: "capitalize" }}>
+      <DAField label="Échéance">
+        <button type="button" ref={dueBtnRef} onClick={() => setDueOpen(o => !o)}
+          style={{
+            ...input(), cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 8,
+            color: form.deadline ? T.text : T.textMut,
+            boxShadow: dueOpen ? `0 0 0 1.5px ${T.text}` : "none",
+          }}>
+          <CalendarClock size={14} strokeWidth={1.75} color={T.textMut} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, minWidth: 0, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {fmtDayLong(form.deadline) || "Choisir une date"}
-          </button>
-          {/* Raccourci : la fin de l'année, échéance par défaut de la page. */}
-          {form.deadline !== endOfYear && (
-            <button type="button" onClick={() => setForm({ ...form, deadline: endOfYear })}
-              style={{ padding: "9px 12px", borderRadius: "var(--radius-card)", border: `1px solid ${T.border}`, background: T.white, color: T.textSub, fontSize:12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
-              31 déc.
-            </button>
-          )}
-        </div>
+          </span>
+        </button>
         {dueOpen && (
           <MiniCalendar
             anchorRef={dueBtnRef}
@@ -1969,40 +2021,97 @@ function CategoryModal({ initial, onSave, onClose, onGoToObjectives }) {
             align="left"
           />
         )}
-      </Field>
+      </DAField>
 
-      <Field label="Qui je veux devenir dans le futur">
-        <AutoTextarea value={form.identity} onChange={e => setForm({ ...form, identity: e.target.value })}
-          placeholder="ex : Je suis quelqu'un qui médite et cultive la gratitude chaque jour."
-          minRows={2} />
-      </Field>
+      <ModalSection title="L'inspiration" />
 
-      <Field label="La personne à qui je veux ressembler">
+      <DAField label="La personne à qui je veux ressembler">
         <input value={form.roleModel} onChange={e => setForm({ ...form, roleModel: e.target.value })}
           placeholder="ex : un mentor, un athlète, un proche inspirant…" style={input()} />
-      </Field>
+      </DAField>
 
-      <Field label="Ce que j'admire chez cette personne (optionnel)">
-        <textarea value={form.roleModelWhy} onChange={e => setForm({ ...form, roleModelWhy: e.target.value })}
+      <DAField label="Ce que j'admire chez elle (optionnel)">
+        <AutoTextarea value={form.roleModelWhy} onChange={e => setForm({ ...form, roleModelWhy: e.target.value })}
           placeholder="ex : sa rigueur, sa bienveillance, sa constance au quotidien…"
-          rows={2} style={{ ...writing(), minHeight: 0, lineHeight: 1.4 }} />
-      </Field>
+          minRows={2} />
+      </DAField>
 
-      <Field label="Objectifs (ils mesurent l'avancement)">
-        <button onClick={onGoToObjectives}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white, color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+      <ModalSection title="Le chemin" />
+
+      {/* Les étapes s'ALLUMENT ici, elles ne s'écrivent plus ici : les poser
+          au milieu du cadrage obligeait à rouvrir cette fenêtre pour chaque
+          jalon, alors qu'on les pose et qu'on les coche sur la carte. Éteindre
+          ne supprime rien — les jalons dorment et reviennent au rallumage. */}
+      <StepsSwitch checked={stepsOn} count={steps.length}
+        onChange={(v) => setForm({ ...form, stepsEnabled: v })} />
+
+      <DAField label="Objectifs chiffrés">
+        <button onClick={onGoToObjectives} style={{ ...btnGhost(), display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start" }}>
           <Target size={14} strokeWidth={1.9} /> Gérer les objectifs
         </button>
-      </Field>
-
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textMut }}>
-          <Check size={12} strokeWidth={2.5} color={T.green} /> Enregistré automatiquement
-        </span>
-        <button onClick={onClose} style={{ minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", background: T.brand, color: T.onSolid, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
-      </div>
+      </DAField>
     </Overlay>
+  );
+}
+
+/**
+ * Interrupteur des étapes d'un objectif de l'année, dans sa modale.
+ *
+ * Le cadrage dit SI l'objectif se mène par jalons ; la carte dit lesquels. Poser
+ * les étapes ici obligeait à rouvrir la fenêtre pour chaque ligne, loin de
+ * l'endroit où on les coche.
+ */
+function StepsSwitch({ checked, count, onChange }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 13, color: T.text }}>Étapes</span>
+        <span style={{ display: "block", fontSize: 11, color: T.textMut, marginTop: 2 }}>
+          {count > 0
+            ? `${count} jalon${count > 1 ? "s" : ""}${checked ? "" : " en sommeil"}`
+            : (checked ? "À poser sur la carte" : "Aucun jalon")}
+        </span>
+      </span>
+      <span role="switch" aria-checked={checked} aria-label="Activer les étapes"
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 34, height: 20, borderRadius: 999, flexShrink: 0, position: "relative",
+          background: checked ? T.brand : T.border2,
+          transition: "background 140ms var(--ease-out, ease)",
+        }}>
+        <span style={{
+          position: "absolute", top: 2, left: checked ? 16 : 2, width: 16, height: 16,
+          borderRadius: "50%", background: T.white,
+          transition: "left 140ms var(--ease-out, ease)",
+        }} />
+      </span>
+    </label>
+  );
+}
+
+/* Ligne d'ajout d'une étape, au pied du bloc de la carte : c'est là qu'on lit
+   les jalons, donc là qu'on en pose un de plus. */
+function StepAddRow({ onAdd }) {
+  const [draft, setDraft] = useState("");
+  const submit = () => {
+    const label = draft.trim();
+    if (!label) return;
+    onAdd(label);
+    setDraft("");                              // on en pose rarement une seule
+  };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+      <input value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+        placeholder="Nouvelle étape…"
+        style={{ ...DA_FIELD, fontSize: 12, flex: 1, minWidth: 0 }} />
+      <button type="button" onClick={submit} disabled={!draft.trim()}
+        title="Ajouter l'étape" aria-label="Ajouter l'étape"
+        style={{ ...iconBtn(), width: 30, height: 30, borderRadius: "50%", background: T.text, color: T.textInverted, opacity: draft.trim() ? 1 : 0.35, cursor: draft.trim() ? "pointer" : "default", transition: "opacity .15s ease" }}>
+        <Plus size={14} strokeWidth={2} />
+      </button>
+    </div>
   );
 }
 
@@ -2188,12 +2297,30 @@ function CreateTaskModal({ cat, task, gcal, setTaskRpg, setTaskTimes, onClose, o
  * désormais dans `components/ui/form.jsx`, et le titre redescend dans le corps
  * comme partout ailleurs.
  */
-function Overlay({ title, children, onClose }) {
+function Overlay({ title, children, onClose, footer, width = 440 }) {
+  /* `draggable={false}` : la poignée de déplacement occupait une bande pleine
+     largeur en haut de chaque fenêtre pour un geste que personne ne fait — une
+     modale de formulaire n'a nulle part où aller. Le chrome se réduit donc à sa
+     croix de fermeture. */
   return (
-    <DAModal title={title} onClose={onClose} width={440} maxHeight="90vh" bodyStyle={{ padding: 20 }}>
-      {title && <div style={{ fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>}
+    <DAModal title={title} onClose={onClose} width={width} maxHeight="90vh" footer={footer}
+      draggable={false} bodyStyle={{ padding: "4px 20px 20px", gap: 16 }}>
+      {title && <div style={{ fontSize: 16, fontWeight: 600, color: T.text, letterSpacing: -0.1 }}>{title}</div>}
       {children}
     </DAModal>
+  );
+}
+
+/* Séparateur de section d'une modale : un filet et un titre, rien de plus.
+   Un formulaire qui aligne huit champs de même poids n'a ni début ni fin ; ces
+   respirations disent où l'on en est. Sans phrase d'accompagnement : elles
+   doublaient le libellé des champs qu'elles annonçaient. */
+function ModalSection({ title }) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ height: 1, background: HAIRLINE, marginBottom: 14 }} />
+      <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{title}</div>
+    </div>
   );
 }
 
@@ -2267,5 +2394,8 @@ function input() {
    haut n'est plus une pilule, et l'aplat des champs d'une ligne se lit comme un
    pave gris sur cette hauteur. */
 function writing() {
-  return { ...DA_FIELD_AREA, fontSize: 14 };
+  /* Même aplat que les champs d'une ligne, et non l'aplat dilué des zones
+     d'écriture : dans une modale qui alterne les deux, deux gris voisins pour
+     la même fonction se lisent comme une erreur, pas comme une nuance. */
+  return { ...DA_FIELD_AREA, background: DA_FIELD_BG, fontSize: 14 };
 }
