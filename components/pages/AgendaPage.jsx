@@ -898,9 +898,9 @@ export default function AgendaPage() {
     window.addEventListener("pointerup", onUp);
   };
 
-  // Redimensionnement d'un évènement par ses bords (façon Google Agenda) :
-  // on glisse le bord haut (modifie l'heure de début) ou bas (heure de fin),
-  // par pas de 15 min, puis on enregistre la nouvelle plage.
+  // Redimensionnement d'un bloc par ses bords (façon Google Agenda), évènement
+  // ou tâche : on glisse le bord haut (modifie l'heure de début) ou bas (heure
+  // de fin), par pas de 15 min, puis on enregistre la nouvelle plage.
   const startResize = (e, ev, d, edge) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
@@ -947,6 +947,16 @@ export default function AgendaPage() {
     const toTime = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
     const endM = endMin >= 24 * 60 ? 24 * 60 - 1 : endMin; // 24:00 impossible → 23:59
     const dk = dateKey(d);
+    if (ev.isTask) {
+      /* Tâche : son créneau vit côté tr4de (`taskTimes`), Google Tasks ne
+         connaissant qu'une date limite. Même chemin que le déplacement — et le
+         jour ne change pas, un redimensionnement reste dans sa colonne. */
+      setTaskTimes((prevTimes) => {
+        const prev = prevTimes[ev.id] || {};
+        return { ...prevTimes, [ev.id]: { ...prev, day: prev.day || dk, startTime: toTime(startMin), endTime: toTime(endM) } };
+      });
+      return;
+    }
     const form = {
       ...formFromEvent(ev),
       allDay: false, date: dk, endDate: dk,
@@ -1430,8 +1440,12 @@ export default function AgendaPage() {
                     const compact = (eMin - sMin) <= 30;
                     const minLbl = (m) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
                     const timeLbl = active ? `${minLbl(sMin)} – ${minLbl(eMin >= 1440 ? 1439 : eMin)}` : eventTimeLabel(ev);
-                    // Poignées de redimensionnement (évènements horaires uniquement).
-                    const resizable = !ev.isTask;
+                    /* Poignées de redimensionnement, sur TOUT bloc de la grille
+                       — tâches comprises : une tâche posée à une heure est un
+                       bloc de temps comme un autre, et rien ne justifiait qu'on
+                       puisse la déplacer sans pouvoir l'allonger. La grille ne
+                       reçoit que de l'horaire (le « toute la journée » vit dans
+                       sa propre bande, au-dessus). */
                     const handleStyle = (pos) => ({
                       position: "absolute", left: 0, right: 0, [pos]: 0, height: isMobile ? 14 : 8,
                       cursor: "ns-resize", zIndex: 2, touchAction: "none",
@@ -1451,19 +1465,23 @@ export default function AgendaPage() {
                           display: "flex", flexDirection: compact ? "row" : "column",
                           alignItems: compact ? "baseline" : "stretch", gap: compact ? 5 : 0,
                         }}>
-                        {resizable && (
-                          <div onPointerDown={(e) => startResize(e, ev, d, "top")} onClick={(e) => e.stopPropagation()} style={handleStyle("top")} />
-                        )}
+                        <div onPointerDown={(e) => startResize(e, ev, d, "top")} onClick={(e) => e.stopPropagation()} style={handleStyle("top")} />
                         <span style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flex: compact ? 1 : "none" }}>
-                          {ev.isTask && <TaskCircle done={ev.done} onToggle={(e) => { e.stopPropagation(); onToggleDone(ev); }} />}
+                          {/* La pastille passe AU-DESSUS de la poignée haute :
+                              sur un bloc de 30 min, la bande de redimensionnement
+                              recouvre la ligne de titre, et cocher la tâche
+                              redimensionnait au lieu de la terminer. */}
+                          {ev.isTask && (
+                            <span style={{ position: "relative", zIndex: 3, display: "inline-flex", flexShrink: 0 }}>
+                              <TaskCircle done={ev.done} onToggle={(e) => { e.stopPropagation(); onToggleDone(ev); }} />
+                            </span>
+                          )}
                           <span style={{ fontSize: 10, fontWeight: 600, color: txtCol, textDecoration: ev.isTask && ev.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.summary}</span>
                         </span>
                         {compact
                           ? <span style={{ fontSize: 10, color: txtCol, flexShrink: 0, whiteSpace: "nowrap", opacity: 0.8 }}>{timeLbl}</span>
                           : (height > 28 && <span style={{ fontSize: 10, color: txtCol, opacity: 0.8 }}>{timeLbl}</span>)}
-                        {resizable && (
-                          <div onPointerDown={(e) => startResize(e, ev, d, "bottom")} onClick={(e) => e.stopPropagation()} style={handleStyle("bottom")} />
-                        )}
+                        <div onPointerDown={(e) => startResize(e, ev, d, "bottom")} onClick={(e) => e.stopPropagation()} style={handleStyle("bottom")} />
                       </div>
                     );
                   })}
