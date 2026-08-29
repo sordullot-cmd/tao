@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 
 const INITIAL_TRADES = [
   {
@@ -128,6 +129,10 @@ export default function Strategies({ trades: propTrades = [], tradeStrategies = 
   const [showTradeForm, setShowTradeForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingTradeId, setEditingTradeId] = useState(null);
+  /* Échap referme la modale ouverte. Les deux fermetures reprennent exactement
+     ce que fait le clic sur le fond, remise à zéro de l'édition comprise. */
+  useEscapeDismiss(() => setShowForm(false), showForm);
+  useEscapeDismiss(() => { setShowTradeForm(false); setEditingTradeId(null); }, showTradeForm);
   const [activeTab, setActiveTab] = useState("strategies");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");

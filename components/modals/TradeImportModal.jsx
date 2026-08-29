@@ -3,8 +3,12 @@
 import { useState, useRef } from "react";
 import { parseCSV, calculateStats } from "@/lib/csvParsers";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 
 export default function TradeImportModal({ isOpen, onClose, onImport, T }) {
+  // Échap ferme, comme le clic sur le fond.
+  useEscapeDismiss(onClose, isOpen);
+
   // Account Setup
   const [accountName, setAccountName] = useState("");
   const [selectedBroker, setSelectedBroker] = useState("tradovate");

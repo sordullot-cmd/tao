@@ -22,6 +22,7 @@ import { X, Trash2, Lock, Check, Link2, ArrowRight } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { PLATFORMS, PROP_FIRM_PRESETS, resolvePlatformIcon } from "@/lib/brokers/platforms";
 import { accountColor } from "@/lib/ui/accountTypes";
@@ -52,6 +53,8 @@ function accountTypeSizeLabel(acc) {
 /* ─────────────────────────── Primitives ─────────────────────────── */
 
 export function ModalShell({ title, subtitle, onClose, children, footer, width = 480 }) {
+  // Avant le retour anticipé : un hook ne peut pas être appelé conditionnellement.
+  useEscapeDismiss(onClose);
   if (typeof document === "undefined") return null;
   return ReactDOM.createPortal(
     <div

@@ -989,8 +989,14 @@ export default function App() {
                   transparent), mais il donne aux pages qui le demandent une
                   hauteur de référence : sans lui, la chaîne est rompue ici et
                   aucune ne peut occuper la fenêtre autrement qu'en mesurant sa
-                  propre position en JavaScript. */}
-              <div key={page} style={{ width: "100%", minWidth: 0, minHeight: "100%" }}>
+                  propre position en JavaScript.
+                  La colonne flex, elle, TRANSMET cette hauteur : un `min-height`
+                  en pourcentage ne suffit pas à faire résoudre la hauteur d'un
+                  enfant, alors qu'un item en `flex: 1` s'étire jusqu'à la
+                  hauteur réellement utilisée. C'est ce qui permet à une page
+                  (l'agenda) de faire défiler sa grille SOUS un en-tête fixe au
+                  lieu d'emporter toute la page dans le défilement. */}
+              <div key={page} style={{ width: "100%", minWidth: 0, minHeight: "100%", display: "flex", flexDirection: "column" }}>
                 {pages[page] || pages.dashboard}
               </div>
             </div>

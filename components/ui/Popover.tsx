@@ -23,6 +23,7 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 
 /** Marge minimale conservée entre le panneau et les bords de l'écran. */
 const SCREEN_MARGIN = 8;
@@ -193,18 +194,18 @@ export default function Popover({
       ) return;
       onClose?.();
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose?.(); }
-    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("touchstart", onDown, { passive: true });
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("touchstart", onDown);
-      document.removeEventListener("keydown", onKey);
     };
   }, [open, closeOnOutside, onClose, anchorRef]);
+
+  /* Échap ferme le panneau — par la pile partagée : ouvert depuis une modale, il
+     doit se refermer SEUL au premier appui. Deux écouteurs concurrents sur
+     `document` emportaient la modale avec lui. */
+  useEscapeDismiss(onClose, open);
 
   if (!open || typeof document === "undefined") return null;
 

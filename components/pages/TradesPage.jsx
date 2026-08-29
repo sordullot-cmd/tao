@@ -42,6 +42,7 @@ import { useTradeScreenshots } from "@/lib/hooks/useTradeScreenshots";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useTradeEmotionTags, useTradeErrorTags } from "@/lib/hooks/useTradeEmotionTags";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
@@ -115,6 +116,8 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const { urls: screenshotUrls, uploadScreenshot, removeScreenshot } = useTradeScreenshots();
   const [screenshotBusy, setScreenshotBusy] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
+  // Échap referme la visionneuse — le premier réflexe sur une image plein écran.
+  useEscapeDismiss(() => setLightboxUrl(null), !!lightboxUrl);
   const { emotionTags: emotionsFromHook, addEmotion, removeEmotion } = useTradeEmotionTags();
   const { errorTags: errorsFromHook, addError, removeError } = useTradeErrorTags();
   const [selectedTrade, setSelectedTrade] = useState(null);

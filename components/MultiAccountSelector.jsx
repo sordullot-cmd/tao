@@ -3,6 +3,7 @@ import ReactDOM from "react-dom";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import Popover from "@/components/ui/Popover";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import { t, useLang } from "@/lib/i18n";
 
 export default function MultiAccountSelector({
@@ -17,6 +18,9 @@ export default function MultiAccountSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // account object ou null
   const [deleting, setDeleting] = useState(false);
+  /* Échap annule la confirmation — mais pas pendant la suppression : la requête
+     est partie, refermer laisserait croire qu'on l'a interrompue. */
+  useEscapeDismiss(() => setConfirmDelete(null), !!confirmDelete && !deleting);
   const menuRef = useRef(null);
 
   // Fermeture au clic extérieur : gérée par le Popover. Elle est suspendue tant

@@ -24,6 +24,7 @@ import {
 } from "@/lib/lifeRpgCategories";
 import { GCAL_COLORS, DEFAULT_EVENT_COLOR, eventPaint, nearestGcalColorId, TASK_DEFAULT_PAINT } from "@/lib/gcalColors";
 import { useIcsFeeds, useIcsEvents, isFeedCalendarId } from "@/lib/hooks/useIcsFeeds";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import {
   MAX_REMINDERS, normalizeReminders, remindersFromEvent,
   reminderLabel, addReminder, removeReminder,
@@ -567,6 +568,12 @@ export default function AgendaPage() {
   const [modal, setModal] = React.useState(null); // form objet | null
   const [modalError, setModalError] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
+  /* Échap referme la fiche, comme le clic au fond — mais pas pendant
+     l'enregistrement : la requête est partie, fermer laisserait croire qu'on
+     l'a annulée. Les menus de la fiche (couleur, rappels, récurrence) sont des
+     Popover : ouverts par-dessus, ils sont plus haut dans la pile et se
+     referment seuls au premier appui, sans emporter la fiche. */
+  useEscapeDismiss(() => setModal(null), !!modal && !saving);
   const [overdueOpen, setOverdueOpen] = React.useState(false);
   const [overduePos, setOverduePos] = React.useState(null); // { top, left } du popover
   const [colorOpen, setColorOpen] = React.useState(false);
@@ -1328,27 +1335,40 @@ export default function AgendaPage() {
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-      {/* Le bouton « Aujourd'hui » a pris la place du libellé de mois : une
-          seule commande de navigation au lieu de deux voisines qui se
-          disputaient le même rôle. Trois boutons séparés par un écart plutôt
-          qu'une carte unique — ce sont trois cibles, pas trois zones d'un même
-          contrôle. Aucun libellé de période : l'en-tête de la grille nomme déjà
-          les jours qu'on regarde. */}
+      {/* Le bouton « Aujourd'hui » a pris la place du libellé de mois DANS la
+          pastille de période : une seule commande de navigation au lieu de deux
+          voisines qui se disputaient le même rôle. Trois boutons séparés par un
+          écart plutôt qu'une carte unique — ce sont trois cibles, pas trois
+          zones d'un même contrôle. Le mois, lui, est écrit à gauche : les
+          flèches disent où l'on va, elles ne disent pas où l'on est. */}
       {connected && !isMobile && (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <button
-            onClick={() => setCursor(shiftCursor(view, cursor, -1))}
-            aria-label="Précédent" title="Précédent" style={stepBtn()}
-          >
-            <ChevronLeft size={16} strokeWidth={1.75} />
-          </button>
-          <button onClick={goToday} style={todayBtn()}>Aujourd'hui</button>
-          <button
-            onClick={() => setCursor(shiftCursor(view, cursor, 1))}
-            aria-label="Suivant" title="Suivant" style={stepBtn()}
-          >
-            <ChevronRight size={16} strokeWidth={1.75} />
-          </button>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+          {/* Même cran que le résultat d'une tuile du calendrier de trading
+              (20/500) : c'est le chiffre qui titre sa carte là-bas, la période
+              titre l'agenda ici. Libellé et non bouton — le sélecteur de date
+              est parti avec la pastille, et une troisième affordance collée aux
+              flèches serait ambiguë. */}
+          <span style={{
+            fontSize: 20, fontWeight: 500, lineHeight: 1, color: T.text,
+            textTransform: "capitalize", whiteSpace: "nowrap",
+          }}>
+            {monthYearLabel(view, cursor)}
+          </span>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <button
+              onClick={() => setCursor(shiftCursor(view, cursor, -1))}
+              aria-label="Précédent" title="Précédent" style={stepBtn()}
+            >
+              <ChevronLeft size={16} strokeWidth={1.75} />
+            </button>
+            <button onClick={goToday} style={todayBtn()}>Aujourd'hui</button>
+            <button
+              onClick={() => setCursor(shiftCursor(view, cursor, 1))}
+              aria-label="Suivant" title="Suivant" style={stepBtn()}
+            >
+              <ChevronRight size={16} strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
       )}
       {/* Mobile : pas de flèches ; le libellé ouvre le sélecteur de date. */}
@@ -1805,19 +1825,24 @@ export default function AgendaPage() {
   }
 
   return (
-    /* `minHeight: 100%` plutôt qu'une hauteur mesurée : la page occupe la
-       fenêtre quand son contenu est court, et grandit quand il déborde. Rien à
-       recalculer quand l'en-tête change de hauteur — c'était le défaut de la
-       mesure en JavaScript, juste à l'instant où on la prend et fausse ensuite. */
-    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
+    /* `flex: 1` dans la colonne de la coquille plutôt qu'une hauteur mesurée :
+       la page occupe la fenêtre quand son contenu est court, et grandit quand il
+       déborde. Rien à recalculer quand l'en-tête change de hauteur — c'était le
+       défaut de la mesure en JavaScript, juste à l'instant où on la prend et
+       fausse ensuite. Et surtout : hauteur DÉFINIE, donc l'en-tête reste en
+       place pendant que la grille défile en dessous. */
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
       {header}
-      {/* `flex: 1` sans `minHeight: 0` : le corps prend la hauteur restante pour
-          la grille et le mois, mais garde le droit de POUSSER sous la vue année,
-          plus haute qu'un écran — `minHeight: 0` l'écraserait et son contenu
-          déborderait sans jamais pouvoir défiler. */}
+      {/* `minHeight: 0` borne le corps à la place restante : c'est la grille qui
+          défile, sous l'en-tête des jours épinglé, et la barre de navigation
+          reste à l'écran — on change de semaine sans avoir à remonter.
+          La vue année fait exception : plus haute qu'un écran, elle doit garder
+          le droit de POUSSER, sinon son contenu déborderait sans pouvoir
+          défiler. */}
       <div
         style={{
           flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0,
+          minHeight: (!isMobile && view === "year") ? undefined : 0,
           // Cf. `BODY_PULL` : ce qu'il faut rendre pour finir sur la ligne de la
           // barre latérale, que la vue tienne dans l'écran ou qu'elle défile.
           marginBottom: -BODY_PULL,

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 
 const INITIAL_TRADES = [
   {
@@ -32,6 +33,9 @@ export default function StrategiesNew() {
   const [showTradeForm, setShowTradeForm] = useState(false);
   const [editingTradeId, setEditingTradeId] = useState(null);
   const [showRuleForm, setShowRuleForm] = useState(false);
+  /* Échap referme la modale ouverte, dans les mêmes termes que le clic au fond. */
+  useEscapeDismiss(() => { setShowTradeForm(false); setEditingTradeId(null); }, showTradeForm);
+  useEscapeDismiss(() => setShowRuleForm(false), showRuleForm);
   
   const [tradeFormData, setTradeFormData] = useState({
     symbol: "",

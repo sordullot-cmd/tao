@@ -34,6 +34,7 @@ import { T, FIELD_BG, WRITING_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { BTN } from "@/lib/ui/buttons";
 import { luminance } from "@/lib/ui/color";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
+import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import { useModalExit } from "@/lib/hooks/useModalExit";
 import { useScrollEdges, scrollEdgeShadow } from "@/lib/hooks/useScrollEdges";
 
@@ -446,13 +447,11 @@ export function Modal({
   const { pos, dragging, onMouseDown } = useWindowDrag();
   const { closing, requestClose } = useModalExit(onClose, 160);
 
-  // Échap ferme : la fenêtre n'a pas de barre de titre système pour le faire.
-  React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); requestClose(); } };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, requestClose]);
+  /* Échap ferme : la fenêtre n'a pas de barre de titre système pour le faire.
+     Par la pile partagée, et non par un écouteur à soi : un menu ouvert dans la
+     fenêtre doit se refermer seul au premier appui, sans emporter la fenêtre
+     — et le travail en cours avec elle. */
+  useEscapeDismiss(requestClose, open);
 
   if (!open || typeof document === "undefined") return null;
 
