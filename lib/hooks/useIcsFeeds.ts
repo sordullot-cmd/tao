@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { normalizeFeedUrl } from "@/lib/icsFetch";
+import { courseColor, courseColorId } from "@/lib/icsCategories";
 
 export const ICS_FEEDS_KEY = "tr4de_ics_feeds";
 export const ICS_FEEDS_CLOUD_KEY = "ics_feeds";
@@ -44,10 +45,12 @@ export interface IcsFeedEvent {
   end: string;
   status: string;
   calendarColor: string;
+  /** Type de séance, pour la légende et le regroupement. */
+  category: string;
   /** Toujours vrai : un flux distant se consulte, il ne se modifie pas. */
   readOnly: true;
   htmlLink: string;
-  colorId: null;
+  colorId: string;
   recurringEventId: null;
   guests: never[];
   transparency: string;
@@ -186,10 +189,14 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
             start: ev.start,
             end: ev.end,
             status: ev.status,
-            calendarColor: feed.color,
+            // La couleur vient du TYPE de séance, pas du flux : une semaine
+            // entière d'une seule teinte ne renseigne sur rien, alors qu'un
+            // coup d'œil doit suffire à repérer les TP ou le partiel.
+            calendarColor: courseColor(ev.category, ev.summary),
+            category: ev.category || "",
             readOnly: true,
             htmlLink: "",
-            colorId: null,
+            colorId: courseColorId(ev.category, ev.summary),
             recurringEventId: null,
             guests: [],
             transparency: "opaque",

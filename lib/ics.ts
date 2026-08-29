@@ -31,6 +31,11 @@ export interface IcsEvent {
   start: string;
   end: string;
   status: string;
+  /**
+   * Type de séance tel que l'établissement le nomme (« CM », « TD à distance »).
+   * Vide hors export structuré : c'est alors l'intitulé qui sert d'indice.
+   */
+  category: string;
 }
 
 /* ─────────────── Dépliage et découpage ─────────────── */
@@ -264,6 +269,7 @@ function finalize(cur: Record<string, unknown>): IcsEvent | null {
     start: start.iso,
     end: end.iso,
     status: cur.status === "cancelled" ? "cancelled" : "confirmed",
+    category: "",
   };
 }
 
@@ -306,10 +312,12 @@ export function prettifyIcsEvent(ev: IcsEvent): IcsEvent {
     const m = new RegExp(`^${label}[ \\t]*:[ \\t]*(.*)$`, "im").exec(ev.description);
     return (m?.[1] || "").trim();
   };
-  const matiere = field("Matière");
-  if (!matiere) return ev;
-
   const categorie = field("Catégorie");
+  const matiere = field("Matière");
+  // Sans matière, l'intitulé d'origine reste le meilleur libellé — mais la
+  // catégorie, elle, est exploitable dès qu'elle existe (couleur du type).
+  if (!matiere) return categorie ? { ...ev, category: categorie } : ev;
+
   // « UE 17A : Anglais » → « Anglais ». Le code d'UE est déjà dans la
   // description, et c'est le nom que l'on cherche des yeux dans la grille.
   const nom = matiere.includes(":") ? matiere.slice(matiere.lastIndexOf(":") + 1).trim() : matiere;
@@ -317,6 +325,7 @@ export function prettifyIcsEvent(ev: IcsEvent): IcsEvent {
 
   return {
     ...ev,
+    category: categorie,
     summary: summary || ev.summary,
     // La salle est déjà dans LOCATION ; on la reprend de la description
     // seulement si LOCATION est vide (cours à distance, salle non affectée).

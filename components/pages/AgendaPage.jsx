@@ -24,6 +24,7 @@ import {
 } from "@/lib/lifeRpgCategories";
 import { GCAL_COLORS, DEFAULT_EVENT_COLOR, nearestGcalColorId } from "@/lib/gcalColors";
 import { useIcsFeeds, useIcsEvents, isFeedCalendarId, probeFeed } from "@/lib/hooks/useIcsFeeds";
+import { courseKind, courseColor, KIND_LABELS } from "@/lib/icsCategories";
 import {
   MAX_REMINDERS, normalizeReminders, remindersFromEvent,
   reminderLabel, addReminder, removeReminder,
@@ -715,6 +716,17 @@ export default function AgendaPage() {
   // calendrier à leur horaire (layoutDay ne garde que les items horodatés) ;
   // elles restent aussi affichées dans la rangée du haut via `tasksByDay`.
   const allEvents = React.useMemo(() => [...events, ...icsEvents], [events, icsEvents]);
+
+  // Légende : uniquement les types présents dans la période affichée. La liste
+  // complète ferait chercher des couleurs qui ne sont pas à l'écran.
+  const legend = React.useMemo(() => {
+    const kinds = new Map();
+    for (const ev of icsEvents) {
+      const k = courseKind(ev.category, ev.summary);
+      if (!kinds.has(k)) kinds.set(k, courseColor(ev.category, ev.summary));
+    }
+    return [...kinds].map(([kind, color]) => ({ kind, color, label: KIND_LABELS[kind] }));
+  }, [icsEvents]);
 
   const eventsByDay = React.useMemo(() => {
     const map = new Map();
@@ -1444,6 +1456,21 @@ export default function AgendaPage() {
                         </button>
                       </div>
                     ))}
+
+                    {/* Code couleur des séances, limité aux types de la période. */}
+                    {legend.length > 0 && (
+                      <div style={{ borderTop: `1px solid ${DA_HAIRLINE}`, marginTop: 6, paddingTop: 8, padding: "8px 10px 4px" }}>
+                        <div style={{ fontSize: 11, color: T.textMut, marginBottom: 6 }}>Type de séance</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px" }}>
+                          {legend.map((l) => (
+                            <span key={l.kind} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textMut }}>
+                              <span style={{ width: 9, height: 9, borderRadius: 3, background: l.color, flexShrink: 0 }} />
+                              {l.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Ajout d'un flux : une URL .ics ou webcal:// suffit. */}
                     <div style={{ borderTop: `1px solid ${DA_HAIRLINE}`, marginTop: 6, paddingTop: 8, padding: "8px 10px 4px" }}>

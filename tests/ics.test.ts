@@ -157,6 +157,7 @@ describe("lisibilité des exports ADE", () => {
     start: "2026-09-07T06:00:00.000Z",
     end: "2026-09-07T07:00:00.000Z",
     status: "confirmed",
+    category: "",
   };
 
   it("remonte la matière en tête : dans une case de grille, c'est la seule chose qu'on lit", () => {
