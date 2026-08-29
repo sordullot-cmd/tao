@@ -12,25 +12,28 @@ function json(data, status = 200) {
 }
 
 /**
- * Crée / modifie / supprime un évènement de l'agenda principal.
- * Body : { action: "create" | "update" | "delete", accessToken, eventId?, event? }
+ * Crée / modifie / supprime un évènement.
+ * Body : { action: "create" | "update" | "delete", accessToken, eventId?, event?, calendarId? }
+ * `calendarId` : l'agenda propriétaire de l'évènement — un évènement lu dans un
+ *   agenda secondaire n'est pas patchable via "primary". Absent = agenda principal.
  * `event` : { summary, description, location, allDay, start, end }
  *   - timed : start/end = ISO (UTC) ; all-day : start/end = "YYYY-MM-DD" (end exclusif).
  */
 export async function POST(req) {
   try {
-    const { action, accessToken, eventId, event } = await req.json();
+    const { action, accessToken, eventId, event, calendarId } = await req.json();
     if (!accessToken) return json({ error: "no_access_token" }, 401);
 
     const client = getOAuthClient(req);
     if (!client) return json({ error: "not_configured" }, 503);
     client.setCredentials({ access_token: accessToken });
     const cal = google.calendar({ version: "v3", auth: client });
+    const target = calendarId || "primary";
 
     if (action === "delete") {
       if (!eventId) return json({ error: "no_event_id" }, 400);
       try {
-        await cal.events.delete({ calendarId: "primary", eventId });
+        await cal.events.delete({ calendarId: target, eventId });
       } catch (err) {
         // Déjà supprimé / introuvable côté Google : l'objectif est atteint.
         const code = err?.code || err?.response?.status;
@@ -44,7 +47,7 @@ export async function POST(req) {
     // série, portée par l'évènement maître et non par les occurrences dépliées).
     if (action === "get") {
       if (!eventId) return json({ error: "no_event_id" }, 400);
-      const res = await cal.events.get({ calendarId: "primary", eventId });
+      const res = await cal.events.get({ calendarId: target, eventId });
       const ev = res.data || {};
       return json({ ok: true, event: { id: ev.id, recurrence: ev.recurrence || null, start: ev.start || null, end: ev.end || null } });
     }
@@ -53,7 +56,7 @@ export async function POST(req) {
     if (action === "setDone") {
       if (!eventId) return json({ error: "no_event_id" }, 400);
       await cal.events.patch({
-        calendarId: "primary",
+        calendarId: target,
         eventId,
         requestBody: { extendedProperties: { private: { tr4deDone: event?.done ? "1" : "0" } } },
       });
@@ -114,8 +117,8 @@ export async function POST(req) {
 
       const res =
         action === "create"
-          ? await cal.events.insert({ calendarId: "primary", requestBody: resource, conferenceDataVersion, sendUpdates: "all" })
-          : await cal.events.patch({ calendarId: "primary", eventId, requestBody: resource, conferenceDataVersion, sendUpdates: "all" });
+          ? await cal.events.insert({ calendarId: target, requestBody: resource, conferenceDataVersion, sendUpdates: "all" })
+          : await cal.events.patch({ calendarId: target, eventId, requestBody: resource, conferenceDataVersion, sendUpdates: "all" });
 
       return json({ ok: true, event: res.data });
     }

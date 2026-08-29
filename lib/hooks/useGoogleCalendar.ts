@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCloudState } from "@/lib/hooks/useCloudState";
 
 const TOKENS_KEY = "tr4de_gcal_tokens";
+// Agendas décochés par l'utilisateur. On mémorise les EXCLUSIONS et non les
+// inclusions : un agenda auquel on s'abonne plus tard côté Google (l'emploi du
+// temps universitaire, par exemple) apparaît alors tout seul, sans avoir à
+// revenir cocher une case ici.
+const HIDDEN_CALS_KEY = "tr4de_gcal_hidden_calendars";
+const HIDDEN_CALS_CLOUD_KEY = "gcal_hidden_calendars";
 
 interface Tokens {
   access_token: string | null;
@@ -10,8 +17,21 @@ interface Tokens {
   expiry_date: number | null;
 }
 
+export interface GCalCalendar {
+  id: string;
+  title: string;
+  description: string;
+  color: string | null;
+  primary: boolean;
+  /** Agenda abonné par URL iCal ou partagé en lecture : Google refuse l'écriture. */
+  readOnly: boolean;
+  timeZone: string | null;
+}
+
 export interface GCalEvent {
   id: string;
+  /** Agenda d'origine — nécessaire pour modifier un évènement hors « primary ». */
+  calendarId: string;
   summary: string;
   description: string;
   location: string;
@@ -51,6 +71,12 @@ export function useGoogleCalendar() {
   const [tokens, setTokens] = useState<Tokens | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [ready, setReady] = useState(false);
+  const [calendars, setCalendars] = useState<GCalCalendar[] | null>(null);
+  const [hidden, setHidden] = useCloudState<string[]>(
+    HIDDEN_CALS_KEY,
+    HIDDEN_CALS_CLOUD_KEY,
+    [],
+  );
 
   useEffect(() => {
     setTokens(readTokens());
@@ -71,6 +97,7 @@ export function useGoogleCalendar() {
   const disconnect = useCallback(() => {
     writeTokens(null);
     setTokens(null);
+    setCalendars(null);
   }, []);
 
   /**
@@ -164,14 +191,74 @@ export function useGoogleCalendar() {
     [refreshAccessToken],
   );
 
+  /** Liste les agendas de l'utilisateur (le sien, les partagés, les abonnements iCal). */
+  const fetchCalendars = useCallback(async (): Promise<GCalCalendar[]> => {
+    const res = await authedCall((accessToken) =>
+      fetch("/api/google-calendar/calendars", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken }),
+      }),
+    );
+    if (res.status === 403) throw new Error("insufficient_scope");
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `http_${res.status}`);
+    }
+    const data = await res.json();
+    return (data.calendars || []) as GCalCalendar[];
+  }, [authedCall]);
+
+  // Chargé une fois par connexion : la liste bouge rarement, et un rechargement
+  // à chaque navigation ferait un appel de plus pour rien.
+  useEffect(() => {
+    if (!connected) return;
+    let alive = true;
+    // La règle voit un setState « dans l'effet » alors qu'il est dans le
+    // callback asynchrone : c'est précisément l'usage recommandé (souscrire à
+    // un système externe et poser l'état à la réponse).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCalendars()
+      .then((list) => { if (alive) setCalendars(list); })
+      // Échec (scope pas encore accordé, réseau) : on ne bloque pas l'agenda,
+      // `activeCalendarIds` retombe sur « primary » seul.
+      .catch(() => { if (alive) setCalendars(null); });
+    return () => { alive = false; };
+  }, [connected, fetchCalendars]);
+
+  /**
+   * Agendas effectivement lus. Tant que la liste n'est pas connue, on s'en tient
+   * à l'agenda principal — c'est le comportement d'origine, donc jamais une
+   * régression pendant le chargement.
+   */
+  const activeCalendarIds = useMemo(() => {
+    if (!calendars || !calendars.length) return ["primary"];
+    const hide = new Set(hidden || []);
+    const ids = calendars.filter((c) => !hide.has(c.id)).map((c) => c.id);
+    return ids.length ? ids : ["primary"];
+  }, [calendars, hidden]);
+
+  /** Affiche / masque un agenda dans la grille (persisté, synchronisé). */
+  const toggleCalendar = useCallback(
+    (calendarId: string, visible: boolean) => {
+      setHidden((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        if (visible) return list.filter((id) => id !== calendarId);
+        return list.includes(calendarId) ? list : [...list, calendarId];
+      });
+    },
+    [setHidden],
+  );
+
   /** Récupère les évènements entre deux dates ISO. Lève sur erreur réseau/API. */
   const fetchEvents = useCallback(
-    async (timeMin: string, timeMax: string): Promise<GCalEvent[]> => {
+    async (timeMin: string, timeMax: string, calendarIds?: string[]): Promise<GCalEvent[]> => {
+      const ids = calendarIds && calendarIds.length ? calendarIds : activeCalendarIds;
       const res = await authedCall((accessToken) =>
         fetch("/api/google-calendar/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accessToken, timeMin, timeMax }),
+          body: JSON.stringify({ accessToken, timeMin, timeMax, calendarIds: ids }),
         }),
       );
 
@@ -187,12 +274,17 @@ export function useGoogleCalendar() {
       console.log(`[gcal] ${data.events?.length ?? 0} évènement(s) reçus`, { timeMin, timeMax });
       return data.events || [];
     },
-    [authedCall],
+    [authedCall, activeCalendarIds],
   );
 
   /** Crée / modifie / supprime un évènement, puis renvoie la réponse. */
   const mutateEvent = useCallback(
-    async (action: "create" | "update" | "delete" | "get" | "setDone", payload: { eventId?: string; event?: any }) => {
+    async (
+      action: "create" | "update" | "delete" | "get" | "setDone",
+      // `calendarId` : l'agenda propriétaire. Omis = agenda principal, ce qui
+      // reste juste pour tout ce que tr4de crée lui-même.
+      payload: { eventId?: string; event?: any; calendarId?: string },
+    ) => {
       const res = await authedCall((accessToken) =>
         fetch("/api/google-calendar/event", {
           method: "POST",
@@ -210,11 +302,11 @@ export function useGoogleCalendar() {
     [authedCall],
   );
 
-  const createEvent = useCallback((event: any) => mutateEvent("create", { event }), [mutateEvent]);
-  const updateEvent = useCallback((eventId: string, event: any) => mutateEvent("update", { eventId, event }), [mutateEvent]);
-  const deleteEvent = useCallback((eventId: string) => mutateEvent("delete", { eventId }), [mutateEvent]);
-  const getEvent = useCallback((eventId: string) => mutateEvent("get", { eventId }), [mutateEvent]);
-  const setEventDone = useCallback((eventId: string, done: boolean) => mutateEvent("setDone", { eventId, event: { done } }), [mutateEvent]);
+  const createEvent = useCallback((event: any, calendarId?: string) => mutateEvent("create", { event, calendarId }), [mutateEvent]);
+  const updateEvent = useCallback((eventId: string, event: any, calendarId?: string) => mutateEvent("update", { eventId, event, calendarId }), [mutateEvent]);
+  const deleteEvent = useCallback((eventId: string, calendarId?: string) => mutateEvent("delete", { eventId, calendarId }), [mutateEvent]);
+  const getEvent = useCallback((eventId: string, calendarId?: string) => mutateEvent("get", { eventId, calendarId }), [mutateEvent]);
+  const setEventDone = useCallback((eventId: string, done: boolean, calendarId?: string) => mutateEvent("setDone", { eventId, event: { done }, calendarId }), [mutateEvent]);
 
   /** Appels génériques pour les tâches Google. */
   const callTasks = useCallback(
@@ -251,6 +343,11 @@ export function useGoogleCalendar() {
     connected,
     connect,
     disconnect,
+    calendars,
+    activeCalendarIds,
+    hiddenCalendars: hidden,
+    toggleCalendar,
+    fetchCalendars,
     fetchEvents,
     createEvent,
     updateEvent,

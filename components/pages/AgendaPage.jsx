@@ -101,7 +101,11 @@ function lighten(hex, f = 0.2) {
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
 // Toutes les couleurs sont légèrement éclaircies à l'affichage.
-const eventColor = (ev) => lighten(GCAL_COLORS[ev.colorId] || DEFAULT_EVENT_COLOR, 0.38);
+// `calendarColor` sert de repli : les évènements d'un agenda abonné (emploi du
+// temps universitaire) n'ont pas de `colorId` propre et seraient sinon tous de
+// la couleur par défaut, indiscernables des évènements personnels.
+const eventColor = (ev) =>
+  lighten(GCAL_COLORS[ev.colorId] || ev.calendarColor || DEFAULT_EVENT_COLOR, 0.38);
 
 /** Assombrit une couleur hex (pour le texte lié à la couleur de l'évènement). */
 function darken(hex, f = 0.5) {
@@ -145,7 +149,7 @@ function blankForm(day, startTime = "09:00", endTime = "10:00") {
   const dk = typeof day === "string" ? day : dateKey(day);
   return {
     kind: "event", done: false,
-    id: null, htmlLink: null, summary: "", allDay: false, date: dk, endDate: dk, startTime, endTime,
+    id: null, calendarId: null, htmlLink: null, summary: "", allDay: false, date: dk, endDate: dk, startTime, endTime,
     dueDate: "", // date limite (tâche) : facultative, aucune par défaut
     recur: { preset: "once" }, // récurrence : une seule fois par défaut
     masterId: null, masterStart: null, // série (event récurrent) : renseignés à l'édition
@@ -161,7 +165,7 @@ function formFromEvent(ev) {
   const summary = ev.summary === "(Sans titre)" ? "" : ev.summary;
   const common = {
     kind: ev.isTask ? "task" : "event", done: !!ev.done,
-    id: ev.id, htmlLink: ev.htmlLink,
+    id: ev.id, calendarId: ev.calendarId || null, htmlLink: ev.htmlLink,
     location: ev.location || "", description: ev.description || "", colorId: ev.colorId || null,
     guests: (ev.guests || []).join(", "),
     addMeet: !!ev.hangoutLink, hadMeet: !!ev.hangoutLink,
@@ -509,6 +513,7 @@ export default function AgendaPage() {
   const isMobile = useIsMobile();
   const {
     ready, configured, connected, connect, disconnect,
+    calendars, hiddenCalendars, toggleCalendar,
     fetchEvents, createEvent, updateEvent, deleteEvent, getEvent, setEventDone,
     fetchTasks, createTask, updateTask, toggleTask, deleteTask,
   } = useGoogleCalendar();
@@ -522,6 +527,8 @@ export default function AgendaPage() {
   const recurAnchor = React.useRef(null);
   const colorAnchor = React.useRef(null);
   const remindAnchor = React.useRef(null);
+  const calsAnchor = React.useRef(null);
+  const [calsOpen, setCalsOpen] = React.useState(false);
   // Horloge courante : sert à tracer la ligne « maintenant » et à griser le passé.
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
@@ -631,6 +638,25 @@ export default function AgendaPage() {
     window.addEventListener("mouseup", onUp);
   };
 
+  // Agendas en lecture seule : l'emploi du temps universitaire abonné par URL
+  // iCal en fait partie. Google rejette toute écriture dessus — l'interface doit
+  // donc verrouiller déplacement, redimensionnement et enregistrement plutôt que
+  // de laisser l'utilisateur découvrir l'échec après coup.
+  const readOnlyCalIds = React.useMemo(
+    () => new Set((calendars || []).filter((c) => c.readOnly).map((c) => c.id)),
+    [calendars],
+  );
+  const isLocked = React.useCallback(
+    (item) => !!item && !item.isGTask && !!item.calendarId && readOnlyCalIds.has(item.calendarId),
+    [readOnlyCalIds],
+  );
+  // Couleur d'agenda, pour distinguer les cours du reste sans les repeindre un par un.
+  const calColorById = React.useMemo(() => {
+    const map = new Map();
+    for (const c of calendars || []) if (c.color) map.set(c.id, c.color);
+    return map;
+  }, [calendars]);
+
   const range = React.useMemo(() => computeRange(view, cursor), [view, cursor]);
 
   const loadEvents = React.useCallback(async () => {
@@ -639,14 +665,14 @@ export default function AgendaPage() {
     setError(null);
     try {
       const evs = await fetchEvents(range.start.toISOString(), range.end.toISOString());
-      setEvents(evs);
+      setEvents(evs.map((ev) => ({ ...ev, calendarColor: calColorById.get(ev.calendarId) || null })));
     } catch (e) {
       setEvents([]);
       if (e?.message !== "token_expired") setError(e?.message || "Erreur de chargement");
     } finally {
       setLoading(false);
     }
-  }, [connected, range, fetchEvents]);
+  }, [connected, range, fetchEvents, calColorById]);
 
   React.useEffect(() => { loadEvents(); }, [loadEvents]);
 
@@ -741,7 +767,7 @@ export default function AgendaPage() {
       try { await toggleTask(item.id, nowDone); } catch { loadTasks(); }
     } else {
       setEvents((prev) => prev.map((x) => (x.id === item.id ? { ...x, done: !x.done } : x)));
-      try { await setEventDone(item.id, !item.done); } catch { loadEvents(); }
+      try { await setEventDone(item.id, !item.done, item.calendarId); } catch { loadEvents(); }
     }
   };
 
@@ -756,7 +782,7 @@ export default function AgendaPage() {
     // Évènement récurrent : la règle est portée par l'évènement maître (les
     // occurrences sont dépliées). On la récupère en arrière-plan pour pré-remplir.
     if (!item.isTask && item.recurringEventId) {
-      getEvent(item.recurringEventId)
+      getEvent(item.recurringEventId, item.calendarId)
         .then((res) => {
           const recur = parseRecurrence(res?.event?.recurrence);
           setModal((m) => (m && m.id === item.id
@@ -903,6 +929,7 @@ export default function AgendaPage() {
   // de fin), par pas de 15 min, puis on enregistre la nouvelle plage.
   const startResize = (e, ev, d, edge) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (isLocked(ev)) return;
     e.preventDefault();
     e.stopPropagation();
     const colEl = e.currentTarget.closest("[data-daycol]");
@@ -966,7 +993,7 @@ export default function AgendaPage() {
     const newEnd = toISO(dk, form.endTime);
     setEvents((prev) => prev.map((x) => (x.id === ev.id ? { ...x, start: newStart, end: newEnd } : x)));
     try {
-      await updateEvent(ev.id, payloadFromForm(form));
+      await updateEvent(ev.id, payloadFromForm(form), ev.calendarId);
       await loadEvents();
     } catch (err) {
       if (err?.message === "insufficient_scope") setError("insufficient_scope");
@@ -979,6 +1006,7 @@ export default function AgendaPage() {
   // autre jour. Un simple clic (sans déplacement) ouvre l'édition.
   const startMove = (e, ev, d) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (isLocked(ev)) { openEdit(ev); return; }
     e.preventDefault();
     const colEl = e.currentTarget.closest("[data-daycol]");
     if (!colEl) return;
@@ -1050,7 +1078,7 @@ export default function AgendaPage() {
     const newEnd = toISO(targetDayKey, form.endTime);
     setEvents((prev) => prev.map((x) => (x.id === ev.id ? { ...x, start: newStart, end: newEnd } : x)));
     try {
-      await updateEvent(ev.id, payloadFromForm(form));
+      await updateEvent(ev.id, payloadFromForm(form), ev.calendarId);
       await loadEvents();
     } catch (err) {
       if (err?.message === "insufficient_scope") setError("insufficient_scope");
@@ -1118,7 +1146,7 @@ export default function AgendaPage() {
         }
         const payload = { ...payloadFromForm(toSave), recurrence: buildRecurrence(toSave) };
         let res;
-        if (targetId) res = await updateEvent(targetId, payload);
+        if (targetId) res = await updateEvent(targetId, payload, modal.calendarId);
         else res = await createEvent(payload);
         // Tâches en attente (ajoutées sur un nouvel évènement) : on crée les
         // vraies Google Tasks une fois l'id de l'évènement connu, puis on les lie.
@@ -1166,7 +1194,7 @@ export default function AgendaPage() {
         setModal(null);
         await loadTasks();
       } else {
-        await deleteEvent(modal.id);
+        await deleteEvent(modal.id, modal.calendarId);
         // Retire l'association évènement → tâches (les tâches Google restent).
         setEventTaskLinks((prev) => { if (!prev[modal.id]) return prev; const map = { ...prev }; delete map[modal.id]; return map; });
         setModal(null);
@@ -1271,6 +1299,57 @@ export default function AgendaPage() {
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
         {connected && !isMobile && (
           <>
+            {/* Sélecteur d'agendas : n'apparaît qu'à partir de deux agendas —
+                avec le seul agenda principal, il n'y aurait rien à choisir. */}
+            {(calendars || []).length > 1 && (
+              <div ref={calsAnchor} style={{ position: "relative", display: "inline-flex" }}>
+                <button onClick={() => setCalsOpen((o) => !o)} style={ghostBtn()} title="Agendas affichés">
+                  <CalendarIcon size={14} strokeWidth={2} style={{ marginRight: 6, verticalAlign: "-2px" }} />
+                  Agendas
+                  <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 4, verticalAlign: "-2px" }} />
+                </button>
+                <Popover
+                  anchorRef={calsAnchor}
+                  open={calsOpen}
+                  onClose={() => setCalsOpen(false)}
+                  align="end"
+                  gap={4}
+                  style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)", minWidth: 240 }}
+                >
+                  <>
+                    {(calendars || []).map((c) => {
+                      const visible = !(hiddenCalendars || []).includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleCalendar(c.id, !visible)}
+                          title={c.readOnly ? `${c.title} — lecture seule` : c.title}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8, width: "100%",
+                            padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+                            background: "transparent", textAlign: "left", fontFamily: "var(--font-sans)",
+                            fontSize: 13, color: visible ? T.text : T.textMut,
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <span style={{
+                            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+                            background: visible ? (c.color || DEFAULT_EVENT_COLOR) : "transparent",
+                            border: `1.5px solid ${c.color || DEFAULT_EVENT_COLOR}`,
+                          }} />
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {c.title}
+                          </span>
+                          {visible && <Check size={14} strokeWidth={2.2} color={T.textMut} />}
+                        </button>
+                      );
+                    })}
+                  </>
+                </Popover>
+              </div>
+            )}
             {segmented}
             <button onClick={disconnect} aria-label="Déconnecter" title="Déconnecter" style={iconBtn()}>
               <LogOut size={15} strokeWidth={2} />
@@ -1704,7 +1783,7 @@ export default function AgendaPage() {
                 background: (dragHover || modalDragging) ? T.textMut : T.border,
                 transition: "background-color 120ms ease",
               }} />
-              {modal.id && (
+              {modal.id && !isLocked(modal) && (
                 <button onMouseDown={(e) => e.stopPropagation()} onClick={removeModal} disabled={saving} aria-label="Supprimer" title="Supprimer" style={topIconBtn}
                   onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.red; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
@@ -2118,10 +2197,14 @@ export default function AgendaPage() {
                   <ExternalLink size={12} strokeWidth={2} /> Ouvrir dans Google
                 </a>
               )}
-              <button onClick={() => setModal(null)} disabled={saving} style={ghostBtn()}>Annuler</button>
-              <button onClick={saveModal} disabled={saving || !modal.summary.trim()} style={{ ...primaryBtn(true), opacity: saving || !modal.summary.trim() ? 0.5 : 1 }}>
-                {saving ? "…" : "Enregistrer"}
+              <button onClick={() => setModal(null)} disabled={saving} style={ghostBtn()}>
+                {isLocked(modal) ? "Fermer" : "Annuler"}
               </button>
+              {!isLocked(modal) && (
+                <button onClick={saveModal} disabled={saving || !modal.summary.trim()} style={{ ...primaryBtn(true), opacity: saving || !modal.summary.trim() ? 0.5 : 1 }}>
+                  {saving ? "…" : "Enregistrer"}
+                </button>
+              )}
             </div>
           </div>
         </div>
