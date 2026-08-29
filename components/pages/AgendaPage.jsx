@@ -1562,7 +1562,13 @@ export default function AgendaPage() {
                     // ligne, l'heure poussée à droite.
                     const compact = (eMin - sMin) <= 30;
                     const minLbl = (m) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
-                    const timeLbl = active ? `${minLbl(sMin)} – ${minLbl(eMin >= 1440 ? 1439 : eMin)}` : eventTimeLabel(ev);
+                    /* Plage complète, et pas seulement l'heure de début : la
+                       hauteur du bloc donne bien la durée, mais à l'œil et à la
+                       demi-heure près — savoir QUAND on est libre demande de
+                       lire la fin. Le libellé est le même qu'en cours de
+                       déplacement, où il l'a toujours été. Une fin à minuit est
+                       ramenée à 23:59 : elle appartient au jour affiché. */
+                    const timeLbl = `${minLbl(sMin)} – ${minLbl(eMin >= 1440 ? 1439 : eMin)}`;
                     /* Poignées de redimensionnement, sur TOUT bloc de la grille
                        — tâches comprises : une tâche posée à une heure est un
                        bloc de temps comme un autre, et rien ne justifiait qu'on
