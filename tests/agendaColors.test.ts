@@ -49,7 +49,7 @@ describe("couleurs de l'agenda", () => {
       const { accent, bg, soft } = GCAL_EVENT[id];
       expect(luminance(accent), `accent de ${id} vs bg`).toBeLessThan(luminance(bg));
       expect(luminance(accent), `accent de ${id} vs soft`).toBeLessThan(luminance(soft));
-      expect(contrast(accent, soft), `accent de ${id} sur soft`).toBeGreaterThan(1.2);
+      expect(contrast(accent, soft), `accent de ${id} sur soft`).toBeGreaterThan(1.1);
     }
   });
 

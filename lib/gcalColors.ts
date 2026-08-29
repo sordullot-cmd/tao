@@ -20,16 +20,19 @@
  * couleur posée à l'écran est une couleur publiée ». Elles sont donc calculées
  * une fois pour toutes et écrites ici, à la méthode de `CHIP` : le fond ramené
  * à une clarté choisie (`toLuminance`), l'encre descendue dans la même teinte
- * jusqu'à 4,5:1 sur ce fond (`inkOn`), le trait ÉCLAIRCI de 38 % vers le blanc.
+ * jusqu'à 4,5:1 sur ce fond (`inkOn`), le trait ÉCLAIRCI de 54 % vers le blanc.
  *
- * Ce dernier geste est celui de l'ancien rendu, repris tel quel : le trait y
- * était `lighten(teinte, 0.38)`, et c'est cette légèreté qu'on veut retrouver.
- * Il descend donc sous les 3:1 des éléments graphiques (1,33 à 2,51 sur blanc,
- * là où l'ancien allait de 1,33 à 3,38) — un écart à WCAG 1.4.11 assumé, et
+ * Ce dernier geste vient de l'ancien rendu, qui posait `lighten(teinte, 0.38)` —
+ * repris d'abord à l'identique, puis poussé d'un cran encore : le trait tombe à
+ * 1,24–1,93 sur blanc, là où l'ancien allait de 1,33 à 3,38. C'est donc bien en
+ * dessous des 3:1 des éléments graphiques (WCAG 1.4.11), un écart assumé et
  * sans perte d'information : la couleur de l'évènement est AUSSI portée par son
- * texte, dont le contraste est vérifié, lui. Le trait décore et rappelle, il ne
- * porte rien seul. Un `deepen()` conforme a été essayé aux trois jeux
- * précédents et rendait la barre trop dure pour le reste du bloc.
+ * texte, dont le contraste est vérifié, lui. Le trait rappelle la couleur, il ne
+ * la porte pas seul. Un `deepen()` conforme a été essayé aux trois premiers jeux
+ * de valeurs et rendait la barre bien trop dure pour le reste du bloc.
+ *
+ * Reste une garantie, celle qui empêche le trait de disparaître pour de bon :
+ * il est toujours plus foncé que le fond qu'il borde, `bg` comme `soft`.
  *
  * Dix des onze teintes sont celles de `CATEGORY_PALETTE` (lib/lifeRpgCategories),
  * et pas seulement des voisines prises dans la charte : les deux vivent dans la
@@ -108,17 +111,17 @@ export type EventPaint = {
 
 /** Le jeu complet, par colorId. Valeurs publiées : rien n'est calculé au rendu. */
 export const GCAL_EVENT: Record<string, EventPaint> = {
-  1:  { bg: "#F9F0FF", soft: "#FBF5FF", accent: "#E1B2FF", ink: "#8756A7" },
-  2:  { bg: "#EAF8DF", soft: "#F0FBE9", accent: "#97DF62", ink: "#347902" },
-  3:  { bg: "#EDE7F7", soft: "#F8F6FC", accent: "#BAA2E0", ink: "#7556A7" },
-  4:  { bg: "#FFF0F0", soft: "#FFF5F5", accent: "#FFCFCF", ink: "#875F5F" },
-  5:  { bg: "#FFF4CA", soft: "#FFF8DC", accent: "#FFDD61", ink: "#876A00" },
-  6:  { bg: "#FFE7C4", soft: "#FFF6E9", accent: "#FFBE61", ink: "#965900" },
-  7:  { bg: "#E6F6FE", soft: "#EDF9FE", accent: "#72CEF9", ink: "#1373A1" },
-  8:  { bg: "#F5F5F5", soft: "#F6F6F6", accent: "#ABABAB", ink: "#6B6B6B" },
-  9:  { bg: "#E1EAF7", soft: "#F4F8FC", accent: "#7CA6DE", ink: "#2765B5" },
-  10: { bg: "#E0EECF", soft: "#F3F9ED", accent: "#97C861", ink: "#3A6E00" },
-  11: { bg: "#FFE3E3", soft: "#FFF5F5", accent: "#FF8F8F", ink: "#BA3737" },
+  1:  { bg: "#F9F0FF", soft: "#FBF5FF", accent: "#E8C6FF", ink: "#8756A7" },
+  2:  { bg: "#EAF8DF", soft: "#F0FBE9", accent: "#B2E88B", ink: "#347902" },
+  3:  { bg: "#EDE7F7", soft: "#F8F6FC", accent: "#CCBAE8", ink: "#7556A7" },
+  4:  { bg: "#FFF0F0", soft: "#FFF5F5", accent: "#FFDCDC", ink: "#875F5F" },
+  5:  { bg: "#FFF4CA", soft: "#FFF8DC", accent: "#FFE68A", ink: "#876A00" },
+  6:  { bg: "#FFE7C4", soft: "#FFF6E9", accent: "#FFCF8A", ink: "#965900" },
+  7:  { bg: "#E6F6FE", soft: "#EDF9FE", accent: "#97DBFB", ink: "#1373A1" },
+  8:  { bg: "#F5F5F5", soft: "#F6F6F6", accent: "#C0C0C0", ink: "#6B6B6B" },
+  9:  { bg: "#E1EAF7", soft: "#F4F8FC", accent: "#9DBDE6", ink: "#2765B5" },
+  10: { bg: "#E0EECF", soft: "#F3F9ED", accent: "#B2D78A", ink: "#3A6E00" },
+  11: { bg: "#FFE3E3", soft: "#FFF5F5", accent: "#FFACAC", ink: "#BA3737" },
 };
 
 /** Le jeu de l'emplacement 1, servi à tout ce qui n'a pas de colorId. */
