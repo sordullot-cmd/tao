@@ -11,10 +11,26 @@
  * Application : style inline sur <html>, qui prime sur les valeurs par défaut
  * du CSS. Persistance en localStorage, relue avant l'hydratation par le script
  * `tr4de-accent-init` de app/layout.tsx (évite le flash de l'ancienne couleur).
+ *
+ * ── LE COMPTE, ET PAS SEULEMENT L'APPAREIL ────────────────────────────────
+ * Les deux clés localStorage restent le cache rapide — c'est tout ce que peut
+ * lire un script exécuté avant l'hydratation. La teinte de référence, elle,
+ * vit sur le compte : `lib/hooks/useAccentSetting.ts` la range dans
+ * `user_productivity` sous `ACCENT_CLOUD_KEY`, la relit à chaque montage et
+ * réapplique ce qu'il en revient. Un nouvel appareil ouvre donc l'app dans la
+ * couleur du compte — au prix d'un bref passage par la teinte livrée, le temps
+ * de la première lecture : le script d'avant-hydratation n'a pas de réseau.
  */
 
 export const ACCENT_KEY = "tr4de_accent";
 export const ACCENT_2_KEY = "tr4de_accent_2";
+
+/** Cache local du couple de teintes, tel que le range `useCloudState`. Distinct
+ *  des deux clés ci-dessus, qui restent lues telles quelles par le script
+ *  d'avant-hydratation et ne portent qu'une chaîne. */
+export const ACCENT_STATE_KEY = "tr4de_accent_state";
+/** Colonne `key` de `user_productivity` où dort la teinte du compte. */
+export const ACCENT_CLOUD_KEY = "accent";
 
 export type AccentPreset = {
   id: string;
@@ -57,6 +73,22 @@ export function readAccent(): { primary: string; secondary: string } {
     if (s && isHexColor(s)) secondary = s;
   } catch {}
   return { primary, secondary };
+}
+
+/** Ramène n'importe quelle valeur venue du stockage à un couple de teintes
+ *  valide. Le magasin cloud est un JSON libre : une valeur d'une version
+ *  précédente, ou tronquée, ne doit pas repeindre l'app en `undefined`. */
+export function normalizeAccent(value: unknown): { primary: string; secondary: string } {
+  const v = (value ?? {}) as { primary?: unknown; secondary?: unknown };
+  const primary = typeof v.primary === "string" && isHexColor(v.primary) ? v.primary : DEFAULT_ACCENT;
+  const secondary = typeof v.secondary === "string" && isHexColor(v.secondary) ? v.secondary : DEFAULT_ACCENT_2;
+  return { primary, secondary };
+}
+
+/** Vrai quand les deux teintes sont celles livrées par défaut. */
+export function isDefaultAccent(a: { primary: string; secondary: string }): boolean {
+  return a.primary.toLowerCase() === DEFAULT_ACCENT.toLowerCase()
+    && a.secondary.toLowerCase() === DEFAULT_ACCENT_2.toLowerCase();
 }
 
 /** Applique les teintes à <html> et les enregistre. */

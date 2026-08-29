@@ -25,6 +25,7 @@ import NotesPage from "@/components/pages/NotesPage";
 import RevisionsPage from "@/components/pages/RevisionsPage";
 import FocusPage from "@/components/pages/FocusPage";
 import FocusSentinel from "@/components/focus/FocusSentinel";
+import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
 import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import ActivityPage from "@/components/pages/ActivityPage";
@@ -158,6 +159,10 @@ export default function App() {
   const supabase = createClient();
   const { user, loading: authLoading } = useAuth();
   useLang(); // re-render app on language change
+  /* Teinte de marque du compte : relue et appliquée ici parce que seule la page
+     courante est montée — la couleur doit suivre même quand on n'ouvre jamais
+     les Réglages, qui montent le même hook pour l'écrire. */
+  useAccentSetting();
 
   // Re-render quand l'utilisateur change la devise / le fuseau horaire dans Settings.
   const [, forcePrefRefresh] = useState(0);

@@ -20,10 +20,16 @@
  * couleur posée à l'écran est une couleur publiée ». Elles sont donc calculées
  * une fois pour toutes et écrites ici, à la méthode de `CHIP` : le fond ramené
  * à une clarté choisie (`toLuminance`), l'encre descendue dans la même teinte
- * jusqu'à 4,5:1 sur ce fond (`inkOn`), le trait assombri juste assez pour
- * exister sur le plus clair des fonds qu'il côtoie (`deepen` à 0,28 plutôt que
- * son défaut de 0,30 : au défaut, le trait d'une tâche tombait à 2,89:1 sur son
- * propre fond, sous le seuil des éléments graphiques — WCAG 1.4.11).
+ * jusqu'à 4,5:1 sur ce fond (`inkOn`), le trait ÉCLAIRCI de 38 % vers le blanc.
+ *
+ * Ce dernier geste est celui de l'ancien rendu, repris tel quel : le trait y
+ * était `lighten(teinte, 0.38)`, et c'est cette légèreté qu'on veut retrouver.
+ * Il descend donc sous les 3:1 des éléments graphiques (1,33 à 2,51 sur blanc,
+ * là où l'ancien allait de 1,33 à 3,38) — un écart à WCAG 1.4.11 assumé, et
+ * sans perte d'information : la couleur de l'évènement est AUSSI portée par son
+ * texte, dont le contraste est vérifié, lui. Le trait décore et rappelle, il ne
+ * porte rien seul. Un `deepen()` conforme a été essayé aux trois jeux
+ * précédents et rendait la barre trop dure pour le reste du bloc.
  *
  * Dix des onze teintes sont celles de `CATEGORY_PALETTE` (lib/lifeRpgCategories),
  * et pas seulement des voisines prises dans la charte : les deux vivent dans la
@@ -37,20 +43,28 @@
  * deux bleus, deux violets, deux rouges, deux jaunes) : ramenées à la même
  * clarté, les deux moitiés d'une paire deviennent le même pastel — Flamant et
  * Tomate tombaient exactement sur la même valeur. Le membre clair de chaque
- * paire vise donc 0,86 de luminance et le membre foncé 0,74 (0,89 pour le
- * gris), ce qui les sépare mieux que les couleurs d'origine (distance minimale
- * entre fonds : 7,4 contre 5,5 avant).
+ * paire vise donc 0,90 de luminance et le membre foncé 0,82 (0,93 pour le gris).
  *
- * Ces clartés sont HAUTES à dessein. Un premier jeu visait 0,82 / 0,68 : les
- * contrastes tenaient et les emplacements se séparaient mieux encore, mais une
- * journée pleine devenait un mur d'aplats — la grille se lisait comme une
- * mosaïque au lieu d'un fond sur lequel des blocs sont posés. La teinte doit
- * s'apercevoir, pas s'imposer ; ce qui reste des dix points de luminance rendus
- * suffit à nommer la couleur, et le trait dit le reste.
+ * Ces clartés sont HAUTES, et elles ont été montées deux fois. Les premiers jeux
+ * visaient 0,82 / 0,68 puis 0,86 / 0,74 : les contrastes tenaient et les
+ * emplacements se séparaient mieux, mais une journée pleine devenait un mur
+ * d'aplats — la grille se lisait comme une mosaïque au lieu d'un fond sur lequel
+ * des blocs sont posés. Les valeurs retenues retrouvent la légèreté qu'avait
+ * l'ancien rendu, où la teinte n'était posée qu'à 20 % sur du blanc (ses fonds
+ * s'étalaient de 0,78 à 0,95 de luminance, pour une moyenne de 0,86).
  *
- * `soft` pousse la même logique à son terme : ~0,95 de luminance pour TOUS les
- * emplacements — à peine autre chose que du blanc — et sans chercher à ce que
- * les onze restent distincts entre eux. C'est le fond des tâches et des
+ * Ce que ça coûte : les fonds ne se distinguent plus entre eux que de 5,7 au
+ * mieux, soit le niveau de l'ancien rendu. Ce n'est PAS une régression cachée,
+ * c'est le choix assumé — un voile de couleur ne peut pas à la fois s'effacer et
+ * trancher. Ce qui identifie l'emplacement, c'est le trait de gauche, dont le
+ * contraste est vérifié, lui, contre les deux fonds qu'il côtoie.
+ *
+ * `soft` pousse la même logique à son terme : ~0,93 de luminance pour TOUS les
+ * emplacements — presque du blanc — et sans chercher à ce que les onze restent
+ * distincts entre eux. (0,965 avait été essayé : les tâches y devenaient
+ * franchement blanches, au point qu'on ne devinait plus leur couleur du tout.
+ * Graphite descend son `bg` à 0,91 pour la même raison : à 0,93, son fond de
+ * tâche le rattrapait exactement.) C'est le fond des tâches et des
  * évènements passés, deux choses qui doivent se tenir derrière ce qui reste à
  * faire. Ce qui les identifie, c'est leur trait et, pour une tâche, son rond de
  * complétion — pas leur fond.
@@ -94,17 +108,17 @@ export type EventPaint = {
 
 /** Le jeu complet, par colorId. Valeurs publiées : rien n'est calculé au rendu. */
 export const GCAL_EVENT: Record<string, EventPaint> = {
-  1:  { bg: "#F7EBFF", soft: "#FCF8FF", accent: "#B572E0", ink: "#8756A7" },
-  2:  { bg: "#E0F6D0", soft: "#F4FBEE", accent: "#449E02", ink: "#347902" },
-  3:  { bg: "#E5DCF3", soft: "#FAF9FD", accent: "#9069CD", ink: "#694D96" },
-  4:  { bg: "#FFE9E9", soft: "#FFF8F8", accent: "#AD7979", ink: "#875F5F" },
-  5:  { bg: "#FFEEB2", soft: "#FFF9E5", accent: "#AD8800", ink: "#7A5F00" },
-  6:  { bg: "#FFDAA4", soft: "#FFF9EF", accent: "#C57400", ink: "#875000" },
-  7:  { bg: "#DBF2FE", soft: "#F2FAFE", accent: "#1688BE", ink: "#1373A1" },
-  8:  { bg: "#F2F2F2", soft: "#F9F9F9", accent: "#777777", ink: "#6B6B6B" },
-  9:  { bg: "#D2E1F3", soft: "#F7F9FD", accent: "#2B70C9", ink: "#235BA3" },
-  10: { bg: "#D1E6B8", soft: "#F7FBF2", accent: "#4D9300", ink: "#3A6E00" },
-  11: { bg: "#FFD6D6", soft: "#FFF8F8", accent: "#FF4B4B", ink: "#A73232" },
+  1:  { bg: "#F9F0FF", soft: "#FBF5FF", accent: "#E1B2FF", ink: "#8756A7" },
+  2:  { bg: "#EAF8DF", soft: "#F0FBE9", accent: "#97DF62", ink: "#347902" },
+  3:  { bg: "#EDE7F7", soft: "#F8F6FC", accent: "#BAA2E0", ink: "#7556A7" },
+  4:  { bg: "#FFF0F0", soft: "#FFF5F5", accent: "#FFCFCF", ink: "#875F5F" },
+  5:  { bg: "#FFF4CA", soft: "#FFF8DC", accent: "#FFDD61", ink: "#876A00" },
+  6:  { bg: "#FFE7C4", soft: "#FFF6E9", accent: "#FFBE61", ink: "#965900" },
+  7:  { bg: "#E6F6FE", soft: "#EDF9FE", accent: "#72CEF9", ink: "#1373A1" },
+  8:  { bg: "#F5F5F5", soft: "#F6F6F6", accent: "#ABABAB", ink: "#6B6B6B" },
+  9:  { bg: "#E1EAF7", soft: "#F4F8FC", accent: "#7CA6DE", ink: "#2765B5" },
+  10: { bg: "#E0EECF", soft: "#F3F9ED", accent: "#97C861", ink: "#3A6E00" },
+  11: { bg: "#FFE3E3", soft: "#FFF5F5", accent: "#FF8F8F", ink: "#BA3737" },
 };
 
 /** Le jeu de l'emplacement 1, servi à tout ce qui n'a pas de colorId. */

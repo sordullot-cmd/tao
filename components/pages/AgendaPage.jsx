@@ -1244,8 +1244,8 @@ export default function AgendaPage() {
 
   // Scroll auto vers l'heure actuelle à l'ouverture du time-grid (jour / semaine).
   // On réarme l'intention à chaque changement de vue/date…
-  const scrollRef = React.useRef(null);
   const gridRef = React.useRef(null);
+  const nowAnchorRef = React.useRef(null);
   const didScrollRef = React.useRef(false);
   React.useEffect(() => { didScrollRef.current = false; }, [view, cursor, isMobile]);
   // …puis on positionne la grille dès qu'elle est montée, AVANT la première
@@ -1258,28 +1258,21 @@ export default function AgendaPage() {
     if (!isMobile && view !== "day" && view !== "week") return;
     if (didScrollRef.current) return;
     const grid = gridRef.current;
-    if (!grid) return;
-    // Depuis que la page est en colonne flex, ce n'est plus forcément la carte
-    // qui défile : quand la chaîne de hauteurs ne se ferme pas, c'est le corps
-    // de la coquille. On vise donc le premier ancêtre qui défile VRAIMENT,
-    // sinon on croit avoir défilé et on reste à minuit.
-    let el = scrollRef.current;
-    while (el && el.scrollHeight <= el.clientHeight) el = el.parentElement;
-    // Tant que rien n'a sa hauteur (rendu asynchrone), rien à faire défiler :
-    // on retente au rendu suivant plutôt que de se figer en haut.
-    if (!el) return;
+    // Pas de repère = la période affichée ne contient pas aujourd'hui : on ne
+    // touche pas au défilement (cf. le repère dans la grille).
+    const anchor = nowAnchorRef.current;
+    // Tant que la grille n'a pas sa hauteur (rendu asynchrone), il n'y a rien à
+    // faire défiler : on retente au rendu suivant plutôt que de se figer en haut.
+    if (!grid || !anchor || grid.getBoundingClientRect().height <= 0) return;
     didScrollRef.current = true;
-    // Cible : ligne « maintenant » placée avec ~2h de contexte au-dessus
-    // (le navigateur clampe scrollTop si on dépasse le bas de la grille).
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const nowTop = (nowMinutes / 60) * HOUR_H;
-    // Position de minuit dans le référentiel du conteneur qui défile : la
-    // gouttière d'heures peut être précédée de l'en-tête des jours, d'une barre
-    // d'outils… autant de hauteurs qu'on ne connaît qu'après la mise en page.
-    const offset = grid.getBoundingClientRect().top
-      - (el === document.scrollingElement ? 0 : el.getBoundingClientRect().top)
-      + el.scrollTop;
-    el.scrollTop = Math.max(0, offset + nowTop - 2 * HOUR_H);
+    // On laisse le navigateur amener le repère en haut de la zone visible :
+    // depuis que la page est en colonne flex, ce n'est plus forcément la carte
+    // qui défile, mais parfois le corps de la coquille. Calculer un `scrollTop`
+    // demandait de désigner le bon élément — et se tromper, c'était rester à
+    // minuit sans le savoir. `scrollIntoView` remonte toute la chaîne.
+    // `instant` : `html` porte `scroll-behavior: smooth`, on ne veut pas voir
+    // la journée défiler à l'ouverture.
+    anchor.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
   });
 
   /* ─────────────── Header ─────────────── */
@@ -1337,10 +1330,10 @@ export default function AgendaPage() {
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
       {/* Le bouton « Aujourd'hui » a pris la place du libellé de mois : une
           seule commande de navigation au lieu de deux voisines qui se
-          disputaient le même rôle. Trois boutons à nu séparés par un écart,
-          plutôt qu'une carte unique : ce sont trois cibles, pas trois zones
-          d'un même contrôle. Le mois disparaît :
-          l'en-tête de la grille nomme déjà les jours qu'on regarde. */}
+          disputaient le même rôle. Trois boutons séparés par un écart plutôt
+          qu'une carte unique — ce sont trois cibles, pas trois zones d'un même
+          contrôle. Aucun libellé de période : l'en-tête de la grille nomme déjà
+          les jours qu'on regarde. */}
       {connected && !isMobile && (
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <button
@@ -1414,7 +1407,7 @@ export default function AgendaPage() {
 
     return (
       <div style={{ ...card(), border: "none", overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        <div ref={scrollRef} style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
+        <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
         {/* En-tête jours : nom + numéro + tâches du jour, le tout épinglé en haut */}
         <div style={{ position: "sticky", top: 0, zIndex: 8, background: T.white, display: "flex", borderBottom: `1px solid ${T.border}`, alignItems: "stretch" }}>
           <div style={{ width: gutter, flexShrink: 0 }} />
@@ -1481,6 +1474,16 @@ export default function AgendaPage() {
 
         {/* Grille horaire */}
         <div ref={gridRef} style={{ display: "flex", position: "relative" }}>
+            {/* Cible du défilement d'ouverture : la ligne « maintenant » moins
+                deux heures de contexte. Un repère plutôt qu'une coordonnée —
+                c'est la mise en page réelle qui le place, pas nous.
+                Il n'existe QUE si aujourd'hui est à l'écran : sur une autre
+                journée, l'heure qu'il est ne désigne rien, et se caler dessus
+                jetterait le matin hors de vue sans raison. Son absence est ce
+                qui désarme le défilement. */}
+            {days.some((d) => sameDay(d, today)) && (
+              <div ref={nowAnchorRef} aria-hidden style={{ position: "absolute", top: Math.max(0, nowTop - 2 * HOUR_H), left: 0, width: 1, height: 1, pointerEvents: "none" }} />
+            )}
             {/* Gouttière heures */}
             <div style={{ width: gutter, flexShrink: 0 }}>
               {hours.map((h) => (

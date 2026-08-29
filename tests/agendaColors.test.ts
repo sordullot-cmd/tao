@@ -38,14 +38,18 @@ describe("couleurs de l'agenda", () => {
     }
   });
 
-  /* Le trait de 2 px est ce qui porte l'identité de la couleur : sous 3:1 il
-     cesse d'exister (WCAG 1.4.11, éléments graphiques). Le fond qui le met le
-     plus en difficulté est `soft`, quasi blanc — c'est lui qu'on vérifie, le
-     blanc de la grille étant plus clair encore. */
-  it("détache le trait de gauche des fonds qu'il côtoie", () => {
+  /* Le trait NE tient PAS les 3:1 des éléments graphiques, et c'est voulu : il
+     reprend l'éclaircissement de 38 % de l'ancien rendu, dont c'est toute la
+     légèreté. Ce qu'on vérifie à la place, c'est qu'il reste visible — plus
+     franc que le fond du bloc, sans quoi il n'y aurait plus de bord du tout —
+     et que la couleur est bien portée AILLEURS que par lui, par le texte, qui
+     est tenu à 4,5:1 (cas précédent). */
+  it("garde le trait de gauche plus franc que le fond qu'il borde", () => {
     for (const id of IDS) {
-      expect(contrast(GCAL_EVENT[id].accent, "#FFFFFF"), `accent de ${id} sur la grille`).toBeGreaterThanOrEqual(3);
-      expect(contrast(GCAL_EVENT[id].accent, GCAL_EVENT[id].soft), `accent de ${id} sur soft`).toBeGreaterThanOrEqual(3);
+      const { accent, bg, soft } = GCAL_EVENT[id];
+      expect(luminance(accent), `accent de ${id} vs bg`).toBeLessThan(luminance(bg));
+      expect(luminance(accent), `accent de ${id} vs soft`).toBeLessThan(luminance(soft));
+      expect(contrast(accent, soft), `accent de ${id} sur soft`).toBeGreaterThan(1.2);
     }
   });
 
@@ -54,16 +58,20 @@ describe("couleurs de l'agenda", () => {
      tâches et du passé, à deux doigts du blanc. */
   it("garde les fonds légers, et ceux des tâches presque blancs", () => {
     for (const id of IDS) {
-      expect(luminance(GCAL_EVENT[id].bg), `bg de ${id}`).toBeGreaterThan(0.7);
-      expect(luminance(GCAL_EVENT[id].soft), `soft de ${id}`).toBeGreaterThan(0.93);
+      expect(luminance(GCAL_EVENT[id].bg), `bg de ${id}`).toBeGreaterThan(0.8);
+      expect(luminance(GCAL_EVENT[id].soft), `soft de ${id}`).toBeGreaterThan(0.91);
+      // …et jamais confondu avec le fond plein, sinon une tâche ne se
+      // distinguerait plus d'un évènement (le cas qu'a posé Graphite).
+      expect(luminance(GCAL_EVENT[id].soft), `soft de ${id}`).toBeGreaterThan(luminance(GCAL_EVENT[id].bg));
       // …sans jamais être blanc pour autant : la teinte doit s'apercevoir.
       expect(GCAL_EVENT[id].soft, `soft de ${id}`).not.toBe("#FFFFFF");
     }
   });
 
   /* Onze emplacements pour six familles de teintes : c'est la contrainte qui a
-     fait renoncer à une clarté de fond unique. Le seuil garde l'écart obtenu
-     (7,4), au-dessus des 5,5 des couleurs d'origine. Il ne vaut que pour `bg` :
+     fait renoncer à une clarté de fond unique. Le seuil (5,7 obtenu) ne garde
+     qu'un plancher : des voiles aussi légers ne peuvent pas trancher entre eux,
+     et c'est le trait qui identifie l'emplacement. Il ne vaut que pour `bg` :
      les `soft` convergent vers le blanc, c'est leur raison d'être. */
   it("sépare les fonds des emplacements voisins", () => {
     const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -71,7 +79,7 @@ describe("couleurs de l'agenda", () => {
       for (let j = i + 1; j < paints.length; j++) {
         const [a, b] = [rgb(paints[i].bg), rgb(paints[j].bg)];
         const d = Math.sqrt(0.3 * (a[0] - b[0]) ** 2 + 0.59 * (a[1] - b[1]) ** 2 + 0.11 * (a[2] - b[2]) ** 2);
-        expect(d, `${IDS[i]} ↔ ${IDS[j]}`).toBeGreaterThan(7);
+        expect(d, `${IDS[i]} ↔ ${IDS[j]}`).toBeGreaterThan(5);
       }
     }
   });
@@ -102,10 +110,10 @@ describe("tâche sans couleur choisie", () => {
   /* Une tâche à laquelle on n'a rien choisi prenait l'emplacement 1 : elle
      ressortait lavande, une teinte qu'on n'avait pas demandée et qui la faisait
      passer pour classée. Elle est désormais neutre. */
-  it("reste grise, sans emprunter la teinte d'un emplacement", () => {
-    const teintes = Object.values(GCAL_COLORS).map((c) => c.toUpperCase());
-    expect(teintes).not.toContain(TASK_DEFAULT_PAINT.accent.toUpperCase());
-    // Gris au sens strict : les trois canaux égaux.
+  it("reste grise : aucun des quatre rôles ne porte de teinte", () => {
+    // Gris au sens strict, les trois canaux égaux. C'est la seule garantie qui
+    // tienne dans le temps : le gris de la charte est aussi celui de
+    // l'emplacement Graphite, les comparer ne dirait rien.
     for (const role of ["bg", "soft", "accent", "ink"] as const) {
       const [, r, g, b] = /^#(..)(..)(..)$/.exec(TASK_DEFAULT_PAINT[role])!;
       expect([r, g, b], `${role}`).toEqual([r, r, r]);

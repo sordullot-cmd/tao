@@ -34,7 +34,8 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { DEFAULT_ALERT_SETTINGS } from "@/lib/hooks/useTradeAlerts";
 import { notify, ensureNotifyPermission, isNotifyGranted, isTauri } from "@/lib/notify";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { ACCENT_PRESETS, applyAccent, isHexColor, readAccent } from "@/lib/ui/accent";
+import { ACCENT_PRESETS, isHexColor } from "@/lib/ui/accent";
+import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
 import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
@@ -663,8 +664,11 @@ function GlobalsSection() {
   });
   const [savedMsg, setSavedMsg] = useState("");
   const [loadedFromCloud, setLoadedFromCloud] = useState(false);
-  // Accent de marque : principale (--accent) et secondaire (--accent-2).
-  const [accent, setAccent] = useState(() => readAccent());
+  /* Accent de marque : principale (--accent) et secondaire (--accent-2). Le
+     hook lit la teinte du COMPTE et l'applique ; cette page n'en est qu'un des
+     points d'écriture, la coquille monte le même hook pour l'appliquer au
+     démarrage. */
+  const { accent, setAccent: setAccentColors } = useAccentSetting();
 
   // Applique le thème choisi : "system" retire l'attribut (fallback CSS
   // prefers-color-scheme), sinon force data-theme="light|dark".
@@ -674,15 +678,6 @@ function GlobalsSection() {
       else document.documentElement.dataset.theme = v;
       localStorage.setItem("tr4de_theme", v);
     } catch {}
-  };
-
-  // L'état initial est calculé côté serveur (valeurs par défaut) : on relit une
-  // fois monté pour refléter ce qui est réellement enregistré.
-  useEffect(() => { setAccent(readAccent()); }, []);
-
-  const setAccentColors = (primary, secondary) => {
-    setAccent({ primary, secondary });
-    applyAccent(primary, secondary);
   };
 
   // Charger depuis Supabase au montage (et sur focus)
