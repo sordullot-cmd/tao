@@ -980,7 +980,12 @@ export default function App() {
               overflowX: "hidden",
               position: "relative",
             }}>
-              <div key={page} style={{ width: "100%", minWidth: 0 }}>
+              {/* `minHeight: 100%` — sans effet sur une page courte (le bloc est
+                  transparent), mais il donne aux pages qui le demandent une
+                  hauteur de référence : sans lui, la chaîne est rompue ici et
+                  aucune ne peut occuper la fenêtre autrement qu'en mesurant sa
+                  propre position en JavaScript. */}
+              <div key={page} style={{ width: "100%", minWidth: 0, minHeight: "100%" }}>
                 {pages[page] || pages.dashboard}
               </div>
             </div>

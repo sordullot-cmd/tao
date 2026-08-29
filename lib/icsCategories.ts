@@ -65,12 +65,12 @@ const RULES: { kind: CourseKind; test: RegExp }[] = [
  * franches à ce qui demande réellement d'être là.
  */
 const KIND_COLOR_ID: Record<CourseKind, string> = {
-  cm: "9",         // Myrtille
+  cm: "5",         // Banane
   td: "2",         // Sauge
   tp: "7",         // Paon
   examen: "11",    // Tomate — la seule teinte qui doit sauter aux yeux
   revisions: "6",  // Tangerine
-  soutien: "5",    // Banane
+  soutien: "9",    // Myrtille — libérée par les CM, passés au jaune
   reunion: "3",    // Raisin
   projet: "4",     // Flamant
   stage: "10",     // Basilic

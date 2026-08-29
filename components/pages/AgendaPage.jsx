@@ -4,7 +4,7 @@ import React from "react";
 import {
   Calendar as CalendarIcon,
   LogOut, AlertTriangle, Plug, Trash2, X as IconX, ExternalLink,
-  Clock, MapPin, AlignLeft, Bell, ChevronDown, Target, HelpCircle, Repeat,
+  Clock, MapPin, AlignLeft, Bell, ChevronDown, ChevronLeft, ChevronRight, Target, HelpCircle, Repeat,
   Plus, CheckSquare, Square, Check, Sparkles,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
@@ -15,16 +15,15 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { DateField, TimeField } from "./AgendaDateFields";
 import MiniCalendar from "@/components/ui/MiniCalendar";
-import { FIELD_BG, PeriodPills, StepperPill } from "@/components/ui/da";
+import { FIELD_BG } from "@/components/ui/da";
 import Popover from "@/components/ui/Popover";
 import {
   RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon,
   TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY,
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
 } from "@/lib/lifeRpgCategories";
-import { GCAL_COLORS, DEFAULT_EVENT_COLOR, nearestGcalColorId } from "@/lib/gcalColors";
-import { useIcsFeeds, useIcsEvents, isFeedCalendarId, probeFeed } from "@/lib/hooks/useIcsFeeds";
-import { courseKind, courseColor, KIND_LABELS } from "@/lib/icsCategories";
+import { GCAL_COLORS, DEFAULT_EVENT_COLOR, eventPaint, nearestGcalColorId, TASK_DEFAULT_PAINT } from "@/lib/gcalColors";
+import { useIcsFeeds, useIcsEvents, isFeedCalendarId } from "@/lib/hooks/useIcsFeeds";
 import {
   MAX_REMINDERS, normalizeReminders, remindersFromEvent,
   reminderLabel, addReminder, removeReminder,
@@ -89,38 +88,28 @@ function eventTimeLabel(ev) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Palette officielle Google Agenda (colorId 1–11) : voir l'import GCAL_COLORS /
-// DEFAULT_EVENT_COLOR en tête de fichier (source partagée avec la page Vie RPG).
+// Palette des évènements : voir lib/gcalColors. Les trois couleurs d'un bloc
+// (fond, trait, texte) y sont PUBLIÉES, une par colorId — elles étaient dérivées
+// ici même par éclaircissement/assombrissement, ce que la charte interdit.
 
-/** Éclaircit une couleur hex (mélange vers le blanc). */
-function lighten(hex, f = 0.2) {
-  const h = String(hex).replace("#", "");
-  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-  const n = parseInt(full, 16);
-  if (isNaN(n)) return hex;
-  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  r = Math.round(r + (255 - r) * f); g = Math.round(g + (255 - g) * f); b = Math.round(b + (255 - b) * f);
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
-// Toutes les couleurs sont légèrement éclaircies à l'affichage.
 // `calendarColor` sert de repli : les évènements d'un agenda abonné (emploi du
 // temps universitaire) n'ont pas de `colorId` propre et seraient sinon tous de
-// la couleur par défaut, indiscernables des évènements personnels.
-const eventColor = (ev) =>
-  lighten(GCAL_COLORS[ev.colorId] || ev.calendarColor || DEFAULT_EVENT_COLOR, 0.38);
+// la couleur par défaut, indiscernables des évènements personnels. On rapproche
+// donc sa teinte de l'emplacement le plus proche, plutôt que de la poser telle
+// quelle : hors charte, et sans encre lisible qui l'accompagne.
+/* Une tâche à laquelle on n'a pas choisi de couleur reste neutre : la teinter
+   par défaut lui donnerait un classement qu'on n'a pas demandé. Dès qu'une
+   couleur est posée, elle prime — y compris sur une tâche. */
+const isUncoloredTask = (ev) => (!!ev.isTask || !!ev.isGTask) && !ev.colorId && !ev.calendarColor;
+const eventPaintOf = (ev) =>
+  isUncoloredTask(ev)
+    ? TASK_DEFAULT_PAINT
+    : eventPaint(ev.colorId ?? (ev.calendarColor ? nearestGcalColorId(ev.calendarColor) : null));
 
-/** Assombrit une couleur hex (pour le texte lié à la couleur de l'évènement). */
-function darken(hex, f = 0.5) {
-  const h = String(hex).replace("#", "");
-  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-  const n = parseInt(full, 16);
-  if (isNaN(n)) return "#0D0D0D";
-  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  r = Math.round(r * (1 - f)); g = Math.round(g * (1 - f)); b = Math.round(b * (1 - f));
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
-// Texte d'un évènement : version foncée de sa couleur (ex. vert → vert foncé).
-const eventTextColor = (ev) => darken(eventColor(ev), 0.5);
+// Teinte de fond d'un bloc, selon ce qu'il est : une tâche se tient en retrait
+// derrière les évènements, qui sont des engagements pris à une heure.
+const eventColor = (ev) => (ev.isTask ? eventPaintOf(ev).soft : eventPaintOf(ev).bg);
+const eventTextColor = (ev) => eventPaintOf(ev).ink;
 
 /* ─────────────── Helpers formulaire évènement ─────────────── */
 const localTZ = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; } };
@@ -302,6 +291,24 @@ const REMINDER_UNITS = [
 ];
 
 const HOUR_H = 68; // hauteur d'une heure (px) dans le time-grid
+// La grille s'arrête à la même ligne que la barre latérale, qui se termine à
+// 12 px du bas (`margin: 12px 0 12px 12px` dans `components/ui/Sidebar.tsx`).
+// S'aligner sur elle plutôt que sur une respiration inventée : deux bords à des
+// hauteurs différentes se voient immédiatement.
+const SIDEBAR_BOTTOM_GAP = 12;
+/* Deux mesures de la coquille (`components/DashboardNew.jsx`) qu'il faut
+   connaître pour retomber sur la ligne de la barre latérale :
+   `--page-pad-bottom` du conteneur qui défile, et le padding bas du cadre qui
+   le contient. */
+const SHELL_PAD_BOTTOM = 24;
+const SHELL_OUTER_GAP = 8;
+/* De combien le corps remonte la fin du flux. Le contenu s'arrêterait sinon à
+   `24 + 8 = 32 px` du bas ; on veut les 12 px de la barre, il faut donc rendre
+   20 px. Ce tirage vaut pour les DEUX cas, et c'est là qu'était l'erreur d'avant :
+   reprendre les 24 px entiers alignait bien la grille, mais supprimait toute
+   respiration sous une vue plus haute que l'écran — en bas de défilement, le
+   contenu venait buter contre le bord. */
+const BODY_PULL = SHELL_PAD_BOTTOM - (SIDEBAR_BOTTOM_GAP - SHELL_OUTER_GAP);
 
 /* ─────────────── Plage de dates par mode ─────────────── */
 function computeRange(view, cursor) {
@@ -515,7 +522,7 @@ export default function AgendaPage() {
   const isMobile = useIsMobile();
   const {
     ready, configured, connected, connect, disconnect,
-    calendars, hiddenCalendars, toggleCalendar,
+    calendars,
     fetchEvents, createEvent, updateEvent, deleteEvent, getEvent, setEventDone,
     fetchTasks, createTask, updateTask, toggleTask, deleteTask,
   } = useGoogleCalendar();
@@ -523,14 +530,14 @@ export default function AgendaPage() {
   const [view, setView] = React.useState("week");
   const [cursor, setCursor] = React.useState(() => startOfDay(new Date()));
   const [datePickerOpen, setDatePickerOpen] = React.useState(false);
+  const [viewMenuOpen, setViewMenuOpen] = React.useState(false);
   // Ancres des menus flottants : tous portalisés, il leur faut donc une
   // référence explicite vers leur déclencheur pour se placer.
   const datePickerAnchor = React.useRef(null);
+  const viewAnchor = React.useRef(null);
   const recurAnchor = React.useRef(null);
   const colorAnchor = React.useRef(null);
   const remindAnchor = React.useRef(null);
-  const calsAnchor = React.useRef(null);
-  const [calsOpen, setCalsOpen] = React.useState(false);
   // Horloge courante : sert à tracer la ligne « maintenant » et à griser le passé.
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
@@ -542,11 +549,9 @@ export default function AgendaPage() {
   // Flux iCal ajoutés dans l'app (emploi du temps universitaire) : lus
   // directement, sans passer par Google — l'API Calendar ne sait pas s'abonner
   // à une URL, seule son interface web le sait.
-  const { feeds, addFeed, removeFeed, patchFeed } = useIcsFeeds();
-  const [feedUrl, setFeedUrl] = React.useState("");
-  const [feedName, setFeedName] = React.useState("");
-  const [feedBusy, setFeedBusy] = React.useState(false);
-  const [feedError, setFeedError] = React.useState(null);
+  // La page ne fait que LIRE les flux : leur gestion (ajout, renommage,
+  // suppression) vit dans les paramètres du compte, avec les autres réglages.
+  const { feeds } = useIcsFeeds();
   const [taskTimes, setTaskTimes] = useCloudState(TASK_TIMES_KEY, TASK_TIMES_CLOUD_KEY, {});
   // Cartes Vie RPG (lecture seule ici — éditées sur la page « Vie RPG ») et
   // liaison « tâche → cartes » (+ complétion) que cette page écrit et que la
@@ -603,6 +608,10 @@ export default function AgendaPage() {
   /* Rappels du formulaire. Toujours lus normalisés : un item enregistré avant
      le passage au multiple porte encore un scalaire (`reminder: 10`). */
   const reminderList = React.useMemo(() => normalizeReminders(modal?.reminders), [modal]);
+  /* Pastille « par défaut » du sélecteur : ce que l'item sera VRAIMENT sans
+     couleur choisie — gris pour une tâche, lavande pour un évènement. Montrer
+     la lavande dans les deux cas laissait croire qu'on posait du violet. */
+  const defaultSwatch = modal?.kind === "task" ? TASK_DEFAULT_PAINT.accent : DEFAULT_EVENT_COLOR;
   // Seuls les délais explicites comptent dans la limite Google — « par défaut »
   // n'est pas un override, et le cocher ne doit pas griser les choix rapides.
   const reminderCount = reminderList.filter((v) => typeof v === "number").length;
@@ -671,7 +680,7 @@ export default function AgendaPage() {
 
   const range = React.useMemo(() => computeRange(view, cursor), [view, cursor]);
 
-  const { icsEvents, icsFailed } = useIcsEvents(
+  const { icsEvents } = useIcsEvents(
     feeds,
     range.start.toISOString(),
     range.end.toISOString(),
@@ -717,17 +726,10 @@ export default function AgendaPage() {
   // elles restent aussi affichées dans la rangée du haut via `tasksByDay`.
   const allEvents = React.useMemo(() => [...events, ...icsEvents], [events, icsEvents]);
 
-  // Légende : uniquement les types présents dans la période affichée. La liste
-  // complète ferait chercher des couleurs qui ne sont pas à l'écran.
-  const legend = React.useMemo(() => {
-    const kinds = new Map();
-    for (const ev of icsEvents) {
-      const k = courseKind(ev.category, ev.summary);
-      if (!kinds.has(k)) kinds.set(k, courseColor(ev.category, ev.summary));
-    }
-    return [...kinds].map(([kind, color]) => ({ kind, color, label: KIND_LABELS[kind] }));
-  }, [icsEvents]);
-
+  // Évènements + tâches → placés dans la grille horaire / la vue mois.
+  // Les tâches avec une heure enregistrée se positionnent ainsi dans le
+  // calendrier à leur horaire (layoutDay ne garde que les items horodatés) ;
+  // elles restent aussi affichées dans la rangée du haut via `tasksByDay`.
   const eventsByDay = React.useMemo(() => {
     const map = new Map();
     for (const ev of [...allEvents, ...taskItems]) {
@@ -799,41 +801,6 @@ export default function AgendaPage() {
     } else {
       setEvents((prev) => prev.map((x) => (x.id === item.id ? { ...x, done: !x.done } : x)));
       try { await setEventDone(item.id, !item.done, item.calendarId); } catch { loadEvents(); }
-    }
-  };
-
-  // Messages d'échec du flux : le code brut de la route ne dit rien à qui colle
-  // une URL. Chacun nomme la correction à faire, pas la cause technique.
-  const FEED_ERRORS = {
-    invalid_url: "Ce lien n'est pas une URL valide.",
-    bad_protocol: "Seuls les liens http, https et webcal sont acceptés.",
-    blocked_host: "Ce lien pointe vers une adresse interne, il ne peut pas être lu.",
-    not_a_calendar: "Ce lien répond bien, mais ne contient pas de calendrier iCal.",
-    too_large: "Ce calendrier est trop volumineux.",
-    timeout: "Le serveur du calendrier n'a pas répondu à temps.",
-    http_404: "Lien introuvable (404) — vérifie qu'il est complet.",
-    parse_failed: "Le calendrier a été reçu mais n'a pas pu être lu.",
-    network: "Connexion impossible, réessaie dans un instant.",
-  };
-
-  /** Vérifie l'URL avant de l'enregistrer : un flux muet ajouté sans contrôle
-      ressemblerait à un bug de l'agenda plutôt qu'à une adresse fautive. */
-  const submitFeed = async () => {
-    const url = feedUrl.trim();
-    if (!url || feedBusy) return;
-    setFeedBusy(true);
-    setFeedError(null);
-    try {
-      const probe = await probeFeed(url);
-      if (!probe.ok) {
-        setFeedError(FEED_ERRORS[probe.error] || "Ce lien n'a pas pu être lu.");
-        return;
-      }
-      addFeed(url, feedName);
-      setFeedUrl("");
-      setFeedName("");
-    } finally {
-      setFeedBusy(false);
     }
   };
 
@@ -1278,6 +1245,7 @@ export default function AgendaPage() {
   // Scroll auto vers l'heure actuelle à l'ouverture du time-grid (jour / semaine).
   // On réarme l'intention à chaque changement de vue/date…
   const scrollRef = React.useRef(null);
+  const gridRef = React.useRef(null);
   const didScrollRef = React.useRef(false);
   React.useEffect(() => { didScrollRef.current = false; }, [view, cursor, isMobile]);
   // …puis on positionne la grille dès qu'elle est montée, AVANT la première
@@ -1289,52 +1257,106 @@ export default function AgendaPage() {
     // en vue jour/semaine.
     if (!isMobile && view !== "day" && view !== "week") return;
     if (didScrollRef.current) return;
-    const el = scrollRef.current;
-    // Tant que la grille n'a pas sa hauteur (rendu asynchrone), on n'a rien à
-    // faire défiler : on retente au rendu suivant plutôt que de se figer en haut.
-    if (!el || el.scrollHeight <= el.clientHeight) return;
+    const grid = gridRef.current;
+    if (!grid) return;
+    // Depuis que la page est en colonne flex, ce n'est plus forcément la carte
+    // qui défile : quand la chaîne de hauteurs ne se ferme pas, c'est le corps
+    // de la coquille. On vise donc le premier ancêtre qui défile VRAIMENT,
+    // sinon on croit avoir défilé et on reste à minuit.
+    let el = scrollRef.current;
+    while (el && el.scrollHeight <= el.clientHeight) el = el.parentElement;
+    // Tant que rien n'a sa hauteur (rendu asynchrone), rien à faire défiler :
+    // on retente au rendu suivant plutôt que de se figer en haut.
+    if (!el) return;
     didScrollRef.current = true;
     // Cible : ligne « maintenant » placée avec ~2h de contexte au-dessus
     // (le navigateur clampe scrollTop si on dépasse le bas de la grille).
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    el.scrollTop = Math.max(0, (nowMinutes / 60) * HOUR_H - 2 * HOUR_H);
+    const nowTop = (nowMinutes / 60) * HOUR_H;
+    // Position de minuit dans le référentiel du conteneur qui défile : la
+    // gouttière d'heures peut être précédée de l'en-tête des jours, d'une barre
+    // d'outils… autant de hauteurs qu'on ne connaît qu'après la mise en page.
+    const offset = grid.getBoundingClientRect().top
+      - (el === document.scrollingElement ? 0 : el.getBoundingClientRect().top)
+      + el.scrollTop;
+    el.scrollTop = Math.max(0, offset + nowTop - 2 * HOUR_H);
   });
 
   /* ─────────────── Header ─────────────── */
-  /* Sélecteur de vues : la brique de la page Calendrier. Cette page en portait
-     une copie — même intention, mais un gris, une ombre et une graisse à elle,
-     donc deux sélecteurs qui ne se ressemblaient pas. */
+  /* Sélecteur de vues : un menu déroulant plutôt qu'un segmenté. Quatre
+     pastilles côte à côte occupaient un tiers de l'en-tête pour n'afficher, au
+     fond, qu'une seule information — la vue courante. Le menu n'en montre
+     qu'une et rend la place aux commandes de navigation. */
   const segmented = (
-    <PeriodPills value={view} onChange={setView} options={VIEWS} track size={14} />
+    <div ref={viewAnchor} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        onClick={() => setViewMenuOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={viewMenuOpen}
+        title="Changer de vue"
+        style={viewBtn()}
+      >
+        {(VIEWS.find((v) => v.id === view) || VIEWS[1]).label}
+        <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 4 }} />
+      </button>
+      <Popover
+        anchorRef={viewAnchor}
+        open={viewMenuOpen}
+        onClose={() => setViewMenuOpen(false)}
+        align="end"
+        gap={4}
+        style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)", minWidth: 160 }}
+      >
+        <>
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => { setView(v.id); setViewMenuOpen(false); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, width: "100%",
+                padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer",
+                background: "transparent", textAlign: "left", fontFamily: "var(--font-sans)",
+                fontSize: 13, fontWeight: v.id === view ? 600 : 500,
+                color: v.id === view ? T.text : T.textMut,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ flex: 1 }}>{v.label}</span>
+              {v.id === view && <Check size={14} strokeWidth={2.2} color={T.textMut} />}
+            </button>
+          ))}
+        </>
+      </Popover>
+    </div>
   );
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      {/* Le bouton « Aujourd'hui » a pris la place du libellé de mois : une
+          seule commande de navigation au lieu de deux voisines qui se
+          disputaient le même rôle. Trois boutons à nu séparés par un écart,
+          plutôt qu'une carte unique : ce sont trois cibles, pas trois zones
+          d'un même contrôle. Le mois disparaît :
+          l'en-tête de la grille nomme déjà les jours qu'on regarde. */}
       {connected && !isMobile && (
-        <>
-          <button onClick={goToday} style={ghostBtn()}>Aujourd'hui</button>
-          {/* Flèches + période dans la pastille de la page Calendrier, au lieu
-              de deux chevrons nus suivis d'un libellé isolé. Le libellé garde son
-              rôle de déclencheur du sélecteur de date (`onLabel`). */}
-          <div ref={datePickerAnchor} style={{ position: "relative", display: "inline-flex" }}>
-            <StepperPill
-              label={monthYearLabel(view, cursor)}
-              onPrev={() => setCursor(shiftCursor(view, cursor, -1))}
-              onNext={() => setCursor(shiftCursor(view, cursor, 1))}
-              onLabel={() => setDatePickerOpen((o) => !o)}
-              labelTitle="Choisir une date"
-            />
-            {datePickerOpen && (
-              <MiniCalendar
-                anchorRef={datePickerAnchor}
-                value={cursor}
-                onSelect={(d) => setCursor(startOfDay(d))}
-                onClose={() => setDatePickerOpen(false)}
-                align="left"
-              />
-            )}
-          </div>
-        </>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <button
+            onClick={() => setCursor(shiftCursor(view, cursor, -1))}
+            aria-label="Précédent" title="Précédent" style={stepBtn()}
+          >
+            <ChevronLeft size={16} strokeWidth={1.75} />
+          </button>
+          <button onClick={goToday} style={todayBtn()}>Aujourd'hui</button>
+          <button
+            onClick={() => setCursor(shiftCursor(view, cursor, 1))}
+            aria-label="Suivant" title="Suivant" style={stepBtn()}
+          >
+            <ChevronRight size={16} strokeWidth={1.75} />
+          </button>
+        </div>
       )}
       {/* Mobile : pas de flèches ; le libellé ouvre le sélecteur de date. */}
       {connected && isMobile && (
@@ -1365,147 +1387,6 @@ export default function AgendaPage() {
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
         {connected && !isMobile && (
           <>
-            {/* Sélecteur d'agendas : coche ceux de Google, et ajoute les flux
-                iCal — l'API Google ne sachant pas s'abonner à une URL, c'est
-                tr4de qui les lit. */}
-            {(
-              <div ref={calsAnchor} style={{ position: "relative", display: "inline-flex" }}>
-                <button onClick={() => setCalsOpen((o) => !o)} style={ghostBtn()} title="Agendas affichés">
-                  <CalendarIcon size={14} strokeWidth={2} style={{ marginRight: 6, verticalAlign: "-2px" }} />
-                  Agendas
-                  <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 4, verticalAlign: "-2px" }} />
-                </button>
-                <Popover
-                  anchorRef={calsAnchor}
-                  open={calsOpen}
-                  onClose={() => setCalsOpen(false)}
-                  align="end"
-                  gap={4}
-                  style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)", minWidth: 240 }}
-                >
-                  <>
-                    {(calendars || []).length > 1 && (calendars || []).map((c) => {
-                      const visible = !(hiddenCalendars || []).includes(c.id);
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => toggleCalendar(c.id, !visible)}
-                          title={c.readOnly ? `${c.title} — lecture seule` : c.title}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8, width: "100%",
-                            padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer",
-                            background: "transparent", textAlign: "left", fontFamily: "var(--font-sans)",
-                            fontSize: 13, color: visible ? T.text : T.textMut,
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                        >
-                          <span style={{
-                            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
-                            background: visible ? (c.color || DEFAULT_EVENT_COLOR) : "transparent",
-                            border: `1.5px solid ${c.color || DEFAULT_EVENT_COLOR}`,
-                          }} />
-                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {c.title}
-                          </span>
-                          {visible && <Check size={14} strokeWidth={2.2} color={T.textMut} />}
-                        </button>
-                      );
-                    })}
-
-                    {/* Flux iCal de l'utilisateur */}
-                    {feeds.length > 0 && (
-                      <div style={{ borderTop: `1px solid ${DA_HAIRLINE}`, margin: "6px 0", paddingTop: 6 }} />
-                    )}
-                    {feeds.map((f) => (
-                      <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8 }}>
-                        <button
-                          type="button"
-                          onClick={() => patchFeed(f.id, { enabled: !f.enabled })}
-                          title={f.enabled ? "Masquer ce flux" : "Afficher ce flux"}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0,
-                            border: "none", background: "transparent", cursor: "pointer",
-                            textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 13,
-                            color: f.enabled ? T.text : T.textMut, padding: 0,
-                          }}
-                        >
-                          <span style={{
-                            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
-                            background: f.enabled ? f.color : "transparent",
-                            border: `1.5px solid ${f.color}`,
-                          }} />
-                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {f.name}
-                          </span>
-                          {icsFailed.includes(f.id) && (
-                            <span title="Flux injoignable — dernier chargement en échec">
-                              <AlertTriangle size={13} strokeWidth={2} color={T.red} />
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeFeed(f.id)}
-                          aria-label={`Retirer ${f.name}`}
-                          title="Retirer ce flux"
-                          style={{ border: "none", background: "transparent", cursor: "pointer", color: T.textMut, display: "inline-flex", padding: 2, borderRadius: 6 }}
-                        >
-                          <IconX size={13} strokeWidth={2} />
-                        </button>
-                      </div>
-                    ))}
-
-                    {/* Code couleur des séances, limité aux types de la période. */}
-                    {legend.length > 0 && (
-                      <div style={{ borderTop: `1px solid ${DA_HAIRLINE}`, marginTop: 6, paddingTop: 8, padding: "8px 10px 4px" }}>
-                        <div style={{ fontSize: 11, color: T.textMut, marginBottom: 6 }}>Type de séance</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px" }}>
-                          {legend.map((l) => (
-                            <span key={l.kind} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: T.textMut }}>
-                              <span style={{ width: 9, height: 9, borderRadius: 3, background: l.color, flexShrink: 0 }} />
-                              {l.label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Ajout d'un flux : une URL .ics ou webcal:// suffit. */}
-                    <div style={{ borderTop: `1px solid ${DA_HAIRLINE}`, marginTop: 6, paddingTop: 8, padding: "8px 10px 4px" }}>
-                      <div style={{ fontSize: 11, color: T.textMut, marginBottom: 6 }}>
-                        Ajouter un agenda par lien (.ics / webcal)
-                      </div>
-                      <input
-                        value={feedName}
-                        onChange={(e) => setFeedName(e.target.value)}
-                        placeholder="Nom (ex. Emploi du temps)"
-                        style={{ ...DA_FIELD, width: "100%", marginBottom: 6, fontSize: 13 }}
-                      />
-                      <input
-                        value={feedUrl}
-                        onChange={(e) => { setFeedUrl(e.target.value); setFeedError(null); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") submitFeed(); }}
-                        placeholder="https://…/ics?id=…"
-                        style={{ ...DA_FIELD, width: "100%", fontSize: 13 }}
-                      />
-                      {feedError && (
-                        <div style={{ fontSize: 11, color: T.red, marginTop: 6 }}>{feedError}</div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={submitFeed}
-                        disabled={feedBusy || !feedUrl.trim()}
-                        style={{ ...primaryBtn(true), width: "100%", marginTop: 8, opacity: feedBusy || !feedUrl.trim() ? 0.5 : 1 }}
-                      >
-                        {feedBusy ? "Vérification…" : "Ajouter"}
-                      </button>
-                    </div>
-                  </>
-                </Popover>
-              </div>
-            )}
             {segmented}
             <button onClick={disconnect} aria-label="Déconnecter" title="Déconnecter" style={iconBtn()}>
               <LogOut size={15} strokeWidth={2} />
@@ -1532,8 +1413,8 @@ export default function AgendaPage() {
     const overdueAnchor = Math.max(0, days.findIndex((d) => sameDay(d, today)));
 
     return (
-      <div style={{ ...card(), border: "none", overflow: "hidden" }}>
-        <div ref={scrollRef} style={{ overflowY: "auto", maxHeight: "calc(100vh - 210px)" }}>
+      <div style={{ ...card(), border: "none", overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <div ref={scrollRef} style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
         {/* En-tête jours : nom + numéro + tâches du jour, le tout épinglé en haut */}
         <div style={{ position: "sticky", top: 0, zIndex: 8, background: T.white, display: "flex", borderBottom: `1px solid ${T.border}`, alignItems: "stretch" }}>
           <div style={{ width: gutter, flexShrink: 0 }} />
@@ -1542,8 +1423,12 @@ export default function AgendaPage() {
             const isPast = startOfDay(d) < today;
             const list = tasksByDay.get(dateKey(d)) || [];
             const allDay = allDayByDay.get(dateKey(d)) || [];
+            // Aucun séparateur vertical dans l'en-tête : les colonnes de la grille
+            // horaire portent déjà le leur, et le prolonger jusqu'au nom du jour
+            // enferme l'en-tête dans des rails. Les traits s'arrêtent donc sous
+            // les pastilles d'agenda.
             return (
-              <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 3px 6px", minWidth: 0, borderLeft: daysCount > 1 && i > 0 ? `1px solid ${T.border}` : "none", opacity: isPast ? 0.45 : 1 }}>
+              <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 3px 6px", minWidth: 0, opacity: isPast ? 0.45 : 1 }}>
                 <div style={dayLabelStyle}>{WEEKDAYS[weekdayIdx(d)]}</div>
                 <div style={{
                   marginTop: 3, display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -1595,7 +1480,7 @@ export default function AgendaPage() {
         </div>
 
         {/* Grille horaire */}
-        <div style={{ display: "flex", position: "relative" }}>
+        <div ref={gridRef} style={{ display: "flex", position: "relative" }}>
             {/* Gouttière heures */}
             <div style={{ width: gutter, flexShrink: 0 }}>
               {hours.map((h) => (
@@ -1657,19 +1542,19 @@ export default function AgendaPage() {
                     const height = Math.max(((eMin - sMin) / 60) * HOUR_H, 16);
                     const w = 100 / ev._cols;
                     const left = ev._col * w;
-                    // Les tâches reçoivent une teinte plus claire que les évènements
-                    // pour les distinguer d'un coup d'œil.
-                    const col = ev.isTask ? lighten(eventColor(ev), 0.32) : eventColor(ev);
+                    const paint = eventPaintOf(ev);
                     // Évènement déjà passé → estompé (jour révolu, ou fini avant maintenant).
                     const isPastEvent = isPastDay || (isToday && eMin <= nowMin);
-                    // Estompage du passé via une teinte éclaircie (et NON via l'opacité du
-                    // bloc, qui rendrait le fond blanc translucide et laisserait voir les
-                    // lignes d'heures de la grille au travers).
-                    const dispCol = isPastEvent ? lighten(col, 0.55) : col;
-                    // Teinte semi-transparente posée sur un fond blanc opaque :
-                    // évite que les lignes d'heures du fond transparaissent à travers le bloc.
-                    const tint = ev.isTask ? `${dispCol}1A` : `${dispCol}33`;
-                    const txtCol = (ev.done || isPastEvent) ? T.textMut : eventTextColor(ev);
+                    /* Trois états, trois valeurs déjà publiées — aucune teinte
+                       n'est dérivée ici. Le passé recule d'un cran de fond et
+                       passe au texte atténué, mais GARDE son trait : c'est lui
+                       qui dit de quelle couleur est l'évènement, et une journée
+                       entamée doit rester lisible d'un coup d'œil jusqu'au soir.
+                       Surtout pas d'`opacity` sur le bloc en revanche : elle
+                       rendrait le fond translucide et laisserait voir les lignes
+                       d'heures de la grille au travers. */
+                    const bgCol = (isPastEvent || ev.isTask) ? paint.soft : paint.bg;
+                    const txtCol = (ev.done || isPastEvent) ? T.textMut : paint.ink;
                     // Évènements courts (≤ 30 min) : titre et heure sur une seule
                     // ligne, l'heure poussée à droite.
                     const compact = (eMin - sMin) <= 30;
@@ -1693,9 +1578,8 @@ export default function AgendaPage() {
                         style={{
                           position: "absolute", top, height, cursor: moving ? "grabbing" : "grab", touchAction: "none",
                           left: `calc(${left}% + 2px)`, width: `calc(${w}% - 4px)`,
-                          backgroundColor: T.white, backgroundImage: `linear-gradient(${tint}, ${tint})`, borderLeft: `2px solid ${dispCol}`, borderRadius: "var(--radius-field)",
+                          backgroundColor: bgCol, borderLeft: `2px solid ${paint.accent}`, borderRadius: "var(--radius-field)",
                           padding: "2px 5px", overflow: "hidden", zIndex: active ? 6 : ev.isTask ? 3 : 1,
-                          boxShadow: active ? "0 4px 14px rgba(0,0,0,0.16)" : "0 1px 3px rgba(0,0,0,0.12)",
                           opacity: moving ? 0.92 : 1,
                           display: "flex", flexDirection: compact ? "row" : "column",
                           alignItems: compact ? "baseline" : "stretch", gap: compact ? 5 : 0,
@@ -1735,13 +1619,13 @@ export default function AgendaPage() {
     const gridStart = startOfWeekMonday(monthStart);
     const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
     return (
-      <div style={{ ...card(), padding: 0, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ ...card(), padding: 0, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
           {WEEKDAYS.map((w) => (
             <div key={w} style={{ ...dayLabelStyle, padding: "10px 8px" }}>{w}</div>
           ))}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridAutoRows: "minmax(110px, 1fr)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gridAutoRows: "minmax(84px, 1fr)", flex: 1, minHeight: 0, overflowY: "auto" }}>
           {days.map((d, i) => {
             const inMonth = d.getMonth() === cursor.getMonth();
             const isToday = sameDay(d, today);
@@ -1767,7 +1651,7 @@ export default function AgendaPage() {
                   {shown.map((ev) => (
                     <div key={ev.id} title={ev.summary} onClick={(e) => { e.stopPropagation(); openEdit(ev); }} style={{
                       display: "flex", alignItems: "center", gap: 4, minWidth: 0, cursor: "pointer",
-                      fontSize: 10, color: ev.done ? T.textMut : eventTextColor(ev), background: ev.isTask ? `${lighten(eventColor(ev), 0.32)}26` : `${eventColor(ev)}33`, borderRadius: "var(--radius-field)", padding: "1px 5px",
+                      fontSize: 10, color: ev.done ? T.textMut : eventTextColor(ev), background: eventColor(ev), borderRadius: "var(--radius-field)", padding: "1px 5px",
                     }}>
                       {ev.isTask && <TaskCircle done={ev.done} onToggle={(e) => { e.stopPropagation(); onToggleDone(ev); }} size={12} />}
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: ev.isTask && ev.done ? "line-through" : "none" }}>
@@ -1912,9 +1796,26 @@ export default function AgendaPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
+    /* `minHeight: 100%` plutôt qu'une hauteur mesurée : la page occupe la
+       fenêtre quand son contenu est court, et grandit quand il déborde. Rien à
+       recalculer quand l'en-tête change de hauteur — c'était le défaut de la
+       mesure en JavaScript, juste à l'instant où on la prend et fausse ensuite. */
+    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
       {header}
-      {body}
+      {/* `flex: 1` sans `minHeight: 0` : le corps prend la hauteur restante pour
+          la grille et le mois, mais garde le droit de POUSSER sous la vue année,
+          plus haute qu'un écran — `minHeight: 0` l'écraserait et son contenu
+          déborderait sans jamais pouvoir défiler. */}
+      <div
+        style={{
+          flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0,
+          // Cf. `BODY_PULL` : ce qu'il faut rendre pour finir sur la ligne de la
+          // barre latérale, que la vue tienne dans l'écran ou qu'elle défile.
+          marginBottom: -BODY_PULL,
+        }}
+      >
+        {body}
+      </div>
       {modal && (
         <div onClick={() => !saving && setModal(null)} style={{ position: "fixed", inset: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24, overflowY: "auto" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...card(), width: "100%", maxWidth: 540, padding: 0, boxShadow: "var(--elev-overlay)", transform: `translate(${modalPos.x}px, ${modalPos.y}px)` }}>
@@ -2182,7 +2083,7 @@ export default function AgendaPage() {
               <FormRow icon={CalendarIcon}>
                 <div ref={colorAnchor} data-menu-root style={{ position: "relative" }}>
                   <button type="button" onClick={() => { setColorOpen((o) => !o); setRemindOpen(false); }} style={pillBtn}>
-                    <span style={{ width: 14, height: 14, borderRadius: "50%", background: modal.colorId ? GCAL_COLORS[modal.colorId] : DEFAULT_EVENT_COLOR, display: "inline-block" }} />
+                    <span style={{ width: 14, height: 14, borderRadius: "50%", background: modal.colorId ? GCAL_COLORS[modal.colorId] : defaultSwatch, display: "inline-block" }} />
                     Couleur
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
                   </button>
@@ -2194,7 +2095,7 @@ export default function AgendaPage() {
                     style={{ background: T.white, border: "none", borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}
                   >
                     <>
-                      <button type="button" onClick={() => { setModal({ ...modal, colorId: null }); setColorOpen(false); }} title="Par défaut" style={{ width: 24, height: 24, borderRadius: "50%", background: DEFAULT_EVENT_COLOR, border: modal.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
+                      <button type="button" onClick={() => { setModal({ ...modal, colorId: null }); setColorOpen(false); }} title="Par défaut" style={{ width: 24, height: 24, borderRadius: "50%", background: defaultSwatch, border: modal.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
                       {Object.entries(GCAL_COLORS).map(([id, hex]) => (
                         <button key={id} type="button" onClick={() => { setModal({ ...modal, colorId: id }); setColorOpen(false); }} title={`Couleur ${id}`}
                           style={{ width: 24, height: 24, borderRadius: "50%", background: hex, border: String(modal.colorId) === id ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
@@ -2428,12 +2329,13 @@ export default function AgendaPage() {
 /* ─────────────── Puce de tâche (rangée sous l'en-tête des jours) ─────────────── */
 function TaskRowChip({ item, onToggle, onOpen, overdue = false }) {
   const isTask = !!item.isTask;
-  // Évènement « toute la journée » : couleur pleine de l'évènement, sans pastille.
-  // Tâche : palette tâche (éclaircie) avec rond de complétion.
-  const base = !isTask
-    ? eventColor(item)
-    : item.colorId ? lighten(GCAL_COLORS[item.colorId] || DEFAULT_EVENT_COLOR, 0.38) : (overdue ? T.textMut : T.blue);
-  const txt = item.done ? T.textMut : darken(base, 0.5);
+  /* Le neutre d'une tâche sans couleur est servi par `eventPaintOf` : il n'y a
+     plus de cas particulier ici. Reste « en retard », qui doit se distinguer
+     même quand la tâche est grise — sinon le retard passerait inaperçu. */
+  const paint = eventPaintOf(item);
+  const bgCol = isTask ? paint.soft : paint.bg;
+  const barCol = overdue ? T.red : paint.accent;
+  const txt = item.done ? T.textMut : (overdue ? T.red : paint.ink);
   const timeLbl = item.allDay ? "" : eventTimeLabel(item);
   // En attente : on rappelle la date limite (jj/mm) plutôt que l'heure.
   const overdueLbl = (() => {
@@ -2452,7 +2354,7 @@ function TaskRowChip({ item, onToggle, onOpen, overdue = false }) {
         display: "flex", alignItems: "center", gap: 5, width: "100%",
         minWidth: 0, textAlign: "left", boxSizing: "border-box",
         padding: "2px 6px", borderRadius: "var(--radius-field)", cursor: "pointer", fontFamily: "inherit",
-        background: `${base}1A`, borderLeft: `2px solid ${base}`,
+        background: bgCol, borderLeft: `2px solid ${barCol}`,
       }}
     >
       {isTask && <TaskCircle done={item.done} onToggle={(e) => { e.stopPropagation(); onToggle(item); }} size={12} />}
@@ -2543,6 +2445,32 @@ const iconBtn = () => ({
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   width: 32, height: 32, borderRadius: 999, border: `1px solid ${T.border}`,
   background: T.white, color: T.text, cursor: "pointer", fontFamily: "inherit",
+});
+/* Trio de navigation de l'en-tête : trois pastilles blanches identiques,
+   séparées par leur seul écart. Le blanc de la carte est celui du fond de page
+   en thème clair — d'où l'ombre `elevPill`, la même que les autres pastilles de
+   l'app : sans elle les boutons se dissoudraient dans la page. */
+const stepBtn = () => ({
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  width: 34, height: 34, borderRadius: 999,
+  border: "none", background: T.white, boxShadow: T.elevPill, color: T.text,
+  cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+});
+const todayBtn = () => ({
+  display: "inline-flex", alignItems: "center",
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
+  border: "none", background: T.white, boxShadow: T.elevPill, color: T.text,
+  fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  whiteSpace: "nowrap",
+});
+/* Déclencheur du menu de vues : mêmes gabarit et graisse que « Aujourd'hui »,
+   posé sur l'aplat des champs pour se lire comme un contrôle, pas un lien. */
+const viewBtn = () => ({
+  display: "inline-flex", alignItems: "center",
+  padding: "8px 16px", minHeight: 34, borderRadius: 999,
+  border: "none", background: T.white, boxShadow: T.elevPill, color: T.text,
+  fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+  whiteSpace: "nowrap",
 });
 const ghostBtn = () => ({
   display: "inline-flex", alignItems: "center",

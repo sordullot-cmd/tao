@@ -14,6 +14,8 @@ import {
   Tag as IconTag,
   FileText as IconFile,
   Bell as IconBell,
+  Calendar as IconCalendar,
+  AlertTriangle,
   ExternalLink,
   Sparkles,
   Trash2,
@@ -35,6 +37,9 @@ import { T as BaseT } from "@/lib/ui/tokens";
 import { ACCENT_PRESETS, applyAccent, isHexColor, readAccent } from "@/lib/ui/accent";
 import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
+import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
+import { useIcsFeeds, probeFeed } from "@/lib/hooks/useIcsFeeds";
+import { KIND_LABELS, courseColor } from "@/lib/icsCategories";
 
 // Clés locales absentes de BaseT mappées sur des tokens dark-aware.
 const T = { ...BaseT, panel: BaseT.accentBg, borderHover: BaseT.border2 };
@@ -54,6 +59,7 @@ const buildSections = () => [
       { id: "accounts",     label: t("settings.nav.accounts"), Icon: IconBriefcase },
       { id: "globals",      label: t("settings.nav.globals"),  Icon: IconGlobe },
       { id: "alerts",       label: t("settings.nav.alerts"),   Icon: IconBell },
+      { id: "calendars",    label: t("settings.nav.calendars"), Icon: IconCalendar },
       { id: "import",       label: t("settings.nav.import"),   Icon: IconFile },
       { id: "data",         label: t("settings.nav.data"),     Icon: Database },
     ],
@@ -83,6 +89,7 @@ export default function SettingsPage({ user, onBack, setPage }) {
           {active === "accounts"     && <AccountsSection setPage={setPage} />}
           {active === "globals"      && <GlobalsSection />}
           {active === "alerts"       && <AlertsSection />}
+          {active === "calendars"    && <CalendarsSection />}
           {active === "import"       && <ImportHistorySection />}
           {active === "data"         && <DataExportSection />}
 
@@ -953,6 +960,216 @@ function SectionLabel({ children, mt }) {
     }}>
       {children}
     </div>
+  );
+}
+
+
+/* =================== AGENDAS =================== */
+/* Gestion des sources du calendrier : les agendas Google que l'on choisit
+   d'afficher, et les flux iCal ajoutés par lien.
+
+   Pourquoi le lien est le seul moyen d'ajouter un emploi du temps : l'API Google
+   Calendar ne sait pas s'abonner à une URL. `calendarList.insert` n'accepte que
+   l'identifiant d'un agenda Google existant ; l'abonnement « à partir de l'URL »
+   n'existe que dans l'interface web de Google. C'est donc tr4de qui lit le flux. */
+
+// Messages d'échec : le code brut de la route ne dit rien à qui colle une URL.
+// Chacun nomme la correction à faire, pas la cause technique.
+const FEED_ERRORS = {
+  invalid_url: "Ce lien n'est pas une URL valide.",
+  bad_protocol: "Seuls les liens http, https et webcal sont acceptés.",
+  blocked_host: "Ce lien pointe vers une adresse interne, il ne peut pas être lu.",
+  not_a_calendar: "Ce lien répond bien, mais ne contient pas de calendrier iCal.",
+  too_large: "Ce calendrier est trop volumineux.",
+  timeout: "Le serveur du calendrier n'a pas répondu à temps.",
+  http_404: "Lien introuvable (404) — vérifie qu'il est complet.",
+  parse_failed: "Le calendrier a été reçu mais n'a pas pu être lu.",
+  network: "Connexion impossible, réessaie dans un instant.",
+};
+
+function CalendarsSection() {
+  const { connected, calendars, hiddenCalendars, toggleCalendar } = useGoogleCalendar();
+  const { feeds, addFeed, removeFeed, patchFeed } = useIcsFeeds();
+
+  const [url, setUrl] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [added, setAdded] = useState(null);
+
+  /* On vérifie l'URL avant de l'enregistrer : un flux muet ajouté sans contrôle
+     ressemblerait à un bug de l'agenda plutôt qu'à une adresse fautive. */
+  const submit = async () => {
+    const clean = url.trim();
+    if (!clean || busy) return;
+    setBusy(true);
+    setError(null);
+    setAdded(null);
+    try {
+      const probe = await probeFeed(clean);
+      if (!probe.ok) {
+        setError(FEED_ERRORS[probe.error] || "Ce lien n'a pas pu être lu.");
+        return;
+      }
+      addFeed(clean, name);
+      setUrl("");
+      setName("");
+      // Le nombre de séances lues est la seule preuve tangible que le bon
+      // calendrier a été ajouté — un « c'est enregistré » ne prouve rien.
+      setAdded(probe.total || 0);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const legendKinds = ["cm", "td", "tp", "examen", "revisions", "soutien", "reunion", "annule"];
+
+  return (
+    <>
+      <Card>
+        <CardHeader
+          title="Ajouter un agenda"
+          subtitle="Colle le lien d'abonnement iCal de ton établissement (.ics ou webcal://). L'emploi du temps se met à jour tout seul."
+        />
+        <SectionLabel>Nom</SectionLabel>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Emploi du temps"
+          style={{ ...DA_FIELD, width: "100%" }}
+        />
+        <SectionLabel mt={16}>Lien du calendrier</SectionLabel>
+        <input
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setError(null); setAdded(null); }}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+          placeholder="https://edt.exemple.fr/ics?id=…"
+          style={{ ...DA_FIELD, width: "100%" }}
+        />
+        {error && (
+          <div style={{ fontSize: 12, color: T.red, marginTop: 10 }}>{error}</div>
+        )}
+        {added !== null && (
+          <div style={{ fontSize: 12, color: T.green, marginTop: 10 }}>
+            Agenda ajouté — {added} séance{added > 1 ? "s" : ""} lue{added > 1 ? "s" : ""}.
+          </div>
+        )}
+        <div style={{ marginTop: 16 }}>
+          <PrimaryButton onClick={submit} disabled={busy || !url.trim()}>
+            {busy ? "Vérification…" : "Ajouter l'agenda"}
+          </PrimaryButton>
+        </div>
+      </Card>
+
+      {feeds.length > 0 && (
+        <Card>
+          <CardHeader title="Agendas par lien" subtitle="Décoche pour masquer sans supprimer." />
+          {feeds.map((f, i) => (
+            <div
+              key={f.id}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "12px 0",
+                borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => patchFeed(f.id, { enabled: !f.enabled })}
+                aria-label={f.enabled ? `Masquer ${f.name}` : `Afficher ${f.name}`}
+                style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+                  background: f.enabled ? f.color : "transparent",
+                  border: `1.5px solid ${f.color}`, padding: 0,
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <input
+                  value={f.name}
+                  onChange={(e) => patchFeed(f.id, { name: e.target.value })}
+                  aria-label="Nom de l'agenda"
+                  style={{
+                    ...DA_FIELD, width: "100%", border: "none", background: "transparent",
+                    padding: "2px 0", minHeight: 0, fontWeight: 500,
+                    color: f.enabled ? T.text : T.textMut,
+                  }}
+                />
+                <div style={{ fontSize: 11, color: T.textMut, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {f.url}
+                </div>
+              </div>
+              <DeleteIconButton ariaLabel={`Retirer ${f.name}`} onClick={() => removeFeed(f.id)} />
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {connected && (calendars || []).length > 1 && (
+        <Card>
+          <CardHeader title="Agendas Google" subtitle="Ceux à afficher dans le calendrier." />
+          {calendars.map((c, i) => {
+            const visible = !(hiddenCalendars || []).includes(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => toggleCalendar(c.id, !visible)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, width: "100%",
+                  padding: "12px 0", border: "none", background: "transparent",
+                  borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
+                  cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                }}
+              >
+                <span style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  background: visible ? (c.color || T.textMut) : "transparent",
+                  border: `1.5px solid ${c.color || T.textMut}`,
+                }} />
+                <span style={{
+                  flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500,
+                  color: visible ? T.text : T.textMut,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {c.title}
+                </span>
+                {c.readOnly && (
+                  <span style={{ fontSize: 11, color: T.textMut, flexShrink: 0 }}>lecture seule</span>
+                )}
+              </button>
+            );
+          })}
+        </Card>
+      )}
+
+      {feeds.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Code couleur des séances"
+            subtitle="La couleur vient du type de cours, pas de l'agenda : un examen doit se repérer d'un coup d'œil."
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
+            {legendKinds.map((kind) => (
+              <span key={kind} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, color: T.textSub }}>
+                <span style={{ width: 11, height: 11, borderRadius: 3, background: courseColor(KIND_LABELS[kind]), flexShrink: 0 }} />
+                {KIND_LABELS[kind]}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {!connected && feeds.length === 0 && (
+        <Card>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <AlertTriangle size={16} strokeWidth={1.75} color={T.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+            <p style={{ fontSize: 12, color: T.textSub, margin: 0, lineHeight: 1.6 }}>
+              Aucun agenda pour le moment. Ajoute un lien iCal ci-dessus, ou connecte
+              ton compte Google depuis la page Calendrier pour retrouver tes agendas.
+            </p>
+          </div>
+        </Card>
+      )}
+    </>
   );
 }
 
