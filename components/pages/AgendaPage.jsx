@@ -23,6 +23,7 @@ import {
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
 } from "@/lib/lifeRpgCategories";
 import { GCAL_COLORS, DEFAULT_EVENT_COLOR, nearestGcalColorId } from "@/lib/gcalColors";
+import { useIcsFeeds, useIcsEvents, isFeedCalendarId, probeFeed } from "@/lib/hooks/useIcsFeeds";
 import {
   MAX_REMINDERS, normalizeReminders, remindersFromEvent,
   reminderLabel, addReminder, removeReminder,
@@ -537,6 +538,14 @@ export default function AgendaPage() {
   }, []);
   const [events, setEvents] = React.useState([]);
   const [tasks, setTasks] = React.useState([]);
+  // Flux iCal ajoutés dans l'app (emploi du temps universitaire) : lus
+  // directement, sans passer par Google — l'API Calendar ne sait pas s'abonner
+  // à une URL, seule son interface web le sait.
+  const { feeds, addFeed, removeFeed, patchFeed } = useIcsFeeds();
+  const [feedUrl, setFeedUrl] = React.useState("");
+  const [feedName, setFeedName] = React.useState("");
+  const [feedBusy, setFeedBusy] = React.useState(false);
+  const [feedError, setFeedError] = React.useState(null);
   const [taskTimes, setTaskTimes] = useCloudState(TASK_TIMES_KEY, TASK_TIMES_CLOUD_KEY, {});
   // Cartes Vie RPG (lecture seule ici — éditées sur la page « Vie RPG ») et
   // liaison « tâche → cartes » (+ complétion) que cette page écrit et que la
@@ -647,7 +656,9 @@ export default function AgendaPage() {
     [calendars],
   );
   const isLocked = React.useCallback(
-    (item) => !!item && !item.isGTask && !!item.calendarId && readOnlyCalIds.has(item.calendarId),
+    (item) =>
+      !!item && !item.isGTask && !!item.calendarId &&
+      (isFeedCalendarId(item.calendarId) || readOnlyCalIds.has(item.calendarId)),
     [readOnlyCalIds],
   );
   // Couleur d'agenda, pour distinguer les cours du reste sans les repeindre un par un.
@@ -658,6 +669,12 @@ export default function AgendaPage() {
   }, [calendars]);
 
   const range = React.useMemo(() => computeRange(view, cursor), [view, cursor]);
+
+  const { icsEvents, icsFailed } = useIcsEvents(
+    feeds,
+    range.start.toISOString(),
+    range.end.toISOString(),
+  );
 
   const loadEvents = React.useCallback(async () => {
     if (!connected) return;
@@ -697,9 +714,11 @@ export default function AgendaPage() {
   // Les tâches avec une heure enregistrée se positionnent ainsi dans le
   // calendrier à leur horaire (layoutDay ne garde que les items horodatés) ;
   // elles restent aussi affichées dans la rangée du haut via `tasksByDay`.
+  const allEvents = React.useMemo(() => [...events, ...icsEvents], [events, icsEvents]);
+
   const eventsByDay = React.useMemo(() => {
     const map = new Map();
-    for (const ev of [...events, ...taskItems]) {
+    for (const ev of [...allEvents, ...taskItems]) {
       const k = eventDayKey(ev);
       if (!k) continue;
       if (!map.has(k)) map.set(k, []);
@@ -709,7 +728,7 @@ export default function AgendaPage() {
       arr.sort((a, b) => (a.allDay === b.allDay ? String(a.start).localeCompare(String(b.start)) : a.allDay ? -1 : 1));
     }
     return map;
-  }, [events, taskItems]);
+  }, [allEvents, taskItems]);
 
   const today = startOfDay(new Date());
   const todayKey = dateKey(today);
@@ -733,7 +752,7 @@ export default function AgendaPage() {
   // s'affichent dans la rangée du haut, au-dessus des tâches du jour.
   const allDayByDay = React.useMemo(() => {
     const map = new Map();
-    for (const ev of events) {
+    for (const ev of allEvents) {
       if (!ev.allDay || ev.isTask) continue;
       const k = eventDayKey(ev);
       if (!k) continue;
@@ -742,7 +761,7 @@ export default function AgendaPage() {
     }
     for (const arr of map.values()) arr.sort((a, b) => String(a.summary).localeCompare(String(b.summary)));
     return map;
-  }, [events]);
+  }, [allEvents]);
 
   // Tâches "en attente" : date limite dépassée et non terminées.
   const overdueTasks = React.useMemo(
@@ -768,6 +787,41 @@ export default function AgendaPage() {
     } else {
       setEvents((prev) => prev.map((x) => (x.id === item.id ? { ...x, done: !x.done } : x)));
       try { await setEventDone(item.id, !item.done, item.calendarId); } catch { loadEvents(); }
+    }
+  };
+
+  // Messages d'échec du flux : le code brut de la route ne dit rien à qui colle
+  // une URL. Chacun nomme la correction à faire, pas la cause technique.
+  const FEED_ERRORS = {
+    invalid_url: "Ce lien n'est pas une URL valide.",
+    bad_protocol: "Seuls les liens http, https et webcal sont acceptés.",
+    blocked_host: "Ce lien pointe vers une adresse interne, il ne peut pas être lu.",
+    not_a_calendar: "Ce lien répond bien, mais ne contient pas de calendrier iCal.",
+    too_large: "Ce calendrier est trop volumineux.",
+    timeout: "Le serveur du calendrier n'a pas répondu à temps.",
+    http_404: "Lien introuvable (404) — vérifie qu'il est complet.",
+    parse_failed: "Le calendrier a été reçu mais n'a pas pu être lu.",
+    network: "Connexion impossible, réessaie dans un instant.",
+  };
+
+  /** Vérifie l'URL avant de l'enregistrer : un flux muet ajouté sans contrôle
+      ressemblerait à un bug de l'agenda plutôt qu'à une adresse fautive. */
+  const submitFeed = async () => {
+    const url = feedUrl.trim();
+    if (!url || feedBusy) return;
+    setFeedBusy(true);
+    setFeedError(null);
+    try {
+      const probe = await probeFeed(url);
+      if (!probe.ok) {
+        setFeedError(FEED_ERRORS[probe.error] || "Ce lien n'a pas pu être lu.");
+        return;
+      }
+      addFeed(url, feedName);
+      setFeedUrl("");
+      setFeedName("");
+    } finally {
+      setFeedBusy(false);
     }
   };
 
@@ -1299,9 +1353,10 @@ export default function AgendaPage() {
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
         {connected && !isMobile && (
           <>
-            {/* Sélecteur d'agendas : n'apparaît qu'à partir de deux agendas —
-                avec le seul agenda principal, il n'y aurait rien à choisir. */}
-            {(calendars || []).length > 1 && (
+            {/* Sélecteur d'agendas : coche ceux de Google, et ajoute les flux
+                iCal — l'API Google ne sachant pas s'abonner à une URL, c'est
+                tr4de qui les lit. */}
+            {(
               <div ref={calsAnchor} style={{ position: "relative", display: "inline-flex" }}>
                 <button onClick={() => setCalsOpen((o) => !o)} style={ghostBtn()} title="Agendas affichés">
                   <CalendarIcon size={14} strokeWidth={2} style={{ marginRight: 6, verticalAlign: "-2px" }} />
@@ -1317,7 +1372,7 @@ export default function AgendaPage() {
                   style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)", minWidth: 240 }}
                 >
                   <>
-                    {(calendars || []).map((c) => {
+                    {(calendars || []).length > 1 && (calendars || []).map((c) => {
                       const visible = !(hiddenCalendars || []).includes(c.id);
                       return (
                         <button
@@ -1346,6 +1401,80 @@ export default function AgendaPage() {
                         </button>
                       );
                     })}
+
+                    {/* Flux iCal de l'utilisateur */}
+                    {feeds.length > 0 && (
+                      <div style={{ borderTop: `1px solid ${DA_HAIRLINE}`, margin: "6px 0", paddingTop: 6 }} />
+                    )}
+                    {feeds.map((f) => (
+                      <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => patchFeed(f.id, { enabled: !f.enabled })}
+                          title={f.enabled ? "Masquer ce flux" : "Afficher ce flux"}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0,
+                            border: "none", background: "transparent", cursor: "pointer",
+                            textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 13,
+                            color: f.enabled ? T.text : T.textMut, padding: 0,
+                          }}
+                        >
+                          <span style={{
+                            width: 14, height: 14, borderRadius: 4, flexShrink: 0,
+                            background: f.enabled ? f.color : "transparent",
+                            border: `1.5px solid ${f.color}`,
+                          }} />
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {f.name}
+                          </span>
+                          {icsFailed.includes(f.id) && (
+                            <span title="Flux injoignable — dernier chargement en échec">
+                              <AlertTriangle size={13} strokeWidth={2} color={T.red} />
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFeed(f.id)}
+                          aria-label={`Retirer ${f.name}`}
+                          title="Retirer ce flux"
+                          style={{ border: "none", background: "transparent", cursor: "pointer", color: T.textMut, display: "inline-flex", padding: 2, borderRadius: 6 }}
+                        >
+                          <IconX size={13} strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Ajout d'un flux : une URL .ics ou webcal:// suffit. */}
+                    <div style={{ borderTop: `1px solid ${DA_HAIRLINE}`, marginTop: 6, paddingTop: 8, padding: "8px 10px 4px" }}>
+                      <div style={{ fontSize: 11, color: T.textMut, marginBottom: 6 }}>
+                        Ajouter un agenda par lien (.ics / webcal)
+                      </div>
+                      <input
+                        value={feedName}
+                        onChange={(e) => setFeedName(e.target.value)}
+                        placeholder="Nom (ex. Emploi du temps)"
+                        style={{ ...DA_FIELD, width: "100%", marginBottom: 6, fontSize: 13 }}
+                      />
+                      <input
+                        value={feedUrl}
+                        onChange={(e) => { setFeedUrl(e.target.value); setFeedError(null); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") submitFeed(); }}
+                        placeholder="https://…/ics?id=…"
+                        style={{ ...DA_FIELD, width: "100%", fontSize: 13 }}
+                      />
+                      {feedError && (
+                        <div style={{ fontSize: 11, color: T.red, marginTop: 6 }}>{feedError}</div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={submitFeed}
+                        disabled={feedBusy || !feedUrl.trim()}
+                        style={{ ...primaryBtn(true), width: "100%", marginTop: 8, opacity: feedBusy || !feedUrl.trim() ? 0.5 : 1 }}
+                      >
+                        {feedBusy ? "Vérification…" : "Ajouter"}
+                      </button>
+                    </div>
                   </>
                 </Popover>
               </div>
