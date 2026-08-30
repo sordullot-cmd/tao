@@ -357,7 +357,6 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Pixelmator", word: ["pixelmator"] },
     { name: "Dribbble", app: [], web: ["dribbble.com"] },
     { name: "Behance", app: [], web: ["behance.net"] },
-    { name: "Pinterest", app: ["pinterest"], web: ["pinterest.com", "pinterest.fr"] },
     { name: "Unsplash", app: [], web: ["unsplash.com"] },
     { name: "Midjourney", app: [], web: ["midjourney.com"] },
     { name: "Google Fonts", app: [], web: ["fonts.google.com"] },
@@ -486,6 +485,10 @@ export const CATALOG: CatalogEntry[] = [
        sur les autres réseaux. Le ranger avec Netflix mélangeait un film choisi
        et deux heures d'enchaînement, qui ne se règlent pas pareil. */
     { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"] },
+    /* Pinterest était rangé avec les outils de création, comme banque d'images.
+       C'en est une, mais on n'y va pas comme dans une banque d'images : on y
+       fait défiler un fil, exactement comme ailleurs ici. */
+    { name: "Pinterest", app: ["pinterest"], web: ["pinterest.com", "pinterest.fr"] },
     { name: "X", app: ["x", "twitter", "x twitter"], web: ["x.com", "twitter.com"], title: ["twitter", "x"] },
     { name: "Instagram", app: ["instagram"], web: ["instagram.com"], title: ["instagram"] },
     { name: "TikTok", app: ["tiktok"], web: ["tiktok.com"], title: ["tiktok"] },

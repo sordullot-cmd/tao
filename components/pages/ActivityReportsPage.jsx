@@ -170,12 +170,10 @@ function DailyBars({ days, categories, goalMs }) {
               }}>
                 {stacks.length === 0 ? (
                   <div
-                    data-chart-part
                     onMouseEnter={hoverEmpty}
                     onMouseMove={hoverEmpty}
-                    onClick={(e) => tip.pin(e, `empty:${d.date}`, emptyContent)}
                     aria-label={`${label} — rien de mesuré`}
-                    style={{ height: 2, background: FIELD_BG, borderRadius: 999, cursor: "pointer" }}
+                    style={{ height: 2, background: FIELD_BG, borderRadius: 999 }}
                   />
                 ) : (
                   stacks.map((b, i) => {
@@ -184,10 +182,11 @@ function DailyBars({ days, categories, goalMs }) {
                     return (
                       <div
                         key={b.id}
-                        data-chart-part
+                        /* Sans épinglage : une bande de deux pixels de large se
+                           clique par accident bien plus souvent qu'exprès, et
+                           la bulle restait alors en travers de la figure. */
                         onMouseEnter={hover(b)}
                         onMouseMove={hover(b)}
-                        onClick={(e) => tip.pin(e, b.id, contentOf(b))}
                         aria-label={`${label} · ${b.label} — ${fmtDur(b.ms)}`}
                         style={{
                           height: (b.ms / max) * height,
@@ -195,7 +194,6 @@ function DailyBars({ days, categories, goalMs }) {
                           borderRadius: i === 0 ? "4px 4px 0 0" : 0,
                           minHeight: b.ms > 0 ? 1 : 0,
                           opacity: dim ? 0.4 : 1,
-                          cursor: "pointer",
                           transition: "opacity .12s ease",
                         }}
                       />

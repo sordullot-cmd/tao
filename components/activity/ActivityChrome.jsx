@@ -945,15 +945,16 @@ export function BarRow({ color, label, ms, pct, sub, right, onClick, details }) 
   const hover = (e) => tip.show(e, "row", content);
   return (
     <div
-      data-chart-part
-      /* Le clic de l'appelant prime : là où une ligne MÈNE quelque part, elle ne
-         peut pas aussi servir à figer sa propre bulle. */
-      onClick={onClick || ((e) => tip.pin(e, "row", content))}
+      /* Pas d'épinglage au clic ici, contrairement aux figures : une ligne de
+         liste porte déjà son nom et sa durée en clair, et une bulle qui reste
+         plantée devant la liste qu'on est en train de parcourir gêne plus
+         qu'elle n'aide. Le survol suffit. */
+      onClick={onClick}
       onMouseEnter={hover}
       onMouseMove={hover}
       onMouseLeave={tip.hide}
       style={{
-        display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 10, cursor: onClick ? "pointer" : "default",
         /* Sans surlignage de fond : sur une liste de barres colorées, un voile
            gris posé derrière la ligne survolée ternit la seule chose qu'on est
            venu comparer. La bulle est l'accusé de réception du survol. */

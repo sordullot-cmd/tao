@@ -455,6 +455,48 @@ describe("sélection figée au clic", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
+  it("ne fige rien sur une ligne de liste ni sur une bande de régularité", () => {
+    /* Deux figures explicitement laissées au seul survol : la ligne de liste
+       porte déjà son nom et sa durée en clair, et une bande de régularité de
+       deux pixels se clique par accident. */
+    render(
+      <CategoryRows
+        buckets={[{ id: "social", label: "Réseaux sociaux", color: "#FF4B4B", ms: 40 * MIN, pct: 12 }]}
+        showShare={false}
+      />,
+    );
+    const row = screen.getByText("Réseaux sociaux").closest("div")!.parentElement!.parentElement!;
+    fireEvent.mouseEnter(row);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+    fireEvent.click(row);
+    fireEvent.mouseLeave(row);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("laisse la régularité au seul survol", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2024-06-05T10:00:00"));
+    try {
+      saveDay({
+        date: "2024-06-03", awayMs: 0, updatedAt: Date.now(),
+        segments: [{ s: new Date("2024-06-03T14:00:00").getTime(), e: new Date("2024-06-03T16:00:00").getTime(), app: "Figma", label: "Figma", title: "", cat: "work" }],
+      });
+      render(<ActivityReportsPage setPage={vi.fn()} />);
+
+      const label = new Date("2024-06-03T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+      const band = screen.getByLabelText(new RegExp(`^${label} · `));
+      fireEvent.mouseEnter(band);
+      expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+      fireEvent.click(band);
+      fireEvent.mouseLeave(band.closest("div[style*=\"position: relative\"]") as HTMLElement);
+      expect(screen.queryByRole("tooltip")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("fige le détail d'une catégorie de l'anneau", () => {
     const base = new Date();
     base.setHours(9, 0, 0, 0);

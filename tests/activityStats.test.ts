@@ -137,6 +137,7 @@ describe("classement", () => {
 describe("réseaux sociaux", () => {
   it("sort YouTube du divertissement pour le compter avec les fils", () => {
     expect(classify("Google Chrome", "instagram.com", []).category).toBe("social");
+    expect(classify("Google Chrome", "pinterest.fr", []).category).toBe("social");
     expect(classify("Google Chrome", "Une vidéo - YouTube", []).category).toBe("social");
     // Une séance choisie reste du divertissement : c'est la frontière.
     expect(classify("Google Chrome", "Un film - Netflix", []).category).toBe("fun");
