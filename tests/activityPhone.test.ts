@@ -52,8 +52,8 @@ describe("journée reconstruite depuis Android", () => {
       segments: [{ packageName: "com.android.chrome", app: "Chrome", s: at(14), e: at(14, 40) }],
     });
     const segs = await phoneDay("2026-08-27", [
-      { id: "u-1", match: "chrome", field: "app", category: "research" },
+      { id: "u-1", match: "chrome", field: "app", category: "work" },
     ]);
-    expect(segs![0].cat).toBe("research");
+    expect(segs![0].cat).toBe("work");
   });
 });

@@ -38,15 +38,16 @@ import { AllocationChart, CARD, HAIRLINE, PeriodPills, StepperPill, PillButton }
 import { EmptyState } from "@/components/ui/EmptyState";
 import { T } from "@/lib/ui/tokens";
 import { getLocalDateString } from "@/lib/dateUtils";
-import { dayStats, fmtClock, fmtDur, rangeStats } from "@/lib/activity/stats";
+import { dayStats, fmtClock, fmtDur, ranked, rangeStats } from "@/lib/activity/stats";
 import { daySources, loadRange } from "@/lib/activity/engine";
 import {
-  categoryLabel, isBrowser, PRODUCTIVITY_COLOR, rootDomain,
+  categoryLabel, isBrowser, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain,
 } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, AppRows, BlockDetail, CategoryRows, DayColumn, Disclosure,
-  HourBars, ScreenTimeBars, SessionRows, SourceNotice, StackedBar, TrackingPill,
+  ActivityHeader, AppRows, BlockDetail, CategoryDrilldown, CategoryRows, CrumbNote, DayColumn,
+  Disclosure, HourBars, ScreenTimeBars, SessionRows, SourceNotice, StackedBar, TrackingPill,
+  useChartTip,
 } from "@/components/activity/ActivityChrome";
 
 const TODAY = () => getLocalDateString();
@@ -95,7 +96,24 @@ export default function ActivityPage({ setPage }) {
 
   const day = useDayLog(date);
 
-  const stats = useMemo(() => dayStats(day, settings), [day, settings]);
+  const measured = useMemo(() => dayStats(day, settings), [day, settings]);
+
+  /* Le seuil des cinq minutes est posé ICI, une fois, sur les CLASSEMENTS que la
+     page donne à lire — et nulle part ailleurs. Tout ce qui en descend en
+     hérite : la liste des applications, celle des catégories, l'anneau, le
+     détail d'une catégorie survolée. Le poser au fil des composants revenait à
+     tenir la même règle à six endroits, dont cinq finissaient par diverger.
+
+     Ce qui n'est PAS touché, et ne doit pas l'être : les totaux (temps actif,
+     ventilation par nature), la grille horaire de la journée et les colonnes du
+     temps d'écran. Ces figures disent une somme ; en retirer des miettes les
+     ferait mentir sur leur propre hauteur. */
+  const stats = useMemo(() => ({
+    ...measured,
+    byCategory: ranked(measured.byCategory),
+    byApp: ranked(measured.byApp),
+  }), [measured]);
+  const hiddenApps = measured.byApp.length - stats.byApp.length;
 
   const isToday = date === TODAY();
   const workGoalMs = settings.workGoalHours * 3600_000;
@@ -122,10 +140,19 @@ export default function ActivityPage({ setPage }) {
      temps d'écran (jour par jour) et la carte « où est passé le temps » (la
      semaine entière) sortent du même `rangeStats`, sinon on relit sept journaux
      deux fois par minute pour les mêmes chiffres. */
-  const weekAgg = useMemo(() => {
+  const weekMeasured = useMemo(() => {
     void minuteTick;
     return rangeStats(loadRange(weekStart, shiftDate(weekStart, 6)), settings);
   }, [weekStart, settings, minuteTick]);
+  /* Même seuil sur la semaine, pour la même raison : une application ouverte
+     trois minutes lundi n'apprend rien de la semaine non plus. Les jours
+     (`days`) restent entiers — ce sont eux qui dessinent les colonnes. */
+  const weekAgg = useMemo(() => ({
+    ...weekMeasured,
+    byCategory: ranked(weekMeasured.byCategory),
+    byApp: ranked(weekMeasured.byApp),
+  }), [weekMeasured]);
+  const hiddenWeekApps = weekMeasured.byApp.length - weekAgg.byApp.length;
   const week = weekAgg.days;
 
   const weekLabel = useMemo(() => {
@@ -166,6 +193,40 @@ export default function ActivityPage({ setPage }) {
     () => stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms })),
     [stats.byCategory]
   );
+
+  /* Parts désignées dans les figures de la SEMAINE : la barre des catégories
+     commande le même détail que l'anneau de la journée, celle des natures
+     restreint la liste aux catégories comptées ainsi. Chaque figure a son
+     contrôleur — survol, clic qui fige, Échap et clic ailleurs qui libèrent —
+     et c'est LUI que la liste lit, pour qu'elle ne puisse jamais dire autre
+     chose que la barre. */
+  const catBar = useChartTip();
+  const natureBar = useChartTip();
+  /* Ce qui est ÉPINGLÉ l'emporte sur ce qui est survolé, quelle que soit la
+     figure : sans cette règle, épingler une catégorie puis promener la souris
+     sur la barre des natures effacerait la sélection qu'on venait de poser. */
+  const weekLead = catBar.pinned ? "cat"
+    : natureBar.pinned ? "nature"
+    : catBar.key ? "cat"
+    : natureBar.key ? "nature" : null;
+  const barCat = weekLead === "cat" ? catBar.key : null;
+  const barNature = weekLead === "nature" ? natureBar.key : null;
+  const natureCats = useMemo(() => {
+    const want = { p: "productive", n: "neutral", d: "distracting" }[barNature];
+    if (!want) return null;
+    const list = weekAgg.byCategory.filter(b => resolveProductivity(b.id, settings.productivity) === want);
+    // Rien de cette nature : la liste complète reste la bonne réponse, une
+    // liste vide donnerait l'impression que la semaine s'est effacée.
+    return list.length ? list : null;
+  }, [barNature, weekAgg.byCategory, settings.productivity]);
+
+  /* Catégorie désignée dans l'anneau : c'est elle que la liste voisine détaille.
+     Vérifiée contre la journée AFFICHÉE — changer de jour pendant qu'on survole
+     ne déclenche aucun `mouseleave`, et la catégorie retenue peut n'exister
+     nulle part dans le nouveau jour : la liste détaillerait alors un vide sans
+     qu'on comprenne pourquoi. */
+  const ring = useChartTip();
+  const drillCat = ring.key && stats.byCategory.some(b => b.id === ring.key) ? ring.key : null;
 
   /* Les postes qui ont mesuré ce jour-là. Tant qu'il n'y en a qu'un, on ne dit
      rien : nommer la machine n'apprend rien à qui n'en a qu'une. Dès qu'il y en
@@ -381,12 +442,55 @@ export default function ActivityPage({ setPage }) {
                         centreValue={stats.activeMs}
                         formatValue={(v) => fmtDur(v, { short: true })}
                         showPct={false}
+                        onHover={ring.hoverKey}
+                        onSelect={ring.select}
+                        /* La part épinglée reste en avant quand la souris est
+                           partie ; pendant un survol, l'anneau tranche seul. */
+                        highlight={ring.pinned ? ring.key : null}
                       />
                       {/* Sans la ligne « 38 % · productif » sous chaque barre :
                           l'anneau dit déjà les parts, et la nature se règle dans
-                          « Catégories & règles ». */}
-                      <div style={{ flex: "1 1 190px", minWidth: 176 }}>
-                        <CategoryRows buckets={stats.byCategory} limit={6} showShare={false} />
+                          « Catégories & règles ».
+
+                          Survoler une part de l'anneau DESCEND cette liste d'un
+                          cran : les applications et les sites de la catégorie
+                          désignée, à la place des catégories. La question ne
+                          change pas — « dans quoi ce temps est-il passé ? » —,
+                          seule l'échelle change, et c'est la figure elle-même
+                          qui la commande. */}
+                      <div
+                        role="group"
+                        /* Nommée : son contenu CHANGE sous la souris — sans nom,
+                           rien ne dit de quoi la liste est le détail. */
+                        aria-label="Répartition détaillée"
+                        /* Cliquer DANS le détail ne libère pas la sélection :
+                           c'est ce qu'on vient d'ouvrir, pas le fond. */
+                        data-chart-part
+                        /* Les deux listes sont SUPERPOSÉES dans une même cellule
+                           de grille, celle qu'on ne lit pas restant montée mais
+                           invisible. C'est ce qui fige la hauteur du bloc.
+
+                           Sans ça, un détail plus court que la liste des
+                           catégories rétrécissait la carte ; le conteneur étant
+                           centré verticalement, l'anneau REMONTAIT, sortait de
+                           sous le curseur, le survol se coupait — et la liste
+                           reprenait sa taille, ce qui remettait l'anneau sous la
+                           souris. Le bloc clignotait entre ses deux états. */
+                        style={{ flex: "1 1 190px", minWidth: 176, display: "grid" }}
+                      >
+                        <div style={{ gridArea: "1 / 1", visibility: drillCat ? "hidden" : "visible" }}>
+                          <CategoryRows buckets={stats.byCategory} limit={6} showShare={false} apps={stats.byApp} />
+                        </div>
+                        {drillCat && (
+                          <div style={{ gridArea: "1 / 1" }}>
+                            <CategoryDrilldown
+                              cat={drillCat}
+                              color={stats.byCategory.find(b => b.id === drillCat)?.color}
+                              apps={stats.byApp}
+                              rows={Math.min(6, stats.byCategory.length)}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -397,12 +501,8 @@ export default function ActivityPage({ setPage }) {
                         voisines de formes différentes obligent à réapprendre à
                         lire en passant de l'une à l'autre. */}
                     <span style={{ fontSize: 13, color: T.textSub }}>Applications &amp; sites</span>
-                    {/* Sous cinq minutes, une application n'a rien à dire d'une
-                        journée : elle a été ouverte, pas utilisée. Retirées
-                        plutôt que repoussées derrière « voir plus » — dès lors
-                        qu'il y a plus de cinq lignes, celles-là ne sont que du
-                        bruit à faire défiler. */}
-                    <AppRows apps={stats.byApp} limit={5} minMs={5 * 60_000} />
+                    <AppRows apps={stats.byApp} limit={5} />
+                    <CrumbNote count={hiddenApps} />
                   </div>
                 </>
               )}
@@ -494,8 +594,41 @@ export default function ActivityPage({ setPage }) {
 
           {view === "cats" && (
             <>
-              <StackedBar parts={weekAgg.byCategory} height={14} />
-              <CategoryRows buckets={weekAgg.byCategory} limit={6} productivity={settings.productivity} />
+              <StackedBar parts={weekAgg.byCategory} height={14} tip={catBar} />
+              {/* Les listes sont SUPERPOSÉES et de hauteur commune (cf. l'anneau
+                  de la journée) : la barre de nature vit juste en dessous, et
+                  une liste qui rétrécit sous la souris la ferait sauter. */}
+              <div
+                role="group"
+                /* Nommée comme celle de l'anneau : son contenu change sous la
+                   souris, rien d'autre ne dit de quoi elle est le détail. */
+                aria-label="Répartition hebdomadaire détaillée"
+                data-chart-part
+                style={{ display: "grid" }}
+              >
+                <div style={{ gridArea: "1 / 1", visibility: barCat || natureCats ? "hidden" : "visible" }}>
+                  <CategoryRows buckets={weekAgg.byCategory} limit={6} productivity={settings.productivity} apps={weekAgg.byApp} />
+                </div>
+                {barCat && (
+                  <div style={{ gridArea: "1 / 1" }}>
+                    <CategoryDrilldown
+                      cat={barCat}
+                      color={weekAgg.byCategory.find(b => b.id === barCat)?.color}
+                      apps={weekAgg.byApp}
+                      rows={Math.min(6, weekAgg.byCategory.length)}
+                    />
+                  </div>
+                )}
+                {/* Sous une NATURE, le cran du dessous n'est pas l'application
+                    mais la catégorie : « qu'est-ce qui est compté comme
+                    productif ? » est exactement la question qu'on se pose
+                    devant cette barre-là, et c'est le réglage qui y répond. */}
+                {!barCat && natureCats && (
+                  <div style={{ gridArea: "1 / 1" }}>
+                    <CategoryRows buckets={natureCats} limit={6} productivity={settings.productivity} apps={weekAgg.byApp} />
+                  </div>
+                )}
+              </div>
 
               {/* La nature du temps, sous la répartition : c'est la même
                   matière regroupée en trois, et c'est elle qui décide du
@@ -503,6 +636,7 @@ export default function ActivityPage({ setPage }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12, borderTop: `1px solid ${HAIRLINE}` }}>
                 <StackedBar
                   height={10}
+                  tip={natureBar}
                   parts={[
                     { id: "p", label: "Productif", color: PRODUCTIVITY_COLOR.productive, ms: weekAgg.productiveMs, pct: weekAgg.activeMs ? (weekAgg.productiveMs / weekAgg.activeMs) * 100 : 0 },
                     { id: "n", label: "Neutre", color: PRODUCTIVITY_COLOR.neutral, ms: weekAgg.neutralMs, pct: weekAgg.activeMs ? (weekAgg.neutralMs / weekAgg.activeMs) * 100 : 0 },
@@ -561,6 +695,7 @@ export default function ActivityPage({ setPage }) {
                 onPick={onPick}
                 empty="Tout est classé sur cette semaine."
               />
+              <CrumbNote count={onlyPending ? 0 : hiddenWeekApps} />
             </>
           )}
 

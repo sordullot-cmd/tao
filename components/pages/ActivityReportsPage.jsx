@@ -18,11 +18,12 @@ import { T } from "@/lib/ui/tokens";
 import { PALETTE, GREY } from "@/lib/ui/palette";
 import { getLocalDateString } from "@/lib/dateUtils";
 import { loadRange } from "@/lib/activity/engine";
-import { fmtDur, rangeStats } from "@/lib/activity/stats";
+import { fmtDur, ranked, rangeStats } from "@/lib/activity/stats";
 import { PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
-  ActivityHeader, AppRows, BlockTitle, CategoryRows, HourBars, Metric, SourceNotice,
+  ActivityHeader, AppRows, BlockTitle, CategoryDrilldown, CategoryRows, HourBars, Metric,
+  SourceNotice, TipLine, TipTitle, useChartTip,
 } from "@/components/activity/ActivityChrome";
 
 const RANGES = [
@@ -84,6 +85,7 @@ function fromMonday(days) {
  * la nature du temps.
  */
 function DailyBars({ days, categories, goalMs }) {
+  const tip = useChartTip();
   const max = Math.max(1, ...days.map(d => d.activeMs), goalMs || 0);
   const height = 260;
   const top = categories.slice(0, 6).map(c => c.id);
@@ -95,7 +97,10 @@ function DailyBars({ days, categories, goalMs }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap, height, position: "relative" }}>
+      <div
+        style={{ display: "flex", alignItems: "flex-end", gap, height, position: "relative" }}
+        onMouseLeave={tip.hide}
+      >
         {goalMs > 0 && goalMs <= max && (
           <div
             title={`Objectif : ${fmtDur(goalMs)}`}
@@ -111,10 +116,44 @@ function DailyBars({ days, categories, goalMs }) {
             // grise : six teintes suffisent à lire une colonne, douze la brouillent.
             .map(b => ({ ...b, color: top.includes(b.id) ? b.color : GREY.grey300 }))
             .sort((a, b) => b.ms - a.ms);
+          const label = new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+          /* Le survol vise la PART, pas la colonne. Une colonne est un total —
+             et c'est justement ce que le graphe empile pour ne PAS avoir à le
+             lire. Ce qu'on vient y chercher, c'est « quand est-ce que cette
+             catégorie-là revient », et la réponse est dans une bande, pas dans
+             un jour.
+             La cible retenue est donc la CATÉGORIE, non le couple jour +
+             catégorie : désigner « Développement » un mardi l'allume sur toute
+             la période, et sa régularité — ou ses trous — se lit d'un coup. */
+          const contentOf = (b) => (
+            <>
+              <TipTitle>{b.label}</TipTitle>
+              {/* Durée et part sur la même ligne, comme dans les autres bulles
+                  de la section : deux façons de dire la même quantité. */}
+              <TipLine
+                color={b.color}
+                label={label}
+                value={`${fmtDur(b.ms)} · ${Math.round((b.ms / Math.max(1, d.activeMs)) * 1000) / 10} %`}
+                strong
+              />
+              <TipLine label="Actif ce jour-là" value={fmtDur(d.activeMs)} />
+              {d.focusMs > 0 && <TipLine label="Dont focus" value={fmtDur(d.focusMs)} />}
+            </>
+          );
+          const hover = (b) => (e) => tip.show(e, b.id, contentOf(b));
+          /* Le jour vide n'a pas de part à survoler et garde donc sa cible à
+             lui : sans elle, une colonne plate ne répondrait pas du tout, alors
+             que « rien ce jour-là » est la réponse qu'on cherchait. */
+          const emptyContent = (
+            <>
+              <TipTitle>{label}</TipTitle>
+              <TipLine label="Rien de mesuré" value="—" />
+            </>
+          );
+          const hoverEmpty = (e) => tip.show(e, `empty:${d.date}`, emptyContent);
           return (
             <div
               key={d.date}
-              title={`${new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })} — ${fmtDur(d.activeMs)} actif, ${fmtDur(d.focusMs)} de focus`}
               style={{
                 flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "flex-end",
@@ -123,28 +162,51 @@ function DailyBars({ days, categories, goalMs }) {
                 marginLeft: i > 0 && new Date(`${d.date}T00:00:00`).getDay() === 1 ? gap : 0,
               }}
             >
-              {/* La barre est plus étroite que sa colonne, comme dans l'onglet
-                  « Journée » : c'est la colonne qui porte le survol. */}
+              {/* La barre est plus étroite que sa colonne : c'est le dessin qui
+                  s'affine. Le survol, lui, est porté par chaque PART. */}
               <div style={{
                 width: barW, maxWidth: barMax, height: "100%", display: "flex",
                 flexDirection: "column", justifyContent: "flex-end",
               }}>
                 {stacks.length === 0 ? (
-                  <div style={{ height: 2, background: FIELD_BG, borderRadius: 999 }} />
+                  <div
+                    data-chart-part
+                    onMouseEnter={hoverEmpty}
+                    onMouseMove={hoverEmpty}
+                    onClick={(e) => tip.pin(e, `empty:${d.date}`, emptyContent)}
+                    aria-label={`${label} — rien de mesuré`}
+                    style={{ height: 2, background: FIELD_BG, borderRadius: 999, cursor: "pointer" }}
+                  />
                 ) : (
-                  stacks.map((b, i) => (
-                    <div key={b.id} style={{
-                      height: (b.ms / max) * height,
-                      background: b.color,
-                      borderRadius: i === 0 ? "4px 4px 0 0" : 0,
-                      minHeight: b.ms > 0 ? 1 : 0,
-                    }} />
-                  ))
+                  stacks.map((b, i) => {
+                    // Les voisines reculent, la désignée garde son encre.
+                    const dim = tip.key != null && tip.key !== b.id;
+                    return (
+                      <div
+                        key={b.id}
+                        data-chart-part
+                        onMouseEnter={hover(b)}
+                        onMouseMove={hover(b)}
+                        onClick={(e) => tip.pin(e, b.id, contentOf(b))}
+                        aria-label={`${label} · ${b.label} — ${fmtDur(b.ms)}`}
+                        style={{
+                          height: (b.ms / max) * height,
+                          background: b.color,
+                          borderRadius: i === 0 ? "4px 4px 0 0" : 0,
+                          minHeight: b.ms > 0 ? 1 : 0,
+                          opacity: dim ? 0.4 : 1,
+                          cursor: "pointer",
+                          transition: "opacity .12s ease",
+                        }}
+                      />
+                    );
+                  })
                 )}
               </div>
             </div>
           );
         })}
+        {tip.node}
       </div>
       <div style={{ display: "flex", gap }}>
         {days.map((d, i) => {
@@ -254,7 +316,12 @@ export default function ActivityReportsPage({ setPage }) {
     const logs = loadRange(from, today);
     const prevFrom = shiftDate(from, -range.days);
     const prevLogs = loadRange(prevFrom, shiftDate(from, -1));
-    return { stats: rangeStats(logs, settings), prevStats: rangeStats(prevLogs, settings) };
+    /* Le même seuil que l'onglet « Journée » : sur quatre-vingt-dix jours, une
+       application vue trois minutes en tout est encore moins une habitude
+       qu'elle ne l'était sur une journée. Seuls les CLASSEMENTS sont rognés —
+       les colonnes du bas lisent `stats.days`, qui reste entier. */
+    const trim = (r) => ({ ...r, byCategory: ranked(r.byCategory), byApp: ranked(r.byApp) });
+    return { stats: trim(rangeStats(logs, settings)), prevStats: trim(rangeStats(prevLogs, settings)) };
   }, [range.days, settings, today, minuteTick]);
 
   const workGoalMs = settings.workGoalHours * 3600_000;
@@ -288,6 +355,13 @@ export default function ActivityReportsPage({ setPage }) {
   }, [stats.hourly]);
 
   const parts = stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms }));
+
+  /* Catégorie désignée dans l'anneau — survolée, ou figée d'un clic. Revérifiée
+     contre la période affichée : changer de fenêtre pendant qu'on survole ne
+     déclenche aucun `mouseleave`, et la catégorie retenue peut n'exister nulle
+     part dans la nouvelle. */
+  const ring = useChartTip();
+  const drillCat = ring.key && stats.byCategory.some(b => b.id === ring.key) ? ring.key : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -415,8 +489,36 @@ export default function ActivityReportsPage({ setPage }) {
                 centreValue={stats.activeMs}
                 formatValue={(v) => fmtDur(v, { short: true })}
                 showPct={false}
+                onHover={ring.hoverKey}
+                onSelect={ring.select}
+                highlight={ring.pinned ? ring.key : null}
               />
-              <CategoryRows buckets={stats.byCategory} limit={6} />
+              {/* Survoler une part descend la liste d'un cran — les applications
+                  et les sites de la catégorie désignée — exactement comme dans
+                  l'onglet « Journée ». Les deux listes sont superposées et de
+                  hauteur commune : ce qui suit dans la carte ne doit pas sauter
+                  quand le détail est plus court que la liste. */}
+              <div
+                role="group"
+                aria-label="Répartition détaillée"
+                /* Cliquer dans le détail ne libère pas la sélection. */
+                data-chart-part
+                style={{ display: "grid" }}
+              >
+                <div style={{ gridArea: "1 / 1", visibility: drillCat ? "hidden" : "visible" }}>
+                  <CategoryRows buckets={stats.byCategory} limit={6} apps={stats.byApp} />
+                </div>
+                {drillCat && (
+                  <div style={{ gridArea: "1 / 1" }}>
+                    <CategoryDrilldown
+                      cat={drillCat}
+                      color={stats.byCategory.find(b => b.id === drillCat)?.color}
+                      apps={stats.byApp}
+                      rows={Math.min(6, stats.byCategory.length)}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ ...CARD, display: "flex", flexDirection: "column", gap: 10 }}>

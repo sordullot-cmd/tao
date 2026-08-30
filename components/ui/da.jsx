@@ -158,6 +158,14 @@ export function AllocationChart({
   /** Prévenu quand la souris entre sur une part, ou la quitte (`null`). Symétrique
    *  de `highlight` : c'est par là que l'anneau désigne à son tour. */
   onHover,
+  /**
+   * Prévenu du CLIC sur une part. Sa présence rend l'anneau cliquable : ce que
+   * la souris désigne au survol, un clic le fige — sans quoi lire un détail
+   * suppose de garder le curseur immobile sur un arc de quelques pixels.
+   * L'appelant tient l'état de sélection ; l'anneau ne fait que rapporter le
+   * geste, et reçoit en retour la part à garder en avant par `highlight`.
+   */
+  onSelect,
 }) {
   const [hover, setHover] = React.useState(null);
   const live = parts.filter(p => p.pct > 0);
@@ -234,10 +242,13 @@ export function AllocationChart({
                 strokeDasharray={`${len} ${CIRC - len}`}
                 strokeDashoffset={-a.offset * CIRC}
                 strokeLinecap="butt"
+                data-chart-part={onSelect ? "" : undefined}
                 onMouseEnter={() => { setHover(a.id); onHover?.(a.id); }}
                 onMouseLeave={() => { setHover(null); onHover?.(null); }}
+                onClick={onSelect ? () => onSelect(a.id) : undefined}
                 style={{
                   opacity: lit == null || lit.has(a.id) ? 1 : 0.45,
+                  cursor: onSelect ? "pointer" : "default",
                   transition: "opacity 140ms var(--ease-out, ease), stroke-dasharray 200ms var(--ease-out, ease)",
                 }}
               >

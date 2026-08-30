@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 /* Le suivi d'activité mesure des durées : une erreur de découpage ne se voit pas
    à l'écran (le total « a l'air » plausible), elle se voit ici. */
 
-import { classify, classifyDetailed, resolveProductivity, PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
+import { classify, classifyDetailed, productivityOf, resolveProductivity, PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
 import { DEFAULT_SETTINGS, type DayLog } from "@/lib/activity/engine";
 import { dayBlocks, dayStats, fmtDur, unclassified } from "@/lib/activity/stats";
 
@@ -32,10 +32,13 @@ describe("classement", () => {
   it("reconnaît les jeux, y compris sous leur nom de processus", () => {
     // Le défaut le plus visible de l'ancien classement : tout ceci tombait
     // dans « Non classé », qui finissait première catégorie de la journée.
-    expect(classify("LeagueClientUx", "League of Legends", []).category).toBe("games");
-    expect(classify("RiotClientServices", "Riot Client", []).category).toBe("games");
-    expect(classify("VALORANT-Win64-Shipping", "VALORANT", []).category).toBe("games");
-    expect(classify("steamwebhelper", "Steam", []).category).toBe("games");
+    // Les jeux ont rejoint « Divertissement » : on ne les réglait pas
+    // différemment, et deux catégories distraction faisaient deux petites parts
+    // là où une seule se lit.
+    expect(classify("LeagueClientUx", "League of Legends", []).category).toBe("fun");
+    expect(classify("RiotClientServices", "Riot Client", []).category).toBe("fun");
+    expect(classify("VALORANT-Win64-Shipping", "VALORANT", []).category).toBe("fun");
+    expect(classify("steamwebhelper", "Steam", []).category).toBe("fun");
     expect(classify("javaw", "Minecraft 1.20.4", []).label).toBe("Minecraft");
   });
 
@@ -46,18 +49,29 @@ describe("classement", () => {
   });
 
   it("lit le domaine posé dans le titre d'un navigateur", () => {
-    expect(classify("Google Chrome", "op.gg — stats", []).category).toBe("games");
-    expect(classify("Google Chrome", "Amazon.fr : chaussures", []).category).toBe("shopping");
+    expect(classify("Google Chrome", "op.gg — stats", []).category).toBe("fun");
+    // Les achats sont de la navigation : on traverse une boutique, on n'y produit rien.
+    expect(classify("Google Chrome", "Amazon.fr : chaussures", []).category).toBe("browsing");
   });
 
   it("ne prend pas un nom de site croisé dans une phrase pour ce site", () => {
     // « le monde » traînait dans le titre : la page finissait dans la presse.
-    expect(classify("Safari", "Un site inconnu de tout le monde", []).category).toBe("other");
+    // Elle reste donc de la navigation — inconnue, pas mal rangée.
+    expect(classify("Safari", "Un site inconnu de tout le monde", []).category).toBe("browsing");
   });
 
-  it("range le bruit du système au lieu de le laisser en « non classé »", () => {
-    expect(classify("dwm", "", []).category).toBe("utilities");
-    expect(classify("LockApp", "", []).category).toBe("utilities");
+  it("nomme le mobilier du système sans jamais le proposer au classement", () => {
+    /* Un écran de verrouillage au premier plan veut dire qu'on n'est pas là :
+       le compter comme du travail gonflerait le temps productif de chaque
+       absence. Il reste donc « Non classé » — mais reconnu, nommé, et écarté de
+       la file à ranger, où il noyait les vraies applications inconnues. */
+    for (const app of ["dwm", "LockApp"]) {
+      const res = classifyDetailed(app, "", []);
+      expect(res.category).toBe("other");
+      expect(res.system).toBe(true);
+    }
+    expect(classifyDetailed("Finder", "", []).category).toBe("work");
+    expect(classifyDetailed("BidulePro", "", []).system).toBe(false);
   });
 
   it("dit ce qui a décidé du classement", () => {
@@ -84,19 +98,91 @@ describe("classement", () => {
 
   it("fait primer une règle de l'utilisateur, la plus récente d'abord", () => {
     const rules = [
-      { id: "1", match: "code", category: "writing" },
-      { id: "2", match: "code", category: "design" },
+      { id: "1", match: "code", category: "trading" },
+      { id: "2", match: "code", category: "fun" },
     ];
-    expect(classify("Code", "", rules).category).toBe("design");
+    expect(classify("Code", "", rules).category).toBe("fun");
+  });
+
+  it("suit une règle écrite avec le vocabulaire d'avant", () => {
+    /* Une refonte du vocabulaire doit emporter ce qui était écrit dedans :
+       sans reprise, une règle « ce site → Design » cesserait de ranger quoi que
+       ce soit du jour au lendemain, et sans un mot. */
+    expect(classify("Code", "", [{ id: "1", match: "code", category: "design" }]).category).toBe("work");
+    expect(classify("Code", "", [{ id: "1", match: "code", category: "games" }]).category).toBe("fun");
+    expect(classify("Code", "", [{ id: "1", match: "code", category: "shopping" }]).category).toBe("browsing");
   });
 
   it("laisse non classé ce qu'aucune règle ne reconnaît", () => {
     expect(classify("BidulePro", "", []).category).toBe("other");
   });
 
-  it("ne range pas une page inconnue dans une catégorie productive", () => {
-    // Sinon tout le web non reconnu gonflerait le temps de focus.
-    expect(classify("Safari", "Un site quelconque", []).category).toBe("other");
+  it("range une page inconnue dans « Navigation », et jamais en productif", () => {
+    /* Le plus gros défaut de la mesure : un navigateur qui ne rend qu'un titre
+       (Arc, Firefox, un poste sans autorisation d'automatisation) envoyait des
+       journées entières dans « Non classé » — une entrée par article lu, aucune
+       rangeable. Naviguer n'est pas une anomalie.
+       Neutre, et pas productif : le web qu'on n'a pas su nommer ne doit pas
+       gonfler le temps de focus. */
+    const res = classifyDetailed("Safari", "Un site quelconque", []);
+    expect(res.category).toBe("browsing");
+    expect(productivityOf("browsing")).toBe("neutral");
+    // Une application de bureau inconnue, elle, reste à ranger.
+    expect(classify("BidulePro", "", []).category).toBe("other");
+  });
+});
+
+describe("GitHub et GitHub Desktop, une seule chose", () => {
+  it("réunit le site et l'application sous le même nom et la même catégorie", () => {
+    /* Deux entrées de catalogue en faisaient deux lignes, deux parts et deux
+       totaux à rapprocher à la main — alors qu'on travaille sur le même dépôt. */
+    const web = classifyDetailed("Arc", "PR · github.com/tr4de", []);
+    const app = classifyDetailed("GitHub Desktop", "", []);
+    expect(web.label).toBe("GitHub");
+    expect(app.label).toBe("GitHub");
+    expect(app.category).toBe(web.category);
+  });
+});
+
+describe("une chose, une seule catégorie", () => {
+  /* Le défaut qui faussait tous les totaux : le classement décide segment par
+     segment, et deux segments d'un même site ne décidaient pas toujours pareil
+     — l'URL lisible sur l'un, perdue sur l'autre. Le temps s'agrégeait par nom,
+     la catégorie par segment, et les trois figures de la page se contredisaient
+     sur la même journée. */
+  it("range tout le temps d'un nom là où il en a passé le plus", () => {
+    /* Deux pages du MÊME site, et le navigateur n'a pas dit la même chose :
+       la première porte le domaine dans son titre, la seconde seulement le nom.
+       Le nom deviné est identique, la catégorie ne l'était pas. */
+    const log = day([
+      seg([9, 0], [10, 0], "Chrome", "x", "GitHub", "PR · github.com/tr4de"),
+      seg([10, 0], [10, 20], "Chrome", "x", "GitHub", "Issue #12 | GitHub"),
+    ]);
+    const stats = dayStats(log, DEFAULT_SETTINGS);
+
+    expect(stats.byApp).toHaveLength(1);
+    expect(stats.byApp[0].cat).toBe("dev");
+    // La ligne et la catégorie disent le MÊME temps : c'est tout l'enjeu.
+    expect(stats.byApp[0].ms).toBe(80 * 60_000);
+    expect(stats.byCategory.find(b => b.id === "dev")!.ms).toBe(80 * 60_000);
+    expect(stats.byCategory.find(b => b.id === "browsing")).toBeUndefined();
+  });
+
+  it("ne laisse jamais « Non classé » l'emporter sur une catégorie réelle", () => {
+    /* Un seul segment reconnu suffit à ranger tout ce qui porte le même nom :
+       « Non classé » est un aveu d'ignorance, pas un jugement — il ne peut pas
+       gagner un vote contre quelque chose qu'on a su nommer. */
+    const log = day([
+      seg([9, 0], [11, 0], "BidulePro", "x", "BidulePro", ""),
+      seg([11, 0], [11, 5], "BidulePro", "x", "BidulePro", "chantier"),
+    ]);
+    // Une règle ne reconnaît QUE la seconde : cinq minutes contre deux heures.
+    const stats = dayStats(log, {
+      ...DEFAULT_SETTINGS,
+      rules: [{ id: "r", match: "chantier", field: "title" as const, category: "dev" }],
+    });
+    expect(stats.byApp[0].cat).toBe("dev");
+    expect(stats.byApp[0].ms).toBe(125 * 60_000);
   });
 });
 

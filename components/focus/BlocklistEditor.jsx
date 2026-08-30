@@ -8,38 +8,32 @@
  * réseaux ». D'où la coche de tête de groupe, qui prend la catégorie entière —
  * c'est le geste le plus fréquent, il doit coûter un clic.
  *
- * Dès qu'on tape, l'écran change de nature : les catégories s'effacent et
- * laissent une liste ORDONNÉE par vraisemblance (cf. `lib/focus/search.ts`),
- * parcourable aux flèches et validable à Entrée. C'est la façon dont on cherche
- * une application sur un système ; la reproduire ici évite d'avoir à savoir dans
- * quelle famille les auteurs de l'app ont rangé Discord.
+ * Ce qui est retenu se voit à deux endroits, et ce n'est pas de la redondance
+ * décorative : la ligne est teintée là où on clique, et les cibles retenues sont
+ * rappelées en pastilles au-dessus de la liste — donc sans avoir à déplier
+ * quoi que ce soit. Une coche de 16 px au bout d'une ligne ne suffisait pas.
  *
- * Ce qui est coché se voit à trois endroits, et ce n'est pas de la redondance
- * décorative : la ligne est teintée (on le voit là où on clique), un compte
- * figure sur la famille repliée (on le voit sans déplier), et les cibles
- * retenues sont rappelées en pastilles au-dessus du champ (on le voit sans rien
- * parcourir du tout). Une coche de 16 px au bout d'une ligne ne suffisait pas.
+ * Le champ d'ajout, lui, ne se contente pas d'accepter ce qu'on tape : il
+ * propose les applications RÉELLEMENT INSTALLÉES sur le poste (cf.
+ * `lib/focus/native.ts`) et enregistre leur nom système. Sans cela, « Discrod »
+ * entrait dans une liste aussi facilement que « Discord », et le blocage muet
+ * qui s'ensuivait était indiscernable d'un blocage qui n'a rien eu à faire.
  *
- * Le mode « seuls autorisés » inverse la liste. Il mérite son explication à
- * l'écran : c'est le seul réglage de la page dont l'effet est contre-intuitif,
- * et le seul qui tienne quand on ne sait pas d'avance par où la distraction va
- * arriver.
+ * La fenêtre ne porte aucun texte d'explication : les libellés disent le
+ * réglage, et le seul paragraphe qui subsiste annonce une conséquence
+ * irréversible plutôt qu'un mode d'emploi.
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Search, ChevronRight, AppWindow, AlertTriangle, X, Check, CornerDownLeft } from "lucide-react";
+import { Plus, ChevronRight, AppWindow, AlertTriangle, X, Check, CornerDownLeft } from "lucide-react";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CheckBox, Field, Input, Modal, PillButton } from "@/components/ui/da";
 import { CATEGORIES, CATALOG_BY_ID, catalogOf, hostOf, newId, normApp } from "@/lib/focus/model";
-import { highlight, rankBy, searchCatalog } from "@/lib/focus/search";
+import { highlight, rankBy } from "@/lib/focus/search";
 import { installedApps, nativeAvailable } from "@/lib/focus/native";
 
 const COLORS = Object.keys(PALETTE);
-
-/** Combien de résultats la recherche montre. Au-delà, la liste redevient le mur
- *  qu'elle cherchait à remplacer, et le bas n'est plus ce qu'on visait. */
-const MAX_HITS = 8;
 
 /** Domaine nu à partir de ce qui a été tapé : on accepte une URL entière, un
  *  `www.`, un chemin — et on n'en garde que l'hôte. Sans ça, la première entrée
@@ -220,8 +214,7 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
    * Quarante-et-une entrées déroulées d'un coup, ce n'est pas une liste, c'est
    * un mur : on la parcourt à la molette au lieu de la lire. Fermées, les huit
    * familles tiennent à l'écran d'un seul regard, chacune avec son compte
-   * (« 3/9 »), ce qui suffit à savoir où aller. Et pour chercher un service
-   * précis, le champ au-dessus va plus vite que n'importe quel dépliage. */
+   * (« 3/9 »), ce qui suffit à savoir où aller. */
   const [openCats, setOpenCats] = useState(() => new Set());
   const toggleCat = (id) => setOpenCats(prev => {
     const next = new Set(prev);
@@ -232,19 +225,8 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
   /* Ligne visée par le clavier dans les suggestions d'applications. */
   const [appCursor, setAppCursor] = useState(0);
   const nativeApps = useInstalledApps();
-  const [query, setQuery] = useState("");
-  /* Ligne visée par le clavier, dans la liste des résultats. */
-  const [cursor, setCursor] = useState(0);
 
   const hue = PALETTE[color] || PALETTE.purple;
-
-  const hits = useMemo(() => searchCatalog(query, MAX_HITS), [query]);
-
-  /* La visée repart en tête à la frappe — pas dans un effet : une lettre de plus
-     et le meilleur résultat n'est plus le même, garder l'ancien rang ferait
-     cocher autre chose que ce qu'on lit. Le remettre ici, à la source du
-     changement, évite le rendu en cascade d'un `useEffect`. */
-  const onQuery = (v) => { setQuery(v); setCursor(0); };
 
   const toggle = (id) => setItemIds(prev => {
     const next = new Set(prev);
@@ -269,38 +251,6 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
       t.app ? (c.app || "").toLowerCase() === t.app.toLowerCase() : c.domain === t.domain
     ));
     if (!dupe) setCustom(prev => [...prev, { id: newId("c"), ...t }]);
-  };
-
-  /* Le champ de recherche sait aussi ajouter : quand rien du catalogue ne
-     répond, ce qu'on vient de taper EST la cible voulue, et la faire retaper
-     douze lignes plus bas serait une punition pour avoir cherché. */
-  const orphan = useMemo(
-    () => (query.trim() && !hits.length ? cleanTarget(query) : null),
-    [query, hits.length]
-  );
-
-  const takeHit = (i) => {
-    if (orphan) { addCustom(query); onQuery(""); return; }
-    const hit = hits[i];
-    if (hit) toggle(hit.entry.id);
-  };
-
-  const onSearchKey = (e) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      if (!hits.length) return;
-      setCursor(c => (c + (e.key === "ArrowDown" ? 1 : hits.length - 1)) % hits.length);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      takeHit(cursor);
-    } else if (e.key === "Escape" && query) {
-      /* La frappe s'efface avant la fenêtre : Échap sur un champ rempli veut
-         dire « annule ma recherche », pas « jette la liste en cours ». Marquer
-         la touche comme consommée suffit à retenir la fermeture — c'est le
-         contrat de `useEscapeDismiss`, qui ignore un événement déjà traité. */
-      e.preventDefault();
-      onQuery("");
-    }
   };
 
   /* ── Champ d'ajout ────────────────────────────────────────────────────── */
@@ -438,8 +388,8 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
         <Field label="Sens de la liste">
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {[
-              { id: "block", label: "Bloquer ce qui est listé", hint: "Le reste passe. Le réglage courant." },
-              { id: "allow", label: "N'autoriser QUE ce qui est listé", hint: "Tout le reste est coupé, y compris ce que vous n'avez pas pensé à lister." },
+              { id: "block", label: "Bloquer ce qui est listé" },
+              { id: "allow", label: "N'autoriser QUE ce qui est listé" },
             ].map(opt => (
               <div
                 key={opt.id}
@@ -451,10 +401,7 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
                 }}
               >
                 <CheckBox on={mode === opt.id} color={hue} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{opt.label}</div>
-                  <div style={{ fontSize: 12, color: T.textSub, marginTop: 2, lineHeight: 1.5 }}>{opt.hint}</div>
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{opt.label}</div>
               </div>
             ))}
           </div>
@@ -470,18 +417,14 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
             }}
           >
             <CheckBox on={always} color={hue} />
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: T.text }}>Bloquer en permanence</div>
-              <div style={{ fontSize: 12, color: T.textSub, marginTop: 2, lineHeight: 1.5 }}>
-                {/* La phrase dit l'usage, pas le mécanisme : une liste permanente
-                    ne se lance pas, on l'oublie — et c'est à ce moment-là
-                    qu'elle sert. La contrepartie doit être dite aussi
-                    franchement, sinon on la découvre en la subissant. */}
-                Sans session, tout le temps. Pour ce dont on a décidé de ne plus rien vouloir —
-                le jeu réinstallé trois fois, le site où l&apos;on ne retourne pas. Décoché,
-                la liste ne s&apos;applique que pendant les sessions qui l&apos;incluent.
-              </div>
-              {/* Les deux réglages se combinent en un piège : « seuls autorisés »
+              {/* Le seul texte qui reste dans cette fenêtre, et il n'explique
+                  pas un réglage : il annonce une CONSÉQUENCE, celle des deux
+                  seuls réglages qui, combinés, coupent Internet sans fin. Une
+                  glose se relit quand on veut ; celle-ci se découvrirait le
+                  lendemain, en la subissant.
+                  Les deux réglages se combinent en un piège : « seuls autorisés »
                   coupe tout ce qui n'est pas listé, et « en permanence » ne
                   s'arrête jamais. Ensemble, ils coupent Internet pour de bon.
                   C'est un choix défendable, mais il doit être fait les yeux
@@ -505,132 +448,57 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
           </div>
         </Field>
 
-        <Field
-          label="Applis et sites"
-          hint="Tapez le nom : les entrées les plus probables remontent. ↑ ↓ pour viser, Entrée pour cocher. Une entrée cochée coupe son site — et son application de bureau quand elle en a une, signalée par le repère « appli »."
-        >
+        <Field label="Applis et sites">
           <Selected entries={selected} color={hue} onRemove={removeSelected} />
 
-          <div style={{ position: "relative", marginBottom: 8 }}>
-            <Search size={14} color={T.textMut} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-            <Input
-              value={query}
-              onChange={e => onQuery(e.target.value)}
-              onKeyDown={onSearchKey}
-              placeholder="Rechercher une appli ou un site"
-              aria-label="Rechercher une appli ou un site"
-              style={{ paddingLeft: 32, paddingRight: query ? 30 : undefined }}
-            />
-            {query && (
-              <button
-                type="button" onClick={() => onQuery("")} aria-label="Effacer la recherche"
-                style={{
-                  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-                  background: "none", border: "none", padding: 4, cursor: "pointer",
-                  color: T.textMut, display: "inline-flex",
-                }}
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-
           <div style={{ maxHeight: 280, overflowY: "auto" }} className="scroll-thin">
-            {query.trim() ? (
-              <>
-                {hits.map((h, i) => (
+            {CATEGORIES.map(cat => {
+              const entries = catalogOf(cat.id);
+              const on = entries.filter(e => itemIds.has(e.id)).length;
+              const open = openCats.has(cat.id);
+              return (
+                <div key={cat.id} style={{ marginBottom: 6 }}>
                   <Row
-                    key={h.entry.id}
-                    label={<Marked text={h.entry.name} ranges={h.nameRanges} />}
-                    sub={h.sub ? <Marked text={h.sub} ranges={h.subRanges} /> : null}
-                    on={itemIds.has(h.entry.id)}
-                    active={i === cursor}
-                    onHover={() => setCursor(i)}
-                    color={hue}
-                    onToggle={() => toggle(h.entry.id)}
-                    action={
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <AppTag entry={h.entry} />
-                        {i === cursor && (
-                          <CornerDownLeft size={12} color={T.textMut} aria-hidden="true" />
-                        )}
-                      </span>
+                    label={<span style={{ fontWeight: 600 }}>{cat.label}</span>}
+                    sub={on ? `${on}/${entries.length}` : null}
+                    on={on === entries.length}
+                    partial={on > 0 && on < entries.length}
+                    color={PALETTE[cat.color]}
+                    onToggle={() => toggleCategory(cat.id)}
+                    /* Le chevron ouvre, la ligne coche : deux gestes voisins
+                       mais distincts, d'où l'arrêt de propagation — sans lui,
+                       déplier une famille la cocherait tout entière. */
+                    lead={
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); toggleCat(cat.id); }}
+                        aria-expanded={open}
+                        aria-label={`${open ? "Replier" : "Déplier"} ${cat.label}`}
+                        style={{
+                          background: "none", border: "none", padding: 2, cursor: "pointer",
+                          color: T.textMut, display: "inline-flex", flexShrink: 0,
+                          transform: open ? "rotate(90deg)" : "none", transition: "var(--tr-ui)",
+                        }}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
                     }
                   />
-                ))}
-                {orphan && (
-                  <Row
-                    label={<span>Ajouter « {orphan.domain || orphan.app} »</span>}
-                    sub={orphan.domain ? "site inconnu du catalogue" : "application — demande l'app de bureau"}
-                    on={false}
-                    active
-                    color={hue}
-                    onToggle={() => { addCustom(query); onQuery(""); }}
-                    lead={<Plus size={14} color={T.textMut} style={{ flexShrink: 0 }} />}
-                  />
-                )}
-                {!hits.length && !orphan && (
-                  <div style={{ fontSize: 12, color: T.textMut, padding: "10px 4px" }}>
-                    Rien ne correspond. Ajoutez le domaine à la main ci-dessous.
+                  <div style={{ paddingLeft: 22, borderLeft: `1px solid ${HAIRLINE}`, marginLeft: 14, display: open ? "block" : "none" }}>
+                    {entries.map(e => (
+                      <Row
+                        key={e.id} label={e.name} sub={e.domains[0]} on={itemIds.has(e.id)}
+                        color={hue} onToggle={() => toggle(e.id)} action={<AppTag entry={e} />}
+                      />
+                    ))}
                   </div>
-                )}
-              </>
-            ) : (
-              CATEGORIES.map(cat => {
-                const entries = catalogOf(cat.id);
-                const on = entries.filter(e => itemIds.has(e.id)).length;
-                const open = openCats.has(cat.id);
-                return (
-                  <div key={cat.id} style={{ marginBottom: 6 }}>
-                    <Row
-                      label={<span style={{ fontWeight: 600 }}>{cat.label}</span>}
-                      sub={on ? `${on}/${entries.length}` : null}
-                      on={on === entries.length}
-                      partial={on > 0 && on < entries.length}
-                      color={PALETTE[cat.color]}
-                      onToggle={() => toggleCategory(cat.id)}
-                      /* Le chevron ouvre, la ligne coche : deux gestes voisins
-                         mais distincts, d'où l'arrêt de propagation — sans lui,
-                         déplier une famille la cocherait tout entière. */
-                      lead={
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); toggleCat(cat.id); }}
-                          aria-expanded={open}
-                          aria-label={`${open ? "Replier" : "Déplier"} ${cat.label}`}
-                          style={{
-                            background: "none", border: "none", padding: 2, cursor: "pointer",
-                            color: T.textMut, display: "inline-flex", flexShrink: 0,
-                            transform: open ? "rotate(90deg)" : "none", transition: "var(--tr-ui)",
-                          }}
-                        >
-                          <ChevronRight size={14} />
-                        </button>
-                      }
-                    />
-                    <div style={{ paddingLeft: 22, borderLeft: `1px solid ${HAIRLINE}`, marginLeft: 14, display: open ? "block" : "none" }}>
-                      {entries.map(e => (
-                        <Row
-                          key={e.id} label={e.name} sub={e.domains[0]} on={itemIds.has(e.id)}
-                          color={hue} onToggle={() => toggle(e.id)} action={<AppTag entry={e} />}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                </div>
+              );
+            })}
           </div>
         </Field>
 
-        <Field
-          label="Ajouter un site ou une appli"
-          hint={
-            nativeApps.ready
-              ? "Tapez un nom : les applications installées sur ce poste sont proposées, et c'est leur nom SYSTÈME qui est enregistré. Un domaine (exemple.fr) coupe un site."
-              : "Un domaine coupe le site (exemple.fr) ; un nom seul coupe l'application (Steam), et cela demande l'app de bureau."
-          }
-        >
+        <Field label="Ajouter un site ou une appli">
           <div style={{ display: "flex", gap: 8 }}>
             <Input
               value={draft}
@@ -688,27 +556,6 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
             </div>
           )}
 
-          {custom.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              {custom.map(c => (
-                <Row
-                  key={c.id}
-                  label={c.domain || c.app}
-                  sub={c.domain ? "site" : installedName(c.app) ? "application installée" : "application"}
-                  action={
-                    <button
-                      type="button"
-                      onClick={() => setCustom(prev => prev.filter(x => x.id !== c.id))}
-                      style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: T.textMut, display: "inline-flex" }}
-                      aria-label={`Retirer ${c.domain || c.app}`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  }
-                />
-              ))}
-            </div>
-          )}
         </Field>
       </div>
     </Modal>

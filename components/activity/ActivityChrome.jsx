@@ -13,6 +13,7 @@
    ========================================================================== */
 
 import React, { useRef, useMemo, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { Activity, ChevronDown, MonitorSmartphone, TriangleAlert, Pause, X } from "lucide-react";
 import { CARD, FIELD_BG, HAIRLINE, PeriodPills, SectionTitle } from "@/components/ui/da";
 import { BTN } from "@/lib/ui/buttons";
@@ -23,7 +24,7 @@ import { HUE, PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palett
 import {
   assignableCategories, categoryColor, categoryLabel, PRODUCTIVITY_COLOR, resolveProductivity,
 } from "@/lib/activity/categories";
-import { fmtClock, fmtDur } from "@/lib/activity/stats";
+import { fmtClock, fmtDur, ranked, SHOWN_MIN_MS } from "@/lib/activity/stats";
 
 /* ─── Horloge ────────────────────────────────────────────────────────────
    `Date.now()` lu pendant le rendu est impur : React peut rendre deux fois et
@@ -461,17 +462,10 @@ export function DayColumn({
  * range depuis là, comme dans l'onglet « Applications » — c'est souvent en
  * lisant un pavé qu'on repère un classement faux.
  */
-/* Sous quatre minutes, une application n'a rien à dire d'un pavé : elle a été
-   effleurée, pas utilisée. Un pavé d'une demi-heure en compte facilement dix de
-   ce genre, et elles enterrent les deux ou trois qui portent vraiment le
-   moment. Le seuil vaut pour l'AFFICHAGE seul : ce temps reste compté dans
-   `block.ms`, dans les totaux du jour et dans la liste des applications. */
-const BLOCK_APP_MIN_MS = 4 * 60_000;
-
 export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
   const color = categoryColor(block.cat);
   const share = activeMs > 0 ? (block.ms / activeMs) * 100 : 0;
-  const apps = block.apps.filter(a => a.ms >= BLOCK_APP_MIN_MS);
+  const apps = ranked(block.apps);
   const hidden = block.apps.length - apps.length;
   // Le pavé absorbe les passages courts sur autre chose : ils gardent LEUR
   // couleur dans la liste, sinon le détail dirait le contraire du classement.
@@ -508,15 +502,13 @@ export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
         {strays > 0 && <span style={{ color: T.textMut }}>dont {strays} passage{strays > 1 ? "s" : ""} d’une autre catégorie</span>}
         {/* Ce qui est masqué se DIT : une liste tronquée en silence se lit
             comme une liste complète. */}
-        {hidden > 0 && (
-          <span style={{ color: T.textMut }}>{hidden} sous 4 min, non listée{hidden > 1 ? "s" : ""}</span>
-        )}
+        <CrumbNote count={hidden} />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", overflowY: "auto", minHeight: 0 }}>
         {apps.length === 0 && (
           <span style={{ fontSize: 12, color: T.textSub, padding: "8px 0" }}>
-            Rien n’a dépassé quatre minutes sur ce pavé — le temps s’y est éparpillé.
+            Rien n’a dépassé cinq minutes sur ce pavé — le temps s’y est éparpillé.
           </span>
         )}
         {apps.map(a => {
@@ -554,33 +546,215 @@ export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
   );
 }
 
+/* ─── Infobulle des figures ──────────────────────────────────────────────── */
+
+/* Ce que le survol doit rendre, et que l'infobulle NATIVE du navigateur ne
+   rendait pas : elle met une seconde à venir, ne se met pas en forme (on ne
+   peut donc pas y aligner trois durées en colonne), et ne dit rien pendant ce
+   temps de ce que la souris désigne. Une colonne de graphe est une cible de
+   quelques pixels — sans accusé de réception, on ne sait pas si on est
+   dessus. D'où un calque à nous, ouvert au premier pixel, doublé d'un
+   surlignage de la cible.
+
+   Le calque est portalisé et `position: fixed` sur le curseur : les figures
+   vivent dans des cartes qui défilent et qui coupent leur débord, une bulle
+   posée dans le flux serait tronquée par la première d'entre elles. */
+
+const TIP_MAX_W = 260;
+
+function ChartTip({ tip }) {
+  if (!tip || typeof document === "undefined") return null;
+  // Retournement au ras des bords, sans mesurer : la largeur est plafonnée, il
+  // suffit de savoir de quel côté du curseur la bulle tient encore.
+  const flipX = tip.x > window.innerWidth - (TIP_MAX_W + 24);
+  const flipY = tip.y < 140;
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{
+        position: "fixed",
+        left: flipX ? tip.x - 14 : tip.x + 14,
+        top: flipY ? tip.y + 20 : tip.y - 14,
+        transform: `${flipX ? "translateX(-100%)" : ""} ${flipY ? "" : "translateY(-100%)"}`,
+        maxWidth: TIP_MAX_W,
+        background: T.white,
+        borderRadius: 10,
+        padding: "8px 10px",
+        boxShadow: "var(--elev-overlay)",
+        // Sans ça, la bulle passe sous le curseur et vole le survol à la
+        // colonne qui l'a ouverte : elle clignoterait indéfiniment.
+        pointerEvents: "none",
+        zIndex: 10050,
+        fontFamily: "var(--font-sans)",
+      }}
+    >
+      {tip.content}
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * Survol d'une figure : quelle cible est désignée, et la bulle qui la décrit.
+ *
+ * `show` est branché sur `onMouseMove` et pas seulement sur `onMouseEnter` : la
+ * bulle suit le curseur le long d'une barre, sinon elle reste plantée là où on
+ * est entré et finit par recouvrir ce qu'on regarde.
+ */
+export function useChartTip() {
+  const [tip, setTip] = useState(null);
+  /* Part ÉPINGLÉE : ce qu'on a cliqué reste affiché quand la souris s'en va.
+     Lire un détail obligeait sinon à garder le curseur immobile sur une part de
+     quelques pixels — impossible dès qu'on veut parcourir la liste des yeux, et
+     perdu au moindre tremblement. */
+  const [pin, setPin] = useState(null);
+  const shown = pin || tip;
+
+  /* Sortir de la sélection : Échap, ou un clic AILLEURS. Les deux gestes qu'on
+     essaie d'instinct. Les écouteurs n'existent que pendant l'épinglage — une
+     page qui capte Échap en permanence finit par voler la touche à une modale
+     ou à un champ en cours de saisie.
+     `mousedown` en capture, et non `click` : le clic qui suit sur une autre
+     part doit pouvoir l'épingler à son tour, pas se faire annuler par la
+     fermeture. D'où le marqueur `data-chart-part`, posé sur tout ce qui est
+     une part de figure ou son détail — cliquer dedans ne libère rien. */
+  React.useEffect(() => {
+    if (!pin) return;
+    const onKey = (e) => { if (e.key === "Escape") setPin(null); };
+    const onDown = (e) => { if (!e.target?.closest?.("[data-chart-part]")) setPin(null); };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown, true);
+    };
+  }, [pin]);
+
+  return {
+    /** Cible désignée : celle qu'on a épinglée, sinon celle qu'on survole. */
+    key: shown ? shown.key : null,
+    /** Vrai quand la cible est FIGÉE — la figure peut le marquer autrement. */
+    pinned: !!pin,
+    show: (e, key, content) => { if (!pin) setTip({ x: e.clientX, y: e.clientY, key, content }); },
+    hide: () => { if (!pin) setTip(null); },
+    /** Clic sur une part qui porte une bulle : épingle, ou libère si c'est la même. */
+    pin: (e, key, content) => setPin(p => (p && p.key === key ? null : { x: e.clientX, y: e.clientY, key, content })),
+    /** Survol d'une part SANS bulle (l'anneau, qui écrit à son centre). */
+    hoverKey: (key) => { if (!pin) setTip(key == null ? null : { key }); },
+    /** Clic sur une part SANS bulle. */
+    select: (key) => setPin(p => (p && p.key === key ? null : { key })),
+    /** À poser dans le rendu de la figure : le calque lui-même. */
+    node: <ChartTip tip={shown && shown.content ? shown : null} />,
+  };
+}
+
+/** Titre d'une infobulle — ce que la cible est. */
+export function TipTitle({ children }) {
+  return (
+    <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 4, whiteSpace: "nowrap" }}>
+      {children}
+    </div>
+  );
+}
+
+/** Ligne « pastille · libellé · valeur » d'une infobulle. */
+export function TipLine({ color, label, value, strong }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2, whiteSpace: "nowrap" }}>
+      {color
+        ? <span style={{ width: 8, height: 8, borderRadius: 2, background: color, boxShadow: dotRing(color), flexShrink: 0 }} />
+        : <span style={{ width: 8, flexShrink: 0 }} />}
+      <span style={{ fontSize: 11, color: strong ? T.text : T.textSub, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+      <span style={{
+        fontSize: 11, fontWeight: strong ? 600 : 500, color: T.text,
+        fontVariantNumeric: "tabular-nums",
+      }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/* La ventilation productif / neutre / distraction, identique dans toutes les
+   bulles de la section : c'est la même question qu'on se pose devant une heure,
+   devant un jour et devant une part. */
+function productivityLines(ms, productiveMs, distractingMs) {
+  const neutral = Math.max(0, ms - productiveMs - distractingMs);
+  return (
+    <>
+      {productiveMs > 0 && <TipLine color={PRODUCTIVITY_COLOR.productive} label="Productif" value={fmtDur(productiveMs)} />}
+      {neutral > 0 && <TipLine color={PRODUCTIVITY_COLOR.neutral} label="Neutre" value={fmtDur(neutral)} />}
+      {distractingMs > 0 && <TipLine color={PRODUCTIVITY_COLOR.distracting} label="Distraction" value={fmtDur(distractingMs)} />}
+    </>
+  );
+}
+
 /* ─── Rythme horaire ─────────────────────────────────────────────────────── */
 
 /** 24 colonnes : où le temps productif s'est réellement posé dans la journée. */
 export function HourBars({ hourly, height = 96, fromHour = 0, toHour = 23 }) {
   const slice = hourly.filter(h => h.hour >= fromHour && h.hour <= toHour);
   const max = Math.max(1, ...slice.map(h => h.ms));
+  const tip = useChartTip();
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height, width: "100%" }}>
+    <div
+      style={{ display: "flex", alignItems: "flex-end", gap: 3, height, width: "100%" }}
+      onMouseLeave={tip.hide}
+    >
       {slice.map(h => {
         const neutral = Math.max(0, h.ms - h.productiveMs - h.distractingMs);
         const px = (ms) => (ms / max) * (height - 16);
+        const on = tip.key === h.hour;
+        /* Ce sont les VOISINES qui reculent, jamais la désignée qui s'assombrit
+           — la même règle que la barre de répartition et que l'anneau. Un fond
+           posé derrière la colonne teintait aussi sa partie vide, c'est-à-dire
+           la moitié de la figure : on croyait lire une valeur là où il n'y avait
+           que du vide colorié.
+           Une heure vide n'a pas de barre, et n'en a pas besoin : tout le reste
+           s'efface autour d'elle, ce qui se voit très bien — or « rien entre
+           3 h et 4 h » est une réponse. */
+        const dim = tip.key != null && !on;
+        const content = (
+          <>
+            <TipTitle>{`${pad2(h.hour)} h – ${pad2((h.hour + 1) % 24)} h`}</TipTitle>
+            {h.ms > 0
+              ? <>
+                  {productivityLines(h.ms, h.productiveMs, h.distractingMs)}
+                  <TipLine label="Total" value={fmtDur(h.ms)} strong />
+                </>
+              : <TipLine label="Rien de mesuré" value="—" />}
+          </>
+        );
+        const hover = (e) => tip.show(e, h.hour, content);
         return (
-          <div key={h.hour} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
-            <div
-              title={`${h.hour}h — ${fmtDur(h.ms)} (dont ${fmtDur(h.productiveMs)} productif)`}
-              style={{ width: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", height: height - 16 }}
-            >
+          <div
+            key={h.hour}
+            data-chart-part
+            onMouseEnter={hover}
+            onMouseMove={hover}
+            onClick={(e) => tip.pin(e, h.hour, content)}
+            /* Nommée : une colonne de graphe n'a aucun texte à elle, et sans ce
+               libellé la figure ne dit rien d'autre que sa forme. */
+            aria-label={`${pad2(h.hour)} h — ${fmtDur(h.ms)}`}
+            style={{
+              flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0,
+              opacity: dim ? 0.4 : 1,
+              cursor: "pointer",
+              transition: "opacity .12s ease",
+            }}
+          >
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", height: height - 16 }}>
               <div style={{ height: px(h.distractingMs), background: PRODUCTIVITY_COLOR.distracting, borderRadius: "3px 3px 0 0" }} />
               <div style={{ height: px(neutral), background: PRODUCTIVITY_COLOR.neutral }} />
               <div style={{ height: px(h.productiveMs), background: PRODUCTIVITY_COLOR.productive, borderRadius: h.distractingMs || neutral ? 0 : "3px 3px 0 0" }} />
             </div>
-            <span style={{ fontSize: 10, color: T.textSub, fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontSize: 10, color: on ? T.text : T.textSub, fontVariantNumeric: "tabular-nums" }}>
               {h.hour % 3 === 0 ? h.hour : ""}
             </span>
           </div>
         );
       })}
+      {tip.node}
     </div>
   );
 }
@@ -604,10 +778,14 @@ const WEEKDAY_LETTER = ["D", "L", "M", "M", "J", "V", "S"];
 export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPick, height = 260 }) {
   const max = Math.max(1, ...days.map(d => d.activeMs), goalMs, medianMs);
   const px = (ms) => (ms / max) * height;
+  const tip = useChartTip();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height, position: "relative" }}>
+      <div
+        style={{ display: "flex", alignItems: "flex-end", gap: 14, height, position: "relative" }}
+        onMouseLeave={tip.hide}
+      >
         {goalMs > 0 && goalMs <= max && (
           <div
             title={`Objectif : ${fmtDur(goalMs)}`}
@@ -637,25 +815,49 @@ export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPic
           </div>
         )}
         {days.map(d => {
-          const on = d.date === selected;
           const neutral = Math.max(0, d.activeMs - d.productiveMs - d.distractingMs);
           const parts = [
             { id: "d", ms: d.distractingMs, color: PRODUCTIVITY_COLOR.distracting },
             { id: "n", ms: neutral, color: PRODUCTIVITY_COLOR.neutral },
             { id: "p", ms: d.productiveMs, color: PRODUCTIVITY_COLOR.productive },
           ].filter(p => p.ms > 0);
+          const label = new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+          const lit = tip.key === d.date;
+          const dim = tip.key != null && !lit;
+          const hover = (e) => tip.show(e, d.date, (
+            <>
+              <TipTitle>{label}</TipTitle>
+              {d.activeMs > 0
+                ? <>
+                    {productivityLines(d.activeMs, d.productiveMs, d.distractingMs)}
+                    <TipLine label="Temps d'écran" value={fmtDur(d.activeMs)} strong />
+                  </>
+                : <TipLine label="Rien de mesuré" value="—" />}
+            </>
+          ));
           return (
             <div
               key={d.date}
               onClick={onPick ? () => onPick(d.date) : undefined}
-              title={`${new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })} — ${fmtDur(d.activeMs)}`}
+              onMouseEnter={hover}
+              onMouseMove={hover}
+              /* Le libellé reste lisible aux lecteurs d'écran et aux tests, mais
+                 PAS en `title` : l'infobulle native doublerait la bulle. */
+              aria-label={`${label} — ${fmtDur(d.activeMs)}`}
               style={{
                 flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "flex-end",
                 cursor: onPick ? "pointer" : "default",
-                // Le jour lu se distingue par la NETTETÉ, pas par une couleur de
-                // plus : les autres reculent, lui reste au premier plan.
-                opacity: !selected || on ? 1 : 0.55,
+                /* Au repos, TOUTES les colonnes sont à pleine encre : une figure
+                   qu'on regarde sans rien survoler n'a aucune raison d'être à
+                   moitié éteinte. C'est le survol qui trie — la désignée reste,
+                   les autres reculent — et non la sélection, qui laissait la
+                   semaine grisée en permanence et faisait passer le survol pour
+                   un éclaircissement.
+                   Le jour lu, lui, se reconnaît à son initiale en dessous : une
+                   marque qui ne coûte pas la lisibilité des six autres. */
+                opacity: dim ? 0.4 : 1,
+                transition: "opacity .12s ease",
               }}
             >
               {/* La barre est plus étroite que sa colonne : c'est la colonne qui
@@ -679,11 +881,13 @@ export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPic
             </div>
           );
         })}
+        {tip.node}
       </div>
       <div style={{ display: "flex", gap: 14 }}>
         {days.map(d => {
           const jd = new Date(`${d.date}T00:00:00`);
           const on = d.date === selected;
+          const dim = tip.key != null && tip.key !== d.date;
           /* L'initiale du jour, et rien d'autre : « L25 M26 M27 » demandait de
              lire un nombre pour retrouver un jour qu'une lettre suffit à nommer.
              Le jour affiché se reconnaît à sa graisse, pas à une mention. */
@@ -694,6 +898,8 @@ export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPic
                 flex: 1, minWidth: 0, textAlign: "center", fontSize: 10,
                 color: on ? T.text : T.textSub, fontWeight: on ? 600 : 400,
                 fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden",
+                opacity: dim ? 0.4 : 1,
+                transition: "opacity .12s ease",
               }}
             >
               {WEEKDAY_LETTER[jd.getDay()]}
@@ -715,12 +921,43 @@ export function ScreenTimeBars({ days, goalMs = 0, medianMs = 0, selected, onPic
  * même information, dont l'une prenait le début de chaque nom. Le lien avec
  * l'anneau tient par la barre.
  */
-export function BarRow({ color, label, ms, pct, sub, right, onClick }) {
+export function BarRow({ color, label, ms, pct, sub, right, onClick, details }) {
+  const tip = useChartTip();
+  /* La ligne dit la durée mais pas la part exacte (la page Journée coupe le
+     « 38 % du temps actif » pour tenir en hauteur) : c'est elle que le survol
+     vient chercher, avec la durée à la seconde près — et, quand l'appelant les
+     fournit, ce qui compose la ligne : une catégorie ne dit rien tant qu'on ne
+     sait pas quelles applications et quels sites l'ont remplie. */
+  const content = (
+    <>
+      <TipTitle>{label}</TipTitle>
+      <TipLine
+        color={color}
+        label="Durée"
+        value={`${fmtDur(ms)}${Number.isFinite(pct) ? ` · ${Math.round(pct * 10) / 10} %` : ""}`}
+        strong
+      />
+      {(details || []).map(d => (
+        <TipLine key={d.label} label={d.label} value={fmtDur(d.ms, { short: true })} />
+      ))}
+    </>
+  );
+  const hover = (e) => tip.show(e, "row", content);
   return (
     <div
-      onClick={onClick}
+      data-chart-part
+      /* Le clic de l'appelant prime : là où une ligne MÈNE quelque part, elle ne
+         peut pas aussi servir à figer sa propre bulle. */
+      onClick={onClick || ((e) => tip.pin(e, "row", content))}
+      onMouseEnter={hover}
+      onMouseMove={hover}
+      onMouseLeave={tip.hide}
       style={{
-        display: "flex", alignItems: "center", gap: 10, padding: "7px 0", cursor: onClick ? "pointer" : "default",
+        display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+        /* Sans surlignage de fond : sur une liste de barres colorées, un voile
+           gris posé derrière la ligne survolée ternit la seule chose qu'on est
+           venu comparer. La bulle est l'accusé de réception du survol. */
+        padding: "7px 0",
       }}
     >
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -735,6 +972,64 @@ export function BarRow({ color, label, ms, pct, sub, right, onClick }) {
         </div>
         {sub && <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</span>}
       </div>
+      {tip.node}
+    </div>
+  );
+}
+
+/**
+ * Le détail d'UNE catégorie — ses applications et ses sites — à la place de la
+ * liste des catégories, le temps qu'on survole sa part dans l'anneau.
+ *
+ * Pourquoi REMPLACER la liste plutôt que s'ouvrir sous elle : c'est la même
+ * question (« dans quoi ce temps est-il passé ? ») posée d'un cran plus bas.
+ * Deux listes empilées obligeraient à chercher laquelle répond à quoi, et la
+ * carte doublerait de hauteur au passage de la souris.
+ *
+ * Le nom de la catégorie n'est pas repris en tête : le centre de l'anneau
+ * l'affiche déjà, avec son total, pendant tout le survol.
+ *
+ * Les parts sont relatives à la CATÉGORIE et non à la journée : la liste
+ * décompose la part qu'on désigne, et « 12 % du temps actif » ne dirait pas si
+ * c'est le gros du poste ou une miette.
+ */
+export function CategoryDrilldown({ cat, color, apps, rows = 6 }) {
+  const inCat = useMemo(
+    () => apps.filter(a => a.cat === cat).sort((a, b) => b.ms - a.ms),
+    [apps, cat],
+  );
+  const total = inCat.reduce((n, a) => n + a.ms, 0);
+
+  if (!inCat.length) {
+    return (
+      <span style={{ fontSize: 12, color: T.textSub, display: "block", padding: "8px 0" }}>
+        Rien de détaillé dans cette catégorie.
+      </span>
+    );
+  }
+
+  /* Le nombre de lignes est imposé par l'appelant — celui de la liste qu'on
+     remplace — pour que la carte garde sa hauteur au passage de la souris. Ce
+     qui déborde n'est pas coupé mais CUMULÉ sur la dernière ligne : une liste
+     tronquée en silence ne totaliserait plus la part qu'elle détaille. */
+  const over = inCat.length > rows;
+  const head = over ? inCat.slice(0, Math.max(1, rows - 1)) : inCat;
+  const restMs = total - head.reduce((n, a) => n + a.ms, 0);
+  const pct = (ms) => (total ? (ms / total) * 100 : 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {head.map(a => (
+        <BarRow key={a.id} color={color || a.color} label={a.label} ms={a.ms} pct={pct(a.ms)} />
+      ))}
+      {over && (
+        <BarRow
+          color={GREY.grey300}
+          label={`${inCat.length - head.length} autre${inCat.length - head.length > 1 ? "s" : ""}`}
+          ms={restMs}
+          pct={pct(restMs)}
+        />
+      )}
     </div>
   );
 }
@@ -746,9 +1041,26 @@ export function BarRow({ color, label, ms, pct, sub, right, onClick }) {
  * Elle a sa place dans une liste qu'on vient éplucher ; à côté d'un anneau qui
  * dit déjà les parts, elle triple la hauteur d'une ligne pour la répéter.
  */
-export function CategoryRows({ buckets, limit, productivity, showShare = true }) {
+export function CategoryRows({ buckets, limit, productivity, showShare = true, apps }) {
   const [all, setAll] = useState(false);
   const shown = all || !limit ? buckets : buckets.slice(0, limit);
+
+  /* Ce qui a rempli chaque catégorie, pour la bulle de survol. Une catégorie
+     est un TOTAL : « Divertissement · 1 h 10 » ne dit pas si c'est une série ou
+     dix fois deux minutes de réseaux, et c'est pourtant la seule chose qu'on
+     veuille savoir en s'arrêtant dessus. `apps` est optionnel — les appelants
+     qui ne l'ont pas gardent une bulle sans détail plutôt qu'une erreur. */
+  const byCat = useMemo(() => {
+    const m = new Map();
+    for (const a of apps || []) {
+      const list = m.get(a.cat) || [];
+      list.push({ label: a.label, ms: a.ms });
+      m.set(a.cat, list);
+    }
+    for (const list of m.values()) list.sort((x, y) => y.ms - x.ms);
+    return m;
+  }, [apps]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {shown.map(b => (
@@ -758,6 +1070,7 @@ export function CategoryRows({ buckets, limit, productivity, showShare = true })
           label={b.label}
           ms={b.ms}
           pct={b.pct}
+          details={(byCat.get(b.id) || []).slice(0, 6)}
           sub={showShare
             ? `${Math.round(b.pct)} % du temps actif · ${PRODUCTIVITY_LABEL[resolveProductivity(b.id, productivity)]}`
             : null}
@@ -940,19 +1253,6 @@ function pctLabel(pct) {
 }
 
 /**
- * Répartition par application / site. `onPick` rend chaque ligne corrigeable.
- *
- * `minMs` écarte les miettes — les applications ouvertes deux minutes qu'une
- * journée normale accumule par dizaines. Elles ne sont pas repoussées derrière
- * « voir plus », elles sont RETIRÉES : une liste qu'on déplie pour y trouver
- * trente lignes d'une minute n'apprend rien, et la longueur du dépliage laisse
- * croire qu'il y a quelque chose à y lire.
- *
- * Le tri ne s'applique qu'au-delà de `limit`, c'est-à-dire exactement quand un
- * « voir plus » apparaîtrait. En deçà, tout tient déjà à l'écran et il n'y a
- * rien à nettoyer — masquer une ligne sur quatre serait de la perte sèche.
- */
-/**
  * Le sélecteur de catégorie d'une ligne — ou, quand la ligne ne peut pas être
  * rangée d'un clic, ce qui le DIT.
  *
@@ -984,28 +1284,57 @@ function PickCell({ app, onPick, blocked }) {
   );
 }
 
-export function AppRows({ apps, limit = 8, onPick = null, blocked = null, empty = null, minMs = 0 }) {
+/**
+ * Répartition par application / site. `onPick` rend chaque ligne corrigeable.
+ *
+ * La liste reçoit des données DÉJÀ nettoyées : le seuil des cinq minutes est
+ * posé une fois pour toute la section (cf. `ranked` dans lib/activity/stats).
+ * Le porter aussi ici en ferait deux règles à tenir d'accord, et c'est toujours
+ * la seconde qu'on oublie de changer.
+ */
+export function AppRows({ apps, limit = 8, onPick = null, blocked = null, empty = null }) {
   const [all, setAll] = useState(false);
+  const tip = useChartTip();
 
-  const kept = useMemo(() => {
-    if (!minMs || apps.length <= limit) return apps;
-    const long = apps.filter(a => a.ms >= minMs);
-    /* Une journée entière faite de miettes existe : tout retirer afficherait
-       « rien à afficher » sur des heures bien réelles. Dans ce cas, la liste
-       brute vaut mieux que le vide. */
-    return long.length ? long : apps;
-  }, [apps, limit, minMs]);
-
-  const hidden = apps.length - kept.length;
-  const shown = all ? kept : kept.slice(0, limit);
+  const shown = all ? apps : apps.slice(0, limit);
   if (!apps.length) {
     return <span style={{ fontSize: 12, color: T.textSub, padding: "8px 0" }}>{empty ?? "Rien à afficher."}</span>;
   }
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {shown.map(a => (
+      {shown.map(a => {
+        /* La ligne ne montre que le PREMIER titre de fenêtre, tronqué. Le survol
+           est le seul endroit où l'on peut voir dans quoi l'heure passée sur
+           l'application s'est réellement découpée. */
+        const content = (
+          <>
+            <TipTitle>{a.label}</TipTitle>
+            {/* Durée et part sur la MÊME ligne : ce sont deux façons de dire la
+                même quantité, et les séparer obligeait à descendre d'un cran
+                pour lire la seconde moitié de la réponse. */}
+            <TipLine color={a.color} label={categoryLabel(a.cat)} value={`${fmtDur(a.ms)}${pctLabel(a.pct) ? ` · ${pctLabel(a.pct)}` : ""}`} strong />
+            {(a.titles || []).slice(0, 5).map(t => (
+              <TipLine key={t.title} label={t.title} value={fmtDur(t.ms, { short: true })} />
+            ))}
+            {(a.titles || []).length > 5 && (
+              <TipLine label={`+ ${a.titles.length - 5} autre${a.titles.length - 5 > 1 ? "s" : ""}`} value="" />
+            )}
+          </>
+        );
+        const hover = (e) => tip.show(e, a.id, content);
+        return (
         <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+          <div
+            data-chart-part
+            onMouseEnter={hover}
+            onMouseMove={hover}
+            onClick={(e) => tip.pin(e, a.id, content)}
+            /* Fermeture au bord de la ZONE DE LECTURE, pas de la ligne : sinon
+               la bulle survit au passage vers le sélecteur de catégorie à
+               droite et vient flotter par-dessus son menu. */
+            onMouseLeave={tip.hide}
+            style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5, cursor: "pointer" }}
+          >
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
               <span style={{ fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {a.label}
@@ -1021,7 +1350,10 @@ export function AppRows({ apps, limit = 8, onPick = null, blocked = null, empty 
               <div style={{ width: `${Math.max(1, Math.min(100, a.pct))}%`, height: "100%", background: a.color }} />
             </div>
             {a.titles?.[0]?.title && (
-              <span title={a.titles[0].title} style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              /* Sans `title` natif : la bulle de survol donne déjà les titres,
+                 en entier et à plusieurs — l'infobulle du navigateur viendrait
+                 la doubler une seconde plus tard. */
+              <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {a.titles[0].title}
               </span>
             )}
@@ -1033,25 +1365,35 @@ export function AppRows({ apps, limit = 8, onPick = null, blocked = null, empty 
               apprenne quelque chose. */}
           {onPick && <PickCell app={a} onPick={onPick} blocked={blocked} />}
         </div>
-      ))}
-      {kept.length > limit && (
+        );
+      })}
+      {tip.node}
+      {apps.length > limit && (
         <button
           type="button"
           onClick={() => setAll(v => !v)}
           style={{ alignSelf: "flex-start", marginTop: 4, border: "none", background: "transparent", color: T.textSub, fontSize: 12, fontFamily: "inherit", padding: 0, cursor: "pointer" }}
         >
-          {all ? "Voir moins" : `Voir les ${kept.length - limit} autres`}
+          {all ? "Voir moins" : `Voir les ${apps.length - limit} autres`}
         </button>
       )}
-      {/* Ce qui a été retiré est DIT, en une ligne. Sans elle, les parts ne
-          totalisent plus cent pour cent sans qu'on sache pourquoi, et la
-          différence passe pour une erreur de mesure. */}
-      {hidden > 0 && (
-        <span style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>
-          {hidden} sous {fmtDur(minMs)} masquée{hidden > 1 ? "s" : ""}.
-        </span>
-      )}
     </div>
+  );
+}
+
+/**
+ * « N entrées sous cinq minutes, non listées ».
+ *
+ * Ce qui a été retiré est DIT, en une ligne. Sans elle, les parts ne totalisent
+ * plus cent pour cent sans qu'on sache pourquoi, et la différence passe pour une
+ * erreur de mesure — c'est-à-dire pour un bug de la page.
+ */
+export function CrumbNote({ count }) {
+  if (!count) return null;
+  return (
+    <span style={{ fontSize: 11, color: T.textMut }}>
+      {count} sous {fmtDur(SHOWN_MIN_MS)}, non listée{count > 1 ? "s" : ""}.
+    </span>
   );
 }
 
@@ -1138,23 +1480,57 @@ export function Metric({ label, value, sub, color, valueMs, goalMs, size = 28, l
  * traverser. Elle remplace l'anneau — un anneau demande de comparer des angles
  * et vole 170 px de hauteur pour dire ce qu'une barre dit sur une ligne.
  */
-export function StackedBar({ parts, height = 12, minPct = 1.2 }) {
+/**
+ * `onHover` — prévenu de la part désignée (`null` en sortant). Symétrique de
+ * celui de l'anneau : c'est par là qu'une barre commande la liste qui la
+ * détaille, au lieu de garder pour elle ce que la souris montre.
+ */
+export function StackedBar({ parts, height = 12, minPct = 1.2, onHover, tip: extTip }) {
   const shown = parts.filter(p => p.pct > 0);
   const total = shown.reduce((n, p) => n + p.pct, 0) || 1;
+  /* Un appelant qui pilote une LISTE avec cette barre lui passe son propre
+     contrôleur : survol, épinglage et bulle vivent alors dans un seul état, et
+     la liste ne peut pas dire autre chose que la figure. */
+  const own = useChartTip();
+  const tip = extTip || own;
   return (
-    <div style={{ display: "flex", gap: 2, height, width: "100%", borderRadius: 999, overflow: "hidden", background: FIELD_BG }}>
-      {shown.map(p => (
-        <div
-          key={p.id}
-          title={`${p.label} · ${fmtDur(p.ms)} · ${Math.round(p.pct)} %`}
-          style={{
-            // Une part d'une minute doit rester visible : sans plancher, elle
-            // disparaît et la barre ment par omission.
-            width: `${Math.max(minPct, (p.pct / total) * 100)}%`,
-            background: p.color, minWidth: 3,
-          }}
-        />
-      ))}
+    <div
+      style={{ display: "flex", gap: 2, height, width: "100%", borderRadius: 999, overflow: "hidden", background: FIELD_BG }}
+      onMouseLeave={() => { tip.hide(); onHover?.(null); }}
+    >
+      {shown.map(p => {
+        /* Ici les parts sont côte à côte et de même hauteur : un surlignage ne
+           les distinguerait pas. C'est l'inverse qui marche — les VOISINES
+           reculent, la désignée reste à pleine encre. */
+        const dim = tip.key != null && tip.key !== p.id;
+        const content = (
+          <>
+            <TipTitle>{p.label}</TipTitle>
+            <TipLine color={p.color} label="Durée" value={`${fmtDur(p.ms)} · ${Math.round(p.pct * 10) / 10} %`} strong />
+          </>
+        );
+        const hover = (e) => { tip.show(e, p.id, content); onHover?.(p.id); };
+        return (
+          <div
+            key={p.id}
+            data-chart-part
+            onMouseEnter={hover}
+            onMouseMove={hover}
+            onClick={(e) => tip.pin(e, p.id, content)}
+            aria-label={`${p.label} — ${fmtDur(p.ms)}`}
+            style={{
+              cursor: "pointer",
+              // Une part d'une minute doit rester visible : sans plancher, elle
+              // disparaît et la barre ment par omission.
+              width: `${Math.max(minPct, (p.pct / total) * 100)}%`,
+              background: p.color, minWidth: 3,
+              opacity: dim ? 0.4 : 1,
+              transition: "opacity .12s ease",
+            }}
+          />
+        );
+      })}
+      {tip.node}
     </div>
   );
 }

@@ -53,6 +53,14 @@ export interface CatalogEntry {
   web?: string[];
   /** Fragments cherchés dans le titre de la fenêtre, comme des mots entiers. */
   title?: string[];
+  /**
+   * Mobilier du système : reconnu et nommé, mais jamais proposé au classement.
+   *
+   * Un écran de verrouillage ou la barre des tâches ne sont pas une activité —
+   * on ne les range dans aucune catégorie, et les faire remonter dans la file
+   * « à classer » y noierait les vraies applications inconnues.
+   */
+  system?: boolean;
 }
 
 type Seed = Omit<CatalogEntry, "cat">;
@@ -161,7 +169,6 @@ export const CATALOG: CatalogEntry[] = [
     { name: "pgAdmin", app: ["pgadmin", "pgadmin4"], word: ["pgadmin"] },
     { name: "MongoDB Compass", app: ["mongodb compass", "compass"], word: ["mongodb"] },
     { name: "Redis Insight", app: ["redisinsight", "redis insight"] },
-    { name: "GitHub Desktop", app: ["github desktop", "githubdesktop"] },
     { name: "Sourcetree", word: ["sourcetree"] },
     { name: "GitKraken", word: ["gitkraken"] },
     { name: "Fork", app: ["fork"] },
@@ -188,7 +195,9 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Wireshark", word: ["wireshark"] },
     { name: "Proxyman", word: ["proxyman"] },
     // Sites de développement
-    { name: "GitHub", app: [], web: ["github.com", "gist.github.com", "github.io"] },
+    /* Le site et l'application de bureau sont LA MÊME CHOSE : deux entrées en
+       faisaient deux lignes, deux parts et deux totaux à rapprocher à la main. */
+    { name: "GitHub", app: ["github desktop", "githubdesktop"], web: ["github.com", "gist.github.com", "github.io"] },
     { name: "GitLab", app: [], web: ["gitlab.com"] },
     { name: "Bitbucket", app: [], web: ["bitbucket.org"] },
     { name: "Stack Overflow", app: [], web: ["stackoverflow.com", "stackexchange.com"], title: ["stack overflow"] },
@@ -293,7 +302,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "CME Group", app: [], web: ["cmegroup.com"] },
   ]),
 
-  ...of("writing", [
+  ...of("work", [
     { name: "Obsidian", word: ["obsidian"], web: ["obsidian.md"] },
     { name: "Notion", word: ["notion"], web: ["notion.so", "notion.com"] },
     { name: "Word", app: ["winword", "microsoft word", "word"], word: ["microsoft word"] },
@@ -314,7 +323,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Grammarly", word: ["grammarly"] },
   ]),
 
-  ...of("design", [
+  ...of("work", [
     { name: "Figma", word: ["figma"], web: ["figma.com"] },
     { name: "Photoshop", word: ["photoshop"] },
     { name: "Illustrator", word: ["illustrator"] },
@@ -354,7 +363,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Google Fonts", app: [], web: ["fonts.google.com"] },
   ]),
 
-  ...of("research", [
+  ...of("work", [
     { name: "ChatGPT", app: ["chatgpt", "openai chatgpt"], web: ["chatgpt.com", "chat.openai.com"], title: ["chatgpt"] },
     { name: "Claude", app: ["claude"], web: ["claude.ai"], title: ["claude"] },
     { name: "Gemini", app: [], web: ["gemini.google.com"] },
@@ -394,7 +403,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "New York Times", app: [], web: ["nytimes.com"] },
   ]),
 
-  ...of("admin", [
+  ...of("work", [
     { name: "Excel", app: ["excel", "microsoft excel"], word: ["excel"] },
     { name: "Numbers", app: ["numbers"] },
     { name: "Google Sheets", app: [], web: ["sheets.google.com"], title: ["google sheets"] },
@@ -435,7 +444,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "HubSpot", app: [], web: ["hubspot.com", "app.hubspot.com"] },
   ]),
 
-  ...of("meetings", [
+  ...of("comms", [
     { name: "Zoom", app: ["zoom", "zoom us", "zoomcpthost"], web: ["zoom.us"], title: ["zoom"] },
     { name: "Microsoft Teams", app: ["teams", "ms teams", "microsoft teams", "msteams"], word: ["microsoft teams"] },
     { name: "Google Meet", app: [], web: ["meet.google.com"], title: ["google meet"] },
@@ -471,7 +480,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Intercom", app: [], web: ["intercom.com", "app.intercom.com"] },
   ]),
 
-  ...of("social", [
+  ...of("fun", [
     { name: "X", app: ["x", "twitter", "x twitter"], web: ["x.com", "twitter.com"], title: ["twitter", "x"] },
     { name: "Instagram", app: ["instagram"], web: ["instagram.com"], title: ["instagram"] },
     { name: "TikTok", app: ["tiktok"], web: ["tiktok.com"], title: ["tiktok"] },
@@ -547,7 +556,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Last.fm", app: [], web: ["last.fm"] },
   ]),
 
-  ...of("games", [
+  ...of("fun", [
     /* Le manque le plus criant de l'ancien classement : tout ce bloc tombait
        dans « Non classé » ou dans « Divertissement ». Les jeux ont leur
        catégorie parce qu'ils ne se règlent pas comme une série — on veut pouvoir
@@ -621,7 +630,16 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Tracker.gg", app: [], web: ["tracker.gg", "overwolf.com"] },
   ]),
 
-  ...of("shopping", [
+  ...of("browsing", [
+    /* Les moteurs de recherche n'existaient nulle part dans le catalogue : une
+       recherche Google tombait donc dans « Non classé », alors que c'est
+       exactement ce que « traverser le web » veut dire. */
+    { name: "Google", app: [], web: ["google.com", "google.fr", "www.google.com"] },
+    { name: "Bing", app: [], web: ["bing.com"] },
+    { name: "DuckDuckGo", app: [], web: ["duckduckgo.com"] },
+    { name: "Qwant", app: [], web: ["qwant.com"] },
+    { name: "Ecosia", app: [], web: ["ecosia.org"] },
+    { name: "Brave Search", app: [], web: ["search.brave.com"] },
     { name: "Amazon", app: ["amazon"], web: ["amazon.fr", "amazon.com", "amazon.co.uk", "amazon.de"], title: ["amazon"] },
     { name: "Leboncoin", app: [], web: ["leboncoin.fr"] },
     { name: "eBay", app: [], web: ["ebay.fr", "ebay.com"] },
@@ -644,7 +662,10 @@ export const CATALOG: CatalogEntry[] = [
     { name: "StockX", app: [], web: ["stockx.com"] },
   ]),
 
-  ...of("utilities", [
+  /* Les outils du poste rejoignent « Travail » : ranger des fichiers, ouvrir un
+     coffre de mots de passe ou lancer une archive, c'est du travail — pas une
+     nature de temps à part. */
+  ...of("work", [
     { name: "Finder", app: ["finder"] },
     { name: "Explorateur de fichiers", app: ["explorer", "explorateur", "windows explorer"] },
     { name: "Réglages système", app: ["systemsettings", "system settings", "system preferences", "reglages systeme", "reglages", "parametres", "settings", "systempreferences", "systemsettings exe"] },
@@ -687,13 +708,22 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Éditeur du Registre", app: ["regedit"] },
     { name: "App Store", app: ["app store", "appstore", "microsoft store", "winstore app", "store"] },
     { name: "Installeur", app: ["installer", "setup", "msiexec", "programme d installation"] },
+  ]),
+
+  /* Le MOBILIER du système, lui, n'est pas une activité : un écran de
+     verrouillage au premier plan veut dire qu'on n'est pas là. Le compter comme
+     du travail gonflerait le temps productif de tous les moments où l'on
+     s'absente ; le laisser sans nom le renverrait dans la file à classer, où il
+     noyait les vraies applications inconnues — c'était sa raison d'être ici.
+     D'où `system` : reconnu, nommé, neutre, et JAMAIS proposé au classement. */
+  ...of("other", [
     /* Bruit du système : ces « applications » ne sont pas une activité, mais
        elles sont bien au premier plan et se retrouvaient toutes dans « Non
        classé », où elles noyaient les vraies. */
     { name: "Écran de verrouillage", app: ["loginwindow", "lockapp", "screensaverengine", "logonui"] },
     { name: "Bureau Windows", app: ["dwm", "shellexperiencehost", "sihost", "startmenuexperiencehost", "searchhost", "searchapp", "textinputhost", "applicationframehost", "widgets", "widgetboard"] },
     { name: "Interface macOS", app: ["dock", "systemuiserver", "windowserver", "controlcenter", "notificationcenter", "spotlight", "universalcontrol", "coreautha"] },
-  ]),
+  ].map(e => ({ ...e, system: true }))),
 ];
 
 /* ─── Index ──────────────────────────────────────────────────────────────── */

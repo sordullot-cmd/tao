@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 
-import { AppRows, HourBars } from "@/components/activity/ActivityChrome";
+import { AppRows, CrumbNote, HourBars } from "@/components/activity/ActivityChrome";
 import { PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
+import { ranked, SHOWN_MIN_MS } from "@/lib/activity/stats";
 
 const MIN = 60_000;
 
@@ -12,67 +13,74 @@ function app(label: string, minutes: number) {
   return { id: label, label, ms: minutes * MIN, pct: minutes, color: "#888", cat: "other", titles: [] };
 }
 
-describe("répartition par application", () => {
-  it("retire les miettes dès qu'il y a plus de lignes que la limite", () => {
+describe("seuil des classements", () => {
+  it("écarte ce qui a été ouvert plutôt qu'utilisé", () => {
     /* Sous cinq minutes, une application a été ouverte, pas utilisée. Une
        journée normale en accumule des dizaines, et les déplier n'apprend rien. */
-    const apps = [
-      app("Chrome", 120), app("Code", 90), app("Slack", 30),
-      app("Notes", 10), app("Aperçu", 3), app("Calculette", 1),
-    ];
-    render(<AppRows apps={apps} limit={5} minMs={5 * MIN} />);
+    const kept = ranked([app("Chrome", 120), app("Aperçu", 3), app("Calculette", 1)]);
 
-    expect(screen.getByText("Chrome")).toBeTruthy();
-    expect(screen.queryByText("Aperçu")).toBeNull();
-    expect(screen.queryByText("Calculette")).toBeNull();
-
-    // Quatre lignes gardées sur une limite de cinq : plus rien à déplier.
-    expect(screen.queryByText(/Voir les/)).toBeNull();
-    expect(screen.getByText(/2 sous .* masquées/)).toBeTruthy();
+    expect(kept.map(a => a.label)).toEqual(["Chrome"]);
   });
 
-  it("ne les cache pas non plus derrière « voir plus »", () => {
-    const apps = [
-      app("A", 60), app("B", 50), app("C", 40), app("D", 30),
-      app("E", 20), app("F", 10), app("G", 2),
-    ];
-    render(<AppRows apps={apps} limit={5} minMs={5 * MIN} />);
-
-    fireEvent.click(screen.getByText(/Voir les/));
-    expect(screen.getByText("F")).toBeTruthy();
-    expect(screen.queryByText("G")).toBeNull();
+  it("garde ce qui touche le seuil au lieu de l'écarter de justesse", () => {
+    // Cinq minutes tout rond est du temps passé : c'est en dessous que ça s'arrête.
+    expect(ranked([app("Notes", 5)])).toHaveLength(1);
   });
 
-  it("ne retire rien quand tout tient déjà à l'écran", () => {
-    /* En deçà de la limite, il n'y a rien à nettoyer : masquer une ligne sur
-       quatre serait de la perte sèche. */
-    const apps = [app("A", 60), app("B", 2)];
-    render(<AppRows apps={apps} limit={5} minMs={5 * MIN} />);
+  it("laisse la liste d'origine intacte", () => {
+    /* Les totaux se calculent sur la liste brute : si `ranked` la vidait au
+       passage, le temps actif se mettrait à suivre le seuil d'affichage. */
+    const apps = [app("Chrome", 120), app("Aperçu", 3)];
+    ranked(apps);
+
+    expect(apps).toHaveLength(2);
+  });
+});
+
+describe("répartition par application", () => {
+  it("montre ce qu'on lui donne, sans seuil de son côté", () => {
+    /* Le seuil est posé une fois pour toute la section (cf. `ranked`) : la liste
+       qui le reposerait ici en ferait deux règles à tenir d'accord — et l'écran
+       de classement, lui, a précisément besoin des lignes brèves pour ranger les
+       applications inconnues. */
+    render(<AppRows apps={[app("A", 60), app("B", 1)]} limit={5} />);
 
     expect(screen.getByText("B")).toBeTruthy();
-    expect(screen.queryByText(/masquée/)).toBeNull();
   });
 
-  it("garde la liste brute quand la journée n'est faite que de miettes", () => {
-    /* Tout retirer afficherait « rien à afficher » sur des heures bien réelles. */
-    const apps = [app("A", 4), app("B", 3), app("C", 3), app("D", 2), app("E", 2), app("F", 1)];
-    render(<AppRows apps={apps} limit={5} minMs={5 * MIN} />);
-
-    expect(screen.getByText("A")).toBeTruthy();
-    expect(screen.getByText(/Voir les 1 autres/)).toBeTruthy();
-  });
-
-  it("ne filtre rien quand aucun seuil n'est demandé", () => {
-    // L'écran de classement corrige les applications inconnues, souvent brèves :
-    // les masquer là retirerait précisément ce qu'on vient y faire.
+  it("replie ce qui dépasse la limite derrière un seul bouton", () => {
     const apps = [
       app("A", 60), app("B", 50), app("C", 40),
-      app("D", 30), app("E", 20), app("F", 1),
+      app("D", 30), app("E", 20), app("F", 10), app("G", 5),
     ];
     render(<AppRows apps={apps} limit={5} />);
 
-    fireEvent.click(screen.getByText(/Voir les/));
+    expect(screen.queryByText("F")).toBeNull();
+    fireEvent.click(screen.getByText(/Voir les 2 autres/));
     expect(screen.getByText("F")).toBeTruthy();
+    expect(screen.getByText("G")).toBeTruthy();
+  });
+
+  it("ne propose rien à déplier quand tout tient déjà à l'écran", () => {
+    render(<AppRows apps={[app("A", 60), app("B", 50)]} limit={5} />);
+
+    expect(screen.queryByText(/Voir les/)).toBeNull();
+  });
+});
+
+describe("note des miettes", () => {
+  it("dit combien de lignes le seuil a retirées, et lequel", () => {
+    /* Sans elle, les parts ne totalisent plus cent pour cent sans qu'on sache
+       pourquoi, et la différence passe pour une erreur de mesure. */
+    render(<CrumbNote count={2} />);
+
+    expect(screen.getByText(`2 sous ${SHOWN_MIN_MS / MIN} min, non listées.`)).toBeTruthy();
+  });
+
+  it("reste muette quand rien n'a été retiré", () => {
+    const { container } = render(<CrumbNote count={0} />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

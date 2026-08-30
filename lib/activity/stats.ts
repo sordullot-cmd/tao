@@ -9,7 +9,7 @@
  */
 
 import {
-  allCategories, categoryColor, categoryLabel, isBrowser, resolveProductivity, classifyDetailed,
+  allCategories, categoryColor, categoryLabel, isBrowser, OTHER, resolveProductivity, classifyDetailed,
   type ClassifySource, type Productivity,
 } from "@/lib/activity/categories";
 import type { ActivitySettings, DayLog, Segment } from "@/lib/activity/engine";
@@ -32,6 +32,31 @@ export function fmtClock(ms: number): string {
 }
 
 export const HOUR = 3600_000;
+
+/**
+ * Seuil d'affichage de la section « Activité ».
+ *
+ * Sous cinq minutes, une application n'a pas été utilisée : elle a été OUVERTE.
+ * Une journée normale en accumule des dizaines — un aperçu de PDF, un onglet
+ * refermé, une fenêtre traversée pour aller ailleurs — et chacune produit une
+ * ligne, une part, une pastille. Ces entrées ne se répondent pas entre elles :
+ * elles allongent les listes, poussent ce qui compte hors de l'écran, et font
+ * passer une journée lisible pour un inventaire.
+ */
+export const SHOWN_MIN_MS = 5 * 60_000;
+
+/**
+ * Écarte les miettes d'un CLASSEMENT — ce qui se lit ligne à ligne.
+ *
+ * Ne touche à aucun total : le temps actif, la ventilation par nature et les
+ * colonnes du temps d'écran continuent de compter chaque seconde mesurée. Ce
+ * qui disparaît n'est pas du temps, c'est un NOM qu'on n'avait pas à lire — et
+ * la différence entre la somme des lignes et le total est dite à l'écran plutôt
+ * que laissée à deviner (cf. `CrumbNote`).
+ */
+export function ranked<T extends { ms: number }>(list: T[], minMs: number = SHOWN_MIN_MS): T[] {
+  return list.filter(x => x.ms >= minMs);
+}
 
 /* ─── Types de sortie ───────────────────────────────────────────────────── */
 
@@ -173,6 +198,51 @@ export function recategorize(day: DayLog, settings: ActivitySettings): Segment[]
 
 function msOf(seg: Segment): number {
   return Math.max(0, seg.e - seg.s);
+}
+
+/**
+ * Une même chose, UNE seule catégorie — le défaut qui faussait tous les totaux.
+ *
+ * Le classement décide segment par segment, et deux segments d'un même site
+ * pouvaient ne pas décider pareil : l'URL est lisible sur l'un (« github.com »
+ * → Développement) et perdue sur l'autre (le navigateur n'a rendu qu'un titre
+ * → Navigation). La page agrégeait alors le TEMPS par nom et la CATÉGORIE par
+ * segment, si bien que « GitHub » apparaissait avec ses deux heures entières
+ * sous « Développement », pendant que « Développement » n'en comptait qu'une :
+ * l'anneau, la liste et le détail se contredisaient sur la même journée, et
+ * aucun des trois n'était réparable en corrigeant une règle.
+ *
+ * La règle de départage est celle qu'on peut expliquer : la catégorie où ce nom
+ * a passé le plus de temps l'emporte, et « Non classé » ne l'emporte jamais sur
+ * une catégorie réelle — c'est un aveu d'ignorance, pas un jugement. Un seul
+ * segment reconnu suffit donc à ranger tout ce qui porte le même nom.
+ */
+function oneCategoryPerLabel(segments: Segment[]): Segment[] {
+  const perLabel = new Map<string, Map<string, number>>();
+  for (const seg of segments) {
+    const cats = perLabel.get(seg.label) ?? new Map<string, number>();
+    cats.set(seg.cat, (cats.get(seg.cat) || 0) + msOf(seg));
+    perLabel.set(seg.label, cats);
+  }
+
+  const winner = new Map<string, string>();
+  for (const [label, cats] of perLabel) {
+    let best = "";
+    let bestMs = -1;
+    for (const [cat, ms] of cats) {
+      if (cat === OTHER) continue;
+      /* À égalité, la première rencontrée gagne : l'ordre des segments est
+         chronologique et stable, donc le même journal rend toujours le même
+         classement — un tri qui change tout seul se lit comme un bug. */
+      if (ms > bestMs) { best = cat; bestMs = ms; }
+    }
+    winner.set(label, best || OTHER);
+  }
+
+  return segments.map(seg => {
+    const cat = winner.get(seg.label);
+    return !cat || cat === seg.cat ? seg : { ...seg, cat };
+  });
 }
 
 /** Regroupe les segments productifs contigus en sessions de focus. */
@@ -379,9 +449,11 @@ export function dayBlocks(
 }
 
 export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
-  const segments = recategorize(day, settings)
-    .filter(s => msOf(s) > 0)
-    .sort((a, b) => a.s - b.s);
+  const segments = oneCategoryPerLabel(
+    recategorize(day, settings)
+      .filter(s => msOf(s) > 0)
+      .sort((a, b) => a.s - b.s)
+  );
 
   const activeMs = segments.reduce((n, s) => n + msOf(s), 0);
 
@@ -549,15 +621,33 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
   const distractingMs = days.reduce((n, d) => n + d.distractingMs, 0);
 
   const catMs = new Map<string, number>();
-  const appMs = new Map<string, { ms: number; cat: string; app: string; isSite: boolean; site: string; via: ClassifySource }>();
+  /* Le même écart qu'à la journée, d'un cran au-dessus : la semaine SOMMAIT le
+     temps d'un nom sur sept jours mais gardait la catégorie du PREMIER. Un site
+     reconnu à partir de mercredi ressortait donc toute la semaine dans la
+     catégorie de lundi. On compte donc le temps PAR catégorie, et la dominante
+     l'emporte — la même règle qu'à la journée, pour que les deux échelles ne
+     puissent pas se contredire. */
+  const appMs = new Map<string, {
+    ms: number; cats: Map<string, number>; app: string; isSite: boolean; site: string; via: ClassifySource;
+  }>();
   for (const d of days) {
     for (const b of d.byCategory) catMs.set(b.id, (catMs.get(b.id) || 0) + b.ms);
     for (const a of d.byApp) {
       const prev = appMs.get(a.label)
-        || { ms: 0, cat: a.cat, app: a.app, isSite: a.isSite, site: a.site || "", via: a.via };
+        || { ms: 0, cats: new Map<string, number>(), app: a.app, isSite: a.isSite, site: a.site || "", via: a.via };
+      prev.cats.set(a.cat, (prev.cats.get(a.cat) || 0) + a.ms);
       appMs.set(a.label, { ...prev, ms: prev.ms + a.ms, site: prev.site || a.site || "" });
     }
   }
+  const dominant = (cats: Map<string, number>) => {
+    let best = OTHER;
+    let bestMs = -1;
+    for (const [cat, ms] of cats) {
+      if (cat === OTHER) continue;
+      if (ms > bestMs) { best = cat; bestMs = ms; }
+    }
+    return best;
+  };
   const pct = (ms: number) => (activeMs > 0 ? (ms / activeMs) * 100 : 0);
 
   const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, ms: 0, productiveMs: 0, distractingMs: 0 }));
@@ -582,10 +672,13 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
       .filter(b => b.ms > 0)
       .sort((a, b) => b.ms - a.ms),
     byApp: [...appMs.entries()]
-      .map(([label, v]) => ({
-        id: label, label, color: categoryColor(v.cat), cat: v.cat, app: v.app,
-        isSite: v.isSite, site: v.site, via: v.via, ms: v.ms, pct: pct(v.ms), titles: [],
-      }))
+      .map(([label, v]) => {
+        const cat = dominant(v.cats);
+        return {
+          id: label, label, color: categoryColor(cat), cat, app: v.app,
+          isSite: v.isSite, site: v.site, via: v.via, ms: v.ms, pct: pct(v.ms), titles: [],
+        };
+      })
       .sort((a, b) => b.ms - a.ms),
     avgActiveMs: measured.length ? activeMs / measured.length : 0,
     avgFocusMs: measured.length ? focusMs / measured.length : 0,
@@ -610,7 +703,9 @@ export function unclassified(logs: DayLog[], settings: ActivitySettings): AppBuc
   for (const log of logs) {
     for (const seg of log.segments) {
       const d = classifyDetailed(seg.app, seg.title, settings.rules, seg.site);
-      if (d.category !== "other") continue;
+      /* Le mobilier du système est reconnu mais ne se range pas : le proposer
+         ici noierait les vraies inconnues sous des écrans de verrouillage. */
+      if (d.category !== OTHER || d.system) continue;
       const cur = map.get(d.label)
         || { ms: 0, app: seg.app, isSite: d.isSite, site: seg.site || "", titles: new Map<string, number>() };
       cur.ms += Math.max(0, seg.e - seg.s);

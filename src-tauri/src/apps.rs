@@ -206,3 +206,40 @@ mod imp {
 /// Plafond du parcours. Au-delà, ce n'est plus une liste d'applications, c'est
 /// un inventaire de disque — et il traverserait le pont vers la WebView.
 const MAX: usize = 600;
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// Le parcours doit rendre quelque chose de réel sur la machine qui le lance.
+  ///
+  /// Un test qui se contenterait de vérifier « ça ne panique pas » passerait
+  /// aussi bien avec une liste vide — c'est-à-dire avec le défaut que cette
+  /// commande existe pour corriger.
+  #[test]
+  #[cfg(target_os = "macos")]
+  fn trouve_les_applications_du_systeme() {
+    let apps = installed_apps();
+    assert!(!apps.is_empty(), "aucune application trouvée");
+    // Livré avec macOS, présent sur toute machine : le repère le plus sûr.
+    assert!(
+      apps.iter().any(|a| a.name == "Safari"),
+      "Safari absent de {:?}",
+      apps.iter().take(20).map(|a| &a.name).collect::<Vec<_>>()
+    );
+  }
+
+  /// Le nom rendu est celui que le système rapportera au garde — donc sans
+  /// l'extension du bundle. « Discord.app » ne correspondrait à rien.
+  #[test]
+  #[cfg(target_os = "macos")]
+  fn rend_le_nom_sans_extension_et_sans_doublon() {
+    let apps = installed_apps();
+    assert!(apps.iter().all(|a| !a.name.ends_with(".app")));
+    let mut noms: Vec<String> = apps.iter().map(|a| a.name.to_lowercase()).collect();
+    let avant = noms.len();
+    noms.sort();
+    noms.dedup();
+    assert_eq!(avant, noms.len(), "des noms en double sont proposés");
+  }
+}

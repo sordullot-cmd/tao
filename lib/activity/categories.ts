@@ -18,14 +18,17 @@
  *   3. le nom d'application reconnu à l'identique (« leagueclient ») ;
  *   4. un mot du nom d'application (« Adobe Photoshop 2024 ») ;
  *   5. un nom de site reconnu dans le titre (« … — YouTube ») ;
- *   6. rien : « Non classé », mais avec un NOM propre (le site deviné), pour
- *      qu'un clic suffise à le ranger.
+ *   6. rien de reconnu — et là, deux réponses selon la surface :
+ *        • dans un navigateur, c'est de la NAVIGATION. Une page inconnue n'est
+ *          pas une anomalie à corriger, c'est ce que naviguer veut dire ;
+ *        • ailleurs, « Non classé », avec un NOM propre, pour qu'un clic suffise
+ *          à ranger l'application.
  *
  * Chaque décision garde sa raison (`via`) : la page « Catégories & règles »
  * l'affiche, et un classement qu'on ne peut pas expliquer ne se corrige pas.
  */
 
-import { PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY, HUE } from "@/lib/ui/palette";
+import { PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
 import { getLang } from "@/lib/i18n";
 import {
   CATALOG, domainInTitle, guessSiteName, isBrowserApp, matchAppExact, matchAppWord,
@@ -72,38 +75,79 @@ export interface ActivityCategory {
   hint: string;
 }
 
-/* Quatorze catégories. Deux sont nouvelles et répondent à un défaut de mesure,
-   pas à une envie de nuance :
-     • « Jeux » — ils étaient soit dans « Divertissement » (à côté d'un film,
-       alors qu'on ne les règle pas pareil), soit, le plus souvent, dans « Non
-       classé » ;
-     • « Achats » — Amazon et Leboncoin comptaient comme du divertissement,
-       ce qui rendait le total de « Divertissement » illisible. */
+/**
+ * Sept catégories, et une file d'attente.
+ *
+ * ── Pourquoi si peu ──────────────────────────────────────────────────────
+ * Il y en avait quatorze, et c'était trop pour deux raisons qui se voient à
+ * l'écran. D'abord la LECTURE : quatorze parts dans un anneau de 188 px, ce ne
+ * sont plus des parts, ce sont des traits. Ensuite, et surtout, le CLASSEMENT :
+ * plus une frontière est fine, plus elle se trace mal. « Écriture » et « Admin »
+ * séparaient Notion de Google Docs ; « Recherche » et « Développement »
+ * séparaient la doc React de l'éditeur qui l'utilise. Une même heure de travail
+ * ressortait donc en quatre lignes, dont aucune ne pesait assez pour se voir.
+ *
+ * Les frontières qui restent sont celles qu'on peut défendre devant l'écran :
+ * ce qui produit du code, ce qui regarde les marchés, ce qui produit autre
+ * chose, ce qu'on traverse, ce qui parle, ce qui accompagne, ce qui remplace.
+ *
+ * ── « Navigation », la catégorie qui manquait ────────────────────────────
+ * C'est la nouveauté, et elle répond au plus gros défaut de mesure : un onglet
+ * que le catalogue ne reconnaît pas ne tombe plus dans « Non classé ». Ouvrir
+ * vingt pages dans une journée n'est pas une anomalie à corriger une par une —
+ * c'est ce que naviguer veut dire. « Non classé » ne reçoit donc plus QUE des
+ * applications de bureau inconnues, ce qui en fait de nouveau une file courte,
+ * qu'on vide.
+ *
+ * Neutre, et c'est délibéré : ranger le web inconnu du côté productif gonflerait
+ * le temps de focus de tout ce qu'on n'a pas su nommer — un suivi ne doit pas se
+ * flatter. Du côté distraction, il accuserait une recherche de documentation.
+ * Entre les deux, il compte le temps sans le juger.
+ */
 export const BUILTIN_CATEGORIES: ActivityCategory[] = [
-  { id: "dev",       label: "Développement",      labelEn: "Development",   color: PALETTE.blue,        productivity: "productive",  hint: "Éditeurs, terminaux, docs techniques, dépôts." },
-  { id: "trading",   label: "Trading & marchés",  labelEn: "Trading",       color: PALETTE.green,       productivity: "productive",  hint: "Plateformes, graphiques, journal de trades, prop firms." },
-  { id: "writing",   label: "Écriture & notes",   labelEn: "Writing",       color: PALETTE.purple,      productivity: "productive",  hint: "Traitement de texte, prise de notes, rédaction." },
-  { id: "design",    label: "Design & création",  labelEn: "Design",        color: PALETTE.pink,        productivity: "productive",  hint: "Image, vidéo, son, 3D, maquettes." },
-  { id: "research",  label: "Recherche & lecture",labelEn: "Research",      color: PALETTE.brown,       productivity: "productive",  hint: "IA, encyclopédies, cours, presse, documentation." },
-  { id: "admin",     label: "Admin & gestion",    labelEn: "Admin",         color: PALETTE_DARK.blue,   productivity: "productive",  hint: "Tableurs, agenda, fichiers, démarches, gestion de projet." },
-  { id: "meetings",  label: "Réunions",           labelEn: "Meetings",      color: PALETTE.orange,      productivity: "neutral",     hint: "Visioconférence et appels." },
-  { id: "comms",     label: "Communication",      labelEn: "Communication", color: PALETTE.yellow,      productivity: "neutral",     hint: "Messageries et courrier." },
-  /* La musique sort de « Divertissement » : elle ACCOMPAGNE le travail au lieu
-     de le remplacer, et une heure de Spotify comptée en distraction pendant
-     qu'on code fausse la lecture de la journée. Neutre, donc — ni portée au
-     crédit du travail, ni retenue contre lui ; celui pour qui c'est autre chose
-     le change dans « Catégories & règles ».
-     La teinte suit la règle de la charte (cf. lib/ui/palette) : les huit
-     principales étant prises, on descend d'un cran — l'ambre profond n'est pas
-     l'orange vif des réunions. */
-  { id: "music",     label: "Musique",            labelEn: "Music",         color: PALETTE_DARK.orange, productivity: "neutral",     hint: "Écoute de musique : Spotify, Apple Music, Deezer, SoundCloud." },
-  { id: "utilities", label: "Utilitaires & système", labelEn: "Utilities",  color: PALETTE_DARK.green,  productivity: "neutral",     hint: "Fichiers, réglages, mots de passe, bureau du système." },
-  { id: "shopping",  label: "Achats",             labelEn: "Shopping",      color: HUE.moonJelly,       productivity: "neutral",     hint: "Boutiques en ligne, petites annonces, livraison." },
-  { id: "social",    label: "Réseaux sociaux",    labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux et communautés." },
-  { id: "games",     label: "Jeux",               labelEn: "Games",         color: PALETTE_DARK.pink,   productivity: "distracting", hint: "Jeux, lanceurs et sites de jeu." },
-  { id: "fun",       label: "Divertissement",     labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, musique, séries, sport." },
-  { id: "other",     label: "Non classé",         labelEn: "Uncategorized", color: GREY.grey500,        productivity: "neutral",     hint: "Ce que l'app n'a pas su reconnaître. À ranger en un clic." },
+  { id: "dev",      label: "Développement",     labelEn: "Development",   color: PALETTE.blue,        productivity: "productive",  hint: "Éditeurs, terminaux, dépôts, documentation technique." },
+  { id: "trading",  label: "Trading & marchés", labelEn: "Trading",       color: PALETTE.green,       productivity: "productive",  hint: "Plateformes, graphiques, journal de trades, prop firms." },
+  /* « Travail » absorbe l'écriture, les tableurs, l'agenda, la création, les
+     fichiers et la lecture de fond. Ces six-là se distinguaient mal et se
+     mélangeaient tout le temps : un même document passait de « Écriture » à
+     « Admin » selon qu'il était ouvert dans Notion ou dans Docs. */
+  { id: "work",     label: "Travail",           labelEn: "Work",          color: PALETTE.purple,      productivity: "productive",  hint: "Écriture, tableurs, agenda, création, fichiers, cours et lecture de fond." },
+  { id: "browsing", label: "Navigation",        labelEn: "Browsing",      color: PALETTE.brown,       productivity: "neutral",     hint: "Le web qu'on traverse : moteurs de recherche, achats, pages non reconnues." },
+  { id: "comms",    label: "Communication",     labelEn: "Communication", color: PALETTE.yellow,      productivity: "neutral",     hint: "Messageries, courrier, visioconférence." },
+  /* La musique reste à part : elle ACCOMPAGNE le travail au lieu de le
+     remplacer, et une heure de Spotify comptée en distraction pendant qu'on
+     code fausse la lecture de la journée. */
+  { id: "music",    label: "Musique",           labelEn: "Music",         color: PALETTE_DARK.orange, productivity: "neutral",     hint: "Écoute de musique : Spotify, Apple Music, Deezer, SoundCloud." },
+  { id: "fun",      label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, séries, jeux, réseaux sociaux, sport." },
+  { id: "other",    label: "Non classé",        labelEn: "Uncategorized", color: GREY.grey500,        productivity: "neutral",     hint: "Les applications de bureau que l'app n'a pas su reconnaître. À ranger en un clic." },
 ];
+
+/**
+ * Les catégories d'avant, et où leur temps s'en va.
+ *
+ * Une version qui renomme son vocabulaire doit emporter ce qui était écrit
+ * dedans, sinon la refonte se paie en journal illisible : les RÈGLES de
+ * l'utilisateur pointent vers ces identifiants, et l'historique aussi. Sans
+ * cette table, une règle « ce site → Recherche » cesserait de ranger quoi que ce
+ * soit du jour au lendemain, sans un mot.
+ *
+ * Elle est traversée par `settle`, donc par tout le classement : rien ne peut
+ * la contourner.
+ */
+const MOVED: Record<string, string> = {
+  writing: "work",
+  design: "work",
+  research: "work",
+  admin: "work",
+  utilities: "work",
+  meetings: "comms",
+  shopping: "browsing",
+  social: "fun",
+  games: "fun",
+};
+
+/** Catégorie des pages web que le catalogue ne reconnaît pas. */
+export const BROWSING = "browsing";
 
 export const OTHER = "other";
 
@@ -314,6 +358,8 @@ export interface Classification {
   isSite: boolean;
   /** 0 à 1 : sert à signaler les classements fragiles, pas à les cacher. */
   confidence: number;
+  /** Mobilier du système : nommé, mais jamais proposé au classement. */
+  system: boolean;
 }
 
 const CONFIDENCE: Record<ClassifySource, number> = {
@@ -323,13 +369,16 @@ const CONFIDENCE: Record<ClassifySource, number> = {
 /**
  * Catégorie servie à l'interface : celle du catalogue si elle existe encore.
  *
- * Une catégorie retirée par l'utilisateur (ou disparue d'une version à l'autre)
- * laisserait sinon des segments pointant vers un identifiant sans nom ni
- * couleur — du temps gris, impossible à lire et impossible à corriger. Il
- * retourne donc à « Non classé », d'où la file d'attente le rattrape.
+ * Deux cas, et un seul passage pour les deux. Une catégorie DÉPLACÉE par une
+ * refonte du vocabulaire suit sa destination (cf. `MOVED`) — c'est ce qui fait
+ * qu'une règle écrite l'an dernier range encore quelque chose. Une catégorie
+ * retirée par l'utilisateur, elle, n'a plus ni nom ni couleur : ses segments
+ * deviendraient du temps gris, impossible à lire et impossible à corriger. Ils
+ * retournent donc à « Non classé », d'où la file d'attente les rattrape.
  */
 function settle(id: string): string {
-  return BY_ID[id] ? id : OTHER;
+  const moved = MOVED[id] ?? id;
+  return BY_ID[moved] ? moved : OTHER;
 }
 
 function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: string): Classification {
@@ -340,6 +389,7 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
     matched,
     isSite,
     confidence: CONFIDENCE[hit.via],
+    system: hit.entry.system === true,
   };
 }
 
@@ -411,15 +461,21 @@ export function classifyDetailed(
 
   const mine = userHit(userRules, app, title, host);
   if (mine) {
-    return { category: settle(mine.category), label, via: "user", matched: mine.match, isSite: browser, confidence: 1 };
+    return { category: settle(mine.category), label, via: "user", matched: mine.match, isSite: browser, confidence: 1, system: false };
   }
 
   if (browser) {
-    /* Une page qu'on ne reconnaît pas reste NON CLASSÉE, jamais rangée d'office
-       dans une catégorie productive : sinon tout le web inconnu gonflerait le
-       temps de focus, ce qu'un suivi ne doit précisément pas faire. */
     if (siteHit) return fromHit(siteHit, label, true, domain ?? siteHit.entry.name);
-    return { category: OTHER, label, via: "none", matched: null, isSite: true, confidence: 0 };
+    /* Une page inconnue est de la NAVIGATION, pas une anomalie.
+       Elle tombait dans « Non classé », et c'était le plus gros défaut de la
+       mesure : un navigateur qui ne dit pas son URL (Arc, Firefox, un poste sans
+       autorisation d'automatisation) n'offre qu'un titre de page, où le nom du
+       site ne figure souvent pas. Des journées entières y passaient, la file
+       « à classer » comptait quarante entrées inrangeables — une par article lu
+       — et « Non classé » finissait première catégorie du jour.
+       Navigation est NEUTRE : ce temps ne se met ni au crédit du travail ni au
+       débit de la distraction, ce qui est exactement ce qu'on sait de lui. */
+    return { category: settle(BROWSING), label, via: "none", matched: null, isSite: true, confidence: 0, system: false };
   }
 
   const exact = matchAppExact(app);
@@ -437,7 +493,7 @@ export function classifyDetailed(
   })();
   if (byTitle) return fromHit(byTitle, label, false, byTitle.entry.name);
 
-  return { category: OTHER, label, via: "none", matched: null, isSite: false, confidence: 0 };
+  return { category: OTHER, label, via: "none", matched: null, isSite: false, confidence: 0, system: false };
 }
 
 /**
@@ -484,7 +540,7 @@ export function classifyPhoneApp(
   if (mine) {
     return {
       category: settle(mine.category), label: shown, via: "user",
-      matched: mine.match, isSite: false, confidence: 1,
+      matched: mine.match, isSite: false, confidence: 1, system: false,
     };
   }
 
@@ -494,7 +550,7 @@ export function classifyPhoneApp(
     if (hit) return fromHit(hit, shown, false, norm(candidate));
   }
 
-  return { category: OTHER, label: shown, via: "none", matched: null, isSite: false, confidence: 0 };
+  return { category: OTHER, label: shown, via: "none", matched: null, isSite: false, confidence: 0, system: false };
 }
 
 /* --- Hote ----------------------------------------------------------------- */

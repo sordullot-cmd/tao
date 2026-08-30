@@ -80,8 +80,8 @@ describe("page Activité (journée)", () => {
     fireEvent.click(screen.getByText("Applications"));
     // La ligne porte sa catégorie, et cette pastille est le bouton qui la change.
     fireEvent.click(screen.getByRole("button", { name: /Catégorie : Non classé/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Jeux" }));
-    expect(screen.getByRole("button", { name: /Catégorie : Jeux/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Divertissement" }));
+    expect(screen.getByRole("button", { name: /Catégorie : Divertissement/ })).toBeInTheDocument();
   });
 
   it("ouvre le détail d'un pavé au clic et liste ce qui y a été ouvert", () => {
@@ -109,7 +109,7 @@ describe("page Activité (journée)", () => {
     expect(screen.getAllByText("Temps actif").length).toBeGreaterThan(0);
   });
 
-  it("laisse hors du détail d'un pavé ce qui a duré moins de quatre minutes", () => {
+  it("laisse hors du détail d'un pavé ce qui a duré moins de cinq minutes", () => {
     const base = new Date();
     base.setHours(9, 0, 0, 0);
     const at = (min: number) => base.getTime() + min * 60_000;
@@ -127,7 +127,33 @@ describe("page Activité (journée)", () => {
     expect(screen.getByText("VS Code")).toBeInTheDocument();
     expect(screen.queryByText("Twitter")).toBeNull();
     // Rien n'est masqué en silence.
-    expect(screen.getByText(/1 sous 4 min/)).toBeInTheDocument();
+    expect(screen.getByText(/1 sous 5 min/)).toBeInTheDocument();
+  });
+
+  it("ne nomme nulle part une entrée de moins de cinq minutes", () => {
+    /* Le seuil s'applique à la PAGE, pas à une liste : la même journée alimente
+       la répartition par catégorie, la liste des applications et le détail de
+       l'anneau. Une seule des trois qui garderait les miettes suffirait à
+       remettre le bruit à l'écran. */
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    const at = (min: number) => base.getTime() + min * 60_000;
+    saveDay({
+      date: today, awayMs: 0, updatedAt: Date.now(),
+      segments: [
+        { s: at(0), e: at(75), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
+        // Trois minutes, et la seule de sa catégorie : la ligne ET la part
+        // « Divertissement » doivent disparaître ensemble.
+        { s: at(75), e: at(78), app: "Chrome", label: "Youtube", title: "Lofi", cat: "fun" },
+      ],
+    });
+    render(<ActivityPage setPage={vi.fn()} />);
+
+    expect(screen.getAllByText("VS Code").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Youtube")).toBeNull();
+    expect(screen.queryByText("Divertissement")).toBeNull();
+    // Le temps, lui, reste compté : 1 h 18 mesurées, pas 1 h 15.
+    expect(screen.getAllByText("1 h 18").length).toBeGreaterThan(0);
   });
 
   it("referme la sélection d'un pavé avec Échap", () => {
@@ -164,7 +190,7 @@ describe("page Activité (journée)", () => {
     expect(screen.getByText("Utilisation quotidienne")).toBeInTheDocument();
 
     const label = new Date(`${mKey}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
-    fireEvent.click(screen.getByTitle(`${label} — 2 h 00`));
+    fireEvent.click(screen.getByLabelText(`${label} — 2 h 00`));
     // La page a basculé sur cette journée-là : ses deux heures sont en tête.
     expect(screen.getAllByText("2 h 00").length).toBeGreaterThan(0);
   });
@@ -288,14 +314,14 @@ describe("page Catégories & règles", () => {
 
   it("retire une catégorie livrée et la rétablit", () => {
     render(<ActivityRulesPage setPage={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText(/Supprimer « Jeux »/));
+    fireEvent.click(screen.getByLabelText(/Supprimer « Musique »/));
     // La ligne a disparu du vocabulaire…
-    expect(screen.queryByLabelText(/Supprimer « Jeux »/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Supprimer « Musique »/)).not.toBeInTheDocument();
     // …mais une livrée est masquée, pas effacée : le catalogue y range des
     // centaines d'applications, il faut pouvoir revenir en arrière.
     expect(screen.getByText(/Retirées/)).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Jeux"));
-    expect(screen.getByLabelText(/Supprimer « Jeux »/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Musique"));
+    expect(screen.getByLabelText(/Supprimer « Musique »/)).toBeInTheDocument();
   });
 
   it("réordonne les catégories au glisser-déposer", () => {

@@ -430,7 +430,7 @@ export default function ActivityRulesPage({ setPage }) {
         <BlockTitle right={`${categories.length} · 30 derniers jours`}>Catégories</BlockTitle>
         <span style={{ fontSize: 12, color: T.textSub, lineHeight: 1.5 }}>
           La nature d’une catégorie décide de ce qui compte comme focus et comme distraction.
-          « Réunions » est du travail pour l’un, du temps subi pour l’autre : c’est à toi de trancher.
+          « Communication » est le métier de l’un et la fuite de l’autre : c’est à toi de trancher.
           {" "}L’app reconnaît {catalog.total} applications et sites d’elle-même ; tes règles passent avant.
           {" "}Prends une ligne par sa poignée pour la déplacer : cet ordre est celui de toute la section —
           l’anneau, les légendes, les listes de choix.
