@@ -32,6 +32,19 @@ export interface IcsEvent {
   end: string;
   status: string;
   /**
+   * La MATIÈRE, sans son type de séance — « Anglais », pas « Anglais · TD ».
+   *
+   * L'intitulé affiché compose les deux (cf. `prettifyIcsEvent`), ce qui en fait
+   * un mauvais identifiant de cours : « Anglais · CM » et « Anglais · TD » sont
+   * le même enseignement et ne se ressemblent pas comme chaînes. Une couleur
+   * posée « sur la matière » se casse dessus — elle ne toucherait que les
+   * séances du type qu'on a cliqué.
+   *
+   * Vaut l'intitulé brut quand l'export ne distingue pas les deux : c'est la
+   * meilleure information disponible, et le comportement reste le bon.
+   */
+  course: string;
+  /**
    * Type de séance tel que l'établissement le nomme (« CM », « TD à distance »).
    * Vide hors export structuré : c'est alors l'intitulé qui sert d'indice.
    */
@@ -260,9 +273,11 @@ function finalize(cur: Record<string, unknown>): IcsEvent | null {
       : { iso: shiftIso(start.iso, 3600000), allDay: false };
   }
 
+  const summary = String(cur.summary || "(Sans titre)");
   return {
     uid: String(cur.uid || `${start.iso}-${cur.summary || ""}`),
-    summary: String(cur.summary || "(Sans titre)"),
+    summary,
+    course: summary,
     description: String(cur.description || ""),
     location: String(cur.location || ""),
     allDay: !!start.allDay,
@@ -327,6 +342,9 @@ export function prettifyIcsEvent(ev: IcsEvent): IcsEvent {
     ...ev,
     category: categorie,
     summary: summary || ev.summary,
+    // La matière SEULE, séparée de son type : c'est elle qui identifie un
+    // enseignement d'un bout à l'autre du semestre.
+    course: nom || ev.summary,
     // La salle est déjà dans LOCATION ; on la reprend de la description
     // seulement si LOCATION est vide (cours à distance, salle non affectée).
     location: ev.location || field("Salle"),

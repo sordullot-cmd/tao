@@ -21,12 +21,16 @@ import { normalizeFeedUrl } from "@/lib/icsFetch";
 import {
   courseColor, courseColorId, normalizeKindColors, type KindColors,
 } from "@/lib/icsCategories";
+import { GCAL_COLORS } from "@/lib/gcalColors";
 
 export const ICS_FEEDS_KEY = "tr4de_ics_feeds";
 export const ICS_FEEDS_CLOUD_KEY = "ics_feeds";
 
 export const ICS_KIND_COLORS_KEY = "tr4de_ics_kind_colors";
 export const ICS_KIND_COLORS_CLOUD_KEY = "ics_kind_colors";
+
+export const ICS_EVENT_COLORS_KEY = "tr4de_ics_event_colors";
+export const ICS_EVENT_COLORS_CLOUD_KEY = "ics_event_colors";
 
 /** Palette d'attribution : couleurs distinctes de la teinte par défaut des évènements Google. */
 const FEED_COLORS = ["#B45309", "#7C3AED", "#0E7490", "#BE123C", "#15803D", "#A16207"];
@@ -52,6 +56,8 @@ export interface IcsFeedEvent {
   calendarColor: string;
   /** Type de séance, pour la légende et le regroupement. */
   category: string;
+  /** La matière seule, sans son type — la clé d'une couleur « toute la matière ». */
+  course: string;
   /** Toujours vrai : un flux distant se consulte, il ne se modifie pas. */
   readOnly: true;
   htmlLink: string;
@@ -158,6 +164,82 @@ export function useIcsKindColors() {
   return { kindColors: colors, setKindColor, resetColors };
 }
 
+/**
+ * Couleurs posées à la main sur des séances importées, depuis l'agenda lui-même.
+ *
+ * Un flux distant ne se modifie pas : la séance revient du serveur identique à
+ * chaque lecture, et rien de ce qu'on écrirait dessus ne survivrait. La retouche
+ * vit donc ICI, à côté, et se pose au rendu par-dessus la couleur du type.
+ *
+ * Deux portées, en plus du TYPE qui reste le socle (`useIcsKindColors`) :
+ *
+ *   • UNE séance (`events`) — « ce partiel-là, en rouge ». La clé est
+ *     l'identifiant de l'occurrence, stable d'une lecture à l'autre : un export
+ *     d'emploi du temps déplie chaque séance en un évènement à elle, avec son
+ *     propre UID.
+ *   • UNE matière (`courses`) — « l'anglais en vert », ses CM et ses TD
+ *     compris. La clé est la MATIÈRE (`IcsEvent.course`), jamais l'intitulé
+ *     affiché : celui-ci compose le nom et le type (« Anglais · TD »), si bien
+ *     qu'une couleur posée dessus ne toucherait que les séances du même type.
+ *
+ * Ordre : la séance l'emporte sur la matière, qui l'emporte sur le type — du
+ * plus précis au plus général, comme partout ailleurs.
+ */
+export interface IcsEventColors {
+  events: Record<string, string>;
+  courses: Record<string, string>;
+}
+
+const NO_EVENT_COLORS: IcsEventColors = { events: {}, courses: {} };
+
+/** Clé d'une matière : son nom, ramené à une forme comparable. Deux séances du
+ *  même cours ne s'écrivent pas toujours avec la même casse ni les mêmes
+ *  espaces, et ce sont bien les mêmes. */
+export function courseKey(course: string): string {
+  return String(course || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeEventColors(raw: unknown): IcsEventColors {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return NO_EVENT_COLORS;
+  const pick = (value: unknown): Record<string, string> => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const out: Record<string, string> = {};
+    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+      const id = String(v ?? "").trim();
+      // Les onze emplacements Google, et rien d'autre : ces séances voisinent
+      // avec des évènements Google dans la même grille.
+      if (key && id in GCAL_COLORS) out[key] = id;
+    }
+    return out;
+  };
+  const o = raw as Record<string, unknown>;
+  return { events: pick(o.events), courses: pick(o.courses) };
+}
+
+export function useIcsEventColors() {
+  const [stored, setStored] = useCloudState<IcsEventColors>(
+    ICS_EVENT_COLORS_KEY, ICS_EVENT_COLORS_CLOUD_KEY, NO_EVENT_COLORS,
+  );
+  const colors = useMemo(() => normalizeEventColors(stored), [stored]);
+
+  /* `null` retire la retouche et rend la séance à la portée du dessus. */
+  const setEventColor = useCallback(
+    (scope: "events" | "courses", key: string, colorId: string | null) =>
+      setStored((prev) => {
+        const next = normalizeEventColors(prev);
+        const bucket = { ...next[scope] };
+        if (colorId === null) delete bucket[key];
+        else bucket[key] = colorId;
+        return normalizeEventColors({ ...next, [scope]: bucket });
+      }),
+    [setStored],
+  );
+
+  const resetEventColors = useCallback(() => setStored(NO_EVENT_COLORS), [setStored]);
+
+  return { eventColors: colors, setEventColor, resetEventColors };
+}
+
 /** Vérifie qu'une URL répond bien un calendrier, avant de l'enregistrer. */
 export async function probeFeed(url: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
@@ -184,7 +266,7 @@ interface RawFeedItems {
   feedId: string;
   items: {
     uid: string; summary: string; description: string; location: string;
-    allDay: boolean; start: string; end: string; status: string; category?: string;
+    allDay: boolean; start: string; end: string; status: string; category?: string; course?: string;
   }[];
 }
 
@@ -197,6 +279,7 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState<string[]>([]);
   const { kindColors } = useIcsKindColors();
+  const { eventColors } = useIcsEventColors();
   // Le rendu recrée le tableau `feeds` à chaque passe : on compare son contenu,
   // sinon l'effet se relancerait en boucle.
   const active = useMemo(() => feeds.filter((f) => f.enabled && f.url), [feeds]);
@@ -242,8 +325,16 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
     const out: IcsFeedEvent[] = [];
     for (const { feedId, items } of raw) {
       for (const ev of items) {
+        const id = `${feedId}:${ev.uid}`;
+        /* Du plus précis au plus général : la retouche posée sur CETTE séance,
+           sinon celle posée sur la matière, sinon la couleur de son type. */
+        /* Du plus précis au plus général : cette séance, sinon sa matière,
+           sinon la couleur de son type. */
+        const override = eventColors.events[id]
+          ?? eventColors.courses[courseKey(ev.course || ev.summary)]
+          ?? null;
         out.push({
-          id: `${feedId}:${ev.uid}`,
+          id,
           calendarId: feedCalendarId(feedId),
           summary: ev.summary,
           description: ev.description,
@@ -256,11 +347,12 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
           // entière d'une seule teinte ne renseigne sur rien, alors qu'un
           // coup d'œil doit suffire à repérer les TP ou le partiel. Le choix
           // de la teinte, lui, appartient aux réglages de l'agenda.
-          calendarColor: courseColor(ev.category, ev.summary, kindColors),
+          calendarColor: override ? GCAL_COLORS[override] : courseColor(ev.category, ev.summary, kindColors),
           category: ev.category || "",
+          course: ev.course || ev.summary,
           readOnly: true,
           htmlLink: "",
-          colorId: courseColorId(ev.category, ev.summary, kindColors),
+          colorId: override ?? courseColorId(ev.category, ev.summary, kindColors),
           recurringEventId: null,
           guests: [],
           transparency: "opaque",
@@ -273,7 +365,7 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
       }
     }
     return out;
-  }, [raw, kindColors]);
+  }, [raw, kindColors, eventColors]);
 
   return { icsEvents: events, icsLoading: loading, icsFailed: failed };
 }

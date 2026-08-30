@@ -42,6 +42,7 @@ import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { useIcsFeeds, useIcsKindColors, probeFeed } from "@/lib/hooks/useIcsFeeds";
 import { KIND_LABELS, kindColorId } from "@/lib/icsCategories";
 import { GCAL_COLORS } from "@/lib/gcalColors";
+import Popover from "@/components/ui/Popover";
 import {
   DEFAULT_REMINDERS_STORAGE_KEY,
   DEFAULT_REMINDERS_CLOUD_KEY,
@@ -1062,99 +1063,96 @@ function DefaultRemindersCard() {
  * même grille avec des évènements Google, qui n'ont que ces onze couleurs. Une
  * teinte prise ailleurs se verrait comme une pièce rapportée.
  */
+/**
+ * Code couleur des séances — la légende, devenue réglable sans changer de forme.
+ *
+ * C'est une BANDE et non une liste : huit types alignés sur une ligne qui se
+ * replie, tels qu'ils étaient. Une ligne par type prenait dix fois la hauteur
+ * pour la même information, et surtout on ne voyait plus le code couleur comme
+ * un tout — or c'est ainsi qu'on le lit, en cherchant si deux teintes voisines
+ * se distinguent.
+ *
+ * Le carré EST le bouton. Onze pixels, c'est petit pour une cible, et c'est
+ * assumé : la bande doit garder ses proportions, et le geste est rare (on règle
+ * ses couleurs une fois). Le curseur et l'infobulle disent qu'on peut cliquer.
+ */
 function CourseColorsCard() {
-  const { kindColors, setKindColor, resetColors } = useIcsKindColors();
-  /* Un seul type ouvert à la fois : onze pastilles par ligne sur douze lignes
-     feraient une planche de couleurs où l'on ne retrouve plus le type qu'on
-     voulait changer. */
+  const { kindColors, setKindColor } = useIcsKindColors();
   const [open, setOpen] = useState(null);
-  const kinds = Object.keys(KIND_LABELS);
-  const changed = Object.keys(kindColors).length;
+  /* Une seule ancre pour huit carrés : on y pose celui qu'on vient de cliquer.
+     Huit refs pour un panneau qui ne s'ouvre qu'une fois à la fois ne serviraient
+     qu'à multiplier ce qu'il faut tenir à jour. */
+  const anchorRef = React.useRef(null);
+  const legendKinds = ["cm", "td", "tp", "examen", "revisions", "soutien", "reunion", "annule"];
 
   return (
     <Card>
       <CardHeader
-        title="Couleur des séances importées"
-        subtitle="La couleur vient du type de cours, pas de l'agenda : un examen doit se repérer d'un coup d'œil. Clique un type pour changer la sienne."
+        title="Code couleur des séances"
+        subtitle="La couleur vient du type de cours, pas de l'agenda : un examen doit se repérer d'un coup d'œil."
       />
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {kinds.map((kind, i) => {
-          const id = kindColorId(kind, kindColors);
-          const custom = !!kindColors[kind];
-          const isOpen = open === kind;
-          return (
-            <div key={kind} style={{ borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
+        {legendKinds.map((kind) => (
+          <span key={kind} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, color: T.textSub }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                anchorRef.current = e.currentTarget;
+                setOpen((k) => (k === kind ? null : kind));
+              }}
+              title={`Changer la couleur : ${KIND_LABELS[kind]}`}
+              aria-label={`Changer la couleur : ${KIND_LABELS[kind]}`}
+              style={{
+                width: 11, height: 11, borderRadius: 3, flexShrink: 0,
+                background: GCAL_COLORS[kindColorId(kind, kindColors)],
+                border: "none", padding: 0, cursor: "pointer",
+              }}
+            />
+            {KIND_LABELS[kind]}
+          </span>
+        ))}
+      </div>
+
+      <Popover
+        anchorRef={anchorRef}
+        open={!!open}
+        onClose={() => setOpen(null)}
+        gap={6}
+        style={{ background: T.white, borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", gap: 8 }}
+      >
+        {open && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+              {Object.entries(GCAL_COLORS).map(([cid, hex]) => (
+                <button
+                  key={cid}
+                  type="button"
+                  onClick={() => { setKindColor(open, cid); setOpen(null); }}
+                  aria-label={`Couleur ${cid} pour ${KIND_LABELS[open]}`}
+                  aria-pressed={cid === kindColorId(open, kindColors)}
+                  style={{
+                    width: 24, height: 24, borderRadius: "50%", background: hex, padding: 0, cursor: "pointer",
+                    border: cid === kindColorId(open, kindColors) ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)",
+                  }}
+                />
+              ))}
+            </div>
+            {kindColors[open] && (
               <button
                 type="button"
-                onClick={() => setOpen(isOpen ? null : kind)}
-                aria-expanded={isOpen}
+                onClick={() => { setKindColor(open, null); setOpen(null); }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 12, width: "100%",
-                  padding: "10px 0", border: "none", background: "transparent",
-                  cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                  border: `1px solid ${T.border}`, background: "transparent", cursor: "pointer",
+                  borderRadius: 999, padding: "0 12px", minHeight: 26, fontFamily: "inherit",
+                  fontSize: 12, color: T.textSub,
                 }}
               >
-                <span style={{
-                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                  background: GCAL_COLORS[id],
-                }} />
-                <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, color: T.text }}>
-                  {KIND_LABELS[kind]}
-                </span>
-                {/* Ce qui a été changé se voit sans ouvrir : sinon, rétablir
-                    demande d'ouvrir les douze types pour trouver lesquels. */}
-                {custom && <span style={{ fontSize: 11, color: T.textMut, flexShrink: 0 }}>modifiée</span>}
+                Couleur d’origine
               </button>
-              {isOpen && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "2px 0 12px 28px" }}>
-                  {Object.entries(GCAL_COLORS).map(([cid, hex]) => (
-                    <button
-                      key={cid}
-                      type="button"
-                      onClick={() => { setKindColor(kind, cid); setOpen(null); }}
-                      aria-label={`Couleur ${cid} pour ${KIND_LABELS[kind]}`}
-                      aria-pressed={cid === id}
-                      style={{
-                        width: 24, height: 24, borderRadius: "50%", background: hex, padding: 0,
-                        cursor: "pointer",
-                        border: cid === id ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)",
-                      }}
-                    />
-                  ))}
-                  {custom && (
-                    <button
-                      type="button"
-                      onClick={() => { setKindColor(kind, null); setOpen(null); }}
-                      style={{
-                        border: `1px solid ${T.border}`, background: "transparent", cursor: "pointer",
-                        borderRadius: 999, padding: "0 12px", height: 24, fontFamily: "inherit",
-                        fontSize: 12, color: T.textSub,
-                      }}
-                    >
-                      Couleur d’origine
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {changed > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <button
-            type="button"
-            onClick={() => { resetColors(); setOpen(null); }}
-            style={{
-              border: `1px solid ${T.border}`, background: "transparent", cursor: "pointer",
-              borderRadius: 999, padding: "0 14px", height: 30, fontFamily: "inherit",
-              fontSize: 12, color: T.textSub,
-            }}
-          >
-            Tout rétablir ({changed})
-          </button>
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </Popover>
     </Card>
   );
 }

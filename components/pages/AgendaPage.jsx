@@ -15,7 +15,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { DateField, TimeField } from "./AgendaDateFields";
 import MiniCalendar from "@/components/ui/MiniCalendar";
-import { FIELD_BG } from "@/components/ui/da";
+import { FIELD_BG, PeriodPills } from "@/components/ui/da";
 import Popover from "@/components/ui/Popover";
 import {
   RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon,
@@ -23,7 +23,10 @@ import {
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
 } from "@/lib/lifeRpgCategories";
 import { GCAL_COLORS, DEFAULT_EVENT_COLOR, eventPaint, nearestGcalColorId, TASK_DEFAULT_PAINT } from "@/lib/gcalColors";
-import { useIcsFeeds, useIcsEvents, isFeedCalendarId } from "@/lib/hooks/useIcsFeeds";
+import {
+  useIcsFeeds, useIcsEvents, useIcsEventColors, useIcsKindColors, isFeedCalendarId, courseKey,
+} from "@/lib/hooks/useIcsFeeds";
+import { courseKind, kindColorId, KIND_LABELS } from "@/lib/icsCategories";
 import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import {
   MAX_REMINDERS, normalizeReminders, remindersFromEvent,
@@ -170,6 +173,11 @@ function formFromEvent(ev) {
     kind: ev.isTask ? "task" : "event", done: !!ev.done,
     id: ev.id, calendarId: ev.calendarId || null, htmlLink: ev.htmlLink,
     location: ev.location || "", description: ev.description || "", colorId: ev.colorId || null,
+    /* Le type de séance et la matière, tels que l'export les nomme : ce sont les
+       deux portées d'une couleur, et ni l'un ni l'autre ne se relit dans le
+       formulaire une fois la fenêtre ouverte — l'intitulé affiché les mélange. */
+    category: ev.category || "",
+    course: ev.course || "",
     guests: (ev.guests || []).join(", "),
     addMeet: !!ev.hangoutLink, hadMeet: !!ev.hangoutLink,
     transparency: ev.transparency || "opaque", visibility: ev.visibility || "default",
@@ -642,6 +650,8 @@ export default function AgendaPage() {
   // La page ne fait que LIRE les flux : leur gestion (ajout, renommage,
   // suppression) vit dans les paramètres du compte, avec les autres réglages.
   const { feeds } = useIcsFeeds();
+  const { eventColors, setEventColor } = useIcsEventColors();
+  const { kindColors, setKindColor } = useIcsKindColors();
   const [taskTimes, setTaskTimes] = useCloudState(TASK_TIMES_KEY, TASK_TIMES_CLOUD_KEY, {});
   // Cartes Vie RPG (lecture seule ici — éditées sur la page « Vie RPG ») et
   // liaison « tâche → cartes » (+ complétion) que cette page écrit et que la
@@ -670,6 +680,11 @@ export default function AgendaPage() {
   const [overdueOpen, setOverdueOpen] = React.useState(false);
   const [overduePos, setOverduePos] = React.useState(null); // { top, left } du popover
   const [colorOpen, setColorOpen] = React.useState(false);
+  /* Portée visée pour la retouche d'une séance importée : cette occurrence, ou
+     toute la matière. Un cours revient vingt fois dans un semestre — sans la
+     seconde, le recolorer demanderait vingt allers-retours, et personne ne le
+     ferait. */
+  const [feedScopeChoice, setFeedScopeChoice] = React.useState("events");
   const [remindOpen, setRemindOpen] = React.useState(false);
   const [recurOpen, setRecurOpen] = React.useState(false);
   // Menus du bloc ancré : l'ancre (mode + « juste avant ») et les jours.
@@ -715,6 +730,7 @@ export default function AgendaPage() {
      couleur choisie — gris pour une tâche, lavande pour un évènement. Montrer
      la lavande dans les deux cas laissait croire qu'on posait du violet. */
   const defaultSwatch = modal?.kind === "task" ? TASK_DEFAULT_PAINT.accent : DEFAULT_EVENT_COLOR;
+
   // Seuls les délais explicites comptent dans la limite Google — « par défaut »
   // n'est pas un override, et le cocher ne doit pas griser les choix rapides.
   const reminderCount = reminderList.filter((v) => typeof v === "number").length;
@@ -780,6 +796,43 @@ export default function AgendaPage() {
     for (const c of calendars || []) if (c.color) map.set(c.id, c.color);
     return map;
   }, [calendars]);
+
+  /* Une séance importée ne s'enregistre pas — le flux la rendra identique à la
+     prochaine lecture — mais sa COULEUR, elle, peut être retouchée : elle vit à
+     côté, dans les réglages, et se pose au rendu. C'est le seul champ d'un
+     évènement en lecture seule qui réponde, d'où le traitement à part : la
+     retouche s'applique tout de suite, sans bouton « Enregistrer » qui n'existe
+     pas ici.
+
+     Deux portées, et la seconde est le TYPE de séance — pas la matière. C'est
+     lui qui structure un emploi du temps : ce qu'on cherche des yeux dans une
+     semaine, c'est « où sont mes TP » et « quand est le partiel », pas « où est
+     l'anglais ». La même valeur que règlent les paramètres, atteinte depuis la
+     séance qu'on a sous les yeux. */
+  const feedItem = modal && !modal.isGTask && isFeedCalendarId(modal.calendarId || "");
+  const feedKind = feedItem ? courseKind(modal.category, modal.summary) : null;
+  const feedCourse = feedItem ? courseKey(modal.course || modal.summary) : "";
+  const feedHasOwn = feedItem && !!eventColors.events[modal.id];
+  const feedHasCourse = feedItem && !!eventColors.courses[feedCourse];
+
+  const paintFeed = (scope, colorId) => {
+    if (!feedItem) return;
+    if (scope === "kind") {
+      /* Les portées plus précises sont levées en même temps : sans ça, la
+         couleur qu'on vient de donner au type ne s'appliquerait pas à la séance
+         qu'on regarde, et le choix semblerait ignoré. */
+      setEventColor("events", modal.id, null);
+      setEventColor("courses", feedCourse, null);
+      setKindColor(feedKind, colorId);
+    } else if (scope === "courses") {
+      setEventColor("events", modal.id, null);
+      setEventColor("courses", feedCourse, colorId);
+    } else {
+      setEventColor("events", modal.id, colorId);
+    }
+    setModal((m) => (m ? { ...m, colorId: colorId ?? kindColorId(feedKind, kindColors) } : m));
+    setColorOpen(false);
+  };
 
   const range = React.useMemo(() => computeRange(view, cursor), [view, cursor]);
 
@@ -2625,7 +2678,18 @@ export default function AgendaPage() {
               {/* Couleur */}
               <FormRow icon={CalendarIcon}>
                 <div ref={colorAnchor} data-menu-root style={{ position: "relative" }}>
-                  <button type="button" onClick={() => { setColorOpen((o) => !o); setRemindOpen(false); }} style={pillBtn}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      /* On rouvre sur la portée DÉJÀ retenue : une séance mise
+                         à part se rouvre sur elle-même, sinon on repartirait
+                         sur le type sans voir qu'on écrase une exception. */
+                      if (feedItem) setFeedScopeChoice(feedHasOwn ? "events" : feedHasCourse ? "courses" : "kind");
+                      setColorOpen((o) => !o);
+                      setRemindOpen(false);
+                    }}
+                    style={pillBtn}
+                  >
                     <span style={{ width: 14, height: 14, borderRadius: "50%", background: modal.colorId ? GCAL_COLORS[modal.colorId] : defaultSwatch, display: "inline-block" }} />
                     Couleur
                     <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
@@ -2635,14 +2699,59 @@ export default function AgendaPage() {
                     open={colorOpen}
                     closeOnOutside={false}
                     gap={4}
-                    style={{ background: T.white, border: "none", borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}
+                    style={{ background: T.white, border: "none", borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", gap: 8 }}
                   >
                     <>
-                      <button type="button" onClick={() => { setModal({ ...modal, colorId: null }); setColorOpen(false); }} title="Par défaut" style={{ width: 24, height: 24, borderRadius: "50%", background: defaultSwatch, border: modal.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
-                      {Object.entries(GCAL_COLORS).map(([id, hex]) => (
-                        <button key={id} type="button" onClick={() => { setModal({ ...modal, colorId: id }); setColorOpen(false); }} title={`Couleur ${id}`}
-                          style={{ width: 24, height: 24, borderRadius: "50%", background: hex, border: String(modal.colorId) === id ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
-                      ))}
+                      {/* Séance importée : la portée se choisit AVANT la teinte.
+                          L'inverse (choisir puis étendre) fait passer la grille
+                          par un état qu'on n'a pas demandé. */}
+                      {feedItem && (
+                        <PeriodPills
+                          value={feedScopeChoice}
+                          onChange={setFeedScopeChoice}
+                          options={[
+                            { id: "kind", label: "Le type" },
+                            { id: "courses", label: "La matière" },
+                            { id: "events", label: "La séance" },
+                          ]}
+                          rail
+                          size={12}
+                        />
+                      )}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (feedItem) { paintFeed(feedScopeChoice, null); return; }
+                            setModal({ ...modal, colorId: null }); setColorOpen(false);
+                          }}
+                          title={feedItem ? "Couleur du type de séance" : "Par défaut"}
+                          style={{ width: 24, height: 24, borderRadius: "50%", background: defaultSwatch, border: (feedItem ? !feedHasOwn && feedScopeChoice === "events" : modal.colorId == null) ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }}
+                        />
+                        {Object.entries(GCAL_COLORS).map(([id, hex]) => (
+                          <button key={id} type="button"
+                            onClick={() => {
+                              if (feedItem) { paintFeed(feedScopeChoice, id); return; }
+                              setModal({ ...modal, colorId: id }); setColorOpen(false);
+                            }}
+                            title={`Couleur ${id}`}
+                            style={{ width: 24, height: 24, borderRadius: "50%", background: hex, border: String(modal.colorId) === id ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
+                        ))}
+                      </div>
+                      {feedItem && (
+                        <span style={{ fontSize: 11, color: T.textMut, maxWidth: 230, lineHeight: 1.45 }}>
+                          {/* Ce que la portée choisie va emporter : sans le
+                              dire, on ne sait pas si l'on repeint une séance ou
+                              tout un semestre. Et une séance importée ne se
+                              modifie pas — le flux la rendra identique. */}
+                          {feedScopeChoice === "kind"
+                            ? `Toutes les séances de type « ${feedKind ? KIND_LABELS[feedKind] : "—"} », ici comme dans les paramètres.`
+                            : feedScopeChoice === "courses"
+                              ? `Toutes les séances de « ${modal.course || modal.summary} », CM et TD compris.`
+                              : "Cette séance seule, par exception."}
+                          {" "}Seule la couleur se retouche : le reste vient de l’agenda importé.
+                        </span>
+                      )}
                     </>
                   </Popover>
                 </div>

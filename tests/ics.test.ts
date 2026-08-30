@@ -158,12 +158,24 @@ describe("lisibilité des exports ADE", () => {
     end: "2026-09-07T07:00:00.000Z",
     status: "confirmed",
     category: "",
+    course: "",
   };
 
   it("remonte la matière en tête : dans une case de grille, c'est la seule chose qu'on lit", () => {
     // L'intitulé brut commence par le type et la salle ; la matière, tout au
     // bout, est le premier mot coupé par l'ellipse.
     expect(prettifyIcsEvent(seance).summary).toBe("Anglais · TD");
+  });
+
+  it("expose la matière SEULE, à côté de l'intitulé qui la compose", () => {
+    /* « Anglais · TD » et « Anglais · CM » sont le même enseignement et deux
+       chaînes différentes : une couleur posée « sur la matière » depuis
+       l'agenda se casserait sur l'intitulé affiché. */
+    const td = prettifyIcsEvent(seance);
+    const cm = prettifyIcsEvent({ ...seance, description: seance.description.replace("Catégorie : TD", "Catégorie : CM") });
+    expect(td.course).toBe("Anglais");
+    expect(cm.course).toBe("Anglais");
+    expect(td.summary).not.toBe(cm.summary);
   });
 
   it("récupère la salle depuis la description quand LOCATION est vide", () => {
