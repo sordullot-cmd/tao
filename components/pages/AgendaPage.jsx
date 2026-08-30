@@ -5,7 +5,7 @@ import {
   Calendar as CalendarIcon,
   LogOut, AlertTriangle, Plug, Trash2, X as IconX, ExternalLink,
   Clock, MapPin, AlignLeft, Bell, ChevronDown, ChevronLeft, ChevronRight, Target, HelpCircle, Repeat,
-  Plus, CheckSquare, Square, Check, Sparkles,
+  Plus, CheckSquare, Square, Check, Sparkles, Sunrise,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
@@ -29,7 +29,13 @@ import {
   MAX_REMINDERS, normalizeReminders, remindersFromEvent,
   reminderLabel, addReminder, removeReminder,
 } from "@/lib/agendaReminders";
-import { FIELD as DA_FIELD } from "@/components/ui/form";
+import {
+  ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY,
+  DEFAULT_ANCHOR_MINUTES, DEFAULT_ANCHOR_TITLE, DEFAULT_SLEEP_MINUTES, DEFAULT_SLEEP_TITLE,
+  anchorDurationLabel, anchoredOccurrencesForRange, defaultBefore, minutesBetween, newAnchorId,
+  normalizeAnchoredBlocks, removeAnchoredBlock, upsertAnchoredBlock,
+} from "@/lib/agendaAnchoredBlocks";
+import { FIELD as DA_FIELD, DurationField } from "@/components/ui/form";
 import { HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
@@ -149,6 +155,10 @@ function blankForm(day, startTime = "09:00", endTime = "10:00") {
     colorId: null, transparency: "opaque", visibility: "default", reminders: [10],
     rpgCategories: [], // cartes Vie RPG liées (tâche) : XP à la complétion
     pendingTasks: [], // tâches Google à créer à l'enregistrement (nouvel évènement)
+    // Bloc ancré (cf. lib/agendaAnchoredBlocks) : cochée, la case fait de la
+    // saisie un bloc local répété chaque jour au lieu d'un évènement Google.
+    // La durée est reprise de la plage dessinée au moment où on coche.
+    anchored: false, anchorId: null, anchorMinutes: DEFAULT_ANCHOR_MINUTES, anchorMode: "morning", anchorBefore: "", anchorGap: 0,
   };
 }
 
@@ -561,6 +571,10 @@ export default function AgendaPage() {
   const rpgCategories = Array.isArray(rpgState.categories) ? rpgState.categories : DEFAULT_CATEGORIES;
   const [taskRpg, setTaskRpg] = useCloudState(TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY, {});
   const [eventTaskLinks, setEventTaskLinks] = useCloudState(EVENT_TASK_LINKS_KEY, "event_task_links", {}); // évènement → ids de tâches Google
+  // Blocs ancrés : « réveil + préparation » et consorts, qui se posent chaque
+  // jour juste avant le premier élément. Locaux — Google ne saurait pas quoi
+  // faire d'un évènement dont l'heure est un calcul (cf. lib/agendaAnchoredBlocks).
+  const [anchoredStore, setAnchoredStore] = useCloudState(ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY, []);
   const [modalTab, setModalTab] = React.useState("event"); // vue interne du modal évènement : "event" | "tasks"
   const [taskDraft, setTaskDraft] = React.useState(""); // saisie d'ajout de tâche
   const [loading, setLoading] = React.useState(false);
@@ -737,6 +751,8 @@ export default function AgendaPage() {
   // Les tâches avec une heure enregistrée se positionnent ainsi dans le
   // calendrier à leur horaire (layoutDay ne garde que les items horodatés) ;
   // elles restent aussi affichées dans la rangée du haut via `tasksByDay`.
+  const anchoredBlocks = React.useMemo(() => normalizeAnchoredBlocks(anchoredStore), [anchoredStore]);
+
   const eventsByDay = React.useMemo(() => {
     const map = new Map();
     for (const ev of [...allEvents, ...taskItems]) {
@@ -745,11 +761,26 @@ export default function AgendaPage() {
       if (!map.has(k)) map.set(k, []);
       map.get(k).push(ev);
     }
+    /* Les blocs ancrés se calculent APRÈS le regroupement : leur fin est
+       l'heure du premier élément de la journée — celle du jour même le matin,
+       celle du lendemain le soir. On balaie donc toute la plage chargée et pas
+       seulement les jours qui ont quelque chose : un dimanche vide porte quand
+       même la nuit qui mène au lundi matin. */
+    if (anchoredBlocks.length) {
+      const dayKeys = [];
+      for (let d = startOfDay(range.start); d < range.end; d = addDays(d, 1)) dayKeys.push(dateKey(d));
+      const placed = anchoredOccurrencesForRange(anchoredBlocks, dayKeys, map);
+      for (const [k, occ] of placed) {
+        if (!occ.length) continue;
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(...occ);
+      }
+    }
     for (const arr of map.values()) {
       arr.sort((a, b) => (a.allDay === b.allDay ? String(a.start).localeCompare(String(b.start)) : a.allDay ? -1 : 1));
     }
     return map;
-  }, [allEvents, taskItems]);
+  }, [allEvents, taskItems, anchoredBlocks, range]);
 
   const today = startOfDay(new Date());
   const todayKey = dateKey(today);
@@ -816,6 +847,26 @@ export default function AgendaPage() {
   const openCreate = (day, startTime, endTime) => { setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft(""); setModal(blankForm(day || cursor, startTime, endTime)); };
   const openEdit = (item) => {
     setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft("");
+    /* Bloc ancré : l'occurrence cliquée sert de brouillon (titre, couleur, et
+       les heures de CE jour). Seule la durée en sortira — la date affichée n'est
+       qu'un exemple, celui du jour qu'on regarde. */
+    if (item.isAnchored) {
+      /* Les heures de l'occurrence ne diraient pas la vérité : une nuit est
+         coupée à minuit, et le morceau qu'on a cliqué ne dure pas la nuit. On
+         relit donc le bloc lui-même. */
+      const block = anchoredBlocks.find((b) => b.id === item.anchorId);
+      setModal({
+        ...formFromEvent(item),
+        id: item.anchorId, anchored: true, anchorId: item.anchorId,
+        summary: block?.summary ?? item.summary,
+        colorId: block?.colorId ?? item.colorId ?? null,
+        anchorMinutes: block?.minutes ?? DEFAULT_ANCHOR_MINUTES,
+        anchorMode: block?.anchor === "evening" ? "evening" : "morning",
+        anchorBefore: block?.before || "",
+        anchorGap: block?.gap ?? 0,
+      });
+      return;
+    }
     const base = item.isGTask ? formFromTaskItem(item, taskTimes) : formFromEvent(item);
     if (item.isGTask) base.rpgCategories = taskRpg[item.id]?.categories || [];
     setModal(base);
@@ -970,6 +1021,10 @@ export default function AgendaPage() {
   const startResize = (e, ev, d, edge) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (isLocked(ev)) return;
+    // Un bloc ancré n'a pas d'heure à soi : l'allonger par le bord déplacerait
+    // une position qui sera recalculée à la seconde suivante. Sa durée s'édite
+    // dans le modal.
+    if (ev.isAnchored) return;
     e.preventDefault();
     e.stopPropagation();
     const colEl = e.currentTarget.closest("[data-daycol]");
@@ -1047,6 +1102,7 @@ export default function AgendaPage() {
   const startMove = (e, ev, d) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (isLocked(ev)) { openEdit(ev); return; }
+    if (ev.isAnchored) { openEdit(ev); return; }
     e.preventDefault();
     const colEl = e.currentTarget.closest("[data-daycol]");
     if (!colEl) return;
@@ -1131,6 +1187,31 @@ export default function AgendaPage() {
     setSaving(true);
     setModalError(null);
     try {
+      /* Bloc ancré : rien ne part chez Google. On ne retient que le titre, la
+         couleur et la DURÉE lue dans les deux champs d'heure — l'heure de début
+         sera recalculée chaque jour. */
+      if (modal.anchored) {
+        setAnchoredStore((prev) => {
+          const list = normalizeAnchoredBlocks(prev);
+          const existing = modal.anchorId ? list.find((b) => b.id === modal.anchorId) : null;
+          const evening = modal.anchorMode === "evening";
+          return upsertAnchoredBlock(list, {
+            // Les réglages fins (jours, heure limite, marge…) vivent dans
+            // Réglages → Agendas : on repart de ceux du bloc pour ne pas les
+            // écraser en changeant un titre ici.
+            ...(existing || {}),
+            id: modal.anchorId || newAnchorId(),
+            summary: String(modal.summary || "").trim() || (evening ? DEFAULT_SLEEP_TITLE : DEFAULT_ANCHOR_TITLE),
+            minutes: modal.anchorMinutes,
+            colorId: modal.colorId || null,
+            anchor: evening ? "evening" : "morning",
+            before: modal.anchorBefore || "",
+            gap: modal.anchorGap || 0,
+          });
+        });
+        setModal(null);
+        return;
+      }
       if (modal.kind === "task" || modalTab === "tasks") {
         const payload = taskPayloadFromForm(modal);
         // On édite une tâche existante seulement si le modal porte déjà une tâche ;
@@ -1223,6 +1304,12 @@ export default function AgendaPage() {
   };
 
   const removeModal = async () => {
+    if (modal?.anchored) {
+      // Purement local : pas d'appel réseau, donc pas d'état « en cours ».
+      setAnchoredStore((prev) => removeAnchoredBlock(normalizeAnchoredBlocks(prev), modal.anchorId));
+      setModal(null);
+      return;
+    }
     if (!modal?.id) return;
     setSaving(true);
     setModalError(null);
@@ -1624,6 +1711,9 @@ export default function AgendaPage() {
                               <TaskCircle done={ev.done} onToggle={(e) => { e.stopPropagation(); onToggleDone(ev); }} />
                             </span>
                           )}
+                          {/* Le bloc ancré se signale : il n'a pas d'heure à lui,
+                              et rien d'autre dans la grille ne bouge tout seul. */}
+                          {ev.isAnchored && <Sunrise size={11} strokeWidth={2.2} color={txtCol} style={{ flexShrink: 0 }} />}
                           <span style={{ fontSize: 10, fontWeight: 600, color: txtCol, textDecoration: ev.isTask && ev.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.summary}</span>
                         </span>
                         {compact
@@ -1825,13 +1915,32 @@ export default function AgendaPage() {
   }
 
   return (
-    /* `flex: 1` dans la colonne de la coquille plutôt qu'une hauteur mesurée :
-       la page occupe la fenêtre quand son contenu est court, et grandit quand il
-       déborde. Rien à recalculer quand l'en-tête change de hauteur — c'était le
-       défaut de la mesure en JavaScript, juste à l'instant où on la prend et
-       fausse ensuite. Et surtout : hauteur DÉFINIE, donc l'en-tête reste en
-       place pendant que la grille défile en dessous. */
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)" }} className="anim-1">
+    /* Hauteur FIXE sur desktop : l'agenda est une vue d'application, pas un
+       document. Sa barre de navigation et l'en-tête des jours doivent rester à
+       l'écran pendant qu'on parcourt les heures — donc c'est la grille qui
+       défile, pas la page.
+       On se cale en `position: absolute` sur le conteneur scrollable de la
+       coquille (il est en `position: relative`, cf. DashboardNew) plutôt que de
+       faire descendre une hauteur de parent en parent : chaque étage de la
+       chaîne — pourcentage, `min-height`, item flex — est une occasion pour la
+       hauteur de redevenir « auto » sans prévenir, et c'est exactement ce qui
+       laissait toute la page défiler. Les décalages reprennent les variables de
+       gouttière de la coquille : rien ne bouge à l'écran.
+       Sur mobile, la coquille rend son conteneur non scrollable (cf. globals) et
+       c'est la page entière qui défile : on y reste dans le flux. */
+    <div
+      className="anim-1"
+      style={{
+        display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)",
+        ...(isMobile ? { minHeight: "100%" } : {
+          position: "absolute",
+          top: "var(--page-pad-top, 14px)",
+          bottom: "var(--page-pad-bottom, 24px)",
+          left: "var(--content-left, 40px)",
+          right: "var(--page-gutter, 40px)",
+        }),
+      }}
+    >
       {header}
       {/* `minHeight: 0` borne le corps à la place restante : c'est la grille qui
           défile, sous l'en-tête des jours épinglé, et la barre de navigation
@@ -1842,7 +1951,10 @@ export default function AgendaPage() {
       <div
         style={{
           flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0,
-          minHeight: (!isMobile && view === "year") ? undefined : 0,
+          minHeight: (isMobile || view !== "year") ? 0 : undefined,
+          // La vue année est plus haute qu'un écran : puisque la page ne défile
+          // plus, elle défile pour son compte.
+          overflowY: (!isMobile && view === "year") ? "auto" : undefined,
           // Cf. `BODY_PULL` : ce qu'il faut rendre pour finir sur la ligne de la
           // barre latérale, que la vue tienne dans l'écran ou qu'elle défile.
           marginBottom: -BODY_PULL,
@@ -1899,7 +2011,11 @@ export default function AgendaPage() {
                   (le mode Tâche affiche date limite + masque la récurrence).
                 - Tâche autonome (édition d'une Google Task) : simple libellé. */}
             <div style={{ display: "flex", gap: 6, padding: "12px 24px 4px 58px", alignItems: "center", flexWrap: "wrap" }}>
-              {modal.kind === "event" ? (
+              {/* Bloc ancré : ni évènement Google ni tâche, la bascule n'aurait
+                  rien à basculer — on annonce simplement ce qu'on édite. */}
+              {modal.anchored ? (
+                <span style={{ minHeight: 28, padding: "5px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600, background: `color-mix(in srgb, ${T.blue} 10%, transparent)`, color: T.blue }}>{(modal.anchorMode || "morning") === "evening" ? "Bloc du soir" : "Bloc du matin"}</span>
+              ) : modal.kind === "event" ? (
                 [{ k: "event", label: "Événement" }, { k: "tasks", label: "Tâche" }].map(({ k, label }) => {
                   const active = modalTab === k;
                   return (
@@ -1925,8 +2041,33 @@ export default function AgendaPage() {
             <div style={{ padding: "8px 24px 6px" }}>
               <>
               {/* Date / heures — résumé lisible, éditable au clic */}
-              <FormRow icon={Clock} top={timeEdit}>
-                {!timeEdit ? (
+              <FormRow icon={Clock} top={timeEdit || modal.anchored}>
+                {/* Un bloc ancré n'a ni date ni heure de début : les deux se
+                    déduisent du jour affiché. Il ne reste qu'une durée — et un
+                    champ « durée » vaut mieux que deux heures dont on jetterait
+                    la position (une nuit de sommeil finit d'ailleurs le
+                    lendemain, ce que deux heures ne savent pas dire). */}
+                {modal.anchored ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 14, color: T.text, width: 52 }}>Durée</span>
+                      <DurationField minutes={modal.anchorMinutes} onChange={(v) => setModal({ ...modal, anchorMinutes: v })} />
+                    </div>
+                    {/* L'écart : rien n'oblige un bloc à être collé à son ancre.
+                        « Une heure de sport qui finit 5 min avant le premier
+                        cours » ne se dit pas autrement, l'ancre bougeant tous
+                        les jours. */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 14, color: T.text, width: 52 }}>Écart</span>
+                      <DurationField minutes={modal.anchorGap || 0} max={12 * 60} onChange={(v) => setModal({ ...modal, anchorGap: v })} />
+                      <span style={{ fontSize: 12, color: T.textMut }}>
+                        avant {modal.anchorBefore
+                          ? `« ${anchoredBlocks.find((b) => b.id === modal.anchorBefore)?.summary || "le bloc suivant"} »`
+                          : modal.anchorMode === "evening" ? "le réveil du lendemain" : "le 1ᵉʳ évènement du jour"}
+                      </span>
+                    </div>
+                  </div>
+                ) : !timeEdit ? (
                   <button type="button" onClick={() => setTimeEdit(true)}
                     style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", padding: "2px 0", width: "100%" }}>
                     <div style={{ fontSize: 14, color: T.text, display: "flex", alignItems: "baseline", gap: 24, flexWrap: "wrap" }}>
@@ -1978,8 +2119,121 @@ export default function AgendaPage() {
                 )}
               </FormRow>
 
-              {/* Récurrence (évènements uniquement — masquée en mode tâche) */}
-              {!(modal.kind === "task" || modalTab === "tasks") && (
+              {/* Bloc ancré — « réveil + préparation », « sommeil »… La case ne
+                  s'offre qu'à la création, ou sur un bloc déjà ancré :
+                  convertir un évènement Google déjà enregistré voudrait dire le
+                  supprimer là-bas, et ce n'est pas une chose à faire dans le dos
+                  de quelqu'un. */}
+              {!(modal.kind === "task" || modalTab === "tasks") && (!modal.id || modal.anchored) && (
+                <FormRow icon={Sunrise} top={modal.anchored}>
+                  <button type="button"
+                    onClick={() => {
+                      setModalTab("event"); setTimeEdit(false);
+                      setModal({
+                        ...modal, anchored: !modal.anchored, allDay: false,
+                        // À la première coche, la durée est celle de la plage
+                        // qu'on venait de dessiner dans la grille.
+                        anchorMinutes: modal.anchored ? modal.anchorMinutes : minutesBetween(modal.startTime, modal.endTime),
+                        anchorBefore: modal.anchored ? modal.anchorBefore : defaultBefore(anchoredBlocks, modal.anchorMode || "morning"),
+                      });
+                    }}
+                    style={{
+                      ...pillBtn, alignSelf: "flex-start",
+                      background: modal.anchored ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : T.white,
+                      borderColor: modal.anchored ? `color-mix(in srgb, ${T.blue} 33%, transparent)` : T.border,
+                      color: modal.anchored ? T.blue : T.text,
+                      fontWeight: 500,
+                    }}>
+                    <span style={{
+                      width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0,
+                      border: `1.5px solid ${modal.anchored ? T.blue : T.textMut}`,
+                      background: modal.anchored ? T.blue : "transparent",
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      color: T.onSolid, fontSize: 10, lineHeight: 1,
+                    }}>{modal.anchored ? "✓" : ""}</span>
+                    Bloc qui se cale tout seul
+                  </button>
+                  {modal.anchored && (
+                    <>
+                      {/* Les deux ancres. Le soir n'est pas « le matin à
+                          l'envers » : il se calcule depuis le réveil du
+                          LENDEMAIN, ce qui est la seule façon d'obtenir une
+                          nuit de durée constante. */}
+                      <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                        {[
+                          { id: "morning", label: "Avant le 1ᵉʳ évènement du jour" },
+                          { id: "evening", label: "Avant le réveil du lendemain" },
+                        ].map((m) => {
+                          const on = (modal.anchorMode || "morning") === m.id;
+                          return (
+                            <button key={m.id} type="button"
+                              onClick={() => setModal({
+                                ...modal, anchorMode: m.id,
+                                /* Un bloc du soir tout neuf est presque toujours
+                                   une nuit : on propose 8 h plutôt que la durée
+                                   d'un réveil. Sur un bloc déjà enregistré, on
+                                   ne touche à rien. */
+                                anchorMinutes: modal.anchorId
+                                  ? modal.anchorMinutes
+                                  : m.id === "evening" ? DEFAULT_SLEEP_MINUTES : DEFAULT_ANCHOR_MINUTES,
+                                // Deuxième bloc du mode : il se range derrière
+                                // le précédent (lire avant de dormir).
+                                anchorBefore: modal.anchorId ? modal.anchorBefore : defaultBefore(anchoredBlocks, m.id),
+                              })}
+                              style={{
+                                ...pillBtn,
+                                background: on ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : T.white,
+                                borderColor: on ? `color-mix(in srgb, ${T.blue} 33%, transparent)` : T.border,
+                                color: on ? T.blue : T.text, fontWeight: 500,
+                              }}>
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {/* À quoi il se colle. Le choix n'apparaît que s'il y a
+                          autre chose à désigner que l'ancre naturelle — sinon
+                          c'est une liste à une entrée. */}
+                      {(() => {
+                        const mode = modal.anchorMode || "morning";
+                        const famille = anchoredBlocks.filter((b) => b.anchor === mode && b.id !== modal.anchorId);
+                        if (!famille.length) return null;
+                        return (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 12, color: T.textMut }}>Se pose juste avant</span>
+                            <select value={modal.anchorBefore || ""}
+                              onChange={(e) => setModal({ ...modal, anchorBefore: e.target.value })}
+                              style={{ ...DA_FIELD, width: "auto", fontSize: 12, padding: "7px 12px", cursor: "pointer" }}>
+                              <option value="">{mode === "evening" ? "le réveil du lendemain" : "le 1ᵉʳ évènement du jour"}</option>
+                              {famille.map((b) => <option key={b.id} value={b.id}>{b.summary}</option>)}
+                            </select>
+                          </div>
+                        );
+                      })()}
+                      <div style={{ fontSize: 12, color: T.textMut, marginTop: 6, lineHeight: 1.45 }}>
+                        {(() => {
+                          const mode = modal.anchorMode || "morning";
+                          const cible = modal.anchorBefore
+                            ? anchoredBlocks.find((b) => b.id === modal.anchorBefore)
+                            : null;
+                          const duree = anchorDurationLabel(modal.anchorMinutes);
+                          const ecart = modal.anchorGap ? `${anchorDurationLabel(modal.anchorGap)} avant` : "au début de";
+                          if (cible) return `${duree} qui se terminent ${ecart} « ${cible.summary} », lui-même calé sur ${mode === "evening" ? "le réveil du lendemain" : "le premier élément de la journée"}.`;
+                          const fin = modal.anchorGap ? `${anchorDurationLabel(modal.anchorGap)} avant` : "à l'heure";
+                          return mode === "evening"
+                            ? `Chaque soir, ${duree} qui se terminent ${fin} du réveil du lendemain — le premier bloc du matin, sinon le premier évènement. La nuit se coupe à minuit et s'affiche sur les deux journées.`
+                            : `Chaque jour, ${duree} qui se terminent ${fin} du premier élément de la journée.`;
+                        })()}
+                        {" "}Jours, réveil au plus tard et marge se règlent dans Réglages → Agendas.
+                      </div>
+                    </>
+                  )}
+                </FormRow>
+              )}
+
+              {/* Récurrence (évènements uniquement — masquée en mode tâche, et
+                  sur un bloc ancré : « chaque jour » est déjà sa règle) */}
+              {!(modal.kind === "task" || modalTab === "tasks" || modal.anchored) && (
                 <FormRow icon={Repeat}>
                   <div ref={recurAnchor} data-menu-root style={{ position: "relative" }}>
                     <button type="button" onClick={() => { setRecurOpen((o) => !o); setColorOpen(false); setRemindOpen(false); }} style={pillBtn}>
@@ -2087,8 +2341,12 @@ export default function AgendaPage() {
                 </FormRow>
               )}
 
-              {/* Lieu (évènement) / Date limite (tâche) */}
-              {(modal.kind === "task" || modalTab === "tasks") ? (
+              {/* Lieu (évènement) / Date limite (tâche). Masqué sur un bloc
+                  ancré, comme la description, les notifications et les objectifs :
+                  le bloc ne retient que son titre, sa durée et sa couleur, et
+                  proposer des champs qu'on jetterait à l'enregistrement serait
+                  un mensonge poli. */}
+              {!modal.anchored && ((modal.kind === "task" || modalTab === "tasks") ? (
                 <FormRow icon={Target}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 14, color: T.textMut }}>Date limite</span>
@@ -2106,12 +2364,14 @@ export default function AgendaPage() {
                 <FormRow icon={MapPin}>
                   <input value={modal.location} onChange={(e) => setModal({ ...modal, location: e.target.value })} placeholder="Ajouter un lieu" style={rowInp} />
                 </FormRow>
-              )}
+              ))}
 
               {/* Description */}
-              <FormRow icon={AlignLeft} top>
-                <textarea value={modal.description} onChange={(e) => setModal({ ...modal, description: e.target.value })} placeholder="Ajouter une description" rows={2} style={{ ...rowInp, resize: "vertical", display: "block", lineHeight: 1.4, verticalAlign: "top" }} />
-              </FormRow>
+              {!modal.anchored && (
+                <FormRow icon={AlignLeft} top>
+                  <textarea value={modal.description} onChange={(e) => setModal({ ...modal, description: e.target.value })} placeholder="Ajouter une description" rows={2} style={{ ...rowInp, resize: "vertical", display: "block", lineHeight: 1.4, verticalAlign: "top" }} />
+                </FormRow>
+              )}
 
               {/* Couleur */}
               <FormRow icon={CalendarIcon}>
@@ -2142,7 +2402,9 @@ export default function AgendaPage() {
               {/* Notifications — plusieurs rappels possibles sur le même item.
                   Les rappels retenus sont affichés en pastilles retirables : sans
                   ça, un menu à cases cochées oblige à l'ouvrir pour savoir ce qui
-                  est programmé. */}
+                  est programmé. Un bloc ancré n'en a pas : on notifierait une
+                  heure qui aura bougé avant la notification. */}
+              {!modal.anchored && (
               <FormRow icon={Bell} top>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
                   {reminderList.length === 0 && (
@@ -2235,10 +2497,12 @@ export default function AgendaPage() {
                   </div>
                 </div>
               </FormRow>
+              )}
 
               {/* Objectifs de l'année (cartes de la Quête de soi). Pour une tâche :
                   la terminer fait progresser chaque objectif lié. Pour un évènement :
                   aucun XP, la sélection sert seulement à reprendre sa couleur. */}
+              {!modal.anchored && (
               <FormRow icon={Sparkles} top>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 500, color: T.textSub, marginBottom: 8 }}>
@@ -2274,6 +2538,7 @@ export default function AgendaPage() {
                     )}
                   </div>
                 </FormRow>
+              )}
               </>
 
               {modalError && (

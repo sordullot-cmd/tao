@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Sparkles,
+  Sunrise,
+  Moon,
   Trash2,
   Download,
   Upload,
@@ -41,6 +43,14 @@ import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { useIcsFeeds, probeFeed } from "@/lib/hooks/useIcsFeeds";
 import { KIND_LABELS, courseColor } from "@/lib/icsCategories";
+import { GCAL_COLORS } from "@/lib/gcalColors";
+import { DurationField } from "@/components/ui/form";
+import {
+  ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY, ALL_DAYS,
+  DEFAULT_ANCHOR_MINUTES, DEFAULT_ANCHOR_TITLE, DEFAULT_SLEEP_MINUTES, DEFAULT_SLEEP_TITLE,
+  MAX_ANCHOR_MINUTES, anchorDurationLabel, defaultBefore, newAnchorId,
+  normalizeAnchoredBlocks, removeAnchoredBlock, upsertAnchoredBlock,
+} from "@/lib/agendaAnchoredBlocks";
 
 // Clés locales absentes de BaseT mappées sur des tokens dark-aware.
 const T = { ...BaseT, panel: BaseT.accentBg, borderHover: BaseT.border2 };
@@ -1153,6 +1163,8 @@ function CalendarsSection() {
         </Card>
       )}
 
+      <AnchoredBlocksCard />
+
       {!connected && feeds.length === 0 && (
         <Card>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -1165,6 +1177,233 @@ function CalendarsSection() {
         </Card>
       )}
     </>
+  );
+}
+
+/* =================== BLOCS QUOTIDIENS DE L'AGENDA =================== */
+
+/* Les blocs qui n'ont pas d'heure à eux : « réveil + préparation » se termine
+   au premier évènement du jour, « sommeil » se termine au réveil du lendemain.
+   Ils se créent depuis le modal de l'agenda ; c'est ici qu'on règle QUAND ils
+   ont le droit de se poser — le modal ne porte que le titre, la durée et la
+   couleur, qui suffisent à en créer un sans lire une page de réglages. */
+
+const ANCHOR_WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
+const ANCHOR_WEEKDAYS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+
+function AnchoredBlocksCard() {
+  const [store, setStore] = useCloudState(ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY, []);
+  const blocks = normalizeAnchoredBlocks(store);
+
+  const patch = (id, changes) => setStore((prev) => {
+    const list = normalizeAnchoredBlocks(prev);
+    const found = list.find((b) => b.id === id);
+    return found ? upsertAnchoredBlock(list, { ...found, ...changes }) : list;
+  });
+  const add = (anchor) => setStore((prev) => {
+    const list = normalizeAnchoredBlocks(prev);
+    return upsertAnchoredBlock(list, {
+      id: newAnchorId(),
+      summary: anchor === "evening" ? DEFAULT_SLEEP_TITLE : DEFAULT_ANCHOR_TITLE,
+      minutes: anchor === "evening" ? DEFAULT_SLEEP_MINUTES : DEFAULT_ANCHOR_MINUTES,
+      colorId: null,
+      anchor,
+      // Le deuxième bloc d'un mode se range derrière le premier : « lecture »
+      // ajoutée après « sommeil » se pose juste avant lui.
+      before: defaultBefore(list, anchor),
+    });
+  });
+  const remove = (id) => setStore((prev) => removeAnchoredBlock(normalizeAnchoredBlocks(prev), id));
+
+  return (
+    <Card>
+      <CardHeader
+        title="Blocs quotidiens"
+        subtitle="Des blocs sans heure fixe : ils se posent avant le premier évènement de la journée, ou avant le réveil du lendemain pour une nuit de durée constante."
+      />
+      {blocks.length === 0 ? (
+        <p style={{ fontSize: 12, color: T.textSub, margin: "0 0 16px", lineHeight: 1.6 }}>
+          {"Aucun bloc. Ajoute-en un ici, ou coche « Bloc qui se cale tout seul » en créant un évènement dans l'agenda."}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
+          {blocks.map((b) => (
+            <AnchoredBlockRow key={b.id} block={b} blocks={blocks} onPatch={(c) => patch(b.id, c)} onRemove={() => remove(b.id)} />
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <SecondaryButton onClick={() => add("morning")} icon={Sunrise}>Bloc du matin</SecondaryButton>
+        <SecondaryButton onClick={() => add("evening")} icon={Moon}>Bloc du soir</SecondaryButton>
+      </div>
+    </Card>
+  );
+}
+
+/** « Écart avant … » : ce que le bloc vise, dit avec les mots de son réglage. */
+function cibleLabel(block, cible, evening, ecart) {
+  const quoi = cible ? `« ${cible.summary} »` : evening ? "le réveil" : "le 1ᵉʳ évènement";
+  return ecart ? `Écart avant ${quoi}` : quoi;
+}
+
+function AnchoredBlockRow({ block, blocks, onPatch, onRemove }) {
+  const evening = block.anchor === "evening";
+  // Les autres blocs du même mode : les seuls auxquels celui-ci peut se coller.
+  const famille = blocks.filter((b) => b.anchor === block.anchor && b.id !== block.id);
+  const cible = block.before ? famille.find((b) => b.id === block.before) : null;
+  const off = !block.enabled;
+  const timeInput = { ...DA_FIELD, width: 118, padding: "7px 12px", fontSize: 12 };
+
+  return (
+    <div style={{
+      border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", padding: 14,
+      display: "flex", flexDirection: "column", gap: 12,
+      // Éteint : le bloc reste lisible mais ne prétend plus agir.
+      opacity: off ? 0.55 : 1,
+    }}>
+      {/* Titre + interrupteur + suppression */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          value={block.summary}
+          onChange={(e) => onPatch({ summary: e.target.value })}
+          placeholder={evening ? DEFAULT_SLEEP_TITLE : DEFAULT_ANCHOR_TITLE}
+          style={{ ...DA_FIELD, flex: 1, minWidth: 0 }}
+        />
+        <button type="button" onClick={() => onPatch({ enabled: off })}
+          title={off ? "Activer ce bloc" : "Désactiver sans le supprimer"}
+          style={{
+            padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", cursor: "pointer",
+            fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+            background: off ? DA_FIELD_BG : `color-mix(in srgb, ${T.green} 14%, transparent)`,
+            color: off ? T.textMut : T.green,
+          }}>
+          {off ? "Éteint" : "Actif"}
+        </button>
+        <DeleteIconButton ariaLabel="Supprimer ce bloc" onClick={onRemove} />
+      </div>
+
+      {/* Ancre : c'est elle qui décide de tout le reste du calcul. */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {[
+          { id: "morning", label: "Avant le 1ᵉʳ évènement du jour" },
+          { id: "evening", label: "Avant le réveil du lendemain" },
+        ].map((m) => {
+          const on = block.anchor === m.id;
+          return (
+            <button key={m.id} type="button" onClick={() => onPatch({ anchor: m.id, before: "" })}
+              style={{
+                padding: "8px 16px", minHeight: 34, borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
+                fontSize: 12, fontWeight: 500, border: "none",
+                background: on ? T.text : DA_FIELD_BG, color: on ? T.white : T.text,
+              }}>
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {famille.length > 0 && (
+        <div>
+          <SectionLabel>Se pose juste avant</SectionLabel>
+          <select value={block.before} onChange={(e) => onPatch({ before: e.target.value })}
+            style={{ ...DA_FIELD, width: "auto", minWidth: 220, fontSize: 12, padding: "7px 12px", cursor: "pointer" }}>
+            <option value="">{evening ? "le réveil du lendemain" : "le 1ᵉʳ évènement du jour"}</option>
+            {famille.map((b) => <option key={b.id} value={b.id}>{b.summary}</option>)}
+          </select>
+          <div style={{ fontSize: 11, color: T.textMut, lineHeight: 1.5, marginTop: 6 }}>
+            {"Une chaîne : « lecture » avant « sommeil » avant le réveil. Le jour où le bloc désigné ne se pose pas, celui-ci non plus."}
+          </div>
+        </div>
+      )}
+
+      <SectionLabel>Jours</SectionLabel>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {ANCHOR_WEEKDAYS.map((lbl, i) => {
+          const on = block.days.includes(i);
+          return (
+            <button key={i} type="button" title={ANCHOR_WEEKDAYS_FULL[i]}
+              onClick={() => {
+                const next = on ? block.days.filter((d) => d !== i) : [...block.days, i].sort((a, c) => a - c);
+                // Zéro jour coché voudrait dire « jamais », ce qu'on dit déjà
+                // avec l'interrupteur : on rend la semaine entière.
+                onPatch({ days: next.length ? next : ALL_DAYS });
+              }}
+              style={{
+                width: 34, height: 34, borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "inherit",
+                fontSize: 12, fontWeight: 600,
+                background: on ? T.text : DA_FIELD_BG, color: on ? T.white : T.textMut,
+              }}>
+              {lbl}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+        <div>
+          <SectionLabel>Durée</SectionLabel>
+          <DurationField minutes={block.minutes} max={MAX_ANCHOR_MINUTES} onChange={(v) => onPatch({ minutes: v })} />
+        </div>
+        <div>
+          {/* L'écart : ce qui reste libre entre la fin du bloc et son ancre.
+              Zéro colle, et c'est le cas courant — mais un bloc peut vouloir
+              finir un quart d'heure avant, sans pour autant s'accrocher à une
+              heure fixe. */}
+          <SectionLabel>{cibleLabel(block, cible, evening, true)}</SectionLabel>
+          <DurationField minutes={block.gap} max={12 * 60} onChange={(v) => onPatch({ gap: v })} />
+        </div>
+      </div>
+
+      <div>
+        {/* Une seule heure fait les deux métiers : elle empêche l'absurde (un
+            rendez-vous à 14 h ne justifie pas un réveil à 13 h 15) ET pose le
+            bloc les jours où il n'y a rien à suivre. */}
+        <SectionLabel>{evening ? "Coucher au plus tard" : "Réveil au plus tard"}</SectionLabel>
+        <input type="time" value={block.maxStart} onChange={(e) => onPatch({ maxStart: e.target.value })} style={timeInput} />
+        <div style={{ fontSize: 11, color: T.textMut, lineHeight: 1.5, marginTop: 6 }}>
+          {evening
+            ? "La nuit s'allonge plutôt que de commencer au milieu de la nuit quand le lendemain démarre tard ; sa fin reste le réveil. Vide = aucune limite."
+            : "Le bloc ne commence jamais après cette heure : premier évènement trop tard, ou journée vide, il s'y pose quand même — 9 h ici veut dire « debout à 9 h au plus tard ». Vide : le bloc reste collé au premier évènement et ne s'affiche pas les jours sans rien."}
+        </div>
+      </div>
+
+      <SectionLabel>Couleur</SectionLabel>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" onClick={() => onPatch({ colorId: null })} title="Par défaut"
+          style={{ width: 24, height: 24, borderRadius: "50%", background: DA_FIELD_BG, border: block.colorId == null ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
+        {Object.entries(GCAL_COLORS).map(([id, hex]) => (
+          <button key={id} type="button" onClick={() => onPatch({ colorId: id })} title={`Couleur ${id}`}
+            style={{ width: 24, height: 24, borderRadius: "50%", background: hex, border: String(block.colorId) === id ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)", cursor: "pointer", padding: 0 }} />
+        ))}
+      </div>
+
+      <button type="button" onClick={() => onPatch({ countTasks: !block.countTasks })}
+        style={{
+          alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8,
+          padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", cursor: "pointer",
+          fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+          background: block.countTasks ? DA_FIELD_BG : "transparent", color: T.text,
+        }}>
+        <span style={{
+          width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0,
+          border: `1.5px solid ${block.countTasks ? T.text : T.textMut}`,
+          background: block.countTasks ? T.text : "transparent",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          color: T.white, fontSize: 10, lineHeight: 1,
+        }}>{block.countTasks ? "✓" : ""}</span>
+        Une tâche posée à une heure compte comme premier élément
+      </button>
+
+      <div style={{ fontSize: 11, color: T.textSub, lineHeight: 1.5 }}>
+        {(() => {
+          const duree = anchorDurationLabel(block.minutes);
+          const ecart = block.gap ? `, ${anchorDurationLabel(block.gap)} avant` : " au début de";
+          if (cible) return `${duree} qui se terminent${ecart} « ${cible.summary} ».`;
+          if (evening) return `${duree} qui se terminent à l'heure du réveil du lendemain (premier bloc du matin, sinon premier évènement). La nuit se coupe à minuit et s'affiche sur les deux journées.`;
+          return `${duree} qui se terminent à l'heure du premier élément de la journée.${block.maxStart ? "" : " Aucun élément ce jour-là, aucun bloc."}`;
+        })()}
+      </div>
+    </div>
   );
 }
 

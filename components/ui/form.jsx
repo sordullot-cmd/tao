@@ -278,6 +278,32 @@ export function CheckBox({ on = false, partial = false, color = T.text, size = 1
 
 /** Libellé d'un champ : 12 px atténué, jamais de capitales espacées. */
 /** @param {{ children?: import("react").ReactNode, style?: import("react").CSSProperties }} props */
+/**
+ * Durée en heures + minutes.
+ *
+ * Deux petits champs plutôt qu'un nombre de minutes : « 8 h 00 » se lit, « 480 »
+ * se calcule. Les deux moitiés éditent la MÊME valeur — passer 90 min à 2 h ne
+ * demande donc pas de vider les minutes d'abord.
+ */
+export function DurationField({ minutes, onChange, max = 16 * 60, step = 5 }) {
+  const total = Math.min(max, Math.max(0, Math.round(Number(minutes) || 0)));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  const emit = (nh, nm) => onChange(Math.min(max, Math.max(0, nh * 60 + nm)));
+  const box = { ...FIELD_SM, width: 58, textAlign: "center", padding: "6px 8px" };
+  const num = (v) => Math.max(0, Math.round(Number(v) || 0));
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <input type="number" min={0} max={Math.floor(max / 60)} value={h} aria-label="Heures"
+        onChange={(e) => emit(num(e.target.value), m)} style={box} />
+      <span style={{ fontSize: 12, color: T.textMut }}>h</span>
+      <input type="number" min={0} max={59} step={step} value={m} aria-label="Minutes"
+        onChange={(e) => emit(h, Math.min(59, num(e.target.value)))} style={box} />
+      <span style={{ fontSize: 12, color: T.textMut }}>min</span>
+    </span>
+  );
+}
+
 export function Label({ children, style = undefined }) {
   return (
     <div style={{ fontSize: 12, fontWeight: 500, color: T.text, opacity: 0.5, ...style }}>
