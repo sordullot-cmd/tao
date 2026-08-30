@@ -8,6 +8,18 @@
  * réseaux ». D'où la coche de tête de groupe, qui prend la catégorie entière —
  * c'est le geste le plus fréquent, il doit coûter un clic.
  *
+ * Dès qu'on tape, l'écran change de nature : les catégories s'effacent et
+ * laissent une liste ORDONNÉE par vraisemblance (cf. `lib/focus/search.ts`),
+ * parcourable aux flèches et validable à Entrée. C'est la façon dont on cherche
+ * une application sur un système ; la reproduire ici évite d'avoir à savoir dans
+ * quelle famille les auteurs de l'app ont rangé Discord.
+ *
+ * Ce qui est coché se voit à trois endroits, et ce n'est pas de la redondance
+ * décorative : la ligne est teintée (on le voit là où on clique), un compte
+ * figure sur la famille repliée (on le voit sans déplier), et les cibles
+ * retenues sont rappelées en pastilles au-dessus du champ (on le voit sans rien
+ * parcourir du tout). Une coche de 16 px au bout d'une ligne ne suffisait pas.
+ *
  * Le mode « seuls autorisés » inverse la liste. Il mérite son explication à
  * l'écran : c'est le seul réglage de la page dont l'effet est contre-intuitif,
  * et le seul qui tienne quand on ne sait pas d'avance par où la distraction va
@@ -15,13 +27,18 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Search, ChevronRight, AppWindow, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Search, ChevronRight, AppWindow, AlertTriangle, X, CornerDownLeft } from "lucide-react";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CheckBox, Field, Input, Modal, PillButton } from "@/components/ui/da";
-import { CATEGORIES, CATALOG, catalogOf, hostOf, newId } from "@/lib/focus/model";
+import { CATEGORIES, CATALOG_BY_ID, catalogOf, hostOf, newId } from "@/lib/focus/model";
+import { highlight, searchCatalog } from "@/lib/focus/search";
 
 const COLORS = Object.keys(PALETTE);
+
+/** Combien de résultats la recherche montre. Au-delà, la liste redevient le mur
+ *  qu'elle cherchait à remplacer, et le bas n'est plus ce qu'on visait. */
+const MAX_HITS = 8;
 
 /** Domaine nu à partir de ce qui a été tapé : on accepte une URL entière, un
  *  `www.`, un chemin — et on n'en garde que l'hôte. Sans ça, la première entrée
@@ -78,24 +95,92 @@ function AppTag({ entry }) {
   );
 }
 
-function Row({ label, sub, on, partial, color, onToggle, action, lead }) {
+/** Texte dont les lettres trouvées sont mises en avant. La graisse plutôt que
+ *  la couleur : la teinte de la liste sert déjà à dire « coché », lui donner un
+ *  second sens sur la même ligne les rendrait indistinguables. */
+function Marked({ text, ranges }) {
+  return (
+    <>
+      {highlight(text, ranges).map((part, i) => (
+        <span key={i} style={part.hit ? { fontWeight: 700, color: T.text } : undefined}>{part.text}</span>
+      ))}
+    </>
+  );
+}
+
+function Row({ label, sub, on, partial, color, onToggle, action, lead, active, onHover }) {
+  /* Trois fonds possibles, et l'ordre compte : coché l'emporte sur survolé,
+     sinon la ligne semblerait se décocher au passage de la souris. */
+  const base = on
+    ? `color-mix(in srgb, ${color} 14%, transparent)`
+    : active ? FIELD_BG : "transparent";
   return (
     <div
       onClick={onToggle}
+      onMouseEnter={onHover}
+      role={onToggle ? "button" : undefined}
+      aria-pressed={onToggle && !partial ? !!on : undefined}
       style={{
         display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: 8,
         cursor: onToggle ? "pointer" : "default", transition: "var(--tr-ui)",
+        background: base,
+        boxShadow: on ? `inset 0 0 0 1px color-mix(in srgb, ${color} 45%, transparent)` : "none",
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = FIELD_BG; }}
-      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      onMouseOver={e => { if (!on && !active) e.currentTarget.style.background = FIELD_BG; }}
+      onMouseOut={e => { e.currentTarget.style.background = base; }}
     >
       {lead}
       {onToggle && <CheckBox on={on} partial={partial} color={color} />}
-      <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{
+        flex: 1, minWidth: 0, fontSize: 13, color: T.text, fontWeight: on ? 600 : 400,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
         {label}
-        {sub && <span style={{ color: T.textMut, marginLeft: 6, fontSize: 12 }}>{sub}</span>}
+        {sub && <span style={{ color: T.textMut, marginLeft: 6, fontSize: 12, fontWeight: 400 }}>{sub}</span>}
       </span>
       {action}
+    </div>
+  );
+}
+
+/**
+ * Rappel de ce qui est retenu, au-dessus du champ.
+ *
+ * C'est la réponse à « est-ce que je l'ai vraiment cochée ? » : elle ne demande
+ * ni de déplier une famille, ni de se souvenir de la frappe qui avait sorti
+ * l'entrée. Le ✕ retire, parce que c'est là qu'on s'aperçoit d'une erreur.
+ */
+function Selected({ entries, color, onRemove }) {
+  if (!entries.length) return null;
+  return (
+    <div style={{
+      display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8,
+      maxHeight: 92, overflowY: "auto",
+    }} className="scroll-thin">
+      {entries.map(e => (
+        <span
+          key={e.key}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            fontSize: 12, color: T.text, padding: "3px 6px 3px 9px", borderRadius: 999,
+            background: `color-mix(in srgb, ${color} 16%, transparent)`,
+            boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 45%, transparent)`,
+          }}
+        >
+          {e.label}
+          <button
+            type="button"
+            onClick={() => onRemove(e)}
+            aria-label={`Retirer ${e.label}`}
+            style={{
+              background: "none", border: "none", padding: 2, cursor: "pointer",
+              color: T.textMut, display: "inline-flex", borderRadius: 999,
+            }}
+          >
+            <X size={11} />
+          </button>
+        </span>
+      ))}
     </div>
   );
 }
@@ -122,14 +207,18 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
   });
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
+  /* Ligne visée par le clavier, dans la liste des résultats. */
+  const [cursor, setCursor] = useState(0);
 
   const hue = PALETTE[color] || PALETTE.purple;
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return null;
-    return CATALOG.filter(e => e.name.toLowerCase().includes(q) || e.domains.some(d => d.includes(q)));
-  }, [query]);
+  const hits = useMemo(() => searchCatalog(query, MAX_HITS), [query]);
+
+  /* La visée repart en tête à la frappe — pas dans un effet : une lettre de plus
+     et le meilleur résultat n'est plus le même, garder l'ancien rang ferait
+     cocher autre chose que ce qu'on lit. Le remettre ici, à la source du
+     changement, évite le rendu en cascade d'un `useEffect`. */
+  const onQuery = (v) => { setQuery(v); setCursor(0); };
 
   const toggle = (id) => setItemIds(prev => {
     const next = new Set(prev);
@@ -147,15 +236,58 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
     });
   };
 
-  const addCustom = () => {
-    const t = cleanTarget(draft);
+  const addCustom = (raw) => {
+    const t = cleanTarget(raw);
     if (!t) return;
     const dupe = custom.some(c => (
       t.app ? (c.app || "").toLowerCase() === t.app.toLowerCase() : c.domain === t.domain
     ));
-    if (dupe) { setDraft(""); return; }
-    setCustom(prev => [...prev, { id: newId("c"), ...t }]);
-    setDraft("");
+    if (!dupe) setCustom(prev => [...prev, { id: newId("c"), ...t }]);
+  };
+
+  /* Le champ de recherche sait aussi ajouter : quand rien du catalogue ne
+     répond, ce qu'on vient de taper EST la cible voulue, et la faire retaper
+     douze lignes plus bas serait une punition pour avoir cherché. */
+  const orphan = useMemo(
+    () => (query.trim() && !hits.length ? cleanTarget(query) : null),
+    [query, hits.length]
+  );
+
+  const takeHit = (i) => {
+    if (orphan) { addCustom(query); onQuery(""); return; }
+    const hit = hits[i];
+    if (hit) toggle(hit.entry.id);
+  };
+
+  const onSearchKey = (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!hits.length) return;
+      setCursor(c => (c + (e.key === "ArrowDown" ? 1 : hits.length - 1)) % hits.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      takeHit(cursor);
+    } else if (e.key === "Escape" && query) {
+      /* La frappe s'efface avant la fenêtre : Échap sur un champ rempli veut
+         dire « annule ma recherche », pas « jette la liste en cours ». Marquer
+         la touche comme consommée suffit à retenir la fermeture — c'est le
+         contrat de `useEscapeDismiss`, qui ignore un événement déjà traité. */
+      e.preventDefault();
+      onQuery("");
+    }
+  };
+
+  /* Ce qui est retenu, catalogue et entrées libres confondus — c'est un seul
+     ensemble pour qui compose la liste, la provenance ne l'intéresse pas. */
+  const selected = useMemo(() => [
+    ...[...itemIds].map(id => CATALOG_BY_ID[id]).filter(Boolean)
+      .map(e => ({ key: e.id, label: e.name, kind: "catalog", id: e.id })),
+    ...custom.map(c => ({ key: c.id, label: c.domain || c.app, kind: "custom", id: c.id })),
+  ], [itemIds, custom]);
+
+  const removeSelected = (item) => {
+    if (item.kind === "catalog") toggle(item.id);
+    else setCustom(prev => prev.filter(x => x.id !== item.id));
   };
 
   const total = itemIds.size + custom.length;
@@ -286,25 +418,74 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
 
         <Field
           label="Applis et sites"
-          hint="Cocher une entrée coupe son site — et son application de bureau quand elle en a une, signalée par le repère « appli »."
+          hint="Tapez le nom : les entrées les plus probables remontent. ↑ ↓ pour viser, Entrée pour cocher. Une entrée cochée coupe son site — et son application de bureau quand elle en a une, signalée par le repère « appli »."
         >
+          <Selected entries={selected} color={hue} onRemove={removeSelected} />
+
           <div style={{ position: "relative", marginBottom: 8 }}>
             <Search size={14} color={T.textMut} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-            <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Chercher dans le catalogue" style={{ paddingLeft: 32 }} />
+            <Input
+              value={query}
+              onChange={e => onQuery(e.target.value)}
+              onKeyDown={onSearchKey}
+              placeholder="Rechercher une appli ou un site"
+              aria-label="Rechercher une appli ou un site"
+              style={{ paddingLeft: 32, paddingRight: query ? 30 : undefined }}
+            />
+            {query && (
+              <button
+                type="button" onClick={() => onQuery("")} aria-label="Effacer la recherche"
+                style={{
+                  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", padding: 4, cursor: "pointer",
+                  color: T.textMut, display: "inline-flex",
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
 
           <div style={{ maxHeight: 280, overflowY: "auto" }} className="scroll-thin">
-            {filtered ? (
-              filtered.length ? filtered.map(e => (
-                <Row
-                  key={e.id} label={e.name} sub={e.domains[0]} on={itemIds.has(e.id)}
-                  color={hue} onToggle={() => toggle(e.id)} action={<AppTag entry={e} />}
-                />
-              )) : (
-                <div style={{ fontSize: 12, color: T.textMut, padding: "10px 4px" }}>
-                  Rien dans le catalogue. Ajoutez le domaine à la main ci-dessous.
-                </div>
-              )
+            {query.trim() ? (
+              <>
+                {hits.map((h, i) => (
+                  <Row
+                    key={h.entry.id}
+                    label={<Marked text={h.entry.name} ranges={h.nameRanges} />}
+                    sub={h.sub ? <Marked text={h.sub} ranges={h.subRanges} /> : null}
+                    on={itemIds.has(h.entry.id)}
+                    active={i === cursor}
+                    onHover={() => setCursor(i)}
+                    color={hue}
+                    onToggle={() => toggle(h.entry.id)}
+                    action={
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <AppTag entry={h.entry} />
+                        {i === cursor && (
+                          <CornerDownLeft size={12} color={T.textMut} aria-hidden="true" />
+                        )}
+                      </span>
+                    }
+                  />
+                ))}
+                {orphan && (
+                  <Row
+                    label={<span>Ajouter « {orphan.domain || orphan.app} »</span>}
+                    sub={orphan.domain ? "site inconnu du catalogue" : "application — demande l'app de bureau"}
+                    on={false}
+                    active
+                    color={hue}
+                    onToggle={() => { addCustom(query); onQuery(""); }}
+                    lead={<Plus size={14} color={T.textMut} style={{ flexShrink: 0 }} />}
+                  />
+                )}
+                {!hits.length && !orphan && (
+                  <div style={{ fontSize: 12, color: T.textMut, padding: "10px 4px" }}>
+                    Rien ne correspond. Ajoutez le domaine à la main ci-dessous.
+                  </div>
+                )}
+              </>
             ) : (
               CATEGORIES.map(cat => {
                 const entries = catalogOf(cat.id);
@@ -361,11 +542,13 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
             <Input
               value={draft}
               onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustom(draft); setDraft(""); } }}
               placeholder="exemple.fr — ou Steam"
               style={{ flex: 1 }}
             />
-            <PillButton onClick={addCustom} disabled={!cleanTarget(draft)}><Plus size={14} /> Ajouter</PillButton>
+            <PillButton onClick={() => { addCustom(draft); setDraft(""); }} disabled={!cleanTarget(draft)}>
+              <Plus size={14} /> Ajouter
+            </PillButton>
           </div>
           {custom.length > 0 && (
             <div style={{ marginTop: 8 }}>

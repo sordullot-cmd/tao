@@ -412,6 +412,9 @@ export default function DailyPlannerPage() {
     return m;
   }, [rpgCategories]);
   const habitColor = (h) => {
+    // Couleur choisie à la main : elle prime sur tout le reste, y compris sur
+    // la carte rattachée — sinon rattacher une carte écraserait le choix.
+    if (h?.color) return h.color;
     for (const id of habitCategoryIds(h)) if (catColorMap[id]) return catColorMap[id];
     // Repli : couleur stable dérivée de l'id, pour qu'une habitude sans carte
     // rattachée reste colorée (et garde la même couleur d'un rendu à l'autre).
@@ -477,16 +480,21 @@ export default function DailyPlannerPage() {
   // Habit form (add + edit)
   const [habitFormOpen, setHabitFormOpen] = useState(false);
   const [editingHabitId, setEditingHabitId] = useState(null);
-  const emptyHabit = { name: "", description: "", time: "", location: "", icon: "", attributes: [], goalIds: [] };
+  const emptyHabit = { name: "", description: "", time: "", location: "", icon: "", color: "", attributes: [], goalIds: [] };
   const [habitDraft, setHabitDraft] = useState(emptyHabit);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const iconPickerAnchor = React.useRef(null);
+  /* Couleur que porterait l'habitude sans choix explicite : c'est elle que la
+     pastille « Auto » affiche, pour que « revenir à auto » se voie avant de
+     cliquer. En création l'id n'existe pas encore — 0 donne un repli stable. */
+  const autoColor = habitColor({ id: editingHabitId ?? 0, attributes: habitDraft.attributes });
+  const draftColor = habitDraft.color || autoColor;
   // Glisser-déposer du formulaire (comme le calendrier)
   const [modalPos, setModalPos] = useState({ x: 0, y: 0 });
   const [modalDragging, setModalDragging] = useState(false);
   const modalDragRef = React.useRef(null);
   const openCreateHabit = () => { setHabitDraft(emptyHabit); setEditingHabitId(null); setIconPickerOpen(false); setModalPos({ x: 0, y: 0 }); setHabitFormOpen(true); };
-  const openEditHabit = (h) => { setHabitDraft({ name: h.name, description: h.description || "", time: h.time || "", location: h.location || "", icon: h.icon || "", attributes: habitCategoryIds(h), goalIds: goalsForHabit(flatGoals, h.id).map(g => String(g.id)) }); setEditingHabitId(h.id); setIconPickerOpen(false); setModalPos({ x: 0, y: 0 }); setHabitFormOpen(true); };
+  const openEditHabit = (h) => { setHabitDraft({ name: h.name, description: h.description || "", time: h.time || "", location: h.location || "", icon: h.icon || "", color: h.color || "", attributes: habitCategoryIds(h), goalIds: goalsForHabit(flatGoals, h.id).map(g => String(g.id)) }); setEditingHabitId(h.id); setIconPickerOpen(false); setModalPos({ x: 0, y: 0 }); setHabitFormOpen(true); };
   const startModalDrag = (e) => {
     if (e.target.closest("button")) return; // pas de drag en cliquant un bouton
     e.preventDefault();
@@ -512,15 +520,18 @@ export default function DailyPlannerPage() {
     if (!nm) return;
     const desc = habitDraft.description.trim() || autoDescription(nm);
     const iconKey = habitDraft.icon && ICON_LIBRARY[habitDraft.icon] ? habitDraft.icon : "";
+    // Une couleur hors palette est refusée : la vider rend l'habitude à sa
+    // couleur automatique plutôt que de figer une valeur qu'aucun thème ne suit.
+    const color = CATEGORY_PALETTE.includes(habitDraft.color) ? habitDraft.color : "";
     const attributes = Array.isArray(habitDraft.attributes) ? habitDraft.attributes.filter(Boolean) : [];
     // L'id sert aussi aux objectifs rattachés : il faut le connaître AVANT
     // d'écrire les liens, y compris à la création.
     const habitId = editingHabitId != null ? editingHabitId : Date.now();
     if (editingHabitId) {
       // `attribute: undefined` retire l'ancien champ unique hérité (rétrocompat).
-      setHabits(prev => prev.map(h => h.id === editingHabitId ? { ...h, name: nm, description: desc, time: habitDraft.time, location: habitDraft.location.trim(), icon: iconKey, attributes, attribute: undefined } : h));
+      setHabits(prev => prev.map(h => h.id === editingHabitId ? { ...h, name: nm, description: desc, time: habitDraft.time, location: habitDraft.location.trim(), icon: iconKey, color, attributes, attribute: undefined } : h));
     } else {
-      setHabits(prev => [...prev, { id: habitId, name: nm, description: desc, time: habitDraft.time, location: habitDraft.location.trim(), icon: iconKey, attributes }]);
+      setHabits(prev => [...prev, { id: habitId, name: nm, description: desc, time: habitDraft.time, location: habitDraft.location.trim(), icon: iconKey, color, attributes }]);
     }
     syncHabitGoalLinks(habitId, habitDraft.goalIds);
     setHabitFormOpen(false); setHabitDraft(emptyHabit); setEditingHabitId(null); setIconPickerOpen(false);
@@ -719,7 +730,7 @@ export default function DailyPlannerPage() {
                       <button type="button" onClick={() => setIconPickerOpen((o) => !o)} style={pillBtn}>
                         {(() => {
                           const PreviewIco = habitDraft.icon && ICON_LIBRARY[habitDraft.icon] ? ICON_LIBRARY[habitDraft.icon] : autoIcon(habitDraft.name?.trim() || "");
-                          return <PreviewIco size={16} strokeWidth={1.9} color={T.text} />;
+                          return <PreviewIco size={16} strokeWidth={1.9} color={draftColor} />;
                         })()}
                         {habitDraft.icon ? "Icône choisie" : "Icône · auto"}
                         <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
@@ -781,6 +792,42 @@ export default function DailyPlannerPage() {
                           </div>
                         </>
                       </Popover>
+                    </div>
+                  </div>
+
+                  {/* Couleur — pastille d'icône et case à cocher de la liste */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 500, color: T.textSub, display: "block", marginBottom: 6 }}>
+                      Couleur <span style={{ color: T.textMut, fontWeight: 400 }}>· optionnel</span>
+                    </label>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                      {/* « Auto » n'est pas une couleur de plus : c'est le retour
+                          à la carte rattachée (ou au repli dérivé de l'id). La
+                          pastille montre donc la couleur qui s'appliquerait. */}
+                      <button type="button" onClick={() => setHabitDraft({ ...habitDraft, color: "" })}
+                        title="Auto (carte rattachée)" aria-label="Couleur automatique" aria-pressed={!habitDraft.color}
+                        style={{
+                          width: 26, height: 26, borderRadius: "50%", background: autoColor, border: "none",
+                          cursor: "pointer", padding: 0, position: "relative",
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          color: T.onSolid, fontSize: 10, fontWeight: 600, fontFamily: "inherit",
+                          boxShadow: !habitDraft.color ? `0 0 0 2px ${T.white}, 0 0 0 4px ${autoColor}` : "none",
+                        }}>A</button>
+                      {CATEGORY_PALETTE.map(c => {
+                        const active = habitDraft.color === c;
+                        return (
+                          <button key={c} type="button" onClick={() => setHabitDraft({ ...habitDraft, color: c })}
+                            title={c} aria-label={`Couleur ${c}`} aria-pressed={active}
+                            style={{
+                              width: 26, height: 26, borderRadius: "50%", background: c, border: "none",
+                              cursor: "pointer", padding: 0,
+                              /* Anneau POSÉ autour du disque (comme Vie RPG) : une
+                                 bordure mangerait la pastille et ferait varier sa
+                                 taille apparente d'un clic à l'autre. */
+                              boxShadow: active ? `0 0 0 2px ${T.white}, 0 0 0 4px ${c}` : "none",
+                            }} />
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -956,14 +1003,18 @@ export default function DailyPlannerPage() {
                     {/* Vignette d'icône — celle des pages Focus et Sport,
                         tenue par `vignette` (lib/ui/color) : voile de la couleur
                         du sujet sur le disque, glyphe dans cette même couleur.
-                        Une fois l'habitude cochée, elle retombe sur le gris
-                        neutre. */}
+                        Cocher REMPLIT le disque de cette même couleur au lieu
+                        de l'éteindre en gris : une habitude tenue est ce que la
+                        liste a de plus visible, pas ce qu'elle efface. L'encre
+                        est celle de la case à cocher voisine, elle aussi pleine
+                        de la couleur — deux traitements différents sur la même
+                        ligne se liraient comme deux états différents. */}
                     <div style={{
                       width: 34, height: 34, borderRadius: "50%",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0,
                       ...(done
-                        ? { background: T.accentBg, color: T.textMut }
+                        ? { background: color || T.text, color: T.onSolid }
                         : (color ? vignette(color) : { background: T.accentBg, color: T.text })),
                       transition: "background .15s ease, color .15s ease",
                     }}>
@@ -973,7 +1024,11 @@ export default function DailyPlannerPage() {
                     {/* Content (non cliquable) */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
-                        fontSize: 13, fontWeight: 600, color: done ? T.textMut : T.text,
+                        /* Barré mais PAS grisé : le barré suffit à retrouver
+                           d'un coup d'œil ce qui reste à faire, l'atténuation
+                           en plus donnait à une ligne tenue l'air d'une ligne
+                           désactivée. */
+                        fontSize: 13, fontWeight: 600, color: T.text,
                         textDecoration: done ? "line-through" : "none",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2,
                       }}>
