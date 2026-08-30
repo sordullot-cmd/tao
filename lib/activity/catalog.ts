@@ -241,11 +241,22 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Expo", app: [], web: ["expo.dev", "docs.expo.dev"] },
   ]),
 
-  ...of("trading", [
-    /* tao trade en premier : c'est CETTE app. Son processus s'appelle « tao »
-       (cf. src-tauri/tauri.conf.json), trois lettres qu'on ne peut pas chercher
-       comme un fragment — d'où la correspondance exacte. */
+  /* CETTE app, seule dans sa catégorie.
+     Elle était rangée avec les plateformes de marché, et ça ne tenait pas :
+     « Trading & marchés » répond à « combien de temps ai-je passé sur les
+     marchés ? », or le temps passé ICI est celui qu'on passe à écrire son
+     journal, à relire ses trades, à régler l'app — pas à regarder un cours. Les
+     confondre rendait la mesure des marchés inutilisable, et d'autant plus que
+     c'est l'app qui se mesure elle-même : elle finissait par occuper sa propre
+     première place.
+     Son processus s'appelle « tao » (cf. src-tauri/tauri.conf.json), trois
+     lettres qu'on ne peut pas chercher comme un fragment — d'où la
+     correspondance exacte. */
+  ...of("tao", [
     { name: "tao trade", app: ["tao", "tao trade", "taotrade", "tr4de", "tao trade desktop"], web: ["tao-trade.vercel.app"], title: ["tao trade"] },
+  ]),
+
+  ...of("trading", [
     { name: "MetaTrader 5", app: ["terminal64", "metatrader 5", "metatrader5"], word: ["metatrader"] },
     { name: "MetaTrader 4", app: ["terminal", "metatrader 4", "metatrader4"] },
     { name: "NinjaTrader", word: ["ninjatrader"] },

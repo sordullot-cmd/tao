@@ -125,6 +125,15 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
      vidéo, on y reste pour la suivante. */
   { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube." },
   { id: "fun",      label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, séries, jeux, sport." },
+  /* L'app elle-même, et NEUTRE — c'est le point délicat.
+     Écrire son journal est du travail, personne n'en doute. Mais un suivi qui
+     compte son propre écran comme du temps productif se flatte : chaque minute
+     passée à le consulter améliorerait le score qu'il affiche, et le chiffre
+     cesserait de vouloir dire quelque chose. Neutre, il compte ce temps sans le
+     porter à son crédit. Qui n'est pas d'accord le passe en productif d'un clic
+     dans « Catégories & règles » — c'est un jugement, il appartient à
+     l'utilisateur, pas au code qui le mesure. */
+  { id: "tao",      label: "tao trade",         labelEn: "tao trade",     color: PALETTE.pink,        productivity: "neutral",     hint: "Le temps passé dans cette app : journal, relecture, réglages." },
   { id: "other",    label: "Non classé",        labelEn: "Uncategorized", color: GREY.grey500,        productivity: "neutral",     hint: "Les applications de bureau que l'app n'a pas su reconnaître. À ranger en un clic." },
 ];
 

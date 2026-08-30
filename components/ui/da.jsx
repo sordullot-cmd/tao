@@ -160,10 +160,10 @@ export function AllocationChart({
   onHover,
   /**
    * Prévenu du CLIC sur une part. Sa présence rend l'anneau cliquable : ce que
-   * la souris désigne au survol, un clic le fige — sans quoi lire un détail
-   * suppose de garder le curseur immobile sur un arc de quelques pixels.
-   * L'appelant tient l'état de sélection ; l'anneau ne fait que rapporter le
-   * geste, et reçoit en retour la part à garder en avant par `highlight`.
+   * le survol montre, un clic le RETIENT — la figure voisine qui détaille la
+   * part reste alors ouverte pendant qu'on la lit, au lieu de se refermer dès
+   * que le curseur bouge. L'appelant tient l'état ; l'anneau rapporte le geste
+   * et reçoit en retour la part à garder en avant par `highlight`.
    */
   onSelect,
 }) {

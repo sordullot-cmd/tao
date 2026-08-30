@@ -46,8 +46,20 @@ describe("classement", () => {
 
   it("reconnaît tao trade, dont le processus s'appelle « tao »", () => {
     const res = classify("tao", "tao", []);
-    expect(res.category).toBe("trading");
     expect(res.label).toBe("tao trade");
+    /* L'app a sa catégorie à elle. Rangée avec les plateformes, elle rendait la
+       mesure des marchés inutilisable : « combien de temps sur les marchés ? »
+       répondait surtout « le temps passé à écrire mon journal ». */
+    expect(res.category).toBe("tao");
+    expect(classify("Google Chrome", "tradingview.com", []).category).toBe("trading");
+  });
+
+  it("ne se compte pas comme du temps productif", () => {
+    /* Un suivi qui crédite son propre écran améliore son score à chaque fois
+       qu'on le consulte : le chiffre cesserait de vouloir dire quelque chose.
+       C'est un jugement, donc réglable — mais le défaut ne se flatte pas. */
+    expect(productivityOf("tao")).toBe("neutral");
+    expect(resolveProductivity("tao", { tao: "productive" })).toBe("productive");
   });
 
   it("lit le domaine posé dans le titre d'un navigateur", () => {

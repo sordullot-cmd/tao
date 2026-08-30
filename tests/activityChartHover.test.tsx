@@ -392,112 +392,27 @@ describe("détail au survol de l'anneau (Rapports)", () => {
   });
 });
 
-describe("sélection figée au clic", () => {
-  it("garde la bulle après le départ de la souris, et la rend à Échap", () => {
+describe("le clic retient le détail, jamais la bulle", () => {
+  /* Ce que le clic sert à faire : garder OUVERTE la liste qui détaille la part,
+     le temps de la lire. Ce qu'il ne doit surtout pas faire : laisser la bulle
+     collée par-dessus la figure — elle recouvre ce qu'on est venu regarder et
+     demande un geste de plus pour s'en débarrasser. */
+
+  it("ne laisse aucune bulle derrière lui", () => {
     render(
-      <HourBars hourly={[
-        { hour: 9, ms: 45 * MIN, productiveMs: 30 * MIN, distractingMs: 5 * MIN },
-        { hour: 10, ms: 20 * MIN, productiveMs: 20 * MIN, distractingMs: 0 },
+      <StackedBar parts={[
+        { id: "dev", label: "Développement", color: "#4C6FFF", ms: 120 * MIN, pct: 60 },
+        { id: "fun", label: "Divertissement", color: "#FF4B4B", ms: 80 * MIN, pct: 40 },
       ]} />,
     );
-    const col = screen.getByLabelText("09 h — 45 min");
-
-    // Sans clic, la bulle vit le temps du survol.
-    fireEvent.mouseEnter(col);
-    fireEvent.mouseLeave(col.parentElement as HTMLElement);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-
-    // Le clic la fige : lire un détail ne demande plus de garder le curseur
-    // immobile sur une colonne de quelques pixels.
-    fireEvent.click(col);
-    fireEvent.mouseLeave(col.parentElement as HTMLElement);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("09 h – 10 h");
-
-    // Survoler ailleurs ne vole pas la sélection.
-    fireEvent.mouseEnter(screen.getByLabelText("10 h — 20 min"));
-    expect(screen.getByRole("tooltip")).toHaveTextContent("09 h – 10 h");
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("tooltip")).toBeNull();
-  });
-
-  it("libère la sélection sur un clic ailleurs, mais pas dans la figure", () => {
-    render(
-      <div>
-        <StackedBar parts={[
-          { id: "dev", label: "Développement", color: "#4C6FFF", ms: 120 * MIN, pct: 60 },
-          { id: "fun", label: "Divertissement", color: "#FF4B4B", ms: 80 * MIN, pct: 40 },
-        ]} />
-        <button type="button">ailleurs</button>
-      </div>,
-    );
     const part = screen.getByLabelText("Divertissement — 1 h 20");
+    fireEvent.mouseEnter(part);
     fireEvent.click(part);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Divertissement");
-
-    // Un clic sur une AUTRE part déplace la sélection au lieu de la fermer.
-    fireEvent.mouseDown(screen.getByLabelText("Développement — 2 h 00"));
-    fireEvent.click(screen.getByLabelText("Développement — 2 h 00"));
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Développement");
-
-    // Le fond, lui, libère.
-    fireEvent.mouseDown(screen.getByText("ailleurs"));
+    fireEvent.mouseLeave(part.parentElement as HTMLElement);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("re-cliquer la même part la libère", () => {
-    render(<HourBars hourly={[{ hour: 9, ms: 45 * MIN, productiveMs: 30 * MIN, distractingMs: 5 * MIN }]} />);
-    const col = screen.getByLabelText("09 h — 45 min");
-    fireEvent.click(col);
-    expect(screen.getByRole("tooltip")).toBeInTheDocument();
-    fireEvent.mouseDown(col);
-    fireEvent.click(col);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-  });
-
-  it("ne fige rien sur une ligne de liste ni sur une bande de régularité", () => {
-    /* Deux figures explicitement laissées au seul survol : la ligne de liste
-       porte déjà son nom et sa durée en clair, et une bande de régularité de
-       deux pixels se clique par accident. */
-    render(
-      <CategoryRows
-        buckets={[{ id: "social", label: "Réseaux sociaux", color: "#FF4B4B", ms: 40 * MIN, pct: 12 }]}
-        showShare={false}
-      />,
-    );
-    const row = screen.getByText("Réseaux sociaux").closest("div")!.parentElement!.parentElement!;
-    fireEvent.mouseEnter(row);
-    expect(screen.getByRole("tooltip")).toBeInTheDocument();
-
-    fireEvent.click(row);
-    fireEvent.mouseLeave(row);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-  });
-
-  it("laisse la régularité au seul survol", () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2024-06-05T10:00:00"));
-    try {
-      saveDay({
-        date: "2024-06-03", awayMs: 0, updatedAt: Date.now(),
-        segments: [{ s: new Date("2024-06-03T14:00:00").getTime(), e: new Date("2024-06-03T16:00:00").getTime(), app: "Figma", label: "Figma", title: "", cat: "work" }],
-      });
-      render(<ActivityReportsPage setPage={vi.fn()} />);
-
-      const label = new Date("2024-06-03T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
-      const band = screen.getByLabelText(new RegExp(`^${label} · `));
-      fireEvent.mouseEnter(band);
-      expect(screen.getByRole("tooltip")).toBeInTheDocument();
-
-      fireEvent.click(band);
-      fireEvent.mouseLeave(band.closest("div[style*=\"position: relative\"]") as HTMLElement);
-      expect(screen.queryByRole("tooltip")).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("fige le détail d'une catégorie de l'anneau", () => {
+  it("garde le détail de l'anneau ouvert quand la souris s'en va", () => {
     const base = new Date();
     base.setHours(9, 0, 0, 0);
     const at = (min: number) => base.getTime() + min * 60_000;
@@ -514,14 +429,57 @@ describe("sélection figée au clic", () => {
     const ring = screen.getByLabelText("Répartition du temps par catégorie");
     const arc = ring.querySelector("circle[stroke-dasharray]") as SVGCircleElement;
 
+    // Sans clic, le détail vit le temps du survol.
+    fireEvent.mouseEnter(arc);
+    fireEvent.mouseLeave(arc);
+    expect(visibleOf(side)).not.toHaveTextContent("VS Code");
+
+    // Avec, il reste — c'est tout ce que le clic change.
     fireEvent.click(arc);
     fireEvent.mouseLeave(arc);
-    // La souris est partie : sans épinglage, la liste serait revenue aux
-    // catégories.
     expect(visibleOf(side)).toHaveTextContent("VS Code");
+    expect(screen.queryByRole("tooltip")).toBeNull();
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(visibleOf(side)).toHaveTextContent("Développement");
     expect(visibleOf(side)).not.toHaveTextContent("VS Code");
+  });
+
+  it("libère la sélection sur un clic ailleurs, mais pas dans le détail", () => {
+    const base = new Date();
+    base.setHours(9, 0, 0, 0);
+    const at = (min: number) => base.getTime() + min * 60_000;
+    saveDay({
+      date: getLocalDateString(), awayMs: 0, updatedAt: Date.now(),
+      segments: [
+        { s: at(0), e: at(60), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
+        { s: at(60), e: at(90), app: "Chrome", label: "Youtube", title: "Lofi - YouTube", cat: "fun" },
+      ],
+    });
+    render(<ActivityPage setPage={vi.fn()} />);
+
+    const side = screen.getByRole("group", { name: "Répartition détaillée" });
+    const ring = screen.getByLabelText("Répartition du temps par catégorie");
+    fireEvent.click(ring.querySelector("circle[stroke-dasharray]") as SVGCircleElement);
+    expect(visibleOf(side)).toHaveTextContent("VS Code");
+
+    // Cliquer dans la liste qu'on vient d'ouvrir ne la referme pas.
+    fireEvent.mouseDown(side);
+    expect(visibleOf(side)).toHaveTextContent("VS Code");
+
+    // Le fond, lui, libère.
+    fireEvent.mouseDown(document.body);
+    expect(visibleOf(side)).toHaveTextContent("Développement");
+  });
+
+  it("ne fige rien sur une ligne de liste ni sur une colonne horaire", () => {
+    /* Ces figures-là ne commandent aucune liste : un clic n'aurait rien à
+       retenir, et ne doit donc rien faire du tout. */
+    render(<HourBars hourly={[{ hour: 9, ms: 45 * MIN, productiveMs: 30 * MIN, distractingMs: 5 * MIN }]} />);
+    const col = screen.getByLabelText("09 h — 45 min");
+    fireEvent.mouseEnter(col);
+    fireEvent.click(col);
+    fireEvent.mouseLeave(col.parentElement as HTMLElement);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });

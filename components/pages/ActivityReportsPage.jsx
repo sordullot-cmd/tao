@@ -354,7 +354,7 @@ export default function ActivityReportsPage({ setPage }) {
 
   const parts = stats.byCategory.map(b => ({ id: b.id, label: b.label, color: b.color, pct: b.pct, amount: b.ms }));
 
-  /* Catégorie désignée dans l'anneau — survolée, ou figée d'un clic. Revérifiée
+  /* Catégorie survolée dans l'anneau. Revérifiée
      contre la période affichée : changer de fenêtre pendant qu'on survole ne
      déclenche aucun `mouseleave`, et la catégorie retenue peut n'exister nulle
      part dans la nouvelle. */
@@ -489,7 +489,7 @@ export default function ActivityReportsPage({ setPage }) {
                 showPct={false}
                 onHover={ring.hoverKey}
                 onSelect={ring.select}
-                highlight={ring.pinned ? ring.key : null}
+                highlight={ring.key}
               />
               {/* Survoler une part descend la liste d'un cran — les applications
                   et les sites de la catégorie désignée — exactement comme dans
@@ -499,7 +499,7 @@ export default function ActivityReportsPage({ setPage }) {
               <div
                 role="group"
                 aria-label="Répartition détaillée"
-                /* Cliquer dans le détail ne libère pas la sélection. */
+                /* Cliquer dans le détail ne le referme pas. */
                 data-chart-part
                 style={{ display: "grid" }}
               >

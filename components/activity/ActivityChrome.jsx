@@ -603,48 +603,49 @@ function ChartTip({ tip }) {
  */
 export function useChartTip() {
   const [tip, setTip] = useState(null);
-  /* Part ÉPINGLÉE : ce qu'on a cliqué reste affiché quand la souris s'en va.
-     Lire un détail obligeait sinon à garder le curseur immobile sur une part de
-     quelques pixels — impossible dès qu'on veut parcourir la liste des yeux, et
-     perdu au moindre tremblement. */
-  const [pin, setPin] = useState(null);
-  const shown = pin || tip;
+  /* Part RETENUE d'un clic. Elle ne concerne QUE la sélection — ce que la liste
+     voisine détaille —, jamais la bulle : une bulle qui reste collée par-dessus
+     la figure demande ensuite d'être refermée, et recouvre ce qu'on est venu
+     regarder. Le clic sert à garder la LISTE ouverte pendant qu'on la lit, pas
+     à laisser un calque en travers du dessin. */
+  const [held, setHeld] = useState(null);
 
-  /* Sortir de la sélection : Échap, ou un clic AILLEURS. Les deux gestes qu'on
-     essaie d'instinct. Les écouteurs n'existent que pendant l'épinglage — une
+  /* Sortir de la sélection : Échap, ou un clic AILLEURS — les deux gestes qu'on
+     essaie d'instinct. Les écouteurs n'existent que pendant la sélection : une
      page qui capte Échap en permanence finit par voler la touche à une modale
      ou à un champ en cours de saisie.
-     `mousedown` en capture, et non `click` : le clic qui suit sur une autre
-     part doit pouvoir l'épingler à son tour, pas se faire annuler par la
-     fermeture. D'où le marqueur `data-chart-part`, posé sur tout ce qui est
-     une part de figure ou son détail — cliquer dedans ne libère rien. */
+     `mousedown` en capture plutôt que `click` : sans ça, le clic sur une autre
+     part se ferait annuler par la fermeture avant d'avoir pu la retenir. D'où
+     le marqueur `data-chart-part`, posé sur les parts cliquables et sur le
+     détail qu'elles ouvrent — cliquer dedans ne libère rien. */
   React.useEffect(() => {
-    if (!pin) return;
-    const onKey = (e) => { if (e.key === "Escape") setPin(null); };
-    const onDown = (e) => { if (!e.target?.closest?.("[data-chart-part]")) setPin(null); };
+    if (held == null) return;
+    const onKey = (e) => { if (e.key === "Escape") setHeld(null); };
+    const onDown = (e) => { if (!e.target?.closest?.("[data-chart-part]")) setHeld(null); };
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onDown, true);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onDown, true);
     };
-  }, [pin]);
+  }, [held]);
 
   return {
-    /** Cible désignée : celle qu'on a épinglée, sinon celle qu'on survole. */
-    key: shown ? shown.key : null,
-    /** Vrai quand la cible est FIGÉE — la figure peut le marquer autrement. */
-    pinned: !!pin,
-    show: (e, key, content) => { if (!pin) setTip({ x: e.clientX, y: e.clientY, key, content }); },
-    hide: () => { if (!pin) setTip(null); },
-    /** Clic sur une part qui porte une bulle : épingle, ou libère si c'est la même. */
-    pin: (e, key, content) => setPin(p => (p && p.key === key ? null : { x: e.clientX, y: e.clientY, key, content })),
+    /* Le survol PRIME sur la sélection tant que la souris est sur la figure :
+       désigner une autre part doit en montrer l'aperçu, sinon la sélection
+       ferait écran à la figure. La part retenue reprend la main dès que la
+       souris s'en va. */
+    key: tip ? tip.key : held,
+    /** Vrai quand une part est retenue — la figure peut le marquer autrement. */
+    held: held != null,
+    show: (e, key, content) => setTip({ x: e.clientX, y: e.clientY, key, content }),
+    hide: () => setTip(null),
     /** Survol d'une part SANS bulle (l'anneau, qui écrit à son centre). */
-    hoverKey: (key) => { if (!pin) setTip(key == null ? null : { key }); },
-    /** Clic sur une part SANS bulle. */
-    select: (key) => setPin(p => (p && p.key === key ? null : { key })),
+    hoverKey: (key) => setTip(key == null ? null : { key }),
+    /** Clic sur une part : la retient, ou la libère si c'est la même. */
+    select: (key) => setHeld(h => (h === key ? null : key)),
     /** À poser dans le rendu de la figure : le calque lui-même. */
-    node: <ChartTip tip={shown && shown.content ? shown : null} />,
+    node: <ChartTip tip={tip && tip.content ? tip : null} />,
   };
 }
 
@@ -729,17 +730,14 @@ export function HourBars({ hourly, height = 96, fromHour = 0, toHour = 23 }) {
         return (
           <div
             key={h.hour}
-            data-chart-part
             onMouseEnter={hover}
             onMouseMove={hover}
-            onClick={(e) => tip.pin(e, h.hour, content)}
             /* Nommée : une colonne de graphe n'a aucun texte à elle, et sans ce
                libellé la figure ne dit rien d'autre que sa forme. */
             aria-label={`${pad2(h.hour)} h — ${fmtDur(h.ms)}`}
             style={{
               flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0,
               opacity: dim ? 0.4 : 1,
-              cursor: "pointer",
               transition: "opacity .12s ease",
             }}
           >
@@ -1326,15 +1324,13 @@ export function AppRows({ apps, limit = 8, onPick = null, blocked = null, empty 
         return (
         <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
           <div
-            data-chart-part
             onMouseEnter={hover}
             onMouseMove={hover}
-            onClick={(e) => tip.pin(e, a.id, content)}
             /* Fermeture au bord de la ZONE DE LECTURE, pas de la ligne : sinon
                la bulle survit au passage vers le sélecteur de catégorie à
                droite et vient flotter par-dessus son menu. */
             onMouseLeave={tip.hide}
-            style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5, cursor: "pointer" }}
+            style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}
           >
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
               <span style={{ fontSize: 13, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1512,10 +1508,12 @@ export function StackedBar({ parts, height = 12, minPct = 1.2, onHover, tip: ext
             data-chart-part
             onMouseEnter={hover}
             onMouseMove={hover}
-            onClick={(e) => tip.pin(e, p.id, content)}
+            /* Le clic ne sert QUE là où la barre commande une liste : ailleurs,
+               il n'aurait rien à retenir. */
+            onClick={extTip ? () => tip.select(p.id) : undefined}
             aria-label={`${p.label} — ${fmtDur(p.ms)}`}
             style={{
-              cursor: "pointer",
+              cursor: extTip ? "pointer" : "default",
               // Une part d'une minute doit rester visible : sans plancher, elle
               // disparaît et la barre ment par omission.
               width: `${Math.max(minPct, (p.pct / total) * 100)}%`,

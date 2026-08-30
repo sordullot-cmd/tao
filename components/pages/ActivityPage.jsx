@@ -197,16 +197,16 @@ export default function ActivityPage({ setPage }) {
   /* Parts désignées dans les figures de la SEMAINE : la barre des catégories
      commande le même détail que l'anneau de la journée, celle des natures
      restreint la liste aux catégories comptées ainsi. Chaque figure a son
-     contrôleur — survol, clic qui fige, Échap et clic ailleurs qui libèrent —
-     et c'est LUI que la liste lit, pour qu'elle ne puisse jamais dire autre
-     chose que la barre. */
+     contrôleur de survol, et c'est LUI que la liste lit : elle ne peut donc
+     jamais dire autre chose que la barre. */
   const catBar = useChartTip();
   const natureBar = useChartTip();
-  /* Ce qui est ÉPINGLÉ l'emporte sur ce qui est survolé, quelle que soit la
-     figure : sans cette règle, épingler une catégorie puis promener la souris
-     sur la barre des natures effacerait la sélection qu'on venait de poser. */
-  const weekLead = catBar.pinned ? "cat"
-    : natureBar.pinned ? "nature"
+  /* Ce qui est RETENU d'un clic l'emporte sur ce qui est survolé, quelle que
+     soit la figure : sans cette règle, retenir une catégorie puis promener la
+     souris sur la barre des natures effacerait la sélection qu'on venait de
+     poser. */
+  const weekLead = catBar.held ? "cat"
+    : natureBar.held ? "nature"
     : catBar.key ? "cat"
     : natureBar.key ? "nature" : null;
   const barCat = weekLead === "cat" ? catBar.key : null;
@@ -444,9 +444,9 @@ export default function ActivityPage({ setPage }) {
                         showPct={false}
                         onHover={ring.hoverKey}
                         onSelect={ring.select}
-                        /* La part épinglée reste en avant quand la souris est
+                        /* La part retenue reste en avant quand la souris est
                            partie ; pendant un survol, l'anneau tranche seul. */
-                        highlight={ring.pinned ? ring.key : null}
+                        highlight={ring.key}
                       />
                       {/* Sans la ligne « 38 % · productif » sous chaque barre :
                           l'anneau dit déjà les parts, et la nature se règle dans
@@ -463,8 +463,8 @@ export default function ActivityPage({ setPage }) {
                         /* Nommée : son contenu CHANGE sous la souris — sans nom,
                            rien ne dit de quoi la liste est le détail. */
                         aria-label="Répartition détaillée"
-                        /* Cliquer DANS le détail ne libère pas la sélection :
-                           c'est ce qu'on vient d'ouvrir, pas le fond. */
+                        /* Cliquer DANS le détail ne le referme pas : c'est ce
+                           qu'on vient d'ouvrir, pas le fond. */
                         data-chart-part
                         /* Les deux listes sont SUPERPOSÉES dans une même cellule
                            de grille, celle qu'on ne lit pas restant montée mais
