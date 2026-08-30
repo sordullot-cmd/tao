@@ -26,13 +26,14 @@
  * arriver.
  */
 
-import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Search, ChevronRight, AppWindow, AlertTriangle, X, CornerDownLeft } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Plus, Trash2, Search, ChevronRight, AppWindow, AlertTriangle, X, Check, CornerDownLeft } from "lucide-react";
 import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CheckBox, Field, Input, Modal, PillButton } from "@/components/ui/da";
-import { CATEGORIES, CATALOG_BY_ID, catalogOf, hostOf, newId } from "@/lib/focus/model";
-import { highlight, searchCatalog } from "@/lib/focus/search";
+import { CATEGORIES, CATALOG_BY_ID, catalogOf, hostOf, newId, normApp } from "@/lib/focus/model";
+import { highlight, rankBy, searchCatalog } from "@/lib/focus/search";
+import { installedApps, nativeAvailable } from "@/lib/focus/native";
 
 const COLORS = Object.keys(PALETTE);
 
@@ -185,6 +186,28 @@ function Selected({ entries, color, onRemove }) {
   );
 }
 
+/**
+ * Les applications du poste, lues une fois à l'ouverture de l'éditeur.
+ *
+ * `ready` n'est pas « la liste n'est pas vide » : c'est « le disque a été lu ».
+ * La différence porte tout le reste de l'écran — sans elle, un navigateur, qui
+ * ne voit rien, serait indiscernable d'une machine sans applications, et
+ * l'interface annoncerait « aucune application de ce nom » à quelqu'un qui a
+ * pourtant Discord installé.
+ */
+function useInstalledApps() {
+  const [state, setState] = useState({ list: [], ready: false });
+  useEffect(() => {
+    if (!nativeAvailable()) return undefined;
+    let alive = true;
+    installedApps().then(list => {
+      if (alive) setState({ list, ready: true });
+    });
+    return () => { alive = false; };
+  }, []);
+  return state;
+}
+
 export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
   const [name, setName] = useState(list?.name || "");
   const [color, setColor] = useState(list?.color || "purple");
@@ -206,6 +229,9 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
     return next;
   });
   const [draft, setDraft] = useState("");
+  /* Ligne visée par le clavier dans les suggestions d'applications. */
+  const [appCursor, setAppCursor] = useState(0);
+  const nativeApps = useInstalledApps();
   const [query, setQuery] = useState("");
   /* Ligne visée par le clavier, dans la liste des résultats. */
   const [cursor, setCursor] = useState(0);
@@ -276,6 +302,69 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
       onQuery("");
     }
   };
+
+  /* ── Champ d'ajout ────────────────────────────────────────────────────── */
+
+  /* Ce qui est tapé désigne-t-il un site ? Alors il n'y a pas d'application à
+     proposer : on ne suggère pas Firefox à quelqu'un qui vient de coller une
+     adresse. */
+  const draftTarget = cleanTarget(draft);
+  const draftIsApp = !!draftTarget && !draftTarget.domain;
+
+  const appHits = useMemo(
+    () => (draftIsApp ? rankBy(nativeApps.list, draft, a => a.name, 6, a => a.system) : []),
+    [draftIsApp, nativeApps.list, draft]
+  );
+
+  /** L'application installée qui porte EXACTEMENT ce nom, s'il y en a une. */
+  const installedName = (v) => {
+    const n = normApp(v || "");
+    return n ? nativeApps.list.find(a => normApp(a.name) === n) || null : null;
+  };
+
+  const onDraft = (v) => { setDraft(v); setAppCursor(0); };
+
+  const addDraft = () => { addCustom(draft); onDraft(""); };
+
+  const onDraftKey = (e) => {
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && appHits.length) {
+      e.preventDefault();
+      setAppCursor(c => (c + (e.key === "ArrowDown" ? 1 : appHits.length - 1)) % appHits.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      /* Entrée prend la suggestion visée quand il y en a une : c'est le nom du
+         système, donc celui qui sera reconnu. À défaut seulement, la frappe
+         telle quelle — un nom d'application absent du poste reste légitime, on
+         peut préparer une liste avant d'installer le jeu. */
+      const pick = appHits[appCursor];
+      if (pick) { addCustom(pick.item.name); onDraft(""); }
+      else addDraft();
+    } else if (e.key === "Escape" && draft) {
+      e.preventDefault();
+      onDraft("");
+    }
+  };
+
+  /**
+   * Ce que deviendra la frappe, dit avant de valider.
+   *
+   * Le champ acceptait n'importe quoi en silence : « Discrod » entrait dans la
+   * liste aussi facilement que « Discord », et rien, jamais, ne signalait la
+   * lettre inversée. Le blocage restait muet — exactement comme un blocage qui
+   * n'a rien eu à bloquer.
+   */
+  const draftVerdict = (() => {
+    if (!draftTarget) return null;
+    if (draftTarget.domain) {
+      return { tone: "ok", text: `Site « ${draftTarget.domain} » — coupé dans le navigateur et, sur l'app de bureau, dans les autres navigateurs.` };
+    }
+    const found = installedName(draftTarget.app);
+    if (found) return { tone: "ok", text: `« ${found.name} » est installée sur ce poste : le nom enregistré est celui que le système rapporte.` };
+    if (nativeApps.ready) {
+      return { tone: "warn", text: `Aucune application installée ne porte ce nom. Elle sera quand même enregistrée — utile si vous l'installez plus tard, sans effet sinon.` };
+    }
+    return { tone: "ok", text: "Le nom sera comparé à l'application au premier plan. L'app de bureau propose ici les applications réellement installées." };
+  })();
 
   /* Ce qui est retenu, catalogue et entrées libres confondus — c'est un seul
      ensemble pour qui compose la liste, la provenance ne l'intéresse pas. */
@@ -536,27 +625,76 @@ export default function BlocklistEditor({ list, onSave, onDelete, onClose }) {
 
         <Field
           label="Ajouter un site ou une appli"
-          hint="Ce que le catalogue ne connaît pas. Un domaine coupe le site (exemple.fr) ; un nom seul coupe l'application (Steam), et cela demande l'app de bureau."
+          hint={
+            nativeApps.ready
+              ? "Tapez un nom : les applications installées sur ce poste sont proposées, et c'est leur nom SYSTÈME qui est enregistré. Un domaine (exemple.fr) coupe un site."
+              : "Un domaine coupe le site (exemple.fr) ; un nom seul coupe l'application (Steam), et cela demande l'app de bureau."
+          }
         >
           <div style={{ display: "flex", gap: 8 }}>
             <Input
               value={draft}
-              onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustom(draft); setDraft(""); } }}
+              onChange={e => onDraft(e.target.value)}
+              onKeyDown={onDraftKey}
               placeholder="exemple.fr — ou Steam"
+              aria-label="Nom de l'application ou du site à ajouter"
               style={{ flex: 1 }}
             />
-            <PillButton onClick={() => { addCustom(draft); setDraft(""); }} disabled={!cleanTarget(draft)}>
+            <PillButton onClick={() => addDraft()} disabled={!cleanTarget(draft)}>
               <Plus size={14} /> Ajouter
             </PillButton>
           </div>
+
+          {/* Les applications du poste, proposées à mesure qu'on tape.
+              C'est la seule façon d'écrire un nom d'application QUI EXISTE :
+              une chaîne tapée à la main ne se distingue pas, à l'écran, d'une
+              faute de frappe — et un blocage qui n'attrape rien à cause d'une
+              lettre est indiscernable d'un blocage qui n'a rien eu à attraper. */}
+          {appHits.length > 0 && (
+            <div role="group" aria-label="Applications installées" style={{ marginTop: 8 }}>
+              {appHits.map((h, i) => {
+                const already = custom.some(c => normApp(c.app || "") === normApp(h.item.name));
+                return (
+                  <Row
+                    key={h.item.path || h.item.name}
+                    label={<Marked text={h.item.name} ranges={h.ranges} />}
+                    sub={already ? "déjà dans la liste" : h.item.system ? "application du système" : null}
+                    on={already}
+                    active={i === appCursor}
+                    onHover={() => setAppCursor(i)}
+                    color={hue}
+                    onToggle={() => { if (!already) { addCustom(h.item.name); onDraft(""); } }}
+                    lead={<AppWindow size={13} color={T.textMut} style={{ flexShrink: 0 }} />}
+                    action={i === appCursor && !already ? <CornerDownLeft size={12} color={T.textMut} aria-hidden="true" /> : null}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {/* Verdict sur ce qui est tapé. Court, mais c'est lui qui répond à la
+              question qu'on se pose vraiment devant ce champ : « est-ce que ça
+              va marcher ? » Il ne se prononce que là où il sait — le disque
+              n'est lisible que depuis l'app de bureau. */}
+          {draftVerdict && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 6, marginTop: 8,
+              fontSize: 12, color: draftVerdict.tone === "warn" ? PALETTE.orange : T.textSub,
+            }}>
+              {draftVerdict.tone === "warn"
+                ? <AlertTriangle size={12} color={PALETTE.orange} style={{ flexShrink: 0 }} />
+                : <Check size={12} color={T.textMut} style={{ flexShrink: 0 }} />}
+              <span>{draftVerdict.text}</span>
+            </div>
+          )}
+
           {custom.length > 0 && (
             <div style={{ marginTop: 8 }}>
               {custom.map(c => (
                 <Row
                   key={c.id}
                   label={c.domain || c.app}
-                  sub={c.domain ? undefined : "application"}
+                  sub={c.domain ? "site" : installedName(c.app) ? "application installée" : "application"}
                   action={
                     <button
                       type="button"

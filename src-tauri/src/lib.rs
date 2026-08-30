@@ -1,3 +1,4 @@
+mod apps;
 mod blocker;
 mod phone;
 mod tracker;
@@ -85,7 +86,8 @@ pub fn run() {
       blocker::focus_blocking_supported,
       blocker::front_tab,
       blocker::redirect_tab,
-      blocker::close_app
+      blocker::close_app,
+      apps::installed_apps
     ])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime

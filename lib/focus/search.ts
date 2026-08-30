@@ -189,3 +189,43 @@ export function highlight(text: string, ranges: Range[]): { text: string; hit: b
   if (i < text.length) out.push({ text: text.slice(i), hit: false });
   return out;
 }
+
+/* ── Classement d'une liste quelconque ────────────────────────────────────── */
+
+export interface RankedHit<T> {
+  item: T;
+  score: number;
+  ranges: Range[];
+}
+
+/**
+ * Même classement, appliqué à autre chose que le catalogue — les applications
+ * réellement installées sur le poste, dont la liste n'est connue qu'au moment
+ * où on la demande au système.
+ *
+ * `demote` abaisse une entrée sans la sortir : les applications du système sont
+ * proposées (on peut vouloir couper Mail) mais ne doivent jamais passer devant
+ * ce qu'on a soi-même installé, sous peine de voir « Musique » remonter avant
+ * « Discord » sur deux lettres communes.
+ */
+export function rankBy<T>(
+  items: T[],
+  query: string,
+  name: (t: T) => string,
+  limit = 6,
+  demote: (t: T) => boolean = () => false,
+): RankedHit<T>[] {
+  const q = query.trim();
+  if (!q) return [];
+  const hits: RankedHit<T>[] = [];
+  for (const item of items) {
+    const m = scoreField(name(item), q);
+    if (m) hits.push({ item, score: m.score * (demote(item) ? 0.55 : 1), ranges: m.ranges });
+  }
+  hits.sort((a, b) =>
+    b.score - a.score ||
+    name(a.item).length - name(b.item).length ||
+    name(a.item).localeCompare(name(b.item))
+  );
+  return hits.slice(0, limit);
+}

@@ -156,3 +156,42 @@ export async function closeApp(app: string): Promise<boolean> {
     return false;
   }
 }
+
+/** Une application présente sur le poste, telle que le système la nomme. */
+export interface InstalledApp {
+  name: string;
+  path: string;
+  /** Fournie avec le système : proposée, mais jamais en tête. */
+  system: boolean;
+}
+
+/* Le disque ne change pas pendant qu'on compose une liste : on le lit une fois
+   par session de page. Sans ce cache, chaque frappe du champ d'ajout relancerait
+   un parcours de dossiers — et la suggestion arriverait après la lettre
+   suivante. */
+let cache: InstalledApp[] | null = null;
+
+/**
+ * Applications installées sur le poste.
+ *
+ * Rend une liste VIDE hors de l'app de bureau, et c'est un cas normal, pas une
+ * panne : un navigateur ne voit pas le disque. L'interface le dit alors
+ * franchement plutôt que de laisser croire à une machine sans applications.
+ */
+export async function installedApps(): Promise<InstalledApp[]> {
+  if (!isTauri()) return [];
+  if (cache) return cache;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const raw = await invoke<InstalledApp[]>("installed_apps");
+    cache = (Array.isArray(raw) ? raw : [])
+      .filter(a => a && typeof a.name === "string" && a.name.trim())
+      .map(a => ({ name: a.name.trim(), path: a.path || "", system: a.system === true }));
+    return cache;
+  } catch {
+    // App de bureau antérieure à la commande : pas de suggestions, la saisie
+    // libre reste. Ne pas mettre l'échec en cache — une mise à jour de la
+    // coquille doit pouvoir répondre sans recharger la page.
+    return [];
+  }
+}
