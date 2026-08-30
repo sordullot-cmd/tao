@@ -58,8 +58,10 @@ export type AnchoredBlock = {
    * couché. Réglée à 9 h, elle pose le bloc à 9 h dans les deux cas ; laissée
    * vide, le bloc reste collé au premier élément et disparaît les jours vides.
    *
-   * Un bloc du soir la lit comme l'heure du coucher au plus tard : il commence
-   * alors plus tôt et dure plus longtemps, sa fin restant le réveil.
+   * La NUIT la lit comme l'heure du coucher au plus tard : elle commence alors
+   * plus tôt et dure plus longtemps, sa fin restant le réveil. C'est la seule à
+   * s'étirer ainsi — un bloc chaîné avant elle garde sa durée et laisse du vide
+   * devant lui, comme un bloc du matin.
    */
   maxStart: string;
   /**
@@ -322,9 +324,18 @@ function placeFamily(
         const limit = timeToMinutes(b.maxStart);
         if (limit !== null && startMin > limit) {
           startMin = limit;
-          // Le matin, le bloc garde sa durée et décolle du premier élément ;
-          // le soir, il s'allonge pour ne pas lâcher le réveil (cf. maxStart).
-          if (b.anchor === "morning") {
+          /* Un bloc repoussé par sa limite GARDE SA DURÉE et décolle de son
+             ancre : le vide qui apparaît devant lui est l'information — c'est
+             le temps qu'on ne s'était pas donné.
+             La seule exception est la nuit, c'est-à-dire le bloc du soir
+             accroché DIRECTEMENT au réveil (pas de `before`) : sa fin n'est pas
+             négociable, on dort jusqu'à ce qu'on se lève, et se coucher plus tôt
+             allonge la nuit au lieu de laisser un trou. Un bloc chaîné avant
+             elle — lire, ranger — n'a pas cette propriété : sa durée est un
+             fait, et l'étirer jusqu'au coucher faisait durer deux heures une
+             lecture réglée sur une. */
+          const stretchesToAnchor = b.anchor === "evening" && !b.before;
+          if (!stretchesToAnchor) {
             slot = { startMin, endMin: startMin + b.minutes };
           }
         }

@@ -129,10 +129,14 @@ export default function ActivityRulesPage({ setPage }) {
   const [draft, setDraft] = useState({ match: "", field: "app", category: "dev" });
   /** Catégorie en cours de renommage (une seule à la fois). */
   const [editCat, setEditCat] = useState(null);
-  /* Glisser-déposer : `armed` est l'identifiant de la ligne dont on a saisi la
-     poignée. On n'arme QUE par la poignée — une ligne entièrement `draggable`
-     empêcherait de sélectionner son nom pour le renommer. */
-  const [drag, setDrag] = useState({ armed: null, from: null, over: null, mode: null });
+  /* Glisser-déposer. C'est la POIGNÉE qui porte `draggable`, pas la ligne :
+     une ligne entièrement `draggable` empêcherait de sélectionner son nom pour
+     le renommer, et la rendre `draggable` à la volée au `pointerdown` — ce que
+     faisait le code d'avant — n'arrive pas à temps. Le navigateur décide s'il y
+     a un glissé au `mousedown`, qui suit le `pointerdown` de trop près pour
+     qu'un rendu React se soit intercalé : le geste partait en sélection de
+     texte. La ligne, elle, reste la CIBLE (`onDragOver` / `onDrop`). */
+  const [drag, setDrag] = useState({ from: null, over: null, mode: null });
   const [draftCat, setDraftCat] = useState({ label: "", color: CATEGORY_SWATCHES[0] });
   const [version, setVersion] = useState(0);
 
@@ -449,12 +453,6 @@ export default function ActivityRulesPage({ setPage }) {
               <div
                 key={c.id}
                 className="tr4de-cat-row"
-                draggable={drag.armed === c.id}
-                onDragStart={(e) => {
-                  if (drag.armed !== c.id) { e.preventDefault(); return; }
-                  setDrag(d => ({ ...d, from: c.id, over: null, mode: null }));
-                  try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.id); } catch { /* Safari */ }
-                }}
                 onDragOver={(e) => {
                   if (!drag.from || drag.from === c.id || movable === false) return;
                   e.preventDefault();
@@ -470,9 +468,8 @@ export default function ActivityRulesPage({ setPage }) {
                 onDrop={(e) => {
                   e.preventDefault();
                   moveCategory(drag.from, c.id, drag.mode || "before");
-                  setDrag({ armed: null, from: null, over: null, mode: null });
+                  setDrag({ from: null, over: null, mode: null });
                 }}
-                onDragEnd={() => setDrag({ armed: null, from: null, over: null, mode: null })}
                 style={{
                   display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
                   borderBottom: `1px solid ${HAIRLINE}`, flexWrap: "wrap",
@@ -488,8 +485,20 @@ export default function ActivityRulesPage({ setPage }) {
                   <span
                     className="tr4de-cat-grip"
                     title="Glisser pour déplacer"
-                    onPointerDown={() => setDrag(d => ({ ...d, armed: c.id }))}
-                    onPointerUp={() => setDrag(d => (d.from ? d : { ...d, armed: null }))}
+                    draggable
+                    onDragStart={(e) => {
+                      setDrag({ from: c.id, over: null, mode: null });
+                      try {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", c.id);
+                        /* Sans ça, le fantôme du glissé serait la poignée seule
+                           — quatre points gris qui ne disent pas ce qu'on
+                           déplace. On lui donne la ligne entière. */
+                        const row = e.currentTarget.closest(".tr4de-cat-row");
+                        if (row) e.dataTransfer.setDragImage(row, 12, row.getBoundingClientRect().height / 2);
+                      } catch { /* Safari */ }
+                    }}
+                    onDragEnd={() => setDrag({ from: null, over: null, mode: null })}
                     style={{
                       display: "inline-flex", alignItems: "center", color: T.textMut,
                       cursor: "grab", flexShrink: 0, marginLeft: -4,

@@ -8,11 +8,23 @@
   la fenêtre active reste vide, même si « Accessibilité » est cochée. Le nom de
   l'application, lui, passe par `lsappinfo` et ne dépend d'aucune autorisation
   (cf. src-tauri/src/tracker.rs).
+
+  Micro et caméra : même règle, et c'est ce qui manquait. La WebView accorde
+  bien la permission côté WebKit (wry répond `Grant` au délégué), mais macOS
+  coupe la demande AVANT elle si le bundle ne déclare pas pourquoi il veut le
+  périphérique — `getUserMedia` échoue alors sans que rien ne le demande à
+  l'utilisateur, et l'enregistrement de la page Éloquence reste mort alors que
+  la même page marche dans le navigateur. Une phrase par usage, c'est ce que
+  macOS affiche dans sa boîte de dialogue.
 -->
 <plist version="1.0">
 <dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>tao lit le titre de la fenêtre active pour mesurer le temps passé par application et par site.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>tao enregistre ta voix pour les exercices d'éloquence et la dictée de notes. Les prises restent dans ton compte.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>tao affiche l'image de ta caméra pendant les exercices d'éloquence, comme un miroir. Rien n'est enregistré ni envoyé.</string>
 	<key>LSUIElement</key>
 	<false/>
 </dict>

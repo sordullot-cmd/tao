@@ -313,8 +313,11 @@ describe("page Catégories & règles", () => {
        déplacée doit arriver en deuxième position. */
     const third = rows()[2];
     const label = names()[2];
-    fireEvent.pointerDown(third.querySelector(".tr4de-cat-grip")!);
-    fireEvent.dragStart(third);
+    /* Le glissé part de la POIGNÉE, qui porte `draggable` : la ligne, elle, ne
+       fait que recevoir. Rendre la ligne `draggable` au `pointerdown` ne
+       marchait pas dans un vrai navigateur — le `mousedown` suit de trop près
+       pour qu'un rendu React ait posé l'attribut. */
+    fireEvent.dragStart(third.querySelector(".tr4de-cat-grip")!);
     fireEvent.dragOver(rows()[0], { clientY: 0 });
     fireEvent.drop(rows()[0]);
     expect(names().indexOf(label)).toBe(1);

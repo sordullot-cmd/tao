@@ -1377,15 +1377,19 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
     if (g.pinned) onSetPinnedOpen?.(g.id, next);
     else setOpenLocal(next);
   };
-  const [armed, setArmed] = useState(false);
+  /* Le glissé est autorisé par un REF, jamais par un état.
+     La ligne portait `draggable={armed}`, armé au `pointerdown` : le navigateur
+     décide s'il y a un glissé au `mousedown` qui suit immédiatement, bien avant
+     qu'un rendu React ait pu poser l'attribut, et le geste partait en sélection
+     de texte. La ligne est donc `draggable` en permanence, et c'est
+     `onDragStart` qui refuse les départs illégitimes — un test synchrone, lui. */
+  const armedRef = useRef(false);
   const prevSubCount = useRef((g.subtasks || []).length);
   useEffect(() => {
     const count = (g.subtasks || []).length;
     if (count > prevSubCount.current) setOpen(true);
     prevSubCount.current = count;
   }, [g.subtasks]);
-  const longPressTimer = useRef(null);
-  const pressedRef = useRef(false);
   const subtasks = g.subtasks || [];
 
   // Objectifs manuels : la molette sur la valeur « courant / cible » fait
@@ -1414,23 +1418,17 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
   const isOver = drag?.overId === g.id && drag?.sourceId && drag.sourceId !== g.id;
   const overMode = isOver ? drag.mode : null;
 
-  const cancelLongPress = () => {
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-    pressedRef.current = false;
-    if (drag?.sourceId !== g.id) setArmed(false);
-  };
+  const cancelLongPress = () => { armedRef.current = false; };
 
+  /* Le tri part de la ligne, mais pas de ses commandes : on n'attrape pas un
+     objectif en tirant sur sa case à cocher. */
   const handlePointerDown = (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (e.target.closest("button, input, a")) return;
-    pressedRef.current = true;
-    longPressTimer.current = setTimeout(() => {
-      if (pressedRef.current) setArmed(true);
-    }, 5);
+    armedRef.current = !e.target.closest("button, input, a, select, textarea");
   };
 
   const handleDragStart = (e) => {
-    if (!armed) { e.preventDefault(); return; }
+    if (!armedRef.current) { e.preventDefault(); return; }
     setDrag && setDrag({ sourceId: g.id, overId: null, mode: null });
     try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(g.id)); } catch {}
   };
@@ -1461,21 +1459,19 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
     const mode = drag.mode || "into";
     onDrop && onDrop(drag.sourceId, g.id, mode);
     setDrag({ sourceId: null, overId: null, mode: null });
-    setArmed(false);
-    pressedRef.current = false;
+    armedRef.current = false;
   };
 
   const handleDragEnd = () => {
     setDrag && setDrag({ sourceId: null, overId: null, mode: null });
-    setArmed(false);
-    pressedRef.current = false;
+    armedRef.current = false;
   };
 
   return (
     <>
       <div
         className="tr4de-goals-row"
-        draggable={armed}
+        draggable
         onPointerDown={handlePointerDown}
         onPointerUp={cancelLongPress}
         onPointerCancel={cancelLongPress}
@@ -1488,7 +1484,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         onClick={(e) => {
-          if (armed || drag?.sourceId) { e.preventDefault(); return; }
+          if (drag?.sourceId) { e.preventDefault(); return; }
           // Toggle l'expansion (persisté si épinglé, transient sinon).
           setOpen(v => !v);
         }}
@@ -1511,14 +1507,14 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
           /* Ouvert, la carte perd ses coins bas : le panneau de détail se colle
              dessous et les deux ne forment plus qu'un bloc. */
           borderRadius: nested ? "var(--radius-card)" : (open ? "12px 12px 0 0" : 12),
-          cursor: armed ? "grabbing" : "pointer",
+          cursor: isDragging ? "grabbing" : "pointer",
           transition: "background .12s ease",
           opacity: isDragging ? 0.45 : 1,
           boxShadow: overMode === "before" ? `inset 0 2px 0 0 ${T.blue}`
                   : overMode === "after"  ? `inset 0 -2px 0 0 ${T.blue}`
                   : "none",
-          userSelect: armed ? "none" : "auto",
-          touchAction: armed ? "none" : "auto",
+          userSelect: isDragging ? "none" : "auto",
+          touchAction: isDragging ? "none" : "auto",
         }}
       >
         {!nested && (

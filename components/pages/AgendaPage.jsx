@@ -30,12 +30,12 @@ import {
   reminderLabel, addReminder, removeReminder,
 } from "@/lib/agendaReminders";
 import {
-  ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY,
+  ALL_DAYS, ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY,
   DEFAULT_ANCHOR_MINUTES, DEFAULT_ANCHOR_TITLE, DEFAULT_SLEEP_MINUTES, DEFAULT_SLEEP_TITLE,
   anchorDurationLabel, anchoredOccurrencesForRange, defaultBefore, minutesBetween, newAnchorId,
   normalizeAnchoredBlocks, removeAnchoredBlock, upsertAnchoredBlock,
 } from "@/lib/agendaAnchoredBlocks";
-import { FIELD as DA_FIELD, DurationField } from "@/components/ui/form";
+import { FIELD as DA_FIELD, CheckBox, DurationField } from "@/components/ui/form";
 import { HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
@@ -159,6 +159,7 @@ function blankForm(day, startTime = "09:00", endTime = "10:00") {
     // saisie un bloc local répété chaque jour au lieu d'un évènement Google.
     // La durée est reprise de la plage dessinée au moment où on coche.
     anchored: false, anchorId: null, anchorMinutes: DEFAULT_ANCHOR_MINUTES, anchorMode: "morning", anchorBefore: "", anchorGap: 0,
+    anchorDays: ALL_DAYS, anchorMaxStart: "", anchorCountTasks: true, anchorEnabled: true,
   };
 }
 
@@ -302,6 +303,13 @@ const REMINDER_UNITS = [
 ];
 
 const HOUR_H = 68; // hauteur d'une heure (px) dans le time-grid
+/* Écart vertical entre un bloc et celui qui vient REMPLIR sa colonne juste
+   au-dessus ou juste en dessous. Il vaut les 4 px qui séparent déjà deux blocs
+   côte à côte (2 px de chaque côté) : là où l'un s'élargit sur la place de
+   l'autre, les deux se touchent par un bord neuf, qui doit se lire comme les
+   bords latéraux. Deux blocs simplement consécutifs, eux, restent jointifs —
+   l'heure qui les sépare se lit sur la grille. */
+const FILL_GAP = 4;
 // La grille s'arrête à la même ligne que la barre latérale, qui se termine à
 // 12 px du bas (`margin: 12px 0 12px 12px` dans `components/ui/Sidebar.tsx`).
 // S'aligner sur elle plutôt que sur une respiration inventée : deux bords à des
@@ -362,19 +370,16 @@ function titleFor(view, cursor) {
   return `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
 }
 
-/** Libellé mois + année courant ; "Mois1 – Mois2" si la période chevauche deux mois. */
+/** Libellé mois + année de la période affichée — TOUJOURS un seul mois. */
 function monthYearLabel(view, cursor) {
   if (view === "year") return String(cursor.getFullYear());
-  if (view === "week") {
-    const s = startOfWeekMonday(cursor);
-    const e = addDays(s, 6);
-    const m1 = s.getMonth(), y1 = s.getFullYear();
-    const m2 = e.getMonth(), y2 = e.getFullYear();
-    if (m1 === m2 && y1 === y2) return `${MONTHS[m1]} ${y1}`;
-    if (y1 === y2) return `${MONTHS[m1]} – ${MONTHS[m2]} ${y1}`;
-    return `${MONTHS[m1]} ${y1} – ${MONTHS[m2]} ${y2}`;
-  }
-  return `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
+  /* Une semaine à cheval sur deux mois portait les deux noms (« Août –
+     Septembre 2026 »). C'était exact, mais ça doublait la largeur du titre pour
+     une information que la grille donne déjà : les numéros de jour y repartent
+     à 1 sous les yeux. C'est donc le lundi affiché qui nomme la semaine, et lui
+     seul. */
+  const start = view === "week" ? startOfWeekMonday(cursor) : cursor;
+  return `${MONTHS[start.getMonth()]} ${start.getFullYear()}`;
 }
 
 /* ─────────────── Récurrence (RRULE Google Agenda) ─────────────── */
@@ -466,8 +471,31 @@ function recurrenceLabel(recur) {
   return n === 1 ? `Chaque ${unit}` : `Tous les ${n} ${unit}${plural}`;
 }
 
-/** Positionne les évènements horodatés d'un jour (clusters + colonnes). */
-function layoutDay(evts, day) {
+/* ─── Libellés des blocs ancrés (mêmes règles d'écriture que `recurrenceLabel` :
+   une pastille dit son réglage en toutes lettres, jamais en codes) ─── */
+
+/** « Tous les jours », « En semaine », « Lun · Jeu ». */
+function anchorDaysLabel(days) {
+  const d = Array.isArray(days) && days.length ? [...days].sort((a, b) => a - b) : ALL_DAYS;
+  if (d.length === 7) return "Tous les jours";
+  if (d.length === 5 && d.every((x, i) => x === i)) return "En semaine";
+  if (d.length === 2 && d[0] === 5 && d[1] === 6) return "Le week-end";
+  return d.map((i) => WEEKDAYS[i]).join(" · ");
+}
+
+/** Ce à quoi le bloc s'accroche, tel qu'on l'écrit sur sa pastille. */
+function anchorTargetLabel(form, blocks) {
+  const cible = form.anchorBefore ? (blocks || []).find((b) => b.id === form.anchorBefore) : null;
+  if (cible) return `Juste avant « ${cible.summary} »`;
+  return (form.anchorMode || "morning") === "evening"
+    ? "Avant le réveil du lendemain"
+    : "Avant le 1ᵉʳ évènement du jour";
+}
+
+/** Positionne les évènements horodatés d'un jour (clusters + colonnes).
+ *  Exportée pour les tests : la découpe en tranches se vérifie sur des horaires,
+ *  pas sur des pixels. */
+export function layoutDay(evts, day) {
   const dayStart = startOfDay(day);
   const timed = (evts || [])
     .filter((e) => !e.allDay && e.start)
@@ -485,6 +513,42 @@ function layoutDay(evts, day) {
     })
     .filter(Boolean)
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  /* Découpe d'un évènement en tranches de largeur.
+     Un bloc ne partage sa colonne que pendant le temps RÉELLEMENT commun : une
+     réunion d'une heure croisée par un quart d'heure ne doit pas rester à
+     demi-largeur pendant les 45 minutes où elle est seule. Une largeur unique
+     par évènement ne sait pas dire ça — on rend donc une tranche par intervalle
+     entre deux bornes du groupe, et on fusionne les tranches voisines de même
+     largeur. Les bornes ne viennent que du groupe qui se chevauche : ailleurs,
+     l'évènement reste d'un seul tenant.
+     L'étalement va des deux côtés : la colonne d'un évènement est figée par le
+     placement, mais rien ne justifie de laisser un vide à sa gauche quand c'est
+     le voisin de gauche qui s'est terminé. */
+  const segmentsFor = (ev, cluster, cols) => {
+    const bounds = new Set([ev.startMin, ev.endMin]);
+    for (const o of cluster) {
+      if (o === ev) continue;
+      if (o.startMin > ev.startMin && o.startMin < ev.endMin) bounds.add(o.startMin);
+      if (o.endMin > ev.startMin && o.endMin < ev.endMin) bounds.add(o.endMin);
+    }
+    const marks = [...bounds].sort((a, b) => a - b);
+    const busy = (c, a, b) => cluster.some((o) => o !== ev && o._col === c && o.startMin < b && o.endMin > a);
+    const segs = [];
+    for (let i = 0; i < marks.length - 1; i++) {
+      const a = marks[i];
+      const b = marks[i + 1];
+      let from = ev._col;
+      let to = ev._col;
+      while (from - 1 >= 0 && !busy(from - 1, a, b)) from--;
+      while (to + 1 < cols && !busy(to + 1, a, b)) to++;
+      const span = to - from + 1;
+      const last = segs[segs.length - 1];
+      if (last && last.col === from && last.span === span) last.endMin = b;
+      else segs.push({ startMin: a, endMin: b, col: from, span });
+    }
+    return segs;
+  };
 
   // Partage en colonnes (côte à côte) des éléments qui se chevauchent.
   const place = (items) => {
@@ -512,7 +576,20 @@ function layoutDay(evts, day) {
         }
         if (!placed) { ev._col = colEnds.length; colEnds.push(ev.endMin); }
       }
-      for (const ev of cl) { ev._cols = colEnds.length; out.push(ev); }
+      for (const ev of cl) { ev._cols = colEnds.length; ev._segs = segmentsFor(ev, cl, colEnds.length); }
+      /* Bords à dégager : ceux où un AUTRE évènement s'élargit sur la colonne
+         de celui-ci, juste avant ou juste après lui. C'est le seul endroit où
+         deux blocs se touchent sans qu'une colonne ou une heure ne les sépare —
+         ailleurs, coller reste juste. L'écart est pris sur le bloc qui ne
+         s'élargit pas : le raboter chez l'autre creuserait une encoche au milieu
+         d'un évènement continu. */
+      for (const ev of cl) {
+        const fills = (t, edge) => cl.some((o) => o !== ev && o._col !== ev._col
+          && (o._segs || []).some((sg) => sg[edge] === t && sg.col <= ev._col && ev._col < sg.col + sg.span));
+        ev._gapTop = fills(ev.startMin, "endMin");
+        ev._gapBottom = fills(ev.endMin, "startMin");
+        out.push(ev);
+      }
     }
     return out;
   };
@@ -549,6 +626,8 @@ export default function AgendaPage() {
   const recurAnchor = React.useRef(null);
   const colorAnchor = React.useRef(null);
   const remindAnchor = React.useRef(null);
+  const anchorMenuRef = React.useRef(null);
+  const anchorDaysRef = React.useRef(null);
   // Horloge courante : sert à tracer la ligne « maintenant » et à griser le passé.
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
@@ -593,6 +672,9 @@ export default function AgendaPage() {
   const [colorOpen, setColorOpen] = React.useState(false);
   const [remindOpen, setRemindOpen] = React.useState(false);
   const [recurOpen, setRecurOpen] = React.useState(false);
+  // Menus du bloc ancré : l'ancre (mode + « juste avant ») et les jours.
+  const [anchorMenuOpen, setAnchorMenuOpen] = React.useState(false);
+  const [anchorDaysOpen, setAnchorDaysOpen] = React.useState(false);
   // Délai libre du menu de notifications (valeur + unité), avant ajout.
   const [customRemind, setCustomRemind] = React.useState("2");
   const [customRemindUnit, setCustomRemindUnit] = React.useState("h");
@@ -844,9 +926,9 @@ export default function AgendaPage() {
 
   const goToday = () => setCursor(startOfDay(new Date()));
   const openDay = (d) => { setCursor(startOfDay(d)); setView("day"); };
-  const openCreate = (day, startTime, endTime) => { setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft(""); setModal(blankForm(day || cursor, startTime, endTime)); };
+  const openCreate = (day, startTime, endTime) => { setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setAnchorMenuOpen(false); setAnchorDaysOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft(""); setModal(blankForm(day || cursor, startTime, endTime)); };
   const openEdit = (item) => {
-    setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft("");
+    setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setAnchorMenuOpen(false); setAnchorDaysOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft("");
     /* Bloc ancré : l'occurrence cliquée sert de brouillon (titre, couleur, et
        les heures de CE jour). Seule la durée en sortira — la date affichée n'est
        qu'un exemple, celui du jour qu'on regarde. */
@@ -864,6 +946,10 @@ export default function AgendaPage() {
         anchorMode: block?.anchor === "evening" ? "evening" : "morning",
         anchorBefore: block?.before || "",
         anchorGap: block?.gap ?? 0,
+        anchorDays: block?.days ?? ALL_DAYS,
+        anchorMaxStart: block?.maxStart ?? "",
+        anchorCountTasks: block?.countTasks !== false,
+        anchorEnabled: block?.enabled !== false,
       });
       return;
     }
@@ -1207,6 +1293,10 @@ export default function AgendaPage() {
             anchor: evening ? "evening" : "morning",
             before: modal.anchorBefore || "",
             gap: modal.anchorGap || 0,
+            days: Array.isArray(modal.anchorDays) && modal.anchorDays.length ? modal.anchorDays : ALL_DAYS,
+            maxStart: modal.anchorMaxStart || "",
+            countTasks: modal.anchorCountTasks !== false,
+            enabled: modal.anchorEnabled !== false,
           });
         });
         setModal(null);
@@ -1514,9 +1604,18 @@ export default function AgendaPage() {
 
     return (
       <div style={{ ...card(), border: "none", overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
-        {/* En-tête jours : nom + numéro + tâches du jour, le tout épinglé en haut */}
-        <div style={{ position: "sticky", top: 0, zIndex: 8, background: T.white, display: "flex", borderBottom: `1px solid ${T.border}`, alignItems: "stretch" }}>
+        {/* Les gouttières sont portées par le CONTENEUR QUI DÉFILE, pas par la
+            carte : posées sur la carte, elles laisseraient la barre de
+            défilement collée au bord blanc, en dehors de la marge qu'on vient
+            de créer. La colonne des heures faisait respirer la gauche pendant
+            que les colonnes de jours butaient sur le bord droit — les deux
+            côtés sont maintenant à la même distance. */}
+        <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: `0 ${CARD_PAD}px` }}>
+        {/* En-tête jours : nom + numéro + tâches du jour, le tout épinglé en haut.
+            Son `paddingTop` tient lieu de marge haute : mise sur le conteneur qui
+            défile, elle disparaîtrait au premier tour de molette — un élément
+            `sticky` se cale sur le bord du scroller, pas sur son rembourrage. */}
+        <div style={{ position: "sticky", top: 0, zIndex: 8, background: T.white, paddingTop: CARD_PAD_TOP, display: "flex", borderBottom: `1px solid ${T.border}`, alignItems: "stretch" }}>
           <div style={{ width: gutter, flexShrink: 0 }} />
           {days.map((d, i) => {
             const isToday = sameDay(d, today);
@@ -1648,10 +1747,16 @@ export default function AgendaPage() {
                     const active = resizing || moving;
                     const sMin = resizing ? resizeBox.startMin : moving ? moveBox.startMin : ev.startMin;
                     const eMin = resizing ? resizeBox.endMin : moving ? moveBox.endMin : ev.endMin;
-                    const top = (sMin / 60) * HOUR_H;
-                    const height = Math.max(((eMin - sMin) / 60) * HOUR_H, 16);
-                    const w = 100 / ev._cols;
-                    const left = ev._col * w;
+                    /* Les tranches de largeur (cf. `segmentsFor`) : l'évènement
+                       n'est à demi-largeur que sur le temps partagé, et reprend
+                       toute la place là où il est seul. Un bloc en cours de
+                       déplacement, lui, suit le doigt d'un seul tenant — sa
+                       plage change à chaque pixel, la redécouper en direct
+                       ferait clignoter la grille. */
+                    const segs = (!active && ev._segs && ev._segs.length)
+                      ? ev._segs
+                      : [{ startMin: sMin, endMin: eMin, col: ev._col || 0, span: 1 }];
+                    const colW = 100 / (ev._cols || 1);
                     const paint = eventPaintOf(ev);
                     // Évènement déjà passé → estompé (jour révolu, ou fini avant maintenant).
                     const isPastEvent = isPastDay || (isToday && eMin <= nowMin);
@@ -1665,9 +1770,12 @@ export default function AgendaPage() {
                        d'heures de la grille au travers. */
                     const bgCol = (isPastEvent || ev.isTask) ? paint.soft : paint.bg;
                     const txtCol = (ev.done || isPastEvent) ? T.textMut : paint.ink;
+                    // Hauteur de la tranche qui porte le texte : c'est elle qui
+                    // décide de la mise en page, pas la durée totale.
+                    const headH = Math.max(((segs[0].endMin - segs[0].startMin) / 60) * HOUR_H, 16);
                     // Évènements courts (≤ 30 min) : titre et heure sur une seule
                     // ligne, l'heure poussée à droite.
-                    const compact = (eMin - sMin) <= 30;
+                    const compact = (segs[0].endMin - segs[0].startMin) <= 30;
                     const minLbl = (m) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
                     /* Plage complète, et pas seulement l'heure de début : la
                        hauteur du bloc donne bien la durée, mais à l'œil et à la
@@ -1681,46 +1789,77 @@ export default function AgendaPage() {
                        bloc de temps comme un autre, et rien ne justifiait qu'on
                        puisse la déplacer sans pouvoir l'allonger. La grille ne
                        reçoit que de l'horaire (le « toute la journée » vit dans
-                       sa propre bande, au-dessus). */
+                       sa propre bande, au-dessus). Elles vivent sur la première
+                       et la dernière tranche : les bords du bloc, quoi qu'il
+                       arrive entre les deux. */
                     const handleStyle = (pos) => ({
                       position: "absolute", left: 0, right: 0, [pos]: 0, height: isMobile ? 14 : 8,
                       cursor: "ns-resize", zIndex: 2, touchAction: "none",
                     });
+                    const R = "var(--radius-field)";
                     return (
-                      <div key={ev.id}
-                        onPointerDown={(e) => { e.stopPropagation(); startMove(e, ev, d); }}
-                        onClick={(e) => e.stopPropagation()}
-                        title={`${timeLbl} ${ev.summary}`}
-                        style={{
-                          position: "absolute", top, height, cursor: moving ? "grabbing" : "grab", touchAction: "none",
-                          left: `calc(${left}% + 2px)`, width: `calc(${w}% - 4px)`,
-                          backgroundColor: bgCol, borderLeft: `2px solid ${paint.accent}`, borderRadius: "var(--radius-field)",
-                          padding: "2px 5px", overflow: "hidden", zIndex: active ? 6 : ev.isTask ? 3 : 1,
-                          opacity: moving ? 0.92 : 1,
-                          display: "flex", flexDirection: compact ? "row" : "column",
-                          alignItems: compact ? "baseline" : "stretch", gap: compact ? 5 : 0,
-                        }}>
-                        <div onPointerDown={(e) => startResize(e, ev, d, "top")} onClick={(e) => e.stopPropagation()} style={handleStyle("top")} />
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flex: compact ? 1 : "none" }}>
-                          {/* La pastille passe AU-DESSUS de la poignée haute :
-                              sur un bloc de 30 min, la bande de redimensionnement
-                              recouvre la ligne de titre, et cocher la tâche
-                              redimensionnait au lieu de la terminer. */}
-                          {ev.isTask && (
-                            <span style={{ position: "relative", zIndex: 3, display: "inline-flex", flexShrink: 0 }}>
-                              <TaskCircle done={ev.done} onToggle={(e) => { e.stopPropagation(); onToggleDone(ev); }} />
-                            </span>
-                          )}
-                          {/* Le bloc ancré se signale : il n'a pas d'heure à lui,
-                              et rien d'autre dans la grille ne bouge tout seul. */}
-                          {ev.isAnchored && <Sunrise size={11} strokeWidth={2.2} color={txtCol} style={{ flexShrink: 0 }} />}
-                          <span style={{ fontSize: 10, fontWeight: 600, color: txtCol, textDecoration: ev.isTask && ev.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.summary}</span>
-                        </span>
-                        {compact
-                          ? <span style={{ fontSize: 10, color: txtCol, flexShrink: 0, whiteSpace: "nowrap", opacity: 0.8 }}>{timeLbl}</span>
-                          : (height > 28 && <span style={{ fontSize: 10, color: txtCol, opacity: 0.8 }}>{timeLbl}</span>)}
-                        <div onPointerDown={(e) => startResize(e, ev, d, "bottom")} onClick={(e) => e.stopPropagation()} style={handleStyle("bottom")} />
-                      </div>
+                      <React.Fragment key={ev.id}>
+                        {segs.map((seg, i) => {
+                          const first = i === 0;
+                          const last = i === segs.length - 1;
+                          /* Écart réservé aux bords que touche un voisin venu
+                             remplir la colonne (cf. `FILL_GAP`), et pris sur les
+                             bords du BLOC seulement : entre deux tranches, il
+                             découperait en morceaux un évènement continu. */
+                          const gapTop = (first && ev._gapTop) ? FILL_GAP : 0;
+                          const gapBottom = (last && ev._gapBottom) ? FILL_GAP : 0;
+                          const top = (seg.startMin / 60) * HOUR_H + gapTop;
+                          const full = ((seg.endMin - seg.startMin) / 60) * HOUR_H;
+                          // Le minimum de 16 px ne vaut que pour un bloc d'un
+                          // seul tenant : l'imposer à chaque tranche décollerait
+                          // les morceaux les uns des autres.
+                          const height = Math.max((segs.length === 1 ? Math.max(full, 16) : full) - gapTop - gapBottom, 6);
+                          const left = seg.col * colW;
+                          const w = seg.span * colW;
+                          return (
+                            <div key={i}
+                              onPointerDown={(e) => { e.stopPropagation(); startMove(e, ev, d); }}
+                              onClick={(e) => e.stopPropagation()}
+                              title={`${timeLbl} ${ev.summary}`}
+                              style={{
+                                position: "absolute", top, height, cursor: moving ? "grabbing" : "grab", touchAction: "none",
+                                left: `calc(${left}% + 2px)`, width: `calc(${w}% - 4px)`,
+                                backgroundColor: bgCol, borderLeft: `2px solid ${paint.accent}`,
+                                // Seuls les coins du BLOC sont arrondis : entre
+                                // deux tranches, l'arrondi ferait une encoche au
+                                // milieu d'un évènement continu.
+                                borderRadius: segs.length === 1 ? R : first ? `${R} ${R} 0 0` : last ? `0 0 ${R} ${R}` : 0,
+                                padding: "2px 5px", overflow: "hidden", zIndex: active ? 6 : ev.isTask ? 3 : 1,
+                                opacity: moving ? 0.92 : 1,
+                                display: "flex", flexDirection: compact ? "row" : "column",
+                                alignItems: compact ? "baseline" : "stretch", gap: compact ? 5 : 0,
+                              }}>
+                              {first && <div onPointerDown={(e) => startResize(e, ev, d, "top")} onClick={(e) => e.stopPropagation()} style={handleStyle("top")} />}
+                              {first && (
+                                <span style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flex: compact ? 1 : "none" }}>
+                                  {/* La pastille passe AU-DESSUS de la poignée haute :
+                                      sur un bloc de 30 min, la bande de redimensionnement
+                                      recouvre la ligne de titre, et cocher la tâche
+                                      redimensionnait au lieu de la terminer. */}
+                                  {ev.isTask && (
+                                    <span style={{ position: "relative", zIndex: 3, display: "inline-flex", flexShrink: 0 }}>
+                                      <TaskCircle done={ev.done} onToggle={(e) => { e.stopPropagation(); onToggleDone(ev); }} />
+                                    </span>
+                                  )}
+                                  {/* Le bloc ancré se signale : il n'a pas d'heure à lui,
+                                      et rien d'autre dans la grille ne bouge tout seul. */}
+                                  {ev.isAnchored && <Sunrise size={11} strokeWidth={2.2} color={txtCol} style={{ flexShrink: 0 }} />}
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: txtCol, textDecoration: ev.isTask && ev.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.summary}</span>
+                                </span>
+                              )}
+                              {first && (compact
+                                ? <span style={{ fontSize: 10, color: txtCol, flexShrink: 0, whiteSpace: "nowrap", opacity: 0.8 }}>{timeLbl}</span>
+                                : (headH > 28 && <span style={{ fontSize: 10, color: txtCol, opacity: 0.8 }}>{timeLbl}</span>))}
+                              {last && <div onPointerDown={(e) => startResize(e, ev, d, "bottom")} onClick={(e) => e.stopPropagation()} style={handleStyle("bottom")} />}
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -1735,10 +1874,20 @@ export default function AgendaPage() {
   /* ─────────────── Vue Mois ─────────────── */
   const renderMonth = () => {
     const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
     const gridStart = startOfWeekMonday(monthStart);
-    const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+    /* Autant de semaines qu'il en faut pour couvrir le mois, pas six par
+       principe : à six, un mois qui tient en cinq se voyait offrir une rangée
+       entièrement hors mois, et la grille donnait à lire deux mois au lieu
+       d'un. Les quelques jours voisins qui complètent la première et la
+       dernière semaine restent, eux — une semaine coupée en son milieu se
+       lirait plus mal que ces trois cases grisées. */
+    const days = [];
+    for (let w = gridStart; w <= monthEnd; w = addDays(w, 7)) {
+      for (let i = 0; i < 7; i++) days.push(addDays(w, i));
+    }
     return (
-      <div style={{ ...card(), padding: 0, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ ...card(), padding: `${CARD_PAD_TOP}px ${CARD_PAD}px 0`, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
           {WEEKDAYS.map((w) => (
             <div key={w} style={{ ...dayLabelStyle, padding: "10px 8px" }}>{w}</div>
@@ -1756,7 +1905,7 @@ export default function AgendaPage() {
                 style={{
                   cursor: "pointer",
                   borderRight: i % 7 !== 6 ? `1px solid ${T.border}` : "none",
-                  borderBottom: i < 35 ? `1px solid ${T.border}` : "none",
+                  borderBottom: i < days.length - 7 ? `1px solid ${T.border}` : "none",
                   padding: "6px 6px 8px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0,
                   opacity: inMonth ? 1 : 0.4,
                 }}>
@@ -2014,7 +2163,26 @@ export default function AgendaPage() {
               {/* Bloc ancré : ni évènement Google ni tâche, la bascule n'aurait
                   rien à basculer — on annonce simplement ce qu'on édite. */}
               {modal.anchored ? (
-                <span style={{ minHeight: 28, padding: "5px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600, background: `color-mix(in srgb, ${T.blue} 10%, transparent)`, color: T.blue }}>{(modal.anchorMode || "morning") === "evening" ? "Bloc du soir" : "Bloc du matin"}</span>
+                <>
+                  <span style={{ minHeight: 28, padding: "5px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600, background: `color-mix(in srgb, ${T.blue} 10%, transparent)`, color: T.blue }}>{(modal.anchorMode || "morning") === "evening" ? "Bloc du soir" : "Bloc du matin"}</span>
+                  {/* Suspendre plutôt que supprimer : une semaine de vacances ne
+                      doit pas coûter le réglage. À côté du badge, là où le modal
+                      dit CE QU'ON ÉDITE, et non dans le formulaire, qui dit
+                      comment le bloc se pose. */}
+                  <button type="button"
+                    onClick={() => setModal({ ...modal, anchorEnabled: modal.anchorEnabled === false })}
+                    title={modal.anchorEnabled === false ? "Réactiver ce bloc" : "Suspendre sans supprimer"}
+                    style={{
+                      // Métrique des onglets voisins (cf. lib/ui/buttons.ts) :
+                      // un bouton du site fait 34 px, badge ou pas à côté.
+                      minHeight: 34, padding: "8px 16px", borderRadius: 999, border: "none", cursor: "pointer",
+                      fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+                      background: modal.anchorEnabled === false ? FIELD_BG : "transparent",
+                      color: modal.anchorEnabled === false ? T.textMut : T.textSub,
+                    }}>
+                    {modal.anchorEnabled === false ? "Éteint" : "Actif"}
+                  </button>
+                </>
               ) : modal.kind === "event" ? (
                 [{ k: "event", label: "Événement" }, { k: "tasks", label: "Tâche" }].map(({ k, label }) => {
                   const active = modalTab === k;
@@ -2048,25 +2216,35 @@ export default function AgendaPage() {
                     la position (une nuit de sommeil finit d'ailleurs le
                     lendemain, ce que deux heures ne savent pas dire). */}
                 {modal.anchored ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 14, color: T.text, width: 52 }}>Durée</span>
-                      <DurationField minutes={modal.anchorMinutes} onChange={(v) => setModal({ ...modal, anchorMinutes: v })} />
+                  /* Même geste que la date d'un évènement : une phrase lisible,
+                     qui s'ouvre au clic sur ses deux champs. Un bloc ancré n'a
+                     ni date ni heure de début — il n'a qu'une durée et un écart
+                     avec ce qui le suit. */
+                  !timeEdit ? (
+                    <button type="button" onClick={() => setTimeEdit(true)}
+                      style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", padding: "2px 0", width: "100%" }}>
+                      <div style={{ fontSize: 14, color: T.text, display: "flex", alignItems: "baseline", gap: 24, flexWrap: "wrap" }}>
+                        <span>{anchorDurationLabel(modal.anchorMinutes)}</span>
+                        <span>{modal.anchorGap ? `${anchorDurationLabel(modal.anchorGap)} avant l'ancre` : "collé à l'ancre"}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: T.textMut, marginTop: 2 }}>Durée du bloc · écart avec ce qui le suit</div>
+                    </button>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, color: T.textMut, width: 46 }}>Durée</span>
+                        <DurationField minutes={modal.anchorMinutes} onChange={(v) => setModal({ ...modal, anchorMinutes: v })} />
+                      </div>
+                      {/* L'écart : rien n'oblige un bloc à être collé à son
+                          ancre. « Une heure de sport qui finit 5 min avant le
+                          premier cours » ne se dit pas autrement, l'ancre
+                          bougeant tous les jours. */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, color: T.textMut, width: 46 }}>Écart</span>
+                        <DurationField minutes={modal.anchorGap || 0} max={12 * 60} onChange={(v) => setModal({ ...modal, anchorGap: v })} />
+                      </div>
                     </div>
-                    {/* L'écart : rien n'oblige un bloc à être collé à son ancre.
-                        « Une heure de sport qui finit 5 min avant le premier
-                        cours » ne se dit pas autrement, l'ancre bougeant tous
-                        les jours. */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 14, color: T.text, width: 52 }}>Écart</span>
-                      <DurationField minutes={modal.anchorGap || 0} max={12 * 60} onChange={(v) => setModal({ ...modal, anchorGap: v })} />
-                      <span style={{ fontSize: 12, color: T.textMut }}>
-                        avant {modal.anchorBefore
-                          ? `« ${anchoredBlocks.find((b) => b.id === modal.anchorBefore)?.summary || "le bloc suivant"} »`
-                          : modal.anchorMode === "evening" ? "le réveil du lendemain" : "le 1ᵉʳ évènement du jour"}
-                      </span>
-                    </div>
-                  </div>
+                  )
                 ) : !timeEdit ? (
                   <button type="button" onClick={() => setTimeEdit(true)}
                     style={{ border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", padding: "2px 0", width: "100%" }}>
@@ -2126,108 +2304,179 @@ export default function AgendaPage() {
                   de quelqu'un. */}
               {!(modal.kind === "task" || modalTab === "tasks") && (!modal.id || modal.anchored) && (
                 <FormRow icon={Sunrise} top={modal.anchored}>
-                  <button type="button"
-                    onClick={() => {
-                      setModalTab("event"); setTimeEdit(false);
-                      setModal({
-                        ...modal, anchored: !modal.anchored, allDay: false,
-                        // À la première coche, la durée est celle de la plage
-                        // qu'on venait de dessiner dans la grille.
-                        anchorMinutes: modal.anchored ? modal.anchorMinutes : minutesBetween(modal.startTime, modal.endTime),
-                        anchorBefore: modal.anchored ? modal.anchorBefore : defaultBefore(anchoredBlocks, modal.anchorMode || "morning"),
-                      });
-                    }}
-                    style={{
-                      ...pillBtn, alignSelf: "flex-start",
-                      background: modal.anchored ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : T.white,
-                      borderColor: modal.anchored ? `color-mix(in srgb, ${T.blue} 33%, transparent)` : T.border,
-                      color: modal.anchored ? T.blue : T.text,
-                      fontWeight: 500,
-                    }}>
-                    <span style={{
-                      width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0,
-                      border: `1.5px solid ${modal.anchored ? T.blue : T.textMut}`,
-                      background: modal.anchored ? T.blue : "transparent",
-                      display: "inline-flex", alignItems: "center", justifyContent: "center",
-                      color: T.onSolid, fontSize: 10, lineHeight: 1,
-                    }}>{modal.anchored ? "✓" : ""}</span>
-                    Bloc qui se cale tout seul
-                  </button>
-                  {modal.anchored && (
-                    <>
-                      {/* Les deux ancres. Le soir n'est pas « le matin à
-                          l'envers » : il se calcule depuis le réveil du
-                          LENDEMAIN, ce qui est la seule façon d'obtenir une
-                          nuit de durée constante. */}
-                      <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                        {[
-                          { id: "morning", label: "Avant le 1ᵉʳ évènement du jour" },
-                          { id: "evening", label: "Avant le réveil du lendemain" },
-                        ].map((m) => {
-                          const on = (modal.anchorMode || "morning") === m.id;
-                          return (
-                            <button key={m.id} type="button"
-                              onClick={() => setModal({
-                                ...modal, anchorMode: m.id,
-                                /* Un bloc du soir tout neuf est presque toujours
-                                   une nuit : on propose 8 h plutôt que la durée
-                                   d'un réveil. Sur un bloc déjà enregistré, on
-                                   ne touche à rien. */
-                                anchorMinutes: modal.anchorId
-                                  ? modal.anchorMinutes
-                                  : m.id === "evening" ? DEFAULT_SLEEP_MINUTES : DEFAULT_ANCHOR_MINUTES,
-                                // Deuxième bloc du mode : il se range derrière
-                                // le précédent (lire avant de dormir).
-                                anchorBefore: modal.anchorId ? modal.anchorBefore : defaultBefore(anchoredBlocks, m.id),
-                              })}
-                              style={{
-                                ...pillBtn,
-                                background: on ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : T.white,
-                                borderColor: on ? `color-mix(in srgb, ${T.blue} 33%, transparent)` : T.border,
-                                color: on ? T.blue : T.text, fontWeight: 500,
-                              }}>
-                              {m.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {/* À quoi il se colle. Le choix n'apparaît que s'il y a
-                          autre chose à désigner que l'ancre naturelle — sinon
-                          c'est une liste à une entrée. */}
-                      {(() => {
-                        const mode = modal.anchorMode || "morning";
-                        const famille = anchoredBlocks.filter((b) => b.anchor === mode && b.id !== modal.anchorId);
-                        if (!famille.length) return null;
-                        return (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 12, color: T.textMut }}>Se pose juste avant</span>
-                            <select value={modal.anchorBefore || ""}
-                              onChange={(e) => setModal({ ...modal, anchorBefore: e.target.value })}
-                              style={{ ...DA_FIELD, width: "auto", fontSize: 12, padding: "7px 12px", cursor: "pointer" }}>
-                              <option value="">{mode === "evening" ? "le réveil du lendemain" : "le 1ᵉʳ évènement du jour"}</option>
-                              {famille.map((b) => <option key={b.id} value={b.id}>{b.summary}</option>)}
-                            </select>
-                          </div>
-                        );
-                      })()}
-                      <div style={{ fontSize: 12, color: T.textMut, marginTop: 6, lineHeight: 1.45 }}>
-                        {(() => {
-                          const mode = modal.anchorMode || "morning";
-                          const cible = modal.anchorBefore
-                            ? anchoredBlocks.find((b) => b.id === modal.anchorBefore)
-                            : null;
-                          const duree = anchorDurationLabel(modal.anchorMinutes);
-                          const ecart = modal.anchorGap ? `${anchorDurationLabel(modal.anchorGap)} avant` : "au début de";
-                          if (cible) return `${duree} qui se terminent ${ecart} « ${cible.summary} », lui-même calé sur ${mode === "evening" ? "le réveil du lendemain" : "le premier élément de la journée"}.`;
-                          const fin = modal.anchorGap ? `${anchorDurationLabel(modal.anchorGap)} avant` : "à l'heure";
-                          return mode === "evening"
-                            ? `Chaque soir, ${duree} qui se terminent ${fin} du réveil du lendemain — le premier bloc du matin, sinon le premier évènement. La nuit se coupe à minuit et s'affiche sur les deux journées.`
-                            : `Chaque jour, ${duree} qui se terminent ${fin} du premier élément de la journée.`;
-                        })()}
-                        {" "}Jours, réveil au plus tard et marge se règlent dans Réglages → Agendas.
-                      </div>
-                    </>
+                  {!modal.anchored ? (
+                    <button type="button"
+                      onClick={() => {
+                        setModalTab("event"); setTimeEdit(false);
+                        setModal({
+                          ...modal, anchored: true, allDay: false,
+                          // À la coche, la durée est celle de la plage qu'on
+                          // venait de dessiner dans la grille.
+                          anchorMinutes: minutesBetween(modal.startTime, modal.endTime),
+                          anchorBefore: defaultBefore(anchoredBlocks, modal.anchorMode || "morning"),
+                        });
+                      }}
+                      style={{ ...pillBtn, alignSelf: "flex-start", background: T.white, borderColor: T.border, color: T.text, fontWeight: 500 }}>
+                      <span style={{
+                        width: 15, height: 15, borderRadius: "var(--radius-field)", flexShrink: 0,
+                        border: `1.5px solid ${T.textMut}`, background: "transparent",
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        color: T.onSolid, fontSize: 10, lineHeight: 1,
+                      }} />
+                      Bloc qui se cale tout seul
+                    </button>
+                  ) : (
+                    /* Une seule pastille dit l'ancre en toutes lettres et ouvre
+                       le menu qui la règle — même geste que la récurrence, au
+                       lieu d'un panneau de réglages déplié en permanence. */
+                    <div ref={anchorMenuRef} data-menu-root style={{ position: "relative" }}>
+                      <button type="button"
+                        onClick={() => { setAnchorMenuOpen((o) => !o); setAnchorDaysOpen(false); setColorOpen(false); setRemindOpen(false); }}
+                        style={pillBtn}>
+                        {anchorTargetLabel(modal, anchoredBlocks)}
+                        <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
+                      </button>
+                      <Popover
+                        anchorRef={anchorMenuRef}
+                        open={anchorMenuOpen}
+                        onClose={() => setAnchorMenuOpen(false)}
+                        gap={4}
+                        minWidth={260}
+                        maxHeight={380}
+                        style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+                      >
+                        <>
+                          <div style={menuLabel}>Se cale sur</div>
+                          {[
+                            { id: "morning", label: "Le 1ᵉʳ évènement du jour" },
+                            { id: "evening", label: "Le réveil du lendemain" },
+                          ].map((m) => {
+                            const on = (modal.anchorMode || "morning") === m.id && !modal.anchorBefore;
+                            return (
+                              <button key={m.id} type="button"
+                                onClick={() => setModal({
+                                  ...modal, anchorMode: m.id, anchorBefore: "",
+                                  /* Un bloc du soir tout neuf est presque
+                                     toujours une nuit : on propose 8 h plutôt
+                                     que la durée d'un réveil. Sur un bloc déjà
+                                     enregistré, on ne touche à rien. */
+                                  anchorMinutes: modal.anchorId
+                                    ? modal.anchorMinutes
+                                    : m.id === "evening" ? DEFAULT_SLEEP_MINUTES : DEFAULT_ANCHOR_MINUTES,
+                                })}
+                                style={{ ...menuItem, background: on ? T.accentBg : "transparent" }}>
+                                {m.label}
+                              </button>
+                            );
+                          })}
+                          {/* Les blocs du même mode : « lecture juste avant
+                              sommeil » se choisit ici, et pas en calculant
+                              soi-même l'heure. */}
+                          {(() => {
+                            const mode = modal.anchorMode || "morning";
+                            const famille = anchoredBlocks.filter((b) => b.anchor === mode && b.id !== modal.anchorId);
+                            if (!famille.length) return null;
+                            return (
+                              <>
+                                <div style={menuLabel}>Juste avant un autre bloc</div>
+                                {famille.map((b) => (
+                                  <button key={b.id} type="button"
+                                    onClick={() => setModal({ ...modal, anchorBefore: b.id })}
+                                    style={{ ...menuItem, background: modal.anchorBefore === b.id ? T.accentBg : "transparent" }}>
+                                    {b.summary}
+                                  </button>
+                                ))}
+                              </>
+                            );
+                          })()}
+                          <div style={menuLabel}>Ce qui compte comme premier élément</div>
+                          <button type="button"
+                            onClick={() => setModal({ ...modal, anchorCountTasks: modal.anchorCountTasks === false })}
+                            style={{ ...menuItem, display: "flex", alignItems: "center", gap: 8 }}>
+                            <CheckBox on={modal.anchorCountTasks !== false} />
+                            Les tâches posées à une heure
+                          </button>
+                        </>
+                      </Popover>
+                    </div>
                   )}
+                </FormRow>
+              )}
+
+              {/* Jours du bloc ancré — la place qu'occupe la récurrence sur un
+                  évènement, puisque c'est la même question : quand ça revient.
+                  Le réveil au plus tard vit dans le même menu ; c'est lui qui
+                  décide si le bloc se pose un jour vide, donc il appartient au
+                  « quand ». */}
+              {modal.anchored && (
+                <FormRow icon={Repeat}>
+                  <div ref={anchorDaysRef} data-menu-root style={{ position: "relative" }}>
+                    <button type="button"
+                      onClick={() => { setAnchorDaysOpen((o) => !o); setAnchorMenuOpen(false); setColorOpen(false); setRemindOpen(false); }}
+                      style={pillBtn}>
+                      {anchorDaysLabel(modal.anchorDays)}
+                      {modal.anchorMaxStart ? ` · ${(modal.anchorMode || "morning") === "evening" ? "coucher" : "réveil"} ≤ ${modal.anchorMaxStart}` : ""}
+                      <ChevronDown size={14} color={T.textMut} style={{ marginLeft: 2 }} />
+                    </button>
+                    <Popover
+                      anchorRef={anchorDaysRef}
+                      open={anchorDaysOpen}
+                      onClose={() => setAnchorDaysOpen(false)}
+                      gap={4}
+                      minWidth={260}
+                      maxHeight={380}
+                      style={{ background: T.white, border: "none", borderRadius: 12, padding: 10, boxShadow: "var(--elev-overlay)" }}
+                    >
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                          <span style={menuLabel}>Jours</span>
+                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                            {WEEKDAYS_MIN.map((lbl, i) => {
+                              const jours = Array.isArray(modal.anchorDays) ? modal.anchorDays : ALL_DAYS;
+                              const on = jours.includes(i);
+                              return (
+                                <button key={i} type="button" title={WEEKDAYS_FULL[i]}
+                                  onClick={() => {
+                                    const next = on ? jours.filter((d) => d !== i) : [...jours, i].sort((a, c) => a - c);
+                                    // Tout décocher voudrait dire « jamais »,
+                                    // ce que dit déjà l'interrupteur du bloc.
+                                    setModal({ ...modal, anchorDays: next.length ? next : ALL_DAYS });
+                                  }}
+                                  style={{
+                                    width: 30, height: 30, borderRadius: "50%", cursor: "pointer", fontFamily: "inherit",
+                                    fontSize: 12, fontWeight: 500,
+                                    border: `1px solid ${on ? T.blue : T.border}`,
+                                    background: on ? T.blue : T.white, color: on ? T.onSolid : T.text,
+                                  }}>{lbl}</button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                          <span style={menuLabel}>
+                            {(modal.anchorMode || "morning") === "evening" ? "Coucher au plus tard" : "Réveil au plus tard"}
+                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <input type="time" value={modal.anchorMaxStart || ""}
+                              onChange={(e) => setModal({ ...modal, anchorMaxStart: e.target.value })}
+                              style={{ ...DA_FIELD, width: 118, fontSize: 13, padding: "7px 12px" }} />
+                            {modal.anchorMaxStart && (
+                              <button type="button" onClick={() => setModal({ ...modal, anchorMaxStart: "" })}
+                                aria-label="Retirer la limite" title="Retirer la limite"
+                                style={{ border: "none", background: "transparent", cursor: "pointer", color: T.textMut, display: "inline-flex", alignItems: "center", padding: 2, borderRadius: 6 }}>
+                                <IconX size={14} strokeWidth={2} />
+                              </button>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 11, color: T.textMut, lineHeight: 1.45 }}>
+                            {(modal.anchorMode || "morning") === "evening"
+                              ? "La nuit s'allonge plutôt que de commencer plus tard quand le lendemain démarre tard."
+                              : "Le bloc ne commence jamais après cette heure, et s'y pose même les jours sans rien. Vide : rien ces jours-là."}
+                          </span>
+                        </div>
+                      </div>
+                    </Popover>
+                  </div>
                 </FormRow>
               )}
 
@@ -2711,6 +2960,14 @@ function FormRow({ icon: Icon, children, top = false, iconColor }) {
    les appelants posent leur propre padding, et `CARD` clipperait au passage tout
    ce qui dépasse (un menu ouvert depuis une carte). */
 const card = () => ({ background: T.white, borderRadius: 12, boxShadow: T.elevCard });
+
+/* Gouttières intérieures des vues d'agenda. `card()` ne les porte pas lui-même —
+   il sert aussi à des blocs qui doivent rester pleins — et les grilles se
+   collaient donc aux quatre bords. Le haut est plus court que les côtés :
+   l'en-tête des jours a déjà son propre rembourrage, et la même valeur en aurait
+   fait une bande. */
+const CARD_PAD = 16;
+const CARD_PAD_TOP = 10;
 const subInp = { padding: "5px 4px", fontSize: 14, fontFamily: "inherit", color: T.text, background: "transparent", border: "none", borderRadius: 6, outline: "none", cursor: "pointer" };
 const rowInp = { width: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 14, color: T.text, padding: "5px 0", boxSizing: "border-box" };
 // Bouton "pilule" moderne (couleur, notification)
@@ -2722,6 +2979,21 @@ const topIconBtn = {
   transition: "background-color 120ms ease, color 120ms ease",
 };
 // Ligne d'un menu déroulant de notification (choix exclusif ou case à cocher).
+/* Deux briques des menus flottants du modal, reprises telles quelles du menu de
+   récurrence : un intertitre en capitales et une ligne de choix pleine largeur.
+   Elles étaient écrites à plat à chaque menu — les blocs ancrés en ouvrent deux
+   de plus, c'était le moment de les nommer. */
+const menuLabel = {
+  fontSize: 11, fontWeight: 600, color: T.textMut,
+  textTransform: "uppercase", letterSpacing: 0.4,
+  padding: "8px 10px 4px",
+};
+const menuItem = {
+  width: "100%", textAlign: "left", border: "none", borderRadius: 8,
+  padding: "8px 10px", cursor: "pointer", fontFamily: "inherit",
+  fontSize: 13, color: T.text, fontWeight: 500,
+};
+
 const remindOptBtn = {
   width: "100%", textAlign: "left", border: "none", borderRadius: 8,
   padding: "8px 10px", cursor: "pointer", fontFamily: "inherit",

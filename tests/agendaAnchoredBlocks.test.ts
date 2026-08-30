@@ -262,6 +262,35 @@ describe("blocs du soir", () => {
     expect(minOfIn(DAY, routine!.occurrence.start)).toBe(22 * 60 + 30);
   });
 
+  /* Le cas qui ne marchait pas : une lecture d'une heure, chaînée avant la
+     nuit, à qui on donne une heure limite. Elle commençait bien à l'heure dite
+     mais restait collée au coucher — deux heures de lecture réglées sur une.
+     Elle doit garder sa durée et laisser le vide devant elle. */
+  it("garde sa durée quand un bloc chaîné est repoussé par sa limite", () => {
+    // Réveil à 08:00, nuit de 8 h : le coucher tombe à minuit, et la lecture
+    // d'une heure irait de 23:00 à minuit. Limitée à 21:00, elle doit finir à
+    // 22:00 et laisser deux heures vides avant la nuit.
+    const parts = eveningOccurrences(
+      [nuit(480), nuit(60, "r1", { summary: "Lecture", before: "n1", maxStart: "21:00" })],
+      DAY, 8 * 60,
+    );
+    const lecture = parts.find((x) => x.occurrence.anchorId === "r1")!;
+    expect(minOfIn(DAY, lecture.occurrence.start)).toBe(21 * 60);
+    expect(minOfIn(DAY, lecture.occurrence.end)).toBe(22 * 60);
+    // …et la nuit, elle, n'a pas bougé : c'est bien un trou qui s'est ouvert.
+    const sommeil = parts.find((x) => x.occurrence.anchorId === "n1")!;
+    expect(minOfIn(DAY, sommeil.occurrence.start)).toBe(24 * 60);
+  });
+
+  /* Le pendant : la nuit, elle, DOIT s'étirer. Sa fin est le réveil, et se
+     coucher plus tôt allonge le sommeil au lieu d'ouvrir un trou devant le
+     lever. C'est ce qui distingue le bloc accroché au réveil des autres. */
+  it("étire la nuit, et elle seule, quand le coucher est avancé", () => {
+    const parts = eveningOccurrences([nuit(480, "n1", { maxStart: "22:00" })], DAY, 8 * 60);
+    expect(minOfIn(DAY, parts[0].occurrence.start)).toBe(22 * 60);
+    expect(minOfIn(NEXT, parts[1].occurrence.end)).toBe(8 * 60); // 10 h, pas 8
+  });
+
   it("respecte coucher au plus tard, marge et jours comme le matin", () => {
     // Le lendemain démarre tard : la nuit s'allonge plutôt que de commencer au
     // milieu de la nuit — sa fin reste le réveil.
