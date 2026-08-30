@@ -51,7 +51,7 @@ import {
 } from "@/lib/bank/categories";
 import {
   ALL_DAYS, balanceSeries, depthOf, groupByDay, kindLabelKey, oldestDate, parseDay,
-  periodStats, withinDays,
+  pendingTotal, periodStats, withinDays,
 } from "@/lib/bank/transactions";
 import { ConfirmModal } from "@/components/modals/AccountModals";
 import { AssetFormModal } from "@/components/modals/PatrimoineModals";
@@ -127,6 +127,14 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
   // visite, il n'y a rien à modifier ni à supprimer ici.
   const aggregated = !!asset && isBankAsset(asset);
 
+  /* Relevé du compte à la profondeur MINIMALE : la fiche n'en a besoin ICI que
+     pour ses opérations en attente, qui sont toujours récentes — le solde
+     affiché est le solde attendu, banque plus attente. `BankMovements` demande
+     ensuite plus profond selon la fenêtre choisie, dans le MÊME cache : les deux
+     appels ne coûtent qu'une requête. */
+  const { transactions: recentTxs } = useBankTransactions(asset ? bankAssetUid(asset) : null, 90);
+  const pending = pendingTotal(recentTxs);
+
   /* Synthèse du crédit — calculée AVANT la sortie « actif introuvable » : un hook
      ne peut pas vivre après un `return`. Le restant dû est stocké négatif
      (cf. `lib/patrimoine`) et `loanStats` raisonne en positif, d'où la valeur
@@ -171,7 +179,9 @@ export default function PatrimoineAssetPage({ assetId, setPage, setSelectedHoldi
   }
 
   const holdings = Array.isArray(asset.holdings) ? asset.holdings : [];
-  const value = assetValue(asset);
+  // Le solde ATTENDU, comme la synthèse (cf. `withPendingBalances`) : les deux
+  // pages doivent afficher le même chiffre pour le même compte.
+  const value = Math.round((assetValue(asset) + pending) * 100) / 100;
   const gain = assetGain(asset);
   const portfolio = isPortfolio(asset.type);
 
@@ -654,6 +664,10 @@ const MOVEMENTS_FOLDED = 12;
  * `balanceSeries`) : la banque ne rend pas l'historique de ses soldes, seulement
  * le solde du jour et les opérations. Elle est donc exacte aux opérations
  * récupérées près — ce qui est le cas sur la fenêtre demandée.
+ *
+ * `balanceSeries` reçoit le solde COMPTABILISÉ et ajoute lui-même les opérations
+ * en attente : le solde passé ici ne doit donc pas l'être déjà, sans quoi
+ * l'attente compterait deux fois.
  */
 function BankMovements({ asset }) {
   const uid = bankAssetUid(asset);
@@ -846,9 +860,10 @@ function MovementRow({ tx }) {
         )}
       </span>
 
-      {/* Une opération en attente n'est pas encore dans le solde de la banque —
-          et n'est donc pas non plus dans la courbe. Le dire ici évite de
-          chercher pourquoi les deux ne se répondent pas. */}
+      {/* Une opération en attente n'est pas encore passée au solde de la banque,
+          mais l'argent est engagé : elle compte dans le solde affiché et dans la
+          courbe. Le marqueur reste — il dit que la banque peut encore la
+          modifier ou l'annuler, ce qu'un montant seul ne dit pas. */}
       {tx.pending && (
         <span style={{
           flexShrink: 0, fontSize: 11, fontWeight: 500, color: T.amber,

@@ -18,7 +18,9 @@ import { t, useLang } from "@/lib/i18n";
 import { BackLink, CARD, HeroAmount, TH } from "@/components/ui/da";
 import { AssetFormModal, BankFormModal } from "@/components/modals/PatrimoineModals";
 import AssetAvatar from "@/components/ui/AssetAvatar";
-import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
+import {
+  bankAccountToAsset, useBankAccounts, useBankTxByAssetId, withPendingBalances,
+} from "@/lib/bank/useBankAccounts";
 import { fmt } from "@/lib/ui/format";
 import {
   assetGain,
@@ -42,6 +44,12 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
   const [addingBank, setAddingBank] = React.useState(false);
   const bank = useBankAccounts();
   const isChecking = cls?.slug === "comptes";
+
+  /* Relevés des comptes agrégés, à la profondeur minimale : cette page n'en tire
+     que les opérations en attente, pour additionner les mêmes soldes ATTENDUS
+     que la synthèse d'où l'on vient. Sans cela, un compte porterait deux
+     montants différents à un clic d'écart. */
+  const { txByAssetId } = useBankTxByAssetId(bank.accounts);
 
   const back = (
     <div style={{ marginLeft: -8 }}>
@@ -70,7 +78,10 @@ export default function PatrimoineClassPage({ classSlug, setPage, setSelectedAss
      sont PAS écrits dans le store, et cette page ne lisait que lui — la classe
      « Comptes courants » s'ouvrait donc vide alors que la synthèse d'où l'on
      vient y montrait des comptes. */
-  const allAssets = [...(store.assets || []), ...bank.accounts.map(bankAccountToAsset)];
+  const allAssets = withPendingBalances(
+    [...(store.assets || []), ...bank.accounts.map(bankAccountToAsset)],
+    txByAssetId,
+  );
   const assets = assetsOfClass(allAssets, cls);
   const total = assets.reduce((s, a) => s + assetValue(a), 0);
   const gains = assets.map(assetGain).filter((g) => g !== null);

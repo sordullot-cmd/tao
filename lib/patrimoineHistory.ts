@@ -44,7 +44,12 @@ export function samplingStep(spanDays: number): number {
 }
 
 export interface ReconstructOptions {
-  /** Mouvements normalisés, indexés par id d'actif (`enablebanking-…`). */
+  /** Mouvements normalisés, indexés par id d'actif (`enablebanking-…`).
+   *
+   *  Les opérations EN ATTENTE en font partie et sont défaites comme les
+   *  autres : les actifs reçus doivent donc porter le solde ATTENDU, celui que
+   *  produit `withPendingBalances`. Un solde comptabilisé associé à des
+   *  mouvements en attente ferait finir la courbe à côté du chiffre héros. */
   txByAssetId?: Record<string, BankTransaction[]>;
   /** Points relevés à l'ouverture de la page — le passé déjà constaté. */
   measured?: HistoryPoint[];
@@ -148,7 +153,7 @@ function valuator(
        le chiffre héros, sans quoi la page se contredirait. */
     if (grossOnly && current < 0) continue;
 
-    const txs = (txByAssetId[a.id] || []).filter((tx) => !tx.pending && tx.date);
+    const txs = (txByAssetId[a.id] || []).filter((tx) => tx.date);
 
     if (txs.length > 0) {
       const perDay = new Map<string, number>();
@@ -250,7 +255,7 @@ function earliestKnownDay(
 
   for (const id in txByAssetId) {
     for (const tx of txByAssetId[id] || []) {
-      if (!tx.pending && tx.date) keep(addDays(tx.date, -1));
+      if (tx.date) keep(addDays(tx.date, -1));
     }
   }
 

@@ -1503,14 +1503,20 @@ function stepTone(status, color) {
   return { dot: T.border, text: T.text, label: T.textMut };
 }
 
-// Une étape de la frise : pastille cochable, libellé éditable au clic, et les
+// Une étape de la LISTE : pastille cochable, libellé éditable au clic, et les
 // objectifs chiffrés qui la mesurent. Les actions n'apparaissent qu'au survol
 // de la ligne.
+//
+// Sans trait de liaison entre les pastilles : c'est le rail, au-dessus, qui
+// porte désormais la continuité du parcours. Le dire deux fois faisait de la
+// liste une seconde frise, plus haute et moins lisible que la première — et le
+// trait vertical imposait à chaque ligne une gouttière dont elle n'a plus
+// besoin.
 //
 // Pas de datation : une étape se note et se coche, point. Le calendrier vit
 // ailleurs (tâches d'agenda, échéance de l'objectif) ; le demander ici faisait
 // d'un jalon de trois mots une saisie à deux temps.
-function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
+function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
   const [hov, setHov] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(step.label);
@@ -1534,10 +1540,7 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{ display: "flex", alignItems: "flex-start", gap: 9, position: "relative" }}>
-      {/* Colonne de la frise : la pastille, et le trait qui rejoint la suivante.
-          Le trait s'arrête à la dernière étape — une frise qui continue dans le
-          vide laisserait croire à une suite qui n'existe pas. */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", alignSelf: "stretch", flexShrink: 0, paddingTop: 3 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, paddingTop: 3 }}>
         {measured ? (
           /* Pastille de mesure : remplie en camembert à l'avancement de ses
              objectifs. Elle dit d'un coup d'œil ce qu'une case à cocher ne
@@ -1569,10 +1572,9 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
             {step.done && <Check size={8} strokeWidth={3.5} />}
           </button>
         )}
-        {!last && <div style={{ width: 1.5, flex: 1, minHeight: 12, marginTop: 3, background: T.border, borderRadius: 999 }} />}
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 10 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {editing ? (
             <input autoFocus value={draft}
@@ -1667,15 +1669,120 @@ function StepRow({ step, cat, status, last, goals = [], allObjectives = [], onTo
 }
 
 /**
- * Bloc « Étapes » d'une carte : la frise et son avancement, sous un en-tête
- * qu'on déplie.
+ * Le RAIL des jalons — le chemin, lisible sans rien déplier.
  *
- * REPLIÉ par défaut, et absent tant qu'aucune étape n'existe. Trois cartes
- * dépliant chacune sa frise repoussaient hors de l'écran les objectifs chiffrés
- * — ce que la carte MESURE — et une carte sans jalon portait une invitation
- * « Par où passer ? » qui pesait autant que son contenu. L'en-tête suffit à
- * dire l'essentiel (combien de jalons franchis, combien en retard) ; on ouvre
- * quand on vient précisément lire le chemin.
+ * Le bloc « Étapes » se refermait sur lui-même : replié il ne disait qu'un
+ * compte (« 2/5 »), et le chemin — ce qu'on vient chercher sur une carte
+ * d'objectif annuel — n'existait qu'une fois la frise ouverte, c'est-à-dire
+ * presque jamais. Un compte dit COMBIEN ; il ne dit ni où l'on en est, ni ce
+ * qui vient ensuite.
+ *
+ * D'où un rail permanent : un point par jalon, reliés, remplis jusqu'à celui
+ * qu'on tient. On y lit d'un coup la forme du parcours — trois franchis d'un
+ * bloc puis un vide, ou une progression régulière — que le rapport 2/5 aplatit.
+ *
+ * Il s'adapte à la largeur plutôt qu'à un nombre d'étapes : les connecteurs
+ * prennent la place qui reste, si bien que trois jalons ou neuf tiennent dans
+ * la même colonne d'un tiers de page. Au-delà de ce que la carte peut montrer,
+ * le rail se tait plutôt que de tasser des points illisibles — la liste
+ * dépliée, elle, reste exhaustive.
+ */
+const RAIL_MAX_DOTS = 9;
+
+/* Exporté pour ses tests : le rail est la seule pièce PERMANENTE du bloc,
+   celle qui doit répondre sans qu'on déplie — elle mérite d'être vérifiée sans
+   monter la page entière. */
+export function StepRail({ steps, cat, today, stepPcts }) {
+  if (!steps.length || steps.length > RAIL_MAX_DOTS) return null;
+
+  const marks = steps.map((s) => {
+    const pcts = goalPctsOf(stepPcts, s.id);
+    return {
+      id: s.id,
+      label: s.label,
+      done: isStepDone(s, pcts),
+      status: stepStatus(s, today, pcts),
+      pct: Math.round(stepCompletion(s, pcts)),
+    };
+  });
+
+  /* La prochaine, c'est la première non franchie — et non la plus avancée : on
+     suit un chemin dans l'ordre où il a été posé, même si un jalon plus loin a
+     déjà commencé à bouger. */
+  const next = marks.find((m) => !m.done) || null;
+  const done = marks.filter((m) => m.done).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <div
+        role="img"
+        aria-label={`Jalons : ${done} franchis sur ${marks.length}${next ? `, prochain « ${next.label} »` : ""}`}
+        style={{ display: "flex", alignItems: "center", gap: 0 }}
+      >
+        {marks.map((m, i) => {
+          const tone = stepTone(m.status, cat.color);
+          /* Le connecteur porte la couleur quand le jalon d'AVANT est franchi :
+             c'est le chemin déjà parcouru qu'il colore, pas celui qui reste. */
+          const filled = i > 0 && marks[i - 1].done;
+          return (
+            <React.Fragment key={m.id}>
+              {i > 0 && (
+                <span style={{
+                  flex: 1, height: 1.5, minWidth: 6, borderRadius: 999,
+                  background: filled ? cat.color : T.border,
+                  opacity: filled ? 0.55 : 1,
+                }} />
+              )}
+              <span
+                title={m.done ? `${m.label} — franchie` : `${m.label} — ${m.pct} %`}
+                style={{
+                  width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
+                  border: `1.5px solid ${m.done ? cat.color : tone.dot}`,
+                  /* Le camembert dit « à mi-chemin » là où plein/vide ne sait
+                     dire que « pas encore » — c'est ce qui distingue un jalon
+                     entamé d'un jalon intact. */
+                  background: m.done
+                    ? cat.color
+                    : `conic-gradient(${cat.color} ${Math.min(100, m.pct)}%, ${T.white} 0)`,
+                }}
+              />
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Ce qui vient ensuite, nommé. Un rail sans ce libellé montrerait la
+          forme du parcours sans dire vers quoi on marche. */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+        <span style={{
+          flex: 1, minWidth: 0, fontSize: 11, fontWeight: 600,
+          color: next ? T.textSub : cat.color,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {next ? next.label : "Toutes les étapes sont franchies"}
+        </span>
+        {next && next.pct > 0 && (
+          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+            {next.pct} %
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Bloc « Étapes » d'une carte : le rail, puis la liste qu'on déplie.
+ *
+ * Deux étages, et ils ne répondent pas à la même question. Le RAIL est
+ * permanent et dit OÙ ON EN EST — la forme du parcours, et le prochain jalon
+ * nommé. La LISTE, repliée par défaut, dit CE QU'IL Y A : tous les jalons, les
+ * objectifs qui les mesurent, de quoi cocher et rattacher.
+ *
+ * Replier la liste reste nécessaire : trois cartes qui déplient chacune la
+ * leur repoussent hors de l'écran les objectifs chiffrés, ce que la carte
+ * MESURE. Ce qui a changé, c'est qu'on n'a plus besoin de l'ouvrir pour savoir
+ * où l'on va — un rapport « 2/5 » disait combien, jamais où.
  *
  * Aucune saisie ici : une étape se POSE dans la modale de modification de la
  * carte (le ✎ de l'en-tête), avec le reste de ce qui définit l'objectif de
@@ -1695,10 +1802,12 @@ function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}
   if (!enabled) return null;
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <StepRail steps={ordered} cat={cat} today={today} stepPcts={stepPcts} />
+
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
         onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: open ? 8 : 0 }}>
+        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
         <ChevronRight size={12} strokeWidth={2.5} color={T.textMut}
           style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform var(--dur-fast, .12s) var(--ease-out, ease)" }} />
         <span style={{ fontSize: 11, fontWeight: 700, color: hov ? T.textSub : T.textMut, transition: "color .15s ease" }}>Étapes</span>
@@ -1716,14 +1825,13 @@ function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}
       </button>
 
       {open && (
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           {ordered.length === 0 && (
             <div style={{ fontSize: 11, color: T.textMut, marginBottom: 2 }}>{"Aucun jalon pour l'instant."}</div>
           )}
-          {ordered.map((s, i) => (
+          {ordered.map(s => (
             <StepRow key={s.id} step={s} cat={cat}
               status={stepStatus(s, today, goalPctsOf(stepPcts, s.id))}
-              last={i === ordered.length - 1}
               goals={goalsByStep[s.id] || []}
               allObjectives={allObjectives}
               onToggleObjective={onToggleObjective ? (goalId) => onToggleObjective(s.id, goalId) : null}

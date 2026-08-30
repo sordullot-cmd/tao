@@ -74,14 +74,17 @@ describe("remontée du solde d'un compte bancaire", () => {
     expect(at(points, "2026-08-01")).toBeUndefined();
   });
 
-  it("ignore les opérations en attente — elles ne sont pas dans le solde de la banque", () => {
+  it("défait aussi les opérations en attente, comptées dans le solde reçu", () => {
+    /* L'actif porte ici le solde ATTENDU (cf. `withPendingBalances`) : les 1 000
+       contiennent déjà l'attente, la remontée doit donc la défaire comme le
+       reste, sinon le passé s'en trouverait décalé d'autant. */
     const points = reconstructHistory([bank], {
       today: TODAY,
       txByAssetId: {
         "enablebanking-x": [tx("2026-08-13", -200), tx("2026-08-13", -5_000, { pending: true })],
       },
     });
-    expect(at(points, "2026-08-12")).toBe(1_200);
+    expect(at(points, "2026-08-12")).toBe(6_200);
   });
 
   it("finit toujours sur le patrimoine d'aujourd'hui", () => {
