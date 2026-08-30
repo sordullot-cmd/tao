@@ -1,5 +1,5 @@
 /**
- * Rappels d'agenda — modèle partagé entre la page Calendrier (saisie), la route
+ * Rappels d'agenda — modèle partagé entre la page Agenda (saisie), la route
  * Google Calendar (envoi) et `useAgendaReminders` (notifications locales).
  *
  * Un item porte une LISTE de rappels, pas un seul : Google Calendar accepte
@@ -61,6 +61,51 @@ export function remindersToGoogle(list: ReminderValue[]): {
     useDefault: false,
     overrides: (norm as number[]).map((minutes) => ({ method: "popup", minutes })),
   };
+}
+
+/**
+ * Réglage « rappels par défaut », partagé par `useCloudState` entre la page
+ * Paramètres (saisie) et `useAgendaReminders` (programmation).
+ *
+ * Pourquoi il existe : la majorité des évènements n'a AUCUN rappel exploitable
+ * localement. Google ne renvoie `reminders.overrides` que là où l'utilisateur en
+ * a posé un lui-même ; sur un agenda en lecture seule (emploi du temps abonné,
+ * agenda partagé) le champ vaut `{ useDefault: false }` — et un flux iCal lu
+ * directement n'a pas de rappel du tout. Sans repli, ces évènements-là ne
+ * notifiaient jamais rien.
+ */
+export const DEFAULT_REMINDERS_STORAGE_KEY = "tr4de_agenda_default_reminders";
+export const DEFAULT_REMINDERS_CLOUD_KEY = "agenda_default_reminders";
+
+/** Repli d'usine, appliqué tant que l'utilisateur n'a rien choisi. */
+export const FACTORY_DEFAULT_REMINDERS: number[] = [DEFAULT_REMINDER_MIN];
+
+/**
+ * Normalise le réglage lui-même. `"default"` n'y a pas de sens — ce serait un
+ * renvoi circulaire : le réglage EST la valeur par défaut. On retombe donc sur
+ * le repli d'usine plutôt que de boucler.
+ */
+export function normalizeDefaultReminders(input: unknown): number[] {
+  const norm = normalizeReminders(input);
+  if (norm[0] === "default") return [...FACTORY_DEFAULT_REMINDERS];
+  return norm as number[];
+}
+
+/**
+ * Minutes à programmer pour un item, réglage utilisateur compris.
+ *
+ * Un item sans rappel propre hérite du réglage, au même titre qu'un item marqué
+ * « rappels par défaut ». Conséquence assumée : un évènement Google dont
+ * l'utilisateur a explicitement RETIRÉ tout rappel est indiscernable d'un
+ * évènement en lecture seule, et notifiera quand même. L'inverse — se taire
+ * dans le doute — est ce qui faisait manquer les cours.
+ *
+ * Un réglage vide (« aucun ») coupe ce repli sans toucher aux rappels propres.
+ */
+export function effectiveReminderMinutes(input: unknown, fallback: unknown): number[] {
+  const own = normalizeReminders(input);
+  if (own.length && own[0] !== "default") return own as number[];
+  return normalizeDefaultReminders(fallback);
 }
 
 /** Minutes réellement utilisables pour programmer une notification locale. */

@@ -39,8 +39,19 @@ import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
 import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
-import { useIcsFeeds, probeFeed } from "@/lib/hooks/useIcsFeeds";
-import { KIND_LABELS, courseColor } from "@/lib/icsCategories";
+import { useIcsFeeds, useIcsKindColors, probeFeed } from "@/lib/hooks/useIcsFeeds";
+import { KIND_LABELS, kindColorId } from "@/lib/icsCategories";
+import { GCAL_COLORS } from "@/lib/gcalColors";
+import {
+  DEFAULT_REMINDERS_STORAGE_KEY,
+  DEFAULT_REMINDERS_CLOUD_KEY,
+  FACTORY_DEFAULT_REMINDERS,
+  normalizeDefaultReminders,
+  addReminder,
+  removeReminder,
+  reminderLabel,
+  MAX_REMINDERS,
+} from "@/lib/agendaReminders";
 
 // Clés locales absentes de BaseT mappées sur des tokens dark-aware.
 const T = { ...BaseT, panel: BaseT.accentBg, borderHover: BaseT.border2 };
@@ -982,6 +993,172 @@ const FEED_ERRORS = {
   network: "Connexion impossible, réessaie dans un instant.",
 };
 
+/* Délais proposés. Plafonnés à 2 h : au-delà, le rappel tomberait hors de la
+   fenêtre d'anticipation du hook, qui ne regarde que les prochaines heures. */
+const REMINDER_CHOICES = [0, 5, 10, 15, 30, 60, 120];
+
+/**
+ * Rappels appliqués aux évènements qui n'en portent pas : un cours d'emploi du
+ * temps n'a aucun rappel à lire (un flux iCal n'en transporte pas), et Google ne
+ * renvoie d'`overrides` que là où l'utilisateur en a posé un lui-même. Sans ce
+ * réglage, l'écrasante majorité de l'agenda ne notifiait jamais rien.
+ */
+function DefaultRemindersCard() {
+  const [stored, setStored] = useCloudState(
+    DEFAULT_REMINDERS_STORAGE_KEY,
+    DEFAULT_REMINDERS_CLOUD_KEY,
+    FACTORY_DEFAULT_REMINDERS,
+  );
+  const mins = normalizeDefaultReminders(stored);
+  const toggle = (v) =>
+    setStored(mins.includes(v) ? removeReminder(mins, v) : addReminder(mins, v));
+
+  return (
+    <Card>
+      <CardHeader
+        title="Rappels par défaut"
+        subtitle="Notification sur cet appareil pour tout évènement sans rappel à lui — les cours de l'emploi du temps en premier lieu."
+      />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {REMINDER_CHOICES.map((v) => {
+          const on = mins.includes(v);
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => toggle(v)}
+              aria-pressed={on}
+              style={{
+                padding: "6px 10px", borderRadius: "var(--radius-pill)",
+                border: `1px solid ${on ? T.text : T.border}`,
+                background: on ? T.accentBg : T.white,
+                color: on ? T.text : T.textSub, fontSize: 12, fontFamily: "inherit",
+                cursor: "pointer", transition: "border-color 150ms, background 150ms",
+              }}
+            >
+              {reminderLabel(v)}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: T.textMut, marginTop: 12, lineHeight: 1.6 }}>
+        {mins.length === 0
+          ? "Aucun rappel automatique : seuls les évènements où tu as posé un rappel toi-même notifieront."
+          : `${mins.length} rappel${mins.length > 1 ? "s" : ""} sur ${MAX_REMINDERS} — la notification arrive tant que tao trade tourne, fenêtre masquée comprise.`}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Couleur des séances importées, réglable type par type.
+ *
+ * La carte était une LÉGENDE : elle disait le code couleur sans permettre d'en
+ * changer, alors que c'est précisément ce qu'on veut faire en le lisant — les
+ * repères d'un emploi du temps sont personnels, et le vocabulaire d'un
+ * établissement ne se plie pas au nôtre.
+ *
+ * Onze emplacements et pas un nuancier libre : ces séances voisinent dans la
+ * même grille avec des évènements Google, qui n'ont que ces onze couleurs. Une
+ * teinte prise ailleurs se verrait comme une pièce rapportée.
+ */
+function CourseColorsCard() {
+  const { kindColors, setKindColor, resetColors } = useIcsKindColors();
+  /* Un seul type ouvert à la fois : onze pastilles par ligne sur douze lignes
+     feraient une planche de couleurs où l'on ne retrouve plus le type qu'on
+     voulait changer. */
+  const [open, setOpen] = useState(null);
+  const kinds = Object.keys(KIND_LABELS);
+  const changed = Object.keys(kindColors).length;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Couleur des séances importées"
+        subtitle="La couleur vient du type de cours, pas de l'agenda : un examen doit se repérer d'un coup d'œil. Clique un type pour changer la sienne."
+      />
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {kinds.map((kind, i) => {
+          const id = kindColorId(kind, kindColors);
+          const custom = !!kindColors[kind];
+          const isOpen = open === kind;
+          return (
+            <div key={kind} style={{ borderTop: i === 0 ? "none" : `1px solid ${T.border}` }}>
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : kind)}
+                aria-expanded={isOpen}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, width: "100%",
+                  padding: "10px 0", border: "none", background: "transparent",
+                  cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                }}
+              >
+                <span style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  background: GCAL_COLORS[id],
+                }} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, color: T.text }}>
+                  {KIND_LABELS[kind]}
+                </span>
+                {/* Ce qui a été changé se voit sans ouvrir : sinon, rétablir
+                    demande d'ouvrir les douze types pour trouver lesquels. */}
+                {custom && <span style={{ fontSize: 11, color: T.textMut, flexShrink: 0 }}>modifiée</span>}
+              </button>
+              {isOpen && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "2px 0 12px 28px" }}>
+                  {Object.entries(GCAL_COLORS).map(([cid, hex]) => (
+                    <button
+                      key={cid}
+                      type="button"
+                      onClick={() => { setKindColor(kind, cid); setOpen(null); }}
+                      aria-label={`Couleur ${cid} pour ${KIND_LABELS[kind]}`}
+                      aria-pressed={cid === id}
+                      style={{
+                        width: 24, height: 24, borderRadius: "50%", background: hex, padding: 0,
+                        cursor: "pointer",
+                        border: cid === id ? `2px solid ${T.text}` : "1px solid rgba(0,0,0,0.12)",
+                      }}
+                    />
+                  ))}
+                  {custom && (
+                    <button
+                      type="button"
+                      onClick={() => { setKindColor(kind, null); setOpen(null); }}
+                      style={{
+                        border: `1px solid ${T.border}`, background: "transparent", cursor: "pointer",
+                        borderRadius: 999, padding: "0 12px", height: 24, fontFamily: "inherit",
+                        fontSize: 12, color: T.textSub,
+                      }}
+                    >
+                      Couleur d’origine
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {changed > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={() => { resetColors(); setOpen(null); }}
+            style={{
+              border: `1px solid ${T.border}`, background: "transparent", cursor: "pointer",
+              borderRadius: 999, padding: "0 14px", height: 30, fontFamily: "inherit",
+              fontSize: 12, color: T.textSub,
+            }}
+          >
+            Tout rétablir ({changed})
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function CalendarsSection() {
   const { connected, calendars, hiddenCalendars, toggleCalendar } = useGoogleCalendar();
   const { feeds, addFeed, removeFeed, patchFeed } = useIcsFeeds();
@@ -1016,8 +1193,6 @@ function CalendarsSection() {
       setBusy(false);
     }
   };
-
-  const legendKinds = ["cm", "td", "tp", "examen", "revisions", "soutien", "reunion", "annule"];
 
   return (
     <>
@@ -1055,6 +1230,8 @@ function CalendarsSection() {
           </PrimaryButton>
         </div>
       </Card>
+
+      <DefaultRemindersCard />
 
       {feeds.length > 0 && (
         <Card>
@@ -1136,22 +1313,7 @@ function CalendarsSection() {
         </Card>
       )}
 
-      {feeds.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Code couleur des séances"
-            subtitle="La couleur vient du type de cours, pas de l'agenda : un examen doit se repérer d'un coup d'œil."
-          />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
-            {legendKinds.map((kind) => (
-              <span key={kind} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, color: T.textSub }}>
-                <span style={{ width: 11, height: 11, borderRadius: 3, background: courseColor(KIND_LABELS[kind]), flexShrink: 0 }} />
-                {KIND_LABELS[kind]}
-              </span>
-            ))}
-          </div>
-        </Card>
-      )}
+      {feeds.length > 0 && <CourseColorsCard />}
 
       {!connected && feeds.length === 0 && (
         <Card>
@@ -1159,7 +1321,7 @@ function CalendarsSection() {
             <AlertTriangle size={16} strokeWidth={1.75} color={T.amber} style={{ flexShrink: 0, marginTop: 1 }} />
             <p style={{ fontSize: 12, color: T.textSub, margin: 0, lineHeight: 1.6 }}>
               Aucun agenda pour le moment. Ajoute un lien iCal ci-dessus, ou connecte
-              ton compte Google depuis la page Calendrier pour retrouver tes agendas.
+              ton compte Google depuis la page Agenda pour retrouver tes agendas.
             </p>
           </div>
         </Card>

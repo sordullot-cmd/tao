@@ -60,11 +60,15 @@ const RULES: { kind: CourseKind; test: RegExp }[] = [
 ];
 
 /**
- * Couleur (colorId Google) par type. `pause` et `annule` partagent le gris :
- * sémantiquement, les deux disent « rien à faire », et cela laisse les teintes
- * franches à ce qui demande réellement d'être là.
+ * Couleur (colorId Google) par type, TELLE QUE LIVRÉE. `pause` et `annule`
+ * partagent le gris : sémantiquement, les deux disent « rien à faire », et cela
+ * laisse les teintes franches à ce qui demande réellement d'être là.
+ *
+ * Ce n'est qu'un point de départ : chacun repère ses séances autrement, et le
+ * vocabulaire d'un établissement ne se plie pas au nôtre. Les réglages de
+ * l'agenda posent des surcharges par-dessus (cf. `KindColors`).
  */
-const KIND_COLOR_ID: Record<CourseKind, string> = {
+export const KIND_DEFAULT_COLOR_ID: Record<CourseKind, string> = {
   cm: "5",         // Banane
   td: "2",         // Sauge
   tp: "7",         // Paon
@@ -78,6 +82,47 @@ const KIND_COLOR_ID: Record<CourseKind, string> = {
   annule: "8",     // Graphite
   autre: "1",      // Lavande, couleur par défaut des évènements
 };
+
+/**
+ * Ce que l'utilisateur a changé : un colorId Google par type, les autres
+ * gardant leur valeur livrée.
+ *
+ * Un enregistrement PARTIEL et non une copie complète de la table : une teinte
+ * ajustée dans une version future atteint ainsi ceux qui n'y ont pas touché,
+ * au lieu d'être gelée par une copie faite le jour de l'installation.
+ */
+export type KindColors = Partial<Record<CourseKind, string>>;
+
+/** Les onze emplacements Google, et rien d'autre : une valeur libre poserait à
+ *  l'écran une couleur qui n'appartient à aucune palette. */
+function validId(v: unknown): string | null {
+  const id = String(v ?? "").trim();
+  return id in GCAL_COLORS ? id : null;
+}
+
+/** Surcharges relues d'un magasin quelconque : on ne fait confiance à rien. */
+export function normalizeKindColors(raw: unknown): KindColors {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: KindColors = {};
+  for (const [kind, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!(kind in KIND_DEFAULT_COLOR_ID)) continue;
+    const id = validId(value);
+    // Une surcharge égale au défaut n'en est pas une : la retenir figerait la
+    // valeur livrée pour toujours.
+    if (id && id !== KIND_DEFAULT_COLOR_ID[kind as CourseKind]) out[kind as CourseKind] = id;
+  }
+  return out;
+}
+
+/** Emplacement Google d'un type, surcharges comprises. */
+export function kindColorId(kind: CourseKind, colors?: KindColors | null): string {
+  return colors?.[kind] ?? KIND_DEFAULT_COLOR_ID[kind];
+}
+
+/** Couleur hex d'un type, surcharges comprises. */
+export function kindColor(kind: CourseKind, colors?: KindColors | null): string {
+  return GCAL_COLORS[kindColorId(kind, colors)];
+}
 
 /** Libellés lisibles, pour une légende. */
 export const KIND_LABELS: Record<CourseKind, string> = {
@@ -112,11 +157,11 @@ export function courseKind(category?: string, summary?: string): CourseKind {
 }
 
 /** Couleur hex d'une séance, selon son type. */
-export function courseColor(category?: string, summary?: string): string {
-  return GCAL_COLORS[KIND_COLOR_ID[courseKind(category, summary)]];
+export function courseColor(category?: string, summary?: string, colors?: KindColors | null): string {
+  return kindColor(courseKind(category, summary), colors);
 }
 
 /** colorId Google équivalent — pour les traitements qui raisonnent en identifiants. */
-export function courseColorId(category?: string, summary?: string): string {
-  return KIND_COLOR_ID[courseKind(category, summary)];
+export function courseColorId(category?: string, summary?: string, colors?: KindColors | null): string {
+  return kindColorId(courseKind(category, summary), colors);
 }

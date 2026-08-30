@@ -72,7 +72,10 @@ const FR: Dict = {
   "nav.tasks": "Tâches",
   "nav.goals": "Objectifs",
   "nav.dailyPlanner": "Habitudes",
-  "nav.agenda": "Calendrier",
+  /* « Agenda » et non « Calendrier » : la nav portait déjà « Calendrier » pour
+     le P&L jour par jour (`nav.calendar`). Deux entrées du même nom dans la même
+     barre obligeaient à ouvrir pour savoir laquelle. */
+  "nav.agenda": "Agenda",
   "nav.habits": "Habitudes",
   "nav.focus": "Focus",
   "nav.notes": "Notes",
@@ -1466,7 +1469,7 @@ const EN: Dict = {
   "nav.tasks": "Tasks",
   "nav.goals": "Goals",
   "nav.dailyPlanner": "Habits",
-  "nav.agenda": "Calendar",
+  "nav.agenda": "Agenda",
   "nav.habits": "Habits",
   "nav.focus": "Focus",
   "nav.notes": "Notes",

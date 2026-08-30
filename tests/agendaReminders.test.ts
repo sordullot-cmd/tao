@@ -8,6 +8,9 @@ import {
   reminderLabel,
   addReminder,
   removeReminder,
+  normalizeDefaultReminders,
+  effectiveReminderMinutes,
+  FACTORY_DEFAULT_REMINDERS,
 } from "@/lib/agendaReminders";
 
 describe("rappels d'agenda", () => {
@@ -81,5 +84,34 @@ describe("rappels d'agenda", () => {
     expect(reminderLabel(120)).toBe("2 heures avant");
     expect(reminderLabel(1440)).toBe("1 jour avant");
     expect(reminderLabel(90)).toBe("90 minutes avant");
+  });
+
+  it("rabat un évènement sans rappel sur le réglage, sinon les cours ne notifient jamais", () => {
+    // Ce que Google renvoie sur un agenda en lecture seule…
+    expect(effectiveReminderMinutes({ useDefault: false }, [15])).toEqual([15]);
+    // …et ce que porte un cours lu dans un flux iCal.
+    expect(effectiveReminderMinutes(null, [15])).toEqual([15]);
+  });
+
+  it("laisse le rappel propre de l'évènement l'emporter sur le réglage", () => {
+    expect(effectiveReminderMinutes([60], [15])).toEqual([60]);
+    expect(effectiveReminderMinutes(remindersFromEvent({
+      reminders: { useDefault: false, overrides: [{ minutes: 30 }] },
+    }), [15])).toEqual([30]);
+  });
+
+  it("fait de « rappels par défaut » le réglage de l'utilisateur, pas une constante", () => {
+    expect(effectiveReminderMinutes(["default"], [45, 5])).toEqual([45, 5]);
+  });
+
+  it("se tait quand le réglage est vide, sans museler les rappels posés à la main", () => {
+    expect(effectiveReminderMinutes(null, [])).toEqual([]);
+    expect(effectiveReminderMinutes([10], [])).toEqual([10]);
+  });
+
+  it("refuse « default » DANS le réglage — il s'y désignerait lui-même", () => {
+    expect(normalizeDefaultReminders(["default"])).toEqual(FACTORY_DEFAULT_REMINDERS);
+    expect(normalizeDefaultReminders(null)).toEqual([]);
+    expect(normalizeDefaultReminders([30, 5])).toEqual([30, 5]);
   });
 });

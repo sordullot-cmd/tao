@@ -18,10 +18,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { normalizeFeedUrl } from "@/lib/icsFetch";
-import { courseColor, courseColorId } from "@/lib/icsCategories";
+import {
+  courseColor, courseColorId, normalizeKindColors, type KindColors,
+} from "@/lib/icsCategories";
 
 export const ICS_FEEDS_KEY = "tr4de_ics_feeds";
 export const ICS_FEEDS_CLOUD_KEY = "ics_feeds";
+
+export const ICS_KIND_COLORS_KEY = "tr4de_ics_kind_colors";
+export const ICS_KIND_COLORS_CLOUD_KEY = "ics_kind_colors";
 
 /** Palette d'attribution : couleurs distinctes de la teinte par défaut des évènements Google. */
 const FEED_COLORS = ["#B45309", "#7C3AED", "#0E7490", "#BE123C", "#15803D", "#A16207"];
@@ -116,6 +121,43 @@ export function useIcsFeeds() {
   return { feeds, addFeed, removeFeed, patchFeed };
 }
 
+/**
+ * Couleur des séances importées, par type — ce que règlent les paramètres de
+ * l'agenda.
+ *
+ * Le code couleur livré (les examens en rouge, les TP en bleu…) tient sur un
+ * vocabulaire d'établissement français ; il ne peut pas convenir à tout le
+ * monde, et il n'a de toute façon aucune raison d'imposer SES repères. Ce qu'on
+ * cherche des yeux dans une semaine n'est pas le même pour chacun.
+ *
+ * Rangé dans `user_productivity` comme les flux : même compte, tous les
+ * appareils, aucune migration.
+ */
+export function useIcsKindColors() {
+  const [stored, setStored] = useCloudState<KindColors>(
+    ICS_KIND_COLORS_KEY, ICS_KIND_COLORS_CLOUD_KEY, {},
+  );
+  const colors = useMemo(() => normalizeKindColors(stored), [stored]);
+
+  /* `null` rend le type à sa couleur livrée. C'est un RETRAIT et non
+     l'écriture du défaut : sans ça, la valeur du jour serait recopiée dans le
+     magasin et gelée pour toujours, y compris si la charte la corrige. */
+  const setKindColor = useCallback(
+    (kind: string, colorId: string | null) =>
+      setStored((prev) => {
+        const next = { ...normalizeKindColors(prev) };
+        if (colorId === null) delete next[kind as keyof KindColors];
+        else next[kind as keyof KindColors] = colorId;
+        return normalizeKindColors(next);
+      }),
+    [setStored],
+  );
+
+  const resetColors = useCallback(() => setStored({}), [setStored]);
+
+  return { kindColors: colors, setKindColor, resetColors };
+}
+
 /** Vérifie qu'une URL répond bien un calendrier, avant de l'enregistrer. */
 export async function probeFeed(url: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
@@ -137,19 +179,33 @@ export async function probeFeed(url: string): Promise<{ ok: boolean; error?: str
  * Un flux en échec n'empêche pas les autres de s'afficher : l'emploi du temps
  * d'un établissement tombe parfois en maintenance, la grille doit survivre.
  */
+/** Ce que le serveur rend pour un flux, avant mise en couleur. */
+interface RawFeedItems {
+  feedId: string;
+  items: {
+    uid: string; summary: string; description: string; location: string;
+    allDay: boolean; start: string; end: string; status: string; category?: string;
+  }[];
+}
+
 export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: string | null) {
-  const [events, setEvents] = useState<IcsFeedEvent[]>([]);
+  /* Ce qui a été LU est gardé tel quel, et la couleur se pose au rendu.
+     Cousu ensemble, changer une teinte dans les réglages aurait relancé une
+     requête réseau par flux pour repeindre des séances déjà en mémoire — et la
+     grille aurait clignoté sur un choix qui ne change rien à ce qui est lu. */
+  const [raw, setRaw] = useState<RawFeedItems[]>([]);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState<string[]>([]);
+  const { kindColors } = useIcsKindColors();
   // Le rendu recrée le tableau `feeds` à chaque passe : on compare son contenu,
   // sinon l'effet se relancerait en boucle.
   const active = useMemo(() => feeds.filter((f) => f.enabled && f.url), [feeds]);
-  const signature = active.map((f) => `${f.id}:${f.url}:${f.color}:${f.name}`).join("|");
+  const signature = active.map((f) => `${f.id}:${f.url}:${f.name}`).join("|");
   const seq = useRef(0);
 
   useEffect(() => {
     if (!active.length || !timeMin || !timeMax) {
-      setEvents([]);
+      setRaw([]);
       setFailed([]);
       return;
     }
@@ -164,57 +220,60 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url: feed.url, timeMin, timeMax }),
           });
-          if (!res.ok) return { feed, items: [], ok: false };
+          if (!res.ok) return { feedId: feed.id, items: [], ok: false };
           const data = await res.json();
-          return { feed, items: data.events || [], ok: true };
+          return { feedId: feed.id, items: data.events || [], ok: true };
         } catch {
-          return { feed, items: [], ok: false };
+          return { feedId: feed.id, items: [], ok: false };
         }
       }),
     ).then((results) => {
       // Une navigation plus récente a déjà pris la main : cette réponse est périmée.
       if (run !== seq.current) return;
-      const out: IcsFeedEvent[] = [];
-      const ko: string[] = [];
-      for (const { feed, items, ok } of results) {
-        if (!ok) { ko.push(feed.id); continue; }
-        for (const ev of items) {
-          out.push({
-            id: `${feed.id}:${ev.uid}`,
-            calendarId: feedCalendarId(feed.id),
-            summary: ev.summary,
-            description: ev.description,
-            location: ev.location,
-            allDay: ev.allDay,
-            start: ev.start,
-            end: ev.end,
-            status: ev.status,
-            // La couleur vient du TYPE de séance, pas du flux : une semaine
-            // entière d'une seule teinte ne renseigne sur rien, alors qu'un
-            // coup d'œil doit suffire à repérer les TP ou le partiel.
-            calendarColor: courseColor(ev.category, ev.summary),
-            category: ev.category || "",
-            readOnly: true,
-            htmlLink: "",
-            colorId: courseColorId(ev.category, ev.summary),
-            recurringEventId: null,
-            guests: [],
-            transparency: "opaque",
-            visibility: "default",
-            reminders: null,
-            hangoutLink: null,
-            isTask: false,
-            done: false,
-          });
-        }
-      }
-      setEvents(out);
-      setFailed(ko);
+      setRaw(results.filter((r) => r.ok).map(({ feedId, items }) => ({ feedId, items })));
+      setFailed(results.filter((r) => !r.ok).map((r) => r.feedId));
       setLoading(false);
     });
     // `signature` résume `active` : le tableau change d'identité à chaque rendu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, timeMin, timeMax]);
+
+  const events = useMemo<IcsFeedEvent[]>(() => {
+    const out: IcsFeedEvent[] = [];
+    for (const { feedId, items } of raw) {
+      for (const ev of items) {
+        out.push({
+          id: `${feedId}:${ev.uid}`,
+          calendarId: feedCalendarId(feedId),
+          summary: ev.summary,
+          description: ev.description,
+          location: ev.location,
+          allDay: ev.allDay,
+          start: ev.start,
+          end: ev.end,
+          status: ev.status,
+          // La couleur vient du TYPE de séance, pas du flux : une semaine
+          // entière d'une seule teinte ne renseigne sur rien, alors qu'un
+          // coup d'œil doit suffire à repérer les TP ou le partiel. Le choix
+          // de la teinte, lui, appartient aux réglages de l'agenda.
+          calendarColor: courseColor(ev.category, ev.summary, kindColors),
+          category: ev.category || "",
+          readOnly: true,
+          htmlLink: "",
+          colorId: courseColorId(ev.category, ev.summary, kindColors),
+          recurringEventId: null,
+          guests: [],
+          transparency: "opaque",
+          visibility: "default",
+          reminders: null,
+          hangoutLink: null,
+          isTask: false,
+          done: false,
+        });
+      }
+    }
+    return out;
+  }, [raw, kindColors]);
 
   return { icsEvents: events, icsLoading: loading, icsFailed: failed };
 }

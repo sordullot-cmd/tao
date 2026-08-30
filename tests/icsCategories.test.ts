@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { courseKind, courseColor, courseColorId, KIND_LABELS } from "@/lib/icsCategories";
+import {
+  courseKind, courseColor, courseColorId, kindColor, kindColorId,
+  normalizeKindColors, KIND_DEFAULT_COLOR_ID, KIND_LABELS,
+} from "@/lib/icsCategories";
 import { GCAL_COLORS } from "@/lib/gcalColors";
 
 describe("type de séance et couleur", () => {
@@ -72,5 +75,42 @@ describe("type de séance et couleur", () => {
     expect(Object.values(GCAL_COLORS)).toContain(courseColor("TD"));
     expect(courseColor("Examen")).toBe(GCAL_COLORS["11"]); // Tomate
     expect(courseColor("TD annulé")).toBe(GCAL_COLORS["8"]); // Graphite
+  });
+});
+
+/* ── Couleurs réglées par l'utilisateur ───────────────────────────────────── */
+
+describe("couleur d'un type, réglée depuis les paramètres", () => {
+  it("remplace la couleur livrée pour le seul type visé", () => {
+    const mine = { examen: "3" };
+    expect(kindColorId("examen", mine)).toBe("3");
+    expect(courseColor("Partiel", "", mine)).toBe(GCAL_COLORS["3"]);
+    // Les autres types ne bougent pas : on n'a réglé qu'une ligne.
+    expect(kindColorId("td", mine)).toBe(KIND_DEFAULT_COLOR_ID.td);
+  });
+
+  it("n'enregistre pas une couleur égale à celle d'origine", () => {
+    /* Sinon la valeur du jour serait recopiée dans le magasin et gelée pour
+       toujours — y compris si la charte la corrige plus tard. Rendre un type à
+       sa couleur d'origine, c'est RETIRER la surcharge, pas l'écrire. */
+    expect(normalizeKindColors({ examen: KIND_DEFAULT_COLOR_ID.examen })).toEqual({});
+    expect(normalizeKindColors({ examen: "3" })).toEqual({ examen: "3" });
+  });
+
+  it("refuse ce qui n'est ni un type connu ni un emplacement Google", () => {
+    /* Le magasin est un JSON quelconque, relu tel quel d'un appareil à l'autre :
+       une valeur libre poserait à l'écran une couleur qui n'appartient à aucune
+       palette, au milieu d'évènements Google qui n'en ont que onze. */
+    expect(normalizeKindColors({ examen: "#ff0000" })).toEqual({});
+    expect(normalizeKindColors({ examen: "42" })).toEqual({});
+    expect(normalizeKindColors({ inconnu: "3" })).toEqual({});
+    expect(normalizeKindColors(null)).toEqual({});
+    expect(normalizeKindColors(["3"])).toEqual({});
+  });
+
+  it("retombe sur la couleur livrée quand rien n'est réglé", () => {
+    expect(kindColor("examen")).toBe(GCAL_COLORS["11"]);
+    expect(kindColor("examen", {})).toBe(GCAL_COLORS["11"]);
+    expect(courseColorId("Examen", "", {})).toBe("11");
   });
 });
