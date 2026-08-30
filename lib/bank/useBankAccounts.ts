@@ -26,11 +26,9 @@
  *     derrière soi.
  */
 
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import type { Asset } from "@/lib/patrimoine";
-import { pendingTotal, type BankTransaction } from "@/lib/bank/transactions";
-import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 
 export interface BankAccountDTO {
   id: string;
@@ -331,65 +329,6 @@ export const isBankAsset = (asset: { id: string }): boolean =>
  */
 export const bankAssetUid = (asset: { id: string }): string | null =>
   asset.id.startsWith(BANK_ID_PREFIX) ? asset.id.slice(BANK_ID_PREFIX.length) : null;
-
-/**
- * Les actifs, soldes bancaires portés au solde ATTENDU : le comptabilisé rendu
- * par la banque, plus ses opérations en attente (cf. `pendingTotal`).
- *
- * C'est le point d'ajustement UNIQUE des pages du patrimoine — chiffre héros,
- * totaux de classe et courbe partent tous du même tableau, sans quoi le total
- * et la fin de la courbe se répondraient à quelques euros près.
- *
- * Un actif sans relevé (saisi à la main, ou banque qui n'ouvre pas ses
- * opérations) ressort tel quel, et par IDENTITÉ : les `useMemo` qui en
- * dépendent ne se redéclenchent pas tant que rien n'a bougé.
- */
-export function withPendingBalances(
-  assets: Asset[],
-  txByAssetId: Record<string, BankTransaction[]>,
-): Asset[] {
-  let changed = false;
-  const next = assets.map((a) => {
-    const delta = pendingTotal(txByAssetId[a.id] || []);
-    if (delta === 0) return a;
-    changed = true;
-    return { ...a, balance: Math.round((Number(a.balance ?? 0) + delta) * 100) / 100 };
-  });
-  return changed ? next : assets;
-}
-
-/**
- * Relevés indexés par id d'ACTIF (`enablebanking-…`) plutôt que par uid.
- *
- * C'est la forme qu'attendent les pages du patrimoine : `withPendingBalances` et
- * `reconstructHistory` raisonnent en actifs, pas en comptes d'agrégateur. Même
- * hook et même cache derrière — cette réindexation est tout ce que ce hook
- * ajoute, mais elle était recopiée à l'identique dans chaque page qui en avait
- * besoin, et une seule oubliée suffisait à faire diverger deux totaux.
- *
- * Il vit ICI et non dans `useBankTransactions`, où il aurait appelé
- * `useBankTransactionsAll` en interne : les tests de page remplacent ce hook par
- * un `vi.mock` de module, qu'un appel interne contourne — la page se serait
- * retrouvée à demander de vrais relevés au milieu d'un test.
- */
-export function useBankTxByAssetId(
-  accounts: { id: string; uid: string }[],
-  // 90 jours : la profondeur minimale que l'API rend de toute façon, et la
-  // seule dont le solde attendu ait besoin — l'attente est toujours récente.
-  days = 90,
-): { txByAssetId: Record<string, BankTransaction[]>; loading: boolean } {
-  const uids = useMemo(() => accounts.map((a) => a.uid), [accounts]);
-  const { byUid, loading } = useBankTransactionsAll(uids, days);
-  const txByAssetId = useMemo(() => {
-    const map: Record<string, BankTransaction[]> = {};
-    for (const a of accounts) {
-      const txs = byUid[a.uid];
-      if (txs && txs.length > 0) map[a.id] = txs;
-    }
-    return map;
-  }, [accounts, byUid]);
-  return { txByAssetId, loading };
-}
 
 /** Purge le cache des comptes. À appeler quand on quitte la session. */
 export const clearBankAccountsCache = (): void => {

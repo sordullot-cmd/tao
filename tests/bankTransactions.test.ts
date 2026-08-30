@@ -10,7 +10,6 @@ import {
   monthWindow,
   normalizeTransaction,
   oldestDate,
-  pendingTotal,
   periodStats,
   sortTransactions,
   withinDays,
@@ -140,28 +139,12 @@ describe("reconstruction du solde", () => {
     expect(points[2].cum).toBe(500);
   });
 
-  it("compte les opérations en attente, que le solde de la banque ignore encore", () => {
-    // Solde comptabilisé 1000, une carte de 50 en attente le 13 : la courbe finit
-    // sur 950, le solde attendu. Le 12, l'attente n'existait pas encore — ce
-    // jour-là vaut donc toujours 1000, et le passé ne bouge pas.
+  it("écarte les opérations en attente, absentes du solde de la banque", () => {
     const points = balanceSeries(
       [booked("2026-08-12", 200), booked("2026-08-13", -50, { pending: true })],
       1000,
     );
-    expect(points).toEqual([
-      { date: "2026-08-11", cum: 800 },
-      { date: "2026-08-12", cum: 1000 },
-      { date: "2026-08-13", cum: 950 },
-    ]);
-  });
-
-  it("prolonge la courbe sur le solde ATTENDU, pas sur celui de la banque", () => {
-    const points = balanceSeries(
-      [booked("2026-08-10", -25), booked("2026-08-11", -40, { pending: true })],
-      300,
-      "2026-08-13",
-    );
-    expect(points[points.length - 1]).toEqual({ date: "2026-08-13", cum: 260 });
+    expect(points[points.length - 1]).toEqual({ date: "2026-08-12", cum: 1000 });
   });
 
   it("prolonge la courbe jusqu'à aujourd'hui après un jour sans mouvement", () => {
@@ -173,31 +156,13 @@ describe("reconstruction du solde", () => {
     expect(balanceSeries([booked("2026-08-13", -25)], 300)).toHaveLength(2);
   });
 
-  it("ne rend rien du tout sans mouvement daté", () => {
+  it("ne rend rien du tout sans mouvement comptabilisé", () => {
     expect(balanceSeries([], 300)).toEqual([]);
-    expect(balanceSeries([booked("", -25)], 300)).toEqual([]);
+    expect(balanceSeries([booked("2026-08-13", -25, { pending: true })], 300)).toEqual([]);
   });
 
   it("franchit le changement de mois pour le point d'ouverture", () => {
     expect(balanceSeries([booked("2026-08-01", 10)], 110)[0].date).toBe("2026-07-31");
-  });
-});
-
-describe("écart d'attente", () => {
-  it("somme les seules opérations en attente, signe compris", () => {
-    expect(pendingTotal([
-      booked("2026-08-13", -50, { pending: true }),
-      booked("2026-08-13", 20, { pending: true }),
-      booked("2026-08-12", -999),
-    ])).toBe(-30);
-  });
-
-  it("ne retient pas une attente sans date, que la courbe ne saurait pas placer", () => {
-    expect(pendingTotal([booked("", -50, { pending: true })])).toBe(0);
-  });
-
-  it("rend zéro sur un relevé entièrement comptabilisé", () => {
-    expect(pendingTotal([booked("2026-08-13", -50)])).toBe(0);
   });
 });
 

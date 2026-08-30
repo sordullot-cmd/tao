@@ -1503,21 +1503,85 @@ function stepTone(status, color) {
   return { dot: T.border, text: T.text, label: T.textMut };
 }
 
-// Une étape de la LISTE : pastille cochable, libellé éditable au clic, et les
-// objectifs chiffrés qui la mesurent. Les actions n'apparaissent qu'au survol
-// de la ligne.
-//
-// Sans trait de liaison entre les pastilles : c'est le rail, au-dessus, qui
-// porte désormais la continuité du parcours. Le dire deux fois faisait de la
-// liste une seconde frise, plus haute et moins lisible que la première — et le
-// trait vertical imposait à chaque ligne une gouttière dont elle n'a plus
-// besoin.
-//
-// Pas de datation : une étape se note et se coche, point. Le calendrier vit
-// ailleurs (tâches d'agenda, échéance de l'objectif) ; le demander ici faisait
-// d'un jalon de trois mots une saisie à deux temps.
-function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
+/**
+ * Le raccord entre deux tuiles d'étape — ce qui dit qu'on lit une CHAÎNE.
+ *
+ * Sans lui, des tuiles séparées par du vide se lisent comme une liste de choses
+ * indépendantes, alors qu'un jalon n'a de sens que par sa place dans un
+ * parcours. C'était le seul avantage de l'ancienne frise verticale ; il revient
+ * ici, sans le coût qui l'avait fait retirer — le trait ne traverse plus chaque
+ * ligne, il occupe juste l'écart entre deux.
+ *
+ * Aligné sur la pastille : 9 px de marge intérieure de tuile, plus la moitié
+ * d'une pastille de 13 px, moins la moitié de son épaisseur. Un raccord décalé
+ * d'un pixel se voit sur une colonne de cinq.
+ *
+ * Il porte la couleur de la carte quand l'étape du DESSUS est franchie — la même
+ * règle que le rail, pour que les deux racontent la même histoire : c'est le
+ * chemin parcouru qui se colore, pas celui qui reste.
+ */
+function StepLink({ done, color }) {
+  return (
+    <div aria-hidden="true" style={{
+      width: 1.5, height: 8, marginLeft: 14.75, borderRadius: 999,
+      background: done ? color : T.border,
+      opacity: done ? 0.55 : 1,
+    }} />
+  );
+}
+
+/**
+ * Une étape de la liste — une TUILE dont le fond dit l'état.
+ *
+ * C'était une ligne nue : une pastille de 13 px, un libellé, et les barres des
+ * objectifs rattachés posées en dessous. Trois défauts, tous visibles à
+ * l'écran :
+ *
+ *  • rien ne SÉPARAIT deux étapes. Les barres d'objectifs de la première
+ *    touchaient le libellé de la suivante, et une liste de cinq jalons se
+ *    lisait comme un paragraphe — on ne voyait plus où commençait quoi ;
+ *  • l'état tenait dans neuf pixels de pastille. Franchie, en cours, à venir,
+ *    en retard : quatre réponses différentes portées par un seul point, quand
+ *    la surface entière pouvait les dire ;
+ *  • l'avancement d'un jalon mesuré n'existait qu'en dépliant ses objectifs, et
+ *    il fallait les additionner de tête.
+ *
+ * La tuile répond aux trois : son fond porte l'état, sa barre de pied porte
+ * l'avancement, et son contour la sépare de sa voisine. Les objectifs qui la
+ * mesurent se replient dedans — on les ouvre pour agir, pas pour savoir.
+ *
+ * Le fond est teinté à la couleur de la carte et non à une palette d'états :
+ * trois objectifs de l'année côte à côte doivent rester reconnaissables au
+ * premier coup d'œil, et un vert « fait » identique sur les trois effacerait
+ * précisément ce qui les distingue.
+ */
+function stepTile(status, color, measured, pct) {
+  if (status === "done") {
+    return {
+      bg: `color-mix(in srgb, ${color} 14%, transparent)`,
+      ring: `color-mix(in srgb, ${color} 38%, transparent)`,
+    };
+  }
+  if (status === "late") {
+    return { bg: `color-mix(in srgb, ${T.red} 8%, transparent)`, ring: T.red };
+  }
+  // Entamée : le fond s'éclaire à peine, juste assez pour la sortir des jalons
+  // intacts sans la faire passer pour franchie.
+  if (measured && pct > 0) {
+    return {
+      bg: `color-mix(in srgb, ${color} 6%, transparent)`,
+      ring: `color-mix(in srgb, ${color} 26%, transparent)`,
+    };
+  }
+  return { bg: "transparent", ring: T.border };
+}
+
+/* Exportée pour ses tests, comme le rail : c'est la pièce que l'on regarde
+   le plus longtemps sur une carte, et son état ne se déduit d'aucune donnée
+   nue — il naît de la combinaison mesure / franchi / retard. */
+export function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
   const [hov, setHov] = useState(false);
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(step.label);
   const tone = stepTone(status, cat.color);
@@ -1529,6 +1593,7 @@ function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleOb
   const measured = goals.length > 0;
   const done = isStepDone(step, pcts);
   const completion = Math.round(stepCompletion(step, pcts));
+  const tile = stepTile(done ? "done" : status, cat.color, measured, completion);
 
   const commit = () => {
     setEditing(false);
@@ -1539,8 +1604,11 @@ function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleOb
 
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ display: "flex", alignItems: "flex-start", gap: 9, position: "relative" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, paddingTop: 3 }}>
+      style={{
+        borderRadius: 10, background: tile.bg, boxShadow: `inset 0 0 0 1px ${tile.ring}`,
+        overflow: "hidden", transition: "background .15s ease, box-shadow .15s ease",
+      }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 9px" }}>
         {measured ? (
           /* Pastille de mesure : remplie en camembert à l'avancement de ses
              objectifs. Elle dit d'un coup d'œil ce qu'une case à cocher ne
@@ -1572,224 +1640,154 @@ function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleOb
             {step.done && <Check size={8} strokeWidth={3.5} />}
           </button>
         )}
-      </div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {editing ? (
-            <input autoFocus value={draft}
-              onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter") commit();
-                else if (e.key === "Escape") { setDraft(step.label); setEditing(false); }
-              }}
-              onBlur={commit}
-              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
-          ) : (
-            <button type="button" onClick={() => { setDraft(step.label); setEditing(true); }}
-              title="Renommer l'étape"
-              style={{
-                flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent",
-                padding: 0, cursor: "text", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
-                color: tone.text, textDecoration: done ? "line-through" : "none",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-              {step.label}
-            </button>
-          )}
+        {editing ? (
+          <input autoFocus value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") commit();
+              else if (e.key === "Escape") { setDraft(step.label); setEditing(false); }
+            }}
+            onBlur={commit}
+            style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
+        ) : (
+          <button type="button" onClick={() => { setDraft(step.label); setEditing(true); }}
+            title="Renommer l'étape"
+            style={{
+              flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent",
+              padding: 0, cursor: "text", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+              color: tone.text, textDecoration: done ? "line-through" : "none",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+            {step.label}
+          </button>
+        )}
 
-          {onDelete && (
-            <button onClick={onDelete} title="Supprimer l'étape" aria-label={`Supprimer l'étape ${step.label}`}
-              style={{ ...iconBtnSm(), width: 18, height: 18, flexShrink: 0, opacity: hov ? 1 : 0, transition: "opacity .15s ease" }}>
-              <Trash2 size={11} strokeWidth={1.75} />
-            </button>
-          )}
-        </div>
+        {/* Le chiffre du jalon, à l'endroit où on le cherche : au bout de sa
+            ligne. Il n'existait que dans la somme mentale de ses objectifs. */}
+        {measured && !done && (
+          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
+            {completion} %
+          </span>
+        )}
 
         {/* Une étape héritée de l'ancien système peut porter une date : on la
             rappelle en lecture seule (et on signale son retard), sans jamais
             proposer d'en poser une nouvelle. */}
         {step.due && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone.label ?? T.textMut }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone.label ?? T.textMut }}>
             <CalendarClock size={10} strokeWidth={2} />
             {fmtDayShort(step.due)}
-            {status === "late" && " · en retard"}
-          </div>
+            {status === "late" && " · retard"}
+          </span>
         )}
 
-        {/* Objectifs chiffrés qui mesurent ce jalon : ce qu'il faut atteindre
-            pour le franchir, et où l'on en est. Même trame que les objectifs de
-            la carte, en plus discret — ils appartiennent à l'étape, pas à la
-            carte, et ne doivent pas lui voler la lecture. */}
-        {goals.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 7 }}>
-            {goals.map(g => {
-              const reached = g.pct >= 100;
-              const negative = g.rawPct < 0;
-              return (
-                <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ flexShrink: 0, maxWidth: "40%", fontSize: 11, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
-                  <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)} %`}
-                    style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
-                    <div style={{ width: `${g.pct}%`, height: "100%", background: g.color || cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
-                  </div>
-                  <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
-                    {g.pctOnly ? `${Math.round(g.rawPct)}%` : <>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</>}
-                  </span>
-                  {onToggleObjective && (
-                    <button onClick={() => onToggleObjective(g.id)}
-                      title="Retirer de cette étape (l'objectif reste sur la carte)"
-                      aria-label={`Retirer « ${g.label} » de l'étape ${step.label}`}
-                      style={{ ...iconBtnSm(), width: 16, height: 16, flexShrink: 0, opacity: hov ? 1 : 0, transition: "opacity .15s ease" }}>
-                      <X size={10} strokeWidth={2} />
-                    </button>
-                  )}
+        {/* Deux affordances qui s'excluent, et c'est ce qui garde la tuile
+            courte : tant qu'aucun objectif ne mesure l'étape, c'est le bouton
+            d'ajout qui occupe la place — le cacher derrière un dépliage
+            supprimerait le seul chemin pour en rattacher un. Dès qu'il y en a,
+            c'est le compte qui s'affiche, et il ouvre. */}
+        {measured ? (
+          <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
+            title={open ? "Replier les objectifs" : "Voir les objectifs de cette étape"}
+            /* Nommé : « 2 » seul ne dit rien à un lecteur d'écran, et le compte
+               est justement ce que la tuile repliée met à la place du détail. */
+            aria-label={`${open ? "Replier" : "Voir"} les objectifs de l'étape ${step.label}`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, padding: 0,
+              border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
+              fontSize: 10, fontWeight: 600, color: T.textMut,
+            }}>
+            {goals.length}
+            <ChevronRight size={11} strokeWidth={2.5}
+              style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform var(--dur-fast, .12s) var(--ease-out, ease)" }} />
+          </button>
+        ) : onToggleObjective ? (
+          <ObjectiveMultiSelect objectives={allObjectives}
+            color={cat.color} onToggle={onToggleObjective} onCreate={onCreateObjective}
+            compact label="Objectif" />
+        ) : null}
+
+        {onDelete && (
+          <button onClick={onDelete} title="Supprimer l'étape" aria-label={`Supprimer l'étape ${step.label}`}
+            style={{ ...iconBtnSm(), width: 18, height: 18, flexShrink: 0, opacity: hov ? 1 : 0, transition: "opacity .15s ease" }}>
+            <Trash2 size={11} strokeWidth={1.75} />
+          </button>
+        )}
+      </div>
+
+      {/* Objectifs chiffrés qui mesurent ce jalon : ce qu'il faut atteindre pour
+          le franchir, et où l'on en est. Repliés — la tuile dit déjà le total,
+          on ouvre pour AGIR (rattacher, détacher), pas pour savoir. */}
+      {measured && open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 9px 8px 30px" }}>
+          {goals.map(g => {
+            const reached = g.pct >= 100;
+            const negative = g.rawPct < 0;
+            return (
+              <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ flexShrink: 0, maxWidth: "40%", fontSize: 11, fontWeight: 600, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                <div role="progressbar" aria-valuenow={Math.round(g.pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${g.label} : ${Math.round(g.rawPct)} %`}
+                  style={{ flex: 1, minWidth: 0, height: 4, borderRadius: 999, background: T.accentBg, overflow: "hidden" }}>
+                  <div style={{ width: `${g.pct}%`, height: "100%", background: g.color || cat.color, borderRadius: 999, opacity: 0.85, transition: "width var(--dur-slow) var(--ease-out)" }} />
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Rattacher un objectif chiffré à CE jalon. Visible en permanence,
-            comme les autres boutons d'ajout de la carte : il ne se montrait
-            qu'au survol de l'étape tant qu'elle n'avait aucun objectif, ce qui
-            revenait à cacher le seul chemin pour en rattacher un. Le « + » gris
-            reste discret — c'est son rôle, pas son absence, qui l'empêche de
-            manger la frise. */}
-        {onToggleObjective && (
-          <div style={{ marginTop: goals.length > 0 ? 4 : 2 }}>
+                <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                  {g.pctOnly ? `${Math.round(g.rawPct)}%` : <>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</>}
+                </span>
+                {onToggleObjective && (
+                  <button onClick={() => onToggleObjective(g.id)}
+                    title="Retirer de cette étape (l'objectif reste sur la carte)"
+                    aria-label={`Retirer « ${g.label} » de l'étape ${step.label}`}
+                    style={{ ...iconBtnSm(), width: 16, height: 16, flexShrink: 0 }}>
+                    <X size={10} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {onToggleObjective && (
             <ObjectiveMultiSelect objectives={allObjectives}
               color={cat.color} onToggle={onToggleObjective} onCreate={onCreateObjective}
               compact label="Objectif" />
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* Barre de pied : l'avancement du jalon, sur toute la largeur de sa
+          tuile. Seulement pour une étape MESURÉE et pas encore franchie — sans
+          objectif rattaché, elle n'aurait que 0 ou 100 à montrer, c'est-à-dire
+          ce que la pastille dit déjà. */}
+      {measured && !done && (
+        <div style={{ height: 3, background: `color-mix(in srgb, ${cat.color} 12%, transparent)` }}>
+          <div style={{
+            width: `${Math.min(100, completion)}%`, height: "100%", background: cat.color,
+            opacity: 0.75, transition: "width var(--dur-slow) var(--ease-out)",
+          }} />
+        </div>
+      )}
     </div>
   );
 }
 
 /**
- * Le RAIL des jalons — le chemin, lisible sans rien déplier.
+ * Bloc « Étapes » d'une carte : un en-tête, et la liste qu'on déplie.
  *
- * Le bloc « Étapes » se refermait sur lui-même : replié il ne disait qu'un
- * compte (« 2/5 »), et le chemin — ce qu'on vient chercher sur une carte
- * d'objectif annuel — n'existait qu'une fois la frise ouverte, c'est-à-dire
- * presque jamais. Un compte dit COMBIEN ; il ne dit ni où l'on en est, ni ce
- * qui vient ensuite.
+ * REPLIÉ par défaut, et pour une raison qui n'a pas bougé : trois cartes qui
+ * déplient chacune leur liste repoussent hors de l'écran les objectifs chiffrés,
+ * c'est-à-dire ce que la carte MESURE. L'en-tête dit l'essentiel sans ouvrir —
+ * combien de jalons franchis, combien en retard.
  *
- * D'où un rail permanent : un point par jalon, reliés, remplis jusqu'à celui
- * qu'on tient. On y lit d'un coup la forme du parcours — trois franchis d'un
- * bloc puis un vide, ou une progression régulière — que le rapport 2/5 aplatit.
- *
- * Il s'adapte à la largeur plutôt qu'à un nombre d'étapes : les connecteurs
- * prennent la place qui reste, si bien que trois jalons ou neuf tiennent dans
- * la même colonne d'un tiers de page. Au-delà de ce que la carte peut montrer,
- * le rail se tait plutôt que de tasser des points illisibles — la liste
- * dépliée, elle, reste exhaustive.
- */
-const RAIL_MAX_DOTS = 9;
-
-/* Exporté pour ses tests : le rail est la seule pièce PERMANENTE du bloc,
-   celle qui doit répondre sans qu'on déplie — elle mérite d'être vérifiée sans
-   monter la page entière. */
-export function StepRail({ steps, cat, today, stepPcts }) {
-  if (!steps.length || steps.length > RAIL_MAX_DOTS) return null;
-
-  const marks = steps.map((s) => {
-    const pcts = goalPctsOf(stepPcts, s.id);
-    return {
-      id: s.id,
-      label: s.label,
-      done: isStepDone(s, pcts),
-      status: stepStatus(s, today, pcts),
-      pct: Math.round(stepCompletion(s, pcts)),
-    };
-  });
-
-  /* La prochaine, c'est la première non franchie — et non la plus avancée : on
-     suit un chemin dans l'ordre où il a été posé, même si un jalon plus loin a
-     déjà commencé à bouger. */
-  const next = marks.find((m) => !m.done) || null;
-  const done = marks.filter((m) => m.done).length;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-      <div
-        role="img"
-        aria-label={`Jalons : ${done} franchis sur ${marks.length}${next ? `, prochain « ${next.label} »` : ""}`}
-        style={{ display: "flex", alignItems: "center", gap: 0 }}
-      >
-        {marks.map((m, i) => {
-          const tone = stepTone(m.status, cat.color);
-          /* Le connecteur porte la couleur quand le jalon d'AVANT est franchi :
-             c'est le chemin déjà parcouru qu'il colore, pas celui qui reste. */
-          const filled = i > 0 && marks[i - 1].done;
-          return (
-            <React.Fragment key={m.id}>
-              {i > 0 && (
-                <span style={{
-                  flex: 1, height: 1.5, minWidth: 6, borderRadius: 999,
-                  background: filled ? cat.color : T.border,
-                  opacity: filled ? 0.55 : 1,
-                }} />
-              )}
-              <span
-                title={m.done ? `${m.label} — franchie` : `${m.label} — ${m.pct} %`}
-                style={{
-                  width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
-                  border: `1.5px solid ${m.done ? cat.color : tone.dot}`,
-                  /* Le camembert dit « à mi-chemin » là où plein/vide ne sait
-                     dire que « pas encore » — c'est ce qui distingue un jalon
-                     entamé d'un jalon intact. */
-                  background: m.done
-                    ? cat.color
-                    : `conic-gradient(${cat.color} ${Math.min(100, m.pct)}%, ${T.white} 0)`,
-                }}
-              />
-            </React.Fragment>
-          );
-        })}
-      </div>
-
-      {/* Ce qui vient ensuite, nommé. Un rail sans ce libellé montrerait la
-          forme du parcours sans dire vers quoi on marche. */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
-        <span style={{
-          flex: 1, minWidth: 0, fontSize: 11, fontWeight: 600,
-          color: next ? T.textSub : cat.color,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {next ? next.label : "Toutes les étapes sont franchies"}
-        </span>
-        {next && next.pct > 0 && (
-          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: T.textMut, fontVariantNumeric: "tabular-nums" }}>
-            {next.pct} %
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Bloc « Étapes » d'une carte : le rail, puis la liste qu'on déplie.
- *
- * Deux étages, et ils ne répondent pas à la même question. Le RAIL est
- * permanent et dit OÙ ON EN EST — la forme du parcours, et le prochain jalon
- * nommé. La LISTE, repliée par défaut, dit CE QU'IL Y A : tous les jalons, les
- * objectifs qui les mesurent, de quoi cocher et rattacher.
- *
- * Replier la liste reste nécessaire : trois cartes qui déplient chacune la
- * leur repoussent hors de l'écran les objectifs chiffrés, ce que la carte
- * MESURE. Ce qui a changé, c'est qu'on n'a plus besoin de l'ouvrir pour savoir
- * où l'on va — un rapport « 2/5 » disait combien, jamais où.
+ * Un rail horizontal a résumé le parcours au-dessus de cet en-tête, le temps
+ * d'une version. Il faisait double emploi avec les raccords qui relient déjà
+ * les tuiles entre elles : deux dessins du même chemin, l'un miniature et
+ * l'autre à l'échelle, sur une carte d'un tiers de largeur.
  *
  * Aucune saisie ici : une étape se POSE dans la modale de modification de la
  * carte (le ✎ de l'en-tête), avec le reste de ce qui définit l'objectif de
  * l'année. La carte, elle, sert à le PARCOURIR — cocher un jalon, y rattacher
  * un objectif.
  */
-function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}, stepPcts = {}, allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
+export function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}, stepPcts = {}, allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
   const [open, setOpen] = useState(false);
   const [hov, setHov] = useState(false);
 
@@ -1803,8 +1801,6 @@ function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <StepRail steps={ordered} cat={cat} today={today} stepPcts={stepPcts} />
-
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open}
         onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
         style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: 0, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
@@ -1825,22 +1821,32 @@ function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}
       </button>
 
       {open && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        /* Aucun écart entre les tuiles : c'est le RACCORD qui l'occupe, et il
+           doit toucher les deux qu'il relie — un trait suspendu entre deux
+           marges ne relierait rien. */
+        <div style={{ display: "flex", flexDirection: "column" }}>
           {ordered.length === 0 && (
             <div style={{ fontSize: 11, color: T.textMut, marginBottom: 2 }}>{"Aucun jalon pour l'instant."}</div>
           )}
-          {ordered.map(s => (
-            <StepRow key={s.id} step={s} cat={cat}
-              status={stepStatus(s, today, goalPctsOf(stepPcts, s.id))}
-              goals={goalsByStep[s.id] || []}
-              allObjectives={allObjectives}
-              onToggleObjective={onToggleObjective ? (goalId) => onToggleObjective(s.id, goalId) : null}
-              onCreateObjective={onCreateObjective}
-              onToggle={() => onToggle(s.id)}
-              onRename={(label) => onRename(s.id, label)}
-              onDelete={() => onDelete(s.id)} />
+          {ordered.map((s, i) => (
+            <React.Fragment key={s.id}>
+              <StepRow step={s} cat={cat}
+                status={stepStatus(s, today, goalPctsOf(stepPcts, s.id))}
+                goals={goalsByStep[s.id] || []}
+                allObjectives={allObjectives}
+                onToggleObjective={onToggleObjective ? (goalId) => onToggleObjective(s.id, goalId) : null}
+                onCreateObjective={onCreateObjective}
+                onToggle={() => onToggle(s.id)}
+                onRename={(label) => onRename(s.id, label)}
+                onDelete={() => onDelete(s.id)} />
+              {i < ordered.length - 1 && (
+                <StepLink done={isStepDone(s, goalPctsOf(stepPcts, s.id))} color={cat.color} />
+              )}
+            </React.Fragment>
           ))}
-          {onAdd && <StepAddRow onAdd={onAdd} />}
+          {/* L'ajout n'est pas un jalon : il se détache de la chaîne au lieu de
+              la prolonger, sinon le raccord semblerait mener à lui. */}
+          {onAdd && <div style={{ marginTop: 8 }}><StepAddRow onAdd={onAdd} color={cat.color} /></div>}
         </div>
       )}
     </div>
@@ -2199,27 +2205,90 @@ function StepsSwitch({ checked, count, onChange }) {
 
 /* Ligne d'ajout d'une étape, au pied du bloc de la carte : c'est là qu'on lit
    les jalons, donc là qu'on en pose un de plus. */
-function StepAddRow({ onAdd }) {
+/**
+ * Poser un jalon : une TUILE VIDE, au bout de la chaîne.
+ *
+ * C'était un champ de saisie permanent doublé d'un gros bouton rond noir. Deux
+ * défauts, et le second est le plus coûteux :
+ *
+ *  • le champ occupait la place d'une étape en permanence, alors qu'on en pose
+ *    trois dans l'année. Au bas d'une liste de cinq tuiles, la boîte de saisie
+ *    pesait autant que ce qu'on venait lire ;
+ *  • le bouton noir plein était l'élément le plus contrasté de la carte. Il
+ *    tirait l'œil au-dessus des jalons eux-mêmes — un moyen d'ajouter ne doit
+ *    pas passer devant ce qu'on a déjà.
+ *
+ * La tuile vide dit la même chose par sa FORME : même largeur, même rayon, même
+ * alignement de pastille que les jalons au-dessus, mais en pointillé — la place
+ * du suivant, pas encore remplie. Elle ne devient un champ qu'au clic.
+ *
+ * Le champ reste ouvert après l'ajout : on pose rarement un seul jalon, et
+ * refermer obligerait à recliquer entre chacun.
+ */
+function StepAddRow({ onAdd, color }) {
+  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [hov, setHov] = useState(false);
+
   const submit = () => {
     const label = draft.trim();
     if (!label) return;
     onAdd(label);
-    setDraft("");                              // on en pose rarement une seule
+    setDraft("");
   };
+
+  /* Bordure en pointillé et non l'ombre intérieure des tuiles pleines : une
+     tuile vide n'est pas un objet, c'est un emplacement. Le padding perd le
+     pixel que la bordure prend, pour que la pastille reste exactement sur la
+     colonne des jalons — un « + » décalé d'un pixel se voit sur une pile. */
+  const shell = {
+    display: "flex", alignItems: "center", gap: 8, width: "100%",
+    padding: "6px 8px", borderRadius: 10,
+    border: `1px dashed ${hov || editing ? color : T.border}`,
+    background: "transparent", transition: "border-color .15s ease",
+  };
+
+  if (editing) {
+    return (
+      <div style={shell}>
+        <span style={{ width: 13, height: 13, borderRadius: "50%", flexShrink: 0, border: `1.5px dashed ${color}` }} />
+        <input autoFocus value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter") { e.preventDefault(); submit(); }
+            else if (e.key === "Escape") { setDraft(""); setEditing(false); }
+          }}
+          onBlur={() => { if (!draft.trim()) setEditing(false); }}
+          placeholder="Nouvelle étape…"
+          style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 500, color: T.text, fontFamily: "inherit", padding: 0 }} />
+        {/* Discret et sans fond : la touche Entrée fait le geste, ce bouton n'est
+            que le rappel qu'il existe. */}
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={submit} disabled={!draft.trim()}
+          title="Ajouter l'étape" aria-label="Ajouter l'étape"
+          style={{ ...iconBtnSm(), width: 18, height: 18, flexShrink: 0, color, opacity: draft.trim() ? 1 : 0.3, cursor: draft.trim() ? "pointer" : "default", transition: "opacity .15s ease" }}>
+          <Plus size={13} strokeWidth={2.5} />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-      <input value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
-        placeholder="Nouvelle étape…"
-        style={{ ...DA_FIELD, fontSize: 12, flex: 1, minWidth: 0 }} />
-      <button type="button" onClick={submit} disabled={!draft.trim()}
-        title="Ajouter l'étape" aria-label="Ajouter l'étape"
-        style={{ ...iconBtn(), width: 30, height: 30, borderRadius: "50%", background: T.text, color: T.textInverted, opacity: draft.trim() ? 1 : 0.35, cursor: draft.trim() ? "pointer" : "default", transition: "opacity .15s ease" }}>
-        <Plus size={14} strokeWidth={2} />
-      </button>
-    </div>
+    <button type="button" onClick={() => setEditing(true)}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      aria-label="Ajouter une étape"
+      style={{ ...shell, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+      <span style={{
+        width: 13, height: 13, borderRadius: "50%", flexShrink: 0,
+        border: `1.5px dashed ${hov ? color : T.border}`,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        color: hov ? color : T.textMut, transition: "border-color .15s ease, color .15s ease",
+      }}>
+        <Plus size={9} strokeWidth={3} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, color: hov ? T.textSub : T.textMut, transition: "color .15s ease" }}>
+        Nouvelle étape
+      </span>
+    </button>
   );
 }
 

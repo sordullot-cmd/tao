@@ -51,9 +51,7 @@ import {
   usePatrimoine,
   withTodayPoint,
 } from "@/lib/patrimoine";
-import {
-  bankAccountToAsset, useBankAccounts, useBankTxByAssetId, withPendingBalances,
-} from "@/lib/bank/useBankAccounts";
+import { bankAccountToAsset, useBankAccounts } from "@/lib/bank/useBankAccounts";
 import { useBankTransactionsAll } from "@/lib/bank/useBankTransactions";
 import { depthOf, withinDays, ALL_DAYS } from "@/lib/bank/transactions";
 import { categoryLabelKey, spendingByCategory, spendingPalette } from "@/lib/bank/categories";
@@ -90,42 +88,13 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   const [addingAsset, setAddingAsset] = React.useState(false);
   const [addingBank, setAddingBank] = React.useState(false);
 
-  /* Fenêtre de la courbe. Elle suit le COMPTE comme la vue net/brut : on ne
-     revient pas sur « Tout » à chaque visite quand on suit son année en cours. */
-  const [rawPeriod, setPeriod] = useCloudState("tr4de_patrimoine_period", "patrimoine_period", PERIOD_ALL);
-  const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : PERIOD_ALL;
-
-  /* Relevés de TOUS les comptes agrégés : c'est la matière de la courbe — et
-     depuis que les opérations en attente comptent, celle des soldes eux-mêmes.
-     C'est pourquoi ce chargement est posé AVANT la construction des actifs.
-
-     Ce chargement remplace le préchargement des fiches (`prefetchBankTransactions`)
-     que faisait cette page : il remplit le MÊME cache, en allant au moins aussi
-     loin, donc ouvrir la fiche d'un compte reste instantané — sans redemander à
-     la banque deux fois le même relevé à deux profondeurs différentes.
-
-     La profondeur demandée suit la fenêtre choisie : en dessous de 90 jours il
-     n'y a rien à demander de plus, c'est le minimum que l'API rend de toute
-     façon, et redescendre ne doit jamais coûter une requête. */
-  const depth = React.useMemo(() => {
-    const d = periodDays(period);
-    if (d == null) return ALL_DAYS;             // « Tout » : tout ce que la banque rend
-    return depthOf(d) <= 90 ? 90 : d;
-  }, [period]);
-  const { txByAssetId, loading: txLoading } = useBankTxByAssetId(bank.accounts, depth);
-
   /* Le patrimoine, c'est les deux sources réunies : ce qui est saisi à la main
      et ce qui remonte des banques connectées. Les comptes bancaires ne sont PAS
      écrits dans le store — leurs soldes sont relus à chaque visite, et un solde
      périmé affiché comme courant serait pire que pas de solde du tout. */
   const bankAssets = React.useMemo(
-    /* Solde ATTENDU et non comptabilisé : les opérations en attente sont
-       ajoutées au solde rendu par la banque (cf. `withPendingBalances`). Une
-       carte passée hier compte donc dans le patrimoine, comme elle compte déjà
-       dans les dépenses du mois — c'était le seul chiffre de la page à
-       l'ignorer. Le même tableau sert au héros, aux classes et à la courbe. */
-    () => withPendingBalances(bank.accounts.map(bankAccountToAsset), txByAssetId),
-    [bank.accounts, txByAssetId],
+    () => bank.accounts.map(bankAccountToAsset),
+    [bank.accounts],
   );
   const assets = React.useMemo(
     () => [...(store.assets || []), ...bankAssets],
@@ -163,10 +132,9 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
   React.useEffect(() => {
     if (assets.length === 0) return;
     // Le point du jour porte le patrimoine COMPLET, banques comprises. On attend
-    // donc la fin de l'agrégation ET des relevés : sinon le premier rendu
-    // écrirait un total amputé des comptes bancaires — ou de leurs opérations
-    // en attente —, qui resterait le point de la journée.
-    if (bank.loading || txLoading) return;
+    // donc la fin de l'agrégation : sinon le premier rendu écrirait un total
+    // amputé des comptes bancaires, qui resterait le point de la journée.
+    if (bank.loading) return;
     setStore((s) => {
       // Net ET brut sont relevés : la courbe brute ne peut pas déduire les
       // crédits d'un total net déjà figé, il faut donc les avoir gardés.
@@ -174,7 +142,39 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
       const next = withTodayPoint(s.history || [], measured.total, measured.gross);
       return next === s.history ? s : { ...s, history: next };
     });
-  }, [assets, bankAssets, bank.loading, txLoading, setStore]);
+  }, [assets, bankAssets, bank.loading, setStore]);
+
+  /* Fenêtre de la courbe. Elle suit le COMPTE comme la vue net/brut : on ne
+     revient pas sur « Tout » à chaque visite quand on suit son année en cours. */
+  const [rawPeriod, setPeriod] = useCloudState("tr4de_patrimoine_period", "patrimoine_period", PERIOD_ALL);
+  const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : PERIOD_ALL;
+
+  /* Relevés de TOUS les comptes agrégés : c'est la matière de la courbe.
+
+     Ce chargement remplace le préchargement des fiches (`prefetchBankTransactions`)
+     que faisait cette page : il remplit le MÊME cache, en allant au moins aussi
+     loin, donc ouvrir la fiche d'un compte reste instantané — sans redemander à
+     la banque deux fois le même relevé à deux profondeurs différentes.
+
+     La profondeur demandée suit la fenêtre choisie : en dessous de 90 jours il
+     n'y a rien à demander de plus, c'est le minimum que l'API rend de toute
+     façon, et redescendre ne doit jamais coûter une requête. */
+  const depth = React.useMemo(() => {
+    const d = periodDays(period);
+    if (d == null) return ALL_DAYS;             // « Tout » : tout ce que la banque rend
+    return depthOf(d) <= 90 ? 90 : d;
+  }, [period]);
+  const bankUids = React.useMemo(() => bank.accounts.map((a) => a.uid), [bank.accounts]);
+  const { byUid: txByUid } = useBankTransactionsAll(bankUids, depth);
+  // Les relevés sont indexés par uid, la reconstruction raisonne par actif.
+  const txByAssetId = React.useMemo(() => {
+    const map = {};
+    for (const a of bank.accounts) {
+      const txs = txByUid[a.uid];
+      if (txs && txs.length > 0) map[a.id] = txs;
+    }
+    return map;
+  }, [bank.accounts, txByUid]);
 
   /* Historique RECONSTRUIT : les soldes bancaires remontés mouvement par
      mouvement, le capital restant dû des crédits recalculé depuis leur

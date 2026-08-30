@@ -1136,7 +1136,7 @@ const FR: Dict = {
   "patrimoine.asset.movementPending": "en attente",
   "patrimoine.asset.movementsAll": "Tout",
   "patrimoine.asset.movementsDeeper": "Récupération de l'historique auprès de la banque…",
-  "patrimoine.asset.curveHint": "Courbe reconstruite depuis le solde actuel et les mouvements depuis le {date} — la banque ne rend pas l'historique de ses soldes, et la profondeur disponible dépend d'elle. Les opérations en attente y sont comptées.",
+  "patrimoine.asset.curveHint": "Courbe reconstruite depuis le solde actuel et les mouvements depuis le {date} — la banque ne rend pas l'historique de ses soldes, et la profondeur disponible dépend d'elle. Les opérations en attente n'y sont pas comptées.",
   // Natures de mouvement (codes ISO 20022 de la banque, à défaut son libellé)
   "patrimoine.tx.card": "Carte",
   "patrimoine.tx.transfer": "Virement",
@@ -2514,7 +2514,7 @@ const EN: Dict = {
   "patrimoine.asset.movementPending": "pending",
   "patrimoine.asset.movementsAll": "All",
   "patrimoine.asset.movementsDeeper": "Fetching history from the bank…",
-  "patrimoine.asset.curveHint": "Curve rebuilt from the current balance and the movements since {date} — the bank does not return its balance history, and how far back it goes is up to it. Pending operations are included.",
+  "patrimoine.asset.curveHint": "Curve rebuilt from the current balance and the movements since {date} — the bank does not return its balance history, and how far back it goes is up to it. Pending operations are left out.",
   // Movement kinds (ISO 20022 codes from the bank, its label otherwise)
   "patrimoine.tx.card": "Card",
   "patrimoine.tx.transfer": "Transfer",

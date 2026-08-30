@@ -40,8 +40,7 @@ export interface BankTransaction {
   amount: number;
   currency: string;
   kind: TransactionKind;
-  /** Opération pas encore comptabilisée (`PDNG`) — hors solde RENDU par la
-   *  banque, mais comptée dans le solde attendu (cf. `pendingTotal`). */
+  /** Opération pas encore comptabilisée (`PDNG`) — hors solde de la banque. */
   pending: boolean;
 }
 
@@ -206,31 +205,6 @@ export function sortTransactions(txs: BankTransaction[]): BankTransaction[] {
    récupérées, ce qui suffit sur une fenêtre de 90 jours.
    ------------------------------------------------------------------------ */
 
-/**
- * Somme des opérations en attente — l'écart entre le solde COMPTABILISÉ rendu
- * par la banque (`CLBD`) et le solde ATTENDU, celui qu'on affiche partout.
- *
- * Une carte passée hier n'est pas encore dans `CLBD` mais l'argent est engagé :
- * l'ignorer faisait afficher un patrimoine plus riche qu'il ne l'est, d'autant
- * plus faux que la banque comptabilise lentement (le week-end, typiquement).
- *
- * Seules les opérations DATÉES sont comptées : la courbe ne peut placer que
- * celles-là, et deux définitions différentes de l'attente feraient finir la
- * courbe ailleurs que sur le chiffre héros. En pratique l'agrégateur date tout
- * (`transaction_date` à défaut du reste), le cas ne se présente pas.
- *
- * Reste un écart qu'on ne peut pas fermer d'ici : une banque qui publie
- * l'opération comptabilisée sous une référence NEUVE, sans retirer l'attente,
- * la fait compter deux fois le temps que son relevé se range. C'est le prix de
- * l'agrégation — la seule parade serait de rapprocher montant et date à la
- * main, qui confondrait deux achats identiques du même jour.
- */
-export function pendingTotal(txs: BankTransaction[]): number {
-  let sum = 0;
-  for (const tx of txs) if (tx.pending && tx.date) sum += tx.amount;
-  return round2(sum);
-}
-
 /** Jour précédent, en calcul calendaire — `Date` gère les mois et les bissextiles. */
 function previousDay(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -248,13 +222,9 @@ export function parseDay(iso: string): Date {
 /**
  * Courbe du solde, un point par jour de mouvement, du plus ancien au plus récent.
  *
- * `PnlChart` lit `{ date, cum }` : on rend directement cette forme.
- *
- * `bookedBalance` est le solde COMPTABILISÉ, tel que la banque le rend : la
- * fonction y ajoute elle-même les opérations en attente (cf. `pendingTotal`)
- * pour partir du solde attendu, puis remonte avec TOUS les mouvements, en
- * attente compris. L'ajustement est fait ici et nulle part ailleurs — un
- * appelant qui passerait un solde déjà ajusté compterait l'attente deux fois.
+ * `PnlChart` lit `{ date, cum }` : on rend directement cette forme. Les
+ * opérations en attente sont ÉCARTÉES — elles ne sont pas dans le solde rendu
+ * par la banque, les compter ferait dériver toute la série d'autant.
  *
  * Un point d'ouverture est ajouté la veille du premier mouvement : sans lui, une
  * fenêtre à un seul jour de mouvement ne donnerait qu'un point, et la courbe ne
@@ -262,16 +232,14 @@ export function parseDay(iso: string): Date {
  */
 export function balanceSeries(
   txs: BankTransaction[],
-  bookedBalance: number,
+  currentBalance: number,
   today?: string,
 ): { date: string; cum: number }[] {
-  const dated = txs.filter((tx) => tx.date);
-  if (dated.length === 0) return [];
-
-  const currentBalance = round2(bookedBalance + pendingTotal(dated));
+  const booked = txs.filter((tx) => !tx.pending && tx.date);
+  if (booked.length === 0) return [];
 
   const perDay = new Map<string, number>();
-  for (const tx of dated) {
+  for (const tx of booked) {
     perDay.set(tx.date, (perDay.get(tx.date) ?? 0) + tx.amount);
   }
   const days = [...perDay.keys()].sort();
