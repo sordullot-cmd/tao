@@ -40,7 +40,7 @@ describe("journée reconstruite depuis Android", () => {
     // Le nom BRUT est le paquet — c'est lui qu'une règle « application » vise.
     expect(segs![0].app).toBe("com.google.android.youtube");
     // Et le catalogue reconnaît les deux, sans titre de fenêtre.
-    expect(segs![0].cat).toBe("fun");
+    expect(segs![0].cat).toBe("social");
     expect(segs![1].cat).toBe("music");
     // Android ne donne aucun titre : on n'en invente pas.
     expect(segs!.every(s => s.title === "")).toBe(true);

@@ -480,7 +480,12 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Intercom", app: [], web: ["intercom.com", "app.intercom.com"] },
   ]),
 
-  ...of("fun", [
+  ...of("social", [
+    /* YouTube est ici et non dans « Divertissement » : ce qu'on y passe n'est
+       pas une séance, c'est un fil — une vidéo suggérée après l'autre, comme
+       sur les autres réseaux. Le ranger avec Netflix mélangeait un film choisi
+       et deux heures d'enchaînement, qui ne se règlent pas pareil. */
+    { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"] },
     { name: "X", app: ["x", "twitter", "x twitter"], web: ["x.com", "twitter.com"], title: ["twitter", "x"] },
     { name: "Instagram", app: ["instagram"], web: ["instagram.com"], title: ["instagram"] },
     { name: "TikTok", app: ["tiktok"], web: ["tiktok.com"], title: ["tiktok"] },
@@ -497,8 +502,6 @@ export const CATALOG: CatalogEntry[] = [
   ]),
 
   ...of("fun", [
-    { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"] },
-    { name: "YouTube Music", app: [], web: ["music.youtube.com"] },
     { name: "Netflix", app: ["netflix"], web: ["netflix.com"], title: ["netflix"] },
     { name: "Twitch", app: ["twitch"], web: ["twitch.tv"], title: ["twitch"] },
     { name: "Prime Video", app: ["prime video"], web: ["primevideo.com"], title: ["prime video"] },

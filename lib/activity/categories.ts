@@ -118,7 +118,13 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
      remplacer, et une heure de Spotify comptée en distraction pendant qu'on
      code fausse la lecture de la journée. */
   { id: "music",    label: "Musique",           labelEn: "Music",         color: PALETTE_DARK.orange, productivity: "neutral",     hint: "Écoute de musique : Spotify, Apple Music, Deezer, SoundCloud." },
-  { id: "fun",      label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, séries, jeux, réseaux sociaux, sport." },
+  /* Les réseaux méritent leur ligne, séparée du reste du divertissement : un
+     film se choisit et se termine, un fil ne se termine jamais. Les confondre
+     donnait un total dont on ne pouvait rien faire — c'est précisément la part
+     qu'on veut voir isolée. YouTube en fait partie : on y arrive pour une
+     vidéo, on y reste pour la suivante. */
+  { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube." },
+  { id: "fun",      label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, séries, jeux, sport." },
   { id: "other",    label: "Non classé",        labelEn: "Uncategorized", color: GREY.grey500,        productivity: "neutral",     hint: "Les applications de bureau que l'app n'a pas su reconnaître. À ranger en un clic." },
 ];
 
@@ -142,7 +148,6 @@ const MOVED: Record<string, string> = {
   utilities: "work",
   meetings: "comms",
   shopping: "browsing",
-  social: "fun",
   games: "fun",
 };
 

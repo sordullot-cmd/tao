@@ -25,7 +25,9 @@ describe("classement", () => {
 
   it("classe un navigateur par le titre de sa page, pas par son nom", () => {
     const res = classify("Google Chrome", "Lofi beats - YouTube", []);
-    expect(res.category).toBe("fun");
+    // YouTube compte comme un réseau : on y arrive pour une vidéo, on y reste
+    // pour la suivante — ce n'est pas une séance, c'est un fil.
+    expect(res.category).toBe("social");
     expect(res.label).toBe("YouTube");
   });
 
@@ -129,6 +131,24 @@ describe("classement", () => {
     expect(productivityOf("browsing")).toBe("neutral");
     // Une application de bureau inconnue, elle, reste à ranger.
     expect(classify("BidulePro", "", []).category).toBe("other");
+  });
+});
+
+describe("réseaux sociaux", () => {
+  it("sort YouTube du divertissement pour le compter avec les fils", () => {
+    expect(classify("Google Chrome", "instagram.com", []).category).toBe("social");
+    expect(classify("Google Chrome", "Une vidéo - YouTube", []).category).toBe("social");
+    // Une séance choisie reste du divertissement : c'est la frontière.
+    expect(classify("Google Chrome", "Un film - Netflix", []).category).toBe("fun");
+    // YouTube Music est de la musique, et il n'a plus qu'une entrée pour le dire.
+    expect(classify("Google Chrome", "music.youtube.com", []).category).toBe("music");
+  });
+
+  it("rend leur place aux règles écrites avant la fusion", () => {
+    /* « Réseaux sociaux » avait disparu dans « Divertissement » le temps d'une
+       version : une règle qui la visait doit la retrouver, pas rester sur la
+       destination de passage. */
+    expect(classify("Bidule", "", [{ id: "r", match: "bidule", category: "social" }]).category).toBe("social");
   });
 });
 

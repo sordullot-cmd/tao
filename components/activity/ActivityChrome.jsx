@@ -1349,20 +1349,15 @@ export function AppRows({ apps, limit = 8, onPick = null, blocked = null, empty 
             <div style={{ height: 4, borderRadius: 999, background: FIELD_BG, overflow: "hidden" }}>
               <div style={{ width: `${Math.max(1, Math.min(100, a.pct))}%`, height: "100%", background: a.color }} />
             </div>
-            {a.titles?.[0]?.title && (
-              /* Sans `title` natif : la bulle de survol donne déjà les titres,
-                 en entier et à plusieurs — l'infobulle du navigateur viendrait
-                 la doubler une seconde plus tard. */
-              <span style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {a.titles[0].title}
-              </span>
-            )}
+            {/* Plus de titre de fenêtre sous la barre : il n'en tenait qu'UN,
+                tronqué, choisi pour sa durée — donc souvent le moins parlant des
+                cinq. La bulle de survol les donne tous, en entier ; le laisser
+                ici doublait la hauteur de chaque ligne pour en dire moins. */}
           </div>
           {/* La catégorie n'est répétée à droite que là où elle se CHANGE. En
               lecture seule elle ne servait à rien : la couleur de la barre la
-              dit déjà, l'anneau juste au-dessus la dit en grand, et le nom
-              répété rognait la place du titre de fenêtre — la seule ligne qui
-              apprenne quelque chose. */}
+              dit déjà, l'anneau juste au-dessus la dit en grand, et la bulle la
+              nomme au survol. */}
           {onPick && <PickCell app={a} onPick={onPick} blocked={blocked} />}
         </div>
         );

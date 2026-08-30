@@ -192,10 +192,10 @@ describe("survol du graphe de régularité (Rapports)", () => {
       const label = new Date("2024-06-03T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
       /* Le survol vise la PART, pas la colonne : c'est la catégorie qu'on
          désigne, pas le total du jour. */
-      fireEvent.mouseEnter(screen.getByLabelText(new RegExp(`^${label} · Divertissement —`)));
+      fireEvent.mouseEnter(screen.getByLabelText(new RegExp(`^${label} · Réseaux sociaux —`)));
 
       const tip = screen.getByRole("tooltip");
-      expect(tip).toHaveTextContent("Divertissement");
+      expect(tip).toHaveTextContent("Réseaux sociaux");
       expect(tip).toHaveTextContent(label);
       expect(tip).toHaveTextContent("30 min");
       // La part de la journée, que la hauteur de la bande ne chiffre pas.
