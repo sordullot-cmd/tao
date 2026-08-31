@@ -264,7 +264,7 @@ export default function PatrimoineBankPage({ setPage }) {
 
                 return (
                   <li key={a.id} data-card style={{ ...CARD, padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-                    <LogoTile src={bankLogo(a.institution, a.logo)} size={36} name={a.institution} />
+                    <LogoTile src={bankLogo(a.institution, a.logo)} size={36} name={a.institution} shape="circle" />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {a.name}
@@ -396,7 +396,7 @@ function FavoriteBankChip({ fav, connecting, busy, connected, onConnect, onRemov
       >
         {connecting
           ? <Loader2 size={20} strokeWidth={1.75} className="anim-spin" />
-          : <LogoTile src={bankLogo(fav.name, fav.logo)} size={20} name={fav.name} />}
+          : <LogoTile src={bankLogo(fav.name, fav.logo)} size={20} name={fav.name} shape="circle" />}
         <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {fav.name}
         </span>

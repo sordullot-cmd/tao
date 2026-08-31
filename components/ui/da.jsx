@@ -10,7 +10,7 @@
 
 import React from "react";
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
-import { T, FIELD_BG, tileRadius } from "@/lib/ui/tokens";
+import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { dotRing } from "@/lib/ui/color";
 import { fmt } from "@/lib/ui/format";
 import { periodStart } from "@/lib/ui/period";
@@ -392,17 +392,17 @@ export function DirectionTag({ direction }) {
  * Instruments reconnus : nom lisible, marqueur court de la vignette et couleur
  * d'identité.
  *
- * `badge` est ce qui s'affiche DANS la vignette (maquette « Trades » : « 100 »
+ * `badge` est ce qui s'affiche DANS le cercle (maquette « Trades » : « 100 »
  * pour le Nasdaq-100). C'est volontairement l'indice de l'indice et non des
  * initiales : c'est ce qui identifie l'instrument d'un coup d'œil.
  *
- * `color` est la couleur de l'aplat. Ce sont des couleurs d'IDENTITÉ, pas des
+ * `color` est la couleur du disque. Ce sont des couleurs d'IDENTITÉ, pas des
  * couleurs de thème : elles ne passent donc pas par les tokens `T` et ne
  * changent pas en mode sombre — un logo garde sa couleur, comme les pastilles
  * de type de compte dans lib/ui/accountTypes.
  *
  * `icon` : chemin d'une vraie image dans /public/symbols/, si vous en déposez
- * une. Elle prime alors sur l'aplat coloré. Rien n'est téléchargé depuis un
+ * une. Elle prime alors sur le disque coloré. Rien n'est téléchargé depuis un
  * tiers : les pastilles rondes des plateformes de cotation sont leurs propres
  * marques, on ne peut pas les redistribuer dans l'app.
  */
@@ -422,13 +422,13 @@ export const SYMBOL_LOGOS = [
 ];
 
 /* ── Paires de devises ──────────────────────────────────────────────────────
-   Une paire ne se représente pas par une seule vignette : elle met en rapport DEUX
+   Une paire ne se représente pas par un seul disque : elle met en rapport DEUX
    monnaies. On reprend donc la convention des plateformes de cotation — le
    drapeau de la devise de base en grand, celui de la devise de cotation en
    petit derrière, en haut à droite.
    ------------------------------------------------------------------------ */
 
-/** Drapeau de chaque devise reconnue (fichiers de /public/symbols/). */
+/** Drapeau rond de chaque devise reconnue (fichiers de /public/symbols/). */
 export const CURRENCY_ICONS = {
   EUR: "/symbols/eur.png",
   USD: "/symbols/usd.jpg",
@@ -482,25 +482,24 @@ export function symbolLabel(symbol) {
 }
 
 /**
- * Vignette d'un instrument (maquette « Trades », node 319:14004) : carré arrondi
- * de 32 px portant le marqueur de l'indice en blanc. Pas d'image — un logo par
- * instrument dériverait vite, et l'aplat reste lisible à 32 px là où un logo
- * détaillé devient illisible.
+ * Vignette RONDE d'un instrument (maquette « Trades », node 319:14004) : cercle
+ * plein de 32 px portant le marqueur de l'indice en blanc. Pas d'image — un logo
+ * par instrument dériverait vite, et le cercle plein reste lisible à 32 px là où
+ * un logo détaillé devient illisible.
  *
- * Carré arrondi et non disque, comme toutes les vignettes de l'application
- * (`LogoTile`) : dans une liste de trades, la pastille d'un indice et le logo du
- * compte se suivent — deux silhouettes différentes pour la même fonction se
- * lisent comme deux natures d'objet. Et comme là-bas, l'image remplit le cadre
- * bord à bord : le carré est le format dans lequel ces logos sont dessinés.
+ * Le disque est la silhouette par défaut de l'application ; le carré arrondi de
+ * `LogoTile` est réservé aux brokers et aux prop firms. Dans une ligne de trade
+ * les deux se suivent, et cette différence est justement ce qui les distingue :
+ * à gauche l'instrument, à droite le compte sur lequel il a été traité.
  */
 export function SymbolBadge({ symbol, size = 32 }) {
   const known = SYMBOL_LOGOS.find(l => l.match.test(String(symbol || "")));
   const label = known?.badge
     || String(symbol || "?").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase();
 
-  /* Paire de devises : deux vignettes. La grande (devise de base) est posée en bas
-     à gauche, la petite (devise de cotation) en haut à droite et DERRIÈRE —
-     l'ordre du DOM suffit à l'empilement, la grande étant opaque. L'ensemble
+  /* Paire de devises : deux disques. Le grand (devise de base) est posé en bas
+     à gauche, le petit (devise de cotation) en haut à droite et DERRIÈRE —
+     l'ordre du DOM suffit à l'empilement, le grand étant opaque. L'ensemble
      tient dans la même boîte carrée que n'importe quelle autre vignette : la
      ligne ne bouge pas selon l'instrument. */
   const pair = forexPair(symbol);
@@ -509,7 +508,7 @@ export function SymbolBadge({ symbol, size = 32 }) {
     const small = Math.round(size * 0.56);
     const disc = (code, d, pos) => (
       <span style={{
-        position: "absolute", ...pos, width: d, height: d, borderRadius: tileRadius(d),
+        position: "absolute", ...pos, width: d, height: d, borderRadius: "50%",
         overflow: "hidden", background: T.accentBg,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         fontSize: Math.round(d * 0.34), fontWeight: 600, color: T.textSub, letterSpacing: -0.4,
@@ -529,13 +528,13 @@ export function SymbolBadge({ symbol, size = 32 }) {
     );
   }
 
-  // Une vraie image déposée dans /public/symbols/ prime sur l'aplat coloré.
+  // Une vraie image déposée dans /public/symbols/ prime sur le disque coloré.
   if (known?.icon) {
     return (
       <span
         aria-hidden
         style={{
-          width: size, height: size, borderRadius: tileRadius(size), flexShrink: 0,
+          width: size, height: size, borderRadius: "50%", flexShrink: 0,
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           overflow: "hidden", background: T.accentBg,
         }}
@@ -554,7 +553,7 @@ export function SymbolBadge({ symbol, size = 32 }) {
   const scale = label.length >= 4 ? 0.26 : label.length === 3 ? 0.32 : 0.375;
   /* Le sigle est BLANC, en dur, et ne se calcule pas.
      Il est passé par un token (`--color-symbol-badge-text`) que la palette de
-     la charte avait descendu à l'encre `#0D0D0D` : les vignettes gardaient bien
+     la charte avait descendu à l'encre `#0D0D0D` : les disques gardaient bien
      leur couleur de marque, mais « 100 » et « 500 » s'écrivaient en noir
      dessus. Il est aussi passé par un seuil de luminance, qui basculait la
      même vignette d'un thème à l'autre. Ces vignettes sont des LOGOS dessinés
@@ -564,7 +563,7 @@ export function SymbolBadge({ symbol, size = 32 }) {
     <div
       aria-hidden
       style={{
-        width: size, height: size, borderRadius: tileRadius(size), flexShrink: 0,
+        width: size, height: size, borderRadius: "50%", flexShrink: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
         background: known?.color || T.symbolBadge, color: "#FFFFFF",
         fontSize: Math.round(size * scale), fontWeight: 600,
@@ -577,7 +576,7 @@ export function SymbolBadge({ symbol, size = 32 }) {
 }
 
 /**
- * Cellule « instrument » de la maquette : vignette + nom (16 Medium) au
+ * Cellule « instrument » de la maquette : vignette ronde + nom (16 Medium) au
  * dessus du code (12 Regular atténué). Source unique pour la page Trades, le
  * dashboard et le détail d'un compte, qui affichaient trois variantes du même
  * bloc.

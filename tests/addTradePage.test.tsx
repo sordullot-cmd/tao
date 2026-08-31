@@ -73,32 +73,33 @@ describe("écran d'ajout de trades", () => {
       target: { files: [new File(["peu importe"], "releve.csv", { type: "text/csv" })] },
     });
 
-    // Parseur par défaut (Tradovate) : deux trades.
+    /* Aucune plateforme nommée : le parseur reconnaît le format tout seul, et
+       trouve deux trades. */
     expect(await screen.findByText("releve.csv")).toBeTruthy();
     expect(await screen.findByText(/^2 trades$/)).toBeTruthy();
 
     /* La plateforme change → le MÊME fichier doit être relu avec l'autre
        parseur. Sans ça le pied annoncerait un import que le bouton ne ferait
        pas : l'insertion, elle, repart toujours du parseur courant. */
-    fireEvent.click(screen.getByRole("button", { name: /tradovate\s*csv/i }));
+    fireEvent.click(screen.getByRole("button", { name: /pick a platform/i }));
     fireEvent.click(await screen.findByRole("button", { name: /MetaTrader 5/i }));
     expect(await screen.findByText(/^1 trades$/)).toBeTruthy();
   });
 
-  it("présente les comptes d'une firme en pastilles, et n'en présélectionne qu'un type", async () => {
+  it("liste les comptes d'une firme, et n'en présélectionne qu'un type", async () => {
     render(<AddTradePage {...props} accounts={FIRM_ACCOUNTS} firms={[FIRM]} />);
 
     fireEvent.click(screen.getByRole("button", { name: /pick a prop firm or an account/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^Apex/ }));
 
-    /* Mélanger éval et funded dans un même import est rarement voulu : seule la
+    /* Mélanger éval et funded dans un même import est rarement voulu : seul le
        premier groupe part coché, les autres restent visibles. Les comptes sont
        de vraies cases à cocher, d'où le rôle interrogé ici. */
     const eval50 = await screen.findByRole("checkbox", { name: "Eval 50k" });
     expect(eval50).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Funded 50k" })).not.toBeChecked();
 
-    // Une pastille se décoche sans toucher aux autres.
+    // Une ligne se décoche sans toucher aux autres.
     fireEvent.click(eval50);
     expect(eval50).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Eval 100k" })).toBeChecked();
@@ -113,7 +114,9 @@ describe("écran d'ajout de trades", () => {
     fireEvent.click(screen.getByRole("button", { name: /pick a prop firm or an account/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^Apex/ }));
 
-    fireEvent.click(screen.getByRole("button", { name: /tradovate\s*csv/i }));
+    /* Le champ se désigne ici par son rôle et non par son nom : Apex déduit sa
+       plateforme, donc le nom du déclencheur n'est plus l'invite. */
+    fireEvent.click(document.querySelector('[aria-haspopup="listbox"]') as HTMLElement);
     expect(await screen.findByRole("button", { name: /WealthCharts/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /MetaTrader 5/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /AlphaTrader/i })).toBeNull();
@@ -121,11 +124,12 @@ describe("écran d'ajout de trades", () => {
 
   it("bascule sur la plateforme de la firme quand la courante n'y est pas", async () => {
     render(<AddTradePage {...props} accounts={ALPHA_ACCOUNTS} firms={[ALPHA]} />);
-    // Au départ, Tradovate — le choix par défaut hors firme.
-    expect(screen.getByRole("button", { name: /tradovate\s*csv/i })).toBeTruthy();
+    // À l'arrivée, aucune plateforme : le champ montre son invite.
+    expect(screen.getByRole("button", { name: /pick a platform/i })).toBeTruthy();
 
-    /* Alpha Futures ne sert pas Tradovate : laisser le champ dessus annoncerait
-       un import que le parseur ne saurait pas faire. */
+    /* Choisir la firme, en revanche, DÉDUIT la plateforme : Alpha Futures n'en
+       fournit qu'une, et Tradovate ne doit pas être proposé — le champ
+       annoncerait un import que le parseur ne saurait pas faire. */
     fireEvent.click(screen.getByRole("button", { name: /pick a prop firm or an account/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^Alpha Futures/ }));
     expect(await screen.findByRole("button", { name: /alphatrader\s*csv/i })).toBeTruthy();

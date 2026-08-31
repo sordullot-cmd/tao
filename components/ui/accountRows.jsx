@@ -55,24 +55,31 @@ const ACTIONS_COL_GAPLESS = { ...ACTIONS_COL, marginLeft: -4 };
 export const ROW_GUTTER = 36;
 
 /**
- * Vignette d'un compte / d'une firme : un CARRÉ ARRONDI, pas un disque.
+ * Vignette du logo d'une marque — deux silhouettes, selon ce que la marque est.
  *
- * Les logos de brokers et de prop firms sont dessinés dans un carré — c'est leur
- * cadre d'origine, celui de l'icône d'application. Le cercle en coupait les
- * angles, et il fallait rétrécir l'image pour qu'ils y rentrent : le logo
- * flottait au milieu d'une couronne vide. Le carré arrondi épouse le cadre
- * d'origine, donc l'image le remplit BORD À BORD (`cover` sur 100 %) sans rien
- * perdre — la quasi-totalité des logos étant en ratio 1:1, `cover` ne rogne pas,
- * il fait coïncider les bords. L'arrondi suit la taille (`tileRadius`) au lieu
- * d'être fixe, sinon la même silhouette change de nature entre 16 et 44 px.
+ * `shape="tile"` (par défaut) : CARRÉ ARRONDI, réservé aux brokers, aux prop
+ * firms et aux plateformes de trading. Leurs logos sont dessinés dans un carré,
+ * celui de l'icône d'application : le cercle en coupait les angles, et il
+ * fallait rétrécir l'image pour qu'ils y rentrent — le logo flottait alors au
+ * milieu d'une couronne vide. Le carré arrondi épouse ce cadre d'origine, donc
+ * l'image le remplit BORD À BORD (`cover` sur 100 %) sans rien perdre : la
+ * quasi-totalité de ces logos étant en ratio 1:1, `cover` ne rogne pas, il fait
+ * coïncider les bords. L'arrondi suit la taille (`tileRadius`) au lieu d'être
+ * fixe, sinon la même silhouette change de nature entre 16 et 44 px.
+ *
+ * `shape="circle"` : le DISQUE, silhouette de tout le reste de l'application —
+ * banques et établissements du patrimoine, enseignes des relevés, instruments.
+ * Le carré arrondi est donc un marqueur : dans une liste, il dit « compte de
+ * trading » avant même qu'on ait lu le nom.
  *
  * Sans logo, on retombe sur une icône ou les initiales — jamais un placeholder
  * inventé.
  */
-export function LogoTile({ src, size = 20, fallback, name }) {
+export function LogoTile({ src, size = 20, fallback, name, shape = "tile" }) {
   return (
     <span style={{
-      width: size, height: size, borderRadius: tileRadius(size), flexShrink: 0,
+      width: size, height: size, flexShrink: 0,
+      borderRadius: shape === "circle" ? "50%" : tileRadius(size),
       display: "inline-flex", alignItems: "center", justifyContent: "center",
       background: T.accentBg, overflow: "hidden",
     }}>

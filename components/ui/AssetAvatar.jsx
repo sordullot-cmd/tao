@@ -15,7 +15,6 @@
 
 import React from "react";
 import { LogoTile } from "@/components/ui/accountRows";
-import { tileRadius } from "@/lib/ui/tokens";
 import { bankLogo } from "@/lib/bank/bankLogos";
 import { styleOfType } from "@/lib/patrimoine";
 
@@ -27,7 +26,7 @@ export default function AssetAvatar({ asset, size = 32 }) {
      banque n'ait son fichier local le récupère sans qu'on ait à le rouvrir. */
   const logo = bankLogo(asset.institution, asset.logo);
   if (logo) {
-    return <LogoTile src={logo} size={size} name={asset.institution || asset.name} />;
+    return <LogoTile src={logo} size={size} name={asset.institution || asset.name} shape="circle" />;
   }
 
   const style = styleOfType(asset.type);
@@ -35,7 +34,7 @@ export default function AssetAvatar({ asset, size = 32 }) {
     <span
       aria-hidden="true"
       style={{
-        width: size, height: size, borderRadius: tileRadius(size), flexShrink: 0,
+        width: size, height: size, borderRadius: "50%", flexShrink: 0,
         background: style.chip.bg, color: style.chip.text,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         fontSize: Math.max(10, Math.round(size * 0.34)), fontWeight: 600,

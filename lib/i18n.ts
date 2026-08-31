@@ -256,6 +256,8 @@ const FR: Dict = {
   "addTrade.funded": "Compte Funded",
   "addTrade.accountSize": "Montant du Compte",
   "addTrade.broker": "Plateforme",
+  /* Invite du champ Plateforme : rien n'y est présélectionné. */
+  "addTrade.pickPlatform": "Choisir une plateforme",
   "addTrade.strategy": "Stratégie (optionnel)",
   "addTrade.uploadCSV": "Télécharger le fichier CSV",
 
@@ -1652,6 +1654,7 @@ const EN: Dict = {
   "addTrade.funded": "Funded Account",
   "addTrade.accountSize": "Account Size",
   "addTrade.broker": "Platform",
+  "addTrade.pickPlatform": "Pick a platform",
   "addTrade.strategy": "Strategy (optional)",
   "addTrade.uploadCSV": "Upload CSV file",
 

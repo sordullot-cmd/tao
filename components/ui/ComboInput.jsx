@@ -151,7 +151,7 @@ export default function ComboInput({
             lecteur d'écran n'a pas à entendre ses initiales en plus. */}
         {exact?.iconUrl && (
           <span aria-hidden="true" style={{ display: "inline-flex", flexShrink: 0 }}>
-            <LogoTile src={exact.iconUrl} size={22} name={exact.label} />
+            <LogoTile src={exact.iconUrl} size={22} name={exact.label} shape="circle" />
           </span>
         )}
 
@@ -256,7 +256,7 @@ export default function ComboInput({
                 }}
               >
                 <span aria-hidden="true" style={{ display: "inline-flex", flexShrink: 0 }}>
-                  <LogoTile src={opt.iconUrl} size={22} name={opt.label} />
+                  <LogoTile src={opt.iconUrl} size={22} name={opt.label} shape="circle" />
                 </span>
                 <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {opt.label}

@@ -212,7 +212,11 @@ const exportGuide = (id) => {
 const stripIndex = (line) => String(line).replace(/^\s*\d+\.\s*/, "");
 
 /** Extensions proposées au dialogue de fichiers, selon le format attendu. */
-const acceptFor = (format) => (format === "html" ? ".html,.htm" : ".csv,.txt");
+/* Extensions proposées au dialogue de fichiers. Sans plateforme nommée on
+   n'exclut rien : le dialogue ne doit pas masquer le fichier que l'utilisateur
+   est venu chercher sous prétexte qu'on ne sait pas encore d'où il vient. */
+const acceptFor = (format) =>
+  format === "html" ? ".html,.htm" : format === "csv" ? ".csv,.txt" : ".csv,.txt,.html,.htm";
 
 /* Déclencheur d'un champ à menu : la pilule en aplat de la charte (`FIELD`),
    sans contour. Identique à celle du sélecteur de destination juste au-dessus —
@@ -244,7 +248,10 @@ function PlatformField({ value, platforms, favorites, onChange, onToggleFavorite
   const openMenu = () => { setQuery(""); setOpen(true); };
   const closeMenu = () => setOpen(false);
 
-  const current = platformById(value) || platformById(DEFAULT_PLATFORM_ID);
+  /* Rien n'est présélectionné : `current` peut être nul, et le champ affiche
+     alors son invite. Retomber sur une plateforme par défaut faisait passer un
+     choix jamais fait pour un choix fait — avec le mauvais parseur au bout. */
+  const current = platformById(value);
   const options = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     /* `platforms` ne contient que des plateformes d'EXÉCUTION, et seulement
@@ -265,17 +272,29 @@ function PlatformField({ value, platforms, favorites, onChange, onToggleFavorite
       <button
         type="button"
         onClick={() => (open ? closeMenu() : openMenu())}
+        /* Le champ annonce qu'il ouvre une liste, et s'il l'a ouverte : sans
+           ça, un lecteur d'écran présente un bouton dont l'action est une
+           surprise. Son nom accessible reste sa VALEUR — c'est elle qu'on veut
+           entendre en le survolant, pas le mot « plateforme » que le libellé
+           juste au-dessus prononce déjà. */
+        aria-haspopup="listbox"
+        aria-expanded={open}
         /* L'anneau ne se montre QUE menu ouvert : un trait permanent autour
            d'un champ est un rectangle de plus à lire avant son contenu. */
-        style={{ ...TRIGGER, color: T.text, boxShadow: open ? FIELD_FOCUS_RING : "none" }}
+        style={{ ...TRIGGER, boxShadow: open ? FIELD_FOCUS_RING : "none" }}
       >
-        <LogoTile src={current.iconPath} size={18} name={current.name} />
-        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {current.name}
+        {current && <LogoTile src={current.iconPath} size={18} name={current.name} />}
+        <span style={{
+          flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          color: current ? T.text : T.textMut,
+        }}>
+          {current ? current.name : t("addTrade.pickPlatform")}
         </span>
-        <span style={{ ...TYPE.caption2, color: T.textMut, textTransform: "uppercase", flexShrink: 0 }}>
-          {current.format}
-        </span>
+        {current && (
+          <span style={{ ...TYPE.caption2, color: T.textMut, textTransform: "uppercase", flexShrink: 0 }}>
+            {current.format}
+          </span>
+        )}
         {open ? <ChevronUp size={14} color={T.textMut} /> : <ChevronDown size={14} color={T.textMut} />}
       </button>
 
@@ -544,7 +563,13 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
   );
   // Nom du compte quand un seul est visé : sert à présélectionner le parseur.
   const accountName = selectedAccountObjects.length === 1 ? selectedAccountObjects[0].name : "";
-  const [selectedBroker, setSelectedBroker] = useState("tradovate");
+  /* Vide à l'arrivée : la plateforme est un CHOIX, pas un réglage par défaut.
+     Elle se remplit toute seule quand un compte visé en désigne une (effet plus
+     bas) ; sinon l'utilisateur la nomme. Tant qu'elle est vide, le parseur
+     travaille en détection automatique — un fichier reconnu passe donc quand
+     même, et un fichier non reconnu affiche « aucun trade trouvé », ce qui dit
+     précisément quoi faire : nommer sa plateforme. */
+  const [selectedBroker, setSelectedBroker] = useState("");
 
   // Favoris brokers : localStorage = cache rapide, Supabase = source de vérité.
   const [favoriteBrokers, setFavoriteBrokers] = useState(() => {
@@ -626,11 +651,14 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
   );
 
   // Catalogue partagé avec les modales de création de compte / firme.
-  const platform = platformById(selectedBroker) || platformById(DEFAULT_PLATFORM_ID);
+  // Nul tant qu'aucune plateforme n'a été nommée.
+  const platform = platformById(selectedBroker);
   /* Ce qu'on passe au parseur : le repli déclaré par la plateforme, pas son id.
      ProjectX et DepthChart exportent les colonnes de Tradovate sans porter ce
-     nom — sans cette indirection elles retomberaient sur le parseur générique. */
-  const parserHint = platform.hint || platform.id;
+     nom — sans cette indirection elles retomberaient sur le parseur générique.
+     `null` quand rien n'est choisi : `parseCSV` reconnaît alors le format tout
+     seul, plutôt que d'appliquer le parseur d'une plateforme au hasard. */
+  const parserHint = platform ? (platform.hint || platform.id) : null;
 
   /* Le format de fichier à parser suit la plateforme du compte sélectionné.
      Cette page ne MODIFIE aucun compte : création et édition se font depuis la
@@ -653,9 +681,19 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
      faire. Cet effet passe APRÈS celui du compte ci-dessus, dont la plateforme
      enregistrée reste prioritaire quand la firme la propose. */
   useEffect(() => {
+    // Le choix courant reste servi par la destination : on n'y touche pas.
     if (allowedPlatforms.some((p) => p.id === selectedBroker)) return;
+    /* Hors firme, on ne remplit RIEN. C'est toute la différence entre déduire et
+       présélectionner : une prop firm dit quelle plateforme elle fournit, donc
+       la nommer est une déduction ; sans firme il n'y a rien à déduire, et poser
+       une plateforme au hasard ferait passer un choix jamais fait pour un choix
+       fait. Un choix devenu invalide est en revanche effacé. */
+    if (!firmBrand) {
+      if (selectedBroker) setSelectedBroker("");
+      return;
+    }
     const fallback = primaryPlatformForFirm(firmBrand) || allowedPlatforms[0];
-    setSelectedBroker(fallback?.id || DEFAULT_PLATFORM_ID);
+    setSelectedBroker(fallback?.id || "");
   }, [allowedPlatforms, firmBrand, selectedBroker]);
 
   /* Relecture des fichiers — déclenchée par les fichiers ET par la plateforme.
@@ -991,7 +1029,9 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
                 onChange={setSelectedBroker}
                 onToggleFavorite={toggleFavoriteBroker}
               />
-              <ExportGuide platform={platform} />
+              {/* Pas de plateforme nommée : pas de marche à suivre à afficher —
+                  elle est propre à chacune. */}
+              {platform && <ExportGuide platform={platform} />}
             </div>
           </Field>
 
@@ -1002,7 +1042,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
             ref={fileInputRef}
             type="file"
             multiple
-            accept={acceptFor(platform.format)}
+            accept={acceptFor(platform?.format)}
             onChange={handleFileSelect}
             aria-label={t("addTrade.importFileAria")}
             style={{ display: "none" }}
