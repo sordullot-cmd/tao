@@ -36,7 +36,6 @@ import { createClient } from "@/lib/supabase/client";
 import { parseCSV } from "@/lib/csvParsers";
 import { firmBrandId } from "@/lib/accountBrand";
 import {
-  DEFAULT_PLATFORM_ID,
   EXECUTION_PLATFORMS,
   platformById,
   platformsForFirm,

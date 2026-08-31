@@ -275,11 +275,10 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   // Persistée côté compte (Supabase via useCloudState) avec fallback localStorage.
   const [tradeTimeframe, setTradeTimeframe] = useCloudState("tr4de_trade_timeframe", "trades_timeframe", {});
   const TIMEFRAME_OPTIONS = ["M1", "M5", "M15", "H1", "H4"];
-  // Catégories multi-sélection du panneau détail : type d'entrée et liquidité
-  // ciblée. Structure { [tradeId]: [tagId, ...] }. Persistées côté compte
+  // Catégorie multi-sélection du panneau détail : type d'entrée.
+  // Structure { [tradeId]: [tagId, ...] }. Persistée côté compte
   // (Supabase via useCloudState) avec fallback localStorage.
   const [tradeEntryTags, setTradeEntryTags] = useCloudState("tr4de_trade_entry_tags", "trades_entry_tags", {});
-  const [tradeLiquidityTags, setTradeLiquidityTags] = useCloudState("tr4de_trade_liquidity_tags", "trades_liquidity_tags", {});
   // Liste complète des règles de la checklist (base + ajoutées), toutes
   // éditables/supprimables. Persistée globalement.
   const DEFAULT_CHECKLIST_RULES = [
@@ -518,15 +517,6 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     { id: "rejectionblock", label: "RB", color: TAG_COLORS.orange }
   ];
 
-  // Liquidité ciblée (ICT/SMC) — multi-sélection.
-  const allLiquidityTags = [
-    { id: "pdhpdl", label: "PDH/PDL", color: TAG_COLORS.blue },
-    { id: "equalhl", label: "Equal Highs/Lows", color: TAG_COLORS.green },
-    { id: "asianhl", label: "Asian H/L", color: TAG_COLORS.orange },
-    { id: "sessionhl", label: "Session H/L", color: TAG_COLORS.purple },
-    { id: "trendline", label: "Trendline", color: TAG_COLORS.red }
-  ];
-
   // Questions de la checklist Oui/Non du panneau détail (remplace direction + horaires)
   const checklistQuestions = Array.isArray(checklistRules) ? checklistRules : DEFAULT_CHECKLIST_RULES;
 
@@ -643,7 +633,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   };
 
   // Bascule un tag (multi-sélection) sur un state persisté par useCloudState et
-  // propage aux trades enfants d'un groupe. Générique pour entrée / liquidité.
+  // propage aux trades enfants d'un groupe.
   const toggleCloudTag = (setState, selectedTrade, tagId) => {
     const tradeId = selectedTrade?.id;
     if (!tradeId) return;
@@ -662,7 +652,6 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     });
   };
   const toggleEntryTag = (selectedTrade, tagId) => toggleCloudTag(setTradeEntryTags, selectedTrade, tagId);
-  const toggleLiquidityTag = (selectedTrade, tagId) => toggleCloudTag(setTradeLiquidityTags, selectedTrade, tagId);
 
   const allErrorTags = [
     { id: "poorentry", label: "Mauvaise entrée", color: TAG_COLORS.red },
@@ -1969,22 +1958,6 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                           color={tag.color}
                           checked={(tradeEntryTags[selectedTrade.id] || []).includes(tag.id)}
                           onClick={()=>toggleEntryTag(selectedTrade, tag.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* LIQUIDITÉ CIBLÉE (multi-sélection) */}
-                  <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <FieldLabel>Liquidité ciblée</FieldLabel>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                      {allLiquidityTags.map((tag)=>(
-                        <CheckChip
-                          key={tag.id}
-                          label={tag.label}
-                          color={tag.color}
-                          checked={(tradeLiquidityTags[selectedTrade.id] || []).includes(tag.id)}
-                          onClick={()=>toggleLiquidityTag(selectedTrade, tag.id)}
                         />
                       ))}
                     </div>
