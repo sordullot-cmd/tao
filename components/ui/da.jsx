@@ -607,9 +607,9 @@ export function SymbolBadge({ symbol, size = 32 }) {
  * D'où la disparition de la prop `inline` : elle ne servait qu'à rabattre les
  * deux lignes en une pour les listes compactes.
  */
-/* L'écart vignette ↔ symbole : 16 et non 8. Le disque plein est une masse
+/* L'écart vignette ↔ symbole : 14 et non 8. Le disque plein est une masse
    sombre, pas un glyphe — à 8 px le code paraissait posé contre lui. */
-export function SymbolCell({ symbol, size = 32, gap = 16, nameSize = 16 }) {
+export function SymbolCell({ symbol, size = 32, gap = 14, nameSize = 16 }) {
   const { name } = symbolLabel(symbol);
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap,minWidth:0}}>
