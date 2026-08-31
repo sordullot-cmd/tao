@@ -4,10 +4,10 @@ import React from "react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
-import { ArrowUpRight, ArrowDownRight, Pencil, Link2, Check, Plus } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Pencil, Link2, Check, Plus, Trash2 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import { ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
-import { parseAccountSize, updateTradingAccount } from "@/lib/propFirms";
+import { parseAccountSize, updateTradingAccount, deleteTradingAccount } from "@/lib/propFirms";
 import { PLATFORMS } from "@/lib/brokers/platforms";
 import {
   CARD, SectionTitle, SectionAction, HeroAmount, BackLink,
@@ -20,9 +20,10 @@ import MonthCalendar from "@/components/ui/monthCalendar";
 import { RoundLogo } from "@/components/ui/accountRows";
 import Popover from "@/components/ui/Popover";
 import { accountBrand, firmLogo } from "@/lib/accountBrand";
-import { AccountModal, firmErrorLabel } from "@/components/modals/AccountModals";
+import { AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
+import { refreshTradesCache } from "@/lib/tradesCache";
 import { PageSkeleton, showSkeleton } from "@/components/ui/Skeleton";
 
 /* ---------------------------------------------------------------------------
@@ -165,6 +166,9 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
 
   // Modale de modification du compte affiché.
   const [editing, setEditing] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState("");
   const [filterId, setFilterId] = React.useState("all"); // "all" | id d'un compte passé
   const [period, setPeriod] = React.useState("1A");
   const [statsExpanded, setStatsExpanded] = React.useState(false);
@@ -469,6 +473,28 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
     { label: "Trades", value: String(stats.total) },
   ];
 
+  /* Suppression du compte, en tout point celle de la page d'une prop firm :
+     ses trades partent avec lui, donc le cache local doit être re-synchronisé
+     sinon useTrades() les ressert jusqu'au prochain rechargement. La page
+     disparaît avec son sujet — on remonte au parent DIRECT, comme le retour
+     de la barre : la firme du compte, ou la liste des comptes. */
+  const onDeleteAccount = async () => {
+    if (!account) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteTradingAccount(account.id, user?.id);
+      setAccounts?.((prev) => (prev || []).filter((a) => a.id !== account.id));
+      await refreshTradesCache(user?.id);
+      setConfirmDelete(false);
+      if (brand.firm) { setSelectedFirmId?.(brand.firm.id); setPage?.("firm-detail"); }
+      else setPage?.("accounts");
+    } catch (e) {
+      setDeleteError(firmErrorLabel(e));
+      setDeleting(false);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
 
@@ -482,7 +508,11 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
           quand il en a une, la liste des comptes sinon. La liste reste joignable
           en un clic depuis la page de la firme, qui porte déjà son propre
           retour — inutile de la doubler ici. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+      {/* Le retour appartient à l'EN-TÊTE, pas à une section : il se pose donc
+          plus près de l'identité (16 px) que les sections ne le sont entre elles
+          (24 px, le `gap` du conteneur). D'où la marge négative — le lien et le
+          nom qu'il surmonte se lisaient sinon comme deux blocs sans rapport. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: -8 }}>
         <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
           {brand.firm ? (
             <BackLink
@@ -512,14 +542,39 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
 
           {/* Modification du compte — même modale que la page Comptes et la page
               d'une firme. Absente en vue archivée : un eval passé n'existe plus
-              en base, il n'y a rien à modifier. */}
+              en base, il n'y a rien à modifier.
+
+              C'est elle qui porte l'aplat d'encre : on ouvre cette fiche pour
+              régler le compte, le rattachement à une firme se fait une fois. */}
           {!isArchivedView && account && (
             <button
               type="button"
               onClick={() => setEditing(true)}
-              style={pillActionStyle()}
+              style={pillActionStyle(true)}
             >
               <Pencil size={13} strokeWidth={1.75} /> {t("accountModal.editTitle")}
+            </button>
+          )}
+
+          {/* Suppression — pastille ronde à l'extrémité, comme sur la page d'une
+              prop firm : le destructif ne porte pas de libellé et ferme la
+              barre. Absente en vue archivée, où le compte n'existe plus en
+              base. */}
+          {!isArchivedView && account && (
+            <button
+              type="button"
+              onClick={() => { setDeleteError(""); setConfirmDelete(true); }}
+              aria-label={t("common.delete")}
+              title={t("common.delete")}
+              style={{
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 34, height: 34, borderRadius: 999,
+                border: `1px solid ${T.border}`, background: T.white, color: T.textMut, cursor: "pointer",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.redBd; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; e.currentTarget.style.borderColor = T.border; }}
+            >
+              <Trash2 size={14} strokeWidth={1.75} />
             </button>
           )}
 
@@ -536,6 +591,15 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
           )}
         </div>
       </div>
+
+      {deleteError && (
+        <div style={{
+          fontSize: 12, color: T.red, background: T.redBg, border: `1px solid ${T.redBd}`,
+          borderRadius: 8, padding: "9px 12px",
+        }}>
+          {deleteError}
+        </div>
+      )}
 
       {/* ═══ 2. IDENTITÉ ═══ logo 44 px, nom 16 px Medium, maison · type à 40 % */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -673,6 +737,17 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
         />
       </div>
 
+      {confirmDelete && account && (
+        <ConfirmModal
+          title={t("firms.deleteAccountTitle")}
+          message={t("firms.deleteAccountMsg").replace("{name}", account.name || "")}
+          confirmLabel={t("common.delete")}
+          busy={deleting}
+          onConfirm={onDeleteAccount}
+          onClose={() => setConfirmDelete(false)}
+        />
+      )}
+
       {editing && account && (
         <AccountModal
           account={account}
@@ -690,12 +765,21 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
 
 /* Pastille d'action de la barre du haut — partagée par « Modifier » et par le
    rattachement à une firme, pour que les deux ne divergent pas. */
-function pillActionStyle() {
+/**
+ * Pilule de la barre d'actions. `solid` pose l'aplat d'encre de l'action
+ * première — une seule par barre, sans quoi rien n'est mis en avant.
+ *
+ * L'encre posée dessus est `textInverted` et non `onSolid` : l'aplat est celle
+ * du thème, qui s'inverse en sombre, et la lettre doit s'inverser avec lui.
+ */
+function pillActionStyle(solid = false) {
   return {
     display: "inline-flex", alignItems: "center", gap: 6,
     padding: "8px 16px", minHeight: 34, borderRadius: 999,
-    border: `1px solid ${T.border}`, background: T.white,
-    color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+    border: solid ? "none" : `1px solid ${T.border}`,
+    background: solid ? T.text : T.white,
+    color: solid ? T.textInverted : T.text,
+    fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
   };
 }
 

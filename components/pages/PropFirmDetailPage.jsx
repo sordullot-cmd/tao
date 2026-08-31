@@ -454,7 +454,11 @@ export default function PropFirmDetailPage({
           Une ligne à elle seule : le retour vers la liste des comptes à gauche
           — il n'existait jusqu'ici que sur l'écran « firme introuvable », donc
           nulle part en usage normal —, les actions de la firme à droite. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+      {/* Le retour appartient à l'EN-TÊTE, pas à une section : il se pose donc
+          plus près de l'identité (16 px) que les sections ne le sont entre elles
+          (24 px, le `gap` du conteneur). D'où la marge négative — le lien et le
+          nom qu'il surmonte se lisaient sinon comme deux blocs sans rapport. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: -8 }}>
         <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
           <BackLink label={t("nav.accounts")} onClick={() => setPage?.("accounts")} />
         </div>
@@ -473,8 +477,12 @@ export default function PropFirmDetailPage({
             onClick={() => setEditingFirm(true)}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6, minHeight: 34, padding: "8px 16px",
-              borderRadius: 999, border: `1px solid ${T.border}`, background: T.white,
-              color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+              /* L'aplat d'encre va au RÉGLAGE de la firme, pas à l'ajout de
+                 comptes : on garnit une firme une fois, on la règle ensuite.
+                 `textInverted` et non `onSolid` — l'aplat est l'encre du thème,
+                 qui s'inverse en sombre, et la lettre doit suivre. */
+              borderRadius: 999, border: "none", background: T.text,
+              color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}
           >
             <Settings2 size={13} strokeWidth={1.75} /> {t("firms.editFirm")}
@@ -877,6 +885,11 @@ export default function PropFirmDetailPage({
  */
 function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAccount, onEditAccount, onDeleteAccount, onAddAccount }) {
   const [open, setOpen] = React.useState(false);
+  /* Modifier et supprimer ne se montrent qu'à la ligne survolée : affichées sur
+     toutes, elles doublaient la largeur occupée par les commandes et poussaient
+     le montant — la seule information qu'on vient chercher ici. Le focus les
+     révèle aussi, sans quoi elles seraient hors d'atteinte au clavier. */
+  const [activeId, setActiveId] = React.useState(null);
   const ref = React.useRef(null);
   const triggerRef = React.useRef(null);
 
@@ -941,12 +954,13 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
       >
         <>
           {accounts.length === 0 ? (
-            <div style={{ padding: "10px 10px", fontSize: 13, color: T.textMut }}>
+            <div style={{ padding: "8px 10px", fontSize: 13, color: T.textMut }}>
               {t("firms.noAccountYet")}
             </div>
           ) : accounts.map((acc) => {
             const v = viewOf(acc);
             const value = v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false);
+            const on = activeId === acc.id;
             /* Ouvrir / modifier / supprimer côte à côte : trois cibles, donc
                trois boutons frères (un bouton ne peut pas en contenir un autre)
                dans une rangée qui se surligne d'un bloc. */
@@ -954,19 +968,29 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
               <div
                 key={acc.id}
                 style={{
-                  display: "flex", alignItems: "center", gap: 4, borderRadius: 6,
+                  display: "flex", alignItems: "center", borderRadius: 6,
+                  background: on ? T.rowHighlight : "transparent",
                   transition: "background var(--dur-fast) var(--ease-out)",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                onMouseEnter={() => setActiveId(acc.id)}
+                onMouseLeave={() => setActiveId((id) => (id === acc.id ? null : id))}
+                onFocus={() => setActiveId(acc.id)}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setActiveId((id) => (id === acc.id ? null : id));
+                  }
+                }}
               >
                 <button
                   type="button"
                   role="menuitem"
                   onClick={() => choose(() => onOpenAccount?.(acc.id))}
+                  /* Une seule ligne, et non le nom au-dessus de son type : sur
+                     deux étages chaque compte pesait 40 px de haut pour deux
+                     mots, et la liste ne se lisait plus d'un regard. */
                   style={{
                     flex: "1 1 auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0,
-                    textAlign: "left", padding: "8px 10px", minHeight:40, borderRadius: 6,
+                    textAlign: "left", padding: "6px 10px", minHeight: 32, borderRadius: 6,
                     border: "none", background: "transparent", cursor: "pointer",
                     fontFamily: "inherit", color: T.text,
                   }}
@@ -976,16 +1000,17 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
                     width: 8, height: 8, borderRadius: 999, flexShrink: 0,
                     background: colorByAccount?.get(acc.id) || T.textSub,
                   }} />
-                  <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: "1 1 auto" }}>
-                    <span style={{
-                      fontSize: 13, fontWeight: 500,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {acc.name || acc.eval_account_size || "Compte"}
-                    </span>
-                    <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap" }}>
-                      {typeLabel(acc.account_type, acc.eval_account_size)}
-                    </span>
+                  <span style={{
+                    fontSize: 13, fontWeight: 500, minWidth: 0, flex: "1 1 auto",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {acc.name || acc.eval_account_size || "Compte"}
+                  </span>
+                  {/* Le type SANS sa taille : celle-ci est presque toujours déjà
+                      dans le nom du compte (« Topstep 50k »), et l'écrire deux
+                      fois sur la même ligne la rendait illisible. */}
+                  <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {typeLabel(acc.account_type)}
                   </span>
                   <span style={{
                     fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0,
@@ -995,40 +1020,49 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
                     {value}
                   </span>
                 </button>
-                {onEditAccount && (
-                  <IconBtn label={t("common.edit")} onClick={() => choose(() => onEditAccount(acc))}>
-                    <Pencil size={13} strokeWidth={1.75} />
-                  </IconBtn>
-                )}
-                {onDeleteAccount && (
-                  <IconBtn label={t("common.delete")} danger onClick={() => choose(() => onDeleteAccount(acc))}>
-                    <Trash2 size={13} strokeWidth={1.75} />
-                  </IconBtn>
-                )}
+                {/* `visibility` et non un démontage : les deux boutons gardent
+                    leur place, sinon le montant glissait à chaque survol. */}
+                <span style={{
+                  display: "inline-flex", flexShrink: 0, paddingRight: 4,
+                  visibility: on ? "visible" : "hidden",
+                }}>
+                  {onEditAccount && (
+                    <IconBtn label={t("common.edit")} onClick={() => choose(() => onEditAccount(acc))}>
+                      <Pencil size={13} strokeWidth={1.75} />
+                    </IconBtn>
+                  )}
+                  {onDeleteAccount && (
+                    <IconBtn label={t("common.delete")} danger onClick={() => choose(() => onDeleteAccount(acc))}>
+                      <Trash2 size={13} strokeWidth={1.75} />
+                    </IconBtn>
+                  )}
+                </span>
               </div>
             );
           })}
 
+          {/* Ajout d'un compte : une ligne discrète en pied de menu, pas une
+              entrée de même poids que les comptes. Elle occupait 36 px et toute
+              la largeur, derrière un trait pleine largeur — pour une action
+              qu'on ne vient pas chercher ici (la barre d'actions de la page
+              porte déjà « Ajouter des comptes »). */}
           {onAddAccount && (
-            <>
-              <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => choose(onAddAccount)}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  textAlign: "left", padding: "8px 10px", minHeight:36, borderRadius: 6,
-                  border: "none", background: "transparent", cursor: "pointer",
-                  fontFamily: "inherit", fontSize:13, fontWeight: 500, color: T.textSub,
-                  transition: "background var(--dur-fast) var(--ease-out)",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              >
-                <Plus size={14} strokeWidth={1.75} /> {t("firms.addAccount")}
-              </button>
-            </>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => choose(onAddAccount)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                margin: "2px 0 0 10px", padding: "4px 6px 4px 0", minHeight: 24,
+                border: "none", background: "transparent", cursor: "pointer",
+                fontFamily: "inherit", fontSize: 12, fontWeight: 500, color: T.textMut,
+                transition: "color var(--dur-fast) var(--ease-out)",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = T.text; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = T.textMut; }}
+            >
+              <Plus size={12} strokeWidth={2} /> {t("firms.addAccount")}
+            </button>
           )}
         </>
       </Popover>
@@ -1045,7 +1079,7 @@ function IconBtn({ children, onClick, label, danger }) {
       title={label}
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 30, height: 30, borderRadius: 8, border: "none",
+        width: 24, height: 24, borderRadius: 6, border: "none",
         background: "transparent", color: T.textMut, cursor: "pointer", flexShrink: 0,
         transition: "background .12s ease, color .12s ease",
       }}

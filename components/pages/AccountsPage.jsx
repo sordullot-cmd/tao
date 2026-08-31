@@ -7,7 +7,7 @@ import { CARD, SectionTitle, HeroAmount, downsampleLTTB, sparklineBudget } from 
 import { accountBrandColor, brandColor } from "@/lib/ui/brandColors";
 import {
   AccountRowsHeader, TableRow, SubRow, RoundLogo, PassFundedButton,
-  RowIconButton, AddAccountRow,
+  RowIconButton,
 } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
@@ -25,8 +25,9 @@ import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Chec
 import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { isArchivedAccount, ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import { moveEntry, orderEntries } from "@/lib/accountsOrder";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
-import { PropFirmModal, AccountModal, AttachAccountsModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
+import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm } from "@/lib/propFirms";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
@@ -135,7 +136,6 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
      fermée, sinon la firme d'accueil. Le geste part de la firme (sa ligne
      dépliée), là où la question se pose — la modale du compte reste le chemin
      inverse, un compte à la fois. */
-  const [attachingToFirm, setAttachingToFirm] = React.useState(null);
   // Comptes actifs (grille principale + KPI) vs comptes eval archivés (section
   // dédiée en bas). Un compte archivé garde ses trades mais son P&L ne compte
   // plus dans les totaux du site.
@@ -559,6 +559,18 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         });
       }
     }
+    /* Une firme qui n'a qu'un seul compte n'apporte aucune agrégation : la
+       carte affichait « Prop firm / 1 compte » là où le compte lui-même dit
+       plus (son type, sa progression, son passage funded). On la ramène donc
+       à son compte — le logo et le nom de la firme restent portés par la
+       carte de compte. */
+    for (const [key, e] of [...entities]) {
+      if (e.firm && e.accounts.length === 1) {
+        entities.delete(key);
+        const acc = e.accounts[0];
+        entities.set(`acc:${acc.id}`, { ...e, key: `acc:${acc.id}`, firm: null, account: acc });
+      }
+    }
     return [...entities.values()]
       .sort((a, b) => {
         if (b.recent !== a.recent) return b.recent - a.recent;
@@ -586,6 +598,11 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
      toutes ses firmes à chaque rechargement était une corvée pour qui en suit
      plusieurs. Stocké en TABLEAU d'ids — un Set ne survit pas au JSON — et
      reconverti en Set pour la lecture. */
+  // Voir `dragFor` : l'autorisation de glisser se lit dans le `dragstart`, donc
+  // au même tour de boucle que le `pointerdown` qui la pose. Un état React, lui,
+  // ne serait visible qu'au rendu suivant.
+  const dragArmed = React.useRef(false);
+
   const [expandedIds, setExpandedIds] = useCloudState(
     "tr4de_accounts_expanded_rows", "accounts_expanded_rows", []
   );
@@ -596,6 +613,84 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   const toggleRow = (id) => setExpandedIds((prev) => {
     const arr = Array.isArray(prev) ? prev : [];
     return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+  });
+
+  /* ── Ordre manuel de la liste ────────────────────────────────────────────
+     Même mécanique que le dépliage juste au-dessus : une liste d'identifiants
+     dans `user_productivity`, donc localStorage d'abord et Supabase derrière.
+     L'ordre suit le COMPTE et non l'appareil — on range ses firmes une fois.
+     ---------------------------------------------------------------------- */
+  const [rowOrder, setRowOrder] = useCloudState(
+    "tr4de_accounts_order", "accounts_order", []
+  );
+
+  /* Firmes et comptes autonomes sur UN seul rang. Sans cette liste unique, un
+     compte ne pouvait pas remonter au-dessus d'une firme : la page les rendait
+     en deux passes, et l'ordre naturel voulait les firmes d'abord. */
+  const orderedRows = React.useMemo(() => {
+    const rows = [
+      ...firmSummaries.map((summary) => ({ id: `firm:${summary.firm.id}`, kind: "firm", summary })),
+      ...standaloneAccounts.map((account) => ({ id: `acc:${account.id}`, kind: "account", account })),
+    ];
+    return orderEntries(rows, rowOrder);
+  }, [firmSummaries, standaloneAccounts, rowOrder]);
+
+  /* Le glissé en cours : la ligne tirée, celle qu'on survole et le bord visé.
+     État LOCAL — un tri abandonné en cours de route n'a rien à écrire. */
+  const [dragRow, setDragRow] = React.useState({ sourceId: null, overId: null, edge: null });
+
+  /* Les gestionnaires d'une ligne, montés à la demande.
+
+     La ligne est `draggable` en PERMANENCE et c'est `onDragStart` qui refuse les
+     départs illégitimes : armer l'attribut au `pointerdown` arrive trop tard —
+     le navigateur a déjà décidé s'il y avait un glissé, et le geste partait en
+     sélection de texte (même piège que la page Objectifs). */
+  const dragFor = (id) => ({
+    dragging: dragRow.sourceId === id,
+    edge: dragRow.sourceId && dragRow.sourceId !== id && dragRow.overId === id ? dragRow.edge : null,
+    /* On attrape la ligne, pas ses commandes : un clic qui part du chevron, d'un
+       bouton d'action ou d'un sous-compte déplié ne doit rien déplacer. */
+    onPointerDown: (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      dragArmed.current = !e.target.closest("button, input, a, select, textarea");
+    },
+    onStart: (e) => {
+      if (!dragArmed.current) { e.preventDefault(); return; }
+      setDragRow({ sourceId: id, overId: null, edge: null });
+      try {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", id);
+      } catch { /* Safari refuse parfois `setData` hors geste utilisateur. */ }
+    },
+    onOver: (e) => {
+      if (!dragRow.sourceId || dragRow.sourceId === id) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = "move"; } catch { /* idem */ }
+      // La moitié survolée décide du bord : au-dessus on insère avant, en
+      // dessous après. Pas de zone morte — toute la ligne est une cible.
+      const rect = e.currentTarget.getBoundingClientRect();
+      const edge = e.clientY - rect.top < rect.height / 2 ? "before" : "after";
+      if (dragRow.overId !== id || dragRow.edge !== edge) {
+        setDragRow((d) => ({ ...d, overId: id, edge }));
+      }
+    },
+    onLeave: (e) => {
+      // Un enfant survolé n'est pas une sortie : sans ce test, le trait
+      // clignotait au passage sur chaque cellule de la ligne.
+      if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+      setDragRow((d) => (d.overId === id ? { ...d, overId: null, edge: null } : d));
+    },
+    onDrop: (e) => {
+      e.preventDefault();
+      const { sourceId, edge } = dragRow;
+      if (sourceId && sourceId !== id) setRowOrder(moveEntry(orderedRows, sourceId, id, edge || "after"));
+      setDragRow({ sourceId: null, overId: null, edge: null });
+      dragArmed.current = false;
+    },
+    onEnd: () => {
+      setDragRow({ sourceId: null, overId: null, edge: null });
+      dragArmed.current = false;
+    },
   });
 
   /* Comptes et firmes arrivent de Supabase après l'authentification. L'état
@@ -621,6 +716,144 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
       </SkeletonScreen>
     );
   }
+
+  /* Une firme : ligne dépliable sur ses comptes rattachés. Extraite du JSX pour
+     que la liste unique (firmes ET comptes autonomes, cf. `orderedRows`) reste
+     un seul `map` lisible plutôt qu'un branchement de cent lignes. */
+  const renderFirmRow = (summary, drag) => {
+    const id = `firm:${summary.firm.id}`;
+    const open = expanded.has(id);
+    const payout = summary.accounts.reduce((sum, a) => sum + payoutFor(a), 0);
+    return (
+      <TableRow
+        key={id}
+        flat
+        drag={drag}
+        /* Logo de la firme = son nom (Topstep, Apex…). Sa
+           plateforme d'exécution ne sert qu'à l'import. */
+        icon={firmLogo(summary.firm)}
+        fallbackIcon={<Building2 size={12} strokeWidth={1.75} color={T.textSub} />}
+        label={summary.firm.name}
+        cells={[
+          String(summary.count),
+          summary.capital > 0 ? fmtNoCents(summary.capital + summary.pnl) : fmt(summary.pnl, false),
+          summary.trades > 0 ? `${Math.round(summary.winRate)}%` : "—",
+          fmtNoCents(payout),
+        ]}
+        /* Une firme vide n'a rien à déplier : le chevron ouvrait sur une
+           seule phrase (« aucun compte rattaché »), ce que la colonne
+           « comptes » à 0 dit déjà. */
+        expandable={summary.accounts.length > 0}
+        open={open}
+        onToggle={() => toggleRow(id)}
+        onOpen={() => onOpenFirm(summary.firm.id)}
+        actions={
+          <>
+            <RowIconButton
+              label={t("firms.editFirm")}
+              onClick={() => setEditingFirm(summary.firm)}
+            >
+              <Pencil size={14} strokeWidth={1.75} />
+            </RowIconButton>
+            <RowIconButton
+              label={t("firms.deleteFirm")}
+              danger
+              busy={deleting && confirmFirmDelete?.id === summary.firm.id}
+              onClick={() => { setDeleteFirmAccounts(false); setConfirmFirmDelete(summary.firm); }}
+            >
+              <Trash2 size={14} strokeWidth={1.75} />
+            </RowIconButton>
+          </>
+        }
+      >
+        {summary.accounts.map((acc) => {
+          const v = viewOf(acc);
+          return (
+            <SubRow
+              key={acc.id}
+              label={acc.name || acc.eval_account_size || "Compte"}
+              dot={<AccountDot account={acc} firm={summary.firm} />}
+              badge={canPassFunded(acc) ? (
+                <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
+              ) : null}
+              cells={[
+                /* Le type reste écrit en toutes lettres : la pastille
+                   de gauche le code par la couleur, elle ne le dit
+                   pas — et la couleur seule ne suffit jamais. */
+                accountTypeLabel(acc),
+                v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
+                v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
+                fmtNoCents(v.payout),
+              ]}
+              onOpen={() => onOpenDetail(acc.id)}
+              actions={
+                <>
+                  <RowIconButton
+                    label={t("common.edit")}
+                    onClick={() => setEditingAccount(acc)}
+                  >
+                    <Pencil size={14} strokeWidth={1.75} />
+                  </RowIconButton>
+                  <RowIconButton
+                    label={t("common.delete")}
+                    danger
+                    busy={deleting && confirmDelete?.id === acc.id}
+                    onClick={() => setConfirmDelete(acc)}
+                  >
+                    <Trash2 size={14} strokeWidth={1.75} />
+                  </RowIconButton>
+                </>
+              }
+            />
+          );
+        })}
+      </TableRow>
+    );
+  };
+
+  /* Un compte qui ne dépend d'aucune firme — même ligne, sans dépliage. */
+  const renderAccountRow = (acc, drag) => {
+    const v = viewOf(acc);
+    return (
+      <TableRow
+        key={`acc:${acc.id}`}
+        flat
+        drag={drag}
+        icon={getBrokerLogo(acc.broker) || resolvePlatformIcon(acc.broker)}
+        fallbackIcon={<Wallet size={12} strokeWidth={1.75} color={T.textSub} />}
+        label={acc.name || "Compte"}
+        badge={canPassFunded(acc) ? (
+          <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
+        ) : null}
+        cells={[
+          "1",
+          v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
+          v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
+          fmtNoCents(v.payout),
+        ]}
+        expandable={false}
+        onOpen={() => onOpenDetail(acc.id)}
+        actions={
+          <>
+            <RowIconButton
+              label={t("common.edit")}
+              onClick={() => setEditingAccount(acc)}
+            >
+              <Pencil size={14} strokeWidth={1.75} />
+            </RowIconButton>
+            <RowIconButton
+              label={t("common.delete")}
+              danger
+              busy={deleting && confirmDelete?.id === acc.id}
+              onClick={() => setConfirmDelete(acc)}
+            >
+              <Trash2 size={14} strokeWidth={1.75} />
+            </RowIconButton>
+          </>
+        }
+      />
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, fontFamily: "var(--font-sans)" }} className="anim-1">
@@ -818,155 +1051,12 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
               <AccountRowsHeader flush withActions />
 
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {/* Une ligne par firme, dépliable sur ses comptes */}
-                {firmSummaries.map((summary) => {
-                  const id = `firm:${summary.firm.id}`;
-                  const open = expanded.has(id);
-                  const payout = summary.accounts.reduce((sum, a) => sum + payoutFor(a), 0);
-                  return (
-                    <TableRow
-                      key={id}
-                      flat
-                      /* Logo de la firme = son nom (Topstep, Apex…). Sa
-                         plateforme d'exécution ne sert qu'à l'import. */
-                      icon={firmLogo(summary.firm)}
-                      fallbackIcon={<Building2 size={12} strokeWidth={1.75} color={T.textSub} />}
-                      label={summary.firm.name}
-                      cells={[
-                        String(summary.count),
-                        summary.capital > 0 ? fmtNoCents(summary.capital + summary.pnl) : fmt(summary.pnl, false),
-                        summary.trades > 0 ? `${Math.round(summary.winRate)}%` : "—",
-                        fmtNoCents(payout),
-                      ]}
-                      /* Une firme est toujours dépliable : si elle n'a aucun
-                         compte rattaché, on le dit explicitement au lieu de
-                         masquer le chevron — sinon la ligne paraît cassée. */
-                      expandable
-                      open={open}
-                      onToggle={() => toggleRow(id)}
-                      onOpen={() => onOpenFirm(summary.firm.id)}
-                      actions={
-                        <>
-                          <RowIconButton
-                            label={t("firms.editFirm")}
-                            onClick={() => setEditingFirm(summary.firm)}
-                          >
-                            <Pencil size={14} strokeWidth={1.75} />
-                          </RowIconButton>
-                          <RowIconButton
-                            label={t("firms.deleteFirm")}
-                            danger
-                            busy={deleting && confirmFirmDelete?.id === summary.firm.id}
-                            onClick={() => { setDeleteFirmAccounts(false); setConfirmFirmDelete(summary.firm); }}
-                          >
-                            <Trash2 size={14} strokeWidth={1.75} />
-                          </RowIconButton>
-                        </>
-                      }
-                    >
-                      {summary.accounts.length === 0 && (
-                        <div style={{ fontSize: 14, color: T.textMut, padding: "4px 0 4px 30px" }}>
-                          Aucun compte rattaché à cette firme.
-                        </div>
-                      )}
-                      {summary.accounts.map((acc) => {
-                        const v = viewOf(acc);
-                        return (
-                          <SubRow
-                            key={acc.id}
-                            label={acc.name || acc.eval_account_size || "Compte"}
-                            dot={<AccountDot account={acc} firm={summary.firm} />}
-                            badge={canPassFunded(acc) ? (
-                              <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
-                            ) : null}
-                            cells={[
-                              /* Le type reste écrit en toutes lettres : la pastille
-                                 de gauche le code par la couleur, elle ne le dit
-                                 pas — et la couleur seule ne suffit jamais. */
-                              accountTypeLabel(acc),
-                              v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
-                              v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
-                              fmtNoCents(v.payout),
-                            ]}
-                            onOpen={() => onOpenDetail(acc.id)}
-                            actions={
-                              <>
-                                <RowIconButton
-                                  label={t("common.edit")}
-                                  onClick={() => setEditingAccount(acc)}
-                                >
-                                  <Pencil size={14} strokeWidth={1.75} />
-                                </RowIconButton>
-                                <RowIconButton
-                                  label={t("common.delete")}
-                                  danger
-                                  busy={deleting && confirmDelete?.id === acc.id}
-                                  onClick={() => setConfirmDelete(acc)}
-                                >
-                                  <Trash2 size={14} strokeWidth={1.75} />
-                                </RowIconButton>
-                              </>
-                            }
-                          />
-                        );
-                      })}
-
-                      {/* Fin de la liste des comptes de la firme : une seule
-                          ligne « Ajouter un compte », qui ouvre les deux façons
-                          de la garnir — créer un compte, ou rattacher un compte
-                          qui existe déjà (créé avant la firme, ou hors firme).
-                          Deux lignes empilées disaient deux fois « ajouter »
-                          pour une seule intention. */}
-                      <AddAccountRow
-                        onClick={() => setCreatingAccount({ firmId: summary.firm.id })}
-                        onAttach={() => setAttachingToFirm(summary.firm)}
-                      />
-                    </TableRow>
-                  );
-                })}
-
-                {/* Puis les comptes qui ne dépendent d'aucune firme */}
-                {standaloneAccounts.map((acc) => {
-                  const v = viewOf(acc);
-                  return (
-                    <TableRow
-                      key={`acc:${acc.id}`}
-                      flat
-                      icon={getBrokerLogo(acc.broker) || resolvePlatformIcon(acc.broker)}
-                      fallbackIcon={<Wallet size={12} strokeWidth={1.75} color={T.textSub} />}
-                      label={acc.name || "Compte"}
-                      badge={canPassFunded(acc) ? (
-                        <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
-                      ) : null}
-                      cells={[
-                        "1",
-                        v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
-                        v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
-                        fmtNoCents(v.payout),
-                      ]}
-                      expandable={false}
-                      onOpen={() => onOpenDetail(acc.id)}
-                      actions={
-                        <>
-                          <RowIconButton
-                            label={t("common.edit")}
-                            onClick={() => setEditingAccount(acc)}
-                          >
-                            <Pencil size={14} strokeWidth={1.75} />
-                          </RowIconButton>
-                          <RowIconButton
-                            label={t("common.delete")}
-                            danger
-                            busy={deleting && confirmDelete?.id === acc.id}
-                            onClick={() => setConfirmDelete(acc)}
-                          >
-                            <Trash2 size={14} strokeWidth={1.75} />
-                          </RowIconButton>
-                        </>
-                      }
-                    />
-                  );
-                })}
+                {/* Une ligne par firme (dépliable sur ses comptes) ou par compte
+                    autonome, dans l'ordre choisi : les deux natures se glissent
+                    l'une entre l'autre, cf. `orderedRows`. */}
+                {orderedRows.map((row) => (row.kind === "firm"
+                  ? renderFirmRow(row.summary, dragFor(row.id))
+                  : renderAccountRow(row.account, dragFor(row.id))))}
 
                 {/* Enfin l'agrégat des comptes eval archivés (hors totaux du site) */}
                 {archivedAccounts.length > 0 && (() => {
@@ -1096,28 +1186,6 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
           /* La suppression posée dans la modale rejoue la confirmation de la
              page : un seul chemin de suppression, un seul message. */
           onDelete={(acc) => { setEditingAccount(null); setConfirmDelete(acc); }}
-        />
-      )}
-      {/* Rattachement de comptes existants — aucun compte n'est créé ici : les
-          comptes choisis changent de `firm_id`, et apparaissent aussitôt sous la
-          firme, dont on ouvre le dépliage pour qu'on les y voie. */}
-      {attachingToFirm && (
-        <AttachAccountsModal
-          firm={attachingToFirm}
-          accounts={visibleAccounts}
-          firms={firms}
-          onClose={() => setAttachingToFirm(null)}
-          onAttached={({ updated = [] }) => {
-            setAccounts?.((prev) => (prev || []).map((a) => {
-              const hit = updated.find((u) => u.id === a.id);
-              return hit ? { ...a, ...hit } : a;
-            }));
-            const rowId = `firm:${attachingToFirm.id}`;
-            setExpandedIds((prev) => {
-              const arr = Array.isArray(prev) ? prev : [];
-              return arr.includes(rowId) ? arr : [...arr, rowId];
-            });
-          }}
         />
       )}
 

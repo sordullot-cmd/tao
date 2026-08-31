@@ -212,11 +212,29 @@ export function AccountRowsHeader({ firstLabel, withActions = false, flush = fal
  *   porte des actions : les cellules sont réparties en `space-between`, donc une
  *   ligne avec un enfant de moins voit toutes ses colonnes glisser.
  */
+/**
+ * `drag` — tout ce qu'il faut pour attraper la ligne et la reposer ailleurs, ou
+ * `null` pour une ligne fixe. La forme :
+ *
+ *   { dragging, edge, onStart, onOver, onLeave, onDrop, onEnd }
+ *
+ * Les gestionnaires sont posés sur la RANGÉE et non sur le bloc qui l'englobe :
+ * une firme dépliée contient ses comptes, et un `draggable` sur le bloc aurait
+ * fait partir la firme entière dès qu'on tirait sur l'un d'eux.
+ *
+ * `edge` (`"before"` / `"after"`) trace le trait d'insertion. Il est dessiné en
+ * `boxShadow` et non en bordure : une bordure ajouterait un pixel à la hauteur
+ * de la ligne, et toute la liste sauterait au passage du curseur.
+ */
 export function TableRow({
   icon, fallbackIcon, label, badge, cells,
   expandable, open, onToggle, onOpen, actions, reserveActions = false, children, flat = false,
+  drag = null,
 }) {
   const isOpen = expandable && open;
+  const edgeShadow = drag?.edge === "before"
+    ? `inset 0 2px 0 0 ${T.text}`
+    : drag?.edge === "after" ? `inset 0 -2px 0 0 ${T.text}` : "none";
   return (
     <div style={flat
       ? {
@@ -237,6 +255,13 @@ export function TableRow({
           la cible réelle était le SVG de l'icône. Ici, aucun clic sur le carré
           ne peut atteindre la navigation, il n'y a plus rien à intercepter. */}
       <div
+        draggable={!!drag}
+        onPointerDown={drag?.onPointerDown}
+        onDragStart={drag?.onStart}
+        onDragOver={drag?.onOver}
+        onDragLeave={drag?.onLeave}
+        onDrop={drag?.onDrop}
+        onDragEnd={drag?.onEnd}
         onMouseEnter={flat ? (e) => { e.currentTarget.style.background = T.rowHighlight; } : undefined}
         onMouseLeave={flat ? (e) => { e.currentTarget.style.background = "transparent"; } : undefined}
         style={{
@@ -249,6 +274,10 @@ export function TableRow({
             margin: "0 -8px", padding: "10px 8px",
             transition: "background 120ms ease",
           } : null),
+          /* La ligne tirée s'efface au lieu de disparaître : on garde sous les
+             yeux d'où elle vient pendant qu'on cherche où la poser. */
+          ...(drag?.dragging ? { opacity: 0.4, cursor: "grabbing" } : null),
+          boxShadow: edgeShadow,
         }}
       >
         <button
@@ -304,7 +333,10 @@ export function TableRow({
           role="button"
           tabIndex={0}
           data-no-press
-          onClick={onOpen}
+          /* Un glissé qui se termine sur sa propre ligne émet quand même un
+             `click` : sans ce garde-fou, reposer un compte là où on l'avait pris
+             ouvrait sa fiche. */
+          onClick={() => { if (!drag?.dragging) onOpen?.(); }}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(); } }}
           style={{
             flex: 1, minWidth: 0, cursor: "pointer",
@@ -338,7 +370,13 @@ export function TableRow({
 
       {isOpen && (
         <>
-          <div style={{ height: 1, width: "100%", background: T.border }} />
+          {/* Le filet remonte de la hauteur du padding de survol de la rangée.
+              Ce padding est INVISIBLE au repos mais s'ajoutait au `gap` du bloc :
+              il y avait 26 px au-dessus du trait contre 16 en dessous, et la
+              firme paraissait décrochée de ses propres comptes. Les sous-lignes,
+              elles, absorbent déjà le leur (`marginTop: -6`) — d'où le même
+              procédé ici, et un écart désormais égal des deux côtés. */}
+          <div style={{ height: 1, width: "100%", background: T.border, marginTop: flat ? -10 : 0 }} />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>{children}</div>
         </>
       )}
@@ -462,9 +500,12 @@ export function AddAccountRow({ onClick, label, icon, onAttach }) {
 }
 
 /**
- * Même choix, en pastille pleine : c'est l'action première de la page d'une prop
- * firm. Un seul bouton plutôt que « Ajouter » + « Rattacher » côte à côte, qui
- * se disputaient la même intention.
+ * Même choix, en pilule bordée sur le fond des cartes. Un seul bouton plutôt que
+ * « Ajouter » + « Rattacher » côte à côte, qui se disputaient la même intention.
+ *
+ * L'aplat d'encre est passé à « Modifier la firme », qui est l'action pour
+ * laquelle on ouvre la page : garnir la firme se fait une fois, la régler se
+ * refait. Deux pleins côte à côte n'auraient rien hiérarchisé du tout.
  */
 export function AddAccountsButton({ onCreate, onAttach }) {
   const { open, setOpen, ref } = useAnchoredMenu();
@@ -478,8 +519,8 @@ export function AddAccountsButton({ onCreate, onAttach }) {
         onClick={() => setOpen((v) => !v)}
         style={{
           display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px",
-          minHeight: 34, borderRadius: 999, border: "none", background: T.text,
-          color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+          minHeight: 34, borderRadius: 999, border: `1px solid ${T.border}`, background: T.white,
+          color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
         }}
       >
         <Plus size={13} strokeWidth={1.75} /> {t("firms.addAccount")}

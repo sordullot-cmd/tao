@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 
 /* Reproduction du bug « le chevron d'une firme ne déplie rien » sur la vraie
    page, pas sur le composant isolé : c'est l'intégration qui est en cause.
@@ -58,19 +58,25 @@ const renderPage = () =>
     />
   );
 
+/* Le dépliage se juge dans la section « Tous les comptes » seule : la bande
+   des plus actifs cite elle aussi le compte (une firme à compte unique y est
+   représentée par son compte), et une recherche globale confondrait les deux. */
+const inTable = () =>
+  within(screen.getByText("All accounts").closest("section") as HTMLElement);
+
 describe("Page Comptes — dépliage d'une firme", () => {
   it("affiche les sous-comptes au clic sur le chevron, et retient le dépliage", () => {
     const { unmount } = renderPage();
 
     // Le compte enfant n'est pas listé tant que la firme est repliée.
-    expect(screen.queryByText("Topstep 50k")).toBeNull();
+    expect(inTable().queryByText("Topstep 50k")).toBeNull();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /déplier|expand/i })[0]);
-    expect(screen.getByText("Topstep 50k")).toBeTruthy();
+    fireEvent.click(inTable().getAllByRole("button", { name: /déplier|expand/i })[0]);
+    expect(inTable().getByText("Topstep 50k")).toBeTruthy();
 
     // Rechargement de la page : la firme doit rouvrir d'elle-même.
     unmount();
     renderPage();
-    expect(screen.getByText("Topstep 50k")).toBeTruthy();
+    expect(inTable().getByText("Topstep 50k")).toBeTruthy();
   });
 });

@@ -1338,7 +1338,10 @@ function TimelineSection({ title, rows, compute, unitOf, fmtVal, onEdit, onDelet
   );
 }
 
-function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, nested }) {
+/* Exportée pour ses tests : l'ARMEMENT du glissé dépend de l'ordre dans
+   lequel le moteur envoie ses évènements de pointeur, et cet ordre diffère
+   d'un navigateur à l'autre — c'est exactement ce qu'un test doit tenir. */
+export function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDuplicate, onTogglePin, onSetPinnedOpen, onAdjustManual, onSetManual, onSubtasksChange, doneSection, drag, setDrag, onDrop, nested }) {
   const cat = goalCategoryOf(g);
   const Ic = cat.icon;
   const { current, target, pct, rawPct } = compute(g);
@@ -1418,7 +1421,15 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
   const isOver = drag?.overId === g.id && drag?.sourceId && drag.sourceId !== g.id;
   const overMode = isOver ? drag.mode : null;
 
-  const cancelLongPress = () => { armedRef.current = false; };
+  /* Désarme quand le geste se termine SANS glissé.
+     Surtout pas sur `pointercancel` ni `pointerleave`, et c'est là qu'était le
+     bug : ces deux évènements sont précisément ce que le navigateur envoie
+     QUAND un glissé commence. WebKit les émet AVANT `dragstart` — la spec
+     Pointer Events le permet, Chromium les envoie après. Le ref retombait donc
+     à faux juste avant le test, `dragstart` était refusé, et rien ne bougeait :
+     dans Arc tout marchait, dans l'app de bureau (WKWebView) le glissé ne
+     partait jamais, sans le moindre message. */
+  const releaseDrag = () => { armedRef.current = false; };
 
   /* Le tri part de la ligne, mais pas de ses commandes : on n'attrape pas un
      objectif en tirant sur sa case à cocher. */
@@ -1473,9 +1484,7 @@ function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete, onDup
         className="tr4de-goals-row"
         draggable
         onPointerDown={handlePointerDown}
-        onPointerUp={cancelLongPress}
-        onPointerCancel={cancelLongPress}
-        onPointerLeave={cancelLongPress}
+        onPointerUp={releaseDrag}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
