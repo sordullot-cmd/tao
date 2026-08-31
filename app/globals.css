@@ -1020,7 +1020,13 @@ button:not([data-no-press]):not(:disabled):active {
     pointer-events: none;
   }
   [data-card]:hover [data-card-actions],
-  [data-card]:focus-within [data-card-actions] {
+  [data-card]:focus-within [data-card-actions],
+  /* Même règle pour les LIGNES de liste (`data-row` : une firme, un compte).
+     Un attribut distinct de `data-card` parce que la carte se soulève au survol
+     (`translateY`) : sur une ligne de tableau, ce décalage désaligne ses
+     colonnes de l'en-tête. Seul l'effacement des actions est partagé. */
+  [data-row]:hover [data-card-actions],
+  [data-row]:focus-within [data-card-actions] {
     opacity: 1;
     pointer-events: auto;
   }

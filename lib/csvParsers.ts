@@ -163,6 +163,21 @@ const extractTimeHHMMSS = (fillTimeStr: string | null | undefined): string => {
   return `${String(t[1]).padStart(2,'0')}:${t[2]}:${(t[3]||'00').padStart(2,'0')}`;
 };
 
+/* Horloge 12 h → 24 h. Alpha Futures horodate « 01/09/2026 12:03:43.25 AM » :
+   sans cette conversion, 12:03 AM (minuit passé) devenait midi, et la page
+   Trades en déduisait la mauvaise session. Le suffixe est exigé collé à
+   l'heure pour ne pas réinterpréter un export déjà en 24 h. */
+const toHHMMSS24 = (raw: string | null | undefined): string => {
+  const hhmmss = extractTimeHHMMSS(raw);
+  if (!hhmmss) return '';
+  const ampm = String(raw).match(/\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\s*([AaPp])\.?[Mm]/);
+  if (!ampm) return hhmmss;
+  const [hh, mm, ss] = hhmmss.split(':');
+  let h = Number(hh) % 12;
+  if (ampm[1].toLowerCase() === 'p') h += 12;
+  return `${String(h).padStart(2,'0')}:${mm}:${ss}`;
+};
+
 // Backward-compat
 const extractTimeHHMM = extractTimeHHMMSS;
 
@@ -767,9 +782,28 @@ export const parseGenericCSV = (csvText: string): ParsedTrade[] => {
   let dateIdx = headers.findIndex(h => h.includes('date'));
   let symIdx = headers.findIndex(h => h.includes('symbol'));
   let dirIdx = headers.findIndex(h => h.includes('direction'));
-  let entryIdx = headers.findIndex(h => h.includes('entry'));
-  let exitIdx = headers.findIndex(h => h.includes('exit'));
+  /* « Entry Time » contient aussi « entry » : sans cette exclusion, la colonne
+     d'heure serait lue comme le prix d'entrée. Le repli garde les fichiers dont
+     la seule colonne « entry » porte malgré tout le prix. */
+  let entryIdx = headers.findIndex(h => h.includes('entry') && !h.includes('time'));
+  let exitIdx = headers.findIndex(h => h.includes('exit') && !h.includes('time'));
+  if (entryIdx === -1) entryIdx = headers.findIndex(h => h.includes('entry'));
+  if (exitIdx === -1) exitIdx = headers.findIndex(h => h.includes('exit'));
   let pnlIdx = headers.findIndex(h => h.includes('pnl') || h.includes('profit'));
+
+  /* Colonnes facultatives. Les exports « une ligne = un trade » (Alpha Futures)
+     portent l'horodatage, la quantité et le notionnel ; jusqu'ici seul le
+     parseur Tradovate les remontait, et la page Trades laissait vides ses
+     colonnes Heure, Durée et Session. Absentes → champ simplement omis.
+     « timestamp » est écarté : c'est la date complète, pas l'heure seule. */
+  const timeIdxFor = (kind: string) => {
+    const exact = headers.findIndex(h => h.includes(kind) && h.includes('time') && !h.includes('stamp'));
+    return exact !== -1 ? exact : headers.findIndex(h => h.includes(kind) && h.includes('stamp'));
+  };
+  const entryTimeIdx = timeIdxFor('entry');
+  const exitTimeIdx = timeIdxFor('exit');
+  const qtyIdx = headers.findIndex(h => h.includes('quantity') || h.includes('qty') || h.includes('lots') || h.includes('size'));
+  const volIdx = headers.findIndex(h => h.includes('volume'));
 
   // Fallback to position if not found by name
   if (dateIdx === -1) dateIdx = 0;
@@ -799,7 +833,16 @@ export const parseGenericCSV = (csvText: string): ParsedTrade[] => {
       continue;
     }
 
-    const trade = {
+    const qtyVal = qtyIdx !== -1
+      ? (parseFloat((values[qtyIdx] || '').replace(/[^0-9.-]/g, '')) || 1)
+      : 1;
+    const volVal = volIdx !== -1
+      ? parseFloat((values[volIdx] || '').replace(/[^0-9.-]/g, ''))
+      : NaN;
+    const entryTime = entryTimeIdx !== -1 ? toHHMMSS24(values[entryTimeIdx]) : '';
+    const exitTime = exitTimeIdx !== -1 ? toHHMMSS24(values[exitTimeIdx]) : '';
+
+    const trade: ParsedTrade = {
       id: Date.now() + Math.random(),
       date: (values[dateIdx] || new Date().toISOString().split('T')[0]).trim(),
       symbol: (values[symIdx] || 'UNKNOWN').trim().toUpperCase(),
@@ -807,10 +850,14 @@ export const parseGenericCSV = (csvText: string): ParsedTrade[] => {
       entry: entryVal,
       exit: exitVal,
       pnl: pnlVal || 0,
-      qty: 1,
+      qty: qtyVal,
+      quantity: qtyVal,
       broker: 'generic',
       contract_type: detectContractType((values[symIdx] || 'UNKNOWN').trim().toUpperCase()),
-      lot_size: 1
+      lot_size: qtyVal,
+      ...(entryTime ? { entryTime } : {}),
+      ...(exitTime ? { exitTime } : {}),
+      ...(Number.isFinite(volVal) && volVal > 0 ? { volume: volVal } : {}),
     };
 
     trades.push(trade);

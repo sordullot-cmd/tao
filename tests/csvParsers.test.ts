@@ -3,6 +3,7 @@ import {
   detectContractType,
   getContractMultiplier,
   calculateStats,
+  parseCSV,
 } from "@/lib/csvParsers";
 import type { ParsedTrade } from "@/lib/types/trade";
 
@@ -111,5 +112,38 @@ describe("calculateStats()", () => {
     ];
     const s = calculateStats(trades);
     expect(s.maxDrawdown).toBe(70);
+  });
+});
+
+describe("parseGenericCSV() — colonnes facultatives", () => {
+  const csv = (rows: string) =>
+    "Date,Symbol,Direction,Entry,Exit,PnL,Entry Time,Exit Time,Quantity,Volume\n" + rows;
+
+  it("retient l'heure, la quantité et le notionnel quand les colonnes existent", () => {
+    const [tr] = parseCSV(csv("2026-09-01,MNQ,Long,29523.25,29508,-31.82,00:00:11,00:01:01,2,59046.50\n"), null);
+    expect(tr.entryTime).toBe("00:00:11");
+    expect(tr.exitTime).toBe("00:01:01");
+    expect(tr.quantity).toBe(2);
+    expect(tr.volume).toBe(59046.5);
+  });
+
+  it("lit « Entry Time » sans la confondre avec le prix d'entrée", () => {
+    const [tr] = parseCSV(csv("2026-09-01,MNQ,Long,29523.25,29508,-31.82,00:00:11,00:01:01,1,0\n"), null);
+    expect(tr.entry).toBe(29523.25);
+  });
+
+  it("ramène une heure AM/PM sur 24 h mais laisse un export déjà en 24 h", () => {
+    const [nuit] = parseCSV(csv("2026-09-01,MNQ,Long,1,2,10,12:03:43.25 AM,01:04:07 PM,1,0\n"), null);
+    expect(nuit.entryTime).toBe("00:03:43");
+    expect(nuit.exitTime).toBe("13:04:07");
+    const [jour] = parseCSV(csv("2026-09-01,MNQ,Long,1,2,10,14:30:00,15:45:10,1,0\n"), null);
+    expect(jour.entryTime).toBe("14:30:00");
+  });
+
+  it("omet les champs dont la colonne manque plutôt que d'inventer une valeur", () => {
+    const [tr] = parseCSV("Date,Symbol,Direction,Entry,Exit,PnL\n2026-09-01,MNQ,Long,1,2,10\n", null);
+    expect(tr.entryTime).toBeUndefined();
+    expect(tr.volume).toBeUndefined();
+    expect(tr.quantity).toBe(1);
   });
 });

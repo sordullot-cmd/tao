@@ -138,6 +138,16 @@ describe("RowIconButton — cible du clic", () => {
     expect(nav.hasAttribute("data-no-press")).toBe(true);
     expect(screen.getByRole("button", { name: "Supprimer" }).hasAttribute("data-no-press")).toBe(true);
   });
+
+  /* Le contrat que la règle `[data-row]:hover [data-card-actions]` de
+     globals.css attend : sans ces deux attributs les boutons restent affichés
+     en permanence — la cascade échoue en silence, aucun test ne la voit. */
+  it("range les actions dans la colonne effaçable d'une ligne survolée", () => {
+    renderWithAction();
+    const col = screen.getByRole("button", { name: "Supprimer" }).closest("[data-card-actions]");
+    expect(col).not.toBeNull();
+    expect(col!.closest("[data-row]")).not.toBeNull();
+  });
 });
 
 describe("SubRow — actions et navigation", () => {
@@ -176,5 +186,12 @@ describe("SubRow — actions et navigation", () => {
   it("place les actions hors de la zone de navigation", () => {
     renderSub();
     expect(screen.getByRole("button", { name: "Modifier" }).closest('[role="button"]')).toBeNull();
+  });
+
+  it("range les actions dans la colonne effaçable d'une ligne survolée", () => {
+    renderSub();
+    const col = screen.getByRole("button", { name: "Modifier" }).closest("[data-card-actions]");
+    expect(col).not.toBeNull();
+    expect(col!.closest("[data-row]")).not.toBeNull();
   });
 });

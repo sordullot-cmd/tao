@@ -321,6 +321,9 @@ export function TableRow({
           la cible réelle était le SVG de l'icône. Ici, aucun clic sur le carré
           ne peut atteindre la navigation, il n'y a plus rien à intercepter. */}
       <div
+        /* `data-row` : la rangée est ce qu'on survole, donc ce qui décide de
+           montrer les actions de fin de ligne (voir globals.css). */
+        data-row
         draggable={!!drag}
         onPointerDown={drag?.onPointerDown}
         onDragStart={drag?.onStart}
@@ -430,7 +433,7 @@ export function TableRow({
             bouton d'action ne peut atteindre la navigation, il n'y a plus rien à
             intercepter. */}
         {(actions || reserveActions) && (
-          <div style={ACTIONS_COL_GAPLESS} aria-hidden={actions ? undefined : true}>{actions}</div>
+          <div data-card-actions style={ACTIONS_COL_GAPLESS} aria-hidden={actions ? undefined : true}>{actions}</div>
         )}
       </div>
 
@@ -627,6 +630,7 @@ export function SubRow({ label, dot, badge, cells, onOpen, actions, reserveActio
        contient les boutons d'action se les déplace sous le curseur au `:active`,
        et le clic n'arrive jamais. */
     <div
+      data-row
       onMouseEnter={(e) => { e.currentTarget.style.background = T.rowHighlight; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
       style={{
@@ -660,7 +664,7 @@ export function SubRow({ label, dot, badge, cells, onOpen, actions, reserveActio
       </div>
       {/* Pas de compensation de gap ici : la ligne n'en a pas. */}
       {(actions || reserveActions) && (
-        <div style={ACTIONS_COL} aria-hidden={actions ? undefined : true}>{actions}</div>
+        <div data-card-actions style={ACTIONS_COL} aria-hidden={actions ? undefined : true}>{actions}</div>
       )}
     </div>
   );
