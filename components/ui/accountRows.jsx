@@ -4,7 +4,7 @@
  * Lignes de compte — briques partagées entre la page Comptes et la page détail
  * d'une prop firm, pour que la liste des comptes d'une firme soit présentée
  * exactement comme celle de la page Comptes (même géométrie de colonnes, même
- * carte, même logo rond, même en-tête).
+ * carte, même vignette de logo, même en-tête).
  *
  * Extrait de AccountsPage (maquette Figma « My accounts », node 283:10382) :
  * ces composants y étaient locaux, ils sont désormais la source unique.
@@ -12,7 +12,7 @@
 
 import React from "react";
 import { ChevronDown, Trophy, Plus, Link2 } from "lucide-react";
-import { T } from "@/lib/ui/tokens";
+import { T, tileRadius } from "@/lib/ui/tokens";
 import { CARD, TH } from "@/components/ui/da";
 import Popover from "@/components/ui/Popover";
 import { t } from "@/lib/i18n";
@@ -55,22 +55,24 @@ const ACTIONS_COL_GAPLESS = { ...ACTIONS_COL, marginLeft: -4 };
 export const ROW_GUTTER = 36;
 
 /**
- * Vignette ronde d'un compte / d'une firme.
+ * Vignette d'un compte / d'une firme : un CARRÉ ARRONDI, pas un disque.
  *
- * Le logo remplit TOUT le disque (`object-fit: cover` sur 100 % de la boîte),
- * le rond du parent le détourant. Auparavant l'image était posée à 82 % en
- * `contain` : comme les logos de brokers sont des carrés à fond opaque, on
- * voyait ce carré à l'intérieur du cercle et le rond paraissait incomplet.
- * La quasi-totalité des logos étant carrés (ratio 1:1), `cover` ne rogne rien —
- * il ne fait que faire coïncider les bords de l'image avec ceux du disque.
+ * Les logos de brokers et de prop firms sont dessinés dans un carré — c'est leur
+ * cadre d'origine, celui de l'icône d'application. Le cercle en coupait les
+ * angles, et il fallait rétrécir l'image pour qu'ils y rentrent : le logo
+ * flottait au milieu d'une couronne vide. Le carré arrondi épouse le cadre
+ * d'origine, donc l'image le remplit BORD À BORD (`cover` sur 100 %) sans rien
+ * perdre — la quasi-totalité des logos étant en ratio 1:1, `cover` ne rogne pas,
+ * il fait coïncider les bords. L'arrondi suit la taille (`tileRadius`) au lieu
+ * d'être fixe, sinon la même silhouette change de nature entre 16 et 44 px.
  *
  * Sans logo, on retombe sur une icône ou les initiales — jamais un placeholder
  * inventé.
  */
-export function RoundLogo({ src, size = 20, fallback, name }) {
+export function LogoTile({ src, size = 20, fallback, name }) {
   return (
     <span style={{
-      width: size, height: size, borderRadius: "50%", flexShrink: 0,
+      width: size, height: size, borderRadius: tileRadius(size), flexShrink: 0,
       display: "inline-flex", alignItems: "center", justifyContent: "center",
       background: T.accentBg, overflow: "hidden",
     }}>
@@ -85,6 +87,63 @@ export function RoundLogo({ src, size = 20, fallback, name }) {
     </span>
   );
 }
+
+/**
+ * Anatomie d'une LIGNE DE COMPTE dans une liste compacte : un marqueur, le nom,
+ * le type, la valeur — sur une seule ligne de 32 px.
+ *
+ * C'est la présentation du menu « N comptes » de la page d'une prop firm, et
+ * elle vaut partout où l'on énumère des comptes sans les mettre en tableau
+ * (menu de la firme, choix des comptes visés par un import). Elle vit ici, et
+ * non recopiée dans chaque page : deux listes de comptes qui divergent, c'est
+ * deux fois le même écran avec deux hauteurs de ligne.
+ *
+ * Un seul étage, jamais le nom au-dessus de son type : sur deux lignes chaque
+ * compte pesait 40 px pour deux mots, et la liste ne se lisait plus d'un
+ * regard.
+ *
+ * `marker` est le premier créneau — la pastille de couleur qui rappelle la
+ * courbe du compte dans un graphique, une case à cocher quand la ligne est un
+ * choix. C'est l'appelant qui sait laquelle des deux a un sens chez lui.
+ * `value` est optionnelle : toutes les pages ne connaissent pas les trades d'un
+ * compte, et une colonne vide vaut mieux qu'un zéro inventé.
+ */
+export function AccountLine({ marker, name, type, value, valueColor, dim = false }) {
+  return (
+    <>
+      {marker}
+      <span style={{
+        fontSize: 13, fontWeight: 500, minWidth: 0, flex: "1 1 auto",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        color: dim ? T.textSub : T.text,
+      }}>
+        {name}
+      </span>
+      {/* Le type SANS sa taille : celle-ci est presque toujours déjà dans le nom
+          du compte (« Topstep 50k »), et l'écrire deux fois sur la même ligne la
+          rendait illisible. */}
+      {type && (
+        <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap", flexShrink: 0 }}>
+          {type}
+        </span>
+      )}
+      {value != null && (
+        <span style={{
+          fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0,
+          fontVariantNumeric: "tabular-nums", color: valueColor || T.textSub,
+        }}>
+          {value}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Géométrie du conteneur d'une `AccountLine`, à étaler sur la ligne cliquable. */
+export const ACCOUNT_LINE = {
+  display: "flex", alignItems: "center", gap: 8, minWidth: 0,
+  minHeight: 32, padding: "6px 10px", borderRadius: 6,
+};
 
 /* Bouton compact « Passer en Funded » (eval dont la cible est atteinte).
    Il vit DANS la zone de navigation de la ligne (collé au nom du compte) : le
@@ -196,7 +255,7 @@ export function AccountRowsHeader({ firstLabel, withActions = false, flush = fal
 
 /**
  * Ligne de tableau : chevron à gauche quand la ligne est dépliable (comptes
- * d'une firme), logo rond, nom, puis les cellules alignées sur l'en-tête.
+ * d'une firme), vignette du logo, nom, puis les cellules alignées sur l'en-tête.
  *
  * Deux présentations :
  *  - par défaut, la ligne EST une carte blanche autonome ;
@@ -344,7 +403,7 @@ export function TableRow({
           }}
         >
           <div style={{ ...NAME_COL, display: "flex", alignItems: "center", gap: 8 }}>
-            <RoundLogo src={icon} size={20} fallback={fallbackIcon} name={label} />
+            <LogoTile src={icon} size={20} fallback={fallbackIcon} name={label} />
             <span title={label} style={{ fontSize: 16, fontWeight: 500, lineHeight: "17.05px", color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {label}
             </span>

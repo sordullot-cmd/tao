@@ -274,6 +274,65 @@ export function CheckBox({ on = false, partial = false, color = T.text, size = 1
   );
 }
 
+/**
+ * Pastille à cocher — la case à cocher de l'app quand les choix se listent à
+ * plat : type d'entrée d'un trade, liquidité ciblée, règles d'une stratégie,
+ * comptes visés par un import.
+ *
+ * Elle vient de la page Trades, où trois listes affichaient trois copies du même
+ * bloc de 25 lignes. Elle vit ici depuis qu'une quatrième surface l'emploie :
+ * une pastille à cocher recopiée est une pastille qui finit par diverger.
+ *
+ * Ce qui la distingue d'un `PillButton` qu'on colorerait : la CASE reste
+ * visible dans les deux états. Sur une rangée de dix choix indépendants, un
+ * aplat plein ou vide ne dit pas s'il s'agit d'une sélection unique ou
+ * multiple ; une case cochée, oui.
+ *
+ * `color` vient des DONNÉES (couleur d'un tag) : c'est un hex, la concaténation
+ * d'un canal alpha y est permise. Les tokens `T`, eux, sont des `var(…)` et ne
+ * se concatènent jamais. Omettre `color` donne la variante en encre, la seule
+ * qui convienne là où la couleur ne porterait aucune information.
+ */
+/** @param {{ label: import("react").ReactNode, color?: string, checked?: boolean, onClick?: Function, title?: string }} props */
+export function CheckChip({ label, color = undefined, checked = false, onClick = undefined, title = undefined }) {
+  const ink = checked ? (color || T.text) : T.textSub;
+  /* La coche s'adapte à l'aplat : les teintes de tag sont les principales de la
+     charte, et un blanc figé disparaît sur les plus claires. */
+  const glyph = checked && color && luminance(color) > 0.45 ? T.text : T.onSolid;
+  return (
+    <button
+      type="button" role="checkbox" aria-checked={checked}
+      aria-label={typeof label === "string" ? label : undefined}
+      title={title}
+      onClick={onClick}
+      style={{
+        minHeight: 34, maxWidth: "100%",
+        display: "inline-flex", alignItems: "center", gap: 7,
+        padding: "6px 12px 6px 9px", borderRadius: 999, border: "none",
+        background: checked && color ? `${color}1F` : FIELD_BG,
+        cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+        transition: "background var(--dur-fast) var(--ease-out)",
+      }}
+    >
+      <span style={{
+        width: 15, height: 15, borderRadius: 5, flexShrink: 0,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        background: checked ? ink : T.white,
+        boxShadow: checked ? "none" : `inset 0 0 0 1.5px ${HAIRLINE}`,
+        transition: "background var(--dur-fast) var(--ease-out)",
+      }}>
+        {checked && <Check size={11} strokeWidth={3} color={glyph} />}
+      </span>
+      <span style={{
+        fontSize: 12, fontWeight: 500, color: ink,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 /* ── Étiquetage ──────────────────────────────────────────────────────────── */
 
 /** Libellé d'un champ : 12 px atténué, jamais de capitales espacées. */

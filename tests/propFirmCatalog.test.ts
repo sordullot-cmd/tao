@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { existsSync } from "node:fs";
-import { PLATFORMS, PROP_FIRM_PRESETS, resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
+import {
+  EXECUTION_PLATFORMS,
+  PLATFORMS,
+  PROP_FIRM_PRESETS,
+  platformName,
+  platformsForFirm,
+  resolveExecutionPlatform,
+  resolvePlatformIcon,
+} from "@/lib/brokers/platforms";
 import { BROKERS, getBroker } from "@/lib/brokers/registry";
 import { brandColor } from "@/lib/ui/brandColors";
 import { firmBrandId, firmLogo } from "@/lib/accountBrand";
@@ -100,6 +108,92 @@ describe("Catalogue des prop firms", () => {
     expect(new Set(ids).size).toBe(ids.length);
     for (const preset of PROP_FIRM_PRESETS) {
       expect(BROKERS[preset.id as keyof typeof BROKERS], preset.name).toBeTruthy();
+    }
+  });
+});
+
+/* La séparation est le contrat de ce catalogue : une maison de prop trading
+   n'exécute pas d'ordres, elle donne accès à une plateforme. Confondre les deux
+   remettait « Apex » dans un champ « plateforme » — un choix sans sens, et un
+   import sans parseur nommable. */
+describe("Séparation prop firms / plateformes", () => {
+  it("ne propose aucune prop firm comme plateforme d'exécution", () => {
+    const firmIds = new Set(PROP_FIRM_PRESETS.map(p => p.id));
+    for (const p of EXECUTION_PLATFORMS) {
+      expect(p.kind, p.name).toBe("platform");
+      expect(firmIds.has(p.id), p.name).toBe(false);
+    }
+    expect(EXECUTION_PLATFORMS.map(p => p.id)).not.toContain("apex");
+  });
+
+  it("ne garde aucun des courtiers ni des plateformes retirés du produit", () => {
+    const ids = PLATFORMS.map(p => p.id);
+    const gone = [
+      "thinkorswim", "ibkr", "capitalcom", "ig", "webull",   // courtiers actions / CFD
+      "projectx", "depthchart", "ctrader", "dxtrade",        // plateformes écartées
+    ];
+    for (const id of gone) expect(ids, id).not.toContain(id);
+  });
+
+  it("classe les deux listes par ordre alphabétique", () => {
+    /* C'est l'ordre des deux sélecteurs des modales : on sait d'avance où
+       regarder, quel que soit l'ordre de déclaration du catalogue. */
+    const sorted = (names: string[]) => [...names].sort((a, b) => a.localeCompare(b, "fr"));
+    expect(EXECUTION_PLATFORMS.map(p => p.name)).toEqual(sorted(EXECUTION_PLATFORMS.map(p => p.name)));
+    expect(PROP_FIRM_PRESETS.map(p => p.name)).toEqual(sorted(PROP_FIRM_PRESETS.map(p => p.name)));
+  });
+
+  it("n'ouvre à une firme que les plateformes qu'elle propose", () => {
+    expect(platformsForFirm("apex").map(p => p.id).sort()).toEqual(
+      ["ninjatrader", "rithmic", "tradingview", "tradovate", "wealthcharts"]
+    );
+    expect(platformsForFirm("lucid").map(p => p.id).sort()).toEqual(
+      ["ninjatrader", "rithmic", "tradesea", "tradovate"]
+    );
+    /* Alpha Futures tourne sur AlphaTrader, Quantower, DeepChart et
+       WealthCharts : ni Tradovate ni MetaTrader n'ont à y figurer. */
+    expect(platformsForFirm("alphafutures").map(p => p.id).sort()).toEqual(
+      ["alphatrader", "deepchart", "quantower", "wealthcharts"]
+    );
+    expect(platformsForFirm("alphafutures").map(p => p.id)).not.toContain("tradovate");
+    // FTMO passe par MetaTrader, et par rien d'autre.
+    expect(platformsForFirm("ftmo").map(p => p.id).sort()).toEqual(["mt4", "mt5"]);
+    // Une maison hors catalogue (créée à la main) ne restreint rien.
+    expect(platformsForFirm("").length).toBe(EXECUTION_PLATFORMS.length);
+    expect(platformsForFirm("une firme à moi").length).toBe(EXECUTION_PLATFORMS.length);
+  });
+
+  it("déclare chaque plateforme de firme dans le catalogue d'exécution", () => {
+    const known = new Set(EXECUTION_PLATFORMS.map(p => p.id));
+    for (const firm of PROP_FIRM_PRESETS) {
+      expect(firm.platformIds?.length, firm.name).toBeGreaterThan(0);
+      for (const id of firm.platformIds || []) {
+        expect(known.has(id), `${firm.name} → ${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("rend la plateforme d'un compte enregistré au nom de sa firme", () => {
+    /* Les comptes d'avant la séparation portent parfois « Apex Trader
+       Funding » dans `broker` : l'import doit repartir de Tradovate, pas du
+       parseur générique. */
+    expect(resolveExecutionPlatform("Apex Trader Funding")?.id).toBe("tradovate");
+    expect(resolveExecutionPlatform("Apex 50k #2")?.id).toBe("tradovate");
+    expect(resolveExecutionPlatform("FTMO")?.id).toBe("mt5");
+    expect(resolveExecutionPlatform("Alpha Futures")?.id).toBe("alphatrader");
+    // Une plateforme se rend elle-même, sous son nom comme sous son id.
+    expect(resolveExecutionPlatform("WealthCharts")?.id).toBe("wealthcharts");
+    expect(resolveExecutionPlatform("mt5")?.id).toBe("mt5");
+    expect(resolveExecutionPlatform("")).toBeNull();
+  });
+
+  it("donne un parseur de repli aux plateformes que rien ne détecte", () => {
+    /* AlphaTrader, Quantower et DeepChart exportent les colonnes de Tradovate
+       sans porter ce nom : sans `hint`, leur import retombait sur le parseur
+       générique. */
+    expect(platformName("deepchart")).toBe("DeepChart");
+    for (const id of ["alphatrader", "quantower", "deepchart", "tradesea"]) {
+      expect(PLATFORMS.find(p => p.id === id)?.hint, id).toBe("tradovate");
     }
   });
 });

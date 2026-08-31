@@ -1004,6 +1004,28 @@ button:not([data-no-press]):not(:disabled):active {
   }
 }
 
+/* === Actions d'une carte : au survol seulement ===
+   Les deux boutons du coin (modifier, supprimer) alourdissaient la liste alors
+   qu'ils ne servent qu'à la carte qu'on vise. Ils s'effacent donc au repos, et
+   `pointer-events` suit l'opacité — un bouton invisible mais cliquable est un
+   piège. Uniquement là où un survol existe : sur un pointeur grossier ils
+   restent affichés, faute de quoi ils seraient inatteignables. Le focus clavier
+   les rappelle aussi, sans quoi la tabulation traverserait des cibles fantômes. */
+[data-card-actions] {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-card-actions] {
+    opacity: 0;
+    pointer-events: none;
+  }
+  [data-card]:hover [data-card-actions],
+  [data-card]:focus-within [data-card-actions] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* === Stagger : neutralisé (le contenu s'affiche directement) ===
    Classe conservée côté JSX, sans cascade ni opacité de départ. */
 .anim-stagger > * { opacity: 1; animation: none; }

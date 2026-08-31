@@ -53,9 +53,12 @@ describe("tuile d'une étape", () => {
 
   it("garde le bouton d'ajout visible tant qu'aucun objectif ne la mesure", () => {
     /* Sans objectif, il n'y a rien à déplier — et cacher l'ajout derrière un
-       dépliage supprimerait le seul chemin pour en rattacher un. */
+       dépliage supprimerait le seul chemin pour en rattacher un. Réduit au
+       « + » : le mot « Objectif » prenait, sur la ligne, une largeur volée au
+       libellé du jalon. Le sens reste porté par le nom accessible. */
     render(<StepRow {...props} step={step("a", "Marathon")} status="upcoming" goals={[]} onToggleObjective={() => {}} />);
-    expect(screen.getByText("Objectif")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rattacher un objectif à l'étape Marathon" })).toBeTruthy();
+    expect(screen.queryByText("Objectif")).toBeNull();
     expect(screen.queryByRole("button", { name: /Voir les objectifs/ })).toBeNull();
   });
 
@@ -164,5 +167,180 @@ describe("ajout d'une étape", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ajouter une étape" }));
     fireEvent.keyDown(screen.getByPlaceholderText("Nouvelle étape…"), { key: "Enter" });
     expect(added).toEqual([]);
+  });
+});
+
+/* ── Ranger les jalons à la main ──────────────────────────────────────────── */
+
+describe("ordre des étapes", () => {
+  type Move = [string, string, string];
+
+  const openList = (moves: Move[] | null) => {
+    const r = render(
+      <StepsBlock cat={CAT} steps={[step("a", "A"), step("b", "B"), step("c", "C")]}
+        today={TODAY} onMove={moves ? (...m: Move) => moves.push(m) : undefined}
+        onToggle={() => {}} onRename={() => {}} onDelete={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Étapes/ }));
+    return r;
+  };
+
+  /* jsdom ne mesure rien : sans géométrie, les trois tuiles occupent le même
+     point et la place d'arrivée — qui se compte en centres dépassés — n'aurait
+     aucun sens. Trois tuiles de 36 px espacées de 44. */
+  const tiles = (c: HTMLElement) => {
+    const list = [...c.querySelectorAll("[data-step-id]")] as HTMLElement[];
+    list.forEach((el, i) => {
+      el.getBoundingClientRect = () =>
+        ({ top: i * 44, bottom: i * 44 + 36 } as unknown as DOMRect);
+    });
+    return list;
+  };
+
+  /* `fireEvent.pointerDown(el, { clientY })` perd la coordonnée : jsdom ne
+     connaît pas `PointerEvent`, l'événement retombe sur `Event` et son
+     constructeur ignore tout ce qui vient d'un pointeur. Or c'est l'ordonnée
+     seule qui dit où le jalon tombe. */
+  const pointer = (type: string, clientY: number) =>
+    new MouseEvent(type, { bubbles: true, cancelable: true, clientY, button: 0 });
+
+  /** Attrape `el` et le traîne jusqu'à `to`, comme la souris le ferait. */
+  const dragTo = (el: HTMLElement, from: number, to: number) => {
+    fireEvent(el, pointer("pointerdown", from));
+    fireEvent(window, pointer("pointermove", to));
+    fireEvent(window, pointer("pointerup", to));
+  };
+
+  it("dépose le jalon avant celui qu'on remonte au-dessus", () => {
+    const moves: Move[] = [];
+    const { container } = openList(moves);
+    const [, , c] = tiles(container);
+    dragTo(c, 106, 4);
+    expect(moves).toEqual([["c", "a", "before"]]);
+  });
+
+  it("le dépose après celui qu'on descend en dessous", () => {
+    const moves: Move[] = [];
+    const { container } = openList(moves);
+    const [a] = tiles(container);
+    dragTo(a, 18, 110);
+    expect(moves).toEqual([["a", "c", "after"]]);
+  });
+
+  it("ne le sort pas de la liste, si loin qu'on tire", () => {
+    /* On déplace un jalon DANS le chemin : lâché cent pixels sous la dernière
+       tuile, il se range en dernier, il ne part pas ailleurs. */
+    const moves: Move[] = [];
+    const { container } = openList(moves);
+    const [a] = tiles(container);
+    fireEvent(a, pointer("pointerdown", 18));
+    fireEvent(window, pointer("pointermove", 400));
+    expect(a.style.transform).toBe("translateY(88px)"); // borné au bas de la liste
+    fireEvent(window, pointer("pointerup", 400));
+    expect(moves).toEqual([["a", "c", "after"]]);
+  });
+
+  it("ne déplace la tuile que de haut en bas", () => {
+    // Une liste de jalons n'a qu'un axe : une tuile qui dérive latéralement
+    // quitte la colonne où se lit sa place.
+    const { container } = openList([]);
+    const [a] = tiles(container);
+    fireEvent(a, pointer("pointerdown", 18));
+    fireEvent(window, pointer("pointermove", 60));
+    expect(a.style.transform).toBe("translateY(42px)");
+    expect(a.style.transform).not.toContain("translateX");
+  });
+
+  it("laisse le clic renommer quand la souris n'a pas bougé", () => {
+    const moves: Move[] = [];
+    const { container } = openList(moves);
+    const [a] = tiles(container);
+    dragTo(a, 18, 20);
+    expect(moves).toEqual([]);
+    expect(a.style.transform).toBe("none");
+  });
+
+  it("ne part pas d'une commande de la tuile", () => {
+    /* On ne déplace pas un jalon en tirant sur sa case à cocher : le geste
+       partirait au moindre tremblement pendant qu'on le coche. */
+    const moves: Move[] = [];
+    const { container } = openList(moves);
+    tiles(container);
+    fireEvent(screen.getByRole("checkbox", { name: /^A —/ }), pointer("pointerdown", 18));
+    fireEvent(window, pointer("pointermove", 110));
+    fireEvent(window, pointer("pointerup", 110));
+    expect(moves).toEqual([]);
+  });
+
+  it("déplace aussi au clavier, depuis le libellé", () => {
+    /* Le pointeur ne répond ni au clavier ni au doigt — un ordre qu'on ne peut
+       poser qu'à la souris n'est pas un ordre pour tout le monde. */
+    const moves: Move[] = [];
+    openList(moves);
+    fireEvent.keyDown(screen.getByText("B"), { key: "ArrowUp", altKey: true });
+    fireEvent.keyDown(screen.getByText("B"), { key: "ArrowDown", altKey: true });
+    expect(moves).toEqual([["b", "a", "before"], ["b", "c", "after"]]);
+  });
+
+  it("ne fait rien aux deux bouts, ni sans la touche Alt", () => {
+    const moves: Move[] = [];
+    openList(moves);
+    fireEvent.keyDown(screen.getByText("A"), { key: "ArrowUp", altKey: true });
+    fireEvent.keyDown(screen.getByText("C"), { key: "ArrowDown", altKey: true });
+    // Les flèches nues appartiennent au défilement de la page.
+    fireEvent.keyDown(screen.getByText("B"), { key: "ArrowUp" });
+    expect(moves).toEqual([]);
+  });
+
+  it("n'annonce aucune prise quand la carte ne sait pas ranger", () => {
+    // Le bloc se monte aussi sans écriture possible : rien ne doit alors
+    // promettre un geste qui n'aboutirait nulle part.
+    const { container } = openList(null);
+    const [a] = tiles(container);
+    expect(a.style.cursor).toBe("default");
+    fireEvent(a, pointer("pointerdown", 18));
+    fireEvent(window, pointer("pointermove", 110));
+    expect(a.style.transform).toBe("none");
+  });
+});
+
+/* ── Le pli du bloc se retient ────────────────────────────────────────────── */
+
+describe("mémoire de l'ouverture des étapes", () => {
+  it("obéit à la carte quand celle-ci sait retenir le pli", () => {
+    /* Ouvrir le chemin d'un objectif, c'est le suivre en ce moment — une
+       intention qui ne dure pas le temps d'un écran. Elle se reperdait à chaque
+       navigation : trois cartes à rouvrir une par une. */
+    const changes: boolean[] = [];
+    const { rerender } = render(
+      <StepsBlock cat={CAT} steps={[step("a", "A")]} today={TODAY}
+        open={false} onOpenChange={(v: boolean) => changes.push(v)}
+        onToggle={() => {}} onRename={() => {}} onDelete={() => {}} />,
+    );
+    // Fermé : la liste n'est pas là.
+    expect(screen.queryByText("A")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Étapes/ }));
+    // Le bloc ne s'ouvre pas tout seul : il DEMANDE, la carte décide et retient.
+    expect(changes).toEqual([true]);
+    expect(screen.queryByText("A")).toBeNull();
+
+    rerender(
+      <StepsBlock cat={CAT} steps={[step("a", "A")]} today={TODAY}
+        open onOpenChange={(v: boolean) => changes.push(v)}
+        onToggle={() => {}} onRename={() => {}} onDelete={() => {}} />,
+    );
+    expect(screen.getByText("A")).toBeTruthy();
+  });
+
+  it("garde un pli à lui quand personne n'écoute", () => {
+    /* Le bloc se monte aussi hors de la page — tests, écrans à venir : il doit
+       s'ouvrir même sans carte pour retenir son état. */
+    render(
+      <StepsBlock cat={CAT} steps={[step("a", "A")]} today={TODAY}
+        onToggle={() => {}} onRename={() => {}} onDelete={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Étapes/ }));
+    expect(screen.getByText("A")).toBeTruthy();
   });
 });

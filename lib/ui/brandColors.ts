@@ -92,10 +92,10 @@ export const BRAND_COLORS: Record<string, BrandPalette> = {
     propFirm: true,
   },
 
-  // ── Plateformes / brokers ──────────────────────────────────────────────
-  // Chacun porte SA couleur, quitte à ce que deux marques se ressemblent
-  // (IG et Interactive Brokers sont deux rouges, Webull et Apex deux bleus) :
-  // mieux vaut une teinte juste qu'une teinte distincte mais fausse.
+  // ── Plateformes d'exécution ────────────────────────────────────────────
+  // Chacune porte SA couleur, quitte à ce que deux marques se ressemblent
+  // (Tradovate et ProjectX sont deux bleus) : mieux vaut une teinte juste
+  // qu'une teinte distincte mais fausse.
   tradovate: {
     primary: "#267FFF",                      // azur du logo
     secondary: ["#61BC46", "#4594C8"],
@@ -125,33 +125,33 @@ export const BRAND_COLORS: Record<string, BrandPalette> = {
     primary: "#2962FF",                      // bleu signature des boutons
     secondary: ["#0047F9", "#5B9CF6"],       // relevés dans leur CSS
   },
-  thinkorswim: {
-    aliases: ["think or swim"],
-    primary: "#1EB048",                      // vert du logo
-    secondary: ["#25B24E", "#90D6A4"],
-  },
   wealthcharts: {
     aliases: ["wealth charts"],
     primary: "#5DC6E0",                      // cyan du logo, sur fond nuit
     secondary: ["#2B5A66", "#8FDDEE"],
   },
-  ibkr: {
-    aliases: ["interactive brokers", "interactive broker"],
-    primary: "#D81222",                      // rouge du logo
-    secondary: ["#AA0D1C", "#E51324"],
+  /* Teintes relevées sur les logos livrés, comme les précédentes. AlphaTrader
+     fait exception d'un cran : le vert de son logo (#032F20) est trop sombre
+     pour une pastille — c'est son vert clair qui sert, la nuance foncée passant
+     en secondaire. */
+  alphatrader: {
+    aliases: ["alpha trader"],
+    primary: "#07513A",
+    secondary: ["#0B7A55", "#032F20"],
   },
-  capitalcom: {
-    aliases: ["capital.com", "capital"],
-    primary: "#C49978",                      // doré du logo
-    secondary: ["#D0A27D", "#8C6A4F"],
+  quantower: {
+    primary: "#00566C",                      // l'unique teinte du SVG
+    secondary: ["#017A99", "#003C4C"],
   },
-  ig: {
-    primary: "#E01B1C",                      // rouge du logo
-    secondary: ["#E64B4B", "#A81314"],
+  deepchart: {
+    aliases: ["deep chart"],
+    primary: "#3800A4",                      // violet du dégradé
+    secondary: ["#5A2BD6", "#14003C"],
   },
-  webull: {
-    primary: "#0043EA",                      // bleu du logo
-    secondary: ["#004AFF", "#4D82F5"],
+  tradesea: {
+    aliases: ["trade sea"],
+    primary: "#0057B0",                      // bleu du logo
+    secondary: ["#5797FB", "#003D7D"],
   },
 };
 

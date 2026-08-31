@@ -30,7 +30,7 @@ import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
 import { FIELD_FOCUS_RING } from "@/components/ui/form";
 import Popover from "@/components/ui/Popover";
-import { RoundLogo } from "@/components/ui/accountRows";
+import { LogoTile } from "@/components/ui/accountRows";
 
 /** Comparaison souple : casse, accents et espaces multiples ignorés. */
 const key = (s) =>
@@ -151,7 +151,7 @@ export default function ComboInput({
             lecteur d'écran n'a pas à entendre ses initiales en plus. */}
         {exact?.iconUrl && (
           <span aria-hidden="true" style={{ display: "inline-flex", flexShrink: 0 }}>
-            <RoundLogo src={exact.iconUrl} size={22} name={exact.label} />
+            <LogoTile src={exact.iconUrl} size={22} name={exact.label} />
           </span>
         )}
 
@@ -256,7 +256,7 @@ export default function ComboInput({
                 }}
               >
                 <span aria-hidden="true" style={{ display: "inline-flex", flexShrink: 0 }}>
-                  <RoundLogo src={opt.iconUrl} size={22} name={opt.label} />
+                  <LogoTile src={opt.iconUrl} size={22} name={opt.label} />
                 </span>
                 <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {opt.label}

@@ -6,7 +6,7 @@ import { TAG_COLORS } from "@/lib/ui/tradingColors";
 import { CARD, SectionTitle, HeroAmount, downsampleLTTB, sparklineBudget } from "@/components/ui/da";
 import { accountBrandColor, brandColor } from "@/lib/ui/brandColors";
 import {
-  AccountRowsHeader, TableRow, SubRow, RoundLogo, PassFundedButton,
+  AccountRowsHeader, TableRow, SubRow, LogoTile, PassFundedButton,
   RowIconButton,
 } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
@@ -36,41 +36,6 @@ import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
 import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonHero, SkeletonToolbar, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 
-const BROKER_LOGOS = {
-  "tradovate":           "/trado.png",
-  "rithmic":             "/brokers/rithmic.png",
-  "rithmic r|trader":    "/brokers/rithmic.png",
-  "ninjatrader":         "/brokers/ninja trader.png",
-  "ninja trader":        "/brokers/ninja trader.png",
-  "topstep":             "/brokers/Topstep_Logo.jpg",
-  "topstep x":           "/brokers/Topstep_Logo.jpg",
-  "apex":                "/brokers/apex.avif",
-  "apex trader funding": "/brokers/apex.avif",
-  "alphafutures":        "/brokers/alpha futur.svg",
-  "alpha futures":       "/brokers/alpha futur.svg",
-  "tradeify":            "/brokers/Tradeify.png",
-  "lucid":               "/brokers/lucid.png",
-  "lucid trading":       "/brokers/lucid.png",
-  "ftmo":                "/brokers/ftmo.png",
-  "tradingview":         "/brokers/tradingview.webp",
-  "metatrader 5":        "/MetaTrader_5.png",
-  "metatrader 4":        "/brokers/MetaTrader_4.png",
-  "mt5":                 "/MetaTrader_5.png",
-  "mt4":                 "/brokers/MetaTrader_4.png",
-  "thinkorswim":         "/brokers/thinkorswim.png",
-  "wealthcharts":        "/weal.webp",
-  "interactive brokers": "/brokers/Interactive broker.png",
-  "ibkr":                "/brokers/Interactive broker.png",
-  "capital.com":         "/brokers/capital.png",
-  "capital":             "/brokers/capital.png",
-  "ig":                  "/brokers/ig logo.png",
-  "webull":              "/brokers/webull.png",
-};
-
-const getBrokerLogo = (broker) => {
-  if (!broker) return null;
-  return BROKER_LOGOS[String(broker).trim().toLowerCase()] || null;
-};
 
 /* ─── Couleurs encore absentes de lib/ui/tokens.ts ───────────────────────────
    Définies ici en CSS vars (avec repli clair) pour ne pas casser le thème
@@ -819,7 +784,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         key={`acc:${acc.id}`}
         flat
         drag={drag}
-        icon={getBrokerLogo(acc.broker) || resolvePlatformIcon(acc.broker)}
+        icon={resolvePlatformIcon(acc.broker)}
         fallbackIcon={<Wallet size={12} strokeWidth={1.75} color={T.textSub} />}
         label={acc.name || "Compte"}
         badge={canPassFunded(acc) ? (
@@ -1373,7 +1338,7 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
      démo personnel), on retombe sur le broker, seul rattachement du compte. */
   const logo = firm
     ? firmLogo(firm)
-    : (getBrokerLogo(account.broker) || resolvePlatformIcon(account.broker));
+    : resolvePlatformIcon(account.broker);
   /* Sous-titre : la firme (ou le nombre de comptes, pour une carte de firme).
      Un compte ordinaire, lui, n'a pas de firme à afficher : on y met sa
      PLATEFORME d'exécution, seul rattachement qu'il possède — sans quoi la
@@ -1414,7 +1379,7 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
       {/* Nom (et firme / plateforme) posés À DROITE du logo : c'est le logo qui
           ouvre la ligne d'identité, comme dans les lignes du tableau. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-        <RoundLogo src={logo} size={34} name={firm?.name || firmName || account.name} />
+        <LogoTile src={logo} size={34} name={firm?.name || firmName || account.name} />
         <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
           {/* Le badge partage la ligne du nom : posé dans une colonne à part, à
               droite du bloc de texte, il flottait entre les deux lignes. */}

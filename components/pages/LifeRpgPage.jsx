@@ -64,7 +64,8 @@ import GoalsPage, {
   goalUnitOf, fmtGoalVal,
 } from "@/components/pages/GoalsPage";
 import {
-  addStep, cardProgress, goalPctsOf, groupGoalPctsByStep, isStepDone, readSteps, readStepsRaw, stepsEnabledOf,
+  addStep, cardProgress, goalPctsOf, groupGoalPctsByStep, isStepDone, readSteps, readStepsRaw,
+  stepsEnabledOf, stepsOpenOf, moveStep,
   removeStep, sortSteps, stepCompletion, stepStatus, stepsProgress,
   toggleStep, updateStep, yearMarkers, STEP_XP,
 } from "@/lib/lifeRpgSteps";
@@ -720,7 +721,19 @@ export default function LifeRpgPage() {
         c.id === catId ? { ...c, steps: fn(readStepsRaw(c)) } : c),
     }));
   };
+  /* Le pli du bloc « Étapes » vit sur la carte, à côté des étapes : c'est un
+     état qu'on veut retrouver, pas un détail d'affichage. */
+  const setStepsOpenOf = (catId, open) => setState(prev => ({
+    ...prev,
+    categories: (prev.categories || []).map(c => (c.id === catId ? { ...c, stepsOpen: open } : c)),
+  }));
+
   const addStepTo = (catId, label) => patchSteps(catId, steps => addStep(steps, { label }));
+  /* Ranger les jalons à la main. Passe par le même `patchSteps` que le reste :
+     le déplacement est une écriture comme une autre, pas un état d'affichage —
+     un ordre qui ne survivrait pas à la navigation ne se range qu'une fois. */
+  const moveStepOf = (catId, sourceId, targetId, mode) =>
+    patchSteps(catId, steps => moveStep(steps, sourceId, targetId, mode));
   const toggleStepOf = (catId, stepId) => patchSteps(catId, steps => toggleStep(steps, stepId));
   const renameStepOf = (catId, stepId, label) => patchSteps(catId, steps => updateStep(steps, stepId, { label }));
   // Suppression annulable, comme celle d'un objectif de l'année : une étape
@@ -928,7 +941,10 @@ export default function LifeRpgPage() {
             {categories.slice(0, MAX_YEAR_GOALS).map((cat, i) => (
               <YearGoalCard key={cat.id} cat={cat} rank={i + 1} year={YEAR}
                 stepsEnabled={stepsEnabledOf(cat)}
+                stepsOpen={stepsOpenOf(cat)}
+                onToggleStepsOpen={(open) => setStepsOpenOf(cat.id, open)}
                 onAddStep={(label) => addStepTo(cat.id, label)}
+                onMoveStep={(sourceId, targetId, mode) => moveStepOf(cat.id, sourceId, targetId, mode)}
                 xp={progress.attributes[cat.id] || 0}
                 habits={habitsList.filter(h => habitCategoryIds(h).includes(cat.id))}
                 steps={readSteps(cat)}
@@ -1015,7 +1031,7 @@ export default function LifeRpgPage() {
 // dans cet ordre : où j'en suis (avancement confronté au temps écoulé), ce que
 // je vise (résultat + échéance, identité, modèle) et ce que je fais pour y
 // arriver (objectifs chiffrés, tâches, habitudes).
-function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = true, today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onToggleStep, onRenameStep, onDeleteStep, onToggleObjective, onToggleStepObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
+function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = true, stepsOpen = false, onToggleStepsOpen, today, linkedGoals = [], allObjectives = [], tasks = [], onAddStep, onMoveStep, onToggleStep, onRenameStep, onDeleteStep, onToggleObjective, onToggleStepObjective, onCreateObjective, onDetachObjective, onCreateTask, onToggleTask, onEditTask, onDeleteTask, onEdit, onDelete }) {
   const cl = categoryLevel(xp);
   /* Répartition des objectifs chiffrés de la carte : ceux rangés sous une étape
      (ils la mesurent) et les autres, qui restent des objectifs de la carte.
@@ -1188,7 +1204,9 @@ function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = 
           ce qu'on mesure et ce qu'on fait aujourd'hui. Le bloc ne se montre
           qu'une fois des étapes posées (dans la modale ✎), et replié. */}
       {onToggleStep && (
-        <StepsBlock cat={cat} steps={steps} enabled={stepsEnabled} onAdd={onAddStep} today={today}
+        <StepsBlock cat={cat} steps={steps} enabled={stepsEnabled}
+          open={stepsOpen} onOpenChange={onToggleStepsOpen} onAdd={onAddStep}
+          onMove={onMoveStep} today={today}
           goalsByStep={goalsByStep} stepPcts={stepPcts}
           allObjectives={allObjectives} onToggleObjective={onToggleStepObjective}
           onCreateObjective={onCreateObjective}
@@ -1579,7 +1597,7 @@ function stepTile(status, color, measured, pct) {
 /* Exportée pour ses tests, comme le rail : c'est la pièce que l'on regarde
    le plus longtemps sur une carte, et son état ne se déduit d'aucune donnée
    nue — il naît de la combinaison mesure / franchi / retard. */
-export function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
+export function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete, canDrag = false, dragging = false, offsetY = 0, overMode = null, onGrab, onNudge }) {
   const [hov, setHov] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -1602,11 +1620,53 @@ export function StepRow({ step, cat, status, goals = [], allObjectives = [], onT
     else setDraft(step.label);
   };
 
+  /* Ranger les jalons à la main : le geste est PILOTÉ par le bloc, seul à
+     connaître la position des tuiles voisines. La tuile ne fait qu'annoncer
+     l'endroit où on l'attrape, et porter le décalage qu'on lui rend.
+
+     Le glissé natif (`draggable`) a servi ici le temps d'une version, et c'est
+     lui qui a été retiré : son image fantôme suit le curseur dans les DEUX
+     directions, si bien qu'un jalon partait en diagonale hors de sa carte
+     pendant qu'on cherchait sa place dans une liste qui, elle, n'a qu'un axe.
+     Un déplacement en pointeur se contraint, lui, à la verticale. */
+  const handleLabelKey = (e) => {
+    /* Le même déplacement au clavier : le pointeur ne répond ni au clavier ni
+       au doigt (le tactile garde le défilement de la page), et un ordre qu'on
+       ne peut poser qu'à la souris n'est pas un ordre pour tout le monde.
+       `Alt` parce que les flèches nues appartiennent au défilement. */
+    if (!onNudge || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    onNudge(e.key === "ArrowUp" ? -1 : 1);
+  };
+
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      data-step-id={step.id}
+      /* En édition, plus de prise : le geste emporterait le curseur avant qu'il
+         ait pu se poser dans le mot qu'on vient corriger. */
+      onPointerDown={canDrag && !editing ? onGrab : undefined}
       style={{
-        borderRadius: 10, background: tile.bg, boxShadow: `inset 0 0 0 1px ${tile.ring}`,
-        overflow: "hidden", transition: "background .15s ease, box-shadow .15s ease",
+        position: "relative",
+        borderRadius: 10,
+        /* Le trait de dépôt se pose SUR le contour de la tuile visée, en haut ou
+           en bas selon la moitié survolée : il dit une place entre deux jalons,
+           là où une tuile entière surlignée dirait « dedans ». */
+        boxShadow: overMode === "before" ? `inset 0 0 0 1px ${tile.ring}, inset 0 2px 0 0 ${T.blue}`
+                 : overMode === "after" ? `inset 0 0 0 1px ${tile.ring}, inset 0 -2px 0 0 ${T.blue}`
+                 : dragging ? `inset 0 0 0 1px ${tile.ring}, var(--elev-hover, 0 4px 12px rgba(0,0,0,.14))`
+                 : `inset 0 0 0 1px ${tile.ring}`,
+        /* SEUL l'axe vertical : une liste de jalons n'a qu'une dimension, et
+           une tuile qui dérive latéralement quitte la colonne où se lit sa
+           place. Le décalage est borné par le bloc aux deux bouts de la liste. */
+        transform: dragging ? `translateY(${offsetY}px)` : "none",
+        /* Soulevée AU-DESSUS des autres, et opaque : c'est la tuile qu'on tient,
+           pas un fantôme — les voisines ne bougent pas, c'est le trait qui dit
+           où elle tombera. */
+        zIndex: dragging ? 2 : 0,
+        background: dragging ? (tile.bg === "transparent" ? T.white : tile.bg) : tile.bg,
+        cursor: canDrag ? (dragging ? "grabbing" : "grab") : "default",
+        overflow: "hidden",
+        transition: dragging ? "none" : "background .15s ease, box-shadow .15s ease",
       }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 9px" }}>
         {measured ? (
@@ -1651,8 +1711,10 @@ export function StepRow({ step, cat, status, goals = [], allObjectives = [], onT
             onBlur={commit}
             style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "inherit", padding: 0 }} />
         ) : (
-          <button type="button" onClick={() => { setDraft(step.label); setEditing(true); }}
-            title="Renommer l'étape"
+          <button type="button" data-step-label
+            onClick={() => { setDraft(step.label); setEditing(true); }}
+            onKeyDown={handleLabelKey}
+            title={onNudge ? "Renommer l'étape — Alt + ↑ / ↓ pour la déplacer" : "Renommer l'étape"}
             style={{
               flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent",
               padding: 0, cursor: "text", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
@@ -1705,7 +1767,7 @@ export function StepRow({ step, cat, status, goals = [], allObjectives = [], onT
         ) : onToggleObjective ? (
           <ObjectiveMultiSelect objectives={allObjectives}
             color={cat.color} onToggle={onToggleObjective} onCreate={onCreateObjective}
-            compact label="Objectif" />
+            compact label={null} title={`Rattacher un objectif à l'étape ${step.label}`} />
         ) : null}
 
         {onDelete && (
@@ -1787,9 +1849,111 @@ export function StepRow({ step, cat, status, goals = [], allObjectives = [], onT
  * l'année. La carte, elle, sert à le PARCOURIR — cocher un jalon, y rattacher
  * un objectif.
  */
-export function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsByStep = {}, stepPcts = {}, allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
-  const [open, setOpen] = useState(false);
+export function StepsBlock({ cat, steps, enabled = true, open: openProp, onOpenChange, onAdd, onMove, today, goalsByStep = {}, stepPcts = {}, allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete }) {
+  /* Le pli est PILOTÉ quand la carte sait le retenir (`onOpenChange`), local
+     sinon : le bloc se monte aussi hors de la page — tests, écrans à venir — et
+     il doit s'ouvrir même quand personne n'écoute. */
+  const [openLocal, setOpenLocal] = useState(false);
+  const open = onOpenChange ? openProp === true : openLocal;
+  const setOpen = (next) => {
+    const value = typeof next === "function" ? next(open) : next;
+    if (onOpenChange) onOpenChange(value);
+    else setOpenLocal(value);
+  };
   const [hov, setHov] = useState(false);
+
+  /* ── Ranger les jalons à la main ─────────────────────────────────────────
+     L'ordre chronologique ne décide plus de tout : les étapes ne se datent plus
+     à la saisie, et une liste de jalons non datés restait figée dans l'ordre où
+     on les avait tapés — impossible d'intercaler un passage oublié entre le
+     deuxième et le troisième.
+
+     Le geste vit ICI, et non dans la tuile : la tuile tirée et la tuile visée
+     sont deux composants différents, et seule la liste connaît leurs positions.
+     Elle les mesure UNE FOIS, au moment où l'on attrape — les voisines ne
+     bougeant pas pendant le geste, remesurer à chaque mouvement ne dirait rien
+     de plus et ferait travailler la mise en page à chaque pixel. */
+  const listRef = useRef(null);
+  const [drag, setDrag] = useState(null);
+  /* Le clic qui suit le relâchement ouvrirait le renommage de la tuile qu'on
+     vient de poser. On l'avale — depuis la liste elle-même et non par un
+     guetteur posé sur la fenêtre : un geste terminé hors de la fenêtre ne
+     produit aucun clic, et le guetteur survivait alors au démontage du bloc
+     pour avaler le premier clic de la page suivante. */
+  const justDragged = useRef(false);
+
+  const grab = (stepId) => (e) => {
+    justDragged.current = false;
+    if (!onMove) return;
+    /* Le doigt garde le défilement de la page : le retenir demanderait de
+       geler le `touch-action` de chaque tuile, et l'on ne pourrait plus faire
+       défiler la page en la prenant par ses jalons. Le clavier (Alt + flèches)
+       reste le chemin de ceux qui n'ont pas de souris. */
+    if (e.pointerType === "touch") return;
+    if (typeof e.button === "number" && e.button !== 0) return;
+    /* On attrape la tuile par ses zones neutres ET par son libellé — un clic
+       sans déplacement continue de le renommer. Pas par la case à cocher ni la
+       corbeille : on ne déplace pas un jalon en tirant sur ses commandes. */
+    const ctrl = e.target.closest?.("button, input, a, select, textarea");
+    if (ctrl && !ctrl.hasAttribute("data-step-label")) return;
+
+    const host = listRef.current;
+    if (!host) return;
+    const rects = [...host.querySelectorAll("[data-step-id]")].map((n) => {
+      const r = n.getBoundingClientRect();
+      return { id: n.getAttribute("data-step-id"), top: r.top, bottom: r.bottom, mid: (r.top + r.bottom) / 2 };
+    });
+    const self = rects.find((r) => r.id === stepId);
+    if (!self || rects.length < 2) return;
+
+    const g = {
+      startY: e.clientY, started: false, target: null,
+      // Bornes : la tuile ne quitte pas la liste. On déplace un jalon DANS le
+      // chemin, et une tuile lâchée au-dessus du titre n'aurait aucune place.
+      min: rects[0].top - self.top,
+      max: rects[rects.length - 1].bottom - self.bottom,
+      others: rects.filter((r) => r.id !== stepId),
+    };
+
+    const move = (ev) => {
+      const raw = ev.clientY - g.startY;
+      // Un clic n'est pas un glissé : sous ce seuil, le libellé garde son clic.
+      if (!g.started && Math.abs(raw) < 4) return;
+      g.started = true;
+      const dy = Math.max(g.min, Math.min(g.max, raw));
+      /* La place se compte, elle ne se cherche pas : le nombre de voisines
+         DÉPASSÉES EST le rang d'arrivée. Chercher la tuile survolée laissait
+         des trous — entre deux tuiles, le curseur ne survole plus rien et
+         l'indicateur disparaissait.
+
+         Dépassée = sa moitié franchie par le BORD D'ATTAQUE de la tuile tenue :
+         son bas quand on descend, son haut quand on remonte. Comparer les deux
+         centres suffisait tant qu'on ne touchait pas les bouts — mais tiré à
+         fond vers le bas, le décalage est borné pile quand les deux centres
+         coïncident, et la dernière place restait inatteignable. */
+      const lead = dy > 0 ? self.bottom + dy : self.top + dy;
+      const passed = g.others.filter((r) => r.mid < lead).length;
+      g.target = passed === 0
+        ? { id: g.others[0].id, mode: "before" }
+        : { id: g.others[passed - 1].id, mode: "after" };
+      setDrag({ id: stepId, dy, overId: g.target.id, mode: g.target.mode });
+    };
+
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      if (g.started) {
+        justDragged.current = true;
+        if (g.target) onMove(stepId, g.target.id, g.target.mode);
+      }
+      setDrag(null);
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
 
   const ordered = useMemo(() => sortSteps(steps), [steps]);
   const prog = stepsProgress(steps, today, stepPcts);
@@ -1824,7 +1988,16 @@ export function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsBySt
         /* Aucun écart entre les tuiles : c'est le RACCORD qui l'occupe, et il
            doit toucher les deux qu'il relie — un trait suspendu entre deux
            marges ne relierait rien. */
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div ref={listRef}
+          onClickCapture={(e) => {
+            if (!justDragged.current) return;
+            justDragged.current = false;
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          /* Sans cela, tirer une tuile surligne le texte des voisines : le
+             geste part d'un libellé, et le navigateur y voit une sélection. */
+          style={{ display: "flex", flexDirection: "column", userSelect: drag ? "none" : "auto" }}>
           {ordered.length === 0 && (
             <div style={{ fontSize: 11, color: T.textMut, marginBottom: 2 }}>{"Aucun jalon pour l'instant."}</div>
           )}
@@ -1838,7 +2011,18 @@ export function StepsBlock({ cat, steps, enabled = true, onAdd, today, goalsBySt
                 onCreateObjective={onCreateObjective}
                 onToggle={() => onToggle(s.id)}
                 onRename={(label) => onRename(s.id, label)}
-                onDelete={() => onDelete(s.id)} />
+                onDelete={() => onDelete(s.id)}
+                canDrag={Boolean(onMove)}
+                dragging={drag?.id === s.id}
+                offsetY={drag?.id === s.id ? drag.dy : 0}
+                overMode={drag && drag.id !== s.id && drag.overId === s.id ? drag.mode : null}
+                onGrab={grab(s.id)}
+                /* Le voisin se calcule ici, où la liste ordonnée existe : une
+                   tuile ne connaît ni son rang ni celui d'à côté. */
+                onNudge={onMove ? (dir) => {
+                  const target = ordered[i + dir];
+                  if (target) onMove(s.id, target.id, dir < 0 ? "before" : "after");
+                } : null} />
               {i < ordered.length - 1 && (
                 <StepLink done={isStepDone(s, goalPctsOf(stepPcts, s.id))} color={cat.color} />
               )}
@@ -1902,7 +2086,7 @@ function TaskRow({ tk, cat, onToggle, onEdit, onDelete }) {
  *
  * Ferme au clic dehors. Dernière entrée : créer un objectif (page Objectifs).
  */
-function ObjectiveMultiSelect({ objectives, color, onToggle, onCreate, onOpenChange, compact = false, label = "Ajouter" }) {
+function ObjectiveMultiSelect({ objectives, color, onToggle, onCreate, onOpenChange, compact = false, label = "Ajouter", title }) {
   const [open, setOpen] = useState(false);
   const [hov, setHov] = useState(false);
   // Focus clavier : il révèle le déclencheur comme le survol du bloc le fait,
@@ -1916,7 +2100,11 @@ function ObjectiveMultiSelect({ objectives, color, onToggle, onCreate, onOpenCha
   useEffect(() => { if (onOpenChange) onOpenChange(open); }, [open, onOpenChange]);
   /* Deux déclencheurs, selon la place qu'occupe le sélecteur :
      • compact (sur une étape) — lien discret « + Objectif », qui ne s'illumine
-       qu'au survol ou à l'ouverture ;
+       qu'au survol ou à l'ouverture. Sans `label`, il se réduit au seul « + » :
+       sur la LIGNE d'un jalon, le mot « Objectif » prenait soixante pixels de
+       largeur en permanence, pris à un libellé d'étape déjà coupé par
+       l'ellipse — le moyen d'ajouter mangeait ce qu'on venait lire. Le sens
+       passe alors par `title` / `aria-label`, jamais perdu ;
      • pleine largeur (sur la carte) — l'invitation forte, TOUJOURS visible.
        Elle ne se montrait qu'au survol de la zone des objectifs : au doigt il
        n'y a pas de survol, et à la souris il fallait deviner qu'il y avait
@@ -1933,7 +2121,9 @@ function ObjectiveMultiSelect({ objectives, color, onToggle, onCreate, onOpenCha
       {compact ? (
         <button type="button" onClick={() => setOpen(o => !o)}
           onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 4px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: (open || hov) ? T.textSub : T.textMut, opacity: (open || hov) ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
+          title={title || (label ? undefined : "Rattacher un objectif")}
+          aria-label={title || label || "Rattacher un objectif"}
+          style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, gap: label ? 5 : 0, padding: label ? "3px 4px" : 3, border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize:12, fontWeight: 500, color: (open || hov) ? T.textSub : T.textMut, opacity: (open || hov) ? 1 : 0.65, transition: "color .15s ease, opacity .15s ease" }}>
           <Plus size={13} strokeWidth={2} style={{ flexShrink: 0, transform: open ? "rotate(45deg)" : "none", transition: "transform .15s ease" }} />
           {label}
         </button>

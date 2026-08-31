@@ -35,6 +35,9 @@ export interface LifeStep {
   done: boolean;
   /** ISO du moment où elle a été franchie — sert au journal d'activité. */
   doneAt: string | null;
+  /** Rang voulu à la main, `null` tant que la liste n'a jamais été rangée.
+   *  Absent des cartes d'avant le glisser-déposer — d'où l'optionnel. */
+  pos?: number | null;
 }
 
 /** XP d'une étape franchie.
@@ -61,6 +64,24 @@ export function stepsEnabledOf(cat: { stepsEnabled?: boolean } | null | undefine
   return cat?.stepsEnabled !== false;
 }
 
+/**
+ * Le bloc « Étapes » de cette carte est-il déplié ?
+ *
+ * Rangé SUR la carte, comme les étapes elles-mêmes et comme leur interrupteur :
+ * on ouvre le chemin d'un objectif parce qu'on le suit en ce moment, et cette
+ * intention ne dure pas le temps d'un écran. Elle se reperdait à chaque
+ * navigation et à chaque rechargement — trois cartes à rouvrir une par une pour
+ * retrouver ce qu'on regardait il y a dix secondes.
+ *
+ * Drapeau POSITIF (`stepsOpen === true`), à l'inverse de `stepsEnabled` : le
+ * défaut reste fermé, et pour la raison qui l'a fait replier — trois cartes
+ * dépliées repoussent hors de l'écran les objectifs chiffrés, ce que la carte
+ * mesure. Les cartes existantes ne portent rien et restent donc fermées.
+ */
+export function stepsOpenOf(cat: { stepsOpen?: boolean } | null | undefined): boolean {
+  return cat?.stepsOpen === true;
+}
+
 /** Les étapes telles qu'elles sont STOCKÉES, drapeau ignoré. Réservé aux
  *  écritures : patcher la liste à partir de la version filtrée l'effacerait
  *  d'un coup sur une carte dont les étapes sont éteintes. */
@@ -74,6 +95,11 @@ export function readStepsRaw(cat: { steps?: unknown } | null | undefined): LifeS
       due: s.due ? String(s.due).slice(0, 10) : null,
       done: Boolean(s.done),
       doneAt: s.doneAt ? String(s.doneAt) : null,
+      /* Un rang n'est PAS un nombre reconstruit à la lecture : l'index du
+         tableau ferait l'affaire une fois, puis figerait l'ordre d'insertion
+         comme s'il avait été voulu. `null` dit « jamais rangée », et c'est ce
+         que `sortSteps` a besoin de distinguer. */
+      pos: typeof s.pos === "number" && Number.isFinite(s.pos) ? s.pos : null,
     }));
 }
 
@@ -151,13 +177,42 @@ export function isStepDone(step: LifeStep, goalPcts: number[] = []): boolean {
 /* ── Ordre et état ─────────────────────────────────────────────────────── */
 
 /**
- * Ordre CHRONOLOGIQUE, les non datées à la fin.
+ * La liste a-t-elle été rangée à la main ?
+ *
+ * TOUT OU RIEN, et c'est la seule règle qui évite un ordre à moitié voulu : dès
+ * qu'un rang manque, on ne saurait pas où glisser l'étape orpheline sans
+ * l'inventer — au milieu d'une liste rangée, elle se poserait là où personne ne
+ * l'a mise. `moveStep` renumérote donc toujours la liste ENTIÈRE, et `addStep`
+ * prolonge la numérotation quand elle existe déjà : les deux états, « jamais
+ * rangée » et « rangée », sont les seuls atteignables.
+ */
+export function hasManualOrder(steps: LifeStep[]): boolean {
+  return steps.length > 0 && steps.every((s) => typeof s.pos === "number");
+}
+
+/**
+ * Ordre VOULU s'il y en a un, CHRONOLOGIQUE sinon — les non datées à la fin.
+ *
+ * Une main qui range gagne toujours contre le calendrier : c'est tout le sens du
+ * geste, et un tri qui remettrait l'étape à sa date annulerait le déplacement
+ * sous les yeux de celui qui vient de le faire. Le chronologique reste le défaut
+ * des cartes qu'on n'a jamais rangées — dont toutes celles d'avant le
+ * glisser-déposer.
  *
  * Les étapes franchies ne descendent pas en bas de liste : elles restent à leur
  * place dans le temps. C'est ce qui fait la lecture d'une frise — le chemin
  * parcouru et celui qui reste, sur le même axe.
  */
 export function sortSteps(steps: LifeStep[]): LifeStep[] {
+  if (hasManualOrder(steps)) {
+    return [...steps]
+      .map((s, i) => ({ s, i }))
+      // À rangs égaux (données recopiées d'une carte à l'autre), l'ordre du
+      // tableau tranche : deux étapes ne doivent jamais permuter d'un rendu à
+      // l'autre.
+      .sort((a, b) => ((a.s.pos as number) - (b.s.pos as number)) || (a.i - b.i))
+      .map((x) => x.s);
+  }
   return [...steps]
     .map((s, i) => ({ s, i }))
     .sort((a, b) => {
@@ -266,7 +321,44 @@ export function cardProgress(input: {
 export function addStep(steps: LifeStep[], input: { label: string; due?: string | null }): LifeStep[] {
   const label = (input.label || "").trim();
   if (!label) return steps;
-  return [...steps, { id: newStepId(), label, due: input.due || null, done: false, doneAt: null }];
+  /* Sur une liste rangée à la main, le nouveau jalon se pose AU BOUT — un rang
+     de plus que le dernier. Sans lui il n'aurait pas de rang du tout, la liste
+     cesserait d'être « rangée » et retomberait d'un coup en ordre
+     chronologique : un ajout effacerait le rangement. */
+  const pos = hasManualOrder(steps)
+    ? Math.max(...steps.map((s) => s.pos as number)) + 1
+    : null;
+  return [...steps, { id: newStepId(), label, due: input.due || null, done: false, doneAt: null, pos }];
+}
+
+/**
+ * Déplace une étape avant ou après une autre — le glisser-déposer de la carte.
+ *
+ * Part de l'ordre AFFICHÉ (`sortSteps`) et non du tableau stocké : c'est la
+ * liste qu'on voit qu'on réarrange, et sur une carte encore triée par date les
+ * deux ne coïncident pas. Renumérote ensuite tout le monde — voir
+ * `hasManualOrder` pour le pourquoi du tout ou rien.
+ *
+ * Le tableau rendu est lui-même dans l'ordre voulu : les rangs disent l'ordre,
+ * mais une liste stockée en désordre ferait mentir toute lecture brute.
+ */
+export function moveStep(
+  steps: LifeStep[],
+  sourceId: string,
+  targetId: string,
+  mode: "before" | "after" = "before",
+): LifeStep[] {
+  if (!sourceId || !targetId || sourceId === targetId) return steps;
+  const ordered = sortSteps(steps);
+  const from = ordered.findIndex((s) => s.id === sourceId);
+  if (from < 0 || !ordered.some((s) => s.id === targetId)) return steps;
+
+  const next = [...ordered];
+  const [moved] = next.splice(from, 1);
+  // La cible est cherchée APRÈS le retrait : son index a pu reculer d'un cran.
+  const at = next.findIndex((s) => s.id === targetId) + (mode === "after" ? 1 : 0);
+  next.splice(at, 0, moved);
+  return next.map((s, i) => ({ ...s, pos: i }));
 }
 
 export function updateStep(steps: LifeStep[], id: string, patch: Partial<LifeStep>): LifeStep[] {

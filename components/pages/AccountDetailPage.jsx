@@ -8,7 +8,7 @@ import { ArrowUpRight, ArrowDownRight, Pencil, Link2, Check, Plus, Trash2 } from
 import { t, useLang } from "@/lib/i18n";
 import { ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import { parseAccountSize, updateTradingAccount, deleteTradingAccount } from "@/lib/propFirms";
-import { PLATFORMS } from "@/lib/brokers/platforms";
+import { platformName, resolvePlatformIcon } from "@/lib/brokers/platforms";
 import {
   CARD, SectionTitle, SectionAction, HeroAmount, BackLink,
   PeriodPills, windowSeries, AGGREGATE_CURVE_COLOR,
@@ -17,7 +17,7 @@ import {
 import { accountBrandColor, assignSeriesColors } from "@/lib/ui/brandColors";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
-import { RoundLogo } from "@/components/ui/accountRows";
+import { LogoTile } from "@/components/ui/accountRows";
 import Popover from "@/components/ui/Popover";
 import { accountBrand, firmLogo } from "@/lib/accountBrand";
 import { AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
@@ -47,30 +47,6 @@ const fmtNoCents = (n) => {
   return `${prefix}${sym}${Math.abs(v).toLocaleString("en-US")}`;
 };
 
-const BROKER_LOGOS = {
-  "tradovate":           "/trado.png",
-  "rithmic":             "/brokers/rithmic.png",
-  "rithmic r|trader":    "/brokers/rithmic.png",
-  "ninjatrader":         "/brokers/ninja trader.png",
-  "ninja trader":        "/brokers/ninja trader.png",
-  "topstep":             "/brokers/Topstep_Logo.jpg",
-  "topstep x":           "/brokers/Topstep_Logo.jpg",
-  "ftmo":                "/brokers/ftmo.png",
-  "tradingview":         "/brokers/tradingview.webp",
-  "metatrader 5":        "/MetaTrader_5.png",
-  "metatrader 4":        "/brokers/MetaTrader_4.png",
-  "mt5":                 "/MetaTrader_5.png",
-  "mt4":                 "/brokers/MetaTrader_4.png",
-  "thinkorswim":         "/brokers/thinkorswim.png",
-  "wealthcharts":        "/weal.webp",
-  "interactive brokers": "/brokers/Interactive broker.png",
-  "ibkr":                "/brokers/Interactive broker.png",
-  "capital.com":         "/brokers/capital.png",
-  "capital":             "/brokers/capital.png",
-  "ig":                  "/brokers/ig logo.png",
-  "webull":              "/brokers/webull.png",
-};
-const getBrokerLogo = (b) => b ? (BROKER_LOGOS[String(b).trim().toLowerCase()] || null) : null;
 
 const dayKey = (d) => String(d || "").slice(0, 10);
 
@@ -437,7 +413,7 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
      Sans firme (live ou démo personnel), on retombe sur le broker. */
   const brand = accountBrand(account, firms);
   const brokerLine = [brand.label || null, typeLabel].filter(Boolean).join(" · ");
-  const brokerLogo = brand.logo || (account ? getBrokerLogo(account.broker) : null);
+  const brokerLogo = brand.logo || (account ? resolvePlatformIcon(account.broker) : null);
 
   /* Trades du plus récent au plus ancien. La liste se déplie SUR PLACE, comme
      celle de la page d'une firme : l'ancien « Voir plus » quittait la page pour
@@ -516,7 +492,7 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
         <div style={{ display: "flex", alignItems: "center", minWidth: 0, margin: "-7px -8px" }}>
           {brand.firm ? (
             <BackLink
-              icon={<RoundLogo src={brand.logo} size={16} name={brand.firm.name} />}
+              icon={<LogoTile src={brand.logo} size={16} name={brand.firm.name} />}
               label={brand.firm.name}
               onClick={() => { setSelectedFirmId?.(brand.firm.id); setPage?.("firm-detail"); }}
             />
@@ -607,7 +583,7 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
           {/* Vignette du broker — 44 px. Passe par la brique partagée : cette page
               en avait sa propre copie, qui reposait le logo carré en `contain` au
               milieu du rond (d'où le cercle qui paraissait incomplet). */}
-          <RoundLogo src={brokerLogo} size={44} name={displayName} />
+          <LogoTile src={brokerLogo} size={44} name={displayName} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minWidth: 0 }}>
             <h1 style={{
@@ -813,7 +789,7 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
       const patch = { firm_id: firmId || null };
       // Rattaché : le broker suit la plateforme de la firme. Détaché : le compte
       // garde le sien, il n'y a plus de firme pour l'imposer.
-      if (firm) patch.broker = PLATFORMS.find((p) => p.id === firm.platform)?.name || null;
+      if (firm) patch.broker = platformName(firm.platform) || null;
       await updateTradingAccount(account.id, patch);
       onLinked?.({ ...account, ...patch });
       setOpen(false);
@@ -887,7 +863,7 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
                   onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = T.accentBg; }}
                   onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
                 >
-                  <RoundLogo src={firmLogo(f)} size={20} name={f.name} />
+                  <LogoTile src={firmLogo(f)} size={20} name={f.name} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {f.name}
                   </span>

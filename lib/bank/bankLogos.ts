@@ -13,7 +13,7 @@
  * veuille.
  *
  * Ajouter une banque : déposer l'image dans `public/banque/` (carrée, le disque
- * de `RoundLogo` la détoure en `cover`) et ajouter une ligne ici.
+ * de `LogoTile` la détoure en `cover`) et ajouter une ligne ici.
  */
 
 /**

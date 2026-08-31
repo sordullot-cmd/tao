@@ -99,8 +99,13 @@ describe("brandColors", () => {
   it("reconnaît chaque plateforme par son nom affiché", () => {
     expect(brandColor("Rithmic R|Trader")).toBe("#63A703");
     expect(brandColor("NinjaTrader")).toBe("#FF4200");
-    expect(brandColor("Interactive Brokers")).toBe("#D81222");
-    expect(brandColor("Capital.com")).toBe("#C49978");
-    expect(brandColor("IG")).toBe("#E01B1C");
+    expect(brandColor("MetaTrader 5")).toBe("#2C91C6");
+    expect(brandColor("WealthCharts")).toBe("#5DC6E0");
+    /* Les quatre plateformes des prop firms futures, teintes relevées sur leurs
+       logos — c'est ce qui colore leur pastille quand l'image ne charge pas. */
+    expect(brandColor("AlphaTrader")).toBe("#07513A");
+    expect(brandColor("DeepChart")).toBe("#3800A4");
+    expect(brandColor("Quantower")).toBe("#00566C");
+    expect(brandColor("TradeSea")).toBe("#0057B0");
   });
 });

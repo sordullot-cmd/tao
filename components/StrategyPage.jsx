@@ -159,6 +159,15 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     }
   };
 
+  /* Ouvrir le détail d'une stratégie : la carte, mais aussi les quatre records
+     de la barre du haut, y mènent. Le `localStorage` double la prop parce que
+     la coquille remonte la page depuis cette clé après un rechargement. */
+  const openDetail = (strategyId) => {
+    setSelectedStrategyId(strategyId);
+    localStorage.setItem("selectedStrategyId", strategyId);
+    setPage("strategy-detail");
+  };
+
   const handleEditStrategy = (strat) => {
     setFormData(strat);
     setEditingStrategyId(strat.id);
@@ -333,12 +342,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
            quatre colonnes ne s'alignaient plus entre elles. C'est ce
            désalignement qui donnait l'impression de bâclé. */
         const Cell = ({ label, strat, value, suffix, valueColor }) => {
-          const open = () => {
-            if (!strat) return;
-            setSelectedStrategyId(strat.strategy.id);
-            localStorage.setItem("selectedStrategyId", strat.strategy.id);
-            setPage("strategy-detail");
-          };
+          const open = () => { if (strat) openDetail(strat.strategy.id); };
           return (
             <button
               type="button"
@@ -657,22 +661,52 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                 }}
                 onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow = "var(--elev-hover)"; }}
                 onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow = T.elevCard; }}
-                onClick={() => {
-                  setSelectedStrategyId(strategy.id);
-                  localStorage.setItem('selectedStrategyId', strategy.id);
-                  setPage('strategy-detail');
+                /* La carte entière navigue, mais elle porte aussi ses deux
+                   boutons d'action dans un coin. Le `stopPropagation` de ces
+                   boutons suppose que le clic leur parvient — or il ne leur
+                   parvenait que sur une frange : quelque chose se glisse
+                   au-dessus de leur coin haut-gauche et l'événement remontait
+                   ici, ouvrant le détail au lieu de supprimer.
+                   D'où la décision par la GÉOMÉTRIE plutôt que par la cible :
+                   un clic tombé dans le rectangle d'un bouton exécute ce
+                   bouton, quelle que soit la couche qui l'a intercepté. Quand
+                   le clic atteint vraiment le bouton, son propre gestionnaire
+                   coupe la propagation et on ne passe jamais ici. */
+                onClick={(e) => {
+                  const visee = [...e.currentTarget.querySelectorAll("[data-card-actions] button")]
+                    .find((b) => {
+                      /* Au repos les actions sont effacées : leur rectangle
+                         existe encore, mais un clic là ne doit rien déclencher. */
+                      if (getComputedStyle(b).opacity === "0") return false;
+                      const r = b.getBoundingClientRect();
+                      if (!r.width || !r.height) return false;
+                      return e.clientX >= r.left && e.clientX <= r.right
+                          && e.clientY >= r.top && e.clientY <= r.bottom;
+                    });
+                  if (visee) {
+                    if (visee.dataset.action === "delete") handleDeleteStrategy(strategy.id);
+                    else handleEditStrategy(strategy);
+                    return;
+                  }
+                  if (e.target.closest?.("[data-card-actions]")) return;
+                  openDetail(strategy.id);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelectedStrategyId(strategy.id);
-                    localStorage.setItem('selectedStrategyId', strategy.id);
-                    setPage('strategy-detail');
-                  }
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  if (e.target !== e.currentTarget) return;
+                  e.preventDefault();
+                  openDetail(strategy.id);
                 }}
               >
                 {/* ══ COLONNE GAUCHE : identité, courbe, P&L + winrate ══ */}
-                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* `pointerEvents: none` sur les trois blocs de contenu : ils
+                    n'ont rien à cliquer, et le titre « Règles » de la colonne
+                    droite s'étend sur toute sa largeur — il passait SOUS les
+                    deux boutons du coin et leur volait le clic. Seule la frange
+                    du bouton qui dépassait de ce bandeau répondait encore. Le
+                    clic traverse maintenant jusqu'à la carte, qui navigue ;
+                    les boutons restent les seuls à capter. */}
+                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 16, pointerEvents: "none" }}>
                   {/* Pastille de couleur 10 px + nom 16 px, description dessous
                       à 40 % d'opacité (maquette 447:4177). */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
@@ -711,11 +745,13 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                 </div>
 
                 {/* Filet vertical de séparation (maquette 447:4198). */}
-                <div aria-hidden style={{ width: 1, alignSelf: "stretch", background: T.border, flexShrink: 0 }} />
+                <div aria-hidden style={{ width: 1, alignSelf: "stretch", background: T.border, flexShrink: 0, pointerEvents: "none" }} />
 
                 {/* ========== ACTIONS (top-right, absolu) ========== */}
-                <div style={{position:"absolute",top:12,right:12,display:"flex",gap:2,zIndex:2}}>
+                <div data-card-actions style={{position:"absolute",top:12,right:12,display:"flex",gap:2,zIndex:2}}>
                   <button
+                    type="button"
+                    data-action="edit"
                     onClick={(e) => { e.stopPropagation(); handleEditStrategy(strategy); }}
                     title={t("strat.editTip")}
                     aria-label={t("strat.editTip")}
@@ -730,6 +766,8 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                     <Pencil size={14} strokeWidth={1.75} />
                   </button>
                   <button
+                    type="button"
+                    data-action="delete"
                     onClick={(e) => { e.stopPropagation(); handleDeleteStrategy(strategy.id); }}
                     title={t("strat.deleteTip")}
                     aria-label={t("strat.deleteTip")}
@@ -746,7 +784,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
                 </div>
 
                 {/* ══ COLONNE DROITE : les règles, par groupe ══ */}
-                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 16, pointerEvents: "none" }}>
                   <span style={{ fontSize: 16, fontWeight: 500, color: T.text }}>{t("strat.rules")}</span>
 
                   {strategy.groups && strategy.groups.length > 0 ? (
@@ -811,6 +849,10 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
           width={420}
           draggable={false}
           scrim
+          /* Le corps remonte contre l'en-tête : sans poignée à afficher, celui-ci
+             ne porte que la croix, et les 18 px de gouttière haute par défaut
+             ouvraient une bande blanche entre elle et l'avertissement. */
+          bodyStyle={{ padding: "0 18px 14px", gap: 6 }}
           footer={<>
             <DAPillButton onClick={cancelDelete}>{t("common.cancel")}</DAPillButton>
             <DAPillButton

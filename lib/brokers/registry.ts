@@ -84,17 +84,6 @@ export const BROKERS: Record<BrokerId, BrokerAdapter> = {
       return parseNinjaTraderCSV(content);
     },
   },
-  ibkr: {
-    meta: {
-      id: "ibkr",
-      name: "Interactive Brokers",
-      description: "Stocks, options, futures. Export Activity Statement → CSV.",
-      features: { fileImport: false, apiSync: false },
-      color: "#DC2626",
-      initial: "I",
-      logoPath: "/brokers/Interactive%20broker.png",
-    },
-  },
   wealthcharts: {
     meta: {
       id: "wealthcharts",

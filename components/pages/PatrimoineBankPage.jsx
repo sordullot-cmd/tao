@@ -20,7 +20,7 @@ import { Check, Loader2, Plus, RefreshCw, Star, Unlink, X } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
 import { CARD, SectionTitle } from "@/components/ui/da";
-import { RoundLogo } from "@/components/ui/accountRows";
+import { LogoTile } from "@/components/ui/accountRows";
 import { fmt } from "@/lib/ui/format";
 import { bankLogo, bankMatchKey } from "@/lib/bank/bankLogos";
 import { useBankAccounts } from "@/lib/bank/useBankAccounts";
@@ -264,7 +264,7 @@ export default function PatrimoineBankPage({ setPage }) {
 
                 return (
                   <li key={a.id} data-card style={{ ...CARD, padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-                    <RoundLogo src={bankLogo(a.institution, a.logo)} size={36} name={a.institution} />
+                    <LogoTile src={bankLogo(a.institution, a.logo)} size={36} name={a.institution} />
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {a.name}
@@ -396,7 +396,7 @@ function FavoriteBankChip({ fav, connecting, busy, connected, onConnect, onRemov
       >
         {connecting
           ? <Loader2 size={20} strokeWidth={1.75} className="anim-spin" />
-          : <RoundLogo src={bankLogo(fav.name, fav.logo)} size={20} name={fav.name} />}
+          : <LogoTile src={bankLogo(fav.name, fav.logo)} size={20} name={fav.name} />}
         <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {fav.name}
         </span>

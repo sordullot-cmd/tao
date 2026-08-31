@@ -124,3 +124,14 @@ export const WRITING_BG = "color-mix(in srgb, var(--color-text) 1.2%, transparen
 export const SERIES_BG_OPACITY = "var(--opacity-series-bg, 0.35)";
 
 export type Tokens = typeof T;
+
+/** Arrondi d'une VIGNETTE carrée (logo de compte, de firme, d'instrument).
+ *
+ *  Proportionnel au côté, et non pris dans `--radius-*` : ces vignettes vont de
+ *  16 à 44 px, et un rayon fixe de 10 px ferait un disque à 16 px puis un carré
+ *  presque net à 44. À 28 % du côté, la même silhouette d'icône d'application se
+ *  lit à toutes les tailles. Le plancher de 4 px évite qu'à 16 px l'arrondi
+ *  devienne un liseré indistinct. */
+export function tileRadius(size: number): number {
+  return Math.max(4, Math.round(size * 0.28));
+}

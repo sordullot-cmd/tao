@@ -17,7 +17,8 @@
 
 import React from "react";
 import { ChevronDown, ChevronUp, Search, Check, Wallet } from "lucide-react";
-import { T } from "@/lib/ui/tokens";
+import { T, FIELD_BG } from "@/lib/ui/tokens";
+import { FIELD, FIELD_FOCUS_RING } from "@/components/ui/form";
 import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
 import { firmLogo, accountLogo } from "@/lib/accountBrand";
@@ -147,14 +148,17 @@ export default function TradeTargetSelector({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        /* Pilule en APLAT, jamais de rectangle cerné : c'est le champ de la
+           charte (cf. l'en-tête de components/ui/form.jsx). Ce qui dit « c'est
+           ici que ça se passe » n'est pas un trait permanent mais l'anneau qui
+           apparaît quand le menu est ouvert. */
         style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 8,
-          padding: "8px 12px", borderRadius: "var(--radius-card)",
-          border: `1px solid ${open ? "var(--color-border-strong)" : "var(--color-border)"}`,
-          background: "var(--color-card-bg, #FFFFFF)",
-          color: selectedOption ? "var(--color-text)" : "var(--color-text-muted)",
-          fontSize:13, fontWeight: 500, fontFamily: "inherit", textAlign: "left",
-          cursor: "pointer", transition: "border-color 120ms ease",
+          ...FIELD,
+          display: "flex", alignItems: "center", gap: 8,
+          color: selectedOption ? T.text : T.textMut,
+          fontWeight: 500, textAlign: "left", cursor: "pointer",
+          boxShadow: open ? FIELD_FOCUS_RING : "none",
+          transition: "var(--tr-ui)",
         }}
       >
         {selectedOption?.icon && (
@@ -184,7 +188,10 @@ export default function TradeTargetSelector({
         }}
       >
         <>
-          <div style={{ flexShrink: 0, padding: 8, borderBottom: "1px solid var(--color-border)", background: "var(--color-hover-bg, #FAFAFA)" }}>
+          {/* En-tête de recherche : un aplat, pas un filet. Le changement de
+              surface sépare aussi bien qu'une ligne, sans ajouter de trait à la
+              couche flottante. */}
+          <div style={{ flexShrink: 0, padding: 8, background: FIELD_BG }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
               <Search size={13} color={T.textMut} />
               <input

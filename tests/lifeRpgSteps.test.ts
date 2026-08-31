@@ -18,6 +18,8 @@ import {
   readSteps,
   readStepsRaw,
   removeStep,
+  hasManualOrder,
+  moveStep,
   sortSteps,
   stepCompletion,
   stepStatus,
@@ -25,6 +27,7 @@ import {
   toggleStep,
   updateStep,
   stepsEnabledOf,
+  stepsOpenOf,
   yearMarkers,
   yearPosition,
   type LifeStep,
@@ -38,6 +41,7 @@ const step = (over: Partial<LifeStep> = {}): LifeStep => ({
   due: over.due ?? null,
   done: over.done ?? false,
   doneAt: over.doneAt ?? null,
+  pos: over.pos ?? null,
 });
 
 describe("lecture des étapes", () => {
@@ -51,7 +55,7 @@ describe("lecture des étapes", () => {
     const [s] = readSteps({
       steps: [{ id: "a", label: "Certification", due: "2026-06-30T00:00:00.000Z", done: 1 }],
     });
-    expect(s).toEqual({ id: "a", label: "Certification", due: "2026-06-30", done: true, doneAt: null });
+    expect(s).toEqual({ id: "a", label: "Certification", due: "2026-06-30", done: true, doneAt: null, pos: null });
   });
 });
 
@@ -83,6 +87,57 @@ describe("ordre de la frise", () => {
   it("reste stable entre deux étapes de même date", () => {
     const list = [step({ id: "x", due: "2026-05-01" }), step({ id: "y", due: "2026-05-01" })];
     expect(sortSteps(list).map(s => s.id)).toEqual(["x", "y"]);
+  });
+});
+
+describe("rangement à la main", () => {
+  it("fait gagner la main sur le calendrier", () => {
+    // Tout le sens du geste : remettre l'étape à sa date annulerait le
+    // déplacement sous les yeux de celui qui vient de le faire.
+    const list = [step({ id: "a", due: "2026-02-01" }), step({ id: "b", due: "2026-06-01" })];
+    expect(sortSteps(moveStep(list, "b", "a", "before")).map(s => s.id)).toEqual(["b", "a"]);
+  });
+
+  it("dépose après la cible quand on vise le bas de sa tuile", () => {
+    const list = [step({ id: "a" }), step({ id: "b" }), step({ id: "c" })];
+    expect(sortSteps(moveStep(list, "a", "c", "after")).map(s => s.id)).toEqual(["b", "c", "a"]);
+    expect(sortSteps(moveStep(list, "c", "a", "after")).map(s => s.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("range la liste ENTIÈRE, jamais la seule étape déplacée", () => {
+    // Un rang manquant relancerait le tri chronologique sur toute la carte :
+    // le rangement disparaîtrait au rendu suivant.
+    const moved = moveStep([step({ id: "a" }), step({ id: "b" })], "b", "a", "before");
+    expect(hasManualOrder(moved)).toBe(true);
+    expect(moved.map(s => s.pos)).toEqual([0, 1]);
+  });
+
+  it("ne bouge rien sur une cible inconnue, une source inconnue ou elle-même", () => {
+    const list = [step({ id: "a" }), step({ id: "b" })];
+    expect(moveStep(list, "a", "a", "before")).toBe(list);
+    expect(moveStep(list, "a", "fantome", "before")).toBe(list);
+    expect(moveStep(list, "fantome", "a", "before")).toBe(list);
+  });
+
+  it("pose le jalon suivant au bout de la liste rangée, sans la déranger", () => {
+    const ranged = moveStep([step({ id: "a" }), step({ id: "b" })], "b", "a", "before");
+    const after = addStep(ranged, { label: "Nouvelle" });
+    expect(hasManualOrder(after)).toBe(true);
+    expect(sortSteps(after).map(s => s.label)).toEqual(["Étape", "Étape", "Nouvelle"]);
+  });
+
+  it("laisse une liste jamais rangée à son ordre chronologique après un ajout", () => {
+    const after = addStep([step({ id: "a", due: "2026-06-01" })], { label: "Nouvelle" });
+    expect(hasManualOrder(after)).toBe(false);
+    expect(after[1].pos).toBe(null);
+  });
+
+  it("survit à la suppression d'une étape du milieu", () => {
+    // Les rangs gardent leur trou : ils disent un ORDRE, pas un décompte.
+    const ranged = moveStep([step({ id: "a" }), step({ id: "b" }), step({ id: "c" })], "c", "a", "before");
+    const rest = removeStep(ranged, "a");
+    expect(hasManualOrder(rest)).toBe(true);
+    expect(sortSteps(rest).map(s => s.id)).toEqual(["c", "b"]);
   });
 });
 
@@ -289,6 +344,16 @@ describe("interrupteur des étapes", () => {
     // toutes doivent garder leurs jalons.
     expect(stepsEnabledOf(cat)).toBe(true);
     expect(readSteps(cat)).toHaveLength(2);
+  });
+
+  it("garde le bloc fermé tant que la carte ne dit pas le contraire", () => {
+    /* Drapeau POSITIF, à l'inverse de `stepsEnabled` : le défaut reste fermé, et
+       pour la raison qui l'a fait replier — trois cartes dépliées repoussent
+       hors de l'écran les objectifs chiffrés, ce que la carte mesure. */
+    expect(stepsOpenOf(cat)).toBe(false);
+    expect(stepsOpenOf(null)).toBe(false);
+    expect(stepsOpenOf({ ...cat, stepsOpen: true })).toBe(true);
+    expect(stepsOpenOf({ ...cat, stepsOpen: false })).toBe(false);
   });
 
   it("retire les étapes de TOUS les calculs quand elles sont éteintes", () => {

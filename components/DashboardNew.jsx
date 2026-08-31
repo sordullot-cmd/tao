@@ -788,7 +788,7 @@ export default function App() {
 
   const pages = {
     dashboard:  <DashboardPage trades={filteredTrades} allTrades={trades} accounts={accounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
-    "add-trade": <AddTradePage trades={filteredTrades} setPage={setPage} setAccounts={setAccounts} accounts={accounts} firms={firms} selectedAccountIds={selectedAccountIds} addTrade={addTrade} addStrategy={addStrategy} strategies={strategies} user={user} />,
+    "add-trade": <AddTradePage setPage={setPage} setAccounts={setAccounts} accounts={accounts} firms={firms} user={user} />,
     trades:     <TradesPage trades={filteredTrades} strategies={strategies} accounts={visibleAccounts} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     "trade-chart": <TradeChartPage trades={filteredTrades} />,
     calendar:   <CalendarPage trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={accounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,

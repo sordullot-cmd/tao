@@ -24,7 +24,14 @@ import { t, useLang } from "@/lib/i18n";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import SearchableSelect from "@/components/ui/SearchableSelect";
-import { PLATFORMS, PROP_FIRM_PRESETS, resolvePlatformIcon } from "@/lib/brokers/platforms";
+import {
+  PROP_FIRM_PRESETS,
+  platformById,
+  platformName,
+  platformsForFirm,
+  resolveExecutionPlatform,
+  resolvePlatformIcon,
+} from "@/lib/brokers/platforms";
 import { accountColor } from "@/lib/ui/accountTypes";
 import { firmLogo, firmBrandId } from "@/lib/accountBrand";
 import { refreshTradesCache } from "@/lib/tradesCache";
@@ -254,7 +261,14 @@ function ErrorLine({ children }) {
   );
 }
 
-const platformOptions = PLATFORMS.map((p) => ({ id: p.id, label: p.name, iconUrl: p.iconPath }));
+/**
+ * Options du champ « plateforme » — jamais une prop firm : Apex ne s'exécute
+ * pas, elle donne accès à Tradovate ou WealthCharts. `brandId` restreint la
+ * liste aux plateformes que la maison propose vraiment ; sans maison, tout le
+ * catalogue d'exécution.
+ */
+const platformOptions = (brandId) =>
+  platformsForFirm(brandId).map((p) => ({ id: p.id, label: p.name, iconUrl: p.iconPath }));
 
 /* ─────────────────────── Modale firme ─────────────────────── */
 
@@ -312,9 +326,37 @@ export function PropFirmModal({ firm = null, accounts = [], userId, onClose, onS
     setBrand(preset.id);
     if (!isEdit) {
       if (isUntouchedName()) setName(preset.name);
-      setPlatform(preset.id === "ftmo" ? "" : "tradovate");
+      /* La plateforme suit la maison : sa PRINCIPALE (première déclarée), pas
+         Tradovate en dur — FTMO passe par MetaTrader, Alpha Futures par
+         DepthChart. */
+      setPlatform(preset.platformIds?.[0] || "");
     }
   };
+
+  /* La maison qui restreint n'est pas seulement celle cliquée dans les presets :
+     un nom tapé au clavier rattache aussi, et c'est déjà ce que voit le reste de
+     l'app (`firmBrandId` sert au logo et à la couleur). Sans cette dérivation,
+     une firme créée en écrivant « Apex 50k » gardait le catalogue entier. */
+  const effectiveBrand = brand || firmBrandId({ name }) || "";
+  const allowedPlatforms = React.useMemo(() => platformOptions(effectiveBrand), [effectiveBrand]);
+  /* La maison n'est « restreignante » que si le catalogue la connaît ET qu'elle
+     déclare ses plateformes : une firme hors catalogue ne restreint rien. */
+  const brandedFirm = React.useMemo(() => {
+    const hit = platformById(effectiveBrand);
+    return hit?.platformIds?.length ? hit : null;
+  }, [effectiveBrand]);
+  /* Changer de maison efface une plateforme qu'elle ne propose pas — le champ
+     montrerait sinon un choix absent de sa propre liste. Au MONTAGE en revanche
+     on ne touche à rien : une firme d'avant la séparation peut porter une
+     plateforme hors liste, et ouvrir sa modale ne doit pas la lui retirer dans
+     son dos. */
+  const mountedBrand = React.useRef(effectiveBrand);
+  React.useEffect(() => {
+    if (effectiveBrand === mountedBrand.current) return;
+    mountedBrand.current = effectiveBrand;
+    if (platform && !allowedPlatforms.some((o) => o.id === platform)) setPlatform("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveBrand, allowedPlatforms]);
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -414,11 +456,20 @@ export function PropFirmModal({ firm = null, accounts = [], userId, onClose, onS
         <TextInput value={name} onChange={setName} placeholder={t("firms.namePh")} autoFocus />
       </Field>
 
-      <Field label={t("firms.platform")} hint={t("firms.platformHint")}>
+      {/* Le champ dit sur quoi porte la restriction quand une maison est
+          choisie : sinon la liste courte passe pour un catalogue incomplet. */}
+      <Field
+        label={t("firms.platform")}
+        hint={
+          brandedFirm
+            ? t("firms.platformHintBrand").replace("{name}", brandedFirm.name)
+            : t("firms.platformHint")
+        }
+      >
         <SearchableSelect
           value={platform}
           onChange={setPlatform}
-          options={[{ id: "", label: t("firms.noPlatform") }, ...platformOptions]}
+          options={[{ id: "", label: t("firms.noPlatform") }, ...allowedPlatforms]}
           searchPlaceholder={t("firms.searchPlatform")}
           placeholder={t("firms.noPlatform")}
         />
@@ -605,9 +656,7 @@ export function AttachAccountsModal({ firm, accounts = [], firms = [], onClose, 
          Mais on n'EFFACE pas le broker d'un compte pour une firme dont la
          plateforme n'est pas réglée : rattacher ne doit pas perdre une donnée
          déjà saisie. */
-      const brokerName = firm.platform
-        ? PLATFORMS.find((p) => p.id === firm.platform)?.name || null
-        : null;
+      const brokerName = firm.platform ? platformName(firm.platform) || null : null;
       const updated = [];
       for (const acc of candidates.filter((a) => picked.has(a.id))) {
         const patch = brokerName ? { firm_id: firm.id, broker: brokerName } : { firm_id: firm.id };
@@ -798,13 +847,12 @@ export function AccountModal({
     account?.eval_account_size && !isNumericSize ? account.eval_account_size : "50k"
   );
   const [balance, setBalance] = React.useState(isNumericSize ? String(account.eval_account_size) : "");
-  const [platform, setPlatform] = React.useState(() => {
-    if (!account?.broker) return "";
-    const hit = PLATFORMS.find(
-      (p) => p.name.toLowerCase() === String(account.broker).toLowerCase() || p.id === String(account.broker).toLowerCase()
-    );
-    return hit?.id || "";
-  });
+  /* `broker` est enregistré en clair. Sur un compte d'avant la séparation il
+     porte parfois le nom de la FIRME (« Apex Trader Funding ») : on retombe
+     alors sur la plateforme qu'elle fournit, plutôt que sur un champ vide. */
+  const [platform, setPlatform] = React.useState(
+    () => resolveExecutionPlatform(account?.broker)?.id || ""
+  );
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -832,9 +880,7 @@ export function AccountModal({
       // Rattaché à une firme → la plateforme de la firme fait foi, quoi qu'il y
       // ait dans l'état local.
       const effectivePlatform = linkedFirm ? (linkedFirm.platform || "") : platform;
-      const brokerName = effectivePlatform
-        ? PLATFORMS.find((p) => p.id === effectivePlatform)?.name || null
-        : null;
+      const brokerName = effectivePlatform ? platformName(effectivePlatform) || null : null;
       const patch = {
         name: trimmed,
         broker: brokerName,
@@ -962,9 +1008,7 @@ export function AccountModal({
               />
             )}
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {linkedFirm.platform
-                ? PLATFORMS.find((p) => p.id === linkedFirm.platform)?.name || linkedFirm.platform
-                : t("firms.noPlatform")}
+              {linkedFirm.platform ? platformName(linkedFirm.platform) : t("firms.noPlatform")}
             </span>
             <Lock size={13} strokeWidth={1.75} style={{ marginLeft: "auto", flexShrink: 0, color: T.textMut }} />
           </div>
@@ -972,7 +1016,7 @@ export function AccountModal({
           <SearchableSelect
             value={platform}
             onChange={setPlatform}
-            options={[{ id: "", label: t("firms.noPlatform") }, ...platformOptions]}
+            options={[{ id: "", label: t("firms.noPlatform") }, ...platformOptions(null)]}
             searchPlaceholder={t("firms.searchPlatform")}
             placeholder={t("firms.noPlatform")}
           />

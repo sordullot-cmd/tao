@@ -6,38 +6,8 @@ import Popover from "@/components/ui/Popover";
 import { FIELD_BG } from "@/lib/ui/tokens";
 import { FIELD_FOCUS_RING } from "@/components/ui/form";
 import { t, useLang } from "@/lib/i18n";
+import { resolvePlatformIcon } from "@/lib/brokers/platforms";
 
-// Map id (lowercase) → chemin du logo. Utilisé pour afficher l'icône à gauche
-// du compte dans le dropdown.
-const BROKER_ICONS = {
-  tradovate: "/trado.png",
-  mt5: "/MetaTrader_5.png",
-  "metatrader 5": "/MetaTrader_5.png",
-  wealthcharts: "/weal.webp",
-  rithmic: "/brokers/rithmic.png",
-  "rithmic r|trader": "/brokers/rithmic.png",
-  ninjatrader: "/brokers/ninja%20trader.png",
-  topstep: "/brokers/Topstep_Logo.jpg",
-  "topstep x": "/brokers/Topstep_Logo.jpg",
-  apex: "/brokers/apex.avif",
-  "apex trader funding": "/brokers/apex.avif",
-  alphafutures: "/brokers/alpha%20futur.svg",
-  "alpha futures": "/brokers/alpha%20futur.svg",
-  tradeify: "/brokers/Tradeify.png",
-  lucid: "/brokers/lucid.png",
-  "lucid trading": "/brokers/lucid.png",
-  ftmo: "/brokers/ftmo.png",
-  tradingview: "/brokers/tradingview.webp",
-  mt4: "/brokers/MetaTrader_4.png",
-  "metatrader 4": "/brokers/MetaTrader_4.png",
-  thinkorswim: "/brokers/thinkorswim.png",
-  ibkr: "/brokers/Interactive%20broker.png",
-  "interactive brokers": "/brokers/Interactive%20broker.png",
-  capitalcom: "/brokers/capital.png",
-  "capital.com": "/brokers/capital.png",
-  ig: "/brokers/ig%20logo.png",
-  webull: "/brokers/webull.png",
-};
 
 export default function QuickAccountSelector({
   selectedAccountName,
@@ -115,32 +85,12 @@ export default function QuickAccountSelector({
     setConfirmingId(null);
   }, []);
 
-  const resolveBrokerIcon = (broker) => {
-    if (!broker) return null;
-    const key = String(broker).toLowerCase().trim();
-    if (BROKER_ICONS[key]) return BROKER_ICONS[key];
-    // Heuristiques de fallback
-    if (key.includes("trado"))   return BROKER_ICONS.tradovate;
-    if (key.includes("mt5"))     return BROKER_ICONS.mt5;
-    if (key.includes("mt4"))     return BROKER_ICONS.mt4;
-    if (key.includes("meta"))    return BROKER_ICONS.mt5;
-    if (key.includes("wealth"))  return BROKER_ICONS.wealthcharts;
-    if (key.includes("rithmic")) return BROKER_ICONS.rithmic;
-    if (key.includes("ninja"))   return BROKER_ICONS.ninjatrader;
-    if (key.includes("topstep")) return BROKER_ICONS.topstep;
-    if (key.includes("apex"))    return BROKER_ICONS.apex;
-    if (key.includes("alpha"))   return BROKER_ICONS.alphafutures;
-    if (key.includes("tradeify")) return BROKER_ICONS.tradeify;
-    if (key.includes("lucid"))   return BROKER_ICONS.lucid;
-    if (key.includes("ftmo"))    return BROKER_ICONS.ftmo;
-    if (key.includes("trading view") || key.includes("tradingview")) return BROKER_ICONS.tradingview;
-    if (key.includes("think"))   return BROKER_ICONS.thinkorswim;
-    if (key.includes("interactive") || key === "ibkr") return BROKER_ICONS.ibkr;
-    if (key.includes("capital")) return BROKER_ICONS.capitalcom;
-    if (key === "ig" || key.startsWith("ig "))  return BROKER_ICONS.ig;
-    if (key.includes("webull"))  return BROKER_ICONS.webull;
-    return null;
-  };
+  /* Le logo vient du catalogue (`lib/brokers/platforms`), pas d'une table
+     locale : celle qui vivait ici retombait sur `includes("alpha")`, si bien
+     qu'un compte « AlphaTrader » — la plateforme — sortait sous le logo d'Alpha
+     Futures, la firme. Le catalogue épuise les correspondances exactes avant
+     d'approcher, et suit les entrées ajoutées ailleurs. */
+  const resolveBrokerIcon = (broker) => resolvePlatformIcon(broker);
 
   const filtered = query
     ? accounts.filter(a => (a.name || "").toLowerCase().includes(query.toLowerCase()))

@@ -22,7 +22,6 @@ import {
   ChevronRight as LucideChevronRight,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
-import { luminance } from "@/lib/ui/color";
 import { TAG_COLORS, STRATEGY_COLOR_DEFAULT } from "@/lib/ui/tradingColors";
 import Popover from "@/components/ui/Popover";
 import { t, useLang } from "@/lib/i18n";
@@ -31,7 +30,7 @@ import { SkeletonScreen, Skeleton, showSkeleton } from "@/components/ui/Skeleton
 import { fmt } from "@/lib/ui/format";
 import {
   CARD, TH, DirectionTag, SymbolCell, TableFilter, symbolLabel,
-  HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow,
+  HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow, CheckChip,
 } from "@/components/ui/da";
 import { rMultiple, fmtR } from "@/lib/userPrefs";
 import { calculateFees } from "@/lib/tradeFees";
@@ -72,42 +71,6 @@ const HIDDEN_WHEN_EMBEDDED = ["entryDate", "exitDate", "pnlPct", "weekday", "acc
 /* Les aplats (`FIELD_BG`, `WRITING_BG`), le trait dilué (`HAIRLINE`) et les deux
    briques de texte (`FieldLabel`, `StatRow`) vivent dans components/ui/da.jsx :
    les pages portées dans cette DA s'en servent toutes. */
-
-/**
- * Pastille à cocher — type d'entrée, liquidité ciblée, règles d'une stratégie.
- * Ces trois listes affichaient trois copies du même bloc de 25 lignes.
- *
- * `color` vient des DONNÉES (couleur d'un tag) : c'est un hex, la concaténation
- * d'un canal alpha y est permise. Les tokens `T`, eux, sont des `var(…)` et ne
- * se concatènent jamais — d'où le `color-mix` pour les aplats neutres.
- */
-function CheckChip({ label, color, checked, onClick }) {
-  const ink = checked ? (color || T.text) : T.textSub;
-  /* La coche s'adapte à l'aplat : les teintes de tag sont les principales de la
-     charte, et un blanc figé disparaît sur les plus claires. */
-  const glyph = checked && color && luminance(color) > 0.45 ? T.text : T.onSolid;
-  return (
-    <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onClick}
-      style={{minHeight: 34,
-        display:"inline-flex",alignItems:"center",gap:7,
-        padding:"6px 12px 6px 9px",borderRadius:999,border:"none",
-        background: checked && color ? `${color}1F` : FIELD_BG,
-        cursor:"pointer",fontFamily:"inherit",textAlign:"left",
-        transition:"background var(--dur-fast) var(--ease-out)",
-      }}>
-      <span style={{
-        width:15,height:15,borderRadius:5,flexShrink:0,
-        display:"inline-flex",alignItems:"center",justifyContent:"center",
-        background: checked ? ink : T.white,
-        boxShadow: checked ? "none" : `inset 0 0 0 1.5px ${HAIRLINE}`,
-        transition:"background var(--dur-fast) var(--ease-out)",
-      }}>
-        {checked && <LucideCheck size={11} strokeWidth={3} color={glyph} />}
-      </span>
-      <span style={{fontSize:12,fontWeight:500,color:ink}}>{label}</span>
-    </button>
-  );
-}
 
 export default function TradesPage({ trades = [], strategies = [], accounts = [], onImportClick, onDeleteTrade, onClearTrades, embedded = false, maxRows = null, lockColumns = false }) {
   useLang();

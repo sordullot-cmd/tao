@@ -13,7 +13,6 @@ export type BrokerId =
   | "tradovate"
   | "rithmic"
   | "mt5"
-  | "ibkr"
   | "wealthcharts"
   | "ninjatrader"
   // Prop firms futures

@@ -43,7 +43,7 @@ import {
   readFirmHeroMode,
   readFundedMeta,
 } from "@/lib/propFirms";
-import { RoundLogo, AddAccountsButton } from "@/components/ui/accountRows";
+import { LogoTile, AddAccountsButton, AccountLine, ACCOUNT_LINE } from "@/components/ui/accountRows";
 import Popover from "@/components/ui/Popover";
 import {
   CARD, SectionTitle, SectionAction, HeroAmount, MiniKpi, StatsCard,
@@ -510,7 +510,7 @@ export default function PropFirmDetailPage({
           sous-titre. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <RoundLogo src={logo} size={44} name={firm.name} />
+          <LogoTile src={logo} size={44} name={firm.name} />
           <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minWidth: 0 }}>
             <h1 style={{
               margin: 0, fontSize: 16, fontWeight: 500, lineHeight: 1.25, color: T.text,
@@ -988,37 +988,27 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
                   /* Une seule ligne, et non le nom au-dessus de son type : sur
                      deux étages chaque compte pesait 40 px de haut pour deux
                      mots, et la liste ne se lisait plus d'un regard. */
+                  /* Géométrie et contenu viennent de `AccountLine`
+                     (components/ui/accountRows.jsx) : c'est la présentation
+                     partagée des listes de comptes, celle que reprend aussi le
+                     choix des comptes visés d'un import. */
                   style={{
-                    flex: "1 1 auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0,
-                    textAlign: "left", padding: "6px 10px", minHeight: 32, borderRadius: 6,
+                    ...ACCOUNT_LINE, flex: "1 1 auto", textAlign: "left",
                     border: "none", background: "transparent", cursor: "pointer",
                     fontFamily: "inherit", color: T.text,
                   }}
                 >
-                  {/* Même couleur que la courbe du compte dans le graphique. */}
-                  <span aria-hidden style={{
-                    width: 8, height: 8, borderRadius: 999, flexShrink: 0,
-                    background: colorByAccount?.get(acc.id) || T.textSub,
-                  }} />
-                  <span style={{
-                    fontSize: 13, fontWeight: 500, minWidth: 0, flex: "1 1 auto",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
-                    {acc.name || acc.eval_account_size || "Compte"}
-                  </span>
-                  {/* Le type SANS sa taille : celle-ci est presque toujours déjà
-                      dans le nom du compte (« Topstep 50k »), et l'écrire deux
-                      fois sur la même ligne la rendait illisible. */}
-                  <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {typeLabel(acc.account_type)}
-                  </span>
-                  <span style={{
-                    fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0,
-                    fontVariantNumeric: "tabular-nums",
-                    color: v.pnl > 0 ? T.pnlPos : v.pnl < 0 ? T.pnlNeg : T.textSub,
-                  }}>
-                    {value}
-                  </span>
+                  <AccountLine
+                    /* Même couleur que la courbe du compte dans le graphique. */
+                    marker={<span aria-hidden style={{
+                      width: 8, height: 8, borderRadius: 999, flexShrink: 0,
+                      background: colorByAccount?.get(acc.id) || T.textSub,
+                    }} />}
+                    name={acc.name || acc.eval_account_size || "Compte"}
+                    type={typeLabel(acc.account_type)}
+                    value={value}
+                    valueColor={v.pnl > 0 ? T.pnlPos : v.pnl < 0 ? T.pnlNeg : T.textSub}
+                  />
                 </button>
                 {/* `visibility` et non un démontage : les deux boutons gardent
                     leur place, sinon le montant glissait à chaque survol. */}

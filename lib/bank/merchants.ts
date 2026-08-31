@@ -21,7 +21,7 @@
  * `findMerchant` refuse de chercher, parce qu'ils portent des noms de personnes.
  *
  * Ajouter un marchand : déposer l'image dans `public/marchands/` (carrée, le
- * disque de `RoundLogo` la détoure en `cover`), ajouter une ligne dans
+ * disque de `LogoTile` la détoure en `cover`), ajouter une ligne dans
  * `MERCHANTS` avec son `logo`. Sans fichier, la pastille prend la couleur de la
  * marque et les initiales du nom : reconnaissable dans une liste, et déjà mieux
  * qu'une icône grise identique sur quinze lignes.

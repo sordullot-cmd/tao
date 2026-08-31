@@ -20,21 +20,22 @@
  */
 
 import React from "react";
-import { RoundLogo } from "@/components/ui/accountRows";
+import { LogoTile } from "@/components/ui/accountRows";
+import { tileRadius } from "@/lib/ui/tokens";
 import { inkOn, merchantInitials } from "@/lib/bank/merchants";
 
 export default function MerchantAvatar({ merchant, size = 32 }) {
   if (!merchant) return null;
 
   if (merchant.logo) {
-    return <RoundLogo src={merchant.logo} size={size} name={merchant.name} />;
+    return <LogoTile src={merchant.logo} size={size} name={merchant.name} />;
   }
 
   return (
     <span
       aria-hidden="true"
       style={{
-        width: size, height: size, borderRadius: 999, flexShrink: 0,
+        width: size, height: size, borderRadius: tileRadius(size), flexShrink: 0,
         background: merchant.color, color: inkOn(merchant.color),
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         fontSize: Math.max(10, Math.round(size * 0.34)), fontWeight: 600,

@@ -157,7 +157,7 @@ export default function UserProfile({ user, onLogout }) {
                   name="broker"
                   value={formData.broker}
                   onChange={handleChange}
-                  placeholder="e.g., Tradovate, Interactive Brokers"
+                  placeholder="e.g., Tradovate, WealthCharts"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
