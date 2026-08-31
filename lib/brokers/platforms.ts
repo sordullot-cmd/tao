@@ -43,6 +43,13 @@ export interface Platform {
    */
   hint?: "tradovate" | "mt5" | "generic";
   /**
+   * La plateforme n'offre aucun bouton d'export : son relevé se recopie à la
+   * main. L'écran d'import propose alors son convertisseur de copier-coller.
+   * Réservé à celles qui n'ont vraiment pas d'export — partout ailleurs, coller
+   * un relevé serait un détour plus fragile que déposer le fichier.
+   */
+  pasteImport?: boolean;
+  /**
    * Autres graphies reconnues, en minuscules.
    *
    * Une firme n'est pas toujours créée depuis un preset : elle peut être saisie
@@ -62,7 +69,7 @@ export const PLATFORMS: Platform[] = [
   /* Les quatre plateformes servies par les firmes futures. Leurs exports
      reprennent les colonnes Orders de Tradovate, d'où le même repli de
      parsing. */
-  { id: "alphatrader",  name: "AlphaTrader",      kind: "platform", format: "csv",  iconPath: "/brokers/alphatrader.png",    hint: "tradovate", aliases: ["alpha trader"] },
+  { id: "alphatrader",  name: "AlphaTrader",      kind: "platform", format: "csv",  iconPath: "/brokers/alphatrader.png",    hint: "tradovate", aliases: ["alpha trader"], pasteImport: true },
   { id: "quantower",    name: "Quantower",        kind: "platform", format: "csv",  iconPath: "/brokers/quantower.svg",      hint: "tradovate" },
   { id: "deepchart",    name: "DeepChart",        kind: "platform", format: "csv",  iconPath: "/brokers/deepchart.png",      hint: "tradovate", aliases: ["deep chart"] },
   { id: "tradesea",     name: "TradeSea",         kind: "platform", format: "csv",  iconPath: "/brokers/tradesea.jpg",       hint: "tradovate", aliases: ["trade sea"] },

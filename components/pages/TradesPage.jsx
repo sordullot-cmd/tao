@@ -926,7 +926,10 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       if (code && !seen.has(code)) seen.set(code, symbolLabel(code));
     });
     return Array.from(seen.entries())
-      .map(([code, l]) => ({ id: code, label: l.code ? `${l.name} · ${l.code}` : l.name }))
+      /* Le contrat exact quand il en existe un (« MNQU6 »), la racine sinon :
+         le filtre porte sur le symbole tel qu'il est stocké, donc deux
+         échéances doivent rester deux entrées distinguables. */
+      .map(([code, l]) => ({ id: code, label: l.code || l.name }))
       .sort((a, b) => a.label.localeCompare(b.label, "fr"));
   }, [trades]);
   const accountOptions = React.useMemo(
@@ -1563,7 +1566,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                <SymbolCell symbol={t.symbol} size={28} nameSize={14} inline />
+                                <SymbolCell symbol={t.symbol} size={28} nameSize={14} />
                                 <DirectionTag direction={t.direction} />
                                 {isGroupParent && groupSize > 1 && (
                                   /* Un lot d'exécutions se signale par son

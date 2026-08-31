@@ -162,7 +162,7 @@ const COLUMN_DEFS = {
     label: "Instrument",
     // Le code repasse sous le nom : dans une colonne de largeur égale aux
     // autres, les deux ne tiennent pas côte à côte.
-    cell: (c) => <SymbolCell symbol={c.tr.symbol} size={24} nameSize={13} gap={8} />,
+    cell: (c) => <SymbolCell symbol={c.tr.symbol} size={24} nameSize={13} />,
     wrap: { display: "flex", alignItems: "center" },
   },
   direction: {

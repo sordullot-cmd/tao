@@ -28,12 +28,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Check, ChevronDown, ChevronUp, FileText, Search, Star, UploadCloud, X,
+  Check, ChevronDown, ChevronUp, ClipboardPaste, FileText, Search, Star, UploadCloud, X,
   AlertCircle, CheckCircle2, Wallet,
 } from "lucide-react";
 import { t, useLang, getLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { parseCSV } from "@/lib/csvParsers";
+import { parseAlphaFuturesPaste } from "@/lib/brokers/alphaFuturesPaste";
 import { firmBrandId } from "@/lib/accountBrand";
 import {
   EXECUTION_PLATFORMS,
@@ -633,6 +634,19 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
   const fileInputRef = useRef(null);
   /* Survol du glisser-déposer : un state, pas une mutation de `style`. */
   const [dragOver, setDragOver] = useState(false);
+  /* Convertisseur de copier-coller. Certaines plateformes (AlphaTrader) n'ont
+     aucun bouton d'export : le relevé se sélectionne à la souris. La zone de
+     texte remplace alors la zone de dépôt — là où il n'y a pas de fichier,
+     en proposer une n'offre qu'une impasse.
+
+     Le collage converti entre dans `files` comme un fichier ordinaire : le
+     décompte, l'import et l'anti-doublons n'ont pas à savoir d'où vient leur
+     contenu. Marqué `pasted` pour être remplacé à chaque frappe plutôt
+     qu'accumulé, et pour rester hors de la liste des fichiers — la zone de
+     texte est déjà sous les yeux. */
+  const [pasteText, setPasteText] = useState("");
+  const paste = React.useMemo(() => parseAlphaFuturesPaste(pasteText), [pasteText]);
+  const droppedFiles = files.filter((f) => !f.pasted);
 
   /* Firme visée par l'import : celle choisie comme destination, ou celle du
      compte visé. C'est elle qui décide des plateformes offertes — proposer
@@ -753,6 +767,19 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
   };
 
   const removeFile = (name) => setFiles((prev) => prev.filter((f) => f.name !== name));
+
+  /* Un seul fichier de collage à la fois : on remplace, jamais on n'empile.
+     Vidé quand plus rien n'est lisible, sinon un ancien collage resterait
+     compté alors que la zone montre autre chose. */
+  useEffect(() => {
+    setFiles((prev) => {
+      const others = prev.filter((f) => !f.pasted);
+      if (paste.rows.length === 0) {
+        return others.length === prev.length ? prev : others;
+      }
+      return [...others, { name: paste.fileName, content: paste.csv, pasted: true }];
+    });
+  }, [paste]);
 
   const handleImport = async () => {
     if (targetIds.length === 0) {
@@ -917,6 +944,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
 
       setTargetIds([]);
       setFiles([]);
+      setPasteText("");
       setError("");
       setSuccessMsg(
         t("addTrade.info.imported")
@@ -946,13 +974,8 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
       {/* ─── En-tête ─── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-          <h1 style={{ ...TYPE.title2, color: T.text, margin: 0 }}>{t("addTrade.title")}</h1>
-          <p style={{ ...TYPE.callout, fontWeight: 400, color: T.textSub, margin: 0 }}>
-            {t("addTrade.pageSubtitle")}
-          </p>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <h1 style={{ ...TYPE.title2, color: T.text, margin: 0 }}>{t("addTrade.title")}</h1>
         {/* La création de comptes ne se fait pas ici : cette page n'en modifie
             aucun, elle y écrit. Le renvoi reste à portée pour le cas où la
             destination manque. */}
@@ -1036,7 +1059,106 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
 
           <Divider />
 
-          {/* ── Le fichier ── */}
+          {/* ── Le fichier, ou le collage ──
+              AlphaTrader n'exporte rien : son relevé se recopie à la main. La
+              zone de texte ne s'ajoute donc pas à la zone de dépôt, elle la
+              REMPLACE — deux chemins pour un seul geste possible feraient
+              hésiter sur celui qui marche. */}
+          {platform?.pasteImport ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* La zone de collage EST la zone de dépôt : mêmes aplat, rayon,
+                  hauteur, icône et paliers de texte. Rien ne distingue les deux
+                  marches du parcours, parce que c'en est une seule — seul le
+                  geste attendu change.
+
+                  L'habillage reste dans le flux et c'est LUI qui donne sa
+                  hauteur au bloc ; le champ vient par-dessus, transparent. Un
+                  `minHeight` recopié à la main aurait dérivé de la zone de dépôt
+                  au premier ajustement de l'une des deux. */}
+              <div style={{ position: "relative" }}>
+                <div
+                  aria-hidden="true"
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "center",
+                    gap: 5, padding: "34px 20px", borderRadius: 14,
+                    background: FIELD_BG,
+                    /* Masqué, pas démonté : le bloc garde la taille du bloc
+                       d'import une fois le relevé collé. */
+                    visibility: pasteText === "" ? "visible" : "hidden",
+                  }}
+                >
+                  <ClipboardPaste size={22} strokeWidth={1.5} color={T.textSub} />
+                  <span style={{ ...TYPE.callout, color: T.text }}>{t("addTrade.paste.title")}</span>
+                  <span style={{ ...TYPE.label, color: T.textSub }}>{t("addTrade.paste.hint")}</span>
+                </div>
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  aria-label={t("addTrade.paste.field")}
+                  style={{
+                    ...FIELD,
+                    position: "absolute", inset: 0, height: "100%",
+                    borderRadius: 14, padding: "34px 20px",
+                    /* L'habillage dessous porte déjà l'aplat : deux fois le même
+                       gris l'assombrirait. */
+                    background: "transparent",
+                    resize: "none",
+                    /* Vide, le curseur se pose au milieu du bloc, sous le
+                       libellé centré. Rempli, le relevé reprend ses colonnes :
+                       chasse fixe, aligné à gauche, sans retour à la ligne —
+                       seul moyen de voir qu'une ligne a été tronquée à la
+                       copie. */
+                    textAlign: pasteText === "" ? "center" : "left",
+                    fontFamily: pasteText === "" ? "inherit" : "var(--font-mono, monospace)",
+                    whiteSpace: pasteText === "" ? "normal" : "pre",
+                    overflow: "auto",
+                    lineHeight: 1.6,
+                  }}
+                />
+              </div>
+              {paste.skipped.length > 0 && (
+                <span style={{ ...TYPE.caption, color: T.textMut, padding: "0 4px" }}>
+                  {t("addTrade.paste.skipped").replace("{n}", String(paste.skipped.length))}
+                </span>
+              )}
+
+              {/* Rien de lisible alors qu'on a collé quelque chose : le dire
+                  ici, contre la zone, et non dans le bandeau d'erreur du bas
+                  qui parle de l'import. */}
+              {pasteText.trim() !== "" && paste.rows.length === 0 && (
+                <span role="status" style={{ ...TYPE.label, color: T.textSub, padding: "0 4px" }}>
+                  {t("addTrade.paste.empty")}
+                </span>
+              )}
+
+              {/* Cinq lignes suffisent à vérifier que les colonnes sont tombées
+                  en face : au-delà, on relit le relevé entier. */}
+              {paste.rows.slice(0, 5).map((r) => (
+                <div
+                  key={r.tradeId || `${r.entryTimestamp}-${r.entry}`}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, minHeight: 34,
+                    padding: "0 12px", borderRadius: 10, background: FIELD_BG,
+                    ...TYPE.caption, color: T.textSub,
+                  }}
+                >
+                  <span style={{ ...TABULAR }}>{r.date}</span>
+                  <span style={{ color: T.text, fontWeight: 600 }}>{r.symbol}</span>
+                  <span style={{ color: r.direction === "Long" ? T.green : T.red }}>{r.direction}</span>
+                  <span style={{ ...TABULAR }}>{r.entryTime} → {r.exitTime}</span>
+                  <span style={{ ...TABULAR, marginLeft: "auto", color: r.pnl >= 0 ? T.green : T.red }}>
+                    {r.pnl >= 0 ? "+" : ""}{r.pnl.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+              {paste.rows.length > 5 && (
+                <span style={{ ...TYPE.caption, color: T.textMut, padding: "0 4px" }}>
+                  {t("addTrade.paste.more").replace("{n}", String(paste.rows.length - 5))}
+                </span>
+              )}
+            </div>
+          ) : (
+            <>
           <input
             ref={fileInputRef}
             type="file"
@@ -1093,9 +1215,12 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
             <span style={{ ...TYPE.caption, color: T.textMut }}>{t("addTrade.fileTypes")}</span>
           </button>
 
-          {files.length > 0 && (
+            </>
+          )}
+
+          {droppedFiles.length > 0 && (
             <div className="anim-fade-up" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {files.map((f) => (
+              {droppedFiles.map((f) => (
                 <div key={f.name} style={{
                   display: "flex", alignItems: "center", gap: 10, minHeight: 44,
                   padding: "0 6px 0 12px", borderRadius: 10, background: FIELD_BG,

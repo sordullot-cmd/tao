@@ -467,18 +467,37 @@ export function forexPair(symbol) {
 }
 
 /**
- * Décompose un symbole en nom lisible + code, comme dans la maquette
- * (« Nasdaq » au-dessus de « MNQU6 »). Sans correspondance connue, le code
- * seul est affiché plutôt qu'un libellé inventé.
+ * Racine d'un contrat : « CM.MNQM6 » → « MNQ ». Le préfixe de plateforme et le
+ * code d'échéance (mois trimestriel + année) ne disent rien de l'instrument —
+ * c'est la même découpe que celle des imports CSV (lib/csvParsers), pour que
+ * l'écran et les données parlent du même « MNQ ».
+ */
+export function baseSymbol(symbol) {
+  return String(symbol || "").trim().toUpperCase()
+    .replace(/^CM\./, "")
+    .replace(/[HMUZ]\d{1,2}$/, "");
+}
+
+/**
+ * Décompose un symbole en libellé affiché + contrat exact.
+ *
+ * `name` est le SYMBOLE, pas le nom de l'indice : la maquette empilait
+ * « Nasdaq » sur « MNQ », or c'est « MNQ » qu'on cherche dans une liste de
+ * trades — le nom long occupait la ligne de tête pour une information que la
+ * pastille de couleur donne déjà.
+ *
+ * `code` ne survit que s'il ajoute quelque chose au symbole de base : il
+ * distingue deux échéances (« MNQU6 » et « MNQZ5 » ont la même racine) là où
+ * un choix se ferait à l'aveugle, et vaut `null` partout ailleurs.
  */
 export function symbolLabel(symbol) {
   const code = String(symbol || "").trim();
-  const known = SYMBOL_LOGOS.find(l => l.match.test(code));
-  if (known) return { name: known.name, code };
-  // Paire de devises : « EURUSD » se lit « EUR/USD ».
+  // Paire de devises : « EURUSD » se lit « EUR/USD », il n'y a pas d'échéance.
   const pair = forexPair(code);
-  if (pair) return { name: `${pair.base}/${pair.quote}`, code };
-  return { name: code, code: null };
+  if (pair) return { name: `${pair.base}/${pair.quote}`, code: null };
+  const base = baseSymbol(code);
+  if (!base) return { name: code, code: null };
+  return { name: base, code: base === code.toUpperCase() ? null : code };
 }
 
 /**
@@ -576,30 +595,28 @@ export function SymbolBadge({ symbol, size = 32 }) {
 }
 
 /**
- * Cellule « instrument » de la maquette : vignette ronde + nom (16 Medium) au
- * dessus du code (12 Regular atténué). Source unique pour la page Trades, le
- * dashboard et le détail d'un compte, qui affichaient trois variantes du même
- * bloc.
+ * Cellule « instrument » : vignette ronde + le SYMBOLE seul (16 Medium). Source
+ * unique pour la page Trades, le dashboard et le détail d'un compte, qui
+ * affichaient trois variantes du même bloc.
+ *
+ * Une seule ligne, plus l'empilement « Nasdaq » / « MNQ » de la maquette : les
+ * deux disaient la même chose, et le nom de l'indice — la seule des deux
+ * lignes qui ne soit pas ce qu'on lit dans son journal — occupait la grande.
+ * La pastille de couleur porte déjà l'identité de l'instrument.
+ *
+ * D'où la disparition de la prop `inline` : elle ne servait qu'à rabattre les
+ * deux lignes en une pour les listes compactes.
  */
-export function SymbolCell({ symbol, size = 32, gap = 8, nameSize = 16, inline = false }) {
-  const { name, code } = symbolLabel(symbol);
-  // `inline` : nom et code sur une seule ligne (listes compactes) au lieu de
-  // l'empilement de la maquette. Même composant, deux densités.
+/* L'écart vignette ↔ symbole : 16 et non 8. Le disque plein est une masse
+   sombre, pas un glyphe — à 8 px le code paraissait posé contre lui. */
+export function SymbolCell({ symbol, size = 32, gap = 16, nameSize = 16 }) {
+  const { name } = symbolLabel(symbol);
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap,minWidth:0}}>
       <SymbolBadge symbol={symbol} size={size} />
-      <span style={{display:"flex",flexDirection:inline?"row":"column",
-                    alignItems:inline?"baseline":undefined,gap:inline?6:0,minWidth:0}}>
-        <span style={{fontSize:nameSize,fontWeight:500,lineHeight:"17.05px",color:T.text,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-          {name}
-        </span>
-        {code && (
-          <span style={{fontSize:12,lineHeight:"13.95px",color:T.textMut,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-            {code}
-          </span>
-        )}
+      <span style={{fontSize:nameSize,fontWeight:500,lineHeight:"17.05px",color:T.text,
+                    minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        {name}
       </span>
     </span>
   );

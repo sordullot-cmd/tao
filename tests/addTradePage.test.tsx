@@ -135,4 +135,57 @@ describe("écran d'ajout de trades", () => {
     expect(await screen.findByRole("button", { name: /alphatrader\s*csv/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /tradovate\s*csv/i })).toBeNull();
   });
+
+  /* Le convertisseur : AlphaTrader n'exporte aucun fichier, sa zone de dépôt
+     est remplacée par une zone de texte, et ce qu'on y colle vaut fichier. */
+  it("remplace la zone de dépôt par la zone de texte, et seulement pour AlphaTrader", async () => {
+    render(<AddTradePage {...props} />);
+    // Aucune plateforme nommée : on dépose un fichier, il n'y a rien à coller.
+    expect(screen.getByText(/drop your file here/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/statement rows/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /pick a platform/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /MetaTrader 5/i }));
+    expect(screen.queryByLabelText(/statement rows/i)).toBeNull();
+
+    /* Le champ se rouvre par son rôle : une fois MetaTrader retenu, le
+       déclencheur porte ce nom et ne se distingue plus de l'option. */
+    fireEvent.click(document.querySelector('[aria-haspopup="listbox"]') as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: /AlphaTrader/i }));
+    expect(screen.getByLabelText(/statement rows/i)).toBeTruthy();
+    expect(screen.queryByText(/drop your file here/i)).toBeNull();
+  });
+
+  it("compte les trades d'un collage sans rien demander de plus", async () => {
+    render(<AddTradePage {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /pick a platform/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /AlphaTrader/i }));
+
+    fireEvent.change(screen.getByLabelText(/statement rows/i), {
+      target: {
+        value:
+          "XCME_Eq MNQ (U26)\tLONG\t1.00\tf8124dd918905c0b\tBUY\tSELL\t$29,523.25\t$29,508.00\t-$30.50\t$1.32\t01/09/2026 12:00:11.00 AM\t01/09/2026 12:01:01.66 AM",
+      },
+    });
+
+    /* Le pied compte comme pour un fichier déposé — le mock du parseur rend
+       deux trades quel que soit le contenu, c'est la CHAÎNE qu'on vérifie :
+       le collage est bien parti au parseur. */
+    expect(await screen.findByText(/^2 trades$/)).toBeTruthy();
+    // L'aperçu, lui, vient du convertisseur et non du mock.
+    expect(screen.getByText("MNQ")).toBeTruthy();
+    expect(screen.getByText("00:00:11 → 00:01:01")).toBeTruthy();
+  });
+
+  it("ne compte rien quand le collage n'est pas lisible", async () => {
+    render(<AddTradePage {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /pick a platform/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /AlphaTrader/i }));
+
+    fireEvent.change(screen.getByLabelText(/statement rows/i), {
+      target: { value: "trois lignes de rien" },
+    });
+    expect(await screen.findByText(/no trade recognized/i)).toBeTruthy();
+    expect(screen.queryByText(/^\d+ trades$/)).toBeNull();
+  });
 });
