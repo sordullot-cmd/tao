@@ -5,6 +5,7 @@ import { T } from "@/lib/ui/tokens";
 import { TAG_COLORS } from "@/lib/ui/tradingColors";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
+import { byMostRecent } from "@/lib/tradeOrder";
 import { periodStart } from "@/lib/ui/period";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { parseAccountSize } from "@/lib/propFirms";
@@ -1154,9 +1155,11 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
             /* Douze lignes : au-delà de dix, c'est la liste qui donne sa hauteur
                à la rangée (grille en `stretch`) et le calendrier qui s'étire —
                assumé, le vide était du mauvais côté. */
-            const list = [...source]
-              .sort((a, b) => new Date(b.date) - new Date(a.date))
-              .slice(0, 12);
+            /* Tri à la seconde (lib/tradeOrder.ts) : sur la seule date, une
+               journée importée d'un coup ressortait dans l'ordre d'insertion —
+               à l'envers — et les « douze premiers » étaient les douze plus
+               anciens. */
+            const list = [...source].sort(byMostRecent).slice(0, 12);
             return (
               <TradesList
                 trades={list}

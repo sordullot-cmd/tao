@@ -5,7 +5,7 @@ import {
   Calendar as CalendarIcon,
   LogOut, AlertTriangle, Plug, Trash2, X as IconX, ExternalLink,
   Clock, MapPin, AlignLeft, Bell, ChevronDown, ChevronLeft, ChevronRight, Target, HelpCircle, Repeat,
-  Plus, CheckSquare, Square, Check, Sparkles, Sunrise,
+  Plus, CheckSquare, Square, Check, Sparkles, Sunrise, EyeOff, ListChecks,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
@@ -20,18 +20,27 @@ import Popover from "@/components/ui/Popover";
 import {
   RPG_STORAGE_KEY, RPG_CLOUD_KEY, DEFAULT_CATEGORIES, CatIcon,
   TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY,
+  EVENT_RPG_STORAGE_KEY, EVENT_RPG_CLOUD_KEY,
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
 } from "@/lib/lifeRpgCategories";
 import { GCAL_COLORS, DEFAULT_EVENT_COLOR, eventPaint, nearestGcalColorId, TASK_DEFAULT_PAINT } from "@/lib/gcalColors";
 import {
-  useIcsFeeds, useIcsEvents, useIcsEventColors, useIcsKindColors, isFeedCalendarId, courseKey,
+  useIcsFeeds, useIcsEvents, useIcsEventColors, useIcsKindColors, useIcsHiddenEvents,
+  isFeedCalendarId, courseKey,
 } from "@/lib/hooks/useIcsFeeds";
 import { courseKind, kindColorId, KIND_LABELS } from "@/lib/icsCategories";
 import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
+import { useUndo } from "@/lib/contexts/UndoContext";
 import {
   MAX_REMINDERS, normalizeReminders, remindersFromEvent,
   reminderLabel, addReminder, removeReminder,
 } from "@/lib/agendaReminders";
+import {
+  EVENT_CHECKLISTS_KEY, EVENT_CHECKLISTS_CLOUD_KEY,
+  addChecklistItem, adoptChecklist, checklistFor, checklistProgress, dropChecklist,
+  normalizeChecklistItems, normalizeChecklists, newChecklistItem,
+  removeChecklistItem, toggleChecklistItem,
+} from "@/lib/agendaChecklists";
 import {
   ALL_DAYS, ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY,
   DEFAULT_ANCHOR_MINUTES, DEFAULT_ANCHOR_TITLE, DEFAULT_SLEEP_MINUTES, DEFAULT_SLEEP_TITLE,
@@ -650,6 +659,8 @@ export default function AgendaPage() {
   // La page ne fait que LIRE les flux : leur gestion (ajout, renommage,
   // suppression) vit dans les paramètres du compte, avec les autres réglages.
   const { feeds } = useIcsFeeds();
+  const { hideEvent, showEvent } = useIcsHiddenEvents();
+  const { pushUndo } = useUndo();
   const { eventColors, setEventColor } = useIcsEventColors();
   const { kindColors, setKindColor } = useIcsKindColors();
   const [taskTimes, setTaskTimes] = useCloudState(TASK_TIMES_KEY, TASK_TIMES_CLOUD_KEY, {});
@@ -659,7 +670,19 @@ export default function AgendaPage() {
   const [rpgState] = useCloudState(RPG_STORAGE_KEY, RPG_CLOUD_KEY, { categories: DEFAULT_CATEGORIES });
   const rpgCategories = Array.isArray(rpgState.categories) ? rpgState.categories : DEFAULT_CATEGORIES;
   const [taskRpg, setTaskRpg] = useCloudState(TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY, {});
+  /* Objectifs rattachés à un ÉVÈNEMENT. Jusqu'ici la sélection ne servait qu'à
+     reprendre la couleur de la carte et repartait à la fermeture ; les étapes
+     cochées rapportent maintenant de l'XP, il faut donc savoir vers QUOI le
+     créneau fait avancer, et s'en souvenir. */
+  const [eventRpg, setEventRpg] = useCloudState(EVENT_RPG_STORAGE_KEY, EVENT_RPG_CLOUD_KEY, {});
   const [eventTaskLinks, setEventTaskLinks] = useCloudState(EVENT_TASK_LINKS_KEY, "event_task_links", {}); // évènement → ids de tâches Google
+  /* Étapes internes d'un évènement (lib/agendaChecklists.ts). Rien à voir avec
+     les tâches Google ci-dessus : celles-ci vivent dans la grille et dans la
+     liste des tâches, celles-là n'existent que dans le créneau qui les porte. */
+  const [checklistStore, setChecklistStore] = useCloudState(
+    EVENT_CHECKLISTS_KEY, EVENT_CHECKLISTS_CLOUD_KEY, {},
+  );
+  const checklists = React.useMemo(() => normalizeChecklists(checklistStore), [checklistStore]);
   // Blocs ancrés : « réveil + préparation » et consorts, qui se posent chaque
   // jour juste avant le premier élément. Locaux — Google ne saurait pas quoi
   // faire d'un évènement dont l'heure est un calcul (cf. lib/agendaAnchoredBlocks).
@@ -814,6 +837,32 @@ export default function AgendaPage() {
   const feedCourse = feedItem ? courseKey(modal.course || modal.summary) : "";
   const feedHasOwn = feedItem && !!eventColors.events[modal.id];
   const feedHasCourse = feedItem && !!eventColors.courses[feedCourse];
+
+  /* Masquer la séance qu'on regarde. Le seul geste « destructif » qu'une séance
+     importée accepte : le flux appartient à l'établissement, et supprimer
+     là-bas n'est ni possible ni souhaitable — le masque est le nôtre, et se
+     lève depuis Paramètres → Agendas. */
+  const hideFeedEvent = () => {
+    if (!feedItem) return;
+    const snapshot = {
+      id: modal.id,
+      summary: modal.summary,
+      // Le formulaire tient la date et l'heure à part : on les recompose pour
+      // que les réglages sachent dater ce qu'ils proposent de rendre.
+      start: modal.allDay ? modal.date : `${modal.date}T${modal.startTime}`,
+    };
+    hideEvent(snapshot);
+    /* Ctrl+Z rend la séance. La pile globale (lib/contexts/UndoContext.jsx)
+       tenait déjà le raccourci et le bandeau ; masquer par erreur était le seul
+       geste de cette page qu'on ne pouvait pas reprendre — la liste des
+       réglages suppose de savoir qu'elle existe. */
+    pushUndo({
+      label: `Séance « ${snapshot.summary || "sans titre"} »`,
+      undo: () => showEvent(snapshot.id),
+      redo: () => hideEvent(snapshot),
+    });
+    setModal(null);
+  };
 
   const paintFeed = (scope, colorId) => {
     if (!feedItem) return;
@@ -1008,6 +1057,9 @@ export default function AgendaPage() {
     }
     const base = item.isGTask ? formFromTaskItem(item, taskTimes) : formFromEvent(item);
     if (item.isGTask) base.rpgCategories = taskRpg[item.id]?.categories || [];
+    // Un évènement rouvre sur les objectifs qu'on lui avait donnés, sinon la
+    // sélection paraîtrait ne jamais avoir été enregistrée.
+    else if (item.id) base.rpgCategories = eventRpg[item.id]?.categories || [];
     setModal(base);
     // Évènement récurrent : la règle est portée par l'évènement maître (les
     // occurrences sont dépliées). On la récupère en arrière-plan pour pré-remplir.
@@ -1080,6 +1132,55 @@ export default function AgendaPage() {
     }
   };
   const removePendingTask = (idx) => setModal((m) => ({ ...m, pendingTasks: (m.pendingTasks || []).filter((_, i) => i !== idx) }));
+
+  /* ── Étapes de l'évènement ouvert ──────────────────────────────────────────
+     Un évènement déjà enregistré a un id : ses étapes vont droit au magasin, et
+     s'appliquent sans « Enregistrer » — comme la couleur d'une séance importée,
+     qui n'a d'ailleurs pas de bouton d'enregistrement du tout.
+
+     Un évènement en cours de CRÉATION n'a pas encore d'id (c'est Google qui le
+     donne). Ses étapes attendent donc dans le formulaire, et `save()` les pose
+     sous l'id définitif. Une seule branche ici, pour que le reste de l'écran
+     n'ait jamais à savoir dans lequel des deux cas il se trouve. */
+  const modalChecklist = React.useMemo(
+    () => (modal?.id ? checklistFor(checklists, modal.id) : normalizeChecklistItems(modal?.checklist)),
+    [modal?.id, modal?.checklist, checklists],
+  );
+  const [checklistDraft, setChecklistDraft] = React.useState("");
+
+  const addChecklistStep = () => {
+    const text = checklistDraft.trim();
+    if (!text || !modal) return;
+    setChecklistDraft("");
+    if (modal.id) setChecklistStore((prev) => addChecklistItem(normalizeChecklists(prev), modal.id, text));
+    else {
+      const item = newChecklistItem(text);
+      if (item) setModal((m) => ({ ...m, checklist: [...normalizeChecklistItems(m.checklist), item] }));
+    }
+  };
+
+  /* Cocher depuis la grille : le modal n'est pas ouvert, on vise donc
+     l'évènement par son id plutôt que par `modal`. */
+  const toggleEventStep = (eventId, itemId) =>
+    setChecklistStore((prev) => toggleChecklistItem(normalizeChecklists(prev), eventId, itemId));
+
+  const toggleChecklistStep = (itemId) => {
+    if (!modal) return;
+    if (modal.id) setChecklistStore((prev) => toggleChecklistItem(normalizeChecklists(prev), modal.id, itemId));
+    else setModal((m) => ({
+      ...m,
+      checklist: normalizeChecklistItems(m.checklist).map((i) => (i.id === itemId ? { ...i, done: !i.done } : i)),
+    }));
+  };
+
+  const removeChecklistStep = (itemId) => {
+    if (!modal) return;
+    if (modal.id) setChecklistStore((prev) => removeChecklistItem(normalizeChecklists(prev), modal.id, itemId));
+    else setModal((m) => ({
+      ...m,
+      checklist: normalizeChecklistItems(m.checklist).filter((i) => i.id !== itemId),
+    }));
+  };
   const toggleLinkedTask = async (task) => {
     setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, completed: !task.completed } : x)));
     try { await toggleTask(task.id, !task.completed); } catch { loadTasks(); }
@@ -1415,6 +1516,23 @@ export default function AgendaPage() {
         // Tâches en attente (ajoutées sur un nouvel évènement) : on crée les
         // vraies Google Tasks une fois l'id de l'évènement connu, puis on les lie.
         const savedId = modal.id || res?.event?.id;
+        /* Les étapes saisies avant que l'évènement existe : c'est ici, et
+           seulement ici, qu'on connaît enfin son identifiant. */
+        if (savedId && !modal.id) {
+          setChecklistStore((prev) => adoptChecklist(normalizeChecklists(prev), modal.checklist, savedId));
+        }
+        /* Objectifs du créneau : ce sont eux qui disent où va l'XP des étapes.
+           Le titre est gardé à côté pour le journal de la Vie RPG, qui ne lit
+           pas l'agenda. */
+        if (savedId) {
+          const eventCats = Array.isArray(modal.rpgCategories) ? modal.rpgCategories.filter(Boolean) : [];
+          setEventRpg((prev) => {
+            const next = { ...(prev || {}) };
+            if (eventCats.length) next[savedId] = { categories: eventCats, title: modal.summary || "" };
+            else delete next[savedId];
+            return next;
+          });
+        }
         const pending = (modal.pendingTasks || []).map((s) => String(s).trim()).filter(Boolean);
         if (savedId && pending.length) {
           const newIds = [];
@@ -1465,6 +1583,10 @@ export default function AgendaPage() {
         await loadTasks();
       } else {
         await deleteEvent(modal.id, modal.calendarId);
+        // Les étapes s'en vont avec leur évènement : gardées, elles
+        // reviendraient sur un futur évènement qui hériterait de cet id.
+        setChecklistStore((prev) => dropChecklist(normalizeChecklists(prev), modal.id));
+        setEventRpg((prev) => { const next = { ...(prev || {}) }; delete next[modal.id]; return next; });
         // Retire l'association évènement → tâches (les tâches Google restent).
         setEventTaskLinks((prev) => { if (!prev[modal.id]) return prev; const map = { ...prev }; delete map[modal.id]; return map; });
         setModal(null);
@@ -1869,6 +1991,17 @@ export default function AgendaPage() {
                           const height = Math.max((segs.length === 1 ? Math.max(full, 16) : full) - gapTop - gapBottom, 6);
                           const left = seg.col * colW;
                           const w = seg.span * colW;
+                          /* Étapes du créneau, et ce qui tient dedans. Calculé
+                             ici et pas dans le JSX : le titre affiche le reste
+                             en chiffres, et deux calculs séparés auraient fini
+                             par se contredire. 15 px par ligne, sous le titre
+                             et l'heure. */
+                          const steps = first ? checklistFor(checklists, ev.id) : [];
+                          const stepsRoom = (first && !compact && steps.length)
+                            ? Math.floor((height - (headH > 28 ? 30 : 16)) / 15)
+                            : 0;
+                          const stepsShown = stepsRoom > 0 ? steps.slice(0, stepsRoom) : [];
+                          const stepsLeft = steps.length - stepsShown.length;
                           return (
                             <div key={i}
                               onPointerDown={(e) => { e.stopPropagation(); startMove(e, ev, d); }}
@@ -1903,11 +2036,77 @@ export default function AgendaPage() {
                                       et rien d'autre dans la grille ne bouge tout seul. */}
                                   {ev.isAnchored && <Sunrise size={11} strokeWidth={2.2} color={txtCol} style={{ flexShrink: 0 }} />}
                                   <span style={{ fontSize: 10, fontWeight: 600, color: txtCol, textDecoration: ev.isTask && ev.done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.summary}</span>
+                                  {/* L'avancement en chiffres, mais seulement
+                                      quand les étapes ne tiennent pas toutes
+                                      dans le bloc : sous elles il ferait
+                                      doublon, à leur place il est le seul
+                                      indice qu'un créneau en porte. */}
+                                  {stepsLeft > 0 && (() => {
+                                    const p = checklistProgress(steps);
+                                    return (
+                                      <span style={{
+                                        // 10 px : le plus petit cran de
+                                        // l'échelle (lib/ui/type.ts), déjà
+                                        // celui du titre et de l'heure du bloc.
+                                        fontSize: 10, fontWeight: 600, color: txtCol, opacity: 0.7,
+                                        flexShrink: 0, fontVariantNumeric: "tabular-nums",
+                                      }}>
+                                        {p.done}/{p.total}
+                                      </span>
+                                    );
+                                  })()}
                                 </span>
                               )}
                               {first && (compact
                                 ? <span style={{ fontSize: 10, color: txtCol, flexShrink: 0, whiteSpace: "nowrap", opacity: 0.8 }}>{timeLbl}</span>
                                 : (headH > 28 && <span style={{ fontSize: 10, color: txtCol, opacity: 0.8 }}>{timeLbl}</span>))}
+
+                              {/* Les étapes, à même le bloc. Le compteur seul
+                                  disait qu'il y en avait ; il fallait ouvrir
+                                  pour savoir lesquelles — or c'est justement
+                                  pendant le créneau qu'on veut les lire.
+
+                                  Seulement là où il y a la place : sous 30 min
+                                  le bloc n'a qu'une ligne, et en écrire trois
+                                  hors de ses bornes les ferait flotter sur le
+                                  créneau suivant. On n'affiche que ce qui tient,
+                                  et le compteur dit le reste. */}
+                              {stepsShown.length > 0 && (
+                                  <div style={{ display: "flex", flexDirection: "column", minWidth: 0, marginTop: 1 }}>
+                                    {stepsShown.map((item) => (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        /* Le bloc entier est une poignée de
+                                           déplacement : sans ces deux arrêts,
+                                           cocher une étape traînait le créneau. */
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => { e.stopPropagation(); toggleEventStep(ev.id, item.id); }}
+                                        title={item.text}
+                                        style={{
+                                          display: "flex", alignItems: "center", gap: 4, minWidth: 0,
+                                          border: "none", background: "transparent", padding: 0,
+                                          height: 15, cursor: "pointer", fontFamily: "inherit",
+                                          textAlign: "left", color: txtCol,
+                                        }}
+                                      >
+                                        <span style={{ flexShrink: 0, display: "inline-flex", opacity: item.done ? 0.9 : 0.55 }}>
+                                          {item.done
+                                            ? <Check size={10} strokeWidth={3} />
+                                            : <Square size={9} strokeWidth={2.4} />}
+                                        </span>
+                                        <span style={{
+                                          fontSize: 10, minWidth: 0,
+                                          opacity: item.done ? 0.55 : 0.9,
+                                          textDecoration: item.done ? "line-through" : "none",
+                                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                        }}>
+                                          {item.text}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                              )}
                               {last && <div onPointerDown={(e) => startResize(e, ev, d, "bottom")} onClick={(e) => e.stopPropagation()} style={handleStyle("bottom")} />}
                             </div>
                           );
@@ -2188,6 +2387,17 @@ export default function AgendaPage() {
                 background: (dragHover || modalDragging) ? T.textMut : T.border,
                 transition: "background-color 120ms ease",
               }} />
+              {/* Une séance importée ne se supprime pas, elle se masque : même
+                  place, même geste, mais l'icône dit bien que le cours reste
+                  dans le flux de l'établissement. */}
+              {feedItem && (
+                <button onMouseDown={(e) => e.stopPropagation()} onClick={hideFeedEvent}
+                  aria-label="Masquer cette séance" title="Masquer cette séance" style={topIconBtn}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.text; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMut; }}>
+                  <EyeOff size={15} strokeWidth={1.9} />
+                </button>
+              )}
               {modal.id && !isLocked(modal) && (
                 <button onMouseDown={(e) => e.stopPropagation()} onClick={removeModal} disabled={saving} aria-label="Supprimer" title="Supprimer" style={topIconBtn}
                   onMouseEnter={(e) => { e.currentTarget.style.background = T.accentBg; e.currentTarget.style.color = T.red; }}
@@ -2675,6 +2885,71 @@ export default function AgendaPage() {
                 </FormRow>
               )}
 
+              {/* Étapes de l'évènement — ce qu'on fait PENDANT le créneau.
+                  Offertes aussi sur une séance importée : elles ne touchent
+                  pas au flux, elles vivent à côté. Le mode tâche en est privé
+                  (une tâche n'a pas de créneau à découper) et les blocs ancrés
+                  aussi. */}
+              {!modal.anchored && !(modal.kind === "task" || modalTab === "tasks") && (
+                <FormRow icon={ListChecks} top>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {modalChecklist.map((item) => (
+                      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 30 }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleChecklistStep(item.id)}
+                          aria-label={item.done ? `Rouvrir : ${item.text}` : `Terminer : ${item.text}`}
+                          style={{
+                            border: "none", background: "transparent", padding: 0, cursor: "pointer",
+                            display: "inline-flex", alignItems: "center", color: item.done ? T.blue : T.textMut,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.done
+                            ? <CheckSquare size={16} strokeWidth={1.9} />
+                            : <Square size={16} strokeWidth={1.9} />}
+                        </button>
+                        <span style={{
+                          flex: 1, minWidth: 0, fontSize: 14,
+                          color: item.done ? T.textMut : T.text,
+                          textDecoration: item.done ? "line-through" : "none",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {item.text}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeChecklistStep(item.id)}
+                          aria-label={`Retirer : ${item.text}`}
+                          style={{
+                            border: "none", background: "transparent", padding: 2, cursor: "pointer",
+                            color: T.textMut, display: "inline-flex", alignItems: "center",
+                            borderRadius: 6, flexShrink: 0,
+                          }}
+                        >
+                          <IconX size={13} strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))}
+                    {/* Entrée ajoute et laisse le curseur en place : on écrit
+                        trois étapes à la suite sans reprendre la souris. */}
+                    <input
+                      value={checklistDraft}
+                      onChange={(e) => setChecklistDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        addChecklistStep();
+                      }}
+                      onBlur={addChecklistStep}
+                      placeholder={modalChecklist.length ? "Ajouter une étape" : "Découper en étapes (lire, noter, présenter…)"}
+                      aria-label="Ajouter une étape"
+                      style={rowInp}
+                    />
+                  </div>
+                </FormRow>
+              )}
+
               {/* Couleur */}
               <FormRow icon={CalendarIcon}>
                 <div ref={colorAnchor} data-menu-root style={{ position: "relative" }}>
@@ -2858,8 +3133,11 @@ export default function AgendaPage() {
               )}
 
               {/* Objectifs de l'année (cartes de la Quête de soi). Pour une tâche :
-                  la terminer fait progresser chaque objectif lié. Pour un évènement :
-                  aucun XP, la sélection sert seulement à reprendre sa couleur. */}
+                  la terminer fait progresser chaque objectif lié. Pour un
+                  évènement : chaque ÉTAPE cochée crédite `EVENT_STEP_XP` à
+                  chacune des cartes liées — un créneau n'est pas terminé d'un
+                  coup, il avance par ce qu'on y fait. La sélection reprend
+                  toujours la couleur de la carte au passage. */}
               {!modal.anchored && (
               <FormRow icon={Sparkles} top>
                   <div>

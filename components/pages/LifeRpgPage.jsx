@@ -41,6 +41,9 @@ import {
   CalendarClock, ChevronRight, Flag,
 } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
+import {
+  EVENT_CHECKLISTS_KEY, EVENT_CHECKLISTS_CLOUD_KEY, checkedStepsFor,
+} from "@/lib/agendaChecklists";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
 import { SkeletonScreen, SkeletonCard, SkeletonList, SkeletonStats, Skeleton } from "@/components/ui/Skeleton";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
@@ -78,6 +81,7 @@ import {
      liste de teintes pour les catégories contre un jeu de couleurs nommées. */
   CATEGORY_PALETTE, DEFAULT_CATEGORIES, habitCategoryIds,
   TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY, TASK_XP,
+  EVENT_RPG_STORAGE_KEY, EVENT_RPG_CLOUD_KEY, EVENT_STEP_XP,
   TASK_TIMES_STORAGE_KEY, TASK_TIMES_CLOUD_KEY,
   DISCIPLINE_RULE_XP, resolveTradingCatId,
   MAX_YEAR_GOALS, YEAR_GOAL_TEMPLATES, pickTopYearGoals,
@@ -175,7 +179,7 @@ function categoryLevel(xp) {
   return { level: info.level, intoLevel: info.intoLevel, neededForNext: info.neededForNext, levelPct: info.pct };
 }
 
-function computeProgress(habits, history, goals = [], trades = [], accounts = [], taskRpg = {}, disciplineData = {}, categories = []) {
+function computeProgress(habits, history, goals = [], trades = [], accounts = [], taskRpg = {}, disciplineData = {}, categories = [], eventSteps = []) {
   const attributes = {};
   // Catégorie « Trading » réelle (par libellé/id) — l'XP de discipline y est
   // créditée plutôt qu'à un id figé, pour ne pas la disperser sur un doublon.
@@ -244,6 +248,20 @@ function computeProgress(habits, history, goals = [], trades = [], accounts = []
     totalXp += TASK_XP;
     for (const cid of cats) attributes[cid] = (attributes[cid] || 0) + TASK_XP;
     activityLog.push({ ts: entry.completedAt, label: entry.title || "Tâche", xp: TASK_XP, attribute: cats[0] || null });
+  }
+  /* XP des ÉTAPES D'UN CRÉNEAU : `EVENT_STEP_XP` par case cochée dans un
+     évènement d'agenda rattaché à des cartes, crédité à chacune d'elles. Une
+     case n'appartient qu'à un évènement et n'est cochée qu'une fois → source
+     indépendante des tâches, habitudes, objectifs et discipline, donc aucun
+     double comptage. */
+  for (const step of (eventSteps || [])) {
+    const cats = (step.categories || []).filter(Boolean);
+    if (!cats.length) continue;
+    totalXp += EVENT_STEP_XP;
+    for (const cid of cats) attributes[cid] = (attributes[cid] || 0) + EVENT_STEP_XP;
+    // Sans date de coche (étape cochée avant qu'on les date), l'XP compte mais
+    // la ligne n'entre pas au journal : elle s'y rangerait n'importe où.
+    if (step.ts) activityLog.push({ ts: step.ts, label: step.label, xp: EVENT_STEP_XP, attribute: cats[0] });
   }
   // XP des ÉTAPES franchies : `STEP_XP` par jalon coché, crédité à l'objectif
   // de l'année qui le porte. Une étape n'est cochée qu'une fois et n'est
@@ -391,6 +409,12 @@ export default function LifeRpgPage() {
   // terminées et liées créditent de l'XP. On peut désormais en créer ici (une
   // tâche rattachée à une carte), d'où l'accès en écriture.
   const [taskRpg, setTaskRpg] = useCloudState(TASK_RPG_STORAGE_KEY, TASK_RPG_CLOUD_KEY, {});
+  /* Les deux magasins que l'agenda écrit pour les créneaux : les étapes et les
+     objectifs qu'ils font avancer. Lus ici, jamais écrits — la Vie RPG compte,
+     l'agenda décide. */
+  const [checklistStore] = useCloudState(EVENT_CHECKLISTS_KEY, EVENT_CHECKLISTS_CLOUD_KEY, {});
+  const [eventRpg] = useCloudState(EVENT_RPG_STORAGE_KEY, EVENT_RPG_CLOUD_KEY, {});
+  const eventSteps = useMemo(() => checkedStepsFor(checklistStore, eventRpg), [checklistStore, eventRpg]);
   // Jour de planification des tâches (écrit aussi par l'Agenda) : une tâche créée
   // ici avec une date y est posée pour apparaître dans le calendrier ; on le lit
   // aussi pour afficher la date des tâches sur les cartes.
@@ -480,7 +504,7 @@ export default function LifeRpgPage() {
   const habitsList = useMemo(() => (Array.isArray(habits) ? habits : []), [habits]);
   const goalsList = useMemo(() => (Array.isArray(goals) ? goals : []), [goals]);
 
-  const progress = useMemo(() => computeProgress(habitsList, habitHistory, goalsList, trades, accounts, taskRpg, disciplineData, categories), [habitsList, habitHistory, goalsList, trades, accounts, taskRpg, disciplineData, categories]);
+  const progress = useMemo(() => computeProgress(habitsList, habitHistory, goalsList, trades, accounts, taskRpg, disciplineData, categories, eventSteps), [habitsList, habitHistory, goalsList, trades, accounts, taskRpg, disciplineData, categories, eventSteps]);
   // Objectifs liés, regroupés par catégorie, avec leur avancement (pour les cartes).
   const goalsByCat = useMemo(() => {
     const map = {};

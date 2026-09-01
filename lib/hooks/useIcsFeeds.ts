@@ -32,6 +32,9 @@ export const ICS_KIND_COLORS_CLOUD_KEY = "ics_kind_colors";
 export const ICS_EVENT_COLORS_KEY = "tr4de_ics_event_colors";
 export const ICS_EVENT_COLORS_CLOUD_KEY = "ics_event_colors";
 
+export const ICS_HIDDEN_KEY = "tr4de_ics_hidden";
+export const ICS_HIDDEN_CLOUD_KEY = "ics_hidden";
+
 /** Palette d'attribution : couleurs distinctes de la teinte par défaut des évènements Google. */
 const FEED_COLORS = ["#B45309", "#7C3AED", "#0E7490", "#BE123C", "#15803D", "#A16207"];
 
@@ -240,6 +243,92 @@ export function useIcsEventColors() {
   return { eventColors: colors, setEventColor, resetEventColors };
 }
 
+/* ── Séances masquées ────────────────────────────────────────────────────────
+   Un flux distant ne se modifie pas : le cours qu'on ne suit pas, le TP annulé,
+   la permanence qui ne concerne pas son groupe restent dans le `.ics` de
+   l'établissement et reviendraient au premier rafraîchissement. Le masquage est
+   donc le nôtre — une liste posée par-dessus le flux, qui vit dans
+   `user_productivity` comme les couleurs.
+
+   La portée est la SÉANCE, pas la matière : c'est le grain que les exports
+   d'emploi du temps rendent fiable, puisqu'ils dépliaient déjà chaque séance en
+   un `VEVENT` d'UID propre (lib/ics.ts n'interprète aucune `RRULE`). Masquer
+   une matière entière demanderait la clé `courseKey`, comme les couleurs le
+   font — rien n'empêche de l'ajouter le jour où le besoin vient.
+
+   On garde le libellé et la date au moment du masquage, et pas seulement
+   l'identifiant : une séance masquée est justement celle qui n'apparaît plus
+   nulle part, et sans eux les réglages n'auraient qu'une suite d'UID à offrir
+   pour la rendre.
+
+   Rien n'expire tout seul : une séance oubliée à la fin du semestre ne gêne
+   personne (sa date est passée), et une purge automatique risquerait surtout de
+   ressusciter un cours qu'on avait écarté. Les réglages offrent de tout
+   réafficher d'un coup. */
+
+/** Ce qu'on retient d'une séance masquée : de quoi la nommer pour la rendre. */
+export interface IcsHiddenEvent {
+  summary: string;
+  /** Début ISO, tel que le flux l'a donné. */
+  start: string;
+}
+
+/** Séances masquées, indexées par identifiant de séance (`feedId:uid`). */
+export type IcsHidden = Record<string, IcsHiddenEvent>;
+
+const NO_HIDDEN: IcsHidden = {};
+
+function normalizeHidden(raw: unknown): IcsHidden {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return NO_HIDDEN;
+  const out: IcsHidden = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key) continue;
+    /* Tolérance à une forme plus ancienne : une valeur qui n'est pas un objet
+       (un `true`, un libellé nu) vaut masquage, sans nom à afficher. */
+    const v = (value && typeof value === "object" && !Array.isArray(value))
+      ? (value as Record<string, unknown>)
+      : {};
+    out[key] = {
+      summary: String(v.summary ?? (typeof value === "string" ? value : "")),
+      start: String(v.start ?? ""),
+    };
+  }
+  return out;
+}
+
+export function useIcsHiddenEvents() {
+  const [stored, setStored] = useCloudState<IcsHidden>(
+    ICS_HIDDEN_KEY, ICS_HIDDEN_CLOUD_KEY, NO_HIDDEN,
+  );
+  const hidden = useMemo(() => normalizeHidden(stored), [stored]);
+
+  /** Masque UNE séance. On lui prend son nom et sa date au passage. */
+  const hideEvent = useCallback(
+    (event: { id?: string; summary?: string; start?: string } | null | undefined) => {
+      const id = String(event?.id || "");
+      if (!id) return;
+      setStored((prev) => normalizeHidden({
+        ...normalizeHidden(prev),
+        [id]: { summary: String(event?.summary || ""), start: String(event?.start || "") },
+      }));
+    },
+    [setStored],
+  );
+
+  const showEvent = useCallback(
+    (id: string) => setStored((prev) => {
+      const next = normalizeHidden(prev);
+      delete next[id];
+      return next;
+    }),
+    [setStored],
+  );
+
+  const showAllEvents = useCallback(() => setStored(NO_HIDDEN), [setStored]);
+
+  return { hidden, hideEvent, showEvent, showAllEvents };
+}
+
 /** Vérifie qu'une URL répond bien un calendrier, avant de l'enregistrer. */
 export async function probeFeed(url: string): Promise<{ ok: boolean; error?: string; total?: number }> {
   try {
@@ -280,6 +369,7 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
   const [failed, setFailed] = useState<string[]>([]);
   const { kindColors } = useIcsKindColors();
   const { eventColors } = useIcsEventColors();
+  const { hidden } = useIcsHiddenEvents();
   // Le rendu recrée le tableau `feeds` à chaque passe : on compare son contenu,
   // sinon l'effet se relancerait en boucle.
   const active = useMemo(() => feeds.filter((f) => f.enabled && f.url), [feeds]);
@@ -326,6 +416,10 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
     for (const { feedId, items } of raw) {
       for (const ev of items) {
         const id = `${feedId}:${ev.uid}`;
+        /* Écartée ici, en amont de la mise en couleur : une séance masquée ne
+           doit exister ni dans la grille, ni dans les rappels, ni dans les
+           compteurs qui lisent cette même liste. */
+        if (hidden[id]) continue;
         /* Du plus précis au plus général : la retouche posée sur CETTE séance,
            sinon celle posée sur la matière, sinon la couleur de son type. */
         /* Du plus précis au plus général : cette séance, sinon sa matière,
@@ -365,7 +459,7 @@ export function useIcsEvents(feeds: IcsFeed[], timeMin: string | null, timeMax: 
       }
     }
     return out;
-  }, [raw, kindColors, eventColors]);
+  }, [raw, kindColors, eventColors, hidden]);
 
   return { icsEvents: events, icsLoading: loading, icsFailed: failed };
 }

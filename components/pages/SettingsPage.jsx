@@ -19,6 +19,7 @@ import {
   ExternalLink,
   Sparkles,
   Trash2,
+  Eye,
   Download,
   Upload,
   Database,
@@ -38,7 +39,8 @@ import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
 import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
-import { useIcsFeeds, useIcsKindColors, probeFeed } from "@/lib/hooks/useIcsFeeds";
+import { useIcsFeeds, useIcsKindColors, useIcsHiddenEvents, probeFeed } from "@/lib/hooks/useIcsFeeds";
+import { BTN } from "@/lib/ui/buttons";
 import { KIND_LABELS, kindColorId } from "@/lib/icsCategories";
 import { GCAL_COLORS } from "@/lib/gcalColors";
 import Popover from "@/components/ui/Popover";
@@ -1075,6 +1077,93 @@ function DefaultRemindersCard() {
  * assumé : la bande doit garder ses proportions, et le geste est rare (on règle
  * ses couleurs une fois). Le curseur et l'infobulle disent qu'on peut cliquer.
  */
+/* Séances masquées depuis la page Agenda. Elles n'apparaissent plus nulle part
+   ailleurs — c'est tout l'objet du masque — donc cette carte est le SEUL endroit
+   d'où les rendre. Sans elle, masquer serait un aller sans retour. */
+function HiddenCoursesCard() {
+  const { hidden, showEvent, showAllEvents } = useIcsHiddenEvents();
+
+  /* Dans l'ordre de l'emploi du temps, pas dans celui des masquages : c'est
+     comme ça qu'on cherche « le TP du jeudi » qu'on a écarté par erreur. */
+  const rows = React.useMemo(
+    () => Object.entries(hidden)
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => String(a.start).localeCompare(String(b.start))),
+    [hidden],
+  );
+
+  if (rows.length === 0) return null;
+
+  /* « jeu. 8 sept., 10:15 ». La date seule pour une séance sur la journée
+     entière — lui inventer une heure de début serait mentir. */
+  const dateLabel = (start) => {
+    const d = new Date(start);
+    if (isNaN(d.getTime())) return "";
+    const jour = d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+    return String(start).length <= 10
+      ? jour
+      : `${jour}, ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="Séances masquées"
+        subtitle="Les cours écartés de la grille. Le flux de l'établissement, lui, n'a pas bougé : les rendre les fait revenir tels quels."
+      />
+      {rows.map((r, i) => (
+        <div
+          key={r.id}
+          style={{
+            display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+            borderTop: i === 0 ? "none" : `1px solid ${T.border}`,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 13, fontWeight: 500, color: T.text,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {r.summary || "Séance sans titre"}
+            </div>
+            {!!dateLabel(r.start) && (
+              <div style={{ fontSize: 11, color: T.textMut }}>{dateLabel(r.start)}</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => showEvent(r.id)}
+            aria-label={`Réafficher ${r.summary || "cette séance"}`}
+            style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              padding: 6, color: T.textSub, display: "inline-flex", alignItems: "center",
+              gap: 6, borderRadius: 6, fontFamily: "inherit", fontSize: 12, flexShrink: 0,
+              transition: "background 120ms ease, color 120ms ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = T.panel; e.currentTarget.style.color = T.text; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}
+          >
+            <Eye size={14} strokeWidth={1.75} /> Réafficher
+          </button>
+        </div>
+      ))}
+      {rows.length > 1 && (
+        <button
+          type="button"
+          onClick={showAllEvents}
+          style={{
+            ...BTN.sm, marginTop: 12, alignSelf: "flex-start",
+            background: "transparent", border: `1px solid ${T.border}`,
+            fontFamily: "inherit", color: T.textSub, cursor: "pointer",
+          }}
+        >
+          Tout réafficher
+        </button>
+      )}
+    </Card>
+  );
+}
+
 function CourseColorsCard() {
   const { kindColors, setKindColor } = useIcsKindColors();
   const [open, setOpen] = useState(null);
@@ -1311,6 +1400,8 @@ function CalendarsSection() {
       )}
 
       {feeds.length > 0 && <CourseColorsCard />}
+
+      <HiddenCoursesCard />
 
       {!connected && feeds.length === 0 && (
         <Card>

@@ -38,6 +38,22 @@ export const TASK_RPG_CLOUD_KEY = "agenda_task_rpg";
 // XP gagnée pour une tâche terminée, par catégorie liée (≈ une habitude « normale »).
 export const TASK_XP = 25;
 
+// Lien « objectifs d'un ÉVÈNEMENT d'agenda » : les cartes qu'un créneau fait
+// avancer. Écrit par la page Agenda, lu par la page Vie RPG — même partage que
+// `taskRpg` ci-dessus, mais indexé par identifiant d'ÉVÈNEMENT (les deux
+// espaces d'identifiants sont distincts, et un créneau n'est pas une tâche).
+export const EVENT_RPG_STORAGE_KEY = "tr4de_agenda_event_rpg";
+export const EVENT_RPG_CLOUD_KEY = "agenda_event_rpg";
+
+/* XP d'une étape cochée dans un évènement lié à un objectif.
+   Le barème du site, du plus gros au plus petit : un jalon d'objectif vaut 75,
+   une tâche terminée 25, une règle de discipline respectée 10. Une étape de
+   créneau est de cette dernière famille — un geste unitaire dans une journée,
+   pas un livrable — d'où la même valeur. Trois étapes d'une séance de lecture
+   valent donc un peu plus qu'une tâche : c'est voulu, on a fait trois choses au
+   lieu d'en cocher une. */
+export const EVENT_STEP_XP = 10;
+
 // Lien « page Discipline → page Vie RPG » : chaque règle de discipline respectée
 // (cochée un jour donné) crédite de l'XP à la catégorie « Trading ». Source
 // indépendante des habitudes/objectifs/tâches → pas de double comptage.
