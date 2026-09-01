@@ -2090,11 +2090,7 @@ export default function AgendaPage() {
                                           textAlign: "left", color: txtCol,
                                         }}
                                       >
-                                        <span style={{ flexShrink: 0, display: "inline-flex", opacity: item.done ? 0.9 : 0.55 }}>
-                                          {item.done
-                                            ? <Check size={10} strokeWidth={3} />
-                                            : <Square size={9} strokeWidth={2.4} />}
-                                        </span>
+                                        <CheckDot done={item.done} size={10} color={txtCol} />
                                         <span style={{
                                           fontSize: 10, minWidth: 0,
                                           opacity: item.done ? 0.55 : 0.9,
@@ -2905,9 +2901,7 @@ export default function AgendaPage() {
                             flexShrink: 0,
                           }}
                         >
-                          {item.done
-                            ? <CheckSquare size={16} strokeWidth={1.9} />
-                            : <Square size={16} strokeWidth={1.9} />}
+                          <CheckDot done={item.done} size={16} />
                         </button>
                         <span style={{
                           flex: 1, minWidth: 0, fontSize: 14,
@@ -3308,19 +3302,38 @@ function TaskRowChip({ item, onToggle, onOpen, overdue = false }) {
 }
 
 /* ─────────────── Rond de complétion d'une tâche-évènement ─────────────── */
+/* La pastille elle-même, sans le bouton autour : les étapes d'un créneau la
+   posent DANS leur propre bouton (celui qui porte aussi le libellé), et un
+   bouton dans un bouton n'est pas du HTML valide. `color` sert au contour
+   éteint — sur un bloc de couleur, l'encre du bloc se voit mieux que le gris
+   des formulaires. */
+function CheckDot({ done, size = 13, color }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: size, height: size, borderRadius: "50%", flexShrink: 0,
+        border: `1.5px solid ${done ? T.green : (color || T.textMut)}`,
+        background: done ? T.green : "transparent",
+        // Le ✓ est posé sur un aplat vert saturé : `onSolid` reste blanc dans
+        // les deux thèmes, contrairement à `textInverted` qui s'inverse.
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        color: T.onSolid, fontSize: Math.round(size * 0.77), lineHeight: 1,
+      }}>
+      {done ? "✓" : ""}
+    </span>
+  );
+}
+
 function TaskCircle({ done, onToggle, size = 13 }) {
   return (
     <button type="button" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onClick={onToggle}
       aria-label={done ? "Marquer non terminée" : "Marquer terminée"} title="Terminer la tâche"
       style={{
-        width: size, height: size, borderRadius: "50%", flexShrink: 0, cursor: "pointer", padding: 0,
-        border: `1.5px solid ${done ? T.green : T.textMut}`,
-        background: done ? T.green : "transparent",
-        // Le ✓ est posé sur un aplat vert saturé : `onSolid` reste blanc dans
-        // les deux thèmes, contrairement à `textInverted` qui s'inverse.
-        display: "inline-flex", alignItems: "center", justifyContent: "center", color: T.onSolid, fontSize: 10, lineHeight: 1,
+        border: "none", background: "transparent", padding: 0, cursor: "pointer",
+        display: "inline-flex", flexShrink: 0,
       }}>
-      {done ? "✓" : ""}
+      <CheckDot done={done} size={size} />
     </button>
   );
 }
