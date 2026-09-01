@@ -9,6 +9,11 @@
  * supporte pas l'API Web `Notification` (l'utilisateur ne voyait donc rien).
  *
  * Dans un navigateur classique, on retombe sur l'API Web `Notification`.
+ *
+ * ⚠️ macOS : le plugin passe par `UNUserNotificationCenter`, qui EXIGE un bundle
+ * signé. Une app non signée le fait échouer sans rien afficher — d'où
+ * `signingIdentity: "-"` (ad-hoc) dans `tauri.conf.json`. Un binaire construit
+ * sans elle n'émettra aucune notification, alors que tout le reste marche.
  */
 
 /** Vrai si on tourne dans la WebView Tauri (desktop). */
@@ -35,7 +40,8 @@ export async function ensureNotifyPermission(): Promise<boolean> {
       if (await isPermissionGranted()) return true;
       const perm = await requestPermission();
       return perm === "granted";
-    } catch {
+    } catch (e) {
+      warnNotify("ensureNotifyPermission (Tauri)", e);
       return false;
     }
   }
@@ -46,9 +52,20 @@ export async function ensureNotifyPermission(): Promise<boolean> {
     if (Notification.permission === "denied") return false;
     const perm = await Notification.requestPermission();
     return perm === "granted";
-  } catch {
+  } catch (e) {
+    warnNotify("Notification.requestPermission", e);
     return false;
   }
+}
+
+/**
+ * Journalise au lieu d'avaler. Un no-op muet est ici indiscernable d'une absence
+ * de rappel programmé : sans cette trace, diagnostiquer demande de relire tout
+ * le chemin depuis l'agenda. L'inspecteur est compilé dans la build de release
+ * (feature `devtools`) exprès pour la lire.
+ */
+function warnNotify(step: string, err: unknown): void {
+  console.warn(`[notify] ${step} a échoué`, err);
 }
 
 /** Vrai si l'autorisation est déjà accordée (sans la demander). */
@@ -58,7 +75,8 @@ export async function isNotifyGranted(): Promise<boolean> {
     try {
       const { isPermissionGranted } = await tauriPlugin();
       return await isPermissionGranted();
-    } catch {
+    } catch (e) {
+      warnNotify("isNotifyGranted (Tauri)", e);
       return false;
     }
   }
@@ -87,8 +105,8 @@ export async function notify(title: string, options: NotifyOptions = {}): Promis
       if (!granted) granted = (await requestPermission()) === "granted";
       if (!granted) return;
       sendNotification({ title, body });
-    } catch {
-      /* ignore */
+    } catch (e) {
+      warnNotify("sendNotification (Tauri)", e);
     }
     return;
   }
@@ -96,7 +114,7 @@ export async function notify(title: string, options: NotifyOptions = {}): Promis
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   try {
     new Notification(title, { body, icon });
-  } catch {
-    /* ignore */
+  } catch (e) {
+    warnNotify("new Notification", e);
   }
 }
