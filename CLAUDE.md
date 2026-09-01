@@ -78,11 +78,11 @@ La coquille fournit : suivi d'activité (`tracker.rs`), blocage natif
 la barre d'état, démarrage automatique, et la croix ✕ qui masque au lieu de
 quitter.
 
-⚠️ **Le bundle macOS doit être signé**, même en ad-hoc (`signingIdentity: "-"`
-dans `tauri.conf.json`) : `tauri-plugin-notification` passe par
-`UNUserNotificationCenter`, qui refuse de servir une app non signée. La panne est
-muette — tout le reste de l'app marche, seules les notifications système
-manquent. Vérifier avec `codesign -dv /Applications/tao.app`.
+Le bundle macOS est signé en ad-hoc (`signingIdentity: "-"` dans
+`tauri.conf.json`) pour donner à l'app une identité de code stable. ⚠️ Re-signer
+un bundle déjà installé le fait voir comme une NOUVELLE app par TCC : les
+autorisations Accessibilité (celles dont `tracker.rs` et `blocker.rs` dépendent)
+sont à réaccorder dans Réglages Système → Confidentialité.
 
 **Tout le front doit fonctionner sans elle.** Le test est `isTauri()`
 (`lib/notify.ts`) ; les fonctions natives rendent `false` ou `null` en navigateur

@@ -10,10 +10,10 @@
  *
  * Dans un navigateur classique, on retombe sur l'API Web `Notification`.
  *
- * ⚠️ macOS : le plugin passe par `UNUserNotificationCenter`, qui EXIGE un bundle
- * signé. Une app non signée le fait échouer sans rien afficher — d'où
- * `signingIdentity: "-"` (ad-hoc) dans `tauri.conf.json`. Un binaire construit
- * sans elle n'émettra aucune notification, alors que tout le reste marche.
+ * ⚠️ Une notification ne part que si l'app TOURNE : elle est posée par un
+ * `setTimeout` côté client, jamais par un serveur. Machine éteinte, app quittée,
+ * ou simple navigateur mobile fermé — le rappel n'existe pas. C'est la limite à
+ * garder en tête avant de chercher un bug ailleurs.
  */
 
 /** Vrai si on tourne dans la WebView Tauri (desktop). */
