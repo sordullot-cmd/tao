@@ -274,6 +274,10 @@ export const CATALOG: CatalogEntry[] = [
     { name: "ProRealTime", word: ["prorealtime"] },
     { name: "Rithmic", word: ["rithmic"] },
     { name: "TradingView", word: ["tradingview"], web: ["tradingview.com", "fr.tradingview.com"] },
+    /* Plateforme web : le titre de l'onglet est le SYMBOLE traité (« MNQ », « NQ »)
+       ou « Popout Window 1 », jamais le nom de la plateforme. Seul l'hôte la
+       reconnaît — sans lui, chaque contrat comptait comme de la navigation. */
+    { name: "Alpha Trader", app: [], web: ["alphatrader.com"], title: ["alpha trader"] },
     // Courtiers, prop firms, données de marché
     { name: "Investing.com", app: [], web: ["investing.com", "fr.investing.com"] },
     { name: "Binance", app: [], web: ["binance.com"] },
@@ -284,6 +288,7 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Bitget", app: [], web: ["bitget.com"] },
     { name: "MEXC", app: [], web: ["mexc.com"] },
     { name: "FTMO", app: [], web: ["ftmo.com"], title: ["ftmo"] },
+    { name: "Alpha Futures", app: [], web: ["alpha-futures.com"], title: ["alpha futures"] },
     { name: "The5ers", app: [], web: ["the5ers.com"] },
     { name: "Apex Trader Funding", app: [], web: ["apextraderfunding.com"], title: ["apex trader funding"] },
     { name: "Topstep", app: [], web: ["topstep.com", "topsteptrader.com"] },

@@ -59,3 +59,22 @@ describe("une règle de domaine range le site entier", () => {
     expect(rootDomain("exemple.fr")).toBe("exemple.fr");
   });
 });
+
+/* Alpha Trader intitule ses onglets du symbole traité — « MNQ », « NQ » — et
+   jamais de son nom : les règles posées sur le TITRE ne pouvaient pas mordre.
+   C'est l'hôte qui la range, sous-domaine `futures.` compris. */
+describe("les plateformes d'Alpha Futures comptent comme du trading", () => {
+  it("range la plateforme quel que soit le contrat affiché", () => {
+    for (const symbole of ["MNQ", "NQ", "Popout Window 1"]) {
+      const c = classify("Arc", symbole, [], `https://futures.alphatrader.com/${symbole}`);
+      expect(c.category).toBe("trading");
+      expect(c.label).toBe("Alpha Trader");
+    }
+  });
+
+  it("range aussi le tableau de bord de la prop firm", () => {
+    const c = classify("Arc", "Alpha Futures", [], "https://app.alpha-futures.com/dashboard");
+    expect(c.category).toBe("trading");
+    expect(c.label).toBe("Alpha Futures");
+  });
+});

@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/da";
 import { rMultiple, fmtR } from "@/lib/userPrefs";
 import { calculateFees } from "@/lib/tradeFees";
+import { groupExecutions } from "@/lib/tradeGrouping";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
@@ -442,56 +443,23 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   // Groupes "trades pris sur plusieurs comptes" (même symbole/sens/prix d'entrée à 1 min près)
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
-  const buildGroups = (list, windowSec = 60) => {
-    const parseTs = (t) => {
-      const dateStr = String(t.date || "").slice(0, 10);
-      const time = t.entryTime || t.entry_time || "00:00:00";
-      const m = String(time).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-      if (!m) return null;
-      const dt = new Date(`${dateStr}T${String(m[1]).padStart(2, "0")}:${m[2]}:${m[3] || "00"}`);
-      const v = dt.getTime();
-      return isNaN(v) ? null : v;
-    };
-    const sig = (t) => {
-      const sym = String(t.symbol || "").toUpperCase();
-      const dir = String(t.direction || "").toLowerCase();
-      const entry = Math.round((Number(t.entry) || 0) * 100);
-      return `${sym}|${dir}|${entry}`;
-    };
-    // Bucket par signature
-    const buckets = new Map();
-    for (const t of list) {
-      const key = sig(t);
-      if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key).push({ t, ts: parseTs(t) });
-    }
-    const groups = [];
-    for (const arr of buckets.values()) {
-      arr.sort((a, b) => (a.ts || 0) - (b.ts || 0));
-      let cur = null;
-      for (const item of arr) {
-        if (cur && item.ts !== null && cur.lastTs !== null && Math.abs(item.ts - cur.lastTs) <= windowSec * 1000) {
-          cur.children.push(item.t);
-          cur.lastTs = item.ts;
-        } else {
-          if (cur) groups.push(cur);
-          cur = { children: [item.t], lastTs: item.ts };
-        }
-      }
-      if (cur) groups.push(cur);
-    }
-    // Une clé stable basée sur le premier child
-    return groups.map(g => ({
-      key: `g_${tradeKey(g.children[0])}`,
-      parent: g.children[0],
-      children: g.children,
-      pnlSum: g.children.reduce((s, x) => s + (Number(x.pnl) || 0), 0),
-      feesSum: g.children.reduce((s, x) => s + feesOf(x), 0),
-      netSum: g.children.reduce((s, x) => s + netPnlOf(x), 0),
-      qtySum: g.children.reduce((s, x) => s + (qtyOf(x) || 0), 0),
-      volSum: g.children.reduce((s, x) => s + (volOf(x) || 0), 0),
+  /* Le partitionnement vit dans lib/tradeGrouping.ts — il ne réunit que des
+     comptes DISTINCTS, sinon un scale-in (deux entrées au même prix à moins
+     d'une minute sur le même compte) passait pour un seul trade et sa ligne
+     annonçait le P&L des deux. Ici il ne reste que les sommes de la ligne
+     d'accueil. */
+  const buildGroups = (list, windowSec = 60) =>
+    groupExecutions(list, windowSec).map(children => ({
+      // Clé stable, fondée sur le premier enfant.
+      key: `g_${tradeKey(children[0])}`,
+      parent: children[0],
+      children,
+      pnlSum: children.reduce((s, x) => s + (Number(x.pnl) || 0), 0),
+      feesSum: children.reduce((s, x) => s + feesOf(x), 0),
+      netSum: children.reduce((s, x) => s + netPnlOf(x), 0),
+      qtySum: children.reduce((s, x) => s + (qtyOf(x) || 0), 0),
+      volSum: children.reduce((s, x) => s + (volOf(x) || 0), 0),
     }));
-  };
 
   // Propage une opération à tous les trades enfants d'un groupe (si applicable)
   const childrenOf = (selected) => Array.isArray(selected?._children) && selected._children.length > 1
