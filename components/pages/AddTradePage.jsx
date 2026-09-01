@@ -858,6 +858,10 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
           pnl: tr.pnl,
           quantity: tr.quantity ?? tr.qty ?? null,
           volume: tr.volume ?? null,
+          /* Frais réels quand le relevé les chiffre. `pnl` est le BRUT : c'est
+             applyNetPnl() qui soustrait à la lecture, et il préfère ces frais-ci
+             à son barème moyen. */
+          fees: tr.fees ?? null,
           entry_time: tr.entryTime || tr.entry_time || null,
           exit_time: tr.exitTime || tr.exit_time || null,
         }));
@@ -883,11 +887,13 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
           .from("apex_trades")
           .insert(tradesToInsert);
 
-        /* Tolérance : si les colonnes quantity/volume n'existent pas encore en
-           base (migration 028 non appliquée), on réessaie sans elles. */
-        if (insertError && /could not find the '(quantity|volume)' column/i.test(insertError.message || "")) {
-          console.warn("⚠️ Colonnes quantity/volume absentes — réessai sans (applique la migration 028 pour les conserver)");
-          const stripped = tradesToInsert.map(({ quantity, volume, ...rest }) => rest);
+        /* Tolérance : si les colonnes quantity/volume/fees n'existent pas encore
+           en base (migrations 028 / 035 non appliquées), on réessaie sans elles.
+           Perdre les frais réels vaut mieux que perdre l'import — le site
+           retombe alors sur son barème. */
+        if (insertError && /could not find the '(quantity|volume|fees)' column/i.test(insertError.message || "")) {
+          console.warn("⚠️ Colonnes quantity/volume/fees absentes — réessai sans (applique les migrations 028 et 035 pour les conserver)");
+          const stripped = tradesToInsert.map(({ quantity, volume, fees, ...rest }) => rest);
           ({ error: insertError } = await supabase.from("apex_trades").insert(stripped));
         }
 

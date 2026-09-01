@@ -804,6 +804,11 @@ export const parseGenericCSV = (csvText: string): ParsedTrade[] => {
   const exitTimeIdx = timeIdxFor('exit');
   const qtyIdx = headers.findIndex(h => h.includes('quantity') || h.includes('qty') || h.includes('lots') || h.includes('size'));
   const volIdx = headers.findIndex(h => h.includes('volume'));
+  /* Frais réels du relevé. Sans eux, le site retombe sur son barème moyen
+     (lib/tradeFees.ts) : correct pour un export qui n'en dit rien, faux quand
+     le relevé les chiffre au cent près. La colonne `pnl` reste le BRUT — c'est
+     le site qui soustrait, et une seule fois. */
+  const feesIdx = headers.findIndex(h => h.includes('fee') || h.includes('commission'));
 
   // Fallback to position if not found by name
   if (dateIdx === -1) dateIdx = 0;
@@ -839,6 +844,9 @@ export const parseGenericCSV = (csvText: string): ParsedTrade[] => {
     const volVal = volIdx !== -1
       ? parseFloat((values[volIdx] || '').replace(/[^0-9.-]/g, ''))
       : NaN;
+    const feesVal = feesIdx !== -1
+      ? Math.abs(parseFloat((values[feesIdx] || '').replace(/[^0-9.-]/g, '')))
+      : NaN;
     const entryTime = entryTimeIdx !== -1 ? toHHMMSS24(values[entryTimeIdx]) : '';
     const exitTime = exitTimeIdx !== -1 ? toHHMMSS24(values[exitTimeIdx]) : '';
 
@@ -858,6 +866,7 @@ export const parseGenericCSV = (csvText: string): ParsedTrade[] => {
       ...(entryTime ? { entryTime } : {}),
       ...(exitTime ? { exitTime } : {}),
       ...(Number.isFinite(volVal) && volVal > 0 ? { volume: volVal } : {}),
+      ...(Number.isFinite(feesVal) && feesVal > 0 ? { fees: feesVal } : {}),
     };
 
     trades.push(trade);

@@ -17,6 +17,15 @@
  * `parseCSV` tombe dessus sans indice de plateforme, suivies de tout ce que le
  * collage porte en plus — dont l'horodatage, que la page Trades attend pour
  * afficher heure, durée et session.
+ *
+ * ⚠️ La colonne `PnL` du CSV porte le BRUT, pas le net — contrairement au champ
+ * `pnl` des `rows`, qui sert l'aperçu à l'écran et vaut le net. Ce n'est pas une
+ * incohérence : le site attend partout un P&L brut en base et déduit les frais
+ * lui-même (`applyNetPnl`, lib/tradeFees.ts). Y écrire un net déjà amputé
+ * faisait déduire les frais DEUX fois — une fois les vrais du relevé, une fois
+ * ceux du barème — et le P&L global du site tombait sous le vrai de plusieurs
+ * dizaines de dollars. La colonne `Fees` accompagne donc le brut : elle porte
+ * les frais RÉELS, qui priment sur le barème.
  */
 
 /** Valeur $/point, alignée sur getContractMultiplier() de lib/csvParsers.ts. */
@@ -31,7 +40,8 @@ export interface AlphaPasteRow {
   direction: "Long" | "Short";
   entry: number;
   exit: number;
-  /** Net = brut − frais : c'est le P&L que la page Trades affiche. */
+  /** Net = brut − frais. Sert l'aperçu de la page d'import ; le CSV, lui,
+      exporte le brut (voir l'en-tête de fichier). */
   pnl: number;
   pnlGross: number;
   fees: number;
@@ -109,7 +119,9 @@ const CSV_COLUMNS: Array<[string, (r: AlphaPasteRow) => string | number]> = [
   ["Direction", (r) => r.direction],
   ["Entry", (r) => r.entry.toFixed(2)],
   ["Exit", (r) => r.exit.toFixed(2)],
-  ["PnL", (r) => r.pnl.toFixed(2)],
+  /* Le brut, et les frais réels juste après : c'est le site qui fait la
+     soustraction, une seule fois. */
+  ["PnL", (r) => r.pnlGross.toFixed(2)],
   ["Entry Time", (r) => r.entryTime],
   ["Exit Time", (r) => r.exitTime],
   ["Quantity", (r) => r.quantity],

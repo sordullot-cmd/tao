@@ -43,6 +43,10 @@ export interface ParsedTrade {
   /** Montant notionnel total (qty × prix × multiplicateur). */
   volume?: number;
 
+  /** Frais RÉELS lus sur le relevé. Priment sur le barème de lib/tradeFees.ts —
+      d'où l'exigence que `pnl` reste BRUT partout où ce champ est rempli. */
+  fees?: number;
+
   /** Nombre d'ordres ayant constitué ce trade (Tradovate). */
   ordersCount?: number;
 
