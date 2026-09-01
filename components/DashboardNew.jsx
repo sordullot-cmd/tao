@@ -9,7 +9,6 @@ import { useTrades } from "@/lib/hooks/useTradeData";
 import { useStrategies, useUserPreferences } from "@/lib/hooks/useUserData";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
-import { useTradeAlerts } from "@/lib/hooks/useTradeAlerts";
 import { useAgendaReminders } from "@/lib/hooks/useAgendaReminders";
 import { useActivityTracker } from "@/lib/hooks/useActivityTracker";
 import { useApp } from "@/lib/contexts/AppContext";
@@ -216,8 +215,6 @@ export default function App() {
   // ✅ Utiliser les hooks pour Trades et Stratégies (auto-stockés dans Supabase)
   const { trades, addTrade, updateTrade, deleteTrade } = useTrades();
   const { pushUndo } = useUndo();
-  // Surveillance des seuils P&L (alertes navigateur + événement interne)
-  useTradeAlerts(trades || []);
   // Rappels d'agenda → vraies notifications système, quelle que soit la page.
   useAgendaReminders();
   /* Suivi d'activité du poste : la boucle d'échantillonnage vit ICI et non dans

@@ -31,7 +31,6 @@ import SearchableSelect from "@/components/ui/SearchableSelect";
 import { getLang, setLang as setLangPref, t, useLang } from "@/lib/i18n";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCloudState } from "@/lib/hooks/useCloudState";
-import { DEFAULT_ALERT_SETTINGS } from "@/lib/hooks/useTradeAlerts";
 import { notify, ensureNotifyPermission, isNotifyGranted, isTauri } from "@/lib/notify";
 import { T as BaseT } from "@/lib/ui/tokens";
 import { ACCENT_PRESETS, isHexColor } from "@/lib/ui/accent";
@@ -1654,11 +1653,6 @@ function inputStyle() {
 /* ── Alerts section ────────────────────────────────────────────────── */
 function AlertsSection() {
   useLang();
-  const [settings, setSettings] = useCloudState(
-    "tr4de_alert_settings",
-    "alert_settings",
-    DEFAULT_ALERT_SETTINGS
-  );
   // "granted" | "denied" | "default". Sur desktop (Tauri) l'API Web Notification
   // n'est pas fiable : on interroge le plugin natif via isNotifyGranted().
   const [permission, setPermission] = useState(
@@ -1684,8 +1678,6 @@ function AlertsSection() {
     setTimeout(() => setTesting(false), 1200);
   };
 
-  const update = (patch) => setSettings(prev => ({ ...prev, ...patch }));
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <CardHeader title={t("settings.alerts.cardTitle")} subtitle={t("settings.alerts.cardSub")} />
@@ -1708,96 +1700,10 @@ function AlertsSection() {
           {testing ? t("settings.alerts.tested") : t("settings.alerts.test")}
         </button>
       </div>
-
-      {/* Master switch */}
-      <Field label={t("settings.alerts.activeWatch")} hint={t("settings.alerts.activeWatchHint")}>
-        <AlertSwitch
-          checked={settings.enabled}
-          onChange={v => update({ enabled: v })}
-          label={settings.enabled ? t("settings.alerts.enabled") : t("settings.alerts.disabled")}
-        />
-      </Field>
-
-      {/* Thresholds */}
-      <Field label={t("settings.alerts.takeProfit")} hint={t("settings.alerts.takeProfitHint")}>
-        <NumberInput
-          value={settings.dailyTakeProfit}
-          onChange={v => update({ dailyTakeProfit: v })}
-          suffix="$"
-          placeholder="500"
-        />
-      </Field>
-
-      <Field label={t("settings.alerts.maxLoss")} hint={t("settings.alerts.maxLossHint")}>
-        <NumberInput
-          value={settings.dailyMaxLoss}
-          onChange={v => update({ dailyMaxLoss: v })}
-          suffix="$"
-          placeholder="300"
-        />
-      </Field>
-
-      <Field label={t("settings.alerts.losingStreak")} hint={t("settings.alerts.losingStreakHint")}>
-        <NumberInput
-          value={settings.losingStreak}
-          onChange={v => update({ losingStreak: v })}
-          suffix={t("settings.alerts.tradesSuffix")}
-          placeholder="3"
-        />
-      </Field>
     </div>
   );
 }
 
-function AlertSwitch({ checked, onChange, label }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      role="switch"
-      aria-checked={checked}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 10,
-        background: "transparent", border: "none", cursor: "pointer",
-        padding: 0, fontFamily: "inherit",
-      }}
-    >
-      <span style={{
-        width: 36, height: 20, borderRadius: 999,
-        background: checked ? T.green : T.border,
-        position: "relative", transition: "background 150ms",
-        flexShrink: 0,
-      }}>
-        <span style={{
-          position: "absolute", top: 2, left: checked ? 18 : 2,
-          width: 16, height: 16, borderRadius: "50%",
-          background: T.white,
-          boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
-          transition: "left 150ms",
-        }} />
-      </span>
-      <span style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>{label}</span>
-    </button>
-  );
-}
-
-function NumberInput({ value, onChange, suffix, placeholder }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <input
-        type="number"
-        value={value ?? ""}
-        onChange={e => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
-        placeholder={placeholder}
-        min={0}
-        style={{ ...inputStyle(), maxWidth: 160 }}
-      />
-      {suffix && <span style={{ fontSize: 13, color: T.textMut, fontWeight: 500 }}>{suffix}</span>}
-    </div>
-  );
-}
-
-// Harmonisé avec PrimaryButton : primaire = fond T.text / texte blanc.
 function primaryBtn() {
   return {
     padding: "8px 16px", minHeight: 34, borderRadius: 999, border: `1px solid ${T.text}`,

@@ -31,8 +31,9 @@ const COLORS: Record<Severity, { bg: string; bd: string; fg: string; ico: React.
 const MAX_VISIBLE = 3;
 
 /**
- * Écoute l'événement `tr4de:alert` (émis par useTradeAlerts) et affiche les
- * messages dans une stack en bas-droite. Auto-dismiss après 6 secondes.
+ * Écoute l'événement `tr4de:alert` (émis par DrivePage, StrategyPage et le
+ * bouton de test des Paramètres) et affiche les messages dans une stack en
+ * bas-droite. Auto-dismiss après 6 secondes.
  */
 // Durée de l'animation de sortie — doit matcher `toastOut` ci-dessous.
 const EXIT_MS = 180;

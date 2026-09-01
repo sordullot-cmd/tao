@@ -35,6 +35,7 @@ import { t, useLang, getLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { parseCSV } from "@/lib/csvParsers";
 import { parseAlphaFuturesPaste } from "@/lib/brokers/alphaFuturesPaste";
+import { splitNewTrades } from "@/lib/importDedupe";
 import { firmBrandId } from "@/lib/accountBrand";
 import {
   EXECUTION_PLATFORMS,
@@ -645,6 +646,11 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
      qu'accumulé, et pour rester hors de la liste des fichiers — la zone de
      texte est déjà sous les yeux. */
   const [pasteText, setPasteText] = useState("");
+  /* L'invite se retire dès le clic, pas seulement à la première frappe : elle
+     est centrée dans le bloc, donc pile là où le curseur va se poser. La garder
+     ferait taper PAR-DESSUS un libellé qu'on ne peut plus effacer. */
+  const [pasteFocused, setPasteFocused] = useState(false);
+  const pasteIdle = pasteText === "" && !pasteFocused;
   const paste = React.useMemo(() => parseAlphaFuturesPaste(pasteText), [pasteText]);
   const droppedFiles = files.filter((f) => !f.pasted);
 
@@ -836,11 +842,6 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
         return;
       }
 
-      const norm = (v) => (v == null ? "" : String(v));
-      const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-      const sigOf = (tr) =>
-        `${norm(tr.date).slice(0, 10)}|${norm(tr.symbol).toUpperCase()}|${round2(tr.entry)}|${round2(tr.exit)}|${norm(tr.entry_time)}`;
-
       let totalInserted = 0;
       let duplicateCount = 0;
 
@@ -863,25 +864,18 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
 
         if (allTrades.length === 0) continue;
 
-        // Anti-doublons : par compte.
+        /* Anti-doublons : par compte. La règle vit dans lib/importDedupe.ts —
+           elle compare l'heure de SORTIE et compte les occurrences, sans quoi
+           un scale-out (plusieurs sorties au même prix, même seconde d'entrée)
+           ne rentrait qu'une fois. */
         const { data: existingTrades } = await supabase
           .from("apex_trades")
-          .select("date, symbol, entry, exit, entry_time")
+          .select("date, symbol, direction, entry, exit, entry_time, exit_time")
           .eq("user_id", userId)
           .eq("account_id", targetId);
-        const existingSet = new Set((existingTrades || []).map(sigOf));
 
-        const tradesToInsert = [];
-        const seenInBatch = new Set();
-        for (const tr of allTrades) {
-          const sig = sigOf(tr);
-          if (existingSet.has(sig) || seenInBatch.has(sig)) {
-            duplicateCount += 1;
-            continue;
-          }
-          seenInBatch.add(sig);
-          tradesToInsert.push(tr);
-        }
+        const { toInsert: tradesToInsert, duplicates } = splitNewTrades(allTrades, existingTrades || []);
+        duplicateCount += duplicates;
 
         if (tradesToInsert.length === 0) continue;
 
@@ -1084,7 +1078,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
                     background: FIELD_BG,
                     /* Masqué, pas démonté : le bloc garde la taille du bloc
                        d'import une fois le relevé collé. */
-                    visibility: pasteText === "" ? "visible" : "hidden",
+                    visibility: pasteIdle ? "visible" : "hidden",
                   }}
                 >
                   <ClipboardPaste size={22} strokeWidth={1.5} color={T.textSub} />
@@ -1094,6 +1088,8 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
                 <textarea
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
+                  onFocus={() => setPasteFocused(true)}
+                  onBlur={() => setPasteFocused(false)}
                   aria-label={t("addTrade.paste.field")}
                   style={{
                     ...FIELD,
@@ -1108,9 +1104,9 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
                        chasse fixe, aligné à gauche, sans retour à la ligne —
                        seul moyen de voir qu'une ligne a été tronquée à la
                        copie. */
-                    textAlign: pasteText === "" ? "center" : "left",
-                    fontFamily: pasteText === "" ? "inherit" : "var(--font-mono, monospace)",
-                    whiteSpace: pasteText === "" ? "normal" : "pre",
+                    textAlign: pasteIdle ? "center" : "left",
+                    fontFamily: pasteIdle ? "inherit" : "var(--font-mono, monospace)",
+                    whiteSpace: pasteIdle ? "normal" : "pre",
                     overflow: "auto",
                     lineHeight: 1.6,
                   }}
