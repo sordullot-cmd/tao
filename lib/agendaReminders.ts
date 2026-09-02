@@ -140,3 +140,111 @@ export function addReminder(list: ReminderValue[], v: ReminderValue): ReminderVa
 export function removeReminder(list: ReminderValue[], v: ReminderValue): ReminderValue[] {
   return normalizeReminders(normalizeReminders(list).filter((x) => String(x) !== String(v)));
 }
+
+/* ── Échéances ─────────────────────────────────────────────────────────────
+ *
+ * Décider « ce rappel doit sonner maintenant » est séparé du hook pour être
+ * testable sans agenda ni minuteur : c'est la partie qui se trompe en silence,
+ * et son échec ne se voit qu'à la notification qui n'arrive pas.
+ */
+
+/**
+ * Combien de temps un rappel manqué reste bon à dire.
+ *
+ * Un rappel n'est PAS un instant, c'est une fenêtre. L'app n'est pas forcément
+ * en train de tourner à la seconde prévue — poste en veille, fenêtre masquée
+ * dans la barre d'état, page rechargée — et se taire dans ce cas, c'est ce qui
+ * faisait manquer les cours : le rappel de 9 h 50 était simplement abandonné
+ * parce que la boucle ne le découvrait qu'à 9 h 53. Même fenêtre de rattrapage
+ * que les programmes de la page Focus, pour la même raison.
+ */
+export const CATCH_UP_MS = 10 * 60 * 1000;
+
+/**
+ * Au-delà du début de l'évènement, un rappel n'a plus rien à annoncer — il
+ * réveillerait pour un cours déjà commencé depuis une demi-heure.
+ */
+export const START_GRACE_MS = 5 * 60 * 1000;
+
+export interface ReminderItem {
+  /** Origine, pour remplacer d'un bloc ce qu'une source renvoie. */
+  source: string;
+  /** Identifiant stable de l'item (évènement, cours, tâche). */
+  id: string;
+  /** Empreinte de l'horaire : un évènement déplacé redevient à notifier. */
+  startKey: string;
+  startMs: number;
+  title: string;
+  place?: string;
+  /** Rappels propres à l'item ; absents → réglage par défaut. */
+  reminders?: unknown;
+}
+
+export interface DueReminder {
+  /**
+   * Rappels échus, à marquer consommés — y compris quand `announce` est faux.
+   * Sans ça, un rappel trop vieux serait réexaminé à chaque tour et finirait
+   * par sonner le jour où l'horloge repasse dans sa fenêtre.
+   */
+  keys: string[];
+  /** Faux = échu mais périmé : on le consomme sans rien dire. */
+  announce: boolean;
+}
+
+/** Clé de dédoublonnage d'un rappel : l'item, son horaire, et le délai. */
+export function reminderKey(item: ReminderItem, min: number): string {
+  return `${item.id}|${item.startKey}|${min}`;
+}
+
+/**
+ * Les rappels d'un item arrivés à échéance à l'instant `nowMs`.
+ *
+ * Un item peut en avoir plusieurs en retard d'un coup (au réveil du poste,
+ * « 1 jour avant » et « 10 min avant » sont échus tous les deux) : ils sont
+ * tous consommés, mais une seule notification part — deux annonces pour le même
+ * cours à une seconde d'intervalle sont du bruit, pas de l'information.
+ */
+export function dueReminders(
+  item: ReminderItem,
+  nowMs: number,
+  defaultMins: unknown,
+  isFired: (key: string) => boolean,
+): DueReminder | null {
+  const mins = effectiveReminderMinutes(item.reminders, defaultMins);
+  if (!mins.length) return null;
+
+  const keys: string[] = [];
+  let announce = false;
+
+  for (const min of mins) {
+    const key = reminderKey(item, min);
+    if (isFired(key)) continue;
+    const dueMs = item.startMs - min * 60 * 1000;
+    if (dueMs > nowMs) continue; // pas encore l'heure : il reste à venir
+    keys.push(key);
+    if (nowMs - dueMs <= CATCH_UP_MS && nowMs <= item.startMs + START_GRACE_MS) {
+      announce = true;
+    }
+  }
+
+  return keys.length ? { keys, announce } : null;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/**
+ * Corps de la notification. Le délai annoncé est celui qui RESTE, pas celui qui
+ * était réglé : un rappel rattrapé à trois minutes du début ne doit pas
+ * prétendre qu'il en reste dix.
+ */
+export function reminderWhen(startMs: number, nowMs: number): string {
+  const d = new Date(startMs);
+  const at = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const left = Math.round((startMs - nowMs) / 60000);
+  if (left <= 0) return `C'est maintenant (${at})`;
+  if (left < 60) return `Commence à ${at} (dans ${left} min)`;
+  if (left < 1440) return `Commence à ${at} (dans ${Math.round(left / 60)} h)`;
+  return `Commence le ${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} à ${at}`;
+}

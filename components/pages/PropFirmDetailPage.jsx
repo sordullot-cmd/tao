@@ -50,6 +50,7 @@ import {
   PeriodPills, windowSeries, AGGREGATE_CURVE_COLOR, PnlChart, msOf, BackLink,
 } from "@/components/ui/da";
 import { assignSeriesColors, firmBrandColor } from "@/lib/ui/brandColors";
+import { pnlCurve, cumulativeByDay } from "@/lib/ui/pnlCurve";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
@@ -229,25 +230,12 @@ export default function PropFirmDetailPage({
       .sort((a, b) => msOf(a.date) - msOf(b.date));
   }, [firmAccounts, trades]);
 
-  /** Courbe cumulée, un point par jour. */
-  const firmCurve = React.useMemo(() => {
-    const byDay = new Map();
-    firmTrades.forEach((tr) => {
-      const d = String(tr.date || "").slice(0, 10);
-      if (!d) return;
-      byDay.set(d, (byDay.get(d) || 0) + (Number(tr.pnl) || 0));
-    });
-    const days = [...byDay.keys()].sort();
-    if (days.length === 0) return [];
-    const out = [];
-    // Point de départ à zéro, la veille du premier trade.
-    const first = new Date(days[0]);
-    first.setDate(first.getDate() - 1);
-    out.push({ date: first.toISOString().slice(0, 10), cum: 0 });
-    let cum = 0;
-    days.forEach((d) => { cum += byDay.get(d); out.push({ date: d, cum }); });
-    return out;
-  }, [firmTrades]);
+  /** Courbe cumulée de la firme. Un point par TRADE sur la semaine et le mois,
+   *  un point par jour sur les fenêtres plus larges (cf. lib/ui/pnlCurve). */
+  const firmCurve = React.useMemo(
+    () => pnlCurve(firmTrades, period, { anchorZero: true }),
+    [firmTrades, period]
+  );
 
   const visibleCurve = React.useMemo(
     () => windowSeries(firmCurve, period),
@@ -276,21 +264,14 @@ export default function PropFirmDetailPage({
   );
 
   const accountSeries = React.useMemo(() => {
-    return firmAccounts.map((acc) => {
-      const byDay = new Map();
-      (trades || [])
-        .filter((tr) => tr.account_id === acc.id)
-        .forEach((tr) => {
-          const d = String(tr.date || "").slice(0, 10);
-          if (!d) return;
-          byDay.set(d, (byDay.get(d) || 0) + (Number(tr.pnl) || 0));
-        });
-      const days = [...byDay.keys()].sort();
-      let cum = 0;
-      const points = days.map((d) => { cum += byDay.get(d); return { date: d, cum }; });
-      return { id: acc.id, name: acc.name, color: colorByAccount.get(acc.id), points };
-    }).filter((s) => s.points.length > 1);
-  }, [firmAccounts, trades, colorByAccount]);
+    return firmAccounts.map((acc) => ({
+      id: acc.id,
+      name: acc.name,
+      color: colorByAccount.get(acc.id),
+      // Même maille que la courbe de devant, sinon les rangs ne concordent pas.
+      points: pnlCurve((trades || []).filter((tr) => tr.account_id === acc.id), period),
+    })).filter((s) => s.points.length > 1);
+  }, [firmAccounts, trades, colorByAccount, period]);
 
   /** KPI de performance, calculés comme sur la page d'un compte. */
   const perf = React.useMemo(() => {
@@ -300,9 +281,12 @@ export default function PropFirmDetailPage({
     const grossWin = sum(wins);
     const grossLoss = Math.abs(sum(losses));
     const total = firmTrades.length;
-    // Drawdown maximal sur la courbe cumulée.
+    /* Drawdown maximal sur la courbe cumulée — sur SA PROPRE courbe quotidienne
+       et non celle qui est affichée : la maille de cette dernière suit la
+       pastille, et un chiffre de statistique ne doit pas changer parce qu'on a
+       zoomé sur la semaine. */
     let peak = 0, maxDD = 0;
-    firmCurve.forEach((p) => {
+    cumulativeByDay(firmTrades).forEach((p) => {
       if (p.cum > peak) peak = p.cum;
       const dd = p.cum - peak;
       if (dd < maxDD) maxDD = dd;
@@ -329,7 +313,7 @@ export default function PropFirmDetailPage({
       tradingDays: days.size,
       pnl: sum(firmTrades),
     };
-  }, [firmTrades, firmCurve]);
+  }, [firmTrades]);
 
   /** Valeur de la firme = capital géré + P&L agrégé (chiffre héros). */
   const firmValue = totals.capital + perf.pnl;

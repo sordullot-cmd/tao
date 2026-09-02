@@ -11,6 +11,8 @@ import {
   normalizeDefaultReminders,
   effectiveReminderMinutes,
   FACTORY_DEFAULT_REMINDERS,
+  dueReminders,
+  reminderWhen,
 } from "@/lib/agendaReminders";
 
 describe("rappels d'agenda", () => {
@@ -113,5 +115,66 @@ describe("rappels d'agenda", () => {
     expect(normalizeDefaultReminders(["default"])).toEqual(FACTORY_DEFAULT_REMINDERS);
     expect(normalizeDefaultReminders(null)).toEqual([]);
     expect(normalizeDefaultReminders([30, 5])).toEqual([30, 5]);
+  });
+});
+
+describe("échéance d'un rappel", () => {
+  const T10H = new Date(2026, 8, 3, 10, 0, 0).getTime(); // cours à 10 h, heure locale
+  const item = (reminders: unknown = null) => ({
+    source: "gcal:events",
+    id: "ev1",
+    startKey: "2026-09-03T10:00:00+02:00",
+    startMs: T10H,
+    title: "📅 Algèbre",
+    reminders,
+  });
+  const never = () => false;
+  const at = (h: number, m: number) => new Date(2026, 8, 3, h, m, 0).getTime();
+
+  it("se tait tant que l'heure du rappel n'est pas passée", () => {
+    expect(dueReminders(item(), at(9, 49), [10], never)).toBeNull();
+  });
+
+  it("sonne à l'heure du rappel", () => {
+    const due = dueReminders(item(), at(9, 50), [10], never);
+    expect(due?.announce).toBe(true);
+    expect(due?.keys).toEqual(["ev1|2026-09-03T10:00:00+02:00|10"]);
+  });
+
+  it("rattrape un rappel manqué — c'est tout l'objet du correctif", () => {
+    // App lancée à 9 h 55 : le rappel de 9 h 50 était purement abandonné avant.
+    expect(dueReminders(item(), at(9, 55), [10], never)?.announce).toBe(true);
+  });
+
+  it("consomme sans rien dire un rappel trop vieux pour être encore utile", () => {
+    // Poste réveillé à 11 h : le cours de 10 h est passé, se taire est la
+    // réponse — mais la clé doit être marquée, sinon elle repasserait au tour
+    // suivant.
+    const due = dueReminders(item(), at(11, 0), [10], never);
+    expect(due?.announce).toBe(false);
+    expect(due?.keys).toHaveLength(1);
+  });
+
+  it("n'annonce qu'une fois quand plusieurs rappels sont échus ensemble", () => {
+    const due = dueReminders(item([1440, 10]), at(9, 55), [], never);
+    expect(due?.keys).toHaveLength(2); // les deux sont consommés
+    expect(due?.announce).toBe(true); // une seule notification
+  });
+
+  it("ne resonne pas un rappel déjà consommé", () => {
+    const fired = new Set(["ev1|2026-09-03T10:00:00+02:00|10"]);
+    expect(dueReminders(item(), at(9, 55), [10], (k) => fired.has(k))).toBeNull();
+  });
+
+  it("retombe sur le réglage par défaut pour un cours en lecture seule", () => {
+    // Un agenda abonné ne porte aucun `overrides` : sans repli, rien ne sonne.
+    expect(dueReminders(item(null), at(9, 30), [30], never)?.announce).toBe(true);
+    expect(dueReminders(item(null), at(9, 30), [], never)).toBeNull();
+  });
+
+  it("annonce le temps qui RESTE, pas le délai réglé", () => {
+    expect(reminderWhen(T10H, at(9, 55))).toBe("Commence à 10:00 (dans 5 min)");
+    expect(reminderWhen(T10H, at(10, 0))).toBe("C'est maintenant (10:00)");
+    expect(reminderWhen(T10H, at(8, 0))).toBe("Commence à 10:00 (dans 2 h)");
   });
 });

@@ -15,6 +15,7 @@ import {
   PnlChart, msOf, MiniKpi, StatsCard, TableFilter,
 } from "@/components/ui/da";
 import { accountBrandColor, assignSeriesColors } from "@/lib/ui/brandColors";
+import { pnlCurve } from "@/lib/ui/pnlCurve";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
 import { LogoTile } from "@/components/ui/accountRows";
@@ -48,30 +49,9 @@ const fmtNoCents = (n) => {
 };
 
 
-const dayKey = (d) => String(d || "").slice(0, 10);
-
 /* Les dérivations des colonnes de trades (durée, session, jour, frais, lots,
    clés de stratégie) vivent avec la liste elle-même, dans
    components/ui/tradesList.jsx — une seule source pour toutes les pages. */
-
-/** Cumul du P&L par jour (dernier cumul connu de la journée). */
-function cumulativeByDay(list) {
-  const sorted = [...(list || [])].sort(
-    (a, b) => msOf(a.date || a.entry_time || 0) - msOf(b.date || b.entry_time || 0)
-  );
-  const byDay = new Map();
-  let cum = 0;
-  for (const tr of sorted) {
-    const k = dayKey(tr.date || tr.entry_time);
-    if (!k) continue;
-    cum += Number(tr.pnl) || 0;
-    byDay.set(k, cum);
-  }
-  return Array.from(byDay.entries())
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([date, value]) => ({ date, cum: value }))
-    .filter(p => !isNaN(msOf(p.date)));
-}
 
 export default function AccountDetailPage({ accountsLoading = false, accountId, accounts = [], firms = [], trades = [], strategies = [], setPage, setSelectedFirmId, setAccounts, archivedMeta = {} }) {
   useLang();
@@ -320,8 +300,10 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
     };
   }, [accountTrades]);
 
-  // Courbe du compte (cumul par jour) puis fenêtre 1S/1M/3M/6M/1A.
-  const fullCurve = React.useMemo(() => cumulativeByDay(accountTrades), [accountTrades]);
+  /* Courbe du compte puis fenêtre 1S/1M/3M/6M/1A. La MAILLE suit la pastille :
+     un point par trade sur la semaine et le mois, un point par jour au-delà
+     (cf. lib/ui/pnlCurve). */
+  const fullCurve = React.useMemo(() => pnlCurve(accountTrades, period), [accountTrades, period]);
   const curve = React.useMemo(() => windowSeries(fullCurve, period, p => p.date), [fullCurve, period]);
 
   // Séries des autres comptes : la maquette montre plusieurs courbes. On ne les
@@ -344,10 +326,11 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
         id: a.id,
         name: a.name || "Compte",
         color: colorById.get(a.id),
-        points: cumulativeByDay(srcTrades.filter(tr => tr.account_id === a.id)),
+        // Même maille que la courbe de devant, sinon les rangs ne concordent pas.
+        points: pnlCurve(srcTrades.filter(tr => tr.account_id === a.id), period),
       }))
       .filter(s => s.points.length > 1);
-  }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId, firmById]);
+  }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId, firmById, period]);
 
   /* Avant le garde du dessous : sans compte chargé, `account` est introuvable
      et la page annonce « compte introuvable » — un message d'erreur pour ce

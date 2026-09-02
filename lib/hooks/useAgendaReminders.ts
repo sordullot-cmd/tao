@@ -10,8 +10,11 @@ import {
   DEFAULT_REMINDERS_STORAGE_KEY,
   DEFAULT_REMINDERS_CLOUD_KEY,
   FACTORY_DEFAULT_REMINDERS,
-  effectiveReminderMinutes,
+  START_GRACE_MS,
+  dueReminders,
   normalizeDefaultReminders,
+  reminderWhen,
+  type ReminderItem,
 } from "@/lib/agendaReminders";
 
 /**
@@ -29,8 +32,32 @@ import {
  * `IcsFeedEvent` naît avec `reminders: null`, et le hook n'interrogeait que
  * Google. Le repli `effectiveReminderMinutes` leur donne leur délai.
  *
- * Un item peut porter PLUSIEURS rappels : on programme un timer par délai, la
- * clé de dédoublonnage incluant les minutes.
+ * ── POURQUOI UNE HORLOGE ET NON DES MINUTEURS ─────────────────────────────
+ *
+ * La première version posait un `setTimeout` par rappel, parfois à douze heures
+ * d'échéance. Trois choses le rendaient muet, et les trois arrivent tous les
+ * jours :
+ *
+ *   1. Un `setTimeout` long ne survit pas à ce que fait un poste de travail.
+ *      Veille de la machine, fenêtre masquée dans la barre d'état (la WebView
+ *      occluse voit ses minuteurs bridés) : l'échéance passe sans réveil.
+ *   2. Un rappel dont l'heure était passée était ABANDONNÉ (`delay <= 0`). Une
+ *      app lancée à 9 h 53 ne disait plus rien du rappel de 9 h 50, alors que
+ *      le cours, lui, était toujours à 10 h.
+ *   3. L'effet dépendait de `fetchEvents`, dont l'identité change dès que la
+ *      liste des agendas est relue (elle l'est à chaque retour sur la fenêtre).
+ *      Chaque relance vidait TOUS les minuteurs déjà posés et repartait d'un
+ *      appel réseau : les rappels se faisaient désarmer plus vite qu'ils
+ *      n'arrivaient à échéance.
+ *
+ * D'où le modèle retenu, celui de `useScheduleRunner` (page Focus) — le seul du
+ * dépôt dont on sait qu'il déclenche vraiment : une horloge courte compare
+ * l'heure MURALE à une table d'échéances, avec fenêtre de rattrapage. Le poll
+ * réseau ne fait que tenir cette table à jour ; il ne déclenche rien. Et tout ce
+ * que la boucle lit passe par des refs, donc l'effet n'est jamais relancé.
+ *
+ * Ce qui est déjà sonné est retenu dans localStorage : sans ça, le rattrapage
+ * ferait re-sonner le même rappel au premier rechargement de la page.
  *
  * Les tâches Google passent par le même chemin, mais leurs rappels ne viennent
  * pas de Google — l'API Tasks n'en a pas. Ils sont rangés avec l'heure de
@@ -41,19 +68,34 @@ import {
  * tray tant que l'app tourne).
  */
 
-// Fenêtre d'anticipation minimale : on regarde au moins les prochaines 13 h.
-const MIN_LOOKAHEAD_MS = 13 * 60 * 60 * 1000;
-// Marge au-delà du rappel le plus anticipé : un rappel « 2 h avant » a besoin
-// que l'évènement soit déjà dans la fenêtre deux heures plus tôt, sinon le poll
-// ne le découvre qu'une fois l'heure de déclenchement passée.
-const LOOKAHEAD_MARGIN_MS = 60 * 60 * 1000;
-// Fréquence de rafraîchissement de la liste des évènements. Le flux iCal est
-// mis en cache 10 min par `/api/ics` : un poll plus rapide ne servirait qu'à
-// marteler notre propre route.
+// Fenêtre de découverte. 26 h couvrent le rappel « 1 jour avant », le plus
+// lointain qui se règle en pratique — au-delà, l'évènement n'était même pas
+// chargé quand son rappel tombait, donc ne notifiait jamais.
+const MIN_DISCOVERY_MS = 26 * 60 * 60 * 1000;
+// Marge au-delà du rappel le plus anticipé : il faut que l'évènement soit déjà
+// dans la fenêtre AVANT l'heure de son rappel, pas pile à cette heure-là.
+const DISCOVERY_MARGIN_MS = 60 * 60 * 1000;
+// Rafraîchissement de la table. Le flux iCal est mis en cache 10 min par
+// `/api/ics` : un poll plus rapide ne servirait qu'à marteler notre route.
 const POLL_MS = 5 * 60 * 1000;
-// Heure d'ancrage d'un item sans horaire (tâche « toute la journée ») : sans
-// point de départ, « 30 min avant » n'a pas de sens. 9 h = début de journée.
+// Battement de l'horloge. C'est lui, et non le poll, qui décide de notifier :
+// une demi-minute de retard sur un rappel ne se remarque pas.
+const TICK_MS = 30 * 1000;
+// Heure d'ancrage d'un item sans horaire (« toute la journée ») : sans point de
+// départ, « 30 min avant » n'a pas de sens. 9 h = début de journée.
 const ALL_DAY_ANCHOR_H = 9;
+
+// Rappels déjà sonnés, gardés d'une session à l'autre.
+const FIRED_STORAGE_KEY = "tr4de_agenda_fired";
+// Passé ce délai après l'évènement, plus rien ne peut le faire re-sonner : la
+// mémoire n'a plus de raison de le retenir.
+const FIRED_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Sources, pour remplacer d'un bloc ce qu'une réponse renvoie sans toucher aux
+// autres : un ENT en panne ne doit pas effacer les évènements Google.
+const SRC_EVENTS = "gcal:events";
+const SRC_TASKS = "gcal:tasks";
+const srcFeed = (feedId: string) => `ics:${feedId}`;
 
 interface CalEventLike {
   id?: string;
@@ -89,9 +131,47 @@ interface TaskTime {
   reminders?: unknown;
 }
 
-function fmtHour(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/**
+ * Instant de départ d'un item.
+ *
+ * Une date nue (`"2026-09-03"`, ce que Google renvoie pour un évènement « toute
+ * la journée ») est lue en UTC par `new Date` : minuit UTC, soit 2 h du matin à
+ * Paris en été. Le rappel « 10 min avant » tombait donc en pleine nuit. On
+ * ancre la journée à 9 h LOCALE, comme les tâches sans heure.
+ */
+function itemStartMs(start: string, allDay: boolean): number | null {
+  if (allDay || /^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    const [y, m, d] = start.slice(0, 10).split("-").map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d, ALL_DAY_ANCHOR_H, 0, 0, 0).getTime();
+  }
+  const ms = new Date(start).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function loadFired(): Map<string, number> {
+  const map = new Map<string, number>();
+  if (typeof window === "undefined") return map;
+  try {
+    const raw = localStorage.getItem(FIRED_STORAGE_KEY);
+    if (!raw) return map;
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    const floor = Date.now() - FIRED_TTL_MS;
+    for (const [k, v] of Object.entries(parsed || {})) {
+      if (typeof v === "number" && v > floor) map.set(k, v);
+    }
+  } catch {
+    /* entrée illisible : on repart d'une mémoire vide, au pire un doublon */
+  }
+  return map;
+}
+
+function saveFired(map: Map<string, number>): void {
+  try {
+    localStorage.setItem(FIRED_STORAGE_KEY, JSON.stringify(Object.fromEntries(map)));
+  } catch {
+    /* quota / mode privé : la mémoire ne vivra que le temps de la session */
+  }
 }
 
 export function useAgendaReminders(): void {
@@ -110,39 +190,33 @@ export function useAgendaReminders(): void {
     FACTORY_DEFAULT_REMINDERS,
   );
 
-  // Lu dans le poll (asynchrone) : une ref évite de relancer tout l'effet — et
-  // donc de reprogrammer tous les timers — à chaque écriture du magasin.
-  const taskTimesRef = useRef(taskTimes);
-  useEffect(() => { taskTimesRef.current = taskTimes; }, [taskTimes]);
-
-  // Le réglage, lui, DOIT relancer l'effet : un délai raccourci ou allongé
-  // change les timers déjà posés. On dépend de sa forme normalisée, pas de
-  // l'identité du tableau — que `useCloudState` recrée à chaque lecture.
   const defaultMins = useMemo(
     () => normalizeDefaultReminders(defaultReminders),
     [defaultReminders],
   );
-  const defaultSig = defaultMins.join(",");
-  const defaultMinsRef = useRef(defaultMins);
-  useEffect(() => { defaultMinsRef.current = defaultMins; }, [defaultMins]);
-
-  // Idem pour les flux : seules l'URL et l'activation comptent ici, pas le nom
-  // ni la couleur — les renommer ne doit pas reprogrammer tous les rappels.
+  // Seules l'URL et l'activation comptent ici, pas le nom ni la couleur.
   const activeFeeds = useMemo(
     () => feeds.filter((f) => f.enabled && f.url).map((f) => ({ id: f.id, url: f.url })),
     [feeds],
   );
-  const feedsSig = activeFeeds.map((f) => `${f.id}:${f.url}`).join("|");
-  const feedsRef = useRef(activeFeeds);
-  useEffect(() => { feedsRef.current = activeFeeds; }, [activeFeeds]);
 
-  // Timers en attente, indexés par clé de rappel (id|start|minutes).
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  // Rappels déjà déclenchés (évite un doublon après un re-poll / reload).
-  const firedRef = useRef<Set<string>>(new Set());
+  /* Tout ce que la boucle lit passe par cette référence, remise à jour après
+     chaque rendu. C'est ce qui permet à l'effet de n'avoir que deux
+     interrupteurs en dépendances : un réglage modifié est pris en compte au
+     battement suivant, sans désarmer quoi que ce soit. Déclaré AVANT l'effet
+     principal pour que la première valeur y soit déjà. */
+  const live = useRef({ fetchEvents, fetchTasks, taskTimes, defaultMins, activeFeeds });
+  useEffect(() => {
+    live.current = { fetchEvents, fetchTasks, taskTimes, defaultMins, activeFeeds };
+  });
+
+  // Échéances connues, indexées par item. Survit aux rendus, pas au montage.
+  const itemsRef = useRef<Map<string, ReminderItem>>(new Map());
+  // Rappels déjà sonnés → instant de l'évènement (sert à la purge).
+  const firedRef = useRef<Map<string, number> | null>(null);
 
   const googleOn = ready && connected;
-  const hasFeeds = !!feedsSig;
+  const hasFeeds = activeFeeds.length > 0;
 
   useEffect(() => {
     // Sans Google NI flux, il n'y a rien à surveiller — mais l'un des deux
@@ -150,117 +224,123 @@ export function useAgendaReminders(): void {
     if (!googleOn && !hasFeeds) return;
 
     let cancelled = false;
-    const timers = timersRef.current;
+    const items = itemsRef.current;
+    if (firedRef.current === null) firedRef.current = loadFired();
+    const fired = firedRef.current;
 
     void ensureNotifyPermission();
 
-    const lookaheadMs = Math.max(
-      MIN_LOOKAHEAD_MS,
-      (defaultMinsRef.current[0] || 0) * 60 * 1000 + LOOKAHEAD_MARGIN_MS,
-    );
-
-    /** Programme un rappel unique. `startMs` = début de l'item. */
-    const scheduleOne = (
-      id: string,
-      startKey: string,
-      startMs: number,
-      min: number,
-      title: string,
-      place = "",
-    ) => {
-      const triggerMs = startMs - min * 60 * 1000;
-      const delay = triggerMs - Date.now();
-      // Rappel déjà passé ou trop lointain → on ignore (les lointains seront
-      // repris à un prochain poll, quand ils entreront dans la fenêtre).
-      if (delay <= 0 || delay > lookaheadMs) return;
-
-      const key = `${id}|${startKey}|${min}`;
-      if (firedRef.current.has(key) || timers.has(key)) return;
-
-      const timer = setTimeout(() => {
-        timers.delete(key);
-        firedRef.current.add(key);
-        const at = fmtHour(new Date(startMs));
-        const when =
-          min === 0 ? `C'est maintenant (${at})` : `Commence à ${at} (dans ${min} min)`;
-        // La salle est ce qu'on cherche des yeux en lisant un rappel de cours ;
-        // sans elle, la notification oblige à rouvrir l'agenda.
-        void notify(title, { body: place ? `${when} · ${place}` : when });
-      }, delay);
-
-      timers.set(key, timer);
+    /** Remplace ce qu'une source avait posé. Une source muette garde le sien. */
+    const replaceSource = (source: string, list: ReminderItem[]) => {
+      for (const [k, v] of items) if (v.source === source) items.delete(k);
+      for (const it of list) items.set(`${it.source}|${it.id}`, it);
     };
 
-    const scheduleEvent = (ev: CalEventLike) => {
-      if (cancelled) return;
-      if (ev.status === "cancelled" || ev.allDay === undefined) return;
-      if (!ev.id || !ev.start) return;
-      const mins = effectiveReminderMinutes(ev.reminders, defaultMinsRef.current);
-      if (!mins.length) return;
-
-      const startMs = new Date(ev.start).getTime();
-      if (Number.isNaN(startMs)) return;
-
-      const title = `📅 ${ev.summary || "Évènement"}`;
-      for (const min of mins) scheduleOne(ev.id, ev.start, startMs, min, title, ev.location);
+    const fromEvent = (ev: CalEventLike): ReminderItem | null => {
+      if (!ev.id || !ev.start || ev.status === "cancelled") return null;
+      const startMs = itemStartMs(ev.start, !!ev.allDay);
+      if (startMs === null) return null;
+      return {
+        source: SRC_EVENTS,
+        id: ev.id,
+        startKey: ev.start,
+        startMs,
+        title: `📅 ${ev.summary || "Évènement"}`,
+        // La salle est ce qu'on cherche des yeux en lisant un rappel de cours ;
+        // sans elle, la notification oblige à rouvrir l'agenda.
+        place: ev.location || "",
+        reminders: ev.reminders,
+      };
     };
 
     /**
      * Un cours d'un flux iCal. Aucun rappel n'y est attaché — le format n'en
      * transporte pas dans ce que `/api/ics` renvoie — donc tout repose sur le
-     * réglage par défaut. La clé de dédoublonnage préfixe l'`uid` par le flux :
-     * deux établissements peuvent servir le même identifiant.
+     * réglage par défaut. L'identifiant préfixe l'`uid` par le flux : deux
+     * établissements peuvent servir le même.
      */
-    const scheduleIcs = (feedId: string, ev: IcsEventLike) => {
-      if (cancelled) return;
-      if (!ev.uid || !ev.start || ev.allDay) return;
-      if (ev.status === "cancelled") return;
-      const mins = defaultMinsRef.current;
-      if (!mins.length) return;
-
-      const startMs = new Date(ev.start).getTime();
-      if (Number.isNaN(startMs)) return;
-
-      const title = `📅 ${ev.summary || "Cours"}`;
-      for (const min of mins) {
-        scheduleOne(`${feedId}:${ev.uid}`, ev.start, startMs, min, title, ev.location);
-      }
+    const fromIcs = (feedId: string, ev: IcsEventLike): ReminderItem | null => {
+      if (!ev.uid || !ev.start || ev.allDay || ev.status === "cancelled") return null;
+      const startMs = itemStartMs(ev.start, false);
+      if (startMs === null) return null;
+      return {
+        source: srcFeed(feedId),
+        id: `${feedId}:${ev.uid}`,
+        startKey: ev.start,
+        startMs,
+        title: `📅 ${ev.summary || "Cours"}`,
+        place: ev.location || "",
+        reminders: null,
+      };
     };
 
-    const scheduleTask = (tk: GTaskLike) => {
-      if (cancelled) return;
-      if (!tk.id || tk.completed) return;
-      const t = taskTimesRef.current?.[tk.id];
-      if (!t?.day) return;
-      const mins = effectiveReminderMinutes(t.reminders, defaultMinsRef.current);
-      if (!mins.length) return;
-
+    const fromTask = (tk: GTaskLike): ReminderItem | null => {
+      if (!tk.id || tk.completed) return null;
+      const t = live.current.taskTimes?.[tk.id];
+      if (!t?.day) return null;
       // Sans heure de planification, on ancre le rappel au matin du jour posé.
       const hhmm = t.startTime || `${String(ALL_DAY_ANCHOR_H).padStart(2, "0")}:00`;
-      const startMs = new Date(`${t.day}T${hhmm}:00`).getTime();
-      if (Number.isNaN(startMs)) return;
+      const startMs = itemStartMs(`${t.day}T${hhmm}:00`, false);
+      if (startMs === null) return null;
+      return {
+        source: SRC_TASKS,
+        id: tk.id,
+        startKey: `${t.day}T${hhmm}`,
+        startMs,
+        title: `✅ ${tk.title || "Tâche"}`,
+        reminders: t.reminders,
+      };
+    };
 
-      const title = `✅ ${tk.title || "Tâche"}`;
-      for (const min of mins) scheduleOne(tk.id, `${t.day}T${hhmm}`, startMs, min, title);
+    /* ── L'horloge ─────────────────────────────────────────────────────────
+       C'est ici, et nulle part ailleurs, qu'une notification part. */
+    const tick = () => {
+      const now = Date.now();
+      const mins = live.current.defaultMins;
+      let dirty = false;
+
+      for (const [k, item] of items) {
+        // Évènement passé : plus rien à en tirer, et la table doit rester courte.
+        if (item.startMs + START_GRACE_MS < now) { items.delete(k); continue; }
+
+        const due = dueReminders(item, now, mins, (key) => fired.has(key));
+        if (!due) continue;
+
+        for (const key of due.keys) fired.set(key, item.startMs);
+        dirty = true;
+        if (!due.announce) continue;
+
+        const when = reminderWhen(item.startMs, now);
+        void notify(item.title, { body: item.place ? `${when} · ${item.place}` : when });
+      }
+
+      if (!dirty) return;
+      const floor = now - FIRED_TTL_MS;
+      for (const [key, at] of fired) if (at < floor) fired.delete(key);
+      saveFired(fired);
     };
 
     const poll = async () => {
       const now = new Date();
       const timeMin = now.toISOString();
-      const timeMax = new Date(now.getTime() + lookaheadMs).toISOString();
+      const discovery = Math.max(
+        MIN_DISCOVERY_MS,
+        (live.current.defaultMins[0] || 0) * 60 * 1000 + DISCOVERY_MARGIN_MS,
+      );
+      const timeMax = new Date(now.getTime() + discovery).toISOString();
 
       if (googleOn) {
         try {
-          const evs = await fetchEvents(timeMin, timeMax);
+          const evs = (await live.current.fetchEvents(timeMin, timeMax)) as CalEventLike[];
           if (cancelled) return;
-          for (const ev of evs as CalEventLike[]) scheduleEvent(ev);
+          replaceSource(SRC_EVENTS, evs.map(fromEvent).filter(Boolean) as ReminderItem[]);
         } catch {
-          /* réseau / token : on réessaiera au prochain tick */
+          /* réseau / token : on réessaiera au prochain poll */
         }
         try {
-          const tks = await fetchTasks();
+          const tks = ((await live.current.fetchTasks()) || []) as GTaskLike[];
           if (cancelled) return;
-          for (const tk of (tks || []) as GTaskLike[]) scheduleTask(tk);
+          replaceSource(SRC_TASKS, tks.map(fromTask).filter(Boolean) as ReminderItem[]);
         } catch {
           /* idem : l'échec des tâches ne doit pas emporter les évènements */
         }
@@ -268,7 +348,7 @@ export function useAgendaReminders(): void {
 
       // Chaque flux est isolé : un ENT en panne ne doit pas emporter les autres.
       await Promise.all(
-        feedsRef.current.map(async (feed) => {
+        live.current.activeFeeds.map(async (feed) => {
           try {
             const res = await fetch("/api/ics", {
               method: "POST",
@@ -278,22 +358,29 @@ export function useAgendaReminders(): void {
             if (!res.ok || cancelled) return;
             const data = await res.json();
             if (cancelled) return;
-            for (const ev of (data.events || []) as IcsEventLike[]) scheduleIcs(feed.id, ev);
+            const list = ((data.events || []) as IcsEventLike[])
+              .map((ev) => fromIcs(feed.id, ev))
+              .filter(Boolean) as ReminderItem[];
+            replaceSource(srcFeed(feed.id), list);
           } catch {
-            /* flux injoignable : repris au prochain tick */
+            /* flux injoignable : repris au prochain poll */
           }
         }),
       );
+
+      // Un rappel peut déjà être dû dans ce que le poll vient d'apprendre —
+      // typiquement au lancement de l'app, cinq minutes avant un cours.
+      if (!cancelled) tick();
     };
 
     void poll();
-    const interval = setInterval(poll, POLL_MS);
+    const pollId = setInterval(() => { void poll(); }, POLL_MS);
+    const tickId = setInterval(tick, TICK_MS);
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
-      for (const timer of timers.values()) clearTimeout(timer);
-      timers.clear();
+      clearInterval(pollId);
+      clearInterval(tickId);
     };
-  }, [googleOn, hasFeeds, feedsSig, defaultSig, fetchEvents, fetchTasks]);
+  }, [googleOn, hasFeeds]);
 }

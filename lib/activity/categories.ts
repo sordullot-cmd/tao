@@ -395,7 +395,71 @@ function settle(id: string): string {
   return BY_ID[moved] ? moved : OTHER;
 }
 
-function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: string): Classification {
+/* ─── Le sujet, quand le lieu ne suffit pas ──────────────────────────────── */
+
+/**
+ * Ce qu'on REGARDE, sur les plateformes qui ne disent que là où l'on est.
+ *
+ * YouTube est rangé dans « Réseaux sociaux » pour une bonne raison (cf. le
+ * catalogue) : on y enchaîne un fil de vidéos suggérées. Mais on y suit aussi
+ * des formations, et deux heures d'analyse de graphiques n'ont rien à faire au
+ * même endroit que deux heures de fil — c'est même l'inverse exact, l'une est
+ * du travail et l'autre de la distraction. Le titre est la seule chose qui les
+ * sépare, alors on le lit.
+ *
+ * Ces motifs CLASSENT, là où ceux de `CLUES` se contentent de proposer : ils
+ * sont donc volontairement étroits — des termes de métier, pas des mots qu'une
+ * vidéo quelconque peut porter. « broker » (un bus de messages en
+ * développement), « pip » (l'installeur Python) ou « levier » seul en sont
+ * absents pour cette raison. Une erreur reste rattrapable de toute façon : une
+ * règle de l'utilisateur passe avant tout le reste.
+ */
+const SUBJECTS: { cat: string; name: string; re: RegExp }[] = [
+  {
+    cat: "trading",
+    name: "Trading",
+    /* Le titre est normalisé avant le test : sans accent, sans ponctuation
+       (« S&P 500 » → « s p 500 », « day-trading » → « day trading »). */
+    re: /\b(trading|traders?|day ?trading|swing trading|scalping|scalper|bourse|boursi(er|ere)s?|forex|marches financiers|analyse technique|technical analysis|price action|order ?flow|smart money|ict|backtests?|chandeliers?|candlesticks?|take profit|stop loss|risk reward|pips|effet de levier|nasdaq|s ?p ?500|cac 40|dow jones|dax 40|xauusd|prop ?firms?|ftmo|topstep|fundednext|the5ers|apex trader|cryptos?|cryptomonnaies?|bitcoin|btc|ethereum|altcoins?)\b/,
+  },
+];
+
+/** Le sujet annoncé par un titre, s'il en annonce un. */
+function subjectOf(title: string): { cat: string; name: string; matched: string } | null {
+  const hay = norm(title);
+  for (const s of SUBJECTS) {
+    const m = hay.match(s.re);
+    if (m) return { cat: s.cat, name: s.name, matched: m[0] };
+  }
+  return null;
+}
+
+function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: string, title = ""): Classification {
+  /* Le sujet passe devant le lieu, mais seulement là où le lieu n'engage à rien
+     (cf. `hosted` dans le catalogue).
+
+     Le NOM change avec la catégorie — « YouTube · Trading » à côté de
+     « YouTube ». Ce n'est pas cosmétique : la page agrège le temps par nom et
+     n'admet qu'UNE catégorie par nom (cf. `oneCategoryPerLabel`), si bien que
+     deux classements sous le même nom se seraient écrasés l'un l'autre et que
+     la majorité aurait tout emporté. Deux noms, deux lignes, deux totaux — et
+     on lit enfin ce que YouTube a servi à faire. */
+  const subject = hit.entry.hosted ? subjectOf(title) : null;
+  const subjectCat = subject ? settle(subject.cat) : null;
+  // Catégorie retirée par l'utilisateur : celle du catalogue vaut mieux que
+  // « Non classé », qui renverrait ce temps dans la file d'attente.
+  if (subject && subjectCat && subjectCat !== OTHER) {
+    return {
+      category: subjectCat,
+      label: `${label} · ${subject.name}`,
+      via: "title",
+      matched: subject.matched,
+      isSite,
+      confidence: CONFIDENCE.title,
+      system: false,
+    };
+  }
+
   return {
     category: settle(hit.entry.cat),
     label,
@@ -479,7 +543,7 @@ export function classifyDetailed(
   }
 
   if (browser) {
-    if (siteHit) return fromHit(siteHit, label, true, domain ?? siteHit.entry.name);
+    if (siteHit) return fromHit(siteHit, label, true, domain ?? siteHit.entry.name, title);
     /* Une page inconnue est de la NAVIGATION, pas une anomalie.
        Elle tombait dans « Non classé », et c'était le plus gros défaut de la
        mesure : un navigateur qui ne dit pas son URL (Arc, Firefox, un poste sans
@@ -493,10 +557,10 @@ export function classifyDetailed(
   }
 
   const exact = matchAppExact(app);
-  if (exact) return fromHit(exact, label, false, norm(app));
+  if (exact) return fromHit(exact, label, false, norm(app), title);
 
   const word = matchAppWord(app);
-  if (word) return fromHit(word, label, false, word.entry.name);
+  if (word) return fromHit(word, label, false, word.entry.name, title);
 
   /* Dernier recours : le titre d'une application de bureau. Une app inconnue
      ouvrant un PDF de compta, un Electron dont le processus s'appelle
@@ -505,7 +569,7 @@ export function classifyDetailed(
     const d = domainInTitle(title);
     return d ? matchDomain(d) : null;
   })();
-  if (byTitle) return fromHit(byTitle, label, false, byTitle.entry.name);
+  if (byTitle) return fromHit(byTitle, label, false, byTitle.entry.name, title);
 
   return { category: OTHER, label, via: "none", matched: null, isSite: false, confidence: 0, system: false };
 }

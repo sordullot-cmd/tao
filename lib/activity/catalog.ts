@@ -61,6 +61,18 @@ export interface CatalogEntry {
    * « à classer » y noierait les vraies applications inconnues.
    */
   system?: boolean;
+  /**
+   * Plateforme qui HÉBERGE : son nom dit où l'on est, jamais ce qu'on y fait.
+   *
+   * Une heure de formation au trading et une heure de vidéos suggérées tombent
+   * toutes deux dans « Réseaux sociaux » parce qu'elles se passent sur YouTube
+   * — alors que ce sont deux activités opposées, et que le titre, lui, les
+   * distingue. Sur ces entrées-là, et sur elles seules, le classement lit en
+   * plus le SUJET annoncé par le titre (cf. `SUBJECTS` dans
+   * lib/activity/categories). Ailleurs, le nom suffit : un titre de fenêtre de
+   * VS Code parle du fichier ouvert, pas d'une autre activité.
+   */
+  hosted?: boolean;
 }
 
 type Seed = Omit<CatalogEntry, "cat">;
@@ -500,7 +512,7 @@ export const CATALOG: CatalogEntry[] = [
        pas une séance, c'est un fil — une vidéo suggérée après l'autre, comme
        sur les autres réseaux. Le ranger avec Netflix mélangeait un film choisi
        et deux heures d'enchaînement, qui ne se règlent pas pareil. */
-    { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"] },
+    { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"], hosted: true },
     /* Pinterest était rangé avec les outils de création, comme banque d'images.
        C'en est une, mais on n'y va pas comme dans une banque d'images : on y
        fait défiler un fil, exactement comme ailleurs ici. */
@@ -522,7 +534,7 @@ export const CATALOG: CatalogEntry[] = [
 
   ...of("fun", [
     { name: "Netflix", app: ["netflix"], web: ["netflix.com"], title: ["netflix"] },
-    { name: "Twitch", app: ["twitch"], web: ["twitch.tv"], title: ["twitch"] },
+    { name: "Twitch", app: ["twitch"], web: ["twitch.tv"], title: ["twitch"], hosted: true },
     { name: "Prime Video", app: ["prime video"], web: ["primevideo.com"], title: ["prime video"] },
     { name: "Disney+", app: ["disney+", "disney plus"], web: ["disneyplus.com"], title: ["disney+"] },
     { name: "Max", app: [], web: ["max.com", "hbomax.com"] },
@@ -541,8 +553,8 @@ export const CATALOG: CatalogEntry[] = [
     { name: "Webtoon", app: [], web: ["webtoons.com"] },
     { name: "Wakanim", app: [], web: ["wakanim.tv"] },
     { name: "ADN", app: [], web: ["animationdigitalnetwork.fr", "animationdigitalnetwork.com"] },
-    { name: "Dailymotion", app: [], web: ["dailymotion.com"] },
-    { name: "Vimeo", app: [], web: ["vimeo.com"] },
+    { name: "Dailymotion", app: [], web: ["dailymotion.com"], hosted: true },
+    { name: "Vimeo", app: [], web: ["vimeo.com"], hosted: true },
     { name: "Plex", app: ["plex", "plex media player"] },
     { name: "Jellyfin", word: ["jellyfin"] },
     { name: "Kodi", app: ["kodi"] },

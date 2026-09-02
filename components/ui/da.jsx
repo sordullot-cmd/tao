@@ -1471,9 +1471,13 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
           const topPct = (coords[hover][1] / H) * 100;
           const flip = leftPct > 60;
           const d = new Date(p.date);
-          const label = isNaN(d.getTime())
-            ? p.date
-            : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+          /* `label` prime : en maille « un point par trade », deux points d'une
+             même journée porteraient sinon la même date et l'infobulle ne
+             dirait plus lequel on survole (cf. lib/ui/pnlCurve). */
+          const label = p.label
+            || (isNaN(d.getTime())
+              ? p.date
+              : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }));
           return (
             <div style={{
               position: "absolute",
@@ -1493,6 +1497,13 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
               <div style={{ fontSize: 14, fontWeight: 500, color: p.cum > 0 ? T.pnlPos : p.cum < 0 ? T.pnlNeg : T.text }}>
                 {p.cum > 0 ? "+" : ""}{fmt(p.cum, false)}
               </div>
+              {/* Le cumul seul ne dit pas ce que le trade survolé a rapporté —
+                  la question même que pose une courbe tracée trade par trade. */}
+              {p.delta != null && (
+                <div style={{ fontSize: 12, color: T.textSub, marginTop: 2 }}>
+                  {p.delta > 0 ? "+" : ""}{fmt(p.delta, false)} sur ce trade
+                </div>
+              )}
             </div>
           );
         })()}
