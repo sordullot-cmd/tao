@@ -372,6 +372,8 @@ const FR: Dict = {
   "addTrade.info.allDuplicates": "Tous les trades importés ({n}) sont déjà présents dans ce compte.",
   "addTrade.err.saveTrades": "Erreur lors de la sauvegarde des trades: {msg}",
   "addTrade.info.imported": "{n} trade{s} importé{s} — {d} doublon{ds} ignoré{ds}.",
+  "addTrade.info.feesRefreshed": "Frais réels remis à jour sur {n} trade{s} déjà présent{s}.",
+  "addTrade.warn.noFeesColumn": "⚠️ La base ne stocke pas encore les frais : le P&L net suit le barème moyen du site, pas ton relevé. Applique la migration 035 (supabase/migrations/035_apex_trades_fees.sql), puis recolle le relevé.",
   "addTrade.err.import": "Erreur d'import: {msg}",
   "addTrade.err.createStrategy": "Erreur lors de la création de la stratégie: {msg}",
 
@@ -1764,6 +1766,8 @@ const EN: Dict = {
   "addTrade.info.allDuplicates": "All imported trades ({n}) are already in this account.",
   "addTrade.err.saveTrades": "Error saving trades: {msg}",
   "addTrade.info.imported": "{n} trade{s} imported — {d} duplicate{ds} ignored.",
+  "addTrade.info.feesRefreshed": "Real fees refreshed on {n} existing trade{s}.",
+  "addTrade.warn.noFeesColumn": "⚠️ The database does not store fees yet: net P&L follows the site's average rate, not your statement. Apply migration 035 (supabase/migrations/035_apex_trades_fees.sql), then paste the statement again.",
   "addTrade.err.import": "Import error: {msg}",
   "addTrade.err.createStrategy": "Error creating strategy: {msg}",
 

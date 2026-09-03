@@ -16,11 +16,19 @@ import {
 } from "@/components/ui/da";
 import { accountBrandColor, assignSeriesColors } from "@/lib/ui/brandColors";
 import { pnlCurve } from "@/lib/ui/pnlCurve";
+import { resolveAccountRules } from "@/lib/propFirmRules";
+import {
+  CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, contractOf, resolveObjectives,
+  evalProgress, payoutState, withContract, withPayout, withoutPayout,
+} from "@/lib/accountContracts";
+import { useCloudState } from "@/lib/hooks/useCloudState";
+import ContractCard from "@/components/ui/contractCard";
+import { getLocalDateString } from "@/lib/dateUtils";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
 import { LogoTile } from "@/components/ui/accountRows";
 import Popover from "@/components/ui/Popover";
-import { accountBrand, firmLogo } from "@/lib/accountBrand";
+import { accountBrand, firmBrandId, firmLogo } from "@/lib/accountBrand";
 import { AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -331,6 +339,62 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
       }))
       .filter(s => s.points.length > 1);
   }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId, firmById, period]);
+
+  /* ─── Contrat du compte : objectifs de passage, puis retraits ───────────
+     Le magasin est générique (`useCloudState`) et PARTAGÉ avec la liste des
+     comptes : la colonne « payout dispo » y lit les mêmes retraits, sinon les
+     deux pages annonceraient deux soldes. */
+  const [contractStore, setContractStore] = useCloudState(CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, {});
+  const contracts = React.useMemo(() => normalizeStore(contractStore), [contractStore]);
+  const contract = React.useMemo(() => contractOf(contracts, accountId), [contracts, accountId]);
+  const accountRules = React.useMemo(
+    () => resolveAccountRules(
+      firmBrandId(firmById.get(account?.firm_id)),
+      parseAccountSize(account?.eval_account_size),
+    ),
+    [account, firmById],
+  );
+  const objectives = React.useMemo(
+    () => resolveObjectives(contract, accountRules), [contract, accountRules]
+  );
+  const evalState = React.useMemo(
+    () => evalProgress(accountTrades, objectives), [accountTrades, objectives]
+  );
+  const payout = React.useMemo(
+    () => payoutState(accountTrades, contract, objectives), [accountTrades, contract, objectives]
+  );
+
+  /* Les trois écritures passent par `normalizeStore` : le magasin peut venir
+     d'une version antérieure, et une écriture ne doit pas y figer une forme
+     qu'on ne saurait plus relire. */
+  const patchContract = React.useCallback((patch) => {
+    setContractStore(prev => withContract(normalizeStore(prev), accountId, patch));
+  }, [setContractStore, accountId]);
+  const addPayout = React.useCallback((p) => {
+    setContractStore(prev => withPayout(normalizeStore(prev), accountId, p));
+  }, [setContractStore, accountId]);
+  const removePayout = React.useCallback((id) => {
+    setContractStore(prev => withoutPayout(normalizeStore(prev), accountId, id));
+  }, [setContractStore, accountId]);
+
+  const [passError, setPassError] = React.useState("");
+  /* Passer financé change DEUX choses : le type du compte (table Supabase) et
+     la date d'où repartent ses compteurs (contrat). La date d'abord — elle est
+     locale et ne peut pas échouer ; si l'écriture distante rate, on a au pire
+     une date en avance sur un compte encore marqué eval, pas un compte financé
+     dont on ne sait plus depuis quand il l'est. */
+  const passFunded = React.useCallback(async () => {
+    if (!accountId) return;
+    setPassError("");
+    const day = getLocalDateString(new Date());
+    patchContract({ fundedAt: contract.fundedAt || day });
+    try {
+      await updateTradingAccount(accountId, { account_type: "funded" });
+      setAccounts?.(prev => (prev || []).map(a => (a.id === accountId ? { ...a, account_type: "funded" } : a)));
+    } catch (e) {
+      setPassError(e instanceof Error ? e.message : "Le compte n'a pas pu être marqué financé.");
+    }
+  }, [accountId, contract.fundedAt, patchContract, setAccounts]);
 
   /* Avant le garde du dessous : sans compte chargé, `account` est introuvable
      et la page annonce « compte introuvable » — un message d'erreur pour ce
@@ -649,6 +713,36 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
           color={aggregatedAll ? AGGREGATE_CURVE_COLOR : accountBrandColor(account, firmById.get(account?.firm_id))}
         />
       </div>
+
+      {/* Contrat du compte — entre la courbe et le calendrier, parce qu'il
+          répond à la question que la courbe fait naître : « et alors, où j'en
+          suis par rapport à ce que la firme demande ? ». Réservé aux comptes de
+          prop firm : un compte live n'a ni cible à atteindre ni retrait à
+          demander, et la carte y serait vide.
+          Absente aussi de la vue agrégée des eval passés, qui porte plusieurs
+          comptes et donc plusieurs contrats. */}
+      {!isArchivedView && account && (type === "eval" || type === "funded") && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <ContractCard
+            funded={type === "funded"}
+            sizeLabel={typeLabel}
+            firmName={firmById.get(account.firm_id)?.name}
+            capital={capital}
+            contract={contract}
+            objectives={objectives}
+            rules={accountRules}
+            progress={evalState}
+            payout={payout}
+            onPatch={patchContract}
+            onAddPayout={addPayout}
+            onRemovePayout={removePayout}
+            onPassFunded={passFunded}
+          />
+          {passError && (
+            <div style={{ fontSize: 12, color: T.red }}>{passError}</div>
+          )}
+        </div>
+      )}
 
       {/* Calendrier du mois, juste après la courbe : il prolonge la lecture du
           graphique (« quand ») avant que les statistiques ne donnent le

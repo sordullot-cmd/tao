@@ -19,6 +19,14 @@
  *    donne les deux d'un coup : le lot en contient m, la base en a déjà n, on
  *    insère m − n. Réimporter le même relevé n'insère rien (m = n), et un
  *    relevé qui porte trois fois la même ligne en insère trois.
+ *
+ * 3. Un doublon n'est pas forcément SANS INTÉRÊT. Les trades entrés avant que
+ *    la base sache stocker les frais (migration 035) n'en portent aucun, et le
+ *    site leur applique alors son barème moyen — le P&L net affiché s'écarte
+ *    du relevé de plusieurs centaines de dollars sans que rien ne le dise.
+ *    Recoller le relevé est le geste naturel pour réparer ça ; encore faut-il
+ *    que l'import en tire quelque chose. D'où `toRefresh` : les frais réels que
+ *    le lot apporte à des trades déjà en base qui ne les ont pas.
  */
 
 const norm = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -33,6 +41,10 @@ export interface SignableTrade {
   exit?: unknown;
   entry_time?: unknown;
   exit_time?: unknown;
+  /** Présent côté base seulement ; c'est la cible d'un rafraîchissement. */
+  id?: unknown;
+  /** Frais réels. `null` en base = jamais renseignés. */
+  fees?: unknown;
 }
 
 /**
@@ -53,9 +65,17 @@ export const tradeSignature = (tr: SignableTrade): string =>
     norm(tr.exit_time),
   ].join("|");
 
+/** Frais réels à poser sur un trade déjà en base. */
+export interface FeeRefresh {
+  id: unknown;
+  fees: number;
+}
+
 export interface DedupeResult<T> {
   toInsert: T[];
   duplicates: number;
+  /** Doublons dont le lot corrige les frais. Vide dans le cas courant. */
+  toRefresh: FeeRefresh[];
 }
 
 /**
@@ -66,27 +86,54 @@ export const splitNewTrades = <T extends SignableTrade>(
   batch: T[],
   existing: SignableTrade[]
 ): DedupeResult<T> => {
-  /* Combien de fois chaque signature est DÉJÀ en base. Un compteur, pas un
-     Set : c'est ce qui laisse passer la deuxième ligne légitime d'un scale-out
-     tout en arrêtant le réimport d'un relevé entier. */
-  const left = new Map<string, number>();
+  /* Les trades DÉJÀ en base, rangés par signature. Une file et non un simple
+     compteur : compter suffisait à décider d'insérer ou non, mais pas à dire
+     QUEL trade un doublon retrouve — or c'est lui qu'il faut corriger quand le
+     lot apporte des frais que la base n'a pas. On dépile dans l'ordre, ce qui
+     garde le comportement du compteur (le lot en a m, la base n, on insère
+     m − n) sans rien changer aux scale-outs. */
+  const left = new Map<string, SignableTrade[]>();
   for (const tr of existing || []) {
     const sig = tradeSignature(tr);
-    left.set(sig, (left.get(sig) || 0) + 1);
+    const queue = left.get(sig);
+    if (queue) queue.push(tr);
+    else left.set(sig, [tr]);
   }
 
   const toInsert: T[] = [];
+  const toRefresh: FeeRefresh[] = [];
   let duplicates = 0;
   for (const tr of batch) {
     const sig = tradeSignature(tr);
-    const remaining = left.get(sig) || 0;
-    if (remaining > 0) {
-      left.set(sig, remaining - 1);
+    const queue = left.get(sig);
+    const prev = queue && queue.length ? queue.shift() : undefined;
+    if (prev) {
       duplicates += 1;
+      const fees = feeRefreshFor(prev, tr);
+      if (fees !== null) toRefresh.push({ id: prev.id, fees });
       continue;
     }
     toInsert.push(tr);
   }
 
-  return { toInsert, duplicates };
+  return { toInsert, duplicates, toRefresh };
 };
+
+/**
+ * Les frais que le lot apporte à un trade déjà en base, ou `null` s'il n'y a
+ * rien à corriger.
+ *
+ * On ne rafraîchit QUE vers une valeur connue : un relevé muet sur les frais ne
+ * doit jamais effacer ceux qu'un autre import avait chiffrés. Un trade sans id
+ * est hors de portée (l'appelant n'a pas relu la colonne), et une valeur
+ * identique au centime ne vaut pas une écriture.
+ */
+function feeRefreshFor(prev: SignableTrade, incoming: SignableTrade): number | null {
+  if (prev.id == null) return null;
+  if (incoming.fees == null || incoming.fees === "") return null;
+  const next = Number(incoming.fees);
+  if (!Number.isFinite(next) || next < 0) return null;
+  const before = prev.fees == null || prev.fees === "" ? null : Number(prev.fees);
+  if (before !== null && Number.isFinite(before) && round2(before) === round2(next)) return null;
+  return round2(next);
+}

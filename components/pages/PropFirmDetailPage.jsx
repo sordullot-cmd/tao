@@ -41,7 +41,6 @@ import {
   deleteTradingAccount,
   parseAccountSize,
   readFirmHeroMode,
-  readFundedMeta,
 } from "@/lib/propFirms";
 import { LogoTile, AddAccountsButton, AccountLine, ACCOUNT_LINE } from "@/components/ui/accountRows";
 import Popover from "@/components/ui/Popover";
@@ -51,6 +50,8 @@ import {
 } from "@/components/ui/da";
 import { assignSeriesColors, firmBrandColor } from "@/lib/ui/brandColors";
 import { pnlCurve, cumulativeByDay } from "@/lib/ui/pnlCurve";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount } from "@/lib/accountContracts";
+import { useCloudState } from "@/lib/hooks/useCloudState";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import TradesList from "@/components/ui/tradesList";
 import MonthCalendar from "@/components/ui/monthCalendar";
@@ -195,21 +196,26 @@ export default function PropFirmDetailPage({
   }, [firmAccounts, trades]);
 
   /* Vue « compte » alignée sur celle de la page Comptes, pour que les mêmes
-     colonnes affichent les mêmes chiffres des deux côtés. */
-  const fundedMeta = React.useMemo(() => readFundedMeta(), []);
+     colonnes affichent les mêmes chiffres des deux côtés — le payout compris,
+     qui se calcule dans lib/accountContracts et nulle part ailleurs. */
+  const [contractStore] = useCloudState(CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, {});
+  const firmOnly = React.useMemo(() => new Map(firm ? [[firm.id, firm]] : []), [firm]);
+  const payoutStates = React.useMemo(
+    () => payoutsByAccount(firmAccounts, trades, normalizeStore(contractStore), firmOnly),
+    [firmAccounts, trades, contractStore, firmOnly],
+  );
   const viewOf = React.useCallback((acc) => {
     const s = statsByAccount.get(acc.id) || { trades: 0, wins: 0, pnl: 0 };
     const capital = parseAccountSize(acc.eval_account_size);
-    const isFunded = (acc.account_type || "live") === "funded";
     return {
       trades: s.trades,
       pnl: s.pnl,
       capital,
       value: capital != null ? capital + s.pnl : s.pnl,
       winRate: s.trades > 0 ? (s.wins / s.trades) * 100 : null,
-      payout: isFunded ? Math.max(0, s.pnl - (fundedMeta[acc.id]?.funded_payout_min || 0)) : 0,
+      payout: payoutStates.get(acc.id)?.available || 0,
     };
-  }, [statsByAccount, fundedMeta]);
+  }, [statsByAccount, payoutStates]);
 
   const totals = React.useMemo(() => {
     let count = 0, tradeCount = 0, wins = 0, pnl = 0, capital = 0;

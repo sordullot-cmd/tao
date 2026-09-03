@@ -28,13 +28,21 @@ export function isMicroContract(symbol?: string | null): boolean {
 }
 
 /**
- * Frais d'un trade. Une valeur saisie manuellement (`fees`/`commission`) est
- * prioritaire ; sinon on applique le barème automatique selon le symbole.
+ * Frais d'un trade. Les frais RÉELS du relevé (`fees`/`commission`) priment ;
+ * sinon on applique le barème automatique selon le symbole.
+ *
+ * Un relevé qui chiffre les frais à ZÉRO est une information, pas une absence :
+ * le barème ne doit pas revenir par la fenêtre inventer 1,82 $ là où le broker
+ * n'a rien pris. Seule une valeur ABSENTE (`null` en base, champ jamais écrit)
+ * fait retomber sur le barème — d'où le test de nullité plutôt qu'un `> 0`.
  */
 export function calculateFees(trade: TradeLike | null | undefined): number {
   if (trade == null) return 0;
-  const manual = Number(trade.fees ?? trade.commission);
-  if (Number.isFinite(manual) && manual > 0) return manual;
+  const raw = trade.fees != null ? trade.fees : trade.commission;
+  if (raw != null && raw !== "") {
+    const manual = Number(raw);
+    if (Number.isFinite(manual) && manual >= 0) return Math.abs(manual);
+  }
   // Quantité de contrats (micro ou mini) ; défaut 1 si inconnue.
   const qty = Number(trade.quantity ?? trade.qty ?? trade.lots ?? trade.lot_size);
   const n = Number.isFinite(qty) && qty > 0 ? qty : 1;

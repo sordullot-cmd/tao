@@ -844,6 +844,12 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
 
       let totalInserted = 0;
       let duplicateCount = 0;
+      // Trades déjà en base dont l'import a corrigé les frais.
+      let refreshedCount = 0;
+      /* Vrai quand la base ne sait pas encore stocker les frais. L'import passe
+         quand même, mais le P&L net affiché suivra le barème moyen au lieu du
+         relevé — c'est trop gros pour rester dans la console. */
+      let feesColumnMissing = false;
 
       // Insère les trades pour chaque compte cible.
       for (const targetId of targetAccountIds) {
@@ -872,14 +878,36 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
            elle compare l'heure de SORTIE et compte les occurrences, sans quoi
            un scale-out (plusieurs sorties au même prix, même seconde d'entrée)
            ne rentrait qu'une fois. */
+        /* `id` et `fees` en plus des champs de signature : un doublon dont la
+           base ignore les frais est réparable, et c'est le seul moment où on
+           tient les deux côtés. */
         const { data: existingTrades } = await supabase
           .from("apex_trades")
-          .select("date, symbol, direction, entry, exit, entry_time, exit_time")
+          .select("id, fees, date, symbol, direction, entry, exit, entry_time, exit_time")
           .eq("user_id", userId)
           .eq("account_id", targetId);
 
-        const { toInsert: tradesToInsert, duplicates } = splitNewTrades(allTrades, existingTrades || []);
+        const { toInsert: tradesToInsert, duplicates, toRefresh } =
+          splitNewTrades(allTrades, existingTrades || []);
         duplicateCount += duplicates;
+
+        /* Frais réels apportés à des trades déjà là. Sans ça, recoller un
+           relevé pour réparer un P&L faussé par le barème n'aurait servi à
+           rien : tout serait ressorti « doublon ignoré ». */
+        for (const { id, fees } of toRefresh) {
+          const { error: feeError } = await supabase
+            .from("apex_trades")
+            .update({ fees })
+            .eq("id", id)
+            .eq("user_id", userId);
+          if (feeError) {
+            // Colonne absente (migration 035) : inutile d'insister sur les suivants.
+            console.warn("Frais non mis à jour :", feeError.message);
+            feesColumnMissing = true;
+            break;
+          }
+          refreshedCount += 1;
+        }
 
         if (tradesToInsert.length === 0) continue;
 
@@ -893,6 +921,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
            retombe alors sur son barème. */
         if (insertError && /could not find the '(quantity|volume|fees)' column/i.test(insertError.message || "")) {
           console.warn("⚠️ Colonnes quantity/volume/fees absentes — réessai sans (applique les migrations 028 et 035 pour les conserver)");
+          feesColumnMissing = true;
           const stripped = tradesToInsert.map(({ quantity, volume, fees, ...rest }) => rest);
           ({ error: insertError } = await supabase.from("apex_trades").insert(stripped));
         }
@@ -906,7 +935,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
         totalInserted += tradesToInsert.length;
       }
 
-      if (totalInserted === 0) {
+      if (totalInserted === 0 && refreshedCount === 0) {
         setError(t("addTrade.info.allDuplicates").replace("{n}", String(importedTrades.length)));
         setLoading(false);
         return;
@@ -947,11 +976,21 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
       setPasteText("");
       setError("");
       setSuccessMsg(
-        t("addTrade.info.imported")
-          .replace("{n}", String(totalInserted))
-          .replace("{d}", String(duplicateCount))
-          .replace(/\{s\}/g, totalInserted > 1 ? "s" : "")
-          .replace(/\{ds\}/g, duplicateCount > 1 ? "s" : "")
+        [
+          t("addTrade.info.imported")
+            .replace("{n}", String(totalInserted))
+            .replace("{d}", String(duplicateCount))
+            .replace(/\{s\}/g, totalInserted > 1 ? "s" : "")
+            .replace(/\{ds\}/g, duplicateCount > 1 ? "s" : ""),
+          refreshedCount > 0
+            ? t("addTrade.info.feesRefreshed")
+                .replace("{n}", String(refreshedCount))
+                .replace(/\{s\}/g, refreshedCount > 1 ? "s" : "")
+            : "",
+          feesColumnMissing ? t("addTrade.warn.noFeesColumn") : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
       );
       setLoading(false);
 

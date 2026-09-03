@@ -29,6 +29,7 @@ import { moveEntry, orderEntries } from "@/lib/accountsOrder";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
 import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm } from "@/lib/propFirms";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount } from "@/lib/accountContracts";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { firmLogo } from "@/lib/accountBrand";
@@ -454,14 +455,23 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     return map;
   }, [visibleAccounts, firmById, notPlaceholder, trades, fundedMeta]);
 
-  /* Payout disponible d'un compte : uniquement sur les comptes funded, au-delà
-     du minimum de retrait paramétré. Sert la colonne « payout dispo ». */
-  const payoutFor = React.useCallback((acc) => {
-    if (!acc || (acc.account_type || "live") !== "funded") return 0;
-    const s = stats.get(acc.id);
-    if (!s) return 0;
-    return Math.max(0, s.fundedPnl - (fundedMeta[acc.id]?.funded_payout_min || 0));
-  }, [stats, fundedMeta]);
+  /* Contrats des comptes (objectifs, retraits enregistrés) — même magasin que
+     la carte de la page d'un compte, donc mêmes chiffres des deux côtés. */
+  const [contractStore] = useCloudState(CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, {});
+  const payoutStates = React.useMemo(
+    () => payoutsByAccount(notPlaceholder, trades, normalizeStore(contractStore), firmById),
+    [notPlaceholder, trades, contractStore, firmById],
+  );
+
+  /* Payout disponible d'un compte : ce qui reste sur le compte financé UNE FOIS
+     RETIRÉ ce qui en est déjà sorti, et seulement si les conditions de la firme
+     sont réunies. La colonne montrait le P&L brut moins le minimum de retrait :
+     un retrait encaissé y restait affiché comme disponible, et la même somme se
+     comptait deux fois. */
+  const payoutFor = React.useCallback(
+    (acc) => (acc ? payoutStates.get(acc.id)?.available || 0 : 0),
+    [payoutStates],
+  );
 
   /* Vue « compte » unifiée : les chiffres affichés dépendent du type (un funded
      repart de zéro à son passage funded). */
