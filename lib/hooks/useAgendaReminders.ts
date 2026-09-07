@@ -14,6 +14,7 @@ import {
   dueReminders,
   normalizeDefaultReminders,
   reminderWhen,
+  remindersFromEvent,
   type ReminderItem,
 } from "@/lib/agendaReminders";
 
@@ -249,7 +250,12 @@ export function useAgendaReminders(): void {
         // La salle est ce qu'on cherche des yeux en lisant un rappel de cours ;
         // sans elle, la notification oblige à rouvrir l'agenda.
         place: ev.location || "",
-        reminders: ev.reminders,
+        /* DÉBALLÉ ici : Google livre `{ useDefault, overrides }`, pas une liste
+           de minutes. Passé tel quel, l'objet ne se lisait pas — le rappel que
+           l'utilisateur avait posé sur SON évènement était ignoré au profit du
+           réglage par défaut, et ne sonnait plus du tout quand ce réglage était
+           « aucun ». */
+        reminders: remindersFromEvent(ev),
       };
     };
 

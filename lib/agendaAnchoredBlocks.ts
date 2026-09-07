@@ -198,8 +198,85 @@ export function defaultBefore(blocks: AnchoredBlock[], anchor: AnchorMode): stri
   return family.length ? family[family.length - 1].id : "";
 }
 
+/**
+ * La pile d'un mode, RANGÉE : de l'ancre naturelle vers l'extérieur, donc de
+ * bas en haut dans la grille (le premier finit sur l'ancre, le suivant finit là
+ * où il commence…).
+ *
+ * C'est l'ordre que la grille montre, et le seul dans lequel « monter » et
+ * « descendre » un bloc veulent dire quelque chose — le tableau du magasin,
+ * lui, garde l'ordre de création.
+ *
+ * Ouvrent la chaîne : les blocs sans `before`, ET ceux dont le `before` pointe
+ * hors de la famille (bloc effacé, autre mode). `placeFamily` ne sait pas
+ * davantage les rattacher ; les ranger ailleurs mentirait sur ce qui s'affiche.
+ * Ce qui reste après le dernier niveau est pris dans un cycle : gardé en queue
+ * plutôt qu'escamoté.
+ */
+export function anchorChain(blocks: AnchoredBlock[], anchor: AnchorMode): AnchoredBlock[] {
+  const family = normalizeAnchoredBlocks(blocks).filter((b) => b.anchor === anchor);
+  const byId = new Map(family.map((b) => [b.id, b]));
+  const out: AnchoredBlock[] = [];
+  const seen = new Set<string>();
+  let level = family.filter((b) => !b.before || !byId.has(b.before));
+  while (level.length) {
+    for (const b of level) { out.push(b); seen.add(b.id); }
+    const ids = new Set(level.map((b) => b.id));
+    level = family.filter((b) => !seen.has(b.id) && b.before && ids.has(b.before));
+  }
+  for (const b of family) if (!seen.has(b.id)) out.push(b);
+  return out;
+}
+
+/**
+ * Déplace un bloc d'un cran dans sa pile : `"up"` l'éloigne de son ancre (plus
+ * tôt dans la journée), `"down"` l'en rapproche.
+ *
+ * Un maillon ne se déplace pas seul : les deux pointeurs qui l'entouraient
+ * changent de cible. On réécrit donc TOUTE la chaîne d'un coup — c'est le seul
+ * état où les `before` disent exactement ce que la grille empile, et cela
+ * remet du même geste sur ses pieds une pile héritée d'un `before` mort.
+ *
+ * Sans cela, réordonner « lecture / sommeil » demandait de rouvrir les deux
+ * blocs et de refaire à la main le calcul que le chaînage existe précisément
+ * pour éviter.
+ */
+export function moveAnchoredBlock(
+  blocks: AnchoredBlock[],
+  id: string,
+  direction: "up" | "down",
+): AnchoredBlock[] {
+  const list = normalizeAnchoredBlocks(blocks);
+  const me = list.find((b) => b.id === id);
+  if (!me) return list;
+  const chain = anchorChain(list, me.anchor);
+  const at = chain.findIndex((b) => b.id === id);
+  const to = at + (direction === "up" ? 1 : -1);
+  if (at < 0 || to < 0 || to >= chain.length) return list;
+  const order = [...chain];
+  order[at] = chain[to];
+  order[to] = chain[at];
+  const before = new Map(order.map((b, i) => [b.id, i === 0 ? "" : order[i - 1].id]));
+  return list.map((b) => (before.has(b.id) ? { ...b, before: before.get(b.id) as string } : b));
+}
+
+/**
+ * Retire un bloc, et RECOUD la chaîne : ce qui pendait après lui se raccroche à
+ * son ancre à lui.
+ *
+ * Sans cela, `before` pointait dans le vide et le bloc suivant quittait la
+ * grille sans un mot — on supprimait « sommeil », et « lecture » s'en allait
+ * avec. Un `before` mort n'est pas une ancre naturelle (cf. `placeFamily`).
+ */
 export function removeAnchoredBlock(blocks: AnchoredBlock[], id: string): AnchoredBlock[] {
-  return normalizeAnchoredBlocks(blocks).filter((b) => b.id !== id);
+  const list = normalizeAnchoredBlocks(blocks);
+  const gone = list.find((b) => b.id === id);
+  if (!gone) return list;
+  /* Re-normalisé : un aller-retour entre deux blocs (a avant b, b avant a) ferait
+     sinon pointer le survivant sur lui-même. */
+  return normalizeAnchoredBlocks(
+    list.filter((b) => b.id !== id).map((b) => (b.before === id ? { ...b, before: gone.before } : b)),
+  );
 }
 
 /** Minutes depuis minuit, à partir de deux `HH:MM`. Sert à lire la durée dans

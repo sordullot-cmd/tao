@@ -6,6 +6,7 @@ import {
   LogOut, AlertTriangle, Plug, Trash2, X as IconX, ExternalLink,
   Clock, MapPin, AlignLeft, Bell, ChevronDown, ChevronLeft, ChevronRight, Target, HelpCircle, Repeat,
   Plus, CheckSquare, Square, Check, Sparkles, Sunrise, EyeOff, ListChecks,
+  ArrowUp, ArrowDown, Copy, ClipboardPaste,
 } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { t, useLang } from "@/lib/i18n";
@@ -44,9 +45,11 @@ import {
 import {
   ALL_DAYS, ANCHORED_STORAGE_KEY, ANCHORED_CLOUD_KEY,
   DEFAULT_ANCHOR_MINUTES, DEFAULT_ANCHOR_TITLE, DEFAULT_SLEEP_MINUTES, DEFAULT_SLEEP_TITLE,
-  anchorDurationLabel, anchoredOccurrencesForRange, defaultBefore, minutesBetween, newAnchorId,
+  anchorChain, anchorDurationLabel, anchoredOccurrencesForRange, defaultBefore,
+  minutesBetween, moveAnchoredBlock, newAnchorId,
   normalizeAnchoredBlocks, removeAnchoredBlock, upsertAnchoredBlock,
 } from "@/lib/agendaAnchoredBlocks";
+import { clipFromForm, clipLabel, pasteFormInto } from "@/lib/agendaClipboard";
 import { FIELD as DA_FIELD, CheckBox, DurationField } from "@/components/ui/form";
 import { HAIRLINE as DA_HAIRLINE } from "@/lib/ui/tokens";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
@@ -692,6 +695,15 @@ export default function AgendaPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [modal, setModal] = React.useState(null); // form objet | null
+  /* Presse-papiers de la grille (cf. lib/agendaClipboard) : un seul évènement à
+     la fois, en mémoire — il n'a pas à survivre au rechargement, on ne copie
+     pas un créneau pour le coller la semaine prochaine depuis un autre écran. */
+  const [clip, setClip] = React.useState(null);
+  /* Menu contextuel : `{ x, y, ev, dayKey, minutes }`. Le point du clic sert
+     d'ancre au Popover — d'où le div de taille nulle posé à ces coordonnées :
+     un menu contextuel n'a pas de déclencheur, il a un endroit. */
+  const [ctxMenu, setCtxMenu] = React.useState(null);
+  const ctxAnchorRef = React.useRef(null);
   const [modalError, setModalError] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   /* Échap referme la fiche, comme le clic au fond — mais pas pendant
@@ -937,6 +949,33 @@ export default function AgendaPage() {
   // elles restent aussi affichées dans la rangée du haut via `tasksByDay`.
   const anchoredBlocks = React.useMemo(() => normalizeAnchoredBlocks(anchoredStore), [anchoredStore]);
 
+  /* Place du bloc ouvert dans SA pile, telle qu'elle est ENREGISTRÉE — pas
+     telle que le brouillon la voudrait : monter un bloc réécrit ses voisins,
+     ce qui n'a de sens que sur ce qui existe déjà. Un bloc qu'on est en train
+     de créer, ou dont on vient de changer de mode sans enregistrer, n'est dans
+     aucune pile, et les flèches disparaissent. */
+  const anchorSpot = React.useMemo(() => {
+    const id = modal?.anchored ? modal.anchorId : null;
+    const saved = id ? anchoredBlocks.find((b) => b.id === id) : null;
+    if (!saved) return null;
+    const chain = anchorChain(anchoredBlocks, saved.anchor);
+    const at = chain.findIndex((b) => b.id === id);
+    return at < 0 || chain.length < 2 ? null : { at, total: chain.length };
+  }, [modal?.anchored, modal?.anchorId, anchoredBlocks]);
+
+  /* Le déplacement est ÉCRIT tout de suite, sans attendre l'enregistrement du
+     modal : il touche les blocs voisins, que le formulaire ne porte pas. Le
+     brouillon suit dans la foulée, sinon « Enregistrer » remettrait l'ancienne
+     ancre par-dessus le déplacement qu'on vient de faire. */
+  const moveAnchored = (direction) => {
+    const id = modal?.anchorId;
+    if (!id) return;
+    const next = moveAnchoredBlock(anchoredBlocks, id, direction);
+    const moved = next.find((b) => b.id === id);
+    setAnchoredStore(next);
+    if (moved) setModal((m) => (m && m.anchorId === id ? { ...m, anchorBefore: moved.before } : m));
+  };
+
   const eventsByDay = React.useMemo(() => {
     const map = new Map();
     for (const ev of [...allEvents, ...taskItems]) {
@@ -1073,6 +1112,148 @@ export default function AgendaPage() {
         })
         .catch(() => {});
     }
+  };
+
+  /* ─────────────── Copier / coller un évènement ───────────────
+     Clic droit (menu contextuel) et Ctrl/Cmd+C · Ctrl/Cmd+V. Le recalage — la
+     seule partie délicate — vit dans lib/agendaClipboard ; ici on ne fait que
+     lire ce qu'il y a sous le pointeur et écrire chez Google. */
+
+  /* Un bloc ancré n'a pas d'heure à soi (elle est recalculée chaque jour) et
+     une tâche n'est pas un évènement : ni l'un ni l'autre ne se colle. Une
+     séance de l'emploi du temps importé, elle, se copie très bien — c'est même
+     le seul moyen d'en faire quelque chose, puisqu'elle est en lecture seule. */
+  const canCopyItem = (ev) => !!ev && !ev.isAnchored && !ev.isTask && !ev.isGTask;
+
+  const copyItem = (ev) => {
+    if (!canCopyItem(ev)) return false;
+    /* Les étapes du créneau et ses objectifs vivent à côté de l'évènement, dans
+       les magasins locaux : sans eux, un cours recopié perdrait la moitié de ce
+       qu'on y avait mis. Les étapes repartent DÉCOCHÉES et avec des identifiants
+       neufs — un créneau collé est à faire, pas déjà fait. */
+    const next = clipFromForm({
+      ...formFromEvent(ev),
+      checklist: checklistFor(checklists, ev.id).map((i) => newChecklistItem(i.text)).filter(Boolean),
+      rpgCategories: eventRpg[ev.id]?.categories || [],
+    });
+    if (!next) return false;
+    setClip(next);
+    return true;
+  };
+
+  const pasteClip = async (dayKey, minutes = null) => {
+    const form = pasteFormInto(clip, dayKey, minutes);
+    if (!form) return;
+    setError(null);
+    try {
+      const res = await createEvent(payloadFromForm(form));
+      const newId = res?.event?.id;
+      if (newId) {
+        setChecklistStore((prev) => adoptChecklist(normalizeChecklists(prev), form.checklist, newId));
+        const cats = Array.isArray(form.rpgCategories) ? form.rpgCategories.filter(Boolean) : [];
+        if (cats.length) setEventRpg((prev) => ({ ...(prev || {}), [newId]: { categories: cats, title: form.summary || "" } }));
+        /* Annulable comme le reste de l'app : un collage se fait d'une frappe,
+           et se rate donc d'une frappe. Sans redo — le refaire, c'est recoller,
+           et le presse-papiers n'a pas bougé. */
+        pushUndo({
+          label: `Collage de « ${clipLabel(clip)} »`,
+          undo: async () => {
+            try { await deleteEvent(newId); } catch { /* déjà supprimé ailleurs */ }
+            setChecklistStore((prev) => dropChecklist(normalizeChecklists(prev), newId));
+            setEventRpg((prev) => { const n = { ...(prev || {}) }; delete n[newId]; return n; });
+            await loadEvents();
+          },
+        });
+      }
+      await loadEvents();
+    } catch (e) {
+      if (e?.message === "insufficient_scope") setError("insufficient_scope");
+      else setError(e?.message || "Erreur de collage");
+    }
+  };
+
+  /* Position du pointeur dans la grille, à l'instant où l'on frappe un
+     raccourci. Gardée dans un ref et relue par `elementFromPoint` au lieu d'un
+     état : la souris bouge à chaque pixel, et re-rendre la grille pour ça
+     coûterait plus cher que tout le reste de la page. */
+  const pointerRef = React.useRef(null);
+  React.useEffect(() => {
+    const onMove = (e) => { pointerRef.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
+
+  /** Ce que désigne un point de l'écran : un évènement, un creux de journée, ou
+   *  rien du tout. Sert au clic droit comme aux raccourcis. */
+  const targetAt = React.useCallback((x, y) => {
+    if (typeof document === "undefined" || x == null) return null;
+    const el = document.elementFromPoint(x, y);
+    const col = el?.closest?.("[data-daycol]");
+    if (!col) return null;
+    const dayKey = col.getAttribute("data-daykey");
+    const rect = col.getBoundingClientRect();
+    const minutes = Math.max(0, Math.min(24 * 60, ((y - rect.top) / HOUR_H) * 60));
+    const id = el?.closest?.("[data-agenda-event]")?.getAttribute("data-agenda-event") || null;
+    const ev = id ? (eventsByDay.get(dayKey) || []).find((it) => it.id === id) : null;
+    return { dayKey, minutes, ev: ev || null };
+  }, [eventsByDay]);
+
+  /* Le raccourci a besoin de TOUT l'état courant (presse-papiers, fiche
+     ouverte, jour affiché), qui change à chaque rendu. On le lui donne par un
+     ref plutôt que par les dépendances de l'effet : glisser un bloc re-rend la
+     grille à chaque pixel, et une liste de dépendances rebrancherait l'écouteur
+     soixante fois par seconde pour rien. */
+  const keyCtxRef = React.useRef(null);
+  keyCtxRef.current = { clip, modal, targetAt, copyItem, pasteClip, cursor };
+  React.useEffect(() => {
+    const editable = (el) => {
+      if (!el) return false;
+      const tag = (el.tagName || "").toLowerCase();
+      return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
+    };
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      const key = (e.key || "").toLowerCase();
+      if (key !== "c" && key !== "v") return;
+      const ctx = keyCtxRef.current;
+      if (!ctx) return;
+      /* Une saisie en cours garde ses propres copier/coller, et la fiche ouverte
+         parle de SON évènement, pas de la grille derrière elle : dans les deux
+         cas on laisse passer. */
+      if (editable(document.activeElement) || ctx.modal) return;
+      const point = pointerRef.current;
+      if (key === "c") {
+        // Du texte surligné se copie, lui : c'est ce que tout le monde attend.
+        if (String(window.getSelection?.() || "")) return;
+        const at = ctx.targetAt(point?.x, point?.y);
+        if (at?.ev && ctx.copyItem(at.ev)) e.preventDefault();
+        return;
+      }
+      if (!ctx.clip) return;
+      e.preventDefault();
+      const at = ctx.targetAt(point?.x, point?.y);
+      /* Pointeur hors de la grille : le collage tombe sur le jour affiché, à
+         l'heure d'origine — aucun point ne désigne d'heure, et refuser net
+         obligerait à viser une case pour un geste qui n'en demande pas. */
+      if (at) ctx.pasteClip(at.dayKey, at.minutes);
+      else ctx.pasteClip(dateKey(ctx.cursor), null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /** Clic droit : sur un bloc, ou dans le vide d'une colonne. */
+  const openCtxMenu = (e, ev, dayKey) => {
+    const at = targetAt(e.clientX, e.clientY);
+    if (!at && !ev) return; // hors grille : on laisse le menu du navigateur
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({
+      x: e.clientX, y: e.clientY,
+      dayKey: dayKey || at?.dayKey || dateKey(cursor),
+      minutes: at?.minutes ?? null,
+      ev: ev || at?.ev || null,
+    });
   };
 
   // Met à jour partiellement la config de récurrence du form.
@@ -1750,6 +1931,28 @@ export default function AgendaPage() {
         </div>
       )}
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+        {connected && clip && (
+          /* Ce que tient le presse-papiers, en toutes lettres. C'est le seul
+             retour qu'on ait après un Ctrl+C — sans lui, copier ne se voit
+             nulle part et l'on ne sait pas ce qu'on est sur le point de coller.
+             Il sert aussi de vidoir : un presse-papiers qu'on ne peut pas
+             reposer finit par coller ce qu'on avait oublié dedans. */
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6, maxWidth: 240,
+            padding: "6px 8px 6px 12px", minHeight: 34, borderRadius: 999,
+            background: T.white, boxShadow: T.elevPill, fontSize: 12, color: T.textSub,
+          }}>
+            <Copy size={13} strokeWidth={1.75} color={T.textMut} />
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {clipLabel(clip)}
+            </span>
+            <button type="button" onClick={() => setClip(null)}
+              title="Vider le presse-papiers" aria-label="Vider le presse-papiers"
+              style={{ ...iconBtn(), width: 22, height: 22, border: "none", background: "transparent", flexShrink: 0 }}>
+              <IconX size={12} strokeWidth={2} />
+            </button>
+          </span>
+        )}
         {connected && !isMobile && (
           <>
             {segmented}
@@ -1890,7 +2093,9 @@ export default function AgendaPage() {
               const isToday = sameDay(d, today);
               const isPastDay = startOfDay(d) < today;
               return (
-                <div key={di} data-daycol="" data-daykey={dk} onPointerDown={(e) => startDrag(e, d)} title="Glisser (ou toucher) pour créer un évènement" style={{
+                <div key={di} data-daycol="" data-daykey={dk} onPointerDown={(e) => startDrag(e, d)}
+                  onContextMenu={(e) => openCtxMenu(e, null, dk)}
+                  title="Glisser (ou toucher) pour créer un évènement" style={{
                   flex: 1, position: "relative", minWidth: 0, cursor: "pointer", userSelect: "none",
                   borderLeft: daysCount > 1 && di > 0 ? `1px solid ${T.border}` : "none",
                   backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent ${HOUR_H - 1}px, ${T.border} ${HOUR_H - 1}px, ${T.border} ${HOUR_H}px)`,
@@ -2004,8 +2209,13 @@ export default function AgendaPage() {
                           const stepsLeft = steps.length - stepsShown.length;
                           return (
                             <div key={i}
+                              /* Repère lu par `elementFromPoint` : le raccourci
+                                 clavier n'a que la position du pointeur pour
+                                 savoir sur quoi il tombe. */
+                              data-agenda-event={ev.id}
                               onPointerDown={(e) => { e.stopPropagation(); startMove(e, ev, d); }}
                               onClick={(e) => e.stopPropagation()}
+                              onContextMenu={(e) => openCtxMenu(e, ev, dk)}
                               title={`${timeLbl} ${ev.summary}`}
                               style={{
                                 position: "absolute", top, height, cursor: moving ? "grabbing" : "grab", touchAction: "none",
@@ -2359,6 +2569,59 @@ export default function AgendaPage() {
       >
         {body}
       </div>
+
+      {/* ─── Menu contextuel de la grille ───
+          Ancré sur le POINT du clic : un menu contextuel n'a pas de
+          déclencheur, d'où le repère de taille nulle posé à ces coordonnées —
+          le Popover, portalisé et déjà chargé de ne pas déborder de l'écran,
+          fait tout le reste. */}
+      {ctxMenu && (
+        <>
+          <div ref={ctxAnchorRef} aria-hidden="true"
+            style={{ position: "fixed", left: ctxMenu.x, top: ctxMenu.y, width: 0, height: 0, pointerEvents: "none" }} />
+          <Popover
+            anchorRef={ctxAnchorRef}
+            open
+            onClose={() => setCtxMenu(null)}
+            gap={2}
+            minWidth={220}
+            role="menu"
+            style={{ background: T.white, border: "none", borderRadius: 12, padding: 6, boxShadow: "var(--elev-overlay)" }}
+          >
+            <>
+              {canCopyItem(ctxMenu.ev) && (
+                <button type="button" role="menuitem"
+                  onClick={() => { copyItem(ctxMenu.ev); setCtxMenu(null); }}
+                  style={{ ...menuItem, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Copy size={14} strokeWidth={1.75} color={T.textMut} />
+                  <span style={{ flex: 1, minWidth: 0 }}>Copier</span>
+                  <kbd style={ctxKbd}>{"Ctrl/⌘ C"}</kbd>
+                </button>
+              )}
+              {clip && (
+                <button type="button" role="menuitem"
+                  onClick={() => { pasteClip(ctxMenu.dayKey, ctxMenu.minutes); setCtxMenu(null); }}
+                  style={{ ...menuItem, display: "flex", alignItems: "center", gap: 8 }}>
+                  <ClipboardPaste size={14} strokeWidth={1.75} color={T.textMut} />
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    Coller « {clipLabel(clip)} »
+                  </span>
+                  <kbd style={ctxKbd}>{"Ctrl/⌘ V"}</kbd>
+                </button>
+              )}
+              {/* Un menu vide serait un menu qui ne dit pas pourquoi : sur un
+                  bloc ancré ou une tâche, presse-papiers vide, il reste à
+                  expliquer ce qui se copie. */}
+              {!canCopyItem(ctxMenu.ev) && !clip && (
+                <div style={{ ...menuLabel, maxWidth: 240, whiteSpace: "normal", lineHeight: 1.45 }}>
+                  Copie un évènement (clic droit dessus) pour pouvoir le coller ici.
+                </div>
+              )}
+            </>
+          </Popover>
+        </>
+      )}
+
       {modal && (
         <div onClick={() => !saving && setModal(null)} style={{ position: "fixed", inset: 0, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24, overflowY: "auto" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...card(), width: "100%", maxWidth: 540, padding: 0, boxShadow: "var(--elev-overlay)", transform: `translate(${modalPos.x}px, ${modalPos.y}px)` }}>
@@ -2588,6 +2851,7 @@ export default function AgendaPage() {
                     /* Une seule pastille dit l'ancre en toutes lettres et ouvre
                        le menu qui la règle — même geste que la récurrence, au
                        lieu d'un panneau de réglages déplié en permanence. */
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <div ref={anchorMenuRef} data-menu-root style={{ position: "relative" }}>
                       <button type="button"
                         onClick={() => { setAnchorMenuOpen((o) => !o); setAnchorDaysOpen(false); setColorOpen(false); setRemindOpen(false); }}
@@ -2657,6 +2921,33 @@ export default function AgendaPage() {
                           </button>
                         </>
                       </Popover>
+                    </div>
+                    {/* Monter / descendre dans la pile. Le menu ci-dessus ne
+                        règle que l'ancre DE CE BLOC ; réordonner deux blocs
+                        collés demandait de rouvrir les deux et de refaire à la
+                        main le chaînage — exactement ce qu'il existe pour
+                        éviter. Ces flèches réécrivent les voisins d'un geste.
+                        Absentes tant qu'il n'y a qu'un bloc dans la pile : il
+                        n'y aurait rien à réordonner. */}
+                    {anchorSpot && (
+                      <div style={{ display: "inline-flex", gap: 4 }}>
+                        {[
+                          { dir: "up", Icon: ArrowUp, can: anchorSpot.at < anchorSpot.total - 1, label: "Monter le bloc dans la pile (plus tôt)" },
+                          { dir: "down", Icon: ArrowDown, can: anchorSpot.at > 0, label: "Descendre le bloc dans la pile (plus tard)" },
+                        ].map(({ dir, Icon, can, label }) => (
+                          <button key={dir} type="button" disabled={!can}
+                            onClick={() => moveAnchored(dir)}
+                            title={label} aria-label={label}
+                            style={{
+                              ...iconBtn(), width: 34, height: 34,
+                              cursor: can ? "pointer" : "default",
+                              opacity: can ? 1 : 0.4,
+                            }}>
+                            <Icon size={15} strokeWidth={1.75} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     </div>
                   )}
                 </FormRow>
@@ -3387,6 +3678,13 @@ const menuLabel = {
   fontSize: 11, fontWeight: 600, color: T.textMut,
   textTransform: "uppercase", letterSpacing: 0.4,
   padding: "8px 10px 4px",
+};
+/* Le raccourci rappelé au bout de sa ligne. Écrit pour les deux plateformes
+   plutôt que deviné : lire `navigator` au rendu ferait diverger le serveur et
+   le navigateur sur un texte que personne ne lit deux fois. */
+const ctxKbd = {
+  flexShrink: 0, fontSize: 10, fontFamily: "inherit", color: T.textMut,
+  background: T.accentBg, borderRadius: "var(--radius-field)", padding: "1px 5px",
 };
 const menuItem = {
   width: "100%", textAlign: "left", border: "none", borderRadius: 8,

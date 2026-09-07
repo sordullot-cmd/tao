@@ -27,6 +27,21 @@ export const DEFAULT_REMINDER_MIN = 10;
  */
 export function normalizeReminders(input: unknown): ReminderValue[] {
   if (input == null) return [];
+  /* Le format GOOGLE (`{ useDefault, overrides }`) est accepté ici, et pas
+     seulement dans `remindersFromEvent` : c'est la forme que la SOURCE livre, et
+     un appelant qui la passe telle quelle ne se trompait pas bruyamment — la
+     liste sortait vide, l'évènement retombait sur les rappels par défaut, et
+     l'oubli ne se voyait qu'à la notification qui n'arrivait pas (ou plus du
+     tout, si le réglage par défaut était « aucun »). */
+  if (!Array.isArray(input) && typeof input === "object") {
+    const r = input as { useDefault?: boolean; overrides?: Array<{ minutes?: number }> };
+    if (Array.isArray(r.overrides) || typeof r.useDefault === "boolean") {
+      if (Array.isArray(r.overrides) && r.overrides.length) {
+        return normalizeReminders(r.overrides.map((o) => o?.minutes));
+      }
+      return r.useDefault ? ["default"] : [];
+    }
+  }
   const raw = Array.isArray(input) ? input : [input];
   if (raw.some((v) => v === "default")) return ["default"];
   const seen = new Set<number>();
@@ -38,16 +53,13 @@ export function normalizeReminders(input: unknown): ReminderValue[] {
   return [...seen].sort((a, b) => b - a).slice(0, MAX_REMINDERS);
 }
 
-/** Lit les rappels d'un évènement Google (`{ useDefault, overrides }`). */
+/** Lit les rappels d'un évènement Google (`{ useDefault, overrides }`). Le
+ *  déballage lui-même vit dans `normalizeReminders` — deux implémentations de
+ *  la même lecture finiraient par diverger. */
 export function remindersFromEvent(ev: {
   reminders?: { useDefault?: boolean; overrides?: Array<{ minutes?: number }> } | null;
 } | null | undefined): ReminderValue[] {
-  const r = ev?.reminders;
-  if (!r) return [];
-  if (Array.isArray(r.overrides) && r.overrides.length) {
-    return normalizeReminders(r.overrides.map((o) => o?.minutes));
-  }
-  return r.useDefault ? ["default"] : [];
+  return normalizeReminders(ev?.reminders);
 }
 
 /** Traduit une liste de rappels vers le champ `reminders` de l'API Google. */

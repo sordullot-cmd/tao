@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   ALL_DAYS, DEFAULT_ANCHOR_MINUTES, DEFAULT_ANCHOR_TITLE, MAX_ANCHOR_MINUTES,
-  anchorDurationLabel, anchoredOccurrences, anchoredOccurrencesForRange,
-  eveningOccurrences, firstItemMinutes, minutesBetween, nextDayKey,
+  anchorChain, anchorDurationLabel, anchoredOccurrences, anchoredOccurrencesForRange,
+  eveningOccurrences, firstItemMinutes, minutesBetween, moveAnchoredBlock, nextDayKey,
   normalizeAnchoredBlocks, removeAnchoredBlock, upsertAnchoredBlock, wakeMinutes,
 } from "@/lib/agendaAnchoredBlocks";
 
@@ -354,5 +354,74 @@ describe("blocs du soir", () => {
     // Le réveil du matin + le morceau de nuit d'après minuit.
     expect(lendemain).toHaveLength(2);
     expect(nextDayKey(DAY)).toBe(NEXT);
+  });
+});
+
+/* ── Réordonner et défaire une pile ───────────────────────────────────────── */
+
+describe("pile de blocs collés", () => {
+  /* « lecture avant sommeil avant réveil » : la chaîne se lit de l'ancre vers
+     l'extérieur, donc de bas en haut dans la grille. Rangée exprès à l'envers
+     dans le magasin — l'ordre de création n'a rien à voir avec l'empilement. */
+  const pile = () => normalizeAnchoredBlocks([
+    { id: "lecture", summary: "Lecture", minutes: 30, anchor: "evening", before: "nuit" },
+    { id: "nuit", summary: "Sommeil", minutes: 480, anchor: "evening", before: "" },
+    { id: "reveil", summary: "Réveil", minutes: 45, anchor: "morning", before: "" },
+  ]);
+
+  it("range une famille de l'ancre vers l'extérieur, l'autre à part", () => {
+    expect(anchorChain(pile(), "evening").map((b) => b.id)).toEqual(["nuit", "lecture"]);
+    expect(anchorChain(pile(), "morning").map((b) => b.id)).toEqual(["reveil"]);
+  });
+
+  it("ouvre la chaîne sur un bloc dont l'ancre a disparu", () => {
+    /* Un `before` mort ne vaut pas ancre naturelle pour `placeFamily` : le ranger
+       ailleurs qu'en tête mentirait sur ce que la grille montre. */
+    const orphelin = normalizeAnchoredBlocks([
+      { id: "lecture", minutes: 30, anchor: "evening", before: "effacee" },
+    ]);
+    expect(anchorChain(orphelin, "evening").map((b) => b.id)).toEqual(["lecture"]);
+  });
+
+  it("échange deux blocs collés en réécrivant les deux pointeurs", () => {
+    /* Le geste que le chaînage devait éviter : rouvrir les deux blocs pour
+       refaire à la main « qui est avant qui ». */
+    const monte = moveAnchoredBlock(pile(), "nuit", "up");
+    expect(anchorChain(monte, "evening").map((b) => b.id)).toEqual(["lecture", "nuit"]);
+    expect(monte.find((b) => b.id === "lecture")?.before).toBe("");
+    expect(monte.find((b) => b.id === "nuit")?.before).toBe("lecture");
+    // Et l'inverse redonne la pile de départ.
+    expect(anchorChain(moveAnchoredBlock(monte, "nuit", "down"), "evening").map((b) => b.id))
+      .toEqual(["nuit", "lecture"]);
+  });
+
+  it("ne fait rien aux deux bouts de la pile, ni hors d'elle", () => {
+    expect(moveAnchoredBlock(pile(), "nuit", "down")).toEqual(pile());
+    expect(moveAnchoredBlock(pile(), "lecture", "up")).toEqual(pile());
+    // Le réveil est seul dans SA famille : il ne se déplace nulle part.
+    expect(moveAnchoredBlock(pile(), "reveil", "up")).toEqual(pile());
+    expect(moveAnchoredBlock(pile(), "inconnu", "up")).toEqual(pile());
+  });
+
+  it("recoud la chaîne quand on supprime un maillon du milieu", () => {
+    /* Sans couture, « lecture » gardait un `before` pointant dans le vide et
+       quittait la grille sans un mot — on supprimait le sommeil, la lecture
+       s'en allait avec. */
+    const sansNuit = removeAnchoredBlock(pile(), "nuit");
+    expect(sansNuit.map((b) => b.id)).toEqual(["lecture", "reveil"]);
+    expect(sansNuit.find((b) => b.id === "lecture")?.before).toBe("");
+    // Et elle se pose bien, à l'heure qu'occupait la fin de la nuit : le réveil
+    // du lendemain (9 h), moins ses 30 min — soit 8 h 30 le lendemain.
+    const [occ] = eveningOccurrences(sansNuit, DAY, 9 * 60).map((p) => p.occurrence);
+    expect(minOf(occ.start)).toBe(24 * 60 + 8 * 60 + 30);
+  });
+
+  it("ne laisse pas un survivant pointer sur lui-même", () => {
+    // Deux blocs qui se désignent l'un l'autre : la couture recréerait le cycle.
+    const boucle = normalizeAnchoredBlocks([
+      { id: "a", minutes: 30, anchor: "evening", before: "b" },
+      { id: "b", minutes: 30, anchor: "evening", before: "a" },
+    ]);
+    expect(removeAnchoredBlock(boucle, "a").find((x) => x.id === "b")?.before).toBe("");
   });
 });

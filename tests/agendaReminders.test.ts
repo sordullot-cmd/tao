@@ -66,6 +66,19 @@ describe("rappels d'agenda", () => {
     expect(remindersToGoogle([])).toEqual({ useDefault: false, overrides: [] });
   });
 
+  /* La forme que la SOURCE livre. Le hook des notifications la passait telle
+     quelle : elle ne se lisait pas, l'évènement retombait sur le réglage par
+     défaut, et ne sonnait plus du tout quand ce réglage était « aucun ». */
+  it("lit le format Google là où on le lui donne, sans passer par un déballage", () => {
+    expect(normalizeReminders({ useDefault: false, overrides: [{ minutes: 30 }, { minutes: 60 }] }))
+      .toEqual([60, 30]);
+    expect(normalizeReminders({ useDefault: true })).toEqual(["default"]);
+    expect(normalizeReminders({ useDefault: false })).toEqual([]);
+    // Un rappel posé sur l'évènement gagne contre le réglage, même « aucun ».
+    expect(effectiveReminderMinutes({ useDefault: false, overrides: [{ minutes: 30 }] }, []))
+      .toEqual([30]);
+  });
+
   it("relit tous les overrides d'un évènement, pas seulement le premier", () => {
     const ev = { reminders: { useDefault: false, overrides: [{ minutes: 10 }, { minutes: 1440 }] } };
     expect(remindersFromEvent(ev)).toEqual([1440, 10]);
