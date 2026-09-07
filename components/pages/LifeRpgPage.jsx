@@ -527,6 +527,10 @@ export default function LifeRpgPage() {
         // Étape porteuse, s'il y en a une : la carte range alors cet objectif
         // sous son jalon plutôt que dans la liste des objectifs libres.
         rpgStep: g.rpgStep || null,
+        /* Échéance de l'objectif — c'est elle qui DATE le jalon depuis que la
+           modale ne propose plus de dater une étape à la main. Sans elle, un
+           chemin mesuré par des chiffres ne disait plus quand il se termine. */
+        deadline: g.deadline || null,
       };
     };
     for (const g of flattenGoals(goalsList)) {
@@ -1621,7 +1625,7 @@ function stepTile(status, color, measured, pct) {
 /* Exportée pour ses tests, comme le rail : c'est la pièce que l'on regarde
    le plus longtemps sur une carte, et son état ne se déduit d'aucune donnée
    nue — il naît de la combinaison mesure / franchi / retard. */
-export function StepRow({ step, cat, status, goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete, canDrag = false, dragging = false, offsetY = 0, overMode = null, onGrab, onNudge }) {
+export function StepRow({ step, cat, status, today = "", goals = [], allObjectives = [], onToggleObjective, onCreateObjective, onToggle, onRename, onDelete, canDrag = false, dragging = false, offsetY = 0, overMode = null, onGrab, onNudge }) {
   const [hov, setHov] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -1636,6 +1640,20 @@ export function StepRow({ step, cat, status, goals = [], allObjectives = [], onT
   const done = isStepDone(step, pcts);
   const completion = Math.round(stepCompletion(step, pcts));
   const tile = stepTile(done ? "done" : status, cat.color, measured, completion);
+  /* Échéance affichée : la sienne s'il en porte une (cartes héritées), sinon
+     celle de ses objectifs — la PLUS TARDIVE, puisque le jalon ne se franchit
+     qu'une fois tous atteints. Prendre la plus proche daterait le jalon d'un
+     jour où il reste du chemin. Depuis que la modale ne propose plus de dater
+     une étape, c'est la seule date qu'un jalon mesuré puisse montrer, et un
+     chemin sans date ne se pilote pas. */
+  const goalDue = useMemo(() => {
+    const dues = goals.map(g => g.deadline).filter(Boolean).sort();
+    return dues.length > 0 ? dues[dues.length - 1] : null;
+  }, [goals]);
+  const due = step.due || goalDue;
+  /* Le retard se recalcule ici : `status` ne connaît que `step.due`, et une
+     échéance héritée des objectifs passerait donc pour à venir. */
+  const dueLate = !done && Boolean(due) && Boolean(today) && due < today;
 
   const commit = () => {
     setEditing(false);
@@ -1757,14 +1775,18 @@ export function StepRow({ step, cat, status, goals = [], allObjectives = [], onT
           </span>
         )}
 
-        {/* Une étape héritée de l'ancien système peut porter une date : on la
-            rappelle en lecture seule (et on signale son retard), sans jamais
-            proposer d'en poser une nouvelle. */}
-        {step.due && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: tone.label ?? T.textMut }}>
+        {/* La date du jalon, en lecture seule (et son retard s'il y en a) : la
+            sienne quand l'étape en porte une — cartes d'avant, la modale n'en
+            propose plus — et sinon celle de ses objectifs. */}
+        {due && (
+          <span
+            title={step.due
+              ? undefined
+              : "Échéance de ses objectifs — le jalon se franchit quand ils sont tous atteints"}
+            style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: dueLate ? T.red : (tone.label ?? T.textMut) }}>
             <CalendarClock size={10} strokeWidth={2} />
-            {fmtDayShort(step.due)}
-            {status === "late" && " · retard"}
+            {fmtDayShort(due)}
+            {dueLate && " · retard"}
           </span>
         )}
 
@@ -1820,6 +1842,17 @@ export function StepRow({ step, cat, status, goals = [], allObjectives = [], onT
                 <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: negative ? T.red : reached ? T.green : T.textMut, fontVariantNumeric: "tabular-nums" }}>
                   {g.pctOnly ? `${Math.round(g.rawPct)}%` : <>{fmtGoalVal(g.current, g.unit)} / {fmtGoalVal(g.target, g.unit)}</>}
                 </span>
+                {/* « Pour quand » de chaque objectif : la tuile n'en montre que
+                    la dernière, or deux objectifs d'un même jalon n'ont pas
+                    forcément la même échéance — c'est ce qui dit lequel presse.
+                    En rouge une fois la date passée sans que la cible soit
+                    atteinte. */}
+                {g.deadline && (
+                  <span title={`Échéance : ${fmtDayLong(g.deadline)}`}
+                    style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color: !reached && today && g.deadline < today ? T.red : T.textMut, fontVariantNumeric: "tabular-nums" }}>
+                    {fmtDayShort(g.deadline)}
+                  </span>
+                )}
                 {onToggleObjective && (
                   <button onClick={() => onToggleObjective(g.id)}
                     title="Retirer de cette étape (l'objectif reste sur la carte)"
@@ -2027,7 +2060,7 @@ export function StepsBlock({ cat, steps, enabled = true, open: openProp, onOpenC
           )}
           {ordered.map((s, i) => (
             <React.Fragment key={s.id}>
-              <StepRow step={s} cat={cat}
+              <StepRow step={s} cat={cat} today={today}
                 status={stepStatus(s, today, goalPctsOf(stepPcts, s.id))}
                 goals={goalsByStep[s.id] || []}
                 allObjectives={allObjectives}

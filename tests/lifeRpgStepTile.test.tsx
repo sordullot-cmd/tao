@@ -23,8 +23,8 @@ afterEach(cleanup);
 
 /* ── La tuile d'une étape ─────────────────────────────────────────────────── */
 
-const goal = (id: string, label: string, pct: number) =>
-  ({ id, label, pct, rawPct: pct, current: pct, target: 100, unit: "", color: "#4C6FFF", pctOnly: true });
+const goal = (id: string, label: string, pct: number, deadline: string | null = null) =>
+  ({ id, label, pct, rawPct: pct, current: pct, target: 100, unit: "", color: "#4C6FFF", pctOnly: true, deadline });
 
 describe("tuile d'une étape", () => {
   const props = { cat: CAT, allObjectives: [], onToggle: () => {}, onRename: () => {}, onDelete: null };
@@ -74,6 +74,42 @@ describe("tuile d'une étape", () => {
     cleanup();
     const finie = render(<StepRow {...props} step={step("c", "Semi")} status="done" goals={[goal("g", "Km", 100)]} />);
     expect(bars(finie.container)).toBe(0);
+  });
+
+  it("se date sur la dernière échéance de ses objectifs, faute de la sienne", () => {
+    /* La modale ne propose plus de dater un jalon : sans les échéances de ses
+       objectifs, un chemin mesuré par des chiffres ne dirait plus quand il se
+       termine. La PLUS TARDIVE, parce que le jalon ne se franchit qu'une fois
+       tous atteints — la plus proche le daterait d'un jour où il reste du
+       chemin. */
+    render(
+      <StepRow {...props} step={step("a", "Certification")} status="undated" today={TODAY}
+        goals={[goal("g1", "Chapitres", 40, "2026-07-15"), goal("g2", "Examens blancs", 20, "2026-09-30")]} />,
+    );
+    expect(screen.getByText("30 sept.")).toBeTruthy();
+    expect(screen.queryByText("15 juil.")).toBeNull();
+  });
+
+  it("signale le retard d'une échéance héritée de ses objectifs", () => {
+    // `status` ne connaît que `step.due` : sans recalcul, une date passée
+    // empruntée aux objectifs passerait pour à venir.
+    render(
+      <StepRow {...props} step={step("a", "Certification")} status="undated" today={TODAY}
+        goals={[goal("g1", "Chapitres", 40, "2026-03-01")]} />,
+    );
+    expect(screen.getByText(/retard/)).toBeTruthy();
+  });
+
+  it("donne à chaque objectif du jalon sa propre échéance, une fois déplié", () => {
+    /* La tuile n'affiche que la dernière : deux objectifs d'un même jalon n'ont
+       pas forcément la même date, et c'est elle qui dit lequel presse. */
+    render(
+      <StepRow {...props} step={step("a", "Certification")} status="undated" today={TODAY}
+        goals={[goal("g1", "Chapitres", 40, "2026-07-15"), goal("g2", "Examens blancs", 20, "2026-09-30")]} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Voir les objectifs/ }));
+    expect(screen.getByText("15 juil.")).toBeTruthy();
+    expect(screen.getAllByText("30 sept.").length).toBe(2);
   });
 });
 

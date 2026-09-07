@@ -93,9 +93,13 @@ function Face({ hero, heroTone, sub, action, gauges, children }) {
  */
 function Gauge({ label, ratio, value, spent = false, marker = null }) {
   const pct = Math.max(0, Math.min(1, Number(ratio) || 0));
+  /* Une progression est VERTE, du premier pixel au dernier : c'est du chemin
+     fait, et le noir d'encre d'avant la faisait ressembler à une piste inerte
+     plutôt qu'à un acquis. La consommation, elle, garde son échelle de danger —
+     un drawdown qui se remplirait en vert féliciterait pour une perte. */
   const color = spent
     ? (pct >= 1 ? T.red : pct >= 0.75 ? T.amber : T.textMut)
-    : (pct >= 1 ? T.pnlPos : T.text);
+    : T.pnlPos;
   const at = marker ? Math.max(0, Math.min(1, Number(marker.ratio) || 0)) * 100 : 0;
 
   return (
