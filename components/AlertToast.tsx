@@ -17,6 +17,15 @@ interface ToastItem {
   title: string;
   body: string;
   severity: Severity;
+  /**
+   * Ne s'efface pas tout seul : il attend la croix ou le geste de renvoi.
+   *
+   * Réservé à ce qu'on ne peut pas se permettre de manquer — un rappel
+   * d'agenda. Six secondes suffisent à confirmer une action qu'on vient de
+   * faire ; elles ne suffisent pas à prévenir de quelque chose qui va arriver,
+   * quand on est justement en train de regarder ailleurs.
+   */
+  sticky?: boolean;
   /** Passe à true juste avant le démontage pour jouer l'animation de sortie. */
   leaving?: boolean;
 }
@@ -69,15 +78,19 @@ export default function AlertToast() {
 
   useEffect(() => {
     const onAlert = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { title: string; body: string; severity?: Severity };
+      const detail = (e as CustomEvent).detail as { title: string; body: string; severity?: Severity; sticky?: boolean };
       const id = Date.now() + Math.random();
       const item: ToastItem = {
         id,
         title: detail.title,
         body: detail.body,
         severity: detail.severity || "info",
+        sticky: detail.sticky === true,
       };
-      // Limite la pile visible : retire les plus anciens au-delà de MAX_VISIBLE.
+      /* Limite la pile visible : retire les plus anciens au-delà de MAX_VISIBLE.
+         Un toast persistant n'y échappe pas — trois rappels simultanés sont
+         déjà l'exception, et une pile qui grandit sans fin finirait par cacher
+         celui qui vient d'arriver, c'est-à-dire le plus urgent. */
       setItems(prev => {
         const next = [...prev, item];
         if (next.length > MAX_VISIBLE) {
@@ -86,7 +99,7 @@ export default function AlertToast() {
         }
         return next;
       });
-      scheduleDismiss(id);
+      if (!item.sticky) scheduleDismiss(id);
     };
     window.addEventListener("tr4de:alert", onAlert);
     return () => window.removeEventListener("tr4de:alert", onAlert);
@@ -106,7 +119,7 @@ export default function AlertToast() {
      La distance seule ne suffit pas à décider : le mouvement naturel pour
      écarter une notification est une chiquenaude, courte et rapide. On mesure
      donc la vitesse et on projette où la carte se serait arrêtée. */
-  const drag = useRef({ id: -1, toast: -1, startX: 0, startY: 0, decided: -1, dx: 0, width: 0 });
+  const drag = useRef({ id: -1, toast: -1, sticky: false, startX: 0, startY: 0, decided: -1, dx: 0, width: 0 });
   const tracker = useRef(new VelocityTracker());
 
   const paint = (el: HTMLElement | null, dx: number) => {
@@ -128,13 +141,16 @@ export default function AlertToast() {
     tracker.current.reset();
   };
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: number) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: number, sticky: boolean) => {
     // Un seul doigt : changer de doigt en cours de glissé ferait sauter la
     // carte à la nouvelle position, puisque l'origine du geste changerait.
     if (drag.current.id !== -1) return;
     const el = e.currentTarget;
     drag.current = {
-      id: e.pointerId, toast: id,
+      /* La persistance est retenue AVEC le geste : à la fin, il faut savoir si
+         un renvoi abandonné doit relancer un compte à rebours — et un toast
+         persistant n'en a jamais eu. */
+      id: e.pointerId, toast: id, sticky,
       startX: e.clientX, startY: e.clientY,
       decided: -1, dx: 0,
       width: el.getBoundingClientRect().width,
@@ -179,9 +195,10 @@ export default function AlertToast() {
     const flick = vx / 1000 > FLICK_VELOCITY;
     const gone = flick || projected > d.width / 2;
 
+    const sticky = d.sticky;
     resetDrag(el);
     if (gone) dismiss(d.toast);
-    else scheduleDismiss(d.toast);            // reste : le compte à rebours repart
+    else if (!sticky) scheduleDismiss(d.toast);   // reste : le compte à rebours repart
   };
 
   if (items.length === 0) return null;
@@ -247,8 +264,8 @@ export default function AlertToast() {
             role={isDanger ? "alert" : "status"}
             aria-live={isDanger ? "assertive" : "polite"}
             onMouseEnter={() => clearTimer(item.id)}
-            onMouseLeave={() => { if (!item.leaving) scheduleDismiss(item.id); }}
-            onPointerDown={e => onPointerDown(e, item.id)}
+            onMouseLeave={() => { if (!item.leaving && !item.sticky) scheduleDismiss(item.id); }}
+            onPointerDown={e => onPointerDown(e, item.id, item.sticky === true)}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}

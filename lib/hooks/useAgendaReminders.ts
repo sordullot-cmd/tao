@@ -167,6 +167,29 @@ function loadFired(): Map<string, number> {
   return map;
 }
 
+/**
+ * Le même rappel, DANS l'app, sous forme de bandeau qui ne s'efface pas seul.
+ *
+ * Doublon assumé, et c'est tout l'intérêt : une notification système macOS
+ * s'affiche en bannière et disparaît d'elle-même au bout de quelques secondes —
+ * on la manque en regardant ailleurs, ce qui est précisément ce qu'on fait
+ * quand on travaille. Le bundle demande maintenant le style « alerte »
+ * (cf. src-tauri/Info.plist), mais ce réglage est un DÉFAUT que macOS laisse
+ * l'utilisateur écraser, et il ne vaut que pour l'app de bureau : dans un
+ * navigateur, rien ne le remplace.
+ *
+ * Le bandeau, lui, est à nous de bout en bout : il attend la croix. Le corps du
+ * message porte l'heure ABSOLUE de l'évènement (`reminderWhen`), pas seulement
+ * le temps restant — lu une heure plus tard, « dans 5 min » ne voudrait plus
+ * rien dire, « Commence à 14:00 » si.
+ */
+function announceInApp(title: string, body: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("tr4de:alert", {
+    detail: { title, body, severity: "info", sticky: true },
+  }));
+}
+
 function saveFired(map: Map<string, number>): void {
   try {
     localStorage.setItem(FIRED_STORAGE_KEY, JSON.stringify(Object.fromEntries(map)));
@@ -317,7 +340,9 @@ export function useAgendaReminders(): void {
         if (!due.announce) continue;
 
         const when = reminderWhen(item.startMs, now);
-        void notify(item.title, { body: item.place ? `${when} · ${item.place}` : when });
+        const body = item.place ? `${when} · ${item.place}` : when;
+        void notify(item.title, { body });
+        announceInApp(item.title, body);
       }
 
       if (!dirty) return;

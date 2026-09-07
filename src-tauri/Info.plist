@@ -9,6 +9,15 @@
   l'application, lui, passe par `lsappinfo` et ne dépend d'aucune autorisation
   (cf. src-tauri/src/tracker.rs).
 
+  NSUserNotificationAlertStyle : macOS affiche les notifications d'une app en
+  BANNIÈRE par défaut — elle apparaît, puis s'efface toute seule après quelques
+  secondes, et on la manque. « alert » demande le second style : la notification
+  reste à l'écran jusqu'à ce qu'on la ferme. C'est un DÉFAUT d'application, pas
+  une contrainte : Réglages Système → Notifications garde le dernier mot, et si
+  le style a déjà été choisi là-bas pour cette app, c'est ce choix qui gagne.
+  La clé vise NSUserNotification, qui est bien l'API qu'emprunte la pile
+  tauri-plugin-notification → notify-rust → mac-notification-sys.
+
   Micro et caméra : même règle, et c'est ce qui manquait. La WebView accorde
   bien la permission côté WebKit (wry répond `Grant` au délégué), mais macOS
   coupe la demande AVANT elle si le bundle ne déclare pas pourquoi il veut le
@@ -25,6 +34,8 @@
 	<string>tao enregistre ta voix pour les exercices d'éloquence et la dictée de notes. Les prises restent dans ton compte.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>tao affiche l'image de ta caméra pendant les exercices d'éloquence, comme un miroir. Rien n'est enregistré ni envoyé.</string>
+	<key>NSUserNotificationAlertStyle</key>
+	<string>alert</string>
 	<key>LSUIElement</key>
 	<false/>
 </dict>
