@@ -2,13 +2,14 @@
  * Le SUJET d'une vidéo, quand le site ne dit que là où l'on est.
  *
  * YouTube reste rangé dans « Réseaux sociaux » — c'est bien ce qu'on y fait la
- * plupart du temps. Ce qui est sous test, c'est l'exception : une vidéo dont le
- * titre annonce du trading compte dans « Trading & marchés », sous un nom à
- * elle, et le reste de YouTube n'a pas bougé d'un pouce.
+ * plupart du temps. Ce qui est sous test, ce sont les deux exceptions : une
+ * vidéo dont le titre annonce du trading compte dans « Trading & marchés », un
+ * clip compte dans « Musique », chacune sous un nom à elle, et le reste de
+ * YouTube n'a pas bougé d'un pouce.
  */
 
 import { describe, it, expect } from "vitest";
-import { classify, classifyDetailed } from "@/lib/activity/categories";
+import { classify, classifyDetailed, productivityOf } from "@/lib/activity/categories";
 import { DEFAULT_SETTINGS, type DayLog } from "@/lib/activity/engine";
 import { dayStats } from "@/lib/activity/stats";
 
@@ -38,8 +39,54 @@ describe("une vidéo de trading ne compte plus dans les réseaux sociaux", () =>
     expect(d.matched).toBe("analyse technique");
   });
 
+  it("reconnaît le vocabulaire courant d'une chaîne de trading", () => {
+    for (const titre of [
+      "Trade recap de la semaine",
+      "Mon backtesting sur 200 trades",
+      "Winrate de 68% : ma strategy expliquée",
+      "Ma stratégie du lundi matin",
+      "Le trade parfait n'existe pas",
+    ]) {
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("trading");
+    }
+  });
+
   it("vaut aussi pour un direct Twitch, même vocabulaire, même raison", () => {
     expect(classify("Google Chrome", "Session forex du matin", [], "https://www.twitch.tv/qqn").category)
+      .toBe("trading");
+  });
+});
+
+describe("un clip musical compte comme de la musique, pas comme un fil", () => {
+  it("range dans « musique » ce que la mise en forme du titre annonce comme un morceau", () => {
+    for (const titre of [
+      "Artiste - Nom du morceau (Clip officiel)",
+      "SOME BAND - Song Name (Official Music Video)",
+      "Chanteuse ft. Rappeur - Titre (Lyrics)",
+      "Best of 2026 · DJ Set live",
+      "Miles Davis - Kind of Blue (Full Album)",
+    ]) {
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("music");
+    }
+  });
+
+  it("lui donne son nom à elle, pour qu'elle tienne sa propre ligne", () => {
+    expect(classify("Google Chrome", "Artiste - Titre (Official Video) - YouTube", [], YT).label)
+      .toBe("YouTube · Music");
+  });
+
+  it("laisse la musique NEUTRE : elle accompagne le travail, elle ne le remplace pas", () => {
+    // Le fil, lui, reste une distraction — c'est toute la raison de les séparer.
+    expect(productivityOf(classify("Google Chrome", "Titre (Clip officiel) - YouTube", [], YT).category))
+      .toBe("neutral");
+    expect(productivityOf(classify("Google Chrome", "Compilation de chats - YouTube", [], YT).category))
+      .toBe("distracting");
+  });
+
+  it("cède au trading quand le titre parle des deux", () => {
+    // « Lofi pour trader » : le vocabulaire de métier est le plus spécialisé des
+    // deux, c'est lui qui dit à quoi l'heure a servi.
+    expect(classify("Google Chrome", "Lofi mix pour scalper le nasdaq - YouTube", [], YT).category)
       .toBe("trading");
   });
 });
@@ -53,7 +100,12 @@ describe("le sujet ne déborde pas de son bord", () => {
   });
 
   it("épargne les mots que n'importe quelle vidéo peut porter", () => {
-    for (const titre of ["Installer pip sous Windows", "Message broker avec Kafka", "Le levier hydraulique"]) {
+    for (const titre of [
+      "Installer pip sous Windows", "Message broker avec Kafka", "Le levier hydraulique",
+      // Côté musique : un extrait de jeu est un « clip », un direct n'est pas un
+      // concert, et un documentaire sur le rap n'est pas un morceau.
+      "Mon meilleur clip sur Valorant", "En live avec vous ce soir", "Histoire du rap français",
+    ]) {
       expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("social");
     }
   });

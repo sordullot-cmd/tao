@@ -41,7 +41,7 @@ import { getLocalDateString } from "@/lib/dateUtils";
 import { dayStats, fmtClock, fmtDur, ranked, rangeStats } from "@/lib/activity/stats";
 import { daySources, loadRange } from "@/lib/activity/engine";
 import {
-  categoryLabel, isBrowser, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain,
+  categoryLabel, isBrowser, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain, upsertRule,
 } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
@@ -259,17 +259,16 @@ export default function ActivityPage({ setPage }) {
     const match = (domain || (bucket.isSite ? bucket.label : bucket.app || bucket.label))
       .trim().toLowerCase();
     if (!match) return;
+    /* `upsertRule` et non un ajout : rechoisir une catégorie sur la même ligne
+       laissait derrière elle la règle précédente, morte mais toujours listée. */
     setSettings(s => ({
       ...s,
-      rules: [
-        ...s.rules,
-        {
-          id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          match,
-          field,
-          category,
-        },
-      ],
+      rules: upsertRule(s.rules, {
+        id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        match,
+        field,
+        category,
+      }),
     }));
   };
 

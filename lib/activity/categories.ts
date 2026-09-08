@@ -117,13 +117,13 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
   /* La musique reste à part : elle ACCOMPAGNE le travail au lieu de le
      remplacer, et une heure de Spotify comptée en distraction pendant qu'on
      code fausse la lecture de la journée. */
-  { id: "music",    label: "Musique",           labelEn: "Music",         color: PALETTE_DARK.orange, productivity: "neutral",     hint: "Écoute de musique : Spotify, Apple Music, Deezer, SoundCloud." },
+  { id: "music",    label: "Musique",           labelEn: "Music",         color: PALETTE_DARK.orange, productivity: "neutral",     hint: "Écoute de musique : Spotify, Apple Music, Deezer, SoundCloud, clips et albums sur YouTube." },
   /* Les réseaux méritent leur ligne, séparée du reste du divertissement : un
      film se choisit et se termine, un fil ne se termine jamais. Les confondre
      donnait un total dont on ne pouvait rien faire — c'est précisément la part
      qu'on veut voir isolée. YouTube en fait partie : on y arrive pour une
      vidéo, on y reste pour la suivante. */
-  { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube." },
+  { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube — hors vidéos de trading et clips musicaux, comptés à part." },
   { id: "fun",      label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, séries, jeux, sport." },
   /* L'app elle-même, et NEUTRE — c'est le point délicat.
      Écrire son journal est du travail, personne n'en doute. Mais un suivi qui
@@ -350,6 +350,29 @@ export interface ClassifyRule {
   category: string;
 }
 
+/**
+ * Pose une règle en REMPLAÇANT celle qui visait déjà la même chose.
+ *
+ * Choisir une catégorie sur une ligne d'activité écrivait une règle de plus à
+ * chaque fois : trois hésitations sur la même application laissaient trois
+ * règles, dont deux mortes, dans une liste qu'on relit à la main.
+ *
+ * La nouvelle est posée EN FIN de liste, et pas à la place de l'ancienne :
+ * « écrite en dernier = consultée en premier » (cf. `userHit`), donc c'est le
+ * seul endroit d'où une correction est sûre de gagner. La remettre à son ancien
+ * rang la laisserait perdre contre une règle plus récente qui attrape la même
+ * chose — on aurait choisi une catégorie, et rien n'aurait changé.
+ */
+export function upsertRule(rules: ClassifyRule[], rule: ClassifyRule): ClassifyRule[] {
+  const field = rule.field ?? "app";
+  const match = (rule.match || "").trim().toLowerCase();
+  if (!match) return rules;
+  const kept = (rules || []).filter(
+    (r) => !(r && (r.field ?? "app") === field && (r.match || "").toLowerCase() === match),
+  );
+  return [...kept, { ...rule, match, field }];
+}
+
 /** Navigateurs : leur titre de fenêtre porte le vrai sujet, pas leur nom. */
 export function isBrowser(app: string): boolean {
   return isBrowserApp(app);
@@ -404,23 +427,55 @@ function settle(id: string): string {
  * catalogue) : on y enchaîne un fil de vidéos suggérées. Mais on y suit aussi
  * des formations, et deux heures d'analyse de graphiques n'ont rien à faire au
  * même endroit que deux heures de fil — c'est même l'inverse exact, l'une est
- * du travail et l'autre de la distraction. Le titre est la seule chose qui les
- * sépare, alors on le lit.
+ * du travail et l'autre de la distraction. Même chose pour un clip qu'on laisse
+ * tourner en fond : c'est de la MUSIQUE, elle accompagne au lieu de remplacer,
+ * et la compter en distraction fausse la journée exactement comme le ferait une
+ * heure de Spotify rangée là. Le titre est la seule chose qui les sépare, alors
+ * on le lit.
  *
  * Ces motifs CLASSENT, là où ceux de `CLUES` se contentent de proposer : ils
  * sont donc volontairement étroits — des termes de métier, pas des mots qu'une
  * vidéo quelconque peut porter. « broker » (un bus de messages en
  * développement), « pip » (l'installeur Python) ou « levier » seul en sont
- * absents pour cette raison. Une erreur reste rattrapable de toute façon : une
- * règle de l'utilisateur passe avant tout le reste.
+ * absents pour cette raison ; côté musique, « live », « clip » et « mix » seuls
+ * sont écartés pour la même — un extrait de jeu est un « clip », un direct
+ * n'est pas un concert.
+ *
+ * Deux mots font exception et sont volontairement LARGES : « trade » et
+ * « stratégie ». Pris hors contexte ils appartiennent à tout le monde (une
+ * stratégie de jeu, un accord commercial), mais sur les chaînes que suit
+ * l'utilisateur de cette app ils ne parlent que de marchés — et rater un
+ * « trade recap » pour éviter une vidéo de stratégie Valorant coûte plus cher
+ * que l'inverse. Une erreur reste rattrapable de toute façon : une règle de
+ * l'utilisateur passe avant tout le reste.
+ *
+ * L'ORDRE tranche les titres qui parlent des deux (« musique pour trader ») :
+ * le trading passe devant, parce que son vocabulaire est le plus spécialisé des
+ * deux — un titre qui le porte parle rarement d'autre chose.
  */
-const SUBJECTS: { cat: string; name: string; re: RegExp }[] = [
+const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
   {
     cat: "trading",
     name: "Trading",
+    nameEn: "Trading",
     /* Le titre est normalisé avant le test : sans accent, sans ponctuation
        (« S&P 500 » → « s p 500 », « day-trading » → « day trading »). */
-    re: /\b(trading|traders?|day ?trading|swing trading|scalping|scalper|bourse|boursi(er|ere)s?|forex|marches financiers|analyse technique|technical analysis|price action|order ?flow|smart money|ict|backtests?|chandeliers?|candlesticks?|take profit|stop loss|risk reward|pips|effet de levier|nasdaq|s ?p ?500|cac 40|dow jones|dax 40|xauusd|prop ?firms?|ftmo|topstep|fundednext|the5ers|apex trader|cryptos?|cryptomonnaies?|bitcoin|btc|ethereum|altcoins?)\b/,
+    re: /\b(trading|tradingview|traders?|trades?|trade recaps?|day ?trading|swing trading|scalping|scalper|bourse|boursi(er|ere)s?|forex|marches financiers|analyse technique|technical analysis|price action|order ?flow|order block|fair value gap|fvg|liquidity|wyckoff|smart money|ict|backtest(s|ing|er)?|win ?rates?|strateg(y|ies|ie)|chandeliers?|candlesticks?|take profit|stop loss|risk reward|money management|gestion du risque|drawdown|pips|effet de levier|nasdaq|s ?p ?500|cac 40|dow jones|dax 40|us30|xauusd|eurusd|gbpusd|usdjpy|metatrader|mt4|mt5|ninjatrader|prop ?firms?|compte finance|funded account|ftmo|topstep|fundednext|the5ers|apex trader|cryptos?|cryptomonnaies?|bitcoin|btc|ethereum|altcoins?)\b/,
+  },
+  {
+    cat: "music",
+    name: "Musique",
+    nameEn: "Music",
+    /* Deux familles, et aucune n'est un genre musical : ce qui identifie un
+       morceau, c'est la MISE EN FORME que les chaînes lui collent (« official
+       video », « clip officiel », « lyrics », « prod by ») et le format d'écoute
+       (« full album », « dj set », « live session »). Les genres, eux, sont des
+       mots que n'importe quelle vidéo emprunte — un documentaire sur le rap
+       n'est pas de la musique. Une exception, « lofi » : sur ces plateformes il
+       ne désigne jamais un sujet, toujours une bande-son qu'on laisse tourner —
+       et c'est justement le cas qu'on veut compter en neutre plutôt qu'en
+       distraction, puisqu'il accompagne le travail. */
+    re: /\b(clip officiel|clip musical|clip video|official (music )?video|official audio|audio officiel|official visualizer|lyrics?( video)?|paroles|feat|prod by|remix|mashup|nightcore|slowed( and)? reverb|sped up|bass boosted|8d audio|full album|album complet|mixtape|dj (set|mix)|live session|live performance|en concert|concert live|tiny desk|boiler room|karaoke|acoustic|unplugged|instrumental|lofi|lo fi)\b/,
   },
 ];
 
@@ -429,7 +484,9 @@ function subjectOf(title: string): { cat: string; name: string; matched: string 
   const hay = norm(title);
   for (const s of SUBJECTS) {
     const m = hay.match(s.re);
-    if (m) return { cat: s.cat, name: s.name, matched: m[0] };
+    // Le nom suit la langue de l'interface, comme les libellés de catégorie :
+    // « YouTube · Musique » n'aurait aucun sens au milieu d'une page anglaise.
+    if (m) return { cat: s.cat, name: getLang() === "en" ? s.nameEn : s.name, matched: m[0] };
   }
   return null;
 }

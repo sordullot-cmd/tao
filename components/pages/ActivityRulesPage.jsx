@@ -32,7 +32,7 @@ import { PALETTE } from "@/lib/ui/palette";
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
   allCategories, assignableCategories, BUILTIN_CATEGORIES, categoryById, catalogSize, categoryLabel,
-  isBrowser, newCategoryId, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain, suggestCategory,
+  isBrowser, newCategoryId, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain, suggestCategory, upsertRule,
 } from "@/lib/activity/categories";
 import { clearAll, daySources, listDays, loadRange, syncNow } from "@/lib/activity/engine";
 import { device, renameDevice } from "@/lib/activity/cloud";
@@ -295,9 +295,14 @@ export default function ActivityRulesPage({ setPage }) {
   const addRule = (match, field, category) => {
     const clean = (match || "").trim().toLowerCase();
     if (!clean) return;
+    /* Même cible = même règle : reclasser une application déjà rangée corrige la
+       règle existante au lieu d'en empiler une seconde qui la contredit. */
     patch(s => ({
       ...s,
-      rules: [...s.rules, { id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, match: clean, field, category }],
+      rules: upsertRule(s.rules, {
+        id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        match: clean, field, category,
+      }),
     }));
   };
 

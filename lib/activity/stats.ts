@@ -185,14 +185,26 @@ export interface DayStats {
  * l'ancien classement enregistrait « Google Chrome » là où le catalogue sait
  * maintenant lire « YouTube », et l'historique doit en profiter aussi.
  */
-export function recategorize(day: DayLog, settings: ActivitySettings): Segment[] {
+export interface JudgedSegment extends Segment {
+  /**
+   * Ce qui a décidé du classement, à CE tour de reclassement.
+   *
+   * Transitoire : jamais écrit dans le journal — le journal garde la mesure, pas
+   * l'interprétation. Il n'existe que pour départager les segments d'un même nom
+   * (cf. `oneCategoryPerLabel`), où une règle de l'utilisateur doit gagner
+   * contre une déduction du catalogue.
+   */
+  via: ClassifySource;
+}
+
+export function recategorize(day: DayLog, settings: ActivitySettings): JudgedSegment[] {
   return day.segments.map(seg => {
     /* L'hôte relevé à la mesure est réutilisé tel quel : sans lui, un
        reclassement rendrait au segment le nom deviné dans son titre — et
        « Spotify » redeviendrait le nom d'un morceau. */
-    const { category, label } = classifyDetailed(seg.app, seg.title, settings.rules, seg.site);
-    if (category === seg.cat && label === seg.label) return seg;
-    return { ...seg, cat: category, label };
+    const { category, label, via } = classifyDetailed(seg.app, seg.title, settings.rules, seg.site);
+    if (category === seg.cat && label === seg.label) return { ...seg, via };
+    return { ...seg, cat: category, label, via };
   });
 }
 
@@ -216,19 +228,47 @@ function msOf(seg: Segment): number {
  * a passé le plus de temps l'emporte, et « Non classé » ne l'emporte jamais sur
  * une catégorie réelle — c'est un aveu d'ignorance, pas un jugement. Un seul
  * segment reconnu suffit donc à ranger tout ce qui porte le même nom.
+ *
+ * MAIS une règle de l'utilisateur n'entre pas dans ce vote : elle le tranche.
+ * C'est une instruction, pas un indice de plus à peser, et l'oublier vidait de
+ * son effet toute la sélection de catégorie de la page Activité. Le cas se
+ * produit tous les jours : une règle de domaine (« youtube.com ») ne peut
+ * s'appliquer qu'aux segments dont le navigateur a livré l'URL, or beaucoup
+ * n'en ont pas — le reste retombait sur le catalogue, prenait la majorité du
+ * temps, et REPEIGNAIT au passage les segments que la règle venait de classer.
+ * On choisissait une catégorie, la ligne affichait « classé par ta règle », et
+ * la catégorie affichée restait l'ancienne.
  */
-function oneCategoryPerLabel(segments: Segment[]): Segment[] {
+function oneCategoryPerLabel(segments: JudgedSegment[]): JudgedSegment[] {
   const perLabel = new Map<string, Map<string, number>>();
+  /* Ce que l'utilisateur a explicitement demandé pour ce nom, et le temps qui
+     le porte : à deux règles contradictoires sous un même nom (l'une sur le
+     domaine, l'autre sur le titre), la plus représentée tranche — mais elles
+     restent entre elles, le catalogue n'y participe pas. */
+  const decided = new Map<string, Map<string, number>>();
   for (const seg of segments) {
     const cats = perLabel.get(seg.label) ?? new Map<string, number>();
     cats.set(seg.cat, (cats.get(seg.cat) || 0) + msOf(seg));
     perLabel.set(seg.label, cats);
+
+    if (seg.via === "user" && seg.cat !== OTHER) {
+      const mine = decided.get(seg.label) ?? new Map<string, number>();
+      mine.set(seg.cat, (mine.get(seg.cat) || 0) + msOf(seg));
+      decided.set(seg.label, mine);
+    }
   }
 
   const winner = new Map<string, string>();
   for (const [label, cats] of perLabel) {
     let best = "";
     let bestMs = -1;
+    /* Une règle a parlé : le vote n'a pas lieu. `decided` n'a jamais d'entrée
+       « Non classé » — une règle qui pointe vers une catégorie supprimée est
+       sans destination, et vaut alors autant qu'une absence de règle. */
+    for (const [cat, ms] of decided.get(label) ?? []) {
+      if (ms > bestMs) { best = cat; bestMs = ms; }
+    }
+    if (best) { winner.set(label, best); continue; }
     for (const [cat, ms] of cats) {
       if (cat === OTHER) continue;
       /* À égalité, la première rencontrée gagne : l'ordre des segments est

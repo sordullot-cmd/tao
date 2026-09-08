@@ -24,7 +24,7 @@ describe("classement", () => {
   });
 
   it("classe un navigateur par le titre de sa page, pas par son nom", () => {
-    const res = classify("Google Chrome", "Lofi beats - YouTube", []);
+    const res = classify("Google Chrome", "Compilation de chats - YouTube", []);
     // YouTube compte comme un réseau : on y arrive pour une vidéo, on y reste
     // pour la suivante — ce n'est pas une séance, c'est un fil.
     expect(res.category).toBe("social");
@@ -89,7 +89,7 @@ describe("classement", () => {
   });
 
   it("dit ce qui a décidé du classement", () => {
-    expect(classifyDetailed("Google Chrome", "Lofi beats - YouTube", []).via).toBe("title");
+    expect(classifyDetailed("Google Chrome", "Compilation de chats - YouTube", []).via).toBe("title");
     expect(classifyDetailed("Code", "", []).via).toBe("app");
     expect(classifyDetailed("Adobe Photoshop 2024", "affiche.psd", []).via).toBe("word");
     expect(classifyDetailed("Code", "", [{ id: "r", match: "code", category: "fun" }]).via).toBe("user");
@@ -217,6 +217,31 @@ describe("une chose, une seule catégorie", () => {
     expect(stats.byApp[0].cat).toBe("dev");
     expect(stats.byApp[0].ms).toBe(125 * 60_000);
   });
+
+  it("laisse une règle de l'utilisateur TRANCHER le vote, pas y participer", () => {
+    /* Le défaut qui vidait de son effet toute la sélection de catégorie de la
+       page Activité, et le seul symptôme visible était « il ne se passe rien ».
+
+       Une règle de domaine ne peut s'appliquer qu'aux segments dont le
+       navigateur a livré l'URL. Ici le premier la porte (10 min), le second non
+       (50 min) — et le catalogue, lui, reconnaît YouTube dans les deux titres.
+       Le vote au temps donnait donc la majorité au catalogue, qui REPEIGNAIT au
+       passage le segment que la règle venait de classer : la ligne annonçait
+       « classé par ta règle » en affichant l'ancienne catégorie. */
+    const log = day([
+      { ...seg([9, 0], [9, 10], "Chrome", "x", "YouTube", "YouTube"), site: "www.youtube.com" },
+      seg([9, 20], [10, 10], "Chrome", "x", "YouTube", "Une vidéo — YouTube"),
+    ]);
+    const stats = dayStats(log, {
+      ...DEFAULT_SETTINGS,
+      rules: [{ id: "r", match: "youtube.com", field: "site" as const, category: "work" }],
+    });
+    expect(stats.byApp[0].cat).toBe("work");
+    // Tout le temps du nom suit la règle, pas seulement le segment reconnu.
+    expect(stats.byApp[0].ms).toBe(60 * 60_000);
+    expect(stats.byCategory.find(b => b.id === "work")!.ms).toBe(60 * 60_000);
+    expect(stats.byCategory.find(b => b.id === "social")).toBeUndefined();
+  });
 });
 
 describe("nature d'une catégorie", () => {
@@ -231,7 +256,7 @@ describe("statistiques d'une journée", () => {
     seg([9, 0], [10, 30], "Code", "dev"),          // 1 h 30 productif
     seg([10, 30], [10, 40], "Discord", "comms"),   // 10 min neutre (coupe le focus)
     seg([10, 40], [11, 10], "Code", "dev"),        // 30 min productif
-    seg([12, 30], [12, 50], "Chrome", "fun", "Youtube", "Lofi beats - YouTube"), // 20 min distraction, après une pause
+    seg([12, 30], [12, 50], "Chrome", "fun", "Youtube", "Compilation de chats - YouTube"), // 20 min distraction, après une pause
   ]);
   const stats = dayStats(log, DEFAULT_SETTINGS);
 

@@ -64,10 +64,10 @@ export interface CatalogEntry {
   /**
    * Plateforme qui HÉBERGE : son nom dit où l'on est, jamais ce qu'on y fait.
    *
-   * Une heure de formation au trading et une heure de vidéos suggérées tombent
-   * toutes deux dans « Réseaux sociaux » parce qu'elles se passent sur YouTube
-   * — alors que ce sont deux activités opposées, et que le titre, lui, les
-   * distingue. Sur ces entrées-là, et sur elles seules, le classement lit en
+     * Une heure de formation au trading, un clip laissé en fond et une heure de
+   * vidéos suggérées tombent toutes trois dans « Réseaux sociaux » parce
+   * qu'elles se passent sur YouTube — alors que ce sont trois activités qui ne
+   * se ressemblent pas, et que le titre, lui, les distingue. Sur ces entrées-là, et sur elles seules, le classement lit en
    * plus le SUJET annoncé par le titre (cf. `SUBJECTS` dans
    * lib/activity/categories). Ailleurs, le nom suffit : un titre de fenêtre de
    * VS Code parle du fichier ouvert, pas d'une autre activité.
@@ -511,7 +511,10 @@ export const CATALOG: CatalogEntry[] = [
     /* YouTube est ici et non dans « Divertissement » : ce qu'on y passe n'est
        pas une séance, c'est un fil — une vidéo suggérée après l'autre, comme
        sur les autres réseaux. Le ranger avec Netflix mélangeait un film choisi
-       et deux heures d'enchaînement, qui ne se règlent pas pareil. */
+       et deux heures d'enchaînement, qui ne se règlent pas pareil.
+       `hosted` en fait l'exception : ce qu'on y regarde vraiment — une formation
+       au trading, un clip qui tourne en fond — sort de cette catégorie sur la
+       foi du titre (cf. `SUBJECTS`). */
     { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"], hosted: true },
     /* Pinterest était rangé avec les outils de création, comme banque d'images.
        C'en est une, mais on n'y va pas comme dans une banque d'images : on y

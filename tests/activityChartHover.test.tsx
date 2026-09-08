@@ -184,7 +184,7 @@ describe("survol du graphe de régularité (Rapports)", () => {
         date: "2024-06-03", awayMs: 0, updatedAt: Date.now(),
         segments: [
           { s: new Date("2024-06-03T14:00:00").getTime(), e: new Date("2024-06-03T16:00:00").getTime(), app: "Figma", label: "Figma", title: "", cat: "work" },
-          { s: new Date("2024-06-03T16:00:00").getTime(), e: new Date("2024-06-03T16:30:00").getTime(), app: "Chrome", label: "Youtube", title: "Lofi - YouTube", cat: "fun" },
+          { s: new Date("2024-06-03T16:00:00").getTime(), e: new Date("2024-06-03T16:30:00").getTime(), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
         ],
       });
       render(<ActivityReportsPage setPage={vi.fn()} />);
@@ -219,7 +219,7 @@ describe("détail au survol de l'anneau (Journée)", () => {
       segments: [
         { s: at(0), e: at(60), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
         { s: at(60), e: at(80), app: "Chrome", label: "GitHub", title: "PR · github.com/tr4de", cat: "dev" },
-        { s: at(80), e: at(110), app: "Chrome", label: "Youtube", title: "Lofi - YouTube", cat: "fun" },
+        { s: at(80), e: at(110), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
       ],
     });
     render(<ActivityPage setPage={vi.fn()} />);
@@ -323,7 +323,7 @@ describe("détail au survol des figures de la semaine (Journée)", () => {
       segments: [
         { s: at(9), e: at(11), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
         { s: at(11), e: at(12), app: "Chrome", label: "GitHub", title: "PR · github.com/tr4de", cat: "dev" },
-        { s: at(14), e: at(15), app: "Chrome", label: "Youtube", title: "Lofi - YouTube", cat: "fun" },
+        { s: at(14), e: at(15), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
       ],
     });
   }
@@ -372,7 +372,7 @@ describe("détail au survol de l'anneau (Rapports)", () => {
       date: getLocalDateString(), awayMs: 0, updatedAt: Date.now(),
       segments: [
         { s: at(0), e: at(60), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
-        { s: at(60), e: at(90), app: "Chrome", label: "Youtube", title: "Lofi - YouTube", cat: "fun" },
+        { s: at(60), e: at(90), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
       ],
     });
     render(<ActivityReportsPage setPage={vi.fn()} />);
@@ -420,7 +420,7 @@ describe("le clic retient le détail, jamais la bulle", () => {
       date: getLocalDateString(), awayMs: 0, updatedAt: Date.now(),
       segments: [
         { s: at(0), e: at(60), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
-        { s: at(60), e: at(90), app: "Chrome", label: "Youtube", title: "Lofi - YouTube", cat: "fun" },
+        { s: at(60), e: at(90), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
       ],
     });
     render(<ActivityPage setPage={vi.fn()} />);
@@ -453,7 +453,7 @@ describe("le clic retient le détail, jamais la bulle", () => {
       date: getLocalDateString(), awayMs: 0, updatedAt: Date.now(),
       segments: [
         { s: at(0), e: at(60), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
-        { s: at(60), e: at(90), app: "Chrome", label: "Youtube", title: "Lofi - YouTube", cat: "fun" },
+        { s: at(60), e: at(90), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
       ],
     });
     render(<ActivityPage setPage={vi.fn()} />);
