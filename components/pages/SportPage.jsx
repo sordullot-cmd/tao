@@ -332,7 +332,11 @@ export default function SportPage() {
     }],
   });
   const [form, setForm] = useState(emptyForm());
-  const [chartExerciseName, setChartExerciseName] = useState("");
+  /* L'exercice suivi dans le graphique est un RÉGLAGE, pas un état d'écran : on
+     revient sur la page pour voir sa progression sur le même mouvement, et un
+     `useState` la faisait retomber sur le premier de la liste à chaque retour.
+     Il vit donc dans le nuage, comme le repli des mois. */
+  const [chartExerciseName, setChartExerciseName, chartExerciseReady] = useCloudState("tr4de_sport_chart_exercise", "sport_chart_exercise", "");
   // Métrique choisie à la main dans le graphique (null = celle de l'exercice).
   const [chartMetricChoice, setChartMetricChoice] = useState(null);
 
@@ -575,9 +579,14 @@ export default function SportPage() {
     return Array.from(set).sort();
   }, [sessions]);
 
+  /* Repli sur le premier exercice quand rien n'est retenu — ou quand ce qui
+     l'était a disparu (séance supprimée, exercice renommé). L'attente de
+     `chartExerciseReady` évite d'écrire ce repli par-dessus le choix mémorisé
+     qui n'est pas encore revenu du nuage. */
   useEffect(() => {
-    if (!chartExerciseName && allExerciseNames.length > 0) setChartExerciseName(allExerciseNames[0]);
-  }, [allExerciseNames, chartExerciseName]);
+    if (!chartExerciseReady || allExerciseNames.length === 0) return;
+    if (!allExerciseNames.includes(chartExerciseName)) setChartExerciseName(allExerciseNames[0]);
+  }, [allExerciseNames, chartExerciseName, chartExerciseReady, setChartExerciseName]);
 
   /* Options du sélecteur d'exercice du graphique : les plus travaillés d'abord
      (c'est là qu'il y a une progression à lire), avec la pastille de catégorie

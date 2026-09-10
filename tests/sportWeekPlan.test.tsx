@@ -63,6 +63,57 @@ function openPlan() {
   render(<SportPage />);
 }
 
+/** Le déclencheur du sélecteur d'exercice du graphique (`SearchableSelect`) —
+ *  le seul menu à liste de la page hors modale. */
+function chartPicker(): HTMLElement {
+  const el = document.querySelector('[aria-haspopup="listbox"]');
+  if (!el) throw new Error("sélecteur d'exercice absent");
+  return el as HTMLElement;
+}
+
+/* Deux séances, deux exercices : de quoi avoir un choix à retenir. */
+const TWO_EXERCISES = [
+  { id: 1, date: mondayISO(), discipline: "musculation", duration: 60,
+    exercises: [{ id: 11, name: "Squat", category: "legs", sets: [{ id: 111, reps: 5, weight: 100 }] }] },
+  { id: 2, date: mondayISO(1), discipline: "musculation", duration: 60,
+    exercises: [{ id: 21, name: "Tractions", category: "pull", sets: [{ id: 211, reps: 10, weight: null }] }] },
+];
+
+describe("Graphique de progression (Sport)", () => {
+  beforeEach(() => cloudStore.clear());
+
+  it("reprend l'exercice retenu la fois précédente", () => {
+    cloudStore.set("tr4de_sport_sessions", TWO_EXERCISES);
+    cloudStore.set("tr4de_sport_chart_exercise", "Tractions");
+    render(<SportPage />);
+
+    // Sans mémoire, le sélecteur retombait sur le premier exercice de la liste.
+    expect(chartPicker().textContent).toContain("Tractions");
+  });
+
+  it("écrit le choix, et le rend au montage suivant", () => {
+    cloudStore.set("tr4de_sport_sessions", TWO_EXERCISES);
+    const first = render(<SportPage />);
+
+    fireEvent.click(chartPicker());
+    fireEvent.click(screen.getByRole("option", { name: /Tractions/ }));
+    expect(cloudStore.get("tr4de_sport_chart_exercise")).toBe("Tractions");
+
+    first.unmount();
+    render(<SportPage />);
+    expect(chartPicker().textContent).toContain("Tractions");
+  });
+
+  it("retombe sur un exercice existant quand celui retenu a disparu", () => {
+    cloudStore.set("tr4de_sport_sessions", TWO_EXERCISES);
+    cloudStore.set("tr4de_sport_chart_exercise", "Soulevé de terre");
+    render(<SportPage />);
+
+    expect(chartPicker().textContent).not.toContain("Soulevé de terre");
+    expect(cloudStore.get("tr4de_sport_chart_exercise")).toBe("Squat");
+  });
+});
+
 describe("Plan de la semaine (Sport)", () => {
   beforeEach(() => {
     cloudStore.clear();
