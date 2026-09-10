@@ -113,6 +113,15 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
      mélangeaient tout le temps : un même document passait de « Écriture » à
      « Admin » selon qu'il était ouvert dans Notion ou dans Docs. */
   { id: "work",     label: "Travail",           labelEn: "Work",          color: PALETTE.purple,      productivity: "productive",  hint: "Écriture, tableurs, agenda, création, fichiers, cours et lecture de fond." },
+  /* L'apprentissage a sa ligne, et il la prend à « Divertissement » plus qu'à
+     « Travail » : ce qu'on regarde pour apprendre arrivait dans « Réseaux
+     sociaux » avec le reste de YouTube, si bien qu'une heure de cours de
+     communication et une heure de fil comptaient au même endroit — l'une au
+     débit de la journée alors qu'elle en fait le crédit.
+     Les plateformes de cours (Coursera, Anki, Duolingo…) restent dans
+     « Travail » : ce sont des séances qu'on ouvre exprès, pas des vidéos qui
+     passent, et les déplacer emporterait tout l'historique avec elles. */
+  { id: "learning", label: "Apprentissage",      labelEn: "Learning",      color: PALETTE_DARK.blue,   productivity: "productive",  hint: "Ce qu'on regarde pour apprendre : communication, psychologie, philosophie, études, tutoriels, conférences." },
   { id: "browsing", label: "Navigation",        labelEn: "Browsing",      color: PALETTE.brown,       productivity: "neutral",     hint: "Le web qu'on traverse : moteurs de recherche, achats, pages non reconnues." },
   { id: "comms",    label: "Communication",     labelEn: "Communication", color: PALETTE.yellow,      productivity: "neutral",     hint: "Messageries, courrier, visioconférence." },
   /* La musique reste à part : elle ACCOMPAGNE le travail au lieu de le
@@ -124,7 +133,7 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
      donnait un total dont on ne pouvait rien faire — c'est précisément la part
      qu'on veut voir isolée. YouTube en fait partie : on y arrive pour une
      vidéo, on y reste pour la suivante. */
-  { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube — hors vidéos de trading et clips musicaux, comptés à part." },
+  { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube — hors vidéos de trading, d'apprentissage et clips musicaux, comptés à part." },
   { id: "fun",      label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, séries, jeux, sport." },
   /* L'app elle-même, et NEUTRE — c'est le point délicat.
      Écrire son journal est du travail, personne n'en doute. Mais un suivi qui
@@ -434,8 +443,11 @@ function settle(id: string): string {
  * du travail et l'autre de la distraction. Même chose pour un clip qu'on laisse
  * tourner en fond : c'est de la MUSIQUE, elle accompagne au lieu de remplacer,
  * et la compter en distraction fausse la journée exactement comme le ferait une
- * heure de Spotify rangée là. Le titre est la seule chose qui les sépare, alors
- * on le lit.
+ * heure de Spotify rangée là. Et même chose, enfin, pour tout ce qu'on regarde
+ * pour APPRENDRE — communication, psychologie, philosophie, études, tutoriels :
+ * c'est la part de YouTube qu'on avait le plus de raisons de vouloir lire à
+ * part, et la seule que le fil rendait invisible. Le titre est la seule chose
+ * qui les sépare, alors on le lit.
  *
  * Ces motifs CLASSENT, là où ceux de `CLUES` se contentent de proposer : ils
  * sont donc volontairement étroits — des termes de métier, pas des mots qu'une
@@ -453,9 +465,11 @@ function settle(id: string): string {
  * que l'inverse. Une erreur reste rattrapable de toute façon : une règle de
  * l'utilisateur passe avant tout le reste.
  *
- * L'ORDRE tranche les titres qui parlent des deux (« musique pour trader ») :
- * le trading passe devant, parce que son vocabulaire est le plus spécialisé des
- * deux — un titre qui le porte parle rarement d'autre chose.
+ * L'ORDRE tranche les titres qui parlent de plusieurs (« musique pour trader »,
+ * « lofi beats to study to ») : le trading d'abord, parce que son vocabulaire
+ * est le plus spécialisé — un titre qui le porte parle rarement d'autre chose ;
+ * la musique ensuite, parce qu'un morceau qu'on met POUR travailler reste un
+ * morceau ; l'apprentissage en dernier, le plus large des trois.
  */
 const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
   {
@@ -480,6 +494,34 @@ const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
        et c'est justement le cas qu'on veut compter en neutre plutôt qu'en
        distraction, puisqu'il accompagne le travail. */
     re: /\b(clip officiel|clip musical|clip video|official (music )?video|official audio|audio officiel|official visualizer|lyrics?( video)?|paroles|feat|prod by|remix|mashup|nightcore|slowed( and)? reverb|sped up|bass boosted|8d audio|full album|album complet|mixtape|dj (set|mix)|live session|live performance|en concert|concert live|tiny desk|boiler room|karaoke|acoustic|unplugged|instrumental|lofi|lo fi)\b/,
+  },
+  {
+    /* Ce qu'on regarde pour APPRENDRE — et qui tombait dans « Réseaux sociaux »
+       avec le reste de YouTube. C'est l'écart le plus coûteux que laissait la
+       mesure : une heure de cours de communication ou de psychologie comptait
+       exactement là où compte une heure de fil, c'est-à-dire au débit de la
+       journée, alors qu'elle en fait le crédit.
+
+       Le vocabulaire est celui des SUJETS qu'on suit (communication, séduction,
+       psychologie, philosophie, études) et celui des FORMATS qui n'existent que
+       pour enseigner (cours, tutoriel, conférence, masterclass, documentaire,
+       vulgarisation). Les deux ensemble, parce qu'aucun ne suffit : un cours ne
+       dit pas toujours de quoi il parle, et un sujet ne dit pas toujours qu'il
+       est enseigné.
+
+       Ce qui a été volontairement ÉCARTÉ, et c'est le plus important ici :
+       « motivation », « discipline » et « habits » appartiennent à tout le monde
+       (un montage de sport, une vidéo de mode) et auraient rangé en
+       apprentissage la moitié d'un fil. « ted » nu aussi — une série s'appelle
+       Ted. Manquer une vidéo se rattrape d'une règle ; en attraper cent, non.
+
+       APRÈS la musique, et c'est le seul ordre qui tienne : « lofi beats to
+       study to » est de la musique qu'on laisse tourner PENDANT le travail, pas
+       une étude. Et après le trading, qui garde « psychologie du trading ». */
+    cat: "learning",
+    name: "Apprentissage",
+    nameEn: "Learning",
+    re: /\b(appren(dre|ds|ez)|apprentissage|appris|learn|learning|comment faire|tutos?|tutoriels?|tutorials?|cours|lecons?|masterclass|formation|conference|tedx|ted talks?|ted ed|documentaires?|documentary|vulgarisation|explique|expliquee|explained|revisions?|examens?|concours|etudes?(?! op)|etudier|etudiante?s?|methode de travail|memorisation|anki|communication|prise de parole|art oratoire|oratoire|eloquence|rhetorique|storytelling|public speaking|langage corporel|body language|charisme|charisma|social skills|competences sociales|flirt(er)?|seduction|seduire|drague(r)?|dating|psychologie|psychology|psychologique|therapie|therapy|narcissi(sme|que)|manipulation|biais cognitifs?|cognitive biases?|intelligence emotionnelle|confiance en soi|estime de soi|self esteem|developpement personnel|personal development|self improvement|mindset|philosophie|philosophy|philosophique|stoicisme|stoicism|stoique|nietzsche|socrate|platon|existentialisme|neurosciences|sociologie)\b/,
   },
 ];
 

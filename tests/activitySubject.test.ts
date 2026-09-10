@@ -91,6 +91,87 @@ describe("un clip musical compte comme de la musique, pas comme un fil", () => {
   });
 });
 
+describe("une vidéo d'apprentissage n'est pas un fil qui passe", () => {
+  it("range dans « apprentissage » ce que le titre annonce comme tel", () => {
+    for (const titre of [
+      // Les sujets que l'utilisateur suit…
+      "Comment améliorer sa communication au quotidien",
+      "Les 5 biais cognitifs qui décident pour toi",
+      "Psychologie de l'attachement expliquée",
+      "Le stoïcisme pour les nuls",
+      "Nietzsche en 10 minutes",
+      "Comment flirter sans être lourd",
+      "L'art de la séduction, ce que personne ne dit",
+      "Méthode de travail : mes révisions en 3 semaines",
+      // …et les formats qui n'existent que pour enseigner.
+      "Cours de guitare pour débutant",
+      "Tutoriel Excel : les tableaux croisés",
+      "Conférence sur les neurosciences de la mémoire",
+      "Masterclass : la prise de parole en public",
+      "Documentaire : comment fonctionne un vaccin",
+    ]) {
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("learning");
+    }
+  });
+
+  it("lui donne son nom à elle, pour qu'elle tienne sa propre ligne", () => {
+    expect(classify("Google Chrome", "Psychologie de la confiance en soi - YouTube", [], YT).label)
+      .toBe("YouTube · Learning");
+  });
+
+  it("compte cette heure au CRÉDIT de la journée, là où le fil la débitait", () => {
+    // C'est tout l'objet de la séparation : les deux tombaient au même endroit.
+    expect(productivityOf(classify("Google Chrome", "Cours de philosophie - YouTube", [], YT).category))
+      .toBe("productive");
+    expect(productivityOf(classify("Google Chrome", "Compilation de chats - YouTube", [], YT).category))
+      .toBe("distracting");
+  });
+
+  it("dit que c'est le TITRE qui a décidé, et lequel de ses mots", () => {
+    const d = classifyDetailed("Google Chrome", "Psychologie du narcissisme - YouTube", [], YT);
+    expect(d.via).toBe("title");
+    expect(d.matched).toBe("psychologie");
+  });
+
+  it("vaut sur les autres plateformes qui hébergent, pas seulement YouTube", () => {
+    expect(classify("Google Chrome", "Conférence : philosophie et IA", [], "https://vimeo.com/1").category)
+      .toBe("learning");
+  });
+
+  it("cède à la musique, qui cède elle-même au trading", () => {
+    /* « Lofi beats to study to » est de la musique qu'on laisse tourner PENDANT
+       le travail : la compter comme une étude gonflerait le temps d'apprentissage
+       de tout ce qu'on a mis en fond. Et « psychologie du trading » parle de
+       marchés, quoi qu'annonce son premier mot. */
+    expect(classify("Google Chrome", "Lofi beats to study to - YouTube", [], YT).category).toBe("music");
+    expect(classify("Google Chrome", "La psychologie du trading expliquée - YouTube", [], YT).category)
+      .toBe("trading");
+  });
+
+  it("épargne les mots qu'une vidéo quelconque peut porter", () => {
+    for (const titre of [
+      /* Volontairement écartés du vocabulaire : ils rangeraient en apprentissage
+         la moitié d'un fil. */
+      "Motivation gym : 10 minutes pour y aller",
+      "La discipline d'un champion",
+      "Mes habits d'hiver",
+      // « ted » nu manque au vocabulaire pour cette raison exacte.
+      "Ted Lasso saison 3 : mon avis",
+      // Un parcours, un discours : « cours » n'y est pas un mot.
+      "Mon parcours en 2026",
+    ]) {
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("social");
+    }
+  });
+
+  it("laisse une étude de Chopin à la musique classique, pas aux révisions", () => {
+    /* Le seul mot du lot qui appartienne aussi à un autre monde : une « étude »
+       est une forme musicale. Le titre l'annonce toujours de la même façon. */
+    expect(classify("Google Chrome", "Chopin - Etude Op. 10 No. 4 - YouTube", [], YT).category)
+      .not.toBe("learning");
+  });
+});
+
 describe("le sujet ne déborde pas de son bord", () => {
   it("ne s'applique qu'aux plateformes qui hébergent, pas à un site qui sait ce qu'il est", () => {
     // Un article de presse sur la bourse reste de la presse : Le Monde n'est pas
