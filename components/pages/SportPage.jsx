@@ -252,6 +252,12 @@ export default function SportPage() {
   const [hiddenExercises, setHiddenExercises] = useCloudState("tr4de_sport_hidden_exercises", "sport_hidden_exercises", []);
   const [favoriteExercises, setFavoriteExercises] = useCloudState("tr4de_sport_favorite_exercises", "sport_favorite_exercises", []);
   const [customPresets, setCustomPresets] = useCloudState("tr4de_sport_custom_presets", "sport_custom_presets", []);
+  /* Plan de la semaine — RÉCURRENT, pas daté : `{ "0": [entrée…], … "6": [] }`
+     avec 0 = lundi. Un plan daté obligerait à le re-remplir tous les dimanches
+     soir, alors qu'une routine d'entraînement est justement ce qui ne change
+     pas d'une semaine à l'autre ; ce qui change — ce qui a vraiment été fait —
+     se lit dans `sessions`, et l'appariement se refait à l'affichage. */
+  const [weekPlan, setWeekPlan] = useCloudState("tr4de_sport_week_plan", "sport_week_plan", {});
   // Photos de progression physique ({ id, date, dataUrl, weight?, note? }).
   const [progressPhotos, setProgressPhotos] = useCloudState("tr4de_sport_progress_photos", "sport_progress_photos", []);
   /* Mois de l'historique repliés — on stocke les CLÉS REPLIÉES (et non les
@@ -263,9 +269,7 @@ export default function SportPage() {
     (prev || []).includes(key) ? (prev || []).filter(k => k !== key) : [...(prev || []), key]
   ));
 
-  const [tab, setTab] = useState("workout"); // "workout" | "photos"
-  const [filterDiscipline, setFilterDiscipline] = useState("all");
-  const [filterCategory, setFilterCategory] = useState("all");
+  const [tab, setTab] = useState("workout"); // "workout" | "plan" | "photos"
 
   /* Ajout de photos — l'input et son état vivent ICI, pas dans `PhotosTab`.
      Le bouton d'ajout est posé dans la ligne de tête, à côté des onglets, à la
@@ -295,6 +299,26 @@ export default function SportPage() {
     }
   };
 
+  /* Modèle en cours d'édition (null = éditeur fermé). Il vit ICI et non dans le
+     formulaire de séance : les modèles se listent à deux endroits — le menu du
+     plan et le formulaire — et un éditeur par liste en ferait deux à tenir. */
+  const [presetDraft, setPresetDraft] = useState(null);
+  const openPresetEditor = (preset) => setPresetDraft(preset);
+  const openNewPreset = () => setPresetDraft({ id: newPresetId(), name: "", discipline: "musculation", exercises: [] });
+  const savePreset = (preset) => {
+    setCustomPresets(prev => {
+      const list = prev || [];
+      return list.some(p => p.id === preset.id)
+        ? list.map(p => (p.id === preset.id ? preset : p))
+        : [...list, preset];
+    });
+    setPresetDraft(null);
+  };
+  const deletePreset = (id) => {
+    setCustomPresets(prev => (prev || []).filter(p => p.id !== id));
+    setPresetDraft(null);
+  };
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const emptyForm = () => ({
@@ -313,6 +337,28 @@ export default function SportPage() {
   const [chartMetricChoice, setChartMetricChoice] = useState(null);
 
   const openCreate = () => { setForm(emptyForm()); setEditingId(null); setShowForm(true); };
+  /* Démarrer une séance prévue : le formulaire s'ouvre à LA date du jour visé
+     (pas celle d'aujourd'hui) et déjà garni des exercices du modèle — il ne
+     reste que les charges et les répétitions à saisir, ce qui est le seul
+     travail que la salle laisse à faire. */
+  const openPlanned = (dateISO, entry) => {
+    const base = Date.now();
+    const exercises = (entry.exercises || []).map((ex, i) => ({
+      id: base + i * 1000,
+      name: ex.name,
+      category: ex.category || "full_body",
+      sets: [{ id: base + i * 1000 + 1, reps: "", weight: "" }],
+    }));
+    setForm({
+      date: dateISO,
+      discipline: entry.discipline || "musculation",
+      duration: "",
+      notes: "",
+      exercises: exercises.length ? exercises : emptyForm().exercises,
+    });
+    setEditingId(null);
+    setShowForm(true);
+  };
   const openEdit = (s) => { setForm({ ...s }); setEditingId(s.id); setShowForm(true); };
   const close = () => { setShowForm(false); setEditingId(null); };
   const buildData = (f) => ({
@@ -606,22 +652,20 @@ export default function SportPage() {
     return points.sort((a, b) => a.date.localeCompare(b.date));
   }, [sessions, chartExerciseName, chartMetric]);
 
-  /* ─── Filtrage ──────────────────────────────────────────────── */
-  const filteredSessions = useMemo(() => {
-    let list = sessions || [];
-    if (filterDiscipline !== "all") list = list.filter(s => s.discipline === filterDiscipline);
-    if (filterCategory !== "all") {
-      list = list.filter(s => (s.exercises || []).some(e => e.category === filterCategory));
-    }
-    return [...list].sort((a, b) => b.date.localeCompare(a.date));
-  }, [sessions, filterDiscipline, filterCategory]);
-
-  const hasAnyFilter = filterDiscipline !== "all" || filterCategory !== "all";
+  /* ─── Historique, du plus récent au plus ancien ─────────────────
+     Il y avait ici deux rangées de pilules (disciplines, catégories) posées
+     au-dessus de la liste. Neuf boutons pour une timeline déjà repliée par
+     mois, et dont chaque carte annonce sa discipline : la place qu'ils
+     prenaient valait mieux que le tri qu'ils rendaient. */
+  const sortedSessions = useMemo(
+    () => [...(sessions || [])].sort((a, b) => b.date.localeCompare(a.date)),
+    [sessions]
+  );
 
   /* ─── Regroupement de l'historique par mois ──────────────────── */
   const monthGroups = useMemo(() => {
     const map = new Map();
-    for (const s of filteredSessions) {
+    for (const s of sortedSessions) {
       const key = s.date.slice(0, 7);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(s);
@@ -631,7 +675,7 @@ export default function SportPage() {
       label: new Date(key + "-01T00:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
       sessions: list,
     }));
-  }, [filteredSessions]);
+  }, [sortedSessions]);
 
   if (useFirstLoad(sessionsReady, "tr4de_sport_sessions")) {
     return <PageSkeleton variant="stats" stats={3} gap={24} toolbarLeft={[124, 88]} toolbarRight={[148]} />;
@@ -684,42 +728,37 @@ export default function SportPage() {
         <PhotosTab photos={progressPhotos} setPhotos={setProgressPhotos} onAdd={pickPhotos} busy={photoBusy} />
       )}
 
+      {/* Le plan ouvre l'onglet : c'est la question du jour (« qu'est-ce que je
+          fais aujourd'hui ? »), alors que l'historique répond à celle d'hier.
+          Il tient toute la largeur — sept colonnes ne rentrent pas dans le
+          tiers droit — et passe donc AVANT la grille à deux colonnes. */}
+      {tab === "workout" && (
+        <WeekPlanSection
+          plan={weekPlan} setPlan={setWeekPlan}
+          sessions={sessions} presets={customPresets}
+          onStart={openPlanned} onOpenSession={openEdit}
+          onEditPreset={openPresetEditor} onNewPreset={openNewPreset}
+        />
+      )}
+
       {/* Layout en 2 colonnes : timeline à gauche, panneau collant à droite */}
       {tab === "workout" && (
       <div className="tr4de-sport-layout" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(300px, 1fr)", gap: 24, alignItems: "start" }}>
 
-        {/* Colonne gauche : filtres + timeline mensuelle */}
+        {/* Colonne gauche : timeline mensuelle */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <SectionTitle
             size="sm"
             action={
               <span style={{ fontSize: 12, color: T.text, opacity: 0.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                {filteredSessions.length}{hasAnyFilter ? ` / ${(sessions || []).length}` : ""} séance{filteredSessions.length > 1 ? "s" : ""}
+                {sortedSessions.length} séance{sortedSessions.length > 1 ? "s" : ""}
               </span>
             }
           >
             Historique
           </SectionTitle>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {/* Pas de pilule « Toutes » : c'était un bouton dont le seul rôle
-                était de défaire le précédent. Le retour à la vue complète passe
-                maintenant par la pilule active elle-même, qu'un second clic
-                relâche — et à l'arrivée sur la page, aucune n'est prise, donc
-                tout est déjà visible. */}
-            <FilterPills
-              value={filterDiscipline}
-              onChange={setFilterDiscipline}
-              options={DISCIPLINES.map(d => ({ id: d.id, label: d.label, color: d.color }))}
-            />
-            <FilterPills
-              value={filterCategory}
-              onChange={setFilterCategory}
-              options={CATEGORIES.map(c => ({ id: c.id, label: c.label, color: c.color }))}
-            />
-          </div>
-
-          {filteredSessions.length === 0 ? (
+          {sortedSessions.length === 0 ? (
             /* État vide : une carte, comme partout ailleurs — le cadre en
                pointillés faisait un bloc à part au milieu de la page. */
             <div style={{ ...CARD, padding: "48px 32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -727,12 +766,10 @@ export default function SportPage() {
                 <Dumbbell size={22} strokeWidth={1.75} color={T.text} />
               </div>
               <div style={{ fontSize: 16, fontWeight: 500, color: T.text, marginBottom: 6 }}>
-                {hasAnyFilter ? "Aucune séance ne correspond" : "Aucune séance pour le moment"}
+                Aucune séance pour le moment
               </div>
               <div style={{ fontSize: 14, color: T.textSub, maxWidth: 340, lineHeight: 1.5 }}>
-                {hasAnyFilter
-                  ? "Élargis les filtres pour retrouver tes séances."
-                  : "Crée ta première séance pour commencer à suivre ta progression."}
+                Crée ta première séance pour commencer à suivre ta progression.
               </div>
             </div>
           ) : (
@@ -845,6 +882,25 @@ export default function SportPage() {
           hiddenExercises={hiddenExercises} setHiddenExercises={setHiddenExercises}
           favoriteExercises={favoriteExercises} setFavoriteExercises={setFavoriteExercises}
           customPresets={customPresets} setCustomPresets={setCustomPresets}
+          onEditPreset={openPresetEditor}
+        />,
+        document.body
+      )}
+
+      {/* Éditeur de modèle — au-dessus du formulaire de séance, qui peut
+          l'ouvrir. `key` remonte l'état interne quand on passe d'un modèle à
+          l'autre sans fermer l'éditeur. */}
+      {presetDraft && typeof document !== "undefined" && ReactDOM.createPortal(
+        <PresetEditor
+          key={presetDraft.id}
+          draft={presetDraft}
+          isNew={!(customPresets || []).some(p => p.id === presetDraft.id)}
+          onSave={savePreset}
+          onDelete={deletePreset}
+          onClose={() => setPresetDraft(null)}
+          customExercises={customExercises} setCustomExercises={setCustomExercises}
+          hiddenExercises={hiddenExercises} setHiddenExercises={setHiddenExercises}
+          favoriteExercises={favoriteExercises} setFavoriteExercises={setFavoriteExercises}
         />,
         document.body
       )}
@@ -903,6 +959,531 @@ function navArrow(side) {
     display: "inline-flex", alignItems: "center", justifyContent: "center",
     boxShadow: "0 1px 5px rgba(0,0,0,0.18)", zIndex: 2,
   };
+}
+
+/* ─── Éditeur de modèle de séance ─────────────────────────────────
+   Un modèle ne retient que l'ossature d'une séance — un nom, une discipline,
+   une suite d'exercices — jamais les charges ni les répétitions : ce sont
+   justement elles qui changent d'une semaine à l'autre.
+
+   Il fallait donc un formulaire à lui, et pas le formulaire de séance amputé
+   de ses champs : jusqu'ici un modèle ne pouvait que naître d'une séance
+   (« Sauver comme modèle ») et mourir (la corbeille). Une faute de frappe dans
+   le nom, un exercice à retirer, et il n'y avait qu'à tout refaire. */
+function PresetEditor({ draft, isNew, onSave, onDelete, onClose, customExercises, setCustomExercises, hiddenExercises, setHiddenExercises, favoriteExercises, setFavoriteExercises }) {
+  const [preset, setPreset] = useState(draft);
+
+  const isCardio = preset.discipline === "cardio";
+  const rows = preset.exercises || [];
+  const named = rows.filter(e => (e.name || "").trim());
+  const canSave = !!(preset.name || "").trim() && named.length > 0;
+
+  const patch = (p) => setPreset(prev => ({ ...prev, ...p }));
+  const patchRow = (i, p) => patch({ exercises: rows.map((e, j) => (j === i ? { ...e, ...p } : e)) });
+  const addRow = () => patch({ exercises: [...rows, { name: "", category: isCardio ? "cardio" : "full_body" }] });
+  const removeRow = (i) => patch({ exercises: rows.filter((_, j) => j !== i) });
+  const moveRow = (i, delta) => {
+    const j = i + delta;
+    if (j < 0 || j >= rows.length) return;
+    const next = [...rows];
+    [next[i], next[j]] = [next[j], next[i]];
+    patch({ exercises: next });
+  };
+
+  const submit = () => {
+    if (!canSave) return;
+    onSave({
+      ...preset,
+      name: preset.name.trim(),
+      // Les lignes restées vides ne sont pas des exercices : on ne les garde pas.
+      exercises: named.map(e => ({ name: e.name.trim(), category: e.category || "full_body" })),
+    });
+  };
+
+  return (
+    /* Au-dessus du formulaire de séance (z 1000), d'où il peut être ouvert, mais
+       sous les Popover (z 12000) : la recherche d'exercice doit rester visible
+       par-dessus l'éditeur qui l'affiche. */
+    <div {...backdropDismiss(onClose)} className="anim-backdrop"
+      style={{ position: "fixed", inset: 0, background: T.scrim, zIndex: 11000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isNew ? "Nouveau modèle" : "Modifier le modèle"}
+        className="anim-modal"
+        style={{ width: "min(520px, 100%)", maxHeight: "min(88vh, 760px)", display: "flex", flexDirection: "column", background: T.white, borderRadius: "var(--radius-modal)", boxShadow: "var(--elev-overlay)", overflow: "hidden", fontFamily: "var(--font-sans)" }}>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 10px" }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: T.text, flex: 1 }}>
+            {isNew ? "Nouveau modèle" : "Modifier le modèle"}
+          </span>
+          {!isNew && (
+            <button type="button" onClick={() => onDelete(preset.id)} aria-label="Supprimer le modèle" title="Supprimer le modèle"
+              style={iconBtn()}
+              onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
+              <Trash2 size={14} strokeWidth={1.75} />
+            </button>
+          )}
+          <button type="button" onClick={onClose} aria-label="Fermer" style={iconBtn()}>
+            <X size={15} strokeWidth={1.9} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <Label>Nom</Label>
+            <input type="text" autoFocus value={preset.name || ""}
+              onChange={(e) => patch({ name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+              placeholder="Push A, Jambes, Sortie vélo…"
+              style={input()} />
+          </div>
+
+          <div>
+            <Label>Discipline</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+              {DISCIPLINES.map(d => {
+                const Icon = d.Icon;
+                const active = preset.discipline === d.id;
+                return (
+                  <button key={d.id} type="button" onClick={() => patch({ discipline: d.id })}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "8px 16px", fontSize: 13, minHeight: 34, borderRadius: 999, border: "none",
+                      background: active ? T.text : FIELD_BG,
+                      color: active ? T.textInverted : T.textSub,
+                      fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                    }}>
+                    <Icon size={13} strokeWidth={1.75} />
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <Label>Exercices</Label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {rows.length === 0 && (
+                <div style={{ fontSize: 12, color: T.textSub, padding: "4px 2px" }}>
+                  Aucun exercice — le modèle a besoin d’au moins un.
+                </div>
+              )}
+              {rows.map((ex, i) => {
+                const cat = CATEGORIES.find(c => c.id === ex.category);
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: FIELD_BG, borderRadius: 12, padding: "8px 10px" }}>
+                    {/* Même paire de chevrons que le formulaire de séance : dans
+                        un modèle aussi, l'ordre des exercices EST le programme. */}
+                    <div style={{ display: "inline-flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+                      <button type="button" onClick={() => moveRow(i, -1)} disabled={i === 0} aria-label="Monter l'exercice"
+                        style={{ ...iconBtn(), width: 20, height: 16, borderRadius: "var(--radius-field)", opacity: i === 0 ? 0.3 : 1, cursor: i === 0 ? "default" : "pointer" }}>
+                        <ChevronUp size={12} strokeWidth={2} />
+                      </button>
+                      <button type="button" onClick={() => moveRow(i, 1)} disabled={i === rows.length - 1} aria-label="Descendre l'exercice"
+                        style={{ ...iconBtn(), width: 20, height: 16, borderRadius: "var(--radius-field)", opacity: i === rows.length - 1 ? 0.3 : 1, cursor: i === rows.length - 1 ? "default" : "pointer" }}>
+                        <ChevronDown size={12} strokeWidth={2} />
+                      </button>
+                    </div>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: cat?.color || T.textSub, boxShadow: cat ? dotRing(cat.color) : "none" }} />
+                    <ExerciseNameCombobox
+                      value={ex.name}
+                      onChange={(name) => patchRow(i, { name })}
+                      onPick={(item) => patchRow(i, { name: item.name, category: item.category })}
+                      customExercises={customExercises}
+                      setCustomExercises={setCustomExercises}
+                      hiddenExercises={hiddenExercises}
+                      setHiddenExercises={setHiddenExercises}
+                      favoriteExercises={favoriteExercises}
+                      setFavoriteExercises={setFavoriteExercises}
+                      defaultCategory={isCardio ? "cardio" : (ex.category && ex.category !== "cardio" ? ex.category : "full_body")}
+                      isCardio={isCardio}
+                    />
+                    <button type="button" onClick={() => removeRow(i)} aria-label="Supprimer l'exercice"
+                      style={iconBtn()}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
+                      <Trash2 size={11} strokeWidth={1.75} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <button type="button" onClick={addRow} style={{ ...softPill(), marginTop: 8 }}>
+              <Plus size={12} strokeWidth={1.75} /> Ajouter un exercice
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: `1px solid ${HAIRLINE}` }}>
+          <button type="button" onClick={onClose} style={softPill()}>Annuler</button>
+          <button type="button" onClick={submit} disabled={!canSave}
+            style={{
+              padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
+              background: canSave ? T.text : FIELD_BG,
+              color: canSave ? T.textInverted : T.textSub,
+              fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+              cursor: canSave ? "pointer" : "not-allowed",
+            }}>
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Identifiant d'un modèle — hors composant, comme `newEntryId` : appelé au clic,
+   il n'a pas à passer pour un appel impur du rendu. */
+function newPresetId() {
+  return `custom-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
+}
+
+/* ─── Section « Plan de la semaine » — la routine type ────────────
+   Le plan est RÉCURRENT (sept cases, lundi → dimanche) mais s'affiche toujours
+   en regard d'une semaine RÉELLE : sans dates devant les yeux, on ne sait pas
+   ce qui reste à faire aujourd'hui, et « prévu » ne se distingue plus de
+   « fait ». L'appariement des deux est refait à l'affichage, dans l'ordre du
+   plan et par discipline — rien n'est écrit dans les séances, donc supprimer
+   une ligne du plan n'abîme aucun historique. */
+function WeekPlanSection({ plan, setPlan, sessions, presets, onStart, onOpenSession, onEditPreset, onNewPreset }) {
+  // Décalage en semaines par rapport à la semaine courante (0 = celle-ci).
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const days = useMemo(() => {
+    const monday = startOfWeek(new Date());
+    monday.setDate(monday.getDate() + weekOffset * 7);
+    const today = toISOLocal(new Date());
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const iso = toISOLocal(d);
+      return {
+        index: i,
+        iso,
+        weekday: d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", ""),
+        dayNum: d.getDate(),
+        isToday: iso === today,
+        isPast: iso < today,
+      };
+    });
+  }, [weekOffset]);
+
+  const rangeLabel = useMemo(() => {
+    const first = new Date(days[0].iso + "T00:00:00");
+    const last = new Date(days[6].iso + "T00:00:00");
+    const opts = { day: "numeric", month: "short" };
+    const sameMonth = first.getMonth() === last.getMonth();
+    const a = sameMonth
+      ? String(first.getDate())
+      : first.toLocaleDateString("fr-FR", opts);
+    return `${a} – ${last.toLocaleDateString("fr-FR", opts)}`;
+  }, [days]);
+
+  /* Prévu ↔ réalisé. Chaque ligne du plan prend la première séance du jour qui
+     partage sa discipline et qu'aucune ligne précédente n'a déjà prise ; les
+     séances qui restent sont bien réelles mais n'étaient pas au programme, et
+     la colonne les montre quand même — les cacher donnerait l'impression d'un
+     jour vide alors qu'on s'est entraîné. */
+  /* Une ligne posée depuis un modèle SUIT ce modèle : le renommer ou lui ajouter
+     un exercice se voit aussitôt dans le plan, sans avoir à reposer la ligne.
+     La copie gardée dans l'entrée ne sert que de repli, pour le jour où le
+     modèle est supprimé — le plan garde alors ce qu'il annonçait. */
+  const resolveEntry = React.useCallback((entry) => {
+    const src = entry.presetId ? (presets || []).find(p => p.id === entry.presetId) : null;
+    return src
+      ? { ...entry, name: src.name, discipline: src.discipline || entry.discipline, exercises: src.exercises || [] }
+      : entry;
+  }, [presets]);
+
+  const byDay = useMemo(() => days.map(day => {
+    const doneToday = (sessions || []).filter(s => s.date === day.iso);
+    const taken = new Set();
+    const planned = ((plan || {})[String(day.index)] || []).map(raw => {
+      const entry = resolveEntry(raw);
+      const match = doneToday.find(s => !taken.has(s.id) && s.discipline === entry.discipline);
+      if (match) taken.add(match.id);
+      return { entry, session: match || null };
+    });
+    return { day, planned, extra: doneToday.filter(s => !taken.has(s.id)) };
+  }), [days, plan, sessions, resolveEntry]);
+
+  const plannedTotal = byDay.reduce((n, d) => n + d.planned.length, 0);
+  const doneTotal = byDay.reduce((n, d) => n + d.planned.filter(p => p.session).length, 0);
+
+  const addToDay = (index, entry) => setPlan(prev => {
+    const base = prev || {};
+    const key = String(index);
+    return { ...base, [key]: [...(base[key] || []), entry] };
+  });
+  const removeFromDay = (index, entryId) => setPlan(prev => {
+    const base = prev || {};
+    const key = String(index);
+    return { ...base, [key]: (base[key] || []).filter(e => e.id !== entryId) };
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <SectionTitle
+        size="sm"
+        action={
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {plannedTotal > 0 && (
+              <span style={{ fontSize: 12, color: T.text, opacity: 0.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                {doneTotal} / {plannedTotal} faite{plannedTotal > 1 ? "s" : ""}
+              </span>
+            )}
+            {weekOffset !== 0 && (
+              <button type="button" onClick={() => setWeekOffset(0)}
+                style={{ ...softPill(), padding: "5px 12px", minHeight: 28, fontSize: 12 }}>
+                Cette semaine
+              </button>
+            )}
+            {/* Navigation : la plage de dates EST le repère, les flèches
+                l'encadrent — un bouton « semaine précédente » nommé en toutes
+                lettres prendrait la moitié de la ligne de titre. */}
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 2, background: FIELD_BG, borderRadius: 999, padding: 2 }}>
+              <button type="button" onClick={() => setWeekOffset(o => o - 1)} aria-label="Semaine précédente"
+                style={{ ...iconBtn(), width: 24, height: 24 }}>
+                <ChevronLeft size={14} strokeWidth={2} />
+              </button>
+              <span style={{ fontSize: 12, fontWeight: 500, color: T.text, padding: "0 6px", whiteSpace: "nowrap" }}>
+                {rangeLabel}
+              </span>
+              <button type="button" onClick={() => setWeekOffset(o => o + 1)} aria-label="Semaine suivante"
+                style={{ ...iconBtn(), width: 24, height: 24 }}>
+                <ChevronRight size={14} strokeWidth={2} />
+              </button>
+            </div>
+          </div>
+        }
+      >
+        Plan de la semaine
+      </SectionTitle>
+
+      {/* `auto-fit` plutôt qu'un `repeat(7, …)` doublé d'une requête média :
+          les sept jours tiennent sur une ligne quand la place existe, et se
+          replient en deux ou trois colonnes sur téléphone sans réglage. */}
+      <div className="anim-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(148px, 1fr))", gap: 10, alignItems: "stretch" }}>
+        {byDay.map(({ day, planned, extra }) => (
+          <DayColumn
+            key={day.iso}
+            day={day} planned={planned} extra={extra} presets={presets}
+            onAdd={(entry) => addToDay(day.index, entry)}
+            onRemove={(entryId) => removeFromDay(day.index, entryId)}
+            onStart={onStart}
+            onOpenSession={onOpenSession}
+            onEditPreset={onEditPreset}
+            onNewPreset={onNewPreset}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Une colonne = un jour. Elle porte son propre menu d'ajout : un menu unique
+   partagé devrait retenir de quel jour il a été ouvert, pour un gain nul. */
+function DayColumn({ day, planned, extra, presets, onAdd, onRemove, onStart, onOpenSession, onEditPreset, onNewPreset }) {
+  const addRef = React.useRef(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [hovered, setHovered] = useState(null);
+
+  const addPreset = (p) => {
+    /* `presetId` fait le lien : la ligne suit le modèle quand il change. Les
+       champs copiés à côté sont le repli du jour où le modèle est supprimé —
+       une ligne de plan qui se viderait serait pire qu'une ligne figée. */
+    onAdd({
+      id: newEntryId(),
+      presetId: p.id,
+      name: p.name,
+      discipline: p.discipline || "musculation",
+      exercises: (p.exercises || []).map(e => ({ name: e.name, category: e.category })),
+    });
+    setMenuOpen(false);
+  };
+  const addFree = (disc) => {
+    onAdd({
+      id: newEntryId(),
+      name: disc.label,
+      discipline: disc.id,
+      exercises: [],
+    });
+    setMenuOpen(false);
+  };
+
+  return (
+    /* Aujourd'hui se signale par la pastille pleine sur le quantième, comme
+       dans un calendrier — pas par un cadre autour de la carte : sept cartes
+       dont une cerclée ajouteraient un trait à lire pour un jour qu'on
+       reconnaît déjà au chiffre. */
+    <div style={{ ...CARD, padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 118 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: T.text, opacity: day.isPast ? 0.35 : 0.55, textTransform: "capitalize" }}>
+          {day.weekday}
+        </span>
+        <span style={{
+          fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+          minWidth: 20, height: 20, padding: "0 5px", borderRadius: 999,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          background: day.isToday ? T.text : "transparent",
+          color: day.isToday ? T.textInverted : T.text,
+          opacity: day.isToday ? 1 : (day.isPast ? 0.35 : 0.8),
+        }}>
+          {day.dayNum}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+        {planned.length === 0 && extra.length === 0 && (
+          <div style={{ fontSize: 11, color: T.textSub, opacity: 0.7, paddingTop: 2 }}>Repos</div>
+        )}
+
+        {planned.map(({ entry, session }) => {
+          const disc = DISCIPLINES.find(d => d.id === entry.discipline) || DISCIPLINES[0];
+          const done = !!session;
+          return (
+            <div key={entry.id} style={{ position: "relative" }}
+              onMouseEnter={() => setHovered(entry.id)} onMouseLeave={() => setHovered(null)}>
+              {/* La ligne prévue est le bouton : elle démarre la séance à cette
+                  date, garnie du modèle. Une fois faite, elle ouvre la séance
+                  réelle — c'est ce qu'on cherche quand on reclique dessus. */}
+              <button type="button"
+                onClick={() => (done ? onOpenSession(session) : onStart(day.iso, entry))}
+                title={done ? "Ouvrir la séance" : "Démarrer cette séance"}
+                style={{
+                  width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: "inherit",
+                  background: done ? "transparent" : FIELD_BG, borderRadius: 10, padding: "7px 26px 7px 9px",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                  background: disc.color, boxShadow: dotRing(disc.color), opacity: done ? 1 : 0.85,
+                }} />
+                <span style={{
+                  flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500,
+                  color: T.text, opacity: done ? 0.45 : 1,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {entry.name}
+                </span>
+                {done && <Check size={13} strokeWidth={2.25} color={PALETTE.green} style={{ flexShrink: 0 }} />}
+              </button>
+              {hovered === entry.id && (
+                <button type="button" onClick={() => onRemove(entry.id)} aria-label="Retirer du plan"
+                  style={{ ...iconBtn(), position: "absolute", right: 2, top: "50%", transform: "translateY(-50%)", width: 20, height: 20 }}>
+                  <X size={12} strokeWidth={2} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Séance faite ce jour-là sans être au programme : elle compte, mais
+            elle ne coche rien — d'où le libellé plutôt qu'une coche. */}
+        {extra.map(s => {
+          const disc = DISCIPLINES.find(d => d.id === s.discipline) || DISCIPLINES[0];
+          return (
+            <button key={s.id} type="button" onClick={() => onOpenSession(s)}
+              title="Séance hors plan"
+              style={{
+                width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: "inherit",
+                background: "transparent", borderRadius: 10, padding: "7px 9px",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, background: disc.color, boxShadow: dotRing(disc.color) }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {disc.label}
+              </span>
+              <span style={{ fontSize: 10, color: T.textSub, opacity: 0.7, flexShrink: 0 }}>hors plan</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <button ref={addRef} type="button" onClick={() => setMenuOpen(v => !v)}
+        aria-label={`Ajouter une séance au plan · ${day.weekday}`}
+        style={{
+          width: "100%", border: "none", cursor: "pointer", fontFamily: "inherit",
+          background: "transparent", color: T.textSub, borderRadius: 10, padding: "5px 8px",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: 11, fontWeight: 500,
+        }}>
+        <Plus size={12} strokeWidth={2} /> Ajouter
+      </button>
+
+      {/* Le `Popover` ne pose AUCUN fond : il place et il porte, la surface est
+          à l'appelant (le combobox d'exercice et le calendrier la donnent
+          aussi). Sans elle, le menu n'était que du texte flottant au-dessus de
+          la page — lisible, mais posé sur rien. */}
+      <Popover anchorRef={addRef} open={menuOpen} onClose={() => setMenuOpen(false)} minWidth={220} maxHeight={320}
+        style={{
+          background: T.white, border: "none", borderRadius: 12,
+          boxShadow: "var(--elev-overlay)", fontFamily: "var(--font-sans)",
+        }}>
+        <div style={{ padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: T.textSub, padding: "6px 10px 4px" }}>Modèles</div>
+          {(presets || []).map(p => {
+            const disc = DISCIPLINES.find(d => d.id === p.discipline) || DISCIPLINES[0];
+            return (
+              /* La ligne pose le modèle sur le jour ; le crayon l'ouvre. Deux
+                 gestes voisins, mais le second ne touche pas au plan — d'où le
+                 bouton à part plutôt qu'un clic long ou un menu de second rang. */
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <button type="button" onClick={() => addPreset(p)} style={menuRow()}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: disc.color, boxShadow: dotRing(disc.color), flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                  <span style={{ fontSize: 11, color: T.textSub, flexShrink: 0 }}>
+                    {(p.exercises || []).length} ex.
+                  </span>
+                </button>
+                <button type="button" aria-label={`Modifier le modèle ${p.name}`} title="Modifier le modèle"
+                  onClick={() => { setMenuOpen(false); onEditPreset?.(p); }}
+                  style={{ ...iconBtn(), width: 24, height: 24, flexShrink: 0 }}>
+                  <Pencil size={11} strokeWidth={1.75} />
+                </button>
+              </div>
+            );
+          })}
+          <button type="button" onClick={() => { setMenuOpen(false); onNewPreset?.(); }} style={{ ...menuRow(), color: T.textSub }}>
+            <Plus size={12} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1, minWidth: 0 }}>Nouveau modèle</span>
+          </button>
+          <div style={{ height: 1, background: HAIRLINE, margin: "6px 8px" }} />
+          <div style={{ fontSize: 11, fontWeight: 500, color: T.textSub, padding: "2px 10px 4px" }}>Séance libre</div>
+          {DISCIPLINES.map(d => (
+            <button key={d.id} type="button" onClick={() => addFree(d)} style={menuRow()}>
+              <d.Icon size={13} strokeWidth={1.75} color={d.color} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0 }}>{d.label}</span>
+            </button>
+          ))}
+        </div>
+      </Popover>
+    </div>
+  );
+}
+
+/* Identifiant d'une ligne du plan. Hors composant : la règle de pureté de React
+   compte tout `Date.now()` écrit dans le corps d'un composant comme un appel de
+   rendu, alors qu'il n'a lieu qu'au clic. */
+function newEntryId() {
+  return `e-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
+}
+
+/* Ligne de menu du plan — même aplat que les autres listes flottantes. */
+function menuRow() {
+  return {
+    width: "100%", display: "flex", alignItems: "center", gap: 8,
+    padding: "8px 10px", borderRadius: 8, border: "none", background: "transparent",
+    color: T.text, fontSize: 12, fontFamily: "inherit", cursor: "pointer", textAlign: "left",
+  };
+}
+
+/* Lundi de la semaine qui contient `d` — le plan commence là où commence la
+   semaine en France, pas le dimanche du `getDay()` de JavaScript. */
+function startOfWeek(d) {
+  const monday = new Date(d);
+  monday.setDate(monday.getDate() - ((monday.getDay() || 7) - 1));
+  monday.setHours(0, 0, 0, 0);
+  return monday;
 }
 
 /* ─── Onglet « Photos » — suivi de l'évolution physique ─────────── */
@@ -1090,45 +1671,6 @@ function PhotosTab({ photos, setPhotos, onAdd, busy }) {
   );
 }
 
-
-/* ─── Filtres en pills ──────────────────────────────────────────── */
-/**
- * Rangée de filtres à choix unique, RELÂCHABLE.
- *
- * Il n'y a pas d'option « Toutes » dans la liste : cliquer la pilule déjà prise
- * la relâche et rend `clearValue`, ce qui remet la vue complète. Un filtre sans
- * échappatoire obligerait à garder un bouton dont le seul rôle est d'annuler le
- * précédent, et « Toutes » ferait alors passer pour un choix ce qui est en fait
- * l'absence de choix — l'état par défaut de la page.
- */
-function FilterPills({ value, onChange, options, clearValue = "all" }) {
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-      {options.map(o => {
-        const active = value === o.id;
-        return (
-          <button key={o.id} type="button"
-            aria-pressed={active}
-            onClick={() => onChange(active ? clearValue : o.id)}
-            /* Actif : pastille pleine à l'encre du texte. Au repos : simple
-               aplat, sans cadre — une rangée de pilules cerclées faisait autant
-               de traits que de filtres. */
-            style={{
-              padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none",
-              background: active ? T.text : FIELD_BG,
-              color: active ? T.textInverted : T.textSub,
-              fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-              display: "inline-flex", alignItems: "center", gap: 6,
-              transition: "background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)",
-            }}>
-            {o.color && <span style={{ width: 6, height: 6, borderRadius: "50%", background: o.color, boxShadow: dotRing(o.color), flexShrink: 0 }} />}
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /* ─── Carte d'une séance (résumé + dépliage exercices) ──────────── */
 function SessionCard({ session: s, onEdit, onDelete }) {
@@ -1338,6 +1880,8 @@ function PRsCard({ prs }) {
 /* ─── Graphique de progression (simple SVG line) ────────────────── */
 function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = [], onChangeMetric }) {
   const unit = METRIC_UNIT[metric] ?? "";
+  // Point survolé (indice dans `data`), null quand le pointeur est ailleurs.
+  const [hoverIdx, setHoverIdx] = useState(null);
   const VB_W = 600, VB_H = 200, padL = 8, padR = 12, padT = 14, padB = 20;
   const chartW = VB_W - padL - padR;
   const chartH = VB_H - padT - padB;
@@ -1352,6 +1896,19 @@ function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = []
     return { x, y, ...d };
   });
   const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+
+  /* Survol : on ne cherche pas le point le plus proche en distance, mais celui
+     dont la COLONNE contient le pointeur — sur une courbe, la lecture se fait
+     par abscisse, et viser une pente demanderait de suivre la ligne à la
+     souris. `pointer` plutôt que `mouse` : le doigt en profite aussi. */
+  const hovered = hoverIdx != null ? points[hoverIdx] : null;
+  const onPointerMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width || points.length === 0) return;
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const i = points.length === 1 ? 0 : Math.round(ratio * (points.length - 1));
+    setHoverIdx(Math.min(points.length - 1, Math.max(0, i)));
+  };
 
   return (
     <div style={{ ...CARD, padding: 0 }}>
@@ -1382,20 +1939,44 @@ function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = []
                 Meilleur par séance · {unit}
               </span>
             )}
-            <div style={{ fontSize: 12, color: T.text, opacity: 0.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-              {fmtMetricValue(maxW, metric)} {unit}
+            {/* Le détail du point survolé remplace le maximum, à la même place :
+                une infobulle flottante serait rognée par la carte (`overflow:
+                hidden`), et sauterait par-dessus la courbe qu'elle décrit. */}
+            <div style={{ fontSize: 12, color: T.text, opacity: hovered ? 0.9 : 0.5, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {hovered
+                ? `${fmtDate(hovered.date)} · ${fmtMetricValue(hovered.value, metric)} ${unit}${hovered.reps ? ` × ${hovered.reps}` : ""}`
+                : `${fmtMetricValue(maxW, metric)} ${unit}`}
             </div>
           </div>
           {/* Pas de padding à gauche : la courbe touche le bord de la carte. À
               droite la marge reste, les libellés de valeur y respirent. */}
-          <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
-            style={{ width: "100%", height: 160, display: "block", overflow: "visible", fontFamily: "var(--font-sans)" }}>
-            {/* Rien sous la courbe : ni trame ni dégradé. Le tracé seul, à
-                l'accent de marque (`T.kraken`, la couleur des courbes du site,
-                qui suit le préréglage d'accent choisi dans les Réglages). */}
-            <path d={pathD} fill="none" stroke={T.kraken} strokeWidth="2.5"
-              strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-          </svg>
+          <div style={{ position: "relative", touchAction: "pan-y" }}
+            onPointerMove={onPointerMove} onPointerLeave={() => setHoverIdx(null)}>
+            <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="none"
+              style={{ width: "100%", height: 160, display: "block", overflow: "visible", fontFamily: "var(--font-sans)" }}>
+              {/* Rien sous la courbe : ni trame ni dégradé. Le tracé seul, à
+                  l'accent de marque (`T.kraken`, la couleur des courbes du site,
+                  qui suit le préréglage d'accent choisi dans les Réglages). */}
+              <path d={pathD} fill="none" stroke={T.kraken} strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            </svg>
+            {/* Repère en HTML et non en SVG : `preserveAspectRatio="none"`
+                étire le dessin, et un `<circle>` y deviendrait une ellipse. */}
+            {hovered && (
+              <>
+                <div aria-hidden style={{
+                  position: "absolute", top: 0, bottom: 0, width: 1,
+                  left: `${(hovered.x / VB_W) * 100}%`, background: HAIRLINE, pointerEvents: "none",
+                }} />
+                <div aria-hidden style={{
+                  position: "absolute", width: 9, height: 9, borderRadius: "50%",
+                  left: `${(hovered.x / VB_W) * 100}%`, top: `${(hovered.y / VB_H) * 100}%`,
+                  transform: "translate(-50%, -50%)", background: T.kraken,
+                  boxShadow: `0 0 0 2px ${T.white}`, pointerEvents: "none",
+                }} />
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1403,7 +1984,7 @@ function ProgressChart({ allExerciseNames, data, metric = "weight", metrics = []
 }
 
 /* ─── Modal du formulaire de séance ─────────────────────────────── */
-function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, customExercises, setCustomExercises, hiddenExercises, setHiddenExercises, favoriteExercises, setFavoriteExercises, customPresets = [], setCustomPresets }) {
+function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, customExercises, setCustomExercises, hiddenExercises, setHiddenExercises, favoriteExercises, setFavoriteExercises, customPresets = [], setCustomPresets, onEditPreset }) {
   const [showPresets, setShowPresets] = useState(false);
   const [presetNamePrompt, setPresetNamePrompt] = useState(null); // null | string
   const [draggedExId, setDraggedExId] = useState(null);
@@ -1563,8 +2144,12 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
   const isCardio = form.discipline === "cardio";
 
   return (
-    <div {...backdropDismiss(onClose)}
-      style={{ position: "fixed", inset: 0, background: "transparent", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+    /* Voile commun (`T.scrim`, donc plus dense en thème sombre) : la fenêtre se
+       déplace à la souris, mais elle reste MODALE — sans voile, rien ne disait
+       que la page derrière ne répond plus, et le formulaire flottait sur du
+       contenu qu'on croyait encore cliquable. */
+    <div {...backdropDismiss(onClose)} className="anim-backdrop"
+      style={{ position: "fixed", inset: 0, background: T.scrim, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       {/* Pas d'`anim-modal` ici, volontairement : cette fenêtre se déplace à la
           souris et sa position vit dans un `transform`. Une animation d'entrée
           en `transform` écraserait ce translate — la fenêtre sauterait à
@@ -1613,10 +2198,14 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                 </button>
               </div>
               {showPresets && (
+                /* Les aplats étaient à l'envers : panneau à 4 % d'encre,
+                   cartes en `T.white`. Or `T.white` EST la couleur de fond de
+                   la modale en thème sombre — les modèles s'y confondaient avec
+                   le vide, séparés du fond par les seuls 4 % du panneau. C'est
+                   la carte qui porte l'aplat, et le panneau qui s'efface. */
                 <div style={{
                   display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(180px, 100%), 1fr))",
-                  gap: 6, padding: 10,
-                  background: FIELD_BG, border: "none", borderRadius: 12,
+                  gap: 6, padding: "2px 0",
                   maxHeight: 220, overflowY: "auto",
                 }}>
                   {allPresets.length === 0 && (
@@ -1629,7 +2218,7 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                     return (
                       <div key={p.id} style={{
                         position: "relative",
-                        background: T.white, border: "none", borderRadius: 10, boxShadow: T.elevPill,
+                        background: FIELD_BG, border: "none", borderRadius: 10,
                         padding: "8px 10px", display: "flex", flexDirection: "column", gap: 4,
                       }}>
                         <button type="button" onClick={() => applyPreset(p)}
@@ -1650,17 +2239,32 @@ function SessionForm({ form, setForm, editingId, onClose, onSave, onDelete, cust
                           </div>
                         </button>
                         {p.custom && (
-                          <button type="button" onClick={() => deleteCustomPreset(p.id)} aria-label="Supprimer le modèle"
-                            style={{
-                              position: "absolute", top: 4, right: 4,
-                              width: 20, height: 20, borderRadius: "var(--radius-field)", border: "none",
-                              background: "transparent", color: T.textSub, cursor: "pointer",
-                              display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
-                            <Trash2 size={10} strokeWidth={1.75} />
-                          </button>
+                          /* Modifier D'ABORD, supprimer ensuite : le geste le
+                             plus courant sur un modèle est de le corriger, et
+                             la corbeille seule obligeait à le refaire en
+                             entier pour un mot mal tapé. */
+                          <div style={{ position: "absolute", top: 4, right: 4, display: "inline-flex", gap: 1 }}>
+                            <button type="button" onClick={() => onEditPreset?.(p)} aria-label={`Modifier le modèle ${p.name}`} title="Modifier le modèle"
+                              style={{
+                                width: 20, height: 20, borderRadius: "var(--radius-field)", border: "none",
+                                background: "transparent", color: T.textSub, cursor: "pointer",
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = T.white; e.currentTarget.style.color = T.text; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
+                              <Pencil size={10} strokeWidth={1.75} />
+                            </button>
+                            <button type="button" onClick={() => deleteCustomPreset(p.id)} aria-label="Supprimer le modèle"
+                              style={{
+                                width: 20, height: 20, borderRadius: "var(--radius-field)", border: "none",
+                                background: "transparent", color: T.textSub, cursor: "pointer",
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = T.redBg; e.currentTarget.style.color = T.red; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSub; }}>
+                              <Trash2 size={10} strokeWidth={1.75} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     );

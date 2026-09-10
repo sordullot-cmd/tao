@@ -25,9 +25,10 @@
 
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
-  classify, classifyDetailed, hostOf, isBrowser,
+  classify, classifyDetailed, hostOf, isBrowser, selfTitle,
   type CategoryEdit, type ClassifyRule, type CustomCategory, type Productivity,
 } from "@/lib/activity/categories";
+import { type SelfSection } from "@/lib/activity/self";
 import { snapshot, type Snapshot } from "@/lib/activity/native";
 import { device, fetchDays, forgetDevice, pushDay, type CloudDay } from "@/lib/activity/cloud";
 import { mergeSlices } from "@/lib/activity/merge";
@@ -528,6 +529,24 @@ async function resolveSite(snap: Snapshot): Promise<string> {
   return host;
 }
 
+/**
+ * La partie de tao trade où l'on se trouve — dite par la coquille.
+ *
+ * Le poste ne peut pas la deviner : le titre de la fenêtre native est figé et la
+ * navigation n'a pas d'URL (cf. lib/activity/self). La coquille l'écrit ici à
+ * chaque changement de page ; `null` remet l'app sous son seul nom.
+ *
+ * Hors de React et sans abonnement : elle n'est lue qu'au prochain échantillon,
+ * dans quelques secondes au plus, et l'intervalle en cours part alors du côté
+ * de la partie qu'on vient d'ouvrir — cinq secondes attribuées à la page qu'on
+ * quitte ne se voient sur aucun total.
+ */
+let selfSection: SelfSection | null = null;
+
+export function setSelfSection(section: SelfSection | null): void {
+  selfSection = section;
+}
+
 async function tick(): Promise<void> {
   const settings = getSettings();
   const now = Date.now();
@@ -566,15 +585,19 @@ async function tick(): Promise<void> {
   }
 
   const site = await resolveSite(snap);
-  const { category, label } = classify(snap.app, snap.title, settings.rules, site);
+  /* Le titre que l'app de bureau ne donne pas : c'est LUI qu'on écrit dans le
+     segment, et non un classement corrigé après coup, parce que la relecture
+     reclasse depuis (app, titre, hôte) seuls (cf. `recategorize`). */
+  const title = selfTitle(snap.app, snap.title, selfSection);
+  const { category, label } = classify(snap.app, title, settings.rules, site);
   const changed = live.app !== snap.app || live.label !== label || live.cat !== category;
-  append(now - elapsed, now, snap.app, label, snap.title, category, site);
+  append(now - elapsed, now, snap.app, label, title, category, site);
 
   live = {
     running: true,
     app: snap.app,
     label,
-    title: snap.title,
+    title,
     cat: category,
     since: changed || !live.since ? now - elapsed : live.since,
     idleSeconds: snap.idleSeconds,

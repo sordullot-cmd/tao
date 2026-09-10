@@ -34,6 +34,7 @@ import {
   CATALOG, domainInTitle, guessSiteName, isBrowserApp, matchAppExact, matchAppWord,
   matchDomain, matchTitle, norm, type CatalogEntry, type CatalogHit,
 } from "@/lib/activity/catalog";
+import { SELF_SECTIONS, sectionName, selfTitleOf, type SelfSection } from "@/lib/activity/self";
 
 export type Productivity = "productive" | "neutral" | "distracting";
 
@@ -164,6 +165,9 @@ const MOVED: Record<string, string> = {
 export const BROWSING = "browsing";
 
 export const OTHER = "other";
+
+/** Cette app elle-même — la seule entrée du catalogue qui se découpe (cf. `SELF_SECTIONS`). */
+export const SELF = "tao";
 
 /* ─── Les catégories de CET utilisateur ──────────────────────────────────
    Les quatorze ci-dessus sont un point de départ, pas une liste fermée : le
@@ -491,6 +495,62 @@ function subjectOf(title: string): { cat: string; name: string; matched: string 
   return null;
 }
 
+/* ─── La partie de l'app, quand c'est l'app qu'on mesure ─────────────────── */
+
+/** Vrai si ce nom de processus est celui de tao trade elle-même. */
+export function isSelfApp(app: string): boolean {
+  const hit = matchAppExact(app) ?? matchAppWord(app);
+  return !!hit && hit.entry.cat === SELF;
+}
+
+/** La partie de l'app annoncée par un titre, s'il en annonce une. */
+export function sectionInTitle(title: string): SelfSection | null {
+  const hay = norm(title);
+  for (const [id, s] of Object.entries(SELF_SECTIONS)) {
+    if (s.re.test(hay)) return id as SelfSection;
+  }
+  return null;
+}
+
+/**
+ * Le titre à ÉCRIRE dans le segment, quand l'app de bureau est au premier plan.
+ *
+ * Son titre de fenêtre est figé (« tao ») : sans ce relais, ses trois parties se
+ * confondent en une ligne. On le pose dans le titre plutôt que dans le
+ * classement parce que la relecture repart du titre (cf. `recategorize`), et
+ * qu'une correction posée ailleurs serait reperdue au premier affichage.
+ *
+ * Un titre qui nomme DÉJÀ une partie est laissé tel quel : c'est le cas de
+ * l'onglet, qui porte `document.title`, et la partie qu'il annonce est celle
+ * qu'on regarde — pas celle où en est l'app de bureau restée derrière.
+ */
+export function selfTitle(app: string, title: string, section: SelfSection | null): string {
+  if (!section || !isSelfApp(app) || sectionInTitle(title)) return title;
+  return selfTitleOf(section);
+}
+
+/**
+ * Le classement d'une partie de l'app : sa catégorie, et un nom à elle.
+ *
+ * Le nom DOIT différer d'une partie à l'autre — la page agrège le temps par nom
+ * et n'admet qu'une catégorie par nom (cf. `oneCategoryPerLabel`), si bien que
+ * deux parties sous « tao trade » se seraient écrasées l'une l'autre.
+ *
+ * `via` ne change pas : c'est bien le NOM de l'application qui l'a fait
+ * reconnaître, et la page « Règles » ne doit pas raconter autre chose. Le titre
+ * n'a fait que dire ce qu'on y faisait.
+ */
+function withSelfSection(base: Classification, section: SelfSection): Classification {
+  const cat = settle(SELF_SECTIONS[section].cat);
+  return {
+    ...base,
+    // Catégorie retirée par l'utilisateur : celle de l'app vaut mieux que
+    // « Non classé », qui renverrait ce temps dans la file d'attente.
+    category: cat === OTHER ? base.category : cat,
+    label: `${base.label} · ${sectionName(section)}`,
+  };
+}
+
 function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: string, title = ""): Classification {
   /* Le sujet passe devant le lieu, mais seulement là où le lieu n'engage à rien
      (cf. `hosted` dans le catalogue).
@@ -517,7 +577,7 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
     };
   }
 
-  return {
+  const base: Classification = {
     category: settle(hit.entry.cat),
     label,
     via: hit.via,
@@ -526,6 +586,17 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
     confidence: CONFIDENCE[hit.via],
     system: hit.entry.system === true,
   };
+
+  /* Cette app se découpe en trois (cf. lib/activity/self) : le titre le dit, que
+     ce soit celui de l'onglet ou celui que le moteur a écrit pour la fenêtre
+     native. Un onglet vaut ici autant qu'une fenêtre — d'où le test sur les deux
+     chemins, et non sur `hosted` comme pour le sujet d'une vidéo. */
+  if (hit.entry.cat === SELF) {
+    const section = sectionInTitle(title);
+    if (section) return withSelfSection(base, section);
+  }
+
+  return base;
 }
 
 /** Première règle de l'utilisateur qui reconnaît ce relevé (la plus récente). */

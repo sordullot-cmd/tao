@@ -83,11 +83,35 @@ export async function isNotifyGranted(): Promise<boolean> {
   return "Notification" in window && Notification.permission === "granted";
 }
 
+/**
+ * Nom de son réclamé par défaut sur le bureau.
+ *
+ * Le plugin natif ne joue RIEN tant qu'aucun son n'est nommé : `sendNotification`
+ * sans champ `sound` laisse `soundName` vide côté macOS, et la notification
+ * arrive muette. Une alerte muette derrière une fenêtre plein écran est une
+ * alerte manquée — c'est justement le cas qu'on cherche à couvrir.
+ *
+ * Cette constante est la valeur littérale de `NSUserNotificationDefaultSoundName`,
+ * donc le son que l'utilisateur a choisi dans ses réglages, pas un son imposé.
+ * La remplacer par un nom de `/System/Library/Sounds` (« Ping », « Glass »…)
+ * force un son précis.
+ */
+const DESKTOP_SOUND = "NSUserNotificationDefaultSoundName";
+
 export interface NotifyOptions {
   /** Corps du message. */
   body?: string;
   /** Icône (chemin web) — utilisée uniquement par le repli navigateur. */
   icon?: string;
+  /**
+   * Son à jouer. `false` pour une notification muette ; une chaîne pour un son
+   * système nommé. Sans valeur, `DESKTOP_SOUND`.
+   *
+   * Le repli navigateur n'a pas de choix de son à offrir : l'API Web ne connaît
+   * que `silent`, le son lui-même appartient au navigateur. Seul `false` y
+   * change donc quelque chose.
+   */
+  sound?: string | false;
 }
 
 /**
@@ -96,7 +120,7 @@ export interface NotifyOptions {
  */
 export async function notify(title: string, options: NotifyOptions = {}): Promise<void> {
   if (typeof window === "undefined") return;
-  const { body, icon = "/web-app-manifest-192x192.png" } = options;
+  const { body, icon = "/web-app-manifest-192x192.png", sound = DESKTOP_SOUND } = options;
 
   if (isTauri()) {
     try {
@@ -104,7 +128,7 @@ export async function notify(title: string, options: NotifyOptions = {}): Promis
       let granted = await isPermissionGranted();
       if (!granted) granted = (await requestPermission()) === "granted";
       if (!granted) return;
-      sendNotification({ title, body });
+      sendNotification({ title, body, sound: sound === false ? undefined : sound });
     } catch (e) {
       warnNotify("sendNotification (Tauri)", e);
     }
@@ -113,7 +137,7 @@ export async function notify(title: string, options: NotifyOptions = {}): Promis
 
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   try {
-    new Notification(title, { body, icon });
+    new Notification(title, { body, icon, silent: sound === false });
   } catch (e) {
     warnNotify("new Notification", e);
   }

@@ -11,6 +11,8 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { useAgendaReminders } from "@/lib/hooks/useAgendaReminders";
 import { useActivityTracker } from "@/lib/hooks/useActivityTracker";
+import { setSelfSection } from "@/lib/activity/engine";
+import { sectionOfPage, selfTitleOf } from "@/lib/activity/self";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
@@ -241,6 +243,21 @@ export default function App() {
      mesuré même quand on regarde le journal de trading — c'est tout l'objet de
      la mesure — et deux boucles compteraient le même temps deux fois. */
   useActivityTracker();
+  /* Dans quelle PARTIE de l'app on se trouve — trading, vie perso, finance.
+     Le suivi ne peut pas la deviner (titre de fenêtre figé, navigation sans
+     URL : cf. lib/activity/self), et sans elle les trois se confondent en une
+     seule ligne « tao trade » d'où l'on ne tire rien.
+
+     Deux écritures pour deux cas de mesure, et aucune n'est de trop : le titre
+     du document est ce que voit un poste de bureau mesurant tao trade ouvert
+     dans un NAVIGATEUR — il ne lit alors rien que le titre de l'onglet — et le
+     relais direct est ce que voit l'app de bureau, dont le titre de fenêtre ne
+     bouge pas. */
+  useEffect(() => {
+    const section = sectionOfPage(page);
+    setSelfSection(section);
+    document.title = selfTitleOf(section);
+  }, [page]);
   const { strategies, addStrategy, updateStrategy, deleteStrategy } = useStrategies();
   const [userId, setUserId] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
