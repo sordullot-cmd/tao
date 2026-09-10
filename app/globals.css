@@ -2238,6 +2238,19 @@ body.tr4de-scroll-locked {
     padding-bottom: calc(24px + var(--tabbar-total)) !important;
     --page-gutter: max(16px, var(--sa-right)) !important;
     --page-gutter-left: max(16px, var(--sa-left)) !important;
+    /* Le débordement horizontal est ROGNÉ, jamais défilable. Ici le
+       défilement appartient au corps de page (règle plus haut) : une carte
+       trop large ne déborderait donc pas d'un conteneur interne, elle ferait
+       PANNER l'écran entier — en-tête compris —, et l'utilisateur se retrouve
+       avec une interface décalée qu'il doit remettre en place au doigt. Le
+       défaut se voit sur une seule page mal dimensionnée et se lit comme « le
+       site n'est pas responsive ».
+       `clip` et non `hidden` : `hidden` ferait de ce bloc un conteneur de
+       défilement, ce qui rognerait aussi en HAUTEUR alors que c'est le corps
+       de page qui doit défiler. Les surfaces qui ont vraiment besoin de la
+       largeur (`.tr4de-table-wrap`) gardent leur propre défilement. */
+    overflow-x: clip !important;
+    overflow-y: visible !important;
   }
 
   /* L'ancienne barre du haut ne portait que le hamburger : elle n'a plus rien

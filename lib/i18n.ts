@@ -64,6 +64,9 @@ const FR: Dict = {
   "nav.addTrade": "Ajouter des trades",
   "nav.accounts": "Comptes",
   "nav.settings": "Paramètres",
+  /* Onglet « Plus » de la barre d'onglets tactile : il ouvre la feuille qui
+     porte les entrées absentes des quatre onglets. */
+  "nav.more": "Plus",
   "nav.logout": "Déconnexion",
   /* Libellé de la section hors-trading : elle couvre le quotidien, le sport,
      les notes, l'éloquence ET le budget — « Productivité » n'en décrivait plus
@@ -1468,6 +1471,7 @@ const EN: Dict = {
   "nav.addTrade": "Add trades",
   "nav.accounts": "Accounts",
   "nav.settings": "Settings",
+  "nav.more": "More",
   "nav.logout": "Log out",
   "nav.personal": "Personal",
   "nav.tasks": "Tasks",

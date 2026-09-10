@@ -59,9 +59,17 @@ import AlertToast from "@/components/AlertToast";
 import CommandPalette from "@/components/CommandPalette";
 import SettingsPage from "@/components/pages/SettingsPage";
 import Sidebar from "@/components/ui/Sidebar";
+/* Coquille tactile — elle REMPLACE la barre latérale sous 768 px, que
+   globals.css masque à ce seuil. Sans ce montage, un téléphone se retrouve
+   sans aucune navigation : c'était le cas. */
+import TabBar from "@/components/ui/TabBar";
+import Sheet from "@/components/ui/Sheet";
+import MobileHeader from "@/components/ui/MobileHeader";
+import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { getCurrencySymbol, getUserTimezone } from "@/lib/userPrefs";
 import { T } from "@/lib/ui/tokens";
+import { TYPE } from "@/lib/ui/type";
 import { t, useLang } from "@/lib/i18n";
 import {
   LayoutDashboard,
@@ -100,6 +108,8 @@ import {
   Brain as LucideBrain,
   ShieldOff as LucideShieldOff,
   Activity as LucideActivity,
+  Settings as LucideSettings,
+  LogOut as LucideLogOut,
 } from "lucide-react";
 
 /* ─── TOKENS ───────────────────────────────────────────────────────────
@@ -188,6 +198,15 @@ export default function App() {
   });
   const { page, setPage } = useApp();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  /* Feuille « Plus » de la coquille tactile. Un état à part du tiroir
+     ci-dessus : les deux ne coexistent jamais (le tiroir n'existe qu'entre
+     768 et 1024 px), et les confondre ferait ouvrir la feuille en tablette. */
+  const [moreOpen, setMoreOpen] = useState(false);
+  /* Sous 768 px la barre latérale, son voile et le hamburger sont masqués
+     (globals.css) : la navigation passe par la barre d'onglets basse. On lit
+     donc le seuil en JS, faute de quoi la barre d'onglets serait montée sur
+     tous les écrans. */
+  const isMobile = useIsMobile();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("sidebarCollapsed") === "1";
@@ -761,6 +780,96 @@ export default function App() {
     setPage(target);
     setMobileNavOpen(false);
   };
+
+  /* ─── COQUILLE TACTILE ────────────────────────────────────────────────────
+     Sous 768 px, la barre latérale n'existe plus (globals.css la masque avec
+     son voile et le hamburger) : la navigation se fait par une barre d'onglets
+     basse, une feuille « Plus » et un en-tête qui nomme l'écran.
+
+     Pourquoi une barre basse et pas le tiroir du bureau : la navigation est
+     l'action la plus fréquente de l'app, et le hamburger la logeait dans le
+     coin SUPÉRIEUR GAUCHE — le point le plus difficile à atteindre du pouce
+     sur un grand téléphone. La barre basse met les destinations courantes à
+     portée immédiate et montre en permanence où l'on se trouve, ce qu'un
+     tiroir refermé ne peut pas faire.
+
+     Les quatre onglets sont les écrans qu'on ouvre plusieurs fois par jour ;
+     TOUT le reste vit dans la feuille, qui reprend les sections de la barre
+     latérale telles quelles — deux listes tenues en parallèle finiraient par
+     diverger au premier écran ajouté. */
+  const MOBILE_TABS = [
+    { id: "dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
+    { id: "trades",    label: t("nav.trades"),    icon: ListChecks },
+    /* « Ajouter » est une ACTION, pas une destination : pastille pleine au
+       centre, et jamais d'état actif (cf. TabBar). C'est le geste le plus
+       fréquent de l'app, et le centre de la barre est le point le plus sûr du
+       pouce, quelle que soit la main. */
+    { id: "add-trade", label: t("nav.addTrade"),  icon: Plus, primary: true },
+    { id: "calendar",  label: t("nav.calendar"),  icon: LucideCalendar },
+    { id: "more",      label: t("nav.more"),      icon: LucideMoreHorizontal },
+  ];
+
+  /* Titre de l'en-tête tactile. Les libellés de la navigation d'abord — une
+     entrée de nav et l'écran qu'elle ouvre n'ont aucune raison de porter deux
+     noms —, puis les pages de DÉTAIL, qui n'y figurent pas et resteraient
+     anonymes : en application installée il n'y a ni onglet de navigateur ni
+     barre d'adresse pour dire où l'on est. Un détail prend le nom de la
+     section dont il dépend, pas un titre à lui : c'est le repère qui manque,
+     pas la précision. */
+  const MOBILE_TITLES = {
+    ...Object.fromEntries(SIDEBAR_SECTIONS.flatMap(s => s.items.map(i => [i.id, i.label]))),
+    "trade-chart":             t("nav.trades"),
+    "strategy-detail":         t("nav.strategies"),
+    "account-detail":          t("nav.accounts"),
+    "firm-detail":             t("nav.accounts"),
+    "activity-reports":        t("nav.activity"),
+    "activity-rules":          t("nav.activity"),
+    "patrimoine-asset":        t("nav.patrimoine"),
+    "patrimoine-class":        t("nav.patrimoine"),
+    "patrimoine-holding":      t("nav.patrimoine"),
+    "patrimoine-bank":         t("nav.patrimoineBank"),
+    "patrimoine-liabilities":  t("nav.patrimoineLiabilities"),
+    goals:     t("nav.lifeRpg"),
+    spending:  t("nav.cashflow"),
+    reading:   t("nav.reading"),
+    drive:     t("nav.drive"),
+    settings:  t("nav.settings"),
+    backtest:  "Backtest",
+    brokers:   "Brokers",
+  };
+
+  /* Le chevron de retour ne s'affiche que là où l'on ARRIVE depuis un autre
+     écran. Sur une destination de la barre d'onglets il n'y a nulle part où
+     remonter, et un retour y contredirait l'onglet allumé juste en dessous.
+     C'est un retour d'HISTORIQUE, pas un raccourci vers un écran choisi
+     d'avance : depuis le détail d'un compte on revient là d'où l'on vient,
+     comme le bouton système d'Android et le balayage depuis le bord d'iOS. */
+  const mobileBack = !flatNavIds.includes(page) && pageHistory.current.length > 1
+    ? () => goRecent(1)
+    : undefined;
+
+  /* Une entrée de la feuille : même dessin que celles de la barre latérale
+     (icône, libellé, aplat d'accent quand elle est active), à la hauteur de
+     cible tactile près. */
+  const sheetItem = ({ id, icon: Icon, label }, onPick) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => { setMoreOpen(false); onPick(); }}
+      style={{
+        width: "100%", display: "flex", alignItems: "center", gap: 12,
+        minHeight: 48, padding: "0 12px", borderRadius: 10, border: "none",
+        background: page === id ? T.navActiveBg : "transparent",
+        color: page === id ? T.navActiveText : T.text,
+        ...TYPE.callout,
+        textAlign: "left", fontFamily: "inherit", touchAction: "manipulation",
+      }}
+    >
+      <Icon size={19} strokeWidth={page === id ? 2.2 : 1.75} />
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </button>
+  );
+
   useKeyboardShortcuts([
     ...flatNavIds.slice(0, 9).map((id, i) => ({
       key: String(i + 1),
@@ -901,6 +1010,16 @@ export default function App() {
 
         {/* MAIN */}
         <div className="tr4de-main" style={{flex:1,minWidth:0,height:"100vh",display:"flex",flexDirection:"column",background:"transparent"}}>
+          {/* En-tête tactile — il remplace la barre du haut, masquée sous 768 px
+              parce qu'elle ne portait que le hamburger. Il est la SEULE chose
+              qui nomme l'écran courant en application installée : là, il n'y a
+              ni onglet de navigateur ni barre d'adresse.
+              Pas de `scrollRef` : à ce seuil c'est le CORPS de page qui défile
+              (globals.css rend `overflow: visible` au conteneur interne), et
+              c'est justement le défaut de `MobileHeader`. */}
+          {isMobile && (
+            <MobileHeader title={MOBILE_TITLES[page] || t("nav.dashboard")} onBack={mobileBack} />
+          )}
           {/* Barre du haut. En desktop elle est VIDE (le hamburger est masqué) :
               sur le tableau de bord seul, elle ne prend alors AUCUNE hauteur,
               pour que la courbe pleine largeur monte jusqu'au bord supérieur.
@@ -998,6 +1117,45 @@ export default function App() {
           ); })()}
         </div>
       </div>
+
+      {/* Navigation tactile. Montée HORS du cadre de mise en page : les deux
+          pièces sont en `position: fixed`, et le conteneur qui défile est un
+          ancêtre susceptible de les rogner (il l'est déjà en tablette, où il
+          reprend le défilement). */}
+      {isMobile && (
+        <>
+          <TabBar
+            items={MOBILE_TABS}
+            activeId={page}
+            moreOpen={moreOpen}
+            onSelect={(id) => {
+              /* « Plus » BASCULE : un second appui sur l'onglet allumé referme
+                 la feuille. Sans ça, la seule sortie est le voile ou le geste,
+                 et l'onglet reste actif sans rien faire. */
+              if (id === "more") { setMoreOpen(o => !o); return; }
+              setMoreOpen(false);
+              setPage(id);
+            }}
+          />
+          <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t("nav.more")}>
+            {SIDEBAR_SECTIONS.map(section => (
+              <div key={section.label} style={{ paddingBottom: 6 }}>
+                <div style={{ ...TYPE.caption, color: T.textMut, textTransform: "uppercase", letterSpacing: "0.06em", padding: "10px 12px 4px" }}>
+                  {section.label}
+                </div>
+                {section.items.map(item => sheetItem(item, () => setPage(item.id)))}
+              </div>
+            ))}
+            {/* Compte et session : ils vivent au PIED de la barre latérale, ils
+                restent au pied de la feuille. La feuille est la seule voie vers
+                les réglages en tactile — et vers la sortie. */}
+            <div style={{ borderTop: "1px solid " + T.border, marginTop: 6, paddingTop: 6 }}>
+              {sheetItem({ id: "settings", icon: LucideSettings, label: t("nav.settings") }, () => setPage("settings"))}
+              {sheetItem({ id: "__logout", icon: LucideLogOut, label: t("nav.logout") }, handleLogout)}
+            </div>
+          </Sheet>
+        </>
+      )}
     </>
   );
 }

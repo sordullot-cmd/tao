@@ -13,6 +13,7 @@
  */
 
 import React from "react";
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { LayoutDashboard, ListChecks, Plus, Calendar, MoreHorizontal } from "lucide-react";
@@ -160,5 +161,49 @@ describe("En-tête mobile", () => {
     Object.defineProperty(window, "scrollY", { value: 0, writable: true, configurable: true });
     fireEvent.scroll(window);
     expect(header.hasAttribute("data-scrolled")).toBe(false);
+  });
+});
+
+describe("Branchement dans la coquille", () => {
+  /* Les trois pièces ci-dessus peuvent être irréprochables et l'application
+     rester inutilisable au téléphone : elles ont vécu dans le dépôt, testées,
+     SANS être montées nulle part — pendant ce temps la feuille de styles
+     masquait déjà la barre latérale, son voile et le hamburger sous 768 px.
+     Résultat : plus aucune navigation sur mobile, et rien pour le signaler.
+
+     Le test lit la SOURCE, comme tests/typeScale.test.ts : rendre
+     DashboardNew demanderait de simuler l'authentification, Supabase et la
+     quarantaine de pages de la coquille, pour vérifier trois lignes de JSX. */
+  const shell = readFileSync("components/DashboardNew.jsx", "utf8");
+  const css = readFileSync("app/globals.css", "utf8");
+
+  it("masque bien l'ancienne navigation sous 768 px — la prémisse de tout le reste", () => {
+    expect(css).toMatch(/\.tr4de-hamburger\s*\{\s*display: none !important;/);
+    expect(css).toMatch(/\.tr4de-topbar\s*\{\s*display: none !important;/);
+  });
+
+  it("monte les trois pièces là où la barre latérale disparaît", () => {
+    for (const piece of ["TabBar", "Sheet", "MobileHeader"]) {
+      expect(shell, piece).toContain(`@/components/ui/${piece}`);
+      expect(shell, piece).toMatch(new RegExp(`<${piece}\\b`));
+    }
+  });
+
+  it("les réserve au tactile : deux navigations en parallèle vaudraient aucune", () => {
+    for (const piece of ["TabBar", "MobileHeader"]) {
+      const at = shell.indexOf(`<${piece}`);
+      expect(at, piece).toBeGreaterThan(0);
+      // La garde est JUSTE au-dessus du montage, pas quelque part dans le
+      // fichier : `isMobile` y apparaît de toute façon plusieurs fois.
+      expect(shell.slice(Math.max(0, at - 700), at), piece).toContain("isMobile &&");
+    }
+  });
+
+  it("donne un nom à chaque écran, détails compris", () => {
+    // Un détail sans titre laisse l'en-tête vide : en application installée,
+    // il n'y a alors plus rien qui dise où l'on est.
+    for (const detail of ["account-detail", "firm-detail", "strategy-detail", "trade-chart"]) {
+      expect(shell, detail).toMatch(new RegExp(`"${detail}":\\s*t\\(`));
+    }
   });
 });

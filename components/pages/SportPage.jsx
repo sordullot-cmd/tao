@@ -92,10 +92,10 @@ const EXERCISE_LIBRARY = [
   { name: "Tractions pronation",        category: "pull" },
   { name: "Tractions supination",       category: "pull" },
   { name: "Tractions neutres",          category: "pull" },
-  { name: "Australian pull-up",         category: "pull" },
   { name: "Rowing barre",               category: "pull" },
   { name: "Rowing T-bar",               category: "pull" },
   { name: "Rowing haltère",             category: "pull" },
+  { name: "Rowing australien",          category: "pull" },
   { name: "Tirage horizontal poulie",   category: "pull" },
   { name: "Tirage vertical poulie",     category: "pull" },
   { name: "Face pull",                  category: "pull" },
@@ -254,6 +254,14 @@ export default function SportPage() {
   const [customPresets, setCustomPresets] = useCloudState("tr4de_sport_custom_presets", "sport_custom_presets", []);
   // Photos de progression physique ({ id, date, dataUrl, weight?, note? }).
   const [progressPhotos, setProgressPhotos] = useCloudState("tr4de_sport_progress_photos", "sport_progress_photos", []);
+  /* Mois de l'historique repliés — on stocke les CLÉS REPLIÉES (et non les
+     dépliées) pour qu'un mois qui n'existe pas encore s'affiche ouvert : sans
+     ça, chaque nouveau mois arriverait fermé chez les utilisateurs existants.
+     Dans le nuage, donc le repli survit au navigateur et à la machine. */
+  const [collapsedMonths, setCollapsedMonths] = useCloudState("tr4de_sport_collapsed_months", "sport_collapsed_months", []);
+  const toggleMonth = (key) => setCollapsedMonths(prev => (
+    (prev || []).includes(key) ? (prev || []).filter(k => k !== key) : [...(prev || []), key]
+  ));
 
   const [tab, setTab] = useState("workout"); // "workout" | "photos"
   const [filterDiscipline, setFilterDiscipline] = useState("all");
@@ -729,12 +737,20 @@ export default function SportPage() {
             </div>
           ) : (
             <div className="anim-stagger" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              {monthGroups.map(group => (
+              {monthGroups.map(group => {
+                const monthOpen = !(collapsedMonths || []).includes(group.key);
+                return (
                 <div key={group.key}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+                  {/* Le titre du mois EST le bouton de repli : pas de poignée
+                      séparée à viser, et le chevron n'annonce que l'état. */}
+                  <button type="button" onClick={() => toggleMonth(group.key)} aria-expanded={monthOpen}
+                    style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: monthOpen ? 12 : 0, padding: 0, border: "none", background: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", width: "100%" }}>
+                    <ChevronDown size={13} strokeWidth={2} color={T.text} aria-hidden
+                      style={{ alignSelf: "center", flexShrink: 0, opacity: 0.55, transform: monthOpen ? "none" : "rotate(-90deg)", transition: "transform 0.15s" }} />
                     <span style={{ fontSize: 13, fontWeight: 600, color: T.text, textTransform: "capitalize" }}>{group.label}</span>
                     <span style={{ fontSize: 12, color: T.text, opacity: 0.5 }}>· {group.sessions.length} séance{group.sessions.length > 1 ? "s" : ""}</span>
-                  </div>
+                  </button>
+                  {monthOpen && (
                   <div style={{ position: "relative", paddingLeft: 26 }}>
                     {/* Trait vertical de la timeline */}
                     <div style={{ position: "absolute", left: 8, top: 4, bottom: 4, width: 2, background: HAIRLINE, borderRadius: 999 }} />
@@ -754,8 +770,10 @@ export default function SportPage() {
                       })}
                     </div>
                   </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
