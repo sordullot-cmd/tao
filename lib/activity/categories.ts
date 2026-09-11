@@ -31,8 +31,8 @@
 import { PALETTE, PALETTE_DARK, PALETTE_LIGHT, GREY } from "@/lib/ui/palette";
 import { getLang } from "@/lib/i18n";
 import {
-  CATALOG, domainInTitle, guessSiteName, isBrowserApp, matchAppExact, matchAppWord,
-  matchDomain, matchTitle, norm, type CatalogEntry, type CatalogHit,
+  CATALOG, cleanBrowserTitle, domainInTitle, guessSiteName, isBrowserApp, matchAppExact,
+  matchAppWord, matchDomain, matchTitle, norm, type CatalogEntry, type CatalogHit,
 } from "@/lib/activity/catalog";
 import { SELF_SECTIONS, sectionName, selfTitleOf, type SelfSection } from "@/lib/activity/self";
 
@@ -475,6 +475,11 @@ function settle(id: string): string {
  * travailler reste un morceau ; l'apprentissage en dernier, le plus large des
  * trois.
  */
+/* Deux chemins mènent à la musique — les mots du titre et sa forme (cf.
+   `trackOf`) — et ils doivent donner LE MÊME nom : la page agrège par nom, et
+   « YouTube · Musique » écrit deux fois différemment ferait deux lignes. */
+const MUSIC_NAME = { fr: "Musique", en: "Music" } as const;
+
 const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
   {
     /* Une vidéo de trading part dans « Apprentissage », et non dans « Trading &
@@ -494,8 +499,8 @@ const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
   },
   {
     cat: "music",
-    name: "Musique",
-    nameEn: "Music",
+    name: MUSIC_NAME.fr,
+    nameEn: MUSIC_NAME.en,
     /* Deux familles, et aucune n'est un genre musical : ce qui identifie un
        morceau, c'est la MISE EN FORME que les chaînes lui collent (« official
        video », « clip officiel », « lyrics », « prod by ») et le format d'écoute
@@ -504,8 +509,14 @@ const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
        n'est pas de la musique. Une exception, « lofi » : sur ces plateformes il
        ne désigne jamais un sujet, toujours une bande-son qu'on laisse tourner —
        et c'est justement le cas qu'on veut compter en neutre plutôt qu'en
-       distraction, puisqu'il accompagne le travail. */
-    re: /\b(clip officiel|clip musical|clip video|official (music )?video|official audio|audio officiel|official visualizer|lyrics?( video)?|paroles|feat|prod by|remix|mashup|nightcore|slowed( and)? reverb|sped up|bass boosted|8d audio|full album|album complet|mixtape|dj (set|mix)|live session|live performance|en concert|concert live|tiny desk|boiler room|karaoke|acoustic|unplugged|instrumental|lofi|lo fi)\b/,
+       distraction, puisqu'il accompagne le travail.
+
+       « prod » est pris NU (le titre est normalisé : « (prod. Keyzo) » arrive
+       ici en « prod keyzo »). C'est un crédit de producteur, et hors d'un titre
+       de morceau le mot ne sert à peu près jamais seul — le risque tient dans
+       une « prod » de film ou de serveur, et il pèse moins lourd que le rap
+       français entier, dont c'est LA signature de titre. */
+    re: /\b(clip officiel|clip musical|clip video|official (music )?video|official audio|audio officiel|official visualizer|lyrics?( video)?|paroles|feat|prod|produced by|remix|mashup|nightcore|slowed( and)? reverb|sped up|bass boosted|8d audio|full album|album complet|mixtape|dj (set|mix)|live session|live performance|en concert|concert live|tiny desk|boiler room|karaoke|acoustic|unplugged|instrumental|lofi|lo fi)\b/,
   },
   {
     /* Ce qu'on regarde pour APPRENDRE — et qui tombait dans « Réseaux sociaux »
@@ -551,6 +562,94 @@ function subjectOf(title: string): { cat: string; name: string; matched: string 
     if (m) return { cat: s.cat, name: getLang() === "en" ? s.nameEn : s.name, matched: m[0] };
   }
   return null;
+}
+
+/* ─── La FORME d'un morceau, quand aucun mot ne le dit ───────────────────── */
+
+/**
+ * « Artiste - Titre » : la convention que suivent les chaînes qui publient de
+ * la musique, et que ne suit à peu près rien d'autre.
+ *
+ * Les mots de `SUBJECTS` ne rattrapent qu'une partie des clips — ceux dont le
+ * titre annonce sa mise en forme (« Clip officiel », « Lyrics »). Tout le reste
+ * — la moitié du rap français, la plupart des morceaux qu'on met en fond —
+ * n'écrit que le nom de l'artiste, un tiret, le titre, et tombait donc dans le
+ * fil, c'est-à-dire au débit de la journée.
+ *
+ * La forme se lit sur le titre BRUT, pas sur sa version normalisée : c'est le
+ * tiret qui porte le sens ici, et `norm` l'efface avec le reste de la
+ * ponctuation.
+ *
+ * Un tel motif attrape par construction plus large qu'un mot de métier — d'où
+ * trois garde-fous, dans l'ordre où ils coupent :
+ *
+ *   • il passe en DERNIER, après les trois sujets. « Nietzsche - le surhomme »
+ *     ou « Tutoriel Excel - les bases » sont déjà rangés quand on arrive ici :
+ *     un vocabulaire reconnu vaut toujours mieux qu'une forme ;
+ *   • un seul tiret, et deux côtés de la taille d'un nom (`TRACK_SIDES`). Une
+ *     phrase, une date, une énumération ne passent pas ;
+ *   • et la liste de ce qui prend cette forme SANS être un morceau — un
+ *     épisode, un trailer, un best of, une question posée au spectateur.
+ *
+ * Ce qui reste de faux positifs se corrige d'une règle, comme le reste du
+ * classement ; ce qui était perdu ne se rattrapait pas.
+ */
+const TRACK_SEP = /\s+[-–—]\s+/;
+
+/**
+ * La taille des deux côtés — et ils ne sont pas symétriques : un nom d'artiste
+ * est COURT, presque toujours un ou deux mots, jamais une proposition. C'est ce
+ * qui sépare « Ninho - Lettre à une femme » d'une phrase coupée par un tiret
+ * (« Les 10 astuces pour mieux dormir - la science le dit »).
+ */
+const TRACK_SIDES = [{ words: 4, chars: 30 }, { words: 7, chars: 45 }];
+
+/**
+ * Ce qui, d'un côté ou de l'autre, dit que ce n'est pas un morceau.
+ *
+ * Des FORMATS (épisode, trailer, best of, unboxing), et l'adresse au
+ * spectateur — « je », « comment », « pourquoi » — qui ouvre une vidéo parlée
+ * et jamais une chanson. Cherché sur le côté normalisé : « j'ai » y arrive en
+ * « j ai ».
+ */
+const NOT_A_TRACK = /\b(vlogs?|podcasts?|interviews?|reactions?|gameplays?|let ?s play|speedrun|walkthrough|trailers?|bandes? annonces?|teasers?|episodes?|ep \d|partie \d|part \d|s\d+ ?e\d+|saison \d|best of|highlights?|unboxing|tier ?list|top \d|challenge|prank|storytime|actualites?|debat|documentaire|streams?|direct)\b|^(je|j ai|comment|pourquoi|quand|qui|quoi|combien)\b/;
+
+/** Le titre débarrassé du nom de la plateforme (« … - YouTube »). */
+function withoutPlatform(title: string, platform: string): string {
+  const t = cleanBrowserTitle(title);
+  const name = platform.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return t.replace(new RegExp(`\\s*[-–—|·]\\s*${name}\\s*$`, "i"), "").trim();
+}
+
+/** Le sujet « Musique » quand le titre en a la forme, et rien sinon. */
+function trackOf(title: string, platform: string): { cat: string; name: string; matched: string } | null {
+  /* Ce que les chaînes collent derrière — « (Official Video) », « [prod. X] »,
+     « (feat. Y) ». Les mots de `SUBJECTS` en ont déjà tiré ce qu'ils pouvaient ;
+     ce qui reste masquerait la forme du devant. */
+  let core = withoutPlatform(title, platform);
+  for (let prev = ""; core !== prev; ) {
+    prev = core;
+    core = core.replace(/\s*[([][^)\]]*[)\]]\s*$/, "").trim();
+  }
+
+  const sides = core.split(TRACK_SEP);
+  if (sides.length !== 2) return null;
+
+  for (const [i, side] of sides.entries()) {
+    const n = norm(side);
+    const max = TRACK_SIDES[i];
+    if (!n || n.length > max.chars || n.split(" ").length > max.words) return null;
+    if (NOT_A_TRACK.test(n)) return null;
+    /* Un point d'exclamation ou d'interrogation appelle le spectateur : c'est
+       un titre de vidéo parlée ou de direct, pas un morceau. */
+    if (/[!?]/.test(side)) return null;
+  }
+
+  return {
+    cat: "music",
+    name: getLang() === "en" ? MUSIC_NAME.en : MUSIC_NAME.fr,
+    matched: sides.map(s => norm(s)).join(" - "),
+  };
 }
 
 /* ─── La partie de l'app, quand c'est l'app qu'on mesure ─────────────────── */
@@ -619,7 +718,11 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
      deux classements sous le même nom se seraient écrasés l'un l'autre et que
      la majorité aurait tout emporté. Deux noms, deux lignes, deux totaux — et
      on lit enfin ce que YouTube a servi à faire. */
-  const subject = hit.entry.hosted ? subjectOf(title) : null;
+  /* La FORME du titre passe après ses MOTS : « Artiste - Titre » ne dit qu'une
+     convention d'affichage, là où un vocabulaire dit un sujet (cf. `trackOf`). */
+  const subject = hit.entry.hosted
+    ? subjectOf(title) ?? (hit.entry.tracks ? trackOf(title, hit.entry.name) : null)
+    : null;
   const subjectCat = subject ? settle(subject.cat) : null;
   // Catégorie retirée par l'utilisateur : celle du catalogue vaut mieux que
   // « Non classé », qui renverrait ce temps dans la file d'attente.

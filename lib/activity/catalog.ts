@@ -73,6 +73,20 @@ export interface CatalogEntry {
    * VS Code parle du fichier ouvert, pas d'une autre activité.
    */
   hosted?: boolean;
+  /**
+   * Plateforme où « Artiste - Titre » désigne un MORCEAU.
+   *
+   * C'est une convention d'affichage, pas un mot : sur YouTube la moitié des
+   * clips ne portent aucun des marqueurs que lit `SUBJECTS` (« clip officiel »,
+   * « lyrics »), rien que le nom de l'artiste, un tiret, le titre — et ils
+   * tombaient donc avec le fil. La FORME du titre est alors le seul indice, et
+   * le classement la lit (cf. `trackOf` dans lib/activity/categories).
+   *
+   * Réservé aux plateformes de vidéos publiées : sur Twitch, « Pseudo - ce
+   * qu'il fait ce soir » est un titre de direct, et la même forme y rangerait
+   * chaque stream dans la musique.
+   */
+  tracks?: boolean;
 }
 
 type Seed = Omit<CatalogEntry, "cat">;
@@ -515,7 +529,7 @@ export const CATALOG: CatalogEntry[] = [
        `hosted` en fait l'exception : ce qu'on y regarde vraiment — une formation
        au trading, un clip qui tourne en fond — sort de cette catégorie sur la
        foi du titre (cf. `SUBJECTS`). */
-    { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"], hosted: true },
+    { name: "YouTube", app: ["youtube"], web: ["youtube.com", "youtu.be", "m.youtube.com"], title: ["youtube"], hosted: true, tracks: true },
     /* Pinterest était rangé avec les outils de création, comme banque d'images.
        C'en est une, mais on n'y va pas comme dans une banque d'images : on y
        fait défiler un fil, exactement comme ailleurs ici. */

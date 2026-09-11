@@ -91,6 +91,52 @@ describe("un clip musical compte comme de la musique, pas comme un fil", () => {
       .toBe("distracting");
   });
 
+  it("reconnaît un morceau à sa FORME, quand le titre n'en dit pas plus", () => {
+    /* « Artiste - Titre » sans mention de clip ni de paroles : c'est la moitié
+       de ce qu'on écoute, et ça tombait entièrement dans le fil. */
+    for (const titre of [
+      "Ninho - Lettre à une femme",
+      "SDM — Bolide allemand",
+      "Gazo - Mode Akimbo",
+      "Chopin - Etude Op. 10 No. 4",
+      "Daft Punk - Something About Us",
+    ]) {
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("music");
+    }
+  });
+
+  it("lit le crédit du producteur, où qu'il soit posé", () => {
+    // « (prod. X) », « prod by X » : la signature d'un titre de rap.
+    for (const titre of [
+      "Titre du morceau (prod. Keyzo)",
+      "Freestyle #4 prod by Diese",
+    ]) {
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("music");
+    }
+  });
+
+  it("ne prend pas pour un morceau tout ce qui porte un tiret", () => {
+    /* Le tiret est une ponctuation avant d'être une convention : sans ces
+       garde-fous, la forme emporterait la moitié du fil avec elle. */
+    for (const titre of [
+      "Compilation de chats",                       // pas de tiret du tout
+      "GTA 6 - Trailer 2",                          // un format, pas un artiste
+      "Elden Ring - gameplay de la nuit",
+      "Je teste la street food coréenne - vlog",
+      "Pourquoi les chats ronronnent - la réponse",
+      "Les 10 astuces pour mieux dormir - la science le dit", // une phrase, pas un nom
+    ]) {
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("social");
+    }
+  });
+
+  it("ne vaut que là où cette forme désigne un morceau, pas sur un direct", () => {
+    /* Sur Twitch, « Pseudo - ce qu'il fait ce soir » est un titre de direct :
+       la même forme y rangerait chaque stream dans la musique. */
+    expect(classify("Google Chrome", "Kameto - on repart en ranked", [], "https://www.twitch.tv/kamet0").category)
+      .toBe("fun");
+  });
+
   it("cède au trading quand le titre parle des deux", () => {
     // « Lofi pour trader » : le vocabulaire de métier est le plus spécialisé des
     // deux, c'est lui qui dit à quoi l'heure a servi.
