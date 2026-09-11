@@ -107,7 +107,6 @@ import {
   ArrowRightLeft as LucideArrowRightLeft,
   Landmark as LucideLandmark,
   ChartPie as LucideChartPie,
-  Brain as LucideBrain,
   ShieldOff as LucideShieldOff,
   Activity as LucideActivity,
   Settings as LucideSettings,
@@ -729,9 +728,9 @@ export default function App() {
         { id: "activity",      icon: LucideActivity,     label: t("nav.activity") },
         { id: "sport",         icon: LucideDumbbell,     label: "Sport" },
         { id: "notes",         icon: LucideFileText,     label: t("nav.notes") },
-        /* « Révisions » suit « Notes » : c'est là qu'on écrit ce qu'on veut
-           retenir, et l'atelier des révisions part précisément de ces notes. */
-        { id: "revisions",     icon: LucideBrain,        label: t("nav.revisions") },
+        /* « Révisions » n'est plus dans la navigation : la page reste routée et
+           joignable (palette de commandes, liens depuis Notes), elle est
+           seulement masquée ici — pas retirée. */
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
       ],
     },
