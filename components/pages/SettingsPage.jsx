@@ -41,6 +41,7 @@ import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { useIcsFeeds, useIcsKindColors, useIcsHiddenEvents, probeFeed } from "@/lib/hooks/useIcsFeeds";
 import { BTN } from "@/lib/ui/buttons";
+import { readThemeMode, setThemeMode } from "@/lib/ui/sectionTheme";
 import { KIND_LABELS, kindColorId } from "@/lib/icsCategories";
 import { GCAL_COLORS } from "@/lib/gcalColors";
 import Popover from "@/components/ui/Popover";
@@ -667,10 +668,7 @@ function GlobalsSection() {
      défaut ici, c'est afficher « anglais » dans le sélecteur d'une app qui
      démarre en français. */
   const [lang, setLangState] = useState(() => getLang());
-  const [theme, setThemeState] = useState(() => {
-    if (typeof window === "undefined") return "system";
-    try { return localStorage.getItem("tr4de_theme") || "system"; } catch { return "system"; }
-  });
+  const [theme, setThemeState] = useState(() => readThemeMode());
   const [risk, setRisk] = useState(() => {
     if (typeof window === "undefined") return 100;
     try { return parseFloat(localStorage.getItem("tr4de_risk_per_trade") || "100") || 100; } catch { return 100; }
@@ -683,15 +681,12 @@ function GlobalsSection() {
      démarrage. */
   const { accent, setAccent: setAccentColors } = useAccentSetting();
 
-  // Applique le thème choisi : "system" retire l'attribut (fallback CSS
-  // prefers-color-scheme), sinon force data-theme="light|dark".
-  const applyTheme = (v) => {
-    try {
-      if (v === "system") delete document.documentElement.dataset.theme;
-      else document.documentElement.dataset.theme = v;
-      localStorage.setItem("tr4de_theme", v);
-    } catch {}
-  };
+  /* Applique le thème choisi (cf. lib/ui/sectionTheme) : "section" le fait
+     suivre la partie de l'app, "system" suit l'OS, les deux autres le figent.
+     Choisir « Par section » depuis CETTE page ne change rien à l'écran : les
+     réglages n'appartiennent à aucune partie, l'effet se voit à la navigation
+     suivante. */
+  const applyTheme = (v) => setThemeMode(v, "settings");
 
   // Charger depuis Supabase au montage (et sur focus)
   useEffect(() => {
@@ -847,13 +842,14 @@ function GlobalsSection() {
         value={theme}
         onChange={(v) => { setThemeState(v); applyTheme(v); }}
         options={[
+          { id: "section", label: "Par section" },
           { id: "system", label: "Système" },
           { id: "light", label: "Clair" },
           { id: "dark", label: "Sombre" },
         ]}
         searchable={false}
       />
-      <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>Choisis l'apparence de l'interface (Système suit ton OS).</div>
+      <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>Par section : Trading en sombre, Vie perso et Finance en clair. Système suit ton OS.</div>
 
       <SectionLabel mt={20}>Couleurs d'accent</SectionLabel>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>

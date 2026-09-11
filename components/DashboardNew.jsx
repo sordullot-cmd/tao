@@ -13,6 +13,7 @@ import { useAgendaReminders } from "@/lib/hooks/useAgendaReminders";
 import { useActivityTracker } from "@/lib/hooks/useActivityTracker";
 import { setSelfSection } from "@/lib/activity/engine";
 import { sectionOfPage, selfTitleOf } from "@/lib/activity/self";
+import { applyThemeForPage, effectiveTheme, setThemeMode } from "@/lib/ui/sectionTheme";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
@@ -257,6 +258,12 @@ export default function App() {
     setSelfSection(section);
     document.title = selfTitleOf(section);
   }, [page]);
+  /* Le fond suit la partie : trading sombre, vie perso et finance clairs (cf.
+     lib/ui/sectionTheme). Effet séparé du précédent bien qu'il dépende du même
+     `page` : celui-ci parle de mesure, celui-là d'apparence, et les mêler
+     ferait dépendre le thème d'un module de suivi d'activité. Sans effet si
+     l'utilisateur a choisi un thème fixe dans les réglages. */
+  useEffect(() => { applyThemeForPage(page); }, [page]);
   const { strategies, addStrategy, updateStrategy, deleteStrategy } = useStrategies();
   const [userId, setUserId] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -1000,12 +1007,11 @@ export default function App() {
           user={{ name: displayUser.name, initials: displayUser.initials, avatarUrl: displayUser.avatarUrl }}
           onProfile={() => setPage("settings")}
           onSettings={() => setPage("settings")}
-          onDarkMode={() => {
-            const cur = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-            const next = cur === "dark" ? "light" : "dark";
-            document.documentElement.dataset.theme = next;
-            try { localStorage.setItem("tr4de_theme", next); } catch {}
-          }}
+          /* Inverser à la main FIGE le thème : on quitte la bascule par section,
+             sinon le choix serait repris à la première navigation — un bouton
+             qui se défait tout seul ne vaut rien. Réglages → Thème rend la
+             bascule automatique. */
+          onDarkMode={() => setThemeMode(effectiveTheme() === "dark" ? "light" : "dark", page)}
           onLogout={handleLogout}
           /* La barre se dimensionne sur son libellé le plus long : on lit sa
              largeur réelle plutôt que de la deviner. */
