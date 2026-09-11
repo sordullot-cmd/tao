@@ -2,10 +2,10 @@
  * Le SUJET d'une vidéo, quand le site ne dit que là où l'on est.
  *
  * YouTube reste rangé dans « Réseaux sociaux » — c'est bien ce qu'on y fait la
- * plupart du temps. Ce qui est sous test, ce sont les deux exceptions : une
- * vidéo dont le titre annonce du trading compte dans « Trading & marchés », un
- * clip compte dans « Musique », chacune sous un nom à elle, et le reste de
- * YouTube n'a pas bougé d'un pouce.
+ * plupart du temps. Ce qui est sous test, ce sont les exceptions : une vidéo de
+ * trading et une vidéo de cours comptent toutes deux dans « Apprentissage »
+ * (on y apprend, on n'y trade pas), un clip compte dans « Musique », chacune
+ * sous un nom à elle — et le reste de YouTube n'a pas bougé d'un pouce.
  */
 
 import { describe, it, expect } from "vitest";
@@ -15,10 +15,18 @@ import { dayStats } from "@/lib/activity/stats";
 
 const YT = "https://www.youtube.com/watch?v=xxxx";
 
-describe("une vidéo de trading ne compte plus dans les réseaux sociaux", () => {
-  it("range dans « trading » ce que le titre annonce comme tel", () => {
+describe("une vidéo de trading compte comme un apprentissage, pas comme un fil", () => {
+  it("range dans « apprentissage » ce que le titre annonce comme du trading", () => {
     const c = classify("Google Chrome", "Scalping du NASDAQ en direct - YouTube", [], YT);
-    expect(c.category).toBe("trading");
+    expect(c.category).toBe("learning");
+  });
+
+  it("ne la compte PAS comme du temps passé sur les marchés", () => {
+    /* « Combien de temps ai-je passé sur les marchés ? » ne doit pas répondre
+       « en regardant des vidéos » : le visionnage gonflait un chiffre qui ne
+       parle que des plateformes, des graphiques et du journal de trades. */
+    expect(classify("Google Chrome", "Scalping du NASDAQ en direct - YouTube", [], YT).category)
+      .not.toBe("trading");
   });
 
   it("lui donne un nom à elle, pour qu'elle ne se confonde pas avec le reste du site", () => {
@@ -47,13 +55,13 @@ describe("une vidéo de trading ne compte plus dans les réseaux sociaux", () =>
       "Ma stratégie du lundi matin",
       "Le trade parfait n'existe pas",
     ]) {
-      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("trading");
+      expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("learning");
     }
   });
 
   it("vaut aussi pour un direct Twitch, même vocabulaire, même raison", () => {
     expect(classify("Google Chrome", "Session forex du matin", [], "https://www.twitch.tv/qqn").category)
-      .toBe("trading");
+      .toBe("learning");
   });
 });
 
@@ -86,8 +94,9 @@ describe("un clip musical compte comme de la musique, pas comme un fil", () => {
   it("cède au trading quand le titre parle des deux", () => {
     // « Lofi pour trader » : le vocabulaire de métier est le plus spécialisé des
     // deux, c'est lui qui dit à quoi l'heure a servi.
-    expect(classify("Google Chrome", "Lofi mix pour scalper le nasdaq - YouTube", [], YT).category)
-      .toBe("trading");
+    const c = classify("Google Chrome", "Lofi mix pour scalper le nasdaq - YouTube", [], YT);
+    expect(c.label).toBe("YouTube · Trading");
+    expect(c.category).toBe("learning");
   });
 });
 
@@ -108,7 +117,6 @@ describe("une vidéo d'apprentissage n'est pas un fil qui passe", () => {
       "Tutoriel Excel : les tableaux croisés",
       "Conférence sur les neurosciences de la mémoire",
       "Masterclass : la prise de parole en public",
-      "Documentaire : comment fonctionne un vaccin",
     ]) {
       expect(classify("Google Chrome", `${titre} - YouTube`, [], YT).category).toBe("learning");
     }
@@ -138,20 +146,30 @@ describe("une vidéo d'apprentissage n'est pas un fil qui passe", () => {
       .toBe("learning");
   });
 
-  it("cède à la musique, qui cède elle-même au trading", () => {
+  it("cède à la musique, et laisse au trading le soin de se nommer", () => {
     /* « Lofi beats to study to » est de la musique qu'on laisse tourner PENDANT
        le travail : la compter comme une étude gonflerait le temps d'apprentissage
-       de tout ce qu'on a mis en fond. Et « psychologie du trading » parle de
-       marchés, quoi qu'annonce son premier mot. */
+       de tout ce qu'on a mis en fond. */
     expect(classify("Google Chrome", "Lofi beats to study to - YouTube", [], YT).category).toBe("music");
-    expect(classify("Google Chrome", "La psychologie du trading expliquée - YouTube", [], YT).category)
-      .toBe("trading");
+    /* « Psychologie du trading » parle de marchés, quoi qu'annonce son premier
+       mot : même catégorie que le reste de l'apprentissage, mais sous le nom du
+       trading — sans quoi on ne saurait plus ce qu'on a appris. */
+    const c = classify("Google Chrome", "La psychologie du trading expliquée - YouTube", [], YT);
+    expect(c.category).toBe("learning");
+    expect(c.label).toBe("YouTube · Trading");
   });
 
   it("épargne les mots qu'une vidéo quelconque peut porter", () => {
     for (const titre of [
       /* Volontairement écartés du vocabulaire : ils rangeraient en apprentissage
          la moitié d'un fil. */
+      /* Une explication qui ne dit pas de quoi elle parle n'est pas un cours :
+         ces cinq-là ramenaient du YouTube ordinaire dans l'apprentissage. */
+      "La fin de Breaking Bad expliquée",
+      "Documentaire : les requins blancs",
+      "Comment faire un tiramisu",
+      "Cette manipulation de photo est incroyable",
+      "Conférence de presse du PSG",
       "Motivation gym : 10 minutes pour y aller",
       "La discipline d'un champion",
       "Mes habits d'hiver",
@@ -210,7 +228,9 @@ describe("la journée mesurée s'en trouve coupée en deux", () => {
   });
 
   /* Deux heures de fil et vingt minutes de trading : sans nom distinct, la page
-     n'admet qu'une catégorie par nom et le fil aurait tout emporté. */
+     n'admet qu'une catégorie par nom et le fil aurait tout emporté. Les vingt
+     minutes comptent en apprentissage — c'est une vidéo, pas une séance de
+     marché. */
   const day: DayLog = {
     date: "2026-09-02",
     segments: [seg(9, 20, "Backtest de ma stratégie - YouTube"), seg(14, 120, "Compilation de chats - YouTube")],
@@ -218,11 +238,13 @@ describe("la journée mesurée s'en trouve coupée en deux", () => {
     updatedAt: 0,
   };
 
-  it("compte le trading d'un côté et le fil de l'autre", () => {
+  it("compte l'apprentissage d'un côté et le fil de l'autre", () => {
     const stats = dayStats(day, DEFAULT_SETTINGS);
     const ms = new Map(stats.byCategory.map(c => [c.id, c.ms]));
-    expect(ms.get("trading")).toBe(20 * 60_000);
+    expect(ms.get("learning")).toBe(20 * 60_000);
     expect(ms.get("social")).toBe(120 * 60_000);
+    // Et rien du tout du côté des marchés : on n'y a pas mis les pieds.
+    expect(ms.get("trading")).toBeUndefined();
   });
 
   it("montre les deux usages de YouTube sur deux lignes", () => {

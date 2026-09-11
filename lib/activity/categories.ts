@@ -107,7 +107,7 @@ export interface ActivityCategory {
  */
 export const BUILTIN_CATEGORIES: ActivityCategory[] = [
   { id: "dev",      label: "Développement",     labelEn: "Development",   color: PALETTE.blue,        productivity: "productive",  hint: "Éditeurs, terminaux, dépôts, documentation technique." },
-  { id: "trading",  label: "Trading & marchés", labelEn: "Trading",       color: PALETTE.green,       productivity: "productive",  hint: "Plateformes, graphiques, journal de trades, prop firms." },
+  { id: "trading",  label: "Trading & marchés", labelEn: "Trading",       color: PALETTE.green,       productivity: "productive",  hint: "Plateformes, graphiques, journal de trades, prop firms. Les vidéos qui en parlent comptent dans « Apprentissage »." },
   /* « Travail » absorbe l'écriture, les tableurs, l'agenda, la création, les
      fichiers et la lecture de fond. Ces six-là se distinguaient mal et se
      mélangeaient tout le temps : un même document passait de « Écriture » à
@@ -121,7 +121,7 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
      Les plateformes de cours (Coursera, Anki, Duolingo…) restent dans
      « Travail » : ce sont des séances qu'on ouvre exprès, pas des vidéos qui
      passent, et les déplacer emporterait tout l'historique avec elles. */
-  { id: "learning", label: "Apprentissage",      labelEn: "Learning",      color: PALETTE_DARK.blue,   productivity: "productive",  hint: "Ce qu'on regarde pour apprendre : communication, psychologie, philosophie, études, tutoriels, conférences." },
+  { id: "learning", label: "Apprentissage",      labelEn: "Learning",      color: PALETTE_DARK.blue,   productivity: "productive",  hint: "Ce qu'on regarde pour apprendre : trading, communication, psychologie, philosophie, études, tutoriels." },
   { id: "browsing", label: "Navigation",        labelEn: "Browsing",      color: PALETTE.brown,       productivity: "neutral",     hint: "Le web qu'on traverse : moteurs de recherche, achats, pages non reconnues." },
   { id: "comms",    label: "Communication",     labelEn: "Communication", color: PALETTE.yellow,      productivity: "neutral",     hint: "Messageries, courrier, visioconférence." },
   /* La musique reste à part : elle ACCOMPAGNE le travail au lieu de le
@@ -133,7 +133,7 @@ export const BUILTIN_CATEGORIES: ActivityCategory[] = [
      donnait un total dont on ne pouvait rien faire — c'est précisément la part
      qu'on veut voir isolée. YouTube en fait partie : on y arrive pour une
      vidéo, on y reste pour la suivante. */
-  { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube — hors vidéos de trading, d'apprentissage et clips musicaux, comptés à part." },
+  { id: "social",   label: "Réseaux sociaux",   labelEn: "Social media",  color: PALETTE.red,         productivity: "distracting", hint: "Fils sociaux, communautés, YouTube — hors vidéos d'apprentissage (trading compris) et clips musicaux, comptés à part." },
   { id: "fun",      label: "Divertissement",    labelEn: "Entertainment", color: PALETTE_DARK.purple, productivity: "distracting", hint: "Vidéo, séries, jeux, sport." },
   /* L'app elle-même, et NEUTRE — c'est le point délicat.
      Écrire son journal est du travail, personne n'en doute. Mais un suivi qui
@@ -465,15 +465,27 @@ function settle(id: string): string {
  * que l'inverse. Une erreur reste rattrapable de toute façon : une règle de
  * l'utilisateur passe avant tout le reste.
  *
- * L'ORDRE tranche les titres qui parlent de plusieurs (« musique pour trader »,
- * « lofi beats to study to ») : le trading d'abord, parce que son vocabulaire
- * est le plus spécialisé — un titre qui le porte parle rarement d'autre chose ;
- * la musique ensuite, parce qu'un morceau qu'on met POUR travailler reste un
- * morceau ; l'apprentissage en dernier, le plus large des trois.
+ * Trading et apprentissage arrivent désormais dans la MÊME catégorie — regarder
+ * une vidéo de marchés, c'est apprendre, pas trader — mais restent deux sujets
+ * distincts : ils portent deux noms, donc deux lignes, et on lit ce qu'on a
+ * appris. L'ORDRE, lui, tranche les titres qui parlent de plusieurs (« musique
+ * pour trader », « lofi beats to study to ») : le trading d'abord, parce que son
+ * vocabulaire est le plus spécialisé — un titre qui le porte parle rarement
+ * d'autre chose ; la musique ensuite, parce qu'un morceau qu'on met POUR
+ * travailler reste un morceau ; l'apprentissage en dernier, le plus large des
+ * trois.
  */
 const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
   {
-    cat: "trading",
+    /* Une vidéo de trading part dans « Apprentissage », et non dans « Trading &
+       marchés » : on ne trade pas en la regardant, on apprend à trader. La
+       catégorie des marchés répond à « combien de temps ai-je passé SUR les
+       marchés ? » — y verser les heures de YouTube, c'était répondre à côté, et
+       gonfler ce chiffre de tout ce qui n'était que du visionnage.
+       Elle garde son NOM à elle (« YouTube · Trading ») : deux noms sous une
+       même catégorie tiennent deux lignes, et on continue de lire ce qu'on a
+       appris. */
+    cat: "learning",
     name: "Trading",
     nameEn: "Trading",
     /* Le titre est normalisé avant le test : sans accent, sans ponctuation
@@ -509,11 +521,15 @@ const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
        dit pas toujours de quoi il parle, et un sujet ne dit pas toujours qu'il
        est enseigné.
 
-       Ce qui a été volontairement ÉCARTÉ, et c'est le plus important ici :
-       « motivation », « discipline » et « habits » appartiennent à tout le monde
-       (un montage de sport, une vidéo de mode) et auraient rangé en
-       apprentissage la moitié d'un fil. « ted » nu aussi — une série s'appelle
-       Ted. Manquer une vidéo se rattrape d'une règle ; en attraper cent, non.
+       Ce qui a été volontairement ÉCARTÉ, et c'est le plus important ici : les
+       mots qui ANNONCENT une explication sans rien dire de son sujet. « expliqué »
+       range « la fin de Breaking Bad expliquée », « documentaire » range un film
+       animalier, « comment faire » une recette, « manipulation » une retouche
+       photo, et « conférence » seule une conférence de presse. Tous ramenaient
+       du YouTube ordinaire, qui doit rester dans le fil. Même raison pour
+       « motivation », « discipline » et « habits » — un montage de sport, une
+       vidéo de mode — et pour « ted » nu, puisqu'une série s'appelle Ted.
+       Manquer une vidéo se rattrape d'une règle ; en attraper cent, non.
 
        APRÈS la musique, et c'est le seul ordre qui tienne : « lofi beats to
        study to » est de la musique qu'on laisse tourner PENDANT le travail, pas
@@ -521,7 +537,7 @@ const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
     cat: "learning",
     name: "Apprentissage",
     nameEn: "Learning",
-    re: /\b(appren(dre|ds|ez)|apprentissage|appris|learn|learning|comment faire|tutos?|tutoriels?|tutorials?|cours|lecons?|masterclass|formation|conference|tedx|ted talks?|ted ed|documentaires?|documentary|vulgarisation|explique|expliquee|explained|revisions?|examens?|concours|etudes?(?! op)|etudier|etudiante?s?|methode de travail|memorisation|anki|communication|prise de parole|art oratoire|oratoire|eloquence|rhetorique|storytelling|public speaking|langage corporel|body language|charisme|charisma|social skills|competences sociales|flirt(er)?|seduction|seduire|drague(r)?|dating|psychologie|psychology|psychologique|therapie|therapy|narcissi(sme|que)|manipulation|biais cognitifs?|cognitive biases?|intelligence emotionnelle|confiance en soi|estime de soi|self esteem|developpement personnel|personal development|self improvement|mindset|philosophie|philosophy|philosophique|stoicisme|stoicism|stoique|nietzsche|socrate|platon|existentialisme|neurosciences|sociologie)\b/,
+    re: /\b(appren(dre|ds|ez)|apprentissage|appris|learn|learning|tutos?|tutoriels?|tutorials?|cours|lecons?|masterclass|formation|conference(?! de presse)|tedx|ted talks?|ted ed|vulgarisation|revisions?|examens?|concours|etudes?(?! op)|etudier|etudiante?s?|methode de travail|memorisation|anki|communication|prise de parole|art oratoire|oratoire|eloquence|rhetorique|storytelling|public speaking|langage corporel|body language|charisme|charisma|social skills|competences sociales|flirt(er)?|seduction|seduire|drague(r)?|dating|psychologie|psychology|psychologique|therapie|therapy|narcissi(sme|que)|manipulation mentale|emprise|biais cognitifs?|cognitive biases?|intelligence emotionnelle|confiance en soi|estime de soi|self esteem|developpement personnel|personal development|self improvement|mindset|philosophie|philosophy|philosophique|stoicisme|stoicism|stoique|nietzsche|socrate|platon|existentialisme|neurosciences|sociologie)\b/,
   },
 ];
 
