@@ -236,6 +236,55 @@ describe("une vidéo d'apprentissage n'est pas un fil qui passe", () => {
   });
 });
 
+describe("une conversation d'IA se range sur ce dont elle parle", () => {
+  const GEM = "https://gemini.google.com/app/abcdef";
+
+  it("compte les marchés comme un apprentissage, sous leur nom", () => {
+    /* On ne trade pas en discutant avec un modèle : on se fait expliquer. */
+    const c = classify("Google Chrome", "Comprendre le price action sur le Nasdaq", [], GEM);
+    expect(c.category).toBe("learning");
+    expect(c.label).toBe("Gemini · Trading");
+  });
+
+  it("compte les cours comme un apprentissage, matières comprises", () => {
+    for (const titre of [
+      "Théorie des coûts en éco-gestion",
+      "Exercice de comptabilité analytique",
+      "Fiche de révision sur le droit du travail",
+      "Plan de dissertation sur la philosophie du langage",
+      "Aide pour mes maths de licence 2",
+    ]) {
+      expect(classify("Google Chrome", titre, [], GEM).category).toBe("learning");
+    }
+    expect(classify("Google Chrome", "Exercice de comptabilité analytique", [], GEM).label)
+      .toBe("Gemini · Learning");
+  });
+
+  it("laisse tout le reste au TRAVAIL, qui est ce qu'on y fait", () => {
+    for (const titre of [
+      "Corrige ce script Python",
+      "Rédige un mail de relance",
+      "Idées de cadeaux d'anniversaire",
+    ]) {
+      const c = classify("Google Chrome", titre, [], GEM);
+      expect(c.category).toBe("work");
+      expect(c.label).toBe("Gemini");
+    }
+  });
+
+  it("n'y lit QUE les deux sujets qui précisent le travail", () => {
+    /* Demander les paroles d'une chanson n'est pas en écouter : sans ce filtre,
+       le fil de discussion serait compté comme une bande-son. */
+    expect(classify("Google Chrome", "Paroles de la chanson et sa signification", [], GEM).category)
+      .toBe("work");
+  });
+
+  it("ne vaut que pour Gemini, dont le titre d'onglet porte celui du fil", () => {
+    expect(classify("Google Chrome", "Comprendre le price action sur le Nasdaq", [], "https://chatgpt.com/c/1").category)
+      .toBe("work");
+  });
+});
+
 describe("le sujet ne déborde pas de son bord", () => {
   it("ne s'applique qu'aux plateformes qui hébergent, pas à un site qui sait ce qu'il est", () => {
     // Un article de presse sur la bourse reste de la presse : Le Monde n'est pas

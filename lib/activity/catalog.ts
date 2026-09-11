@@ -71,8 +71,23 @@ export interface CatalogEntry {
    * plus le SUJET annoncé par le titre (cf. `SUBJECTS` dans
    * lib/activity/categories). Ailleurs, le nom suffit : un titre de fenêtre de
    * VS Code parle du fichier ouvert, pas d'une autre activité.
+   *
+   * Une plateforme de CONVERSATION en est une aussi, pour la même raison : le
+   * titre d'un fil d'IA est celui que le modèle a donné à la discussion, et il
+   * dit de quoi elle parle. Ce qu'elle a de différent tient dans `subjects`.
    */
   hosted?: boolean;
+  /**
+   * Les seuls sujets que ce lieu accepte — tous, par défaut.
+   *
+   * YouTube ne s'engage à rien : on y trouve aussi bien un morceau qu'un cours,
+   * et les trois sujets y ont leur place. Une IA de travail, non — son nom dit
+   * déjà qu'on y travaille, et seul le DOMAINE de la conversation peut préciser
+   * ce travail. Demander à Gemini les paroles d'une chanson n'est pas écouter
+   * de la musique : sans ce filtre, un fil de discussion serait compté comme
+   * une bande-son, et le temps de travail fondrait dans la catégorie voisine.
+   */
+  subjects?: string[];
   /**
    * Plateforme où « Artiste - Titre » désigne un MORCEAU.
    *
@@ -407,7 +422,14 @@ export const CATALOG: CatalogEntry[] = [
   ...of("work", [
     { name: "ChatGPT", app: ["chatgpt", "openai chatgpt"], web: ["chatgpt.com", "chat.openai.com"], title: ["chatgpt"] },
     { name: "Claude", app: ["claude"], web: ["claude.ai"], title: ["claude"] },
-    { name: "Gemini", app: [], web: ["gemini.google.com"] },
+    /* Les IA de discussion restent du TRAVAIL : c'est ce qu'on y fait la
+       plupart du temps, et leur nom ne dit rien de plus. Gemini fait exception
+       parce que son titre d'onglet porte le titre que le modèle a donné au fil
+       — donc le sujet de la conversation. Deux le sortent du travail, et deux
+       seulement (`subjects`) : les marchés et les études, qui sont de
+       l'APPRENTISSAGE. On n'y trade pas, on n'y suit pas un cours : on se fait
+       expliquer. Tout le reste — du code, un mail, un plan — reste du travail. */
+    { name: "Gemini", app: [], web: ["gemini.google.com"], hosted: true, subjects: ["learning"] },
     { name: "Perplexity", app: ["perplexity"], web: ["perplexity.ai"] },
     { name: "Copilot", app: [], web: ["copilot.microsoft.com"] },
     { name: "Le Chat", app: [], web: ["chat.mistral.ai"] },

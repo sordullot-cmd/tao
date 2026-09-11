@@ -532,6 +532,18 @@ const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
        dit pas toujours de quoi il parle, et un sujet ne dit pas toujours qu'il
        est enseigné.
 
+       Les MATIÈRES s'y ajoutent — éco-gestion, compta, droit, maths, SVT — et les
+       formats d'école qui vont avec (dissertation, annales, partiel, fiche de
+       révision). Elles ne servaient à rien tant que le vocabulaire ne se lisait
+       que sur YouTube, où l'on ne révise pas ; elles comptent depuis qu'une
+       conversation d'IA est lue de la même façon (cf. `subjects` dans le
+       catalogue), parce que c'est là qu'on prépare un cours ou un devoir.
+       Trois mots de cette famille manquent exprès : « ses » et « but » sont des
+       mots français avant d'être des filières, et « BTS » est un groupe de
+       musique plus souvent qu'un diplôme. « droit », « gestion » et « physique »
+       n'y sont que suivis de leur domaine : seuls, ils rangeraient « tout
+       droit », « gestion du risque » et « préparation physique ».
+
        Ce qui a été volontairement ÉCARTÉ, et c'est le plus important ici : les
        mots qui ANNONCENT une explication sans rien dire de son sujet. « expliqué »
        range « la fin de Breaking Bad expliquée », « documentaire » range un film
@@ -548,14 +560,21 @@ const SUBJECTS: { cat: string; name: string; nameEn: string; re: RegExp }[] = [
     cat: "learning",
     name: "Apprentissage",
     nameEn: "Learning",
-    re: /\b(appren(dre|ds|ez)|apprentissage|appris|learn|learning|tutos?|tutoriels?|tutorials?|cours|lecons?|masterclass|formation|conference(?! de presse)|tedx|ted talks?|ted ed|vulgarisation|revisions?|examens?|concours|etudes?(?! op)|etudier|etudiante?s?|methode de travail|memorisation|anki|communication|prise de parole|art oratoire|oratoire|eloquence|rhetorique|storytelling|public speaking|langage corporel|body language|charisme|charisma|social skills|competences sociales|flirt(er)?|seduction|seduire|drague(r)?|dating|psychologie|psychology|psychologique|therapie|therapy|narcissi(sme|que)|manipulation mentale|emprise|biais cognitifs?|cognitive biases?|intelligence emotionnelle|confiance en soi|estime de soi|self esteem|developpement personnel|personal development|self improvement|mindset|philosophie|philosophy|philosophique|stoicisme|stoicism|stoique|nietzsche|socrate|platon|existentialisme|neurosciences|sociologie)\b/,
+    re: /\b(appren(dre|ds|ez)|apprentissage|appris|learn|learning|tutos?|tutoriels?|tutorials?|cours|lecons?|masterclass|formation|conference(?! de presse)|tedx|ted talks?|ted ed|vulgarisation|revisions?|examens?|concours|etudes?(?! op)|etudier|etudiante?s?|methode de travail|memorisation|anki|dissertations?|commentaire compose|fiches? de revision|annales|exercices? corriges?|partiels?|bac blanc|controle continu|devoir maison|qcm|parcoursup|classe preparatoire|prepa|licence \d|master \d|eco ?gestion|eco ?droit|economie|micro ?economie|macro ?economie|sciences economiques|comptabilite|compta|fiscalite|gestion d(e|es) (entreprises?|stocks?|projets?)|management|marketing|ressources humaines|droit (civil|penal|prive|public|constitutionnel|fiscal|commercial|du travail|des affaires|des obligations)|mathematiques|maths|statistiques|probabilites|algebre|geometrie|trigonometrie|physique chimie|sciences physiques|biologie|svt|geographie|geopolitique|histoire geo|communication|prise de parole|art oratoire|oratoire|eloquence|rhetorique|storytelling|public speaking|langage corporel|body language|charisme|charisma|social skills|competences sociales|flirt(er)?|seduction|seduire|drague(r)?|dating|psychologie|psychology|psychologique|therapie|therapy|narcissi(sme|que)|manipulation mentale|emprise|biais cognitifs?|cognitive biases?|intelligence emotionnelle|confiance en soi|estime de soi|self esteem|developpement personnel|personal development|self improvement|mindset|philosophie|philosophy|philosophique|stoicisme|stoicism|stoique|nietzsche|socrate|platon|existentialisme|neurosciences|sociologie)\b/,
   },
 ];
 
-/** Le sujet annoncé par un titre, s'il en annonce un. */
-function subjectOf(title: string): { cat: string; name: string; matched: string } | null {
+/**
+ * Le sujet annoncé par un titre, s'il en annonce un.
+ *
+ * `allowed` restreint la lecture à certaines catégories (cf. `subjects` dans le
+ * catalogue) : un lieu qui dit déjà ce qu'on y fait n'accepte que les sujets
+ * qui le PRÉCISENT, pas ceux qui le contrediraient.
+ */
+function subjectOf(title: string, allowed?: string[]): { cat: string; name: string; matched: string } | null {
   const hay = norm(title);
   for (const s of SUBJECTS) {
+    if (allowed && !allowed.includes(s.cat)) continue;
     const m = hay.match(s.re);
     // Le nom suit la langue de l'interface, comme les libellés de catégorie :
     // « YouTube · Musique » n'aurait aucun sens au milieu d'une page anglaise.
@@ -721,7 +740,7 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
   /* La FORME du titre passe après ses MOTS : « Artiste - Titre » ne dit qu'une
      convention d'affichage, là où un vocabulaire dit un sujet (cf. `trackOf`). */
   const subject = hit.entry.hosted
-    ? subjectOf(title) ?? (hit.entry.tracks ? trackOf(title, hit.entry.name) : null)
+    ? subjectOf(title, hit.entry.subjects) ?? (hit.entry.tracks ? trackOf(title, hit.entry.name) : null)
     : null;
   const subjectCat = subject ? settle(subject.cat) : null;
   // Catégorie retirée par l'utilisateur : celle du catalogue vaut mieux que
