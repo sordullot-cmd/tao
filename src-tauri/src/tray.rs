@@ -443,12 +443,7 @@ fn ensure_popover<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow
        — la fenêtre doit être transparente (d'où `macOSPrivateApi`) ET la page
          aussi, sinon on peint par-dessus le verre (cf. app/tray/page.tsx) ;
        — les coins arrondis viennent du `radius` de l'effet, pas du CSS. */
-    .effects(WindowEffectsConfig {
-      effects: vec![WindowEffect::Menu],
-      state: Some(WindowEffectState::Active),
-      radius: Some(11.0),
-      color: None,
-    })
+    .effects(glass())
     /* L'ombre portée est celle du SYSTÈME, et elle doit l'être.
 
        Une `box-shadow` CSS ne conviendrait pas : le matériau occupe toute la
@@ -564,10 +559,34 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>, icon: Rect) {
   });
 }
 
+/// Le matériau de vibrancy, dans la forme exacte où la fenêtre le reçoit.
+///
+/// Extrait pour être posé DEUX FOIS : à la création, et à chaque affichage.
+/// La seconde n'est pas une précaution de style — un `NSVisualEffectView`
+/// installé sur une fenêtre qui n'a jamais été affichée ne se voit pas toujours
+/// quand elle l'est enfin, et le panneau rend alors un aplat opaque au lieu du
+/// verre. Le reposer sur une fenêtre vivante coûte un appel et lève le doute.
+#[cfg(desktop)]
+fn glass() -> WindowEffectsConfig {
+  WindowEffectsConfig {
+    /* `Popover` et non `Menu` : les deux sont des matériaux système, mais le
+       second est presque opaque — c'est un menu déroulant, il doit couvrir ce
+       qu'il recouvre pour rester lisible sur n'importe quoi. `Popover` est
+       celui des panneaux du Centre de contrôle et du Wi-Fi, justement ceux dont
+       on veut l'aspect : assez translucide pour que le fond transparaisse. */
+    effects: vec![WindowEffect::Popover],
+    state: Some(WindowEffectState::Active),
+    // Le rayon des panneaux du système, mesuré sur ceux de la barre d'état.
+    radius: Some(12.0),
+    color: None,
+  }
+}
+
 /// Pose la fenêtre et la montre.
 #[cfg(desktop)]
 fn reveal<R: Runtime>(win: &WebviewWindow<R>, icon: &Rect) {
   let _ = place_under_icon(win, icon);
+  let _ = win.set_effects(Some(glass()));
   let _ = win.show();
   /* Le focus n'est pas cosmétique : c'est SA PERTE qui referme le popover.
      Sans lui, la fenêtre resterait ouverte par-dessus tout le reste. */

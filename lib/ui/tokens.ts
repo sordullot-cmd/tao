@@ -142,6 +142,8 @@ export const MAC = {
   fill:     "var(--mac-fill, rgba(116,116,128,0.10))",
   /** Surface surélevée (segment actif). Translucide pour la même raison. */
   raised:   "var(--mac-raised, rgba(255,255,255,0.72))",
+  /** L'arête de la plaque de verre — un demi-pixel de blanc à son bord. */
+  rim:      "var(--mac-rim, rgba(255,255,255,0.65))",
 } as const;
 
 export const HAIRLINE = "color-mix(in srgb, var(--color-text) 8%, transparent)";

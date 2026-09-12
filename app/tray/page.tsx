@@ -76,10 +76,18 @@ import {
   type TrayState,
 } from "@/lib/tray/native";
 
-/* Marge autour du panneau : c'est la place de l'ombre. La fenêtre native est
-   opaque à la souris sur toute sa surface, mais transparente à l'œil — cette
-   bande ne se voit donc que par ce qu'elle laisse passer. */
-const PAD = 8;
+/* Aucune marge autour du panneau. Elle servait à loger une ombre dessinée en
+   CSS ; l'ombre est celle du système depuis le passage au verre, et le matériau
+   occupe TOUTE la fenêtre. Une marge y laisserait une bande de verre nu autour
+   du contenu, et le liseré d'arête tomberait au mauvais endroit — au bord du
+   contenu au lieu du bord de la plaque. */
+const PAD = 0;
+
+/* Le rayon des coins. Il est dessiné par l'effet de vibrancy, côté Rust
+   (`glass()` dans src-tauri/src/tray.rs) : la valeur est donc reprise ici, et
+   non décidée — le liseré et le rognage du contenu doivent suivre la MÊME
+   courbe, faute de quoi on voit un coin dépasser de l'autre. */
+const RADIUS = 12;
 
 /* ─── Pictogrammes ─────────────────────────────────────────────────────────── */
 
@@ -219,6 +227,17 @@ export default function TrayPopoverPage() {
       <style dangerouslySetInnerHTML={{ __html: `
         html, body { background: transparent !important; margin: 0; overflow: hidden; }
         body { -webkit-user-select: none; user-select: none; cursor: default; }
+        /* L'arête de la plaque de verre. En pseudo-élément fixe et non en
+           bordure d'un bloc : elle doit épouser le bord de la FENÊTRE, là où
+           l'effet dessine sa courbe, et non celui du contenu. Le second reflet,
+           plus marqué sur la seule arête du haut, est ce que fait la lumière sur
+           une plaque posée à plat. */
+        body::after {
+          content: ""; position: fixed; inset: 0;
+          border-radius: ${RADIUS}px;
+          box-shadow: inset 0 0 0 0.5px ${MAC.rim}, inset 0 0.5px 0 0 ${MAC.rim};
+          pointer-events: none;
+        }
       ` }} />
 
       <div style={{ padding: PAD }}>
@@ -229,7 +248,7 @@ export default function TrayPopoverPage() {
              couleur posée ici le recouvrirait, et on retomberait sur l'aplat
              gris qu'on cherchait à éviter. Le rayon ne sert qu'à rogner le
              contenu sur la courbe que l'effet dessine déjà. */
-          style={{ borderRadius: 11, overflow: "hidden" }}
+          style={{ borderRadius: RADIUS, overflow: "hidden", padding: "5px 0" }}
         >
           <Header
             title={state.title || "Routine du jour"}
@@ -260,6 +279,9 @@ export default function TrayPopoverPage() {
 function Header({ title, date, done, total, complete, recording }: {
   title: string; date: string; done: number; total: number; complete: boolean; recording: boolean;
 }) {
+  /* Plus de jauge sous le titre. Une barre remplie est un code de tableau de
+     bord : elle pesait le tiers de l'entête et mettait un aplat de couleur au
+     repos, là où « 3 / 5 » dit la même chose sur la ligne déjà présente. */
   return (
     <div style={{ padding: "9px 11px 8px" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
@@ -283,42 +305,6 @@ function Header({ title, date, done, total, complete, recording }: {
         </div>
       </div>
 
-      {total > 0 && <Gauge done={done} total={total} />}
-    </div>
-  );
-}
-
-/**
- * Jauge à un segment par règle.
- *
- * Une barre continue dirait la proportion ; celle-ci dit aussi COMBIEN il reste
- * de règles — l'information qu'on vient chercher à onze heures du matin. Au-delà
- * d'une douzaine, les segments deviendraient des traits : on repasse alors à une
- * barre pleine, qui reste juste.
- */
-function Gauge({ done, total }: { done: number; total: number }) {
-  const ratio = total ? done / total : 0;
-
-  if (total > 12) {
-    return (
-      <div style={{ marginTop: 7, height: 3, borderRadius: 2, background: MAC.fill, overflow: "hidden" }}>
-        <div style={{
-          width: `${ratio * 100}%`, height: "100%", borderRadius: 2,
-          background: MAC.label, transition: "width 180ms ease",
-        }} />
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ marginTop: 7, display: "flex", gap: 3 }}>
-      {Array.from({ length: total }, (_, i) => (
-        <div key={i} style={{
-          flex: 1, height: 3, borderRadius: 2,
-          background: i < done ? MAC.label : MAC.fill,
-          transition: "background 180ms ease",
-        }} />
-      ))}
     </div>
   );
 }
@@ -435,12 +421,19 @@ function Rule({ entry, onToggle }: { entry: TrayEntry; onToggle: (id: string) =>
         cursor: "pointer",
       }}
     >
+      {/* CARRÉE, et non ronde.
+
+          Un cercle est le contrôle d'un choix EXCLUSIF — un bouton radio, dont
+          on ne coche qu'un. Une règle de routine se coche indépendamment des
+          autres, et AppKit donne à ce cas un carré à coins doux. C'est aussi ce
+          qui la distingue, à l'œil, du choix de liste juste au-dessus, qui est
+          exclusif lui. La forme dit ce que le clic fera. */}
       <span style={{
         flexShrink: 0,
-        width: 15, height: 15, borderRadius: "50%",
+        width: 14, height: 14, borderRadius: 3.5,
         display: "grid", placeItems: "center",
-        border: `1.5px solid ${entry.done ? "transparent" : MAC.label3}`,
-        background: entry.done ? MAC.label : "transparent",
+        border: entry.done ? "none" : `1px solid ${MAC.label3}`,
+        background: entry.done ? MAC.label : MAC.fill,
         color: MAC.labelInv,
         transition: "background 140ms ease, border-color 140ms ease",
       }}>
@@ -618,7 +611,11 @@ function Action({ icon, label, onClick }: {
         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
         padding: "6px 9px",
         borderRadius: 6,
-        border: `1px solid ${MAC.sep}`,
+        /* Sans contour : un cadre posé sur du verre le découpe en cases, et
+           deux boutons encadrés côte à côte se lisent comme un formulaire. Le
+           survol suffit à dire qu'on peut cliquer — c'est le parti des panneaux
+           du système. */
+        border: "none",
         background: hover ? MAC.fill : "transparent",
         color: MAC.label,
         cursor: "pointer",

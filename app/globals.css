@@ -272,6 +272,11 @@
      que la fenêtre passe au-dessus de quelque chose de coloré. */
   --mac-fill:      rgba(116, 116, 128, 0.10); /* quaternarySystemFill */
   --mac-raised:    rgba(255, 255, 255, 0.72);
+  /* Le liseré interne des panneaux du système : un demi-pixel de blanc au bord
+     du verre. Ce n'est pas une bordure — c'est ce qui donne son ÉPAISSEUR à la
+     plaque, le reflet qu'attrape une arête de verre. Sans lui, le matériau se
+     lit comme une zone floue posée là, pas comme un objet. */
+  --mac-rim:       rgba(255, 255, 255, 0.65);
 }
 
 /* === DARK THEME ===
@@ -288,6 +293,8 @@
   --mac-sep:       rgba(84, 84, 88, 0.48);
   --mac-fill:      rgba(118, 118, 128, 0.24);
   --mac-raised:    rgba(255, 255, 255, 0.14);
+  /* Sur fond sombre, l'arête capte moins : la même valeur y ferait un trait. */
+  --mac-rim:       rgba(255, 255, 255, 0.15);
 
   --color-bg: #1A1A1B;          /* contenu principal (cards) */
   --color-bg-subtle: #0F0F10;   /* nav/sidebar — PLUS FONCÉ que les pages */
