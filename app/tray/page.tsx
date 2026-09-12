@@ -243,6 +243,12 @@ export default function TrayPopoverPage() {
           border-radius: ${RADIUS}px;
           background: ${MAC.veil};
           pointer-events: none;
+          /* DERRIÈRE le contenu, et il faut le dire. Un élément positionné
+             passe au-dessus des éléments qui ne le sont pas : sans cette ligne,
+             le voile recouvrait la page entière d'un blanc uniforme — le verre
+             disparaissait sous un aplat laiteux et le texte se délavait avec.
+             Il doit teinter ce qu'il y a DESSOUS, pas ce qu'il y a dessus. */
+          z-index: -1;
         }
         /* L'arête de la plaque de verre. En pseudo-élément fixe et non en
            bordure d'un bloc : elle doit épouser le bord de la FENÊTRE, là où
