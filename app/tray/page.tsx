@@ -225,12 +225,25 @@ export default function TrayPopoverPage() {
           dessine. Le `overflow: hidden` sur `html` empêche l'ascenseur que la
           moindre sur-mesure ferait apparaître dans un panneau de 340 px. */}
       <style dangerouslySetInnerHTML={{ __html: `
-        html { background: transparent !important; margin: 0; overflow: hidden; }
-        /* Le voile, et rien de plus : la page ne doit toujours pas peindre de
-           fond opaque, sinon elle recouvre le matériau (cf. src-tauri/src/tray.rs).
-           Un blanc translucide l'éclaircit en le laissant vivre. */
-        body { background: ${MAC.veil} !important; margin: 0; overflow: hidden; }
+        html, body { background: transparent !important; margin: 0; overflow: hidden; }
         body { -webkit-user-select: none; user-select: none; cursor: default; }
+        /* LE VOILE, et il doit être ARRONDI.
+
+           Posé sur « body », il couvrait la page entière — c'est-à-dire un
+           rectangle — et débordait donc aux quatre coins du verre : on voyait
+           « le rectangle de base derrière les bouts ronds ». Pire, il rendait la
+           fenêtre opaque partout, si bien que l'ombre du système, qui se calcule
+           d'après les pixels opaques, était rectangulaire elle aussi.
+
+           Sur un pseudo-élément qui porte le même rayon que l'effet, les deux
+           défauts tombent ensemble : plus rien ne dépasse, et l'ombre retrouve
+           la courbe du verre. */
+        body::before {
+          content: ""; position: fixed; inset: 0;
+          border-radius: ${RADIUS}px;
+          background: ${MAC.veil};
+          pointer-events: none;
+        }
         /* L'arête de la plaque de verre. En pseudo-élément fixe et non en
            bordure d'un bloc : elle doit épouser le bord de la FENÊTRE, là où
            l'effet dessine sa courbe, et non celui du contenu. Le second reflet,
