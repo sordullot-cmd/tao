@@ -114,14 +114,14 @@ const POPOVER_URL: &str = "https://tao-trade.vercel.app/tray";
 /// rendue et rappelle `tray_popover_resize`. Partir d'une valeur basse évite le
 /// grand rectangle vide qu'on verrait sinon pendant le chargement.
 ///
-/// La largeur, elle, est celle d'un menu de la barre de menus — une colonne de
-/// libellés courts, pas un panneau. Large, il se distinguerait immédiatement de
-/// ceux du système posés juste à côté, ce qui est le seul défaut qu'on ne peut
-/// pas rattraper ensuite par le dessin.
+/// La largeur tient du panneau de la barre de menus, pas de la carte : large,
+/// il se distinguerait de ceux du système posés juste à côté, et c'est le seul
+/// défaut qu'aucun dessin ne rattrape ensuite. 300 px laissent respirer une
+/// règle de routine sans en faire une fenêtre.
 #[cfg(desktop)]
-const POPOVER_WIDTH: f64 = 258.0;
+const POPOVER_WIDTH: f64 = 300.0;
 #[cfg(desktop)]
-const POPOVER_MIN_HEIGHT: f64 = 120.0;
+const POPOVER_MIN_HEIGHT: f64 = 130.0;
 #[cfg(desktop)]
 const POPOVER_MAX_HEIGHT: f64 = 560.0;
 

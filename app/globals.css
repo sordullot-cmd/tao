@@ -247,12 +247,46 @@
   /* Layout */
   --sidebar-width: 220px;
   --sidebar-width-collapsed: 56px;
+
+  /* === PALETTE SYSTÈME macOS ===
+     Réservée au popover de la barre d'état (app/tray/page.tsx), et à lui seul.
+
+     Pourquoi une palette à part, alors que la règle du dépôt est de tout faire
+     descendre de l'accent de marque : ce panneau ne s'affiche pas DANS l'app,
+     il s'affiche À CÔTÉ des menus du système, sous la barre de menus. Là, c'est
+     la charte d'Apple qui fait référence — un vert de marque y signalerait un
+     corps étranger, quand le bleu système se lit comme une case cochée.
+
+     Les valeurs sont celles d'AppKit (systemBlue, systemRed, separatorColor,
+     quaternarySystemFill, labelColor et ses degrés). Elles ne sont pas
+     approximées : c'est tout l'intérêt de les reprendre. */
+  --mac-accent:    #007AFF;  /* systemBlue */
+  --mac-on-accent: #FFFFFF;
+  --mac-red:       #FF3B30;  /* systemRed */
+  --mac-panel:     #FAFAFA;
+  --mac-sep:       rgba(60, 60, 67, 0.14);   /* separatorColor */
+  --mac-fill:      rgba(116, 116, 128, 0.10); /* quaternarySystemFill */
+  --mac-label:     #000000;
+  --mac-label-2:   rgba(60, 60, 67, 0.62);   /* secondaryLabelColor */
+  --mac-label-3:   rgba(60, 60, 67, 0.32);   /* tertiaryLabelColor */
 }
 
 /* === DARK THEME ===
    Couleurs définies en CSS variables + overrides ciblés sur les couleurs
    les plus courantes câblées en dur (inline styles). */
 :root[data-theme="dark"] {
+  /* Palette système macOS, versions sombres. Ce ne sont pas les mêmes teintes
+     éclaircies : Apple publie deux jeux distincts, le bleu sombre étant plus
+     lumineux pour tenir sur un fond noir. */
+  --mac-accent:  #0A84FF;
+  --mac-red:     #FF453A;
+  --mac-panel:   #1E1E1E;
+  --mac-sep:     rgba(84, 84, 88, 0.48);
+  --mac-fill:    rgba(118, 118, 128, 0.24);
+  --mac-label:   #FFFFFF;
+  --mac-label-2: rgba(235, 235, 245, 0.62);
+  --mac-label-3: rgba(235, 235, 245, 0.32);
+
   --color-bg: #1A1A1B;          /* contenu principal (cards) */
   --color-bg-subtle: #0F0F10;   /* nav/sidebar — PLUS FONCÉ que les pages */
   --color-card-bg: #1A1A1B;

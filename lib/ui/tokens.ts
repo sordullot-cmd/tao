@@ -110,6 +110,31 @@ export const T = {
 
 /** Trait dilué : contour d'une case à cocher, d'une zone de dépôt, limite d'une
  *  zone qui défile — là où un bord doit se deviner sans devenir un cadre. */
+/**
+ * La palette système de macOS — pour le popover de la barre d'état, et lui seul.
+ *
+ * Le reste de l'app descend de l'accent de marque, comme le veut la règle. Ce
+ * panneau-là fait exception parce qu'il ne s'affiche pas dans l'app : il
+ * s'ouvre sous la barre de menus, entre ceux du Wi-Fi et de la batterie. C'est
+ * la charte d'Apple qui y fait référence, et une couleur de marque s'y lirait
+ * comme un corps étranger.
+ *
+ * Les valeurs (systemBlue, systemRed, separatorColor, quaternarySystemFill,
+ * labelColor et ses degrés) sont posées dans app/globals.css, en deux jeux —
+ * Apple en publie un par thème, et non une teinte qu'on éclaircirait.
+ */
+export const MAC = {
+  accent:   "var(--mac-accent, #007AFF)",
+  onAccent: "var(--mac-on-accent, #FFFFFF)",
+  red:      "var(--mac-red, #FF3B30)",
+  panel:    "var(--mac-panel, #FAFAFA)",
+  sep:      "var(--mac-sep, rgba(60,60,67,0.14))",
+  fill:     "var(--mac-fill, rgba(116,116,128,0.10))",
+  label:    "var(--mac-label, #000000)",
+  label2:   "var(--mac-label-2, rgba(60,60,67,0.62))",
+  label3:   "var(--mac-label-3, rgba(60,60,67,0.32))",
+} as const;
+
 export const HAIRLINE = "color-mix(in srgb, var(--color-text) 8%, transparent)";
 
 /** Aplat d'un contrôle (pastille, champ, piste, ligne survolée). Assez pour
