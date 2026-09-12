@@ -51,6 +51,7 @@ use tauri::{AppHandle, Runtime};
 #[cfg(desktop)]
 use tauri::{
   menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
+  utils::{config::WindowEffectsConfig, WindowEffect, WindowEffectState},
   Emitter, LogicalSize, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindow,
   WebviewWindowBuilder,
 };
@@ -426,10 +427,30 @@ fn ensure_popover<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow
     .inner_size(POPOVER_WIDTH, POPOVER_MIN_HEIGHT)
     .decorations(false)
     .transparent(true)
-    /* Une fenêtre sans décoration a des angles VIFS. Les coins arrondis et
-       l'ombre viennent donc du CSS de la page, ce qui suppose deux choses : un
-       fond transparent (d'où `macOSPrivateApi` dans tauri.conf.json) et pas
-       d'ombre système, qui serait rectangulaire et dépasserait des angles. */
+    /* LE VERRE, ET C'EST CELUI D'APPLE.
+
+       `WindowEffect::Menu` est `NSVisualEffectMaterial.menu` — le matériau que
+       le système emploie pour ses propres menus. Ce n'est donc pas une
+       imitation : c'est le même flou, la même saturation, le même réglage de
+       translucidité, et il suivra les changements d'apparence et les réglages
+       d'accessibilité (« Réduire la transparence ») sans qu'on ait à les lire.
+
+       Une page web ne POUVAIT pas faire ça. `backdrop-filter` ne floute que ce
+       qui est dans la page ; ce qu'il y a derrière la FENÊTRE lui est
+       invisible. Toute tentative en CSS aurait donné un gris plat.
+
+       Conséquences, toutes nécessaires :
+       — la fenêtre doit être transparente (d'où `macOSPrivateApi`) ET la page
+         aussi, sinon on peint par-dessus le verre (cf. app/tray/page.tsx) ;
+       — les coins arrondis viennent du `radius` de l'effet, pas du CSS ;
+       — pas d'ombre système : elle suivrait le rectangle de la fenêtre et
+         déborderait des angles. Le matériau se détache déjà tout seul. */
+    .effects(WindowEffectsConfig {
+      effects: vec![WindowEffect::Menu],
+      state: Some(WindowEffectState::Active),
+      radius: Some(11.0),
+      color: None,
+    })
     .shadow(false)
     .always_on_top(true)
     .resizable(false)

@@ -119,20 +119,29 @@ export const T = {
  * la charte d'Apple qui y fait référence, et une couleur de marque s'y lirait
  * comme un corps étranger.
  *
- * Les valeurs (systemBlue, systemRed, separatorColor, quaternarySystemFill,
- * labelColor et ses degrés) sont posées dans app/globals.css, en deux jeux —
- * Apple en publie un par thème, et non une teinte qu'on éclaircirait.
+ * Elle est MONOCHROME, et c'est le point : le fond du panneau est le matériau
+ * de vibrancy des menus (`WindowEffect::Menu`, cf. src-tauri/src/tray.rs), qui
+ * prend déjà la couleur de ce qu'il recouvre. Y ajouter un bleu d'accent
+ * revenait à mettre deux sources de couleur dans quinze centimètres carrés.
+ * Tout est donc de l'encre et des gris translucides — et un gris translucide
+ * sur du verre EST le gris du verre.
+ *
+ * Les valeurs (labelColor et ses degrés, separatorColor, quaternarySystemFill)
+ * sont posées dans app/globals.css, en deux jeux : Apple en publie un par
+ * thème, et non une teinte qu'on éclaircirait.
  */
 export const MAC = {
-  accent:   "var(--mac-accent, #007AFF)",
-  onAccent: "var(--mac-on-accent, #FFFFFF)",
-  red:      "var(--mac-red, #FF3B30)",
-  panel:    "var(--mac-panel, #FAFAFA)",
-  sep:      "var(--mac-sep, rgba(60,60,67,0.14))",
-  fill:     "var(--mac-fill, rgba(116,116,128,0.10))",
+  /** L'encre. Noire en apparence claire, blanche en sombre — comme `labelColor`. */
   label:    "var(--mac-label, #000000)",
   label2:   "var(--mac-label-2, rgba(60,60,67,0.62))",
   label3:   "var(--mac-label-3, rgba(60,60,67,0.32))",
+  /** Ce qui s'écrit SUR un aplat de `label` : la coche dans sa case. */
+  labelInv: "var(--mac-label-inv, #FFFFFF)",
+  sep:      "var(--mac-sep, rgba(60,60,67,0.14))",
+  /** Creux (champ, segment vide). Translucide : il ne perce pas le verre. */
+  fill:     "var(--mac-fill, rgba(116,116,128,0.10))",
+  /** Surface surélevée (segment actif). Translucide pour la même raison. */
+  raised:   "var(--mac-raised, rgba(255,255,255,0.72))",
 } as const;
 
 export const HAIRLINE = "color-mix(in srgb, var(--color-text) 8%, transparent)";

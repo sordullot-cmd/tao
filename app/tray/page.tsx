@@ -57,7 +57,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { isTauri } from "@/lib/notify";
 import { MAC } from "@/lib/ui/tokens";
 import { TYPE, TABULAR } from "@/lib/ui/type";
-import { applyThemeForPage } from "@/lib/ui/sectionTheme";
 import {
   EMPTY_TRAY_STATE,
   TRAY_CAPTURE,
@@ -76,11 +75,6 @@ import {
   type TrayList,
   type TrayState,
 } from "@/lib/tray/native";
-
-/* La routine appartient à la page Discipline : elle porte donc son thème, et
-   non un thème propre. Sans cette ligne, le popover s'ouvrirait en clair
-   au-dessus d'une app en sombre. */
-const THEME_PAGE = "discipline";
 
 /* Marge autour du panneau : c'est la place de l'ombre. La fenêtre native est
    opaque à la souris sur toute sa surface, mais transparente à l'œil — cette
@@ -126,7 +120,29 @@ export default function TrayPopoverPage() {
   const [ready, setReady] = useState(false);
   const panel = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => { applyThemeForPage(THEME_PAGE); }, []);
+  /* Le thème suit l'APPARENCE DU SYSTÈME, et non la section de l'app.
+     C'est la seule surface où la règle de `lib/ui/sectionTheme` ne s'applique
+     pas, pour la même raison que la palette : ce panneau s'ouvre entre ceux du
+     Wi-Fi et de la batterie, qui suivent tous les réglages du Mac. Lui faire
+     porter le thème de la page Discipline — sombre, puisque trading — le
+     rendait noir au milieu de panneaux blancs sur un Mac en apparence claire.
+
+     L'écoute vaut le détour : macOS bascule seul au coucher du soleil, et un
+     popover qui garde l'apparence de la veille est une fenêtre à rouvrir pour
+     rien. */
+  useEffect(() => {
+    /* `matchMedia` au conditionnel, comme dans `effectiveTheme()` : tout
+       environnement de rendu ne l'expose pas, et une apparence manquante doit
+       laisser le thème clair plutôt que faire tomber la page. */
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mq) return;
+    const apply = () => {
+      document.documentElement.dataset.theme = mq.matches ? "dark" : "light";
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   // État initial, puis les poussées suivantes.
   useEffect(() => {
@@ -208,16 +224,12 @@ export default function TrayPopoverPage() {
       <div style={{ padding: PAD }}>
         <div
           ref={panel}
-          style={{
-            borderRadius: 11,
-            background: MAC.panel,
-            border: `1px solid ${MAC.sep}`,
-            /* Deux ombres : une large et diffuse pour décoller le panneau de ce
-               qu'il recouvre, une courte et dense pour poser son bord. Une seule
-               donne soit un halo mou, soit un trait dur. */
-            boxShadow: "0 8px 24px rgba(0,0,0,0.22), 0 1px 3px rgba(0,0,0,0.14)",
-            overflow: "hidden",
-          }}
+          /* AUCUN FOND, AUCUNE BORDURE, AUCUNE OMBRE. Le matériau de vibrancy
+             est appliqué à la FENÊTRE (cf. src-tauri/src/tray.rs) : la moindre
+             couleur posée ici le recouvrirait, et on retomberait sur l'aplat
+             gris qu'on cherchait à éviter. Le rayon ne sert qu'à rogner le
+             contenu sur la courbe que l'effet dessine déjà. */
+          style={{ borderRadius: 11, overflow: "hidden" }}
         >
           <Header
             title={state.title || "Routine du jour"}
@@ -266,7 +278,7 @@ function Header({ title, date, done, total, complete, recording }: {
         }}>
           {title}
         </div>
-        <div style={{ ...TYPE.caption, ...TABULAR, color: complete ? MAC.accent : MAC.label2, flexShrink: 0 }}>
+        <div style={{ ...TYPE.caption, ...TABULAR, color: complete ? MAC.label : MAC.label2, flexShrink: 0 }}>
           {total > 0 ? `${done} / ${total}` : "—"}
         </div>
       </div>
@@ -292,7 +304,7 @@ function Gauge({ done, total }: { done: number; total: number }) {
       <div style={{ marginTop: 7, height: 3, borderRadius: 2, background: MAC.fill, overflow: "hidden" }}>
         <div style={{
           width: `${ratio * 100}%`, height: "100%", borderRadius: 2,
-          background: MAC.accent, transition: "width 180ms ease",
+          background: MAC.label, transition: "width 180ms ease",
         }} />
       </div>
     );
@@ -303,7 +315,7 @@ function Gauge({ done, total }: { done: number; total: number }) {
       {Array.from({ length: total }, (_, i) => (
         <div key={i} style={{
           flex: 1, height: 3, borderRadius: 2,
-          background: i < done ? MAC.accent : MAC.fill,
+          background: i < done ? MAC.label : MAC.fill,
           transition: "background 180ms ease",
         }} />
       ))}
@@ -318,10 +330,10 @@ function RecordingDot() {
       <style dangerouslySetInnerHTML={{ __html:
         "@keyframes tray-rec { 0%,100% { opacity: 1 } 50% { opacity: .35 } }" }} />
       <span style={{
-        width: 6, height: 6, borderRadius: "50%", background: MAC.red,
+        width: 6, height: 6, borderRadius: "50%", background: MAC.label,
         animation: "tray-rec 1.6s ease-in-out infinite",
       }} />
-      <span style={{ ...TYPE.caption2, color: MAC.red, textTransform: "uppercase" }}>Enreg.</span>
+      <span style={{ ...TYPE.caption2, color: MAC.label, textTransform: "uppercase" }}>Enreg.</span>
     </div>
   );
 }
@@ -358,7 +370,7 @@ function ListPicker({ lists, onPick }: { lists: TrayList[]; onPick: (id: string)
               /* Le segment actif est un aplat de FOND, pas de marque : il dit
                  « c’est ici », là où la jauge dit déjà l’avancement. Deux verts
                  dans quarante pixels se disputeraient l’œil. */
-              background: l.active ? MAC.panel : "transparent",
+              background: l.active ? MAC.raised : "transparent",
               boxShadow: l.active ? "0 1px 2px rgba(0,0,0,0.14)" : "none",
               color: l.active ? MAC.label : MAC.label2,
               cursor: "pointer",
@@ -428,8 +440,8 @@ function Rule({ entry, onToggle }: { entry: TrayEntry; onToggle: (id: string) =>
         width: 15, height: 15, borderRadius: "50%",
         display: "grid", placeItems: "center",
         border: `1.5px solid ${entry.done ? "transparent" : MAC.label3}`,
-        background: entry.done ? MAC.accent : "transparent",
-        color: MAC.onAccent,
+        background: entry.done ? MAC.label : "transparent",
+        color: MAC.labelInv,
         transition: "background 140ms ease, border-color 140ms ease",
       }}>
         {entry.done && <Check />}
@@ -551,8 +563,8 @@ function SendButton({ active, onClick }: { active: boolean; onClick: () => void 
         display: "grid", placeItems: "center",
         borderRadius: 6,
         border: "none",
-        background: active ? MAC.accent : MAC.fill,
-        color: active ? MAC.onAccent : MAC.label3,
+        background: active ? MAC.label : MAC.fill,
+        color: active ? MAC.labelInv : MAC.label3,
         opacity: active && hover ? 0.88 : 1,
         cursor: active ? "pointer" : "default",
         transition: "background 140ms ease, opacity 140ms ease",
@@ -580,7 +592,6 @@ function Footer({ recording }: { recording: boolean }) {
         <Action
           icon={<RecordIcon on={recording} />}
           label={recording ? "Arrêter" : "Enregistrer"}
-          tone={recording ? "danger" : "default"}
           onClick={() => { trayEmit(TRAY_RECORD); trayClose(); }}
         />
       </div>
@@ -592,11 +603,10 @@ function Footer({ recording }: { recording: boolean }) {
   );
 }
 
-function Action({ icon, label, onClick, tone = "default" }: {
-  icon: ReactNode; label: string; onClick: () => void; tone?: "default" | "danger";
+function Action({ icon, label, onClick }: {
+  icon: ReactNode; label: string; onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
-  const color = tone === "danger" ? MAC.red : MAC.label;
   return (
     <button
       onClick={onClick}
@@ -610,7 +620,7 @@ function Action({ icon, label, onClick, tone = "default" }: {
         borderRadius: 6,
         border: `1px solid ${MAC.sep}`,
         background: hover ? MAC.fill : "transparent",
-        color,
+        color: MAC.label,
         cursor: "pointer",
       }}
     >
