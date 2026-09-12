@@ -97,7 +97,7 @@ describe("popover de la barre d'état", () => {
     expect(trayState).toHaveBeenCalled();
     expect(screen.getByText("Scalp ouverture")).toBeTruthy();
     expect(screen.getByText("Biais journalier défini")).toBeTruthy();
-    expect(screen.getByText("1 / 2")).toBeTruthy();
+    expect(screen.getByText("1 sur 2")).toBeTruthy();
   });
 
   it("coche sans attendre la coquille, et ne fait qu'émettre", async () => {
@@ -106,7 +106,7 @@ describe("popover de la barre d'état", () => {
 
     expect(trayEmit).toHaveBeenCalledWith(TRAY_TOGGLE, "r2");
     // La progression a bougé tout de suite, avant tout retour d'événement.
-    expect(screen.getByText("2 / 2")).toBeTruthy();
+    expect(screen.getByText("2 sur 2")).toBeTruthy();
   });
 
   it("suit la liste que la fenêtre principale repousse", async () => {

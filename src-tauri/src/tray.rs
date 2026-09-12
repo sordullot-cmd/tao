@@ -113,12 +113,17 @@ const POPOVER_URL: &str = "https://tao-trade.vercel.app/tray";
 /// Gabarit d'ouverture. La hauteur est PROVISOIRE : la page se mesure une fois
 /// rendue et rappelle `tray_popover_resize`. Partir d'une valeur basse évite le
 /// grand rectangle vide qu'on verrait sinon pendant le chargement.
+///
+/// La largeur, elle, est celle d'un menu de la barre de menus — une colonne de
+/// libellés courts, pas un panneau. Large, il se distinguerait immédiatement de
+/// ceux du système posés juste à côté, ce qui est le seul défaut qu'on ne peut
+/// pas rattraper ensuite par le dessin.
 #[cfg(desktop)]
-const POPOVER_WIDTH: f64 = 340.0;
+const POPOVER_WIDTH: f64 = 258.0;
 #[cfg(desktop)]
-const POPOVER_MIN_HEIGHT: f64 = 180.0;
+const POPOVER_MIN_HEIGHT: f64 = 120.0;
 #[cfg(desktop)]
-const POPOVER_MAX_HEIGHT: f64 = 620.0;
+const POPOVER_MAX_HEIGHT: f64 = 560.0;
 
 /// Écart entre le bas de l'icône et le haut du popover, et marge minimale au
 /// bord de l'écran.
