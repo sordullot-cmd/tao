@@ -444,19 +444,19 @@ fn ensure_popover<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow
          aussi, sinon on peint par-dessus le verre (cf. app/tray/page.tsx) ;
        — les coins arrondis viennent du `radius` de l'effet, pas du CSS. */
     .effects(glass())
-    /* L'ombre portée est celle du SYSTÈME, et elle doit l'être.
+    /* PAS D'OMBRE SYSTÈME. Essayée, et reprise : macOS ne recalcule pas la
+       forme de l'ombre d'une fenêtre transparente comme on l'espérait. Elle
+       suivait le RECTANGLE de la fenêtre, pas la courbe du verre — un contour
+       gris à angles droits autour d'un panneau arrondi, ce qui saute aux yeux.
 
-       Une `box-shadow` CSS ne conviendrait pas : le matériau occupe toute la
-       fenêtre, une ombre dessinée dans la page tomberait donc SUR le verre au
-       lieu d'être portée derrière lui — une bande grise autour du contenu, pas
-       une ombre.
+       Une `box-shadow` CSS ne la remplacerait pas non plus : le matériau occupe
+       toute la fenêtre, une ombre dessinée dans la page tomberait SUR le verre
+       au lieu d'être portée derrière lui.
 
-       Elle épouse les angles arrondis parce que la fenêtre est transparente :
-       macOS calcule alors la forme de l'ombre d'après les pixels opaques du
-       contenu, et l'opaque, ici, c'est précisément la couche de vibrancy
-       arrondie. C'est ce qui l'aurait rendue rectangulaire si la page avait
-       gardé un fond plein cadre. */
-    .shadow(true)
+       Le panneau se détache donc par son liseré d'arête et par le contraste du
+       matériau (cf. app/tray/page.tsx). C'est peu, mais c'est juste — et une
+       ombre fausse coûte plus cher qu'une ombre absente. */
+    .shadow(false)
     .always_on_top(true)
     .resizable(false)
     .minimizable(false)
