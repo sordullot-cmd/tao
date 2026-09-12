@@ -167,29 +167,6 @@ function loadFired(): Map<string, number> {
   return map;
 }
 
-/**
- * Le même rappel, DANS l'app, sous forme de bandeau qui ne s'efface pas seul.
- *
- * Doublon assumé, et c'est tout l'intérêt : une notification système macOS
- * s'affiche en bannière et disparaît d'elle-même au bout de quelques secondes —
- * on la manque en regardant ailleurs, ce qui est précisément ce qu'on fait
- * quand on travaille. Le bundle demande maintenant le style « alerte »
- * (cf. src-tauri/Info.plist), mais ce réglage est un DÉFAUT que macOS laisse
- * l'utilisateur écraser, et il ne vaut que pour l'app de bureau : dans un
- * navigateur, rien ne le remplace.
- *
- * Le bandeau, lui, est à nous de bout en bout : il attend la croix. Le corps du
- * message porte l'heure ABSOLUE de l'évènement (`reminderWhen`), pas seulement
- * le temps restant — lu une heure plus tard, « dans 5 min » ne voudrait plus
- * rien dire, « Commence à 14:00 » si.
- */
-function announceInApp(title: string, body: string): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("tr4de:alert", {
-    detail: { title, body, severity: "info", sticky: true },
-  }));
-}
-
 function saveFired(map: Map<string, number>): void {
   try {
     localStorage.setItem(FIRED_STORAGE_KEY, JSON.stringify(Object.fromEntries(map)));
@@ -341,8 +318,20 @@ export function useAgendaReminders(): void {
 
         const when = reminderWhen(item.startMs, now);
         const body = item.place ? `${when} · ${item.place}` : when;
+        /* Le SYSTÈME, et lui seul.
+           Le même rappel doublait jusqu'ici en bandeau bleu dans l'app, et ce
+           doublon était voulu : une bannière macOS s'efface d'elle-même au bout
+           de quelques secondes, on la manque en regardant ailleurs — c'est-à-dire
+           en travaillant. Sauf qu'un bandeau qui attend la croix se paie à chaque
+           rappel, et qu'on en reçoit toute la journée : ils s'empilaient devant
+           l'écran qu'on était en train de lire. Le rappel qu'on ne veut pas
+           manquer se règle du côté du SYSTÈME (style « alerte », cf.
+           src-tauri/Info.plist), là où l'utilisateur garde la main, et non en
+           posant sur l'app une couche qu'il ne peut pas taire.
+           Le corps porte l'heure ABSOLUE (`reminderWhen`) et non le temps
+           restant : relu plus tard dans le centre de notifications, « dans
+           5 min » ne voudrait plus rien dire, « Commence à 14:00 » si. */
         void notify(item.title, { body });
-        announceInApp(item.title, body);
       }
 
       if (!dirty) return;

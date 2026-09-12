@@ -1758,9 +1758,11 @@ function AlertsSection() {
 
   const fireTest = () => {
     setTesting(true);
-    window.dispatchEvent(new CustomEvent("tr4de:alert", {
-      detail: { title: t("settings.alerts.testTitle"), body: t("settings.alerts.testBody"), severity: "info" },
-    }));
+    /* La notification SYSTÈME seule : c'est elle qu'on vient vérifier ici, et
+       c'est la seule qui puisse manquer. Le bandeau in-app qui l'accompagnait
+       prouvait surtout que l'app savait se parler à elle-même — il répondait
+       « oui » même quand l'autorisation macOS était refusée, ce qui est
+       exactement le cas que ce bouton existe pour révéler. */
     void notify("tao trade — Test", { body: t("settings.alerts.testNotifBody") });
     setTimeout(() => setTesting(false), 1200);
   };

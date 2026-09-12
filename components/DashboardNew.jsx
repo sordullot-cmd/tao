@@ -27,6 +27,7 @@ import NotesPage from "@/components/pages/NotesPage";
 import RevisionsPage from "@/components/pages/RevisionsPage";
 import FocusPage from "@/components/pages/FocusPage";
 import FocusSentinel from "@/components/focus/FocusSentinel";
+import TrayBridge from "@/components/TrayBridge";
 import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
 import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
@@ -984,6 +985,11 @@ export default function App() {
           parce qu'on est allé voir ses trades. Ne rend que son écran de blocage,
           quand il y a lieu. */}
       <FocusSentinel />
+      {/* Même raison : le menu de la barre d'état doit rester juste quand la
+          page Discipline n'est pas montée — et surtout quand la fenêtre est
+          cachée, c'est-à-dire quand ce menu est le seul accès à la routine.
+          Ne rend rien ; inerte hors de l'app de bureau. */}
+      <TrayBridge />
       {/* `--shell-left` : la place tenue par la barre latérale (sa largeur + sa
           gouttière de 12 px). Elle n'est plus dans le flux — c'est ce padding
           qui la remplace, appliqué au conteneur SCROLLABLE et non au cadre :

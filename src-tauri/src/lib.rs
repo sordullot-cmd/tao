@@ -1,7 +1,9 @@
 mod apps;
 mod blocker;
+mod capture;
 mod phone;
 mod tracker;
+mod tray;
 
 /* `Manager` n'apporte `get_webview_window` que là où il y a des fenêtres à
    aller chercher : le tray et le relais de deep link, tous deux de bureau. */
@@ -13,11 +15,12 @@ use tauri::Manager;
    `#[cfg(desktop)]` qui suivent — ce ne sont pas des précautions, c'est ce qui
    fait que la caisse compile pour les deux mondes. */
 #[cfg(desktop)]
-use tauri::{
-  menu::{Menu, MenuItem},
-  tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-  WindowEvent,
-};
+use tauri::{tray::TrayIconBuilder, WindowEvent};
+/* Le clic gauche ne sert à ouvrir la fenêtre que sur Windows : ailleurs il
+   déroule le menu (voir plus bas). Ces trois symboles n'ont donc de lecteur que
+   là, et un `use` inconditionnel ferait un avertissement sur les deux autres. */
+#[cfg(all(desktop, target_os = "windows"))]
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 #[cfg(desktop)]
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_fs::FsExt;
@@ -87,7 +90,11 @@ pub fn run() {
       blocker::front_tab,
       blocker::redirect_tab,
       blocker::close_app,
-      apps::installed_apps
+      apps::installed_apps,
+      tray::tray_set_checklist,
+      capture::capture_support,
+      capture::capture_request_access,
+      capture::capture_screen
     ])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime
@@ -111,40 +118,61 @@ pub fn run() {
       // Active le démarrage auto de Windows au premier lancement.
       let _ = app.autolaunch().enable();
 
-      // Icône dans la zone de notification (system tray) + menu clic-droit.
-      let open_i = MenuItem::with_id(app, "open", "Ouvrir", true, None::<&str>)?;
-      let quit_i = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
-      let menu = Menu::with_items(app, &[&open_i, &quit_i])?;
+      /* Icône dans la barre d'état. Son menu porte la routine du jour : la
+         liste part vide et c'est le front qui la remplit dès qu'il a lu les
+         règles (cf. components/TrayBridge.jsx), parce qu'elles vivent
+         dans `user_productivity` et non dans le binaire. */
+      app.manage(tray::TrayChecklist::default());
+      let menu = tray::build_menu(app.handle(), "", &[], &[])?;
 
-      TrayIconBuilder::new()
+      #[allow(unused_mut)]
+      let mut tray_builder = TrayIconBuilder::with_id(tray::TRAY_ID)
         .icon(app.default_window_icon().unwrap().clone())
         .tooltip("tao")
         .menu(&menu)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-          "open" => {
-            if let Some(w) = app.get_webview_window("main") {
-              let _ = w.show();
-              let _ = w.set_focus();
-            }
+        .on_menu_event(|app, event| {
+          let id = event.id.as_ref();
+          // Une règle cochée : le front tranche, on n'écrit rien ici.
+          if tray::handle_menu_event(app, id) {
+            return;
           }
-          "quit" => app.exit(0),
-          _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-          // Clic gauche sur l'icône = rouvrir la fenêtre.
-          if let TrayIconEvent::Click {
-            button: MouseButton::Left,
-            button_state: MouseButtonState::Up,
-            ..
-          } = event
-          {
-            if let Some(w) = tray.app_handle().get_webview_window("main") {
-              let _ = w.show();
-              let _ = w.set_focus();
+          match id {
+            "open" => {
+              if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+              }
             }
+            "quit" => app.exit(0),
+            _ => {}
           }
-        })
-        .build(app)?;
+        });
+
+      /* Sur macOS et Linux, le clic gauche DÉROULE le menu — c'est la
+         convention, et c'est désormais là que se coche la routine : ouvrir la
+         fenêtre par-dessus au même clic reviendrait à cacher la checklist
+         qu'on vient de demander. Windows attend l'inverse (gauche = ouvrir,
+         droit = menu), d'où l'aiguillage. */
+      #[cfg(target_os = "windows")]
+      {
+        tray_builder = tray_builder
+          .show_menu_on_left_click(false)
+          .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+              button: MouseButton::Left,
+              button_state: MouseButtonState::Up,
+              ..
+            } = event
+            {
+              if let Some(w) = tray.app_handle().get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+              }
+            }
+          });
+      }
+
+      tray_builder.build(app)?;
       }
 
       Ok(())

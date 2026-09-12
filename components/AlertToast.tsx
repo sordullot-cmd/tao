@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { AlertTriangle, AlertOctagon, Info, X } from "lucide-react";
+import { AlertTriangle, AlertOctagon, X } from "lucide-react";
 import {
   VelocityTracker,
   project,
@@ -10,28 +10,34 @@ import {
   DRAG_HYSTERESIS,
 } from "@/lib/ui/gesture";
 
-type Severity = "info" | "warn" | "danger";
+/**
+ * Deux gravités, et plus de bleu — c'est le point.
+ *
+ * Il y avait un troisième cran, « info », et il servait à DOUBLER dans l'app ce
+ * que le système annonçait déjà : un rappel d'agenda arrivait deux fois, une
+ * fois sur le bureau et une fois en bandeau bleu qui attendait la croix. Le
+ * raisonnement tenait (une bannière macOS s'efface seule, on la manque en
+ * travaillant) mais le prix ne tenait pas : les bandeaux s'empilaient devant
+ * l'écran qu'on était en train de lire, et rien dans l'app ne permettait de les
+ * taire. Ce qui doit se voir sans qu'on ait rien demandé se règle du côté du
+ * système, là où l'utilisateur garde la main.
+ *
+ * Ne reste donc ici que ce qui a MAL tourné : un enregistrement refusé, une
+ * synchronisation qui échoue. Un toast est une mauvaise nouvelle — jamais un
+ * accusé de réception.
+ */
+type Severity = "warn" | "danger";
 
 interface ToastItem {
   id: number;
   title: string;
   body: string;
   severity: Severity;
-  /**
-   * Ne s'efface pas tout seul : il attend la croix ou le geste de renvoi.
-   *
-   * Réservé à ce qu'on ne peut pas se permettre de manquer — un rappel
-   * d'agenda. Six secondes suffisent à confirmer une action qu'on vient de
-   * faire ; elles ne suffisent pas à prévenir de quelque chose qui va arriver,
-   * quand on est justement en train de regarder ailleurs.
-   */
-  sticky?: boolean;
   /** Passe à true juste avant le démontage pour jouer l'animation de sortie. */
   leaving?: boolean;
 }
 
 const COLORS: Record<Severity, { bg: string; bd: string; fg: string; ico: React.ComponentType<{ size?: number; strokeWidth?: number }> }> = {
-  info:   { bg: "var(--color-blue-bg, #EFF6FF)",  bd: "var(--color-blue-bd, #BFDBFE)",  fg: "var(--color-blue, #1E40AF)",  ico: Info },
   warn:   { bg: "var(--color-amber-bg, #FFF7ED)", bd: "var(--color-amber-bd, #FED7AA)", fg: "var(--color-amber, #9A3412)",  ico: AlertTriangle },
   danger: { bg: "var(--color-red-bg, #FEF2F2)",   bd: "var(--color-red-bd, #FECACA)",   fg: "var(--color-red, #991B1B)",   ico: AlertOctagon },
 };
@@ -40,9 +46,9 @@ const COLORS: Record<Severity, { bg: string; bd: string; fg: string; ico: React.
 const MAX_VISIBLE = 3;
 
 /**
- * Écoute l'événement `tr4de:alert` (émis par DrivePage, StrategyPage et le
- * bouton de test des Paramètres) et affiche les messages dans une stack en
- * bas-droite. Auto-dismiss après 6 secondes.
+ * Écoute l'événement `tr4de:alert` (émis par DrivePage et StrategyPage quand une
+ * opération échoue) et affiche les messages en pile, en bas à droite. Chacun
+ * s'efface seul au bout de six secondes : plus rien ici n'attend la croix.
  */
 // Durée de l'animation de sortie — doit matcher `toastOut` ci-dessous.
 const EXIT_MS = 180;
@@ -78,19 +84,22 @@ export default function AlertToast() {
 
   useEffect(() => {
     const onAlert = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { title: string; body: string; severity?: Severity; sticky?: boolean };
+      const detail = (e as CustomEvent).detail as { title: string; body: string; severity?: Severity };
       const id = Date.now() + Math.random();
       const item: ToastItem = {
         id,
         title: detail.title,
         body: detail.body,
-        severity: detail.severity || "info",
-        sticky: detail.sticky === true,
+        /* « Avertissement » par défaut, et non « information » : ce qui arrive
+           ici a mal tourné, sinon ça n'y arriverait pas. La gravité est RELUE et
+           non reprise telle quelle — les émetteurs sont des fichiers .jsx, que
+           rien n'empêche de redemander le bleu disparu, et une gravité inconnue
+           rendrait une couleur indéfinie plutôt qu'une erreur lisible. */
+        severity: detail.severity === "danger" ? "danger" : "warn",
       };
       /* Limite la pile visible : retire les plus anciens au-delà de MAX_VISIBLE.
-         Un toast persistant n'y échappe pas — trois rappels simultanés sont
-         déjà l'exception, et une pile qui grandit sans fin finirait par cacher
-         celui qui vient d'arriver, c'est-à-dire le plus urgent. */
+         Trois erreurs simultanées sont déjà l'exception, et une pile qui grandit
+         sans fin finirait par cacher celle qui vient d'arriver. */
       setItems(prev => {
         const next = [...prev, item];
         if (next.length > MAX_VISIBLE) {
@@ -99,7 +108,7 @@ export default function AlertToast() {
         }
         return next;
       });
-      if (!item.sticky) scheduleDismiss(id);
+      scheduleDismiss(id);
     };
     window.addEventListener("tr4de:alert", onAlert);
     return () => window.removeEventListener("tr4de:alert", onAlert);
@@ -119,7 +128,7 @@ export default function AlertToast() {
      La distance seule ne suffit pas à décider : le mouvement naturel pour
      écarter une notification est une chiquenaude, courte et rapide. On mesure
      donc la vitesse et on projette où la carte se serait arrêtée. */
-  const drag = useRef({ id: -1, toast: -1, sticky: false, startX: 0, startY: 0, decided: -1, dx: 0, width: 0 });
+  const drag = useRef({ id: -1, toast: -1, startX: 0, startY: 0, decided: -1, dx: 0, width: 0 });
   const tracker = useRef(new VelocityTracker());
 
   const paint = (el: HTMLElement | null, dx: number) => {
@@ -141,16 +150,13 @@ export default function AlertToast() {
     tracker.current.reset();
   };
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: number, sticky: boolean) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: number) => {
     // Un seul doigt : changer de doigt en cours de glissé ferait sauter la
     // carte à la nouvelle position, puisque l'origine du geste changerait.
     if (drag.current.id !== -1) return;
     const el = e.currentTarget;
     drag.current = {
-      /* La persistance est retenue AVEC le geste : à la fin, il faut savoir si
-         un renvoi abandonné doit relancer un compte à rebours — et un toast
-         persistant n'en a jamais eu. */
-      id: e.pointerId, toast: id, sticky,
+      id: e.pointerId, toast: id,
       startX: e.clientX, startY: e.clientY,
       decided: -1, dx: 0,
       width: el.getBoundingClientRect().width,
@@ -195,10 +201,9 @@ export default function AlertToast() {
     const flick = vx / 1000 > FLICK_VELOCITY;
     const gone = flick || projected > d.width / 2;
 
-    const sticky = d.sticky;
     resetDrag(el);
     if (gone) dismiss(d.toast);
-    else if (!sticky) scheduleDismiss(d.toast);   // reste : le compte à rebours repart
+    else scheduleDismiss(d.toast);   // reste : le compte à rebours repart
   };
 
   if (items.length === 0) return null;
@@ -264,8 +269,8 @@ export default function AlertToast() {
             role={isDanger ? "alert" : "status"}
             aria-live={isDanger ? "assertive" : "polite"}
             onMouseEnter={() => clearTimer(item.id)}
-            onMouseLeave={() => { if (!item.leaving && !item.sticky) scheduleDismiss(item.id); }}
-            onPointerDown={e => onPointerDown(e, item.id, item.sticky === true)}
+            onMouseLeave={() => { if (!item.leaving) scheduleDismiss(item.id); }}
+            onPointerDown={e => onPointerDown(e, item.id)}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}

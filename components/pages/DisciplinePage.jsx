@@ -22,6 +22,25 @@ import { useCustomDisciplineRules } from "@/lib/hooks/useCustomDisciplineRules";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { getLocalDateString } from "@/lib/dateUtils";
+import {
+  ROUTINE_CHECKS_PREFIX,
+  ROUTINE_RULES_CLOUD_KEY,
+  ROUTINE_RULES_KEY,
+  activeList,
+  addRule as storeAddRule,
+  dayProgress,
+  editRule as storeEditRule,
+  forgetRoutineCheck as storeRoutineForget,
+  listProgress,
+  newRoutineRuleId,
+  normalizeRoutineStore,
+  onRoutineChecksChange,
+  readRoutineChecks,
+  removeRule as storeRemoveRule,
+  setActiveList as storeSetActiveList,
+  toggleRoutineCheck as storeRoutineToggle,
+} from "@/lib/routineChecklist";
+import RoutineListsModal from "@/components/discipline/RoutineListsModal";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
 import { useSwipeToDismiss } from "@/lib/hooks/useSwipeToDismiss";
@@ -533,103 +552,99 @@ export default function DisciplinePage({ trades = [] }) {
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [showRoutinePopover, setShowRoutinePopover] = useState(false);
   const routineBtnRef = useRef(null);
-  // Checklist routine — état journalier, persisté localement par date.
-  const [routineChecks, setRoutineChecks] = useState(() => {
-    try {
-      const k = `tr4de_routine_checklist_${getLocalDateString()}`;
-      return JSON.parse(localStorage.getItem(k) || "{}");
-    } catch { return {}; }
-  });
-  const DEFAULT_ROUTINE_ITEMS = [
-    { id: "biais_journalier", label: "Biais journalier défini" },
-    { id: "fvg_respecte",     label: "FVG respectée identifiée" },
-    { id: "zones_cle",        label: "Traçage des zones clé" },
-  ];
-  const [routineItems, setRoutineItems] = useCloudState(
-    "tr4de_routine_rules",
-    "routine_rules",
-    DEFAULT_ROUTINE_ITEMS,
+  /* Checklist routine — état journalier. Règles et coches vivent désormais
+     dans `lib/routineChecklist` : le menu de la barre d'état les lit et les
+     écrit lui aussi (cf. components/TrayBridge.jsx), et deux copies du
+     même localStorage se seraient contredites dès la première coche passée par
+     le tray.
+
+     Le magasin porte PLUSIEURS listes — une par stratégie — dont une active.
+     Il est normalisé à la lecture et jamais migré : un ancien tableau plat de
+     règles devient la première liste, sans que l'utilisateur voie la
+     différence. */
+  const [routineChecks, setRoutineChecks] = useState(() => readRoutineChecks());
+  const [savedRoutine, setSavedRoutine] = useCloudState(
+    ROUTINE_RULES_KEY,
+    ROUTINE_RULES_CLOUD_KEY,
+    null,
   );
-  const ROUTINE_ITEMS = Array.isArray(routineItems) && routineItems.length ? routineItems : DEFAULT_ROUTINE_ITEMS;
+  const routineStore = React.useMemo(() => normalizeRoutineStore(savedRoutine), [savedRoutine]);
+  const currentList = activeList(routineStore);
+  const ROUTINE_ITEMS = currentList.items;
+  const [showListsModal, setShowListsModal] = useState(false);
+  const [showListPicker, setShowListPicker] = useState(false);
+  /* Toutes les écritures passent par ici : `useCloudState` rend la valeur BRUTE
+     du magasin, et muter sans normaliser d'abord ferait travailler les
+     fonctions du modèle sur une forme qu'elles ne garantissent plus. */
+  const updateRoutine = React.useCallback(
+    (fn) => setSavedRoutine(prev => fn(normalizeRoutineStore(prev))),
+    [setSavedRoutine],
+  );
   const [editingRuleId, setEditingRuleId] = useState(null);
   const [editingRuleDraft, setEditingRuleDraft] = useState("");
   const [newRuleDraft, setNewRuleDraft] = useState("");
   const addRoutineRule = () => {
     const v = newRuleDraft.trim();
     if (!v) return;
-    setRoutineItems(prev => {
-      const base = Array.isArray(prev) && prev.length ? prev : DEFAULT_ROUTINE_ITEMS;
-      return [...base, { id: `r_${Date.now()}`, label: v }];
-    });
+    updateRoutine(st => storeAddRule(st, st.activeId, v));
     setNewRuleDraft("");
   };
-  // Crée une règle vide et passe immédiatement en édition.
+  // Crée une règle vide et passe immédiatement en édition. L'identifiant est
+  // tiré ICI : sans lui, impossible de dire laquelle des règles on édite.
   const startCreateRoutineRule = () => {
-    const id = `r_${Date.now()}`;
-    setRoutineItems(prev => {
-      const base = Array.isArray(prev) && prev.length ? prev : DEFAULT_ROUTINE_ITEMS;
-      return [...base, { id, label: "" }];
-    });
+    const id = newRoutineRuleId();
+    updateRoutine(st => storeAddRule(st, st.activeId, "", id));
     setEditingRuleId(id);
     setEditingRuleDraft("");
   };
   const startEditRule = (it) => { setEditingRuleId(it.id); setEditingRuleDraft(it.label); };
   const commitEditRule = () => {
-    const v = editingRuleDraft.trim();
     const id = editingRuleId;
     if (!id) return;
-    setRoutineItems(prev => {
-      const base = Array.isArray(prev) && prev.length ? prev : DEFAULT_ROUTINE_ITEMS;
-      if (!v) return base.filter(x => x.id !== id); // règle vide → supprimée
-      return base.map(x => x.id === id ? { ...x, label: v } : x);
-    });
+    // Un libellé vide supprime la règle — c'est `editRule` qui en décide.
+    updateRoutine(st => storeEditRule(st, st.activeId, id, editingRuleDraft));
     setEditingRuleId(null); setEditingRuleDraft("");
   };
   const cancelEditRule = () => {
     const id = editingRuleId;
-    if (id) {
-      // Si la règle était vide (création), on la retire.
-      setRoutineItems(prev => {
-        const base = Array.isArray(prev) && prev.length ? prev : DEFAULT_ROUTINE_ITEMS;
-        const cur = base.find(x => x.id === id);
-        if (cur && !cur.label) return base.filter(x => x.id !== id);
-        return base;
+    // Si la règle était vide (création abandonnée), on la retire.
+    if (id && !editingRuleDraft.trim()) {
+      updateRoutine(st => {
+        const cur = activeList(st).items.find(x => x.id === id);
+        return cur && !cur.label ? storeRemoveRule(st, st.activeId, id) : st;
       });
     }
     setEditingRuleId(null); setEditingRuleDraft("");
   };
   const removeRoutineRule = (id) => {
-    setRoutineItems(prev => {
-      const base = Array.isArray(prev) && prev.length ? prev : DEFAULT_ROUTINE_ITEMS;
-      return base.filter(x => x.id !== id);
-    });
+    updateRoutine(st => storeRemoveRule(st, st.activeId, id));
     // Nettoie l'éventuel check du jour pour cette règle.
-    setRoutineChecks(prev => {
-      if (!(id in prev)) return prev;
-      const next = { ...prev }; delete next[id];
-      try {
-        const k = `tr4de_routine_checklist_${getLocalDateString()}`;
-        localStorage.setItem(k, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    setRoutineChecks(storeRoutineForget(id));
     setHeatmapVersion(v => v + 1);
   };
+  const selectRoutineList = (id) => {
+    updateRoutine(st => storeSetActiveList(st, id));
+    setEditingRuleId(null); setEditingRuleDraft("");
+  };
   const toggleRoutineCheck = (id) => {
-    setRoutineChecks(prev => {
-      const next = { ...prev, [id]: !prev[id] };
-      try {
-        const k = `tr4de_routine_checklist_${getLocalDateString()}`;
-        localStorage.setItem(k, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    setRoutineChecks(storeRoutineToggle(id));
     // La heatmap intègre la routine → forcer un recalcul.
     setHeatmapVersion(v => v + 1);
   };
-  const routineDoneCount = ROUTINE_ITEMS.reduce((n, it) => n + (routineChecks[it.id] ? 1 : 0), 0);
+  /* Coche venue d'ailleurs — du menu de la barre d'état, en pratique. Sans cet
+     abonnement, la page ouverte à côté continuerait d'afficher l'état qu'elle
+     a lu à son montage. */
+  React.useEffect(() => onRoutineChecksChange((next, date) => {
+    if (date !== getLocalDateString()) return;
+    setRoutineChecks(next);
+    setHeatmapVersion(v => v + 1);
+  }), []);
+  const routineDoneCount = listProgress(currentList, routineChecks).done;
   // Fermeture (clic extérieur, Échap) : Popover.
-  const closeRoutinePopover = React.useCallback(() => setShowRoutinePopover(false), []);
+  const closeRoutinePopover = React.useCallback(() => {
+    setShowRoutinePopover(false);
+    setShowListPicker(false);
+  }, []);
   const [heatmapVersion, setHeatmapVersion] = useState(0);
   // Historique des checklists de routine, indexé par date, MÉMOÏSÉ.
   // Auparavant reconstruit dans le rendu de la heatmap en balayant tout
@@ -638,23 +653,25 @@ export default function DisciplinePage({ trades = [] }) {
   // définition des règles change (routineItems).
   const routineByDay = React.useMemo(() => {
     const map = new Map();
-    const totalRules = ROUTINE_ITEMS.length;
-    if (!totalRules) return map;
     try {
-      const prefix = "tr4de_routine_checklist_";
+      const prefix = ROUTINE_CHECKS_PREFIX;
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!k || !k.startsWith(prefix)) continue;
         const date = k.slice(prefix.length);
         let obj;
         try { obj = JSON.parse(localStorage.getItem(k) || "{}"); } catch { obj = {}; }
-        if (!obj || Object.keys(obj).length === 0) continue; // aucune donnée
-        const done = ROUTINE_ITEMS.reduce((n, it) => n + (obj[it.id] ? 1 : 0), 0);
-        map.set(date, { done, total: totalRules });
+        if (!obj || typeof obj !== "object") continue;
+        /* Le total vient des listes RÉELLEMENT touchées ce jour-là, pas de la
+           liste active aujourd'hui : sinon, changer de stratégie ce matin
+           recalculerait rétroactivement toute la heatmap sur le mauvais
+           dénominateur. */
+        const { done, total } = dayProgress(routineStore, obj);
+        if (total > 0) map.set(date, { done, total });
       }
     } catch {}
     return map;
-  }, [heatmapVersion, routineItems]);
+  }, [heatmapVersion, routineStore]);
   // Mémorise la dernière règle cochée pour gérer Shift+clic (sélection plage)
   const [lastClickedRuleId, setLastClickedRuleId] = useState(null);
   const [checkedRuleIds, setCheckedRuleIds] = useState(() => {
@@ -1056,13 +1073,44 @@ export default function DisciplinePage({ trades = [] }) {
                 }}
               >
                 <>
+                  {/* En-tête : la liste ACTIVE, et de quoi en changer.
+                      Pas une rangée de pastilles — à 280 px de large, trois noms
+                      de stratégie débordent déjà, et le popover se mettrait à
+                      défiler horizontalement pour un réglage qu'on touche une
+                      fois par séance. Même geste que le sous-menu « Liste » de
+                      la barre d'état : on montre celle qui sert, les autres sont
+                      à un clic. */}
                   <div style={{
-                    display:"flex", alignItems:"center", justifyContent:"space-between",
-                    padding:"4px 6px 4px 10px",
+                    display:"flex", alignItems:"center", gap:6,
+                    padding:"4px 6px 4px 6px",
                   }}>
-                    <span style={{ fontSize:11, color:T.textMut, fontWeight:500 }}>
-                      Routine du jour
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowListPicker(v => !v)}
+                      title="Changer de liste"
+                      aria-expanded={showListPicker}
+                      style={{
+                        display:"inline-flex", alignItems:"center", gap:6,
+                        flex:1, minWidth:0,
+                        padding:"5px 8px", borderRadius:10,
+                        border:"none", background:"transparent", cursor:"pointer",
+                        fontFamily:"inherit", fontSize:11, fontWeight:600,
+                        color:T.textSub, textAlign:"left",
+                        transition:"background .12s ease",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <span style={{ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:T.text }}>
+                        {currentList.name}
+                      </span>
+                      <span style={{ fontVariantNumeric:"tabular-nums", color:T.textMut }}>
+                        {routineDoneCount}/{ROUTINE_ITEMS.length}
+                      </span>
+                      {showListPicker
+                        ? <ChevronUp size={12} strokeWidth={2} color={T.textMut} />
+                        : <ChevronDown size={12} strokeWidth={2} color={T.textMut} />}
+                    </button>
                     <button
                       type="button"
                       onClick={startCreateRoutineRule}
@@ -1070,7 +1118,8 @@ export default function DisciplinePage({ trades = [] }) {
                       aria-label="Ajouter une règle"
                       style={{
                         display:"inline-flex", alignItems:"center", justifyContent:"center",
-                        width:22, height:22, border:"none", background:"transparent",
+                        width:22, height:22, flexShrink:0,
+                        border:"none", background:"transparent",
                         cursor:"pointer", color:T.textMut, borderRadius:"var(--radius-field)",
                         transition:"background .12s ease, color .12s ease",
                       }}
@@ -1080,6 +1129,42 @@ export default function DisciplinePage({ trades = [] }) {
                       <Plus size={13} strokeWidth={2} />
                     </button>
                   </div>
+
+                  {showListPicker && routineStore.lists.map(l => {
+                    const p = listProgress(l, routineChecks);
+                    const on = l.id === routineStore.activeId;
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => { selectRoutineList(l.id); setShowListPicker(false); }}
+                        style={{
+                          display:"flex", alignItems:"center", gap:10, width:"100%",
+                          padding:"7px 10px", borderRadius:10, boxSizing:"border-box",
+                          border:"none", background:"transparent", cursor:"pointer",
+                          fontFamily:"inherit", fontSize:13, fontWeight:500,
+                          color:T.text, textAlign:"left",
+                          transition:"background .12s ease",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span style={{
+                          width:14, height:14, flexShrink:0, borderRadius:999,
+                          background: on ? T.text : "transparent",
+                          border: on ? "none" : `1px solid ${T.border}`,
+                        }} />
+                        <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {l.name}
+                        </span>
+                        <span style={{ fontSize:11, color:T.textMut, fontVariantNumeric:"tabular-nums" }}>
+                          {p.done}/{p.total}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  <div style={{ height:1, background:T.border, margin:"2px 8px 4px" }} />
 
                   {ROUTINE_ITEMS.map((it, idx) => {
                     const checked = !!routineChecks[it.id];
@@ -1199,8 +1284,47 @@ export default function DisciplinePage({ trades = [] }) {
                       </React.Fragment>
                     );
                   })}
+
+                  {/* Liste vide : le dire, plutôt que de laisser un popover nu
+                      qui ressemble à un chargement qui n'arrive jamais. */}
+                  {ROUTINE_ITEMS.length === 0 && (
+                    <div style={{ padding:"10px 10px 12px", fontSize:12, color:T.textMut, lineHeight:1.5 }}>
+                      Aucune règle dans cette liste. Utilisez + pour en ajouter une.
+                    </div>
+                  )}
+
+                  <div style={{ height:1, background:T.border, margin:"4px 8px 2px" }} />
+                  <button
+                    type="button"
+                    onClick={() => { closeRoutinePopover(); setShowListsModal(true); }}
+                    style={{
+                      display:"flex", alignItems:"center", gap:8, width:"100%",
+                      padding:"7px 10px", borderRadius:10, boxSizing:"border-box",
+                      border:"none", background:"transparent", cursor:"pointer",
+                      fontFamily:"inherit", fontSize:12, fontWeight:500,
+                      color:T.textSub, textAlign:"left",
+                      transition:"background .12s ease",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-hover-bg, #F5F5F5)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <ListChecks size={13} strokeWidth={1.75} />
+                    <span>Gérer les listes</span>
+                  </button>
                 </>
               </Popover>
+
+              {/* Montée à la demande : le hook des stratégies interroge
+                  Supabase dès son montage (cf. l'entête du composant). */}
+              {showListsModal && (
+                <RoutineListsModal
+                  open
+                  store={routineStore}
+                  checks={routineChecks}
+                  onChange={updateRoutine}
+                  onClose={() => setShowListsModal(false)}
+                />
+              )}
             </div>
             <div id="tr4de-page-header-slot" />
           </div>
