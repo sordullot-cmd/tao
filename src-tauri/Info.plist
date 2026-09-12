@@ -25,13 +25,18 @@
   l'utilisateur, et l'enregistrement de la page Éloquence reste mort alors que
   la même page marche dans le navigateur. Une phrase par usage, c'est ce que
   macOS affiche dans sa boîte de dialogue.
+
+  Le micro sert AUSSI au son des enregistrements d'écran (`screencapture -g`,
+  cf. src/recorder.rs). macOS attribue la demande à l'app qui a lancé le
+  processus, pas au processus lui-même : c'est donc bien cette phrase-ci que
+  l'utilisateur lit avant d'accepter, et elle doit couvrir les deux usages.
 -->
 <plist version="1.0">
 <dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>tao lit le titre de la fenêtre active pour mesurer le temps passé par application et par site.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>tao enregistre ta voix pour les exercices d'éloquence et la dictée de notes. Les prises restent dans ton compte.</string>
+	<string>tao enregistre ta voix pour les exercices d'éloquence, la dictée de notes, et le son des enregistrements d'écran. Les vidéos d'écran restent sur ce poste.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>tao affiche l'image de ta caméra pendant les exercices d'éloquence, comme un miroir. Rien n'est enregistré ni envoyé.</string>
 	<key>NSUserNotificationAlertStyle</key>

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Journal des captures — ce qui a été pris, quand, et où c'est posé.
+ * Journal des captures — images ET vidéos : ce qui a été pris, quand, et où
+ * c'est posé.
  *
  * POURQUOI PAS `useCloudState`. Une capture est un FICHIER sur CE disque. Faire
  * suivre la fiche dans le compte donnerait, sur le téléphone et sur l'autre
@@ -24,17 +25,28 @@ import { getLocalDateString } from "@/lib/dateUtils";
 export interface CaptureEntry {
   /** Identifiant ET nom de fichier (sans extension). */
   id: string;
-  /** Prise de vue (ms epoch). */
+  /** Prise de vue (ms epoch) — le DÉBUT, pour une vidéo. */
   at: number;
   /** Chemin absolu sur ce poste. `null` si la prise a échoué. */
   path: string | null;
   bytes: number;
+  /** Image fixe ou enregistrement. Absent sur les fiches d'avant la vidéo :
+   *  `normalizeCaptureEntry` les lit comme des images. */
+  kind?: "image" | "video";
+  /** Durée de l'enregistrement (ms). Absente pour une image. */
+  durationMs?: number;
+  /** Vrai si la prise portait du son. Une vidéo muette qu'on croyait sonore se
+   *  découvre sinon à la relecture, trop tard pour refaire la séance. */
+  audio?: boolean;
   /** Application au premier plan au moment de la prise, si on la connaît. */
   app?: string;
   /** Titre de la fenêtre active — souvent l'instrument et l'unité de temps. */
   title?: string;
   /** Ce qui a déclenché la prise : le menu, une session, l'utilisateur. */
   source: "tray" | "session" | "manual";
+  /** Le dossier de destination a été choisi par l'utilisateur : le fichier peut
+   *  avoir été déplacé ou supprimé depuis le Finder sans que l'app le sache. */
+  external?: boolean;
   /** Renseigné quand la prise a échoué : la cause, telle quelle. */
   error?: string | null;
 }
@@ -51,14 +63,25 @@ export function captureLogKey(date: string = getLocalDateString()): string {
   return `${CAPTURE_LOG_PREFIX}${date}`;
 }
 
+/* Normalisé à la lecture, jamais migré (cf. CLAUDE.md) : les fiches écrites
+   avant l'arrivée de la vidéo n'ont pas de `kind`, et valent « image ». */
+export function normalizeCaptureEntry(entry: CaptureEntry): CaptureEntry {
+  return entry.kind ? entry : { ...entry, kind: "image" };
+}
+
 export function readCaptureLog(date?: string): CaptureEntry[] {
   try {
     const raw = localStorage.getItem(captureLogKey(date));
     const parsed = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) ? (parsed as CaptureEntry[]) : [];
+    return Array.isArray(parsed) ? (parsed as CaptureEntry[]).map(normalizeCaptureEntry) : [];
   } catch {
     return [];
   }
+}
+
+/** Les enregistrements d'une journée — ce que listera le journal de session. */
+export function videosOfDay(date?: string): CaptureEntry[] {
+  return readCaptureLog(date).filter(e => e.kind === "video");
 }
 
 const CHANGE_EVENT = "tr4de:captures";

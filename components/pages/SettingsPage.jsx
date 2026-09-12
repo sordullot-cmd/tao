@@ -23,12 +23,14 @@ import {
   Download,
   Upload,
   Database,
+  Video as IconVideo,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { deleteTradingAccount, notifyAccountsChanged } from "@/lib/propFirms";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import RecordingSection from "@/components/settings/RecordingSection";
 import { getLang, setLang as setLangPref, t, useLang } from "@/lib/i18n";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -74,6 +76,7 @@ const buildSections = () => [
       { id: "accounts",     label: t("settings.nav.accounts"), Icon: IconBriefcase },
       { id: "globals",      label: t("settings.nav.globals"),  Icon: IconGlobe },
       { id: "alerts",       label: t("settings.nav.alerts"),   Icon: IconBell },
+      { id: "recording",    label: t("settings.nav.recording"), Icon: IconVideo },
       { id: "calendars",    label: t("settings.nav.calendars"), Icon: IconCalendar },
       { id: "import",       label: t("settings.nav.import"),   Icon: IconFile },
       { id: "data",         label: t("settings.nav.data"),     Icon: Database },
@@ -104,6 +107,7 @@ export default function SettingsPage({ user, onBack, setPage }) {
           {active === "accounts"     && <AccountsSection setPage={setPage} />}
           {active === "globals"      && <GlobalsSection />}
           {active === "alerts"       && <AlertsSection />}
+          {active === "recording"    && <RecordingSection />}
           {active === "calendars"    && <CalendarsSection />}
           {active === "import"       && <ImportHistorySection />}
           {active === "data"         && <DataExportSection />}

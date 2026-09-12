@@ -1,6 +1,7 @@
 mod apps;
 mod blocker;
 mod capture;
+mod recorder;
 mod phone;
 mod tracker;
 mod tray;
@@ -16,10 +17,11 @@ use tauri::Manager;
    fait que la caisse compile pour les deux mondes. */
 #[cfg(desktop)]
 use tauri::{tray::TrayIconBuilder, WindowEvent};
-/* Le clic gauche ne sert à ouvrir la fenêtre que sur Windows : ailleurs il
-   déroule le menu (voir plus bas). Ces trois symboles n'ont donc de lecteur que
-   là, et un `use` inconditionnel ferait un avertissement sur les deux autres. */
-#[cfg(all(desktop, target_os = "windows"))]
+/* Le clic gauche est lu sur macOS (il ouvre le popover) et sur Windows (il
+   ouvre la fenêtre). Linux reste sur le menu natif : son plateau est un
+   AppIndicator, qui ne remonte pas les clics — un popover y serait du code
+   qu'aucun événement n'atteindrait jamais. */
+#[cfg(all(desktop, any(target_os = "windows", target_os = "macos")))]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 #[cfg(desktop)]
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
@@ -39,6 +41,32 @@ fn allow_vault_dir(app: tauri::AppHandle, path: String) -> Result<(), String> {
     .fs_scope()
     .allow_directory(std::path::Path::new(&path), true)
     .map_err(|e| e.to_string())
+}
+
+/// Ramène la fenêtre principale au premier plan. Servie au popover, qui n'a pas
+/// le droit de manipuler une fenêtre qui n'est pas la sienne.
+#[tauri::command]
+fn tray_open_main(app: tauri::AppHandle) {
+  #[cfg(desktop)]
+  {
+    tray::hide_popover(&app);
+    if let Some(w) = app.get_webview_window("main") {
+      let _ = w.show();
+      let _ = w.set_focus();
+    }
+  }
+  #[cfg(not(desktop))]
+  let _ = &app;
+}
+
+/// Quitte l'app depuis le popover. Le même arrêt d'enregistrement que l'entrée
+/// « Quitter » du menu : la commande vit ici, et non dans `tray.rs`, parce que
+/// c'est ce module qui connaît `recorder`.
+#[tauri::command]
+fn tray_quit(app: tauri::AppHandle) {
+  #[cfg(desktop)]
+  recorder::stop_on_exit(&app);
+  app.exit(0);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -78,6 +106,9 @@ pub fn run() {
     .plugin(tauri_plugin_fs::init())
     // Suivi d'activité du téléphone (Android). Inerte ailleurs — cf. src/phone.rs.
     .plugin(phone::init())
+    // État de l'enregistrement : un seul pour toute l'app, créé avant la
+    // première commande plutôt que dans `setup`, qui ne tourne pas sur mobile.
+    .manage(recorder::Recorder::default())
     .invoke_handler(tauri::generate_handler![
       allow_vault_dir,
       tracker::activity_snapshot,
@@ -92,9 +123,18 @@ pub fn run() {
       blocker::close_app,
       apps::installed_apps,
       tray::tray_set_checklist,
+      tray::tray_get_checklist,
+      tray::tray_popover_resize,
+      tray::tray_popover_close,
+      tray_open_main,
+      tray_quit,
       capture::capture_support,
       capture::capture_request_access,
-      capture::capture_screen
+      capture::capture_screen,
+      recorder::record_status,
+      recorder::record_start,
+      recorder::record_stop,
+      recorder::record_audio_devices
     ])
     .setup(|app| {
       // Sur Windows/Linux, enregistre les schemes deep link au runtime
@@ -123,7 +163,8 @@ pub fn run() {
          règles (cf. components/TrayBridge.jsx), parce qu'elles vivent
          dans `user_productivity` et non dans le binaire. */
       app.manage(tray::TrayChecklist::default());
-      let menu = tray::build_menu(app.handle(), "", &[], &[])?;
+      app.manage(tray::PopoverGuard::default());
+      let menu = tray::build_menu(app.handle(), "", &[], &[], false)?;
 
       #[allow(unused_mut)]
       let mut tray_builder = TrayIconBuilder::with_id(tray::TRAY_ID)
@@ -143,16 +184,46 @@ pub fn run() {
                 let _ = w.set_focus();
               }
             }
-            "quit" => app.exit(0),
+            "quit" => {
+              // Un enregistrement en cours survivrait à l'app : `screencapture`
+              // est un processus à part, que rien ne rattache à son parent.
+              recorder::stop_on_exit(app);
+              app.exit(0)
+            }
             _ => {}
           }
         });
 
-      /* Sur macOS et Linux, le clic gauche DÉROULE le menu — c'est la
-         convention, et c'est désormais là que se coche la routine : ouvrir la
-         fenêtre par-dessus au même clic reviendrait à cacher la checklist
-         qu'on vient de demander. Windows attend l'inverse (gauche = ouvrir,
-         droit = menu), d'où l'aiguillage. */
+      /* Trois systèmes, trois conventions.
+
+         macOS : gauche = popover, droit = menu natif. Le popover est la surface
+         soignée (cf. tray.rs) ; le menu reste dessous comme repli hors ligne.
+         Le `rect` du clic est ce qui permet de poser la fenêtre SOUS l'icône —
+         il n'est connu qu'ici, d'où le passage à `toggle_popover`.
+
+         Windows : gauche = ouvrir la fenêtre, droit = menu. C'est ce qu'on y
+         attend d'une icône de zone de notification, et le popover n'y a pas
+         d'équivalent visuel installé.
+
+         Linux : rien à câbler. Un AppIndicator ne remonte pas les clics, le
+         menu s'y déroule seul — c'est le comportement d'origine, conservé. */
+      #[cfg(target_os = "macos")]
+      {
+        tray_builder = tray_builder
+          .show_menu_on_left_click(false)
+          .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+              button: MouseButton::Left,
+              button_state: MouseButtonState::Up,
+              rect,
+              ..
+            } = event
+            {
+              tray::toggle_popover(tray.app_handle(), rect);
+            }
+          });
+      }
+
       #[cfg(target_os = "windows")]
       {
         tray_builder = tray_builder
@@ -184,12 +255,33 @@ pub fn run() {
         let _ = window.hide();
         api.prevent_close();
       }
+      /* Un popover se referme quand on regarde ailleurs — c'est ce qui le
+         distingue d'une fenêtre, et ce que fait tout menu de la barre d'état.
+         Le masquage est noté au passage : sans ça, le clic qui ferme (sur
+         l'icône elle-même) rouvrirait aussitôt, le popover ayant déjà perdu le
+         focus au moment où l'événement de clic arrive. */
+      #[cfg(desktop)]
+      if let WindowEvent::Focused(false) = event {
+        if window.label() == tray::POPOVER_LABEL {
+          tray::hide_popover(window.app_handle());
+        }
+      }
       #[cfg(mobile)]
       {
         // Sur mobile, c'est le système qui décide de la vie de la fenêtre.
         let _ = (window, event);
       }
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    /* `run` avec fermeture et non `run(context)` : c'est le SEUL endroit qui voie
+       l'app s'éteindre quelle qu'en soit la cause — menu « Quitter », ⌘Q, ou
+       arrêt de la session. Un enregistrement laissé ouvert continuerait sinon de
+       remplir le disque après la disparition de la fenêtre, sans rien pour le
+       montrer ni l'arrêter. */
+    .run(|app, event| {
+      if let tauri::RunEvent::Exit = event {
+        recorder::stop_on_exit(app);
+      }
+    });
 }

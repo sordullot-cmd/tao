@@ -7,7 +7,7 @@
  *  - APIs (/api/*) : pas de cache (toujours réseau)
  */
 
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL_CACHE = `tao-shell-${VERSION}`;
 const RUNTIME_CACHE = `tao-runtime-${VERSION}`;
 
@@ -24,6 +24,11 @@ const SHELL_URLS = [
   // sûre — une page de blocage qui n'arrive pas laisse l'onglet sur une erreur
   // de réseau, et le site coupé à un retour arrière.
   "/blocked",
+  // Popover de la barre d'état (macOS). Il s'ouvre par définition quand l'app
+  // est FERMÉE, donc souvent sur un poste qui vient de se réveiller : sans
+  // pré-cache, le premier clic sur l'icône donne une fenêtre blanche. Le menu
+  // natif reste au clic droit, mais c'est un repli, pas la surface qu'on vise.
+  "/tray",
   "/manifest.webmanifest",
   "/logo.svg",   // logo affiché dans l'interface (écran de chargement hors-ligne)
   "/favicon.svg",
@@ -31,7 +36,7 @@ const SHELL_URLS = [
 ];
 
 /* Pages dont on veut aussi le JS, pas seulement le HTML. */
-const SHELL_HTML = ["/dashboard", "/login"];
+const SHELL_HTML = ["/dashboard", "/login", "/tray"];
 
 /**
  * Pré-cache les assets versionnés référencés par une page.

@@ -48,6 +48,13 @@ pub struct CaptureResult {
   pub path: Option<String>,
   /// Poids en octets — de quoi afficher ce que le journal coûte sur le disque.
   pub bytes: u64,
+  /// L'image est aussi dans le presse-papiers, prête à être collée.
+  ///
+  /// Distinct de `ok` : une capture peut être écrite sur le disque sans avoir pu
+  /// être copiée (`osascript` indisponible, automatisation refusée). Le dire
+  /// permet d'annoncer « capturée » plutôt que « capturée et copiée », au lieu
+  /// de promettre un ⌘V qui collerait ce qu'il y avait avant.
+  pub copied: bool,
   pub error: Option<String>,
 }
 
@@ -107,6 +114,7 @@ pub fn capture_screen<R: Runtime>(
   day: String,
   id: String,
   display: Option<u8>,
+  clipboard: Option<bool>,
 ) -> CaptureResult {
   if !safe_token(&day) || !safe_token(&id) {
     return fail("nom de fichier refusé");
@@ -136,6 +144,12 @@ pub fn capture_screen<R: Runtime>(
       ok: true,
       path: Some(path.to_string_lossy().to_string()),
       bytes: m.len(),
+      /* Copie SUR DEMANDE, jamais par défaut. L'échantillonnage de fond prend
+         une image toutes les trente secondes : copier à chaque fois viderait le
+         presse-papiers de l'utilisateur en continu, y compris au milieu d'un
+         copier-coller qui n'a rien à voir. Seules les captures demandées à la
+         main la réclament. */
+      copied: clipboard.unwrap_or(false) && imp::copy_to_clipboard(&path).is_ok(),
       error: None,
     },
     // Fichier absent ou vide : l'outil a rendu 0 sans rien écrire. Le dire.
@@ -173,6 +187,37 @@ mod imp {
 
   pub fn request_access() -> bool {
     unsafe { CGRequestScreenCaptureAccess() }
+  }
+
+  /// Met l'image dans le presse-papiers, sans toucher au fichier.
+  ///
+  /// Par AppleScript, et non par une caisse de presse-papiers : ce qu'on veut
+  /// coller est une IMAGE, pas un chemin. `tauri-plugin-clipboard-manager` ne
+  /// sait poser que du texte et des images déjà décodées en mémoire — il
+  /// faudrait donc lire le JPEG, le décoder, le réencoder, pour aboutir au même
+  /// pasteboard que cette ligne. `osascript` fait partie de macOS, comme
+  /// `screencapture` juste au-dessus : même arbitrage, même absence de
+  /// dépendance à suivre.
+  ///
+  /// ⚠️ Le collage marche d'autant mieux que la cible attend une image : macOS
+  /// pose ici un TIFF, que WebKit rend en `image/png` au `paste`. C'est ce qui
+  /// permet de coller directement dans une fiche de trade.
+  pub fn copy_to_clipboard(path: &Path) -> Result<(), String> {
+    let script = format!(
+      "set the clipboard to (read (POSIX file \"{}\") as JPEG picture)",
+      // Un chemin ne contient ici que des caractères sûrs (cf. `safe_token`),
+      // mais le dossier parent vient du système : on échappe quand même.
+      path.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    let out = Command::new("/usr/bin/osascript")
+      .args(["-e", &script])
+      .output()
+      .map_err(|e| format!("osascript injoignable : {e}"))?;
+    if out.status.success() {
+      return Ok(());
+    }
+    let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    Err(if err.is_empty() { "copie refusée".into() } else { err })
   }
 
   pub fn grab(path: &Path, display: u8) -> Result<(), String> {
@@ -217,5 +262,9 @@ mod imp {
 
   pub fn grab(_path: &Path, _display: u8) -> Result<(), String> {
     Err("capture d'écran non disponible sur cette plateforme".into())
+  }
+
+  pub fn copy_to_clipboard(_path: &Path) -> Result<(), String> {
+    Err("presse-papiers non disponible sur cette plateforme".into())
   }
 }

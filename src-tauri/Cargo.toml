@@ -26,7 +26,12 @@ log = "0.4"
 # binaire distribué, une erreur JS qui ne se produit que dans la WebView (API
 # absente, permission refusée par macOS) n'a aucun endroit où être lue. Clic
 # droit → « Inspecter l'élément » dans la fenêtre de l'app.
-tauri = { version = "2.10.3", features = ["tray-icon", "devtools"] }
+# `macos-private-api` : le popover de la barre d'état est une fenêtre SANS
+# décoration, dont les coins arrondis et l'ombre sont dessinés en CSS. Il lui
+# faut donc un fond transparent, que macOS n'expose pas autrement. La contrepartie
+# est connue et sans effet ici : une app qui l'active est refusée par le Mac App
+# Store, or celle-ci se distribue en DMG signé ad-hoc (cf. tauri.conf.json).
+tauri = { version = "2.10.3", features = ["tray-icon", "devtools", "macos-private-api"] }
 tauri-plugin-log = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
