@@ -214,11 +214,6 @@ export default function TrayPopoverPage() {
   const total = state.items.length;
   const complete = total > 0 && done === total;
 
-  /* Date COURTE. La forme longue (« vendredi 12 septembre ») occupait la
-     largeur entière d'un panneau qui n'en a pas à revendre, pour une précision
-     dont personne n'a besoin en ouvrant sa routine du jour. */
-  const today = new Date().toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
-
   return (
     <>
       {/* La fenêtre native n'a ni fond ni coins : c'est cette page qui les
@@ -275,7 +270,6 @@ export default function TrayPopoverPage() {
         >
           <Header
             title={state.title || "Routine du jour"}
-            date={today}
             done={done}
             total={total}
             complete={complete}
@@ -312,8 +306,8 @@ function Sep() {
 
 /* ─── Entête ───────────────────────────────────────────────────────────────── */
 
-function Header({ title, date, done, total, complete, recording, lists, onPick }: {
-  title: string; date: string; done: number; total: number; complete: boolean;
+function Header({ title, done, total, complete, recording, lists, onPick }: {
+  title: string; done: number; total: number; complete: boolean;
   recording: boolean; lists: TrayList[]; onPick: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -321,16 +315,15 @@ function Header({ title, date, done, total, complete, recording, lists, onPick }
   /* Plus de jauge sous le titre. Une barre remplie est un code de tableau de
      bord : elle pesait le tiers de l'entête et mettait un aplat de couleur au
      repos, là où « 3 / 5 » dit la même chose sur la ligne déjà présente. */
+  /* Plus de ligne de date non plus. Elle occupait une rangée entière pour dire
+     le jour qu'on est — la seule chose que la barre de menus affiche déjà, à
+     quelques centimètres au-dessus du panneau qu'on vient d'ouvrir. La routine
+     est celle du jour par construction : la dater ne la désambiguïsait pas.
+     L'enregistrement en cours, lui, n'est signalé nulle part ailleurs ; il
+     rejoint la ligne du titre plutôt que de disparaître avec elle. */
   return (
     <div style={{ padding: "9px 11px 8px" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ ...TYPE.caption2, color: MAC.label3, textTransform: "uppercase" }}>
-          {date}
-        </div>
-        {recording && <RecordingDot />}
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         {/* Le NOM de la stratégie est le déclencheur.
 
             La rangée de segments qui servait à en changer occupait une ligne
@@ -359,8 +352,11 @@ function Header({ title, date, done, total, complete, recording, lists, onPick }
           {many && <Chevron open={open} />}
         </button>
 
-        <div style={{ ...TYPE.caption, ...TABULAR, color: complete ? MAC.label : MAC.label2, flexShrink: 0 }}>
-          {total > 0 ? `${done} / ${total}` : "—"}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {recording && <RecordingDot />}
+          <div style={{ ...TYPE.caption, ...TABULAR, color: complete ? MAC.label : MAC.label2 }}>
+            {total > 0 ? `${done} / ${total}` : "—"}
+          </div>
         </div>
       </div>
 

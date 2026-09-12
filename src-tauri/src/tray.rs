@@ -471,6 +471,14 @@ fn ensure_popover<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow
        l'icône. */
     .visible(false)
     .build()?;
+  /* AVANT tout affichage : c'est ce qui distingue le popover d'une fenêtre, et
+     la conversion en panneau ne se fait pas sur une fenêtre déjà montrée. */
+  #[cfg(target_os = "macos")]
+  if let Ok(ptr) = win.ns_window() {
+    if !crate::panel::make_nonactivating(ptr) {
+      log::warn!("[tray] panneau non-activant impossible : le popover ramènera l'app devant");
+    }
+  }
   dress(&win);
   Ok(win)
 }
@@ -630,10 +638,16 @@ fn reveal<R: Runtime>(win: &WebviewWindow<R>, icon: &Rect) {
   if !native_glass {
     let _ = win.set_effects(Some(glass()));
   }
+  /* `show()` seul, et c'est voulu. Côté tao il fait `makeKeyAndOrderFront` —
+     donc il DONNE déjà le focus, ce dont on ne peut pas se passer : c'est la
+     perte de ce focus qui referme le popover, et c'est lui qui porte la frappe
+     dans la note rapide.
+
+     `set_focus()`, lui, y ajoute `activateIgnoringOtherApps:`, c'est-à-dire le
+     réveil de l'application ENTIÈRE : la fenêtre principale remontait devant à
+     chaque clic sur l'icône. La fenêtre étant un panneau non-activant
+     (cf. panel.rs), `show()` suffit à la rendre « key » sans rien activer. */
   let _ = win.show();
-  /* Le focus n'est pas cosmétique : c'est SA PERTE qui referme le popover.
-     Sans lui, la fenêtre resterait ouverte par-dessus tout le reste. */
-  let _ = win.set_focus();
 }
 
 /// Ajuste la hauteur à ce que la page occupe réellement.
