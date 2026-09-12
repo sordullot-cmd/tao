@@ -276,7 +276,10 @@
      du verre. Ce n'est pas une bordure — c'est ce qui donne son ÉPAISSEUR à la
      plaque, le reflet qu'attrape une arête de verre. Sans lui, le matériau se
      lit comme une zone floue posée là, pas comme un objet. */
-  --mac-rim:       rgba(255, 255, 255, 0.65);
+  /* Discret : Liquid Glass dessine DÉJÀ son propre reflet de bord. Un liseré
+     appuyé par-dessus ferait deux arêtes au même endroit. Il ne sert donc plus
+     qu'aux postes d'avant macOS 26, où le matériau de repli n'en a pas. */
+  --mac-rim:       rgba(255, 255, 255, 0.28);
   /* Voile posé SUR le verre.
 
      Le matériau système prend la couleur de ce qu'il recouvre — c'est son
@@ -284,13 +287,16 @@
      panneau vire au gris foncé, et l'encre noire avec. Ce voile blanc le ramène
      vers le clair.
 
-     Toute la difficulté est dans sa DENSITÉ, et elle se règle ici. À 38 %, il
-     éclaircissait bien mais noyait le fond : on ne distinguait plus aucune
-     forme derrière, seulement une bouillie uniforme — ce qui n'est plus du
-     verre, juste du flou. À 18 %, les formes se devinent encore, ce qui est le
-     point de l'effet, et l'encre reste lisible. C'est le curseur à bouger si le
-     panneau paraît un jour trop sombre (monter) ou trop laiteux (baisser). */
-  --mac-veil:      rgba(255, 255, 255, 0.18);
+     Toute la difficulté est dans sa DENSITÉ. Elle a beaucoup baissé depuis le
+     passage à Liquid Glass (cf. src-tauri/src/liquid_glass.rs) : ce matériau
+     règle lui-même son contraste selon ce qu'il recouvre, là où la vibrancy
+     classique laissait le panneau virer au gris foncé. Le voile n'a plus à
+     éclaircir, seulement à adoucir — à 38 %, puis même à 18 %, il noyait les
+     formes du fond et rendait l'effet inutile.
+
+     C'est le curseur à bouger si le texte devient dur à lire sur un fond chargé
+     (monter), ou si le verre paraît laiteux (baisser). */
+  --mac-veil:      rgba(255, 255, 255, 0.06);
 }
 
 /* === DARK THEME ===
@@ -310,7 +316,7 @@
   /* Sur fond sombre, l'arête capte moins : la même valeur y ferait un trait. */
   --mac-rim:       rgba(255, 255, 255, 0.15);
   /* En sombre, le voile ne sert plus à éclaircir mais à unifier : à peine. */
-  --mac-veil:      rgba(255, 255, 255, 0.04);
+  --mac-veil:      rgba(255, 255, 255, 0.03);
 
   --color-bg: #1A1A1B;          /* contenu principal (cards) */
   --color-bg-subtle: #0F0F10;   /* nav/sidebar — PLUS FONCÉ que les pages */

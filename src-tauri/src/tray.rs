@@ -126,6 +126,12 @@ const POPOVER_MIN_HEIGHT: f64 = 130.0;
 #[cfg(desktop)]
 const POPOVER_MAX_HEIGHT: f64 = 560.0;
 
+/// Rayon des coins. Posé sur le matériau — Liquid Glass ou vibrancy — et repris
+/// tel quel par la page, qui doit rogner son contenu sur la MÊME courbe (cf.
+/// `RADIUS` dans app/tray/page.tsx).
+#[cfg(desktop)]
+const POPOVER_RADIUS: f64 = 12.0;
+
 /// Écart entre le bas de l'icône et le haut du popover, et marge minimale au
 /// bord de l'écran.
 #[cfg(desktop)]
@@ -443,7 +449,6 @@ fn ensure_popover<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow
        — la fenêtre doit être transparente (d'où `macOSPrivateApi`) ET la page
          aussi, sinon on peint par-dessus le verre (cf. app/tray/page.tsx) ;
        — les coins arrondis viennent du `radius` de l'effet, pas du CSS. */
-    .effects(glass())
     /* L'ombre portée est celle du SYSTÈME, et elle ne peut être que celle-là :
        le matériau occupe toute la fenêtre, donc une `box-shadow` CSS tomberait
        SUR le verre au lieu d'être portée derrière lui.
@@ -466,7 +471,29 @@ fn ensure_popover<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow
        l'icône. */
     .visible(false)
     .build()?;
+  dress(&win);
   Ok(win)
+}
+
+/// Donne son fond à la fenêtre : Liquid Glass si le système sait le faire, la
+/// vibrancy classique sinon.
+///
+/// Il FAUT l'un ou l'autre. La page ne peint aucun fond (cf. app/tray/page.tsx)
+/// et la fenêtre est transparente : sans matériau, le popover laisserait voir
+/// le bureau au travers.
+#[cfg(desktop)]
+fn dress<R: Runtime>(win: &WebviewWindow<R>) {
+  #[cfg(target_os = "macos")]
+  {
+    if crate::liquid_glass::supported() {
+      if let Ok(ptr) = win.ns_window() {
+        if crate::liquid_glass::install(ptr, POPOVER_RADIUS) {
+          return;
+        }
+      }
+    }
+  }
+  let _ = win.set_effects(Some(glass()));
 }
 
 /// Pose le popover sous l'icône, sans le laisser sortir de l'écran.
@@ -583,8 +610,7 @@ fn glass() -> WindowEffectsConfig {
        dans `--mac-veil` (app/globals.css), le voile que la page ajoute. */
     effects: vec![WindowEffect::Sidebar],
     state: Some(WindowEffectState::Active),
-    // Le rayon des panneaux du système, mesuré sur ceux de la barre d'état.
-    radius: Some(12.0),
+    radius: Some(POPOVER_RADIUS),
     color: None,
   }
 }
@@ -593,7 +619,17 @@ fn glass() -> WindowEffectsConfig {
 #[cfg(desktop)]
 fn reveal<R: Runtime>(win: &WebviewWindow<R>, icon: &Rect) {
   let _ = place_under_icon(win, icon);
-  let _ = win.set_effects(Some(glass()));
+  /* La vibrancy classique a besoin d'être reposée sur une fenêtre vivante —
+     installée sur une fenêtre jamais affichée, elle rendait un aplat opaque.
+     Liquid Glass, lui, est une vue ajoutée à l'arbre : elle tient toute seule,
+     et la reposer à chaque ouverture empilerait les plaques. */
+  #[cfg(target_os = "macos")]
+  let native_glass = crate::liquid_glass::supported();
+  #[cfg(not(target_os = "macos"))]
+  let native_glass = false;
+  if !native_glass {
+    let _ = win.set_effects(Some(glass()));
+  }
   let _ = win.show();
   /* Le focus n'est pas cosmétique : c'est SA PERTE qui referme le popover.
      Sans lui, la fenêtre resterait ouverte par-dessus tout le reste. */

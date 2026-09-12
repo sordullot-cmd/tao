@@ -1,6 +1,8 @@
 mod apps;
 mod blocker;
 mod capture;
+#[cfg(target_os = "macos")]
+mod liquid_glass;
 mod recorder;
 mod phone;
 mod tracker;

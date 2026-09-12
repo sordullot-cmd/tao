@@ -52,6 +52,12 @@ tauri-plugin-dialog = "2"
 # rend, et arrivaient déjà en dépendance indirecte de Tauri.
 core-foundation = "0.10"
 core-foundation-sys = "0.8"
+# Liquid Glass (macOS 26+, cf. src/liquid_glass.rs). `NSGlassEffectView` n'est
+# exposée ni par Tauri ni par `objc2-app-kit` : on la joint par son nom, à
+# l'exécution. Ces deux caisses sont DÉJÀ dans l'arbre — Tauri s'en sert — donc
+# les déclarer ici ne compile rien de plus, ça les rend visibles depuis le code.
+objc2 = "0.6"
+objc2-foundation = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Suivi d'activité (cf. src/tracker.rs) : fenêtre de premier plan, processus
