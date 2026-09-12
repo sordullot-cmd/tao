@@ -277,6 +277,15 @@
      plaque, le reflet qu'attrape une arête de verre. Sans lui, le matériau se
      lit comme une zone floue posée là, pas comme un objet. */
   --mac-rim:       rgba(255, 255, 255, 0.65);
+  /* Voile posé SUR le verre.
+
+     Le matériau système prend la couleur de ce qu'il recouvre — c'est son
+     principe — et sur un écran de trading, ce qu'il recouvre est sombre : le
+     panneau virait au gris foncé, et l'encre noire avec. Ce voile blanc le
+     ramène vers le clair SANS le rendre opaque : à 38 %, le fond transparaît
+     encore et la vibrancy continue de vivre, mais l'encre a de quoi se poser.
+     C'est le compromis que fait Apple lui-même dans ses panneaux clairs. */
+  --mac-veil:      rgba(255, 255, 255, 0.38);
 }
 
 /* === DARK THEME ===
@@ -295,6 +304,8 @@
   --mac-raised:    rgba(255, 255, 255, 0.14);
   /* Sur fond sombre, l'arête capte moins : la même valeur y ferait un trait. */
   --mac-rim:       rgba(255, 255, 255, 0.15);
+  /* En sombre, le voile ne sert plus à éclaircir mais à unifier : à peine. */
+  --mac-veil:      rgba(255, 255, 255, 0.04);
 
   --color-bg: #1A1A1B;          /* contenu principal (cards) */
   --color-bg-subtle: #0F0F10;   /* nav/sidebar — PLUS FONCÉ que les pages */

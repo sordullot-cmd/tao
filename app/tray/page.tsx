@@ -225,7 +225,11 @@ export default function TrayPopoverPage() {
           dessine. Le `overflow: hidden` sur `html` empêche l'ascenseur que la
           moindre sur-mesure ferait apparaître dans un panneau de 340 px. */}
       <style dangerouslySetInnerHTML={{ __html: `
-        html, body { background: transparent !important; margin: 0; overflow: hidden; }
+        html { background: transparent !important; margin: 0; overflow: hidden; }
+        /* Le voile, et rien de plus : la page ne doit toujours pas peindre de
+           fond opaque, sinon elle recouvre le matériau (cf. src-tauri/src/tray.rs).
+           Un blanc translucide l'éclaircit en le laissant vivre. */
+        body { background: ${MAC.veil} !important; margin: 0; overflow: hidden; }
         body { -webkit-user-select: none; user-select: none; cursor: default; }
         /* L'arête de la plaque de verre. En pseudo-élément fixe et non en
            bordure d'un bloc : elle doit épouser le bord de la FENÊTRE, là où
@@ -257,16 +261,17 @@ export default function TrayPopoverPage() {
             total={total}
             complete={complete}
             recording={state.recording}
+            lists={state.lists}
+            onPick={selectList}
           />
 
-          {state.lists.length > 1 && (
-            <ListPicker lists={state.lists} onPick={selectList} />
-          )}
-
+          <Sep />
           <Rules items={state.items} onToggle={toggle} native={isTauri()} ready={ready} />
 
+          <Sep />
           <QuickNote />
 
+          <Sep />
           <Footer recording={state.recording} />
         </div>
       </div>
@@ -274,11 +279,26 @@ export default function TrayPopoverPage() {
   );
 }
 
+/**
+ * Le trait qui sépare deux blocs.
+ *
+ * En élément propre, et non en `borderTop` du bloc suivant : une bordure court
+ * d'un bord à l'autre du panneau et vient buter contre la courbe des angles —
+ * le trait touche le verre là où il commence à tourner, et ça se voit. Une
+ * marge de chaque côté l'arrête avant, comme dans les menus du système.
+ */
+function Sep() {
+  return <div style={{ height: 1, background: MAC.sep, margin: "0 10px" }} />;
+}
+
 /* ─── Entête ───────────────────────────────────────────────────────────────── */
 
-function Header({ title, date, done, total, complete, recording }: {
-  title: string; date: string; done: number; total: number; complete: boolean; recording: boolean;
+function Header({ title, date, done, total, complete, recording, lists, onPick }: {
+  title: string; date: string; done: number; total: number; complete: boolean;
+  recording: boolean; lists: TrayList[]; onPick: (id: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const many = lists.length > 1;
   /* Plus de jauge sous le titre. Une barre remplie est un code de tableau de
      bord : elle pesait le tiers de l'entête et mettait un aplat de couleur au
      repos, là où « 3 / 5 » dit la même chose sur la ligne déjà présente. */
@@ -291,21 +311,59 @@ function Header({ title, date, done, total, complete, recording }: {
         {recording && <RecordingDot />}
       </div>
 
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginTop: 1 }}>
-        <div style={{
-          ...TYPE.headline,
-          color: MAC.label,
-          // Un nom de liste long ne doit pas pousser le compteur hors du panneau.
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {title}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 1 }}>
+        {/* Le NOM de la stratégie est le déclencheur.
+
+            La rangée de segments qui servait à en changer occupait une ligne
+            entière pour un réglage qu'on touche une fois par jour, au-dessus de
+            la routine, qu'on vient lire à chaque ouverture. Or le titre affiche
+            DÉJÀ la stratégie active : en faire le bouton ne coûte rien et rend
+            la ligne. C'est le « pop-up button » d'AppKit, et c'est ce que macOS
+            emploie partout où un choix exclusif doit tenir dans un panneau. */}
+        <button
+          onClick={() => many && setOpen(o => !o)}
+          disabled={!many}
+          style={{
+            ...TYPE.headline,
+            display: "flex", alignItems: "center", gap: 4,
+            minWidth: 0,
+            padding: 0, border: "none", background: "transparent",
+            color: MAC.label,
+            cursor: many ? "pointer" : "default",
+          }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {title}
+          </span>
+          {/* Le chevron n'apparaît QUE s'il y a de quoi choisir : sur une seule
+              stratégie, il annoncerait un menu qui ne s'ouvre pas. */}
+          {many && <Chevron open={open} />}
+        </button>
+
         <div style={{ ...TYPE.caption, ...TABULAR, color: complete ? MAC.label : MAC.label2, flexShrink: 0 }}>
           {total > 0 ? `${done} / ${total}` : "—"}
         </div>
       </div>
 
+      {open && <ListPicker lists={lists} onPick={id => { onPick(id); setOpen(false); }} />}
     </div>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="9" height="9" viewBox="0 0 10 10" fill="none" aria-hidden
+      style={{
+        flexShrink: 0,
+        color: MAC.label3,
+        transform: open ? "rotate(180deg)" : "none",
+        transition: "transform 160ms ease",
+      }}
+    >
+      <path d="M2 3.8 5 6.8 8 3.8" stroke="currentColor" strokeWidth="1.5"
+            strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -324,52 +382,56 @@ function RecordingDot() {
   );
 }
 
-/* ─── Choix de liste ───────────────────────────────────────────────────────── */
+/* ─── Choix de stratégie ───────────────────────────────────────────────────── */
 
 /**
- * Le choix de liste, en contrôle segmenté — et non en pilules.
+ * Les stratégies, déroulées sous le titre qui les porte.
  *
- * Une pilule de l’app mesure 34 px de haut pour 16 px de marge latérale
- * (lib/ui/buttons.ts) : trois listes en occuperaient la moitié d’un panneau de
- * 340 px, au-dessus de ce qu’on vient réellement lire. Le segment est la forme
- * que macOS donne lui-même à ce choix-là dans ses popovers, et il tient sur une
- * ligne.
+ * Des lignes cochées, et non des segments : le contrôle segmenté suppose qu'on
+ * compare des options côte à côte, ce qui demande de la largeur et n'a de sens
+ * qu'à deux ou trois. Une routine par stratégie, il y en a autant qu'on en
+ * trade — la rangée devenait illisible et débordait. Empilées, elles tiennent
+ * quel qu'en soit le nombre, et la coche dit laquelle est active sans avoir à
+ * comparer des fonds.
+ *
+ * Le déroulé est REPLIÉ par défaut : c'est un réglage qu'on touche une fois par
+ * séance, il n'a pas à occuper le panneau qu'on ouvre vingt fois par jour.
  */
 function ListPicker({ lists, onPick }: { lists: TrayList[]; onPick: (id: string) => void }) {
   return (
-    <div style={{ padding: "0 11px 8px" }}>
-      <div style={{
-        display: "flex", gap: 2, padding: 2,
-        background: MAC.fill, borderRadius: 9,
-        overflowX: "auto", scrollbarWidth: "none",
-      }}>
-        {lists.map(l => (
-          <button
-            key={l.id}
-            onClick={() => onPick(l.id)}
-            style={{
-              ...TYPE.caption,
-              flex: 1,
-              padding: "4px 7px",
-              borderRadius: 6,
-              border: "none",
-              /* Le segment actif est un aplat de FOND, pas de marque : il dit
-                 « c’est ici », là où la jauge dit déjà l’avancement. Deux verts
-                 dans quarante pixels se disputeraient l’œil. */
-              background: l.active ? MAC.raised : "transparent",
-              boxShadow: l.active ? "0 1px 2px rgba(0,0,0,0.14)" : "none",
-              color: l.active ? MAC.label : MAC.label2,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {l.name}
-          </button>
-        ))}
-      </div>
+    <div style={{ marginTop: 6, maxHeight: 150, overflowY: "auto" }}>
+      {lists.map(l => <ListRow key={l.id} list={l} onPick={onPick} />)}
     </div>
+  );
+}
+
+function ListRow({ list, onPick }: { list: TrayList; onPick: (id: string) => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={() => onPick(list.id)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        ...TYPE.body,
+        display: "flex", alignItems: "center", gap: 7,
+        width: "100%", textAlign: "left",
+        padding: "4px 6px",
+        border: "none", borderRadius: 5,
+        background: hover ? MAC.fill : "transparent",
+        color: list.active ? MAC.label : MAC.label2,
+        cursor: "pointer",
+      }}
+    >
+      {/* La coche occupe sa colonne même vide : sans elle, les noms danseraient
+          d'un cran en changeant de stratégie. */}
+      <span style={{ width: 11, flexShrink: 0, display: "flex", alignItems: "center" }}>
+        {list.active && <Check />}
+      </span>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {list.name}
+      </span>
+    </button>
   );
 }
 
@@ -380,7 +442,7 @@ function Rules({ items, onToggle, native, ready }: {
 }) {
   if (!items.length) {
     return (
-      <div style={{ borderTop: `1px solid ${MAC.sep}`, padding: "13px 11px", textAlign: "center" }}>
+      <div style={{ padding: "13px 11px", textAlign: "center" }}>
         <div style={{ ...TYPE.body, color: MAC.label2 }}>
           {!ready ? "Chargement…"
             : native ? "Aucune règle de routine"
@@ -399,7 +461,7 @@ function Rules({ items, onToggle, native, ready }: {
     /* Le défilement est borné ici, pas par la fenêtre : au-delà, c'est la
        hauteur renvoyée au Rust qui plafonne, et une liste de vingt règles doit
        rester parcourable sans que le pied de panneau parte hors de l'écran. */
-    <div style={{ borderTop: `1px solid ${MAC.sep}`, padding: "3px 5px", maxHeight: 300, overflowY: "auto" }}>
+    <div style={{ padding: "3px 5px", maxHeight: 300, overflowY: "auto" }}>
       {items.map(it => <Rule key={it.id} entry={it} onToggle={onToggle} />)}
     </div>
   );
@@ -421,19 +483,12 @@ function Rule({ entry, onToggle }: { entry: TrayEntry; onToggle: (id: string) =>
         cursor: "pointer",
       }}
     >
-      {/* CARRÉE, et non ronde.
-
-          Un cercle est le contrôle d'un choix EXCLUSIF — un bouton radio, dont
-          on ne coche qu'un. Une règle de routine se coche indépendamment des
-          autres, et AppKit donne à ce cas un carré à coins doux. C'est aussi ce
-          qui la distingue, à l'œil, du choix de liste juste au-dessus, qui est
-          exclusif lui. La forme dit ce que le clic fera. */}
       <span style={{
         flexShrink: 0,
-        width: 14, height: 14, borderRadius: 3.5,
+        width: 15, height: 15, borderRadius: "50%",
         display: "grid", placeItems: "center",
-        border: entry.done ? "none" : `1px solid ${MAC.label3}`,
-        background: entry.done ? MAC.label : MAC.fill,
+        border: `1.5px solid ${entry.done ? "transparent" : MAC.label3}`,
+        background: entry.done ? MAC.label : "transparent",
         color: MAC.labelInv,
         transition: "background 140ms ease, border-color 140ms ease",
       }}>
@@ -506,7 +561,7 @@ function QuickNote() {
   };
 
   return (
-    <div style={{ borderTop: `1px solid ${MAC.sep}`, padding: "7px 8px" }}>
+    <div style={{ padding: "7px 8px" }}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
         <textarea
           ref={el => { area.current = el; grow(el); }}
@@ -523,7 +578,10 @@ function QuickNote() {
             resize: "none",
             padding: "5px 8px",
             borderRadius: 6,
-            border: `1px solid ${MAC.sep}`,
+            /* Pas de cadre : le creux suffit à dire qu'on peut écrire là, et un
+               trait gris de plus dans un panneau qui en a déjà trois le découpe
+               en cases. */
+            border: "none",
             background: MAC.fill,
             color: MAC.label,
             outline: "none",
@@ -575,7 +633,7 @@ function SendButton({ active, onClick }: { active: boolean; onClick: () => void 
 
 function Footer({ recording }: { recording: boolean }) {
   return (
-    <div style={{ borderTop: `1px solid ${MAC.sep}`, padding: 6 }}>
+    <div style={{ padding: 6 }}>
       <div style={{ display: "flex", gap: 6 }}>
         <Action
           icon={<CameraIcon />}

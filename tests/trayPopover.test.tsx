@@ -118,10 +118,22 @@ describe("popover de la barre d'état", () => {
     expect(screen.queryByText("Biais journalier défini")).toBeNull();
   });
 
-  it("passe le changement de liste à la coquille plutôt que de le décider", async () => {
+  it("ne déroule les stratégies que si on le demande", async () => {
     await mount();
+    /* Replié au montage : c'est un réglage qu'on touche une fois par séance, il
+       n'a pas à occuper le panneau qu'on ouvre vingt fois par jour. */
+    expect(screen.queryByText("Swing")).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByText("Scalp ouverture")); });
+    expect(screen.getByText("Swing")).toBeTruthy();
+  });
+
+  it("passe le changement de stratégie à la coquille plutôt que de le décider", async () => {
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Scalp ouverture")); });
     await act(async () => { fireEvent.click(screen.getByText("Swing")); });
     expect(trayEmit).toHaveBeenCalledWith(TRAY_SELECT, "l2");
+    // Le choix fait, le déroulé se referme — on est venu pour la routine.
+    expect(screen.queryByText("Swing")).toBeNull();
   });
 
   it("envoie la note au journal et vide le champ", async () => {

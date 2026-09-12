@@ -144,6 +144,8 @@ export const MAC = {
   raised:   "var(--mac-raised, rgba(255,255,255,0.72))",
   /** L'arête de la plaque de verre — un demi-pixel de blanc à son bord. */
   rim:      "var(--mac-rim, rgba(255,255,255,0.65))",
+  /** Voile blanc posé sur le verre : il l'éclaircit sans l'opacifier. */
+  veil:     "var(--mac-veil, rgba(255,255,255,0.38))",
 } as const;
 
 export const HAIRLINE = "color-mix(in srgb, var(--color-text) 8%, transparent)";
