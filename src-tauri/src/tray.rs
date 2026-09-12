@@ -442,16 +442,26 @@ fn ensure_popover<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow
        Conséquences, toutes nécessaires :
        — la fenêtre doit être transparente (d'où `macOSPrivateApi`) ET la page
          aussi, sinon on peint par-dessus le verre (cf. app/tray/page.tsx) ;
-       — les coins arrondis viennent du `radius` de l'effet, pas du CSS ;
-       — pas d'ombre système : elle suivrait le rectangle de la fenêtre et
-         déborderait des angles. Le matériau se détache déjà tout seul. */
+       — les coins arrondis viennent du `radius` de l'effet, pas du CSS. */
     .effects(WindowEffectsConfig {
       effects: vec![WindowEffect::Menu],
       state: Some(WindowEffectState::Active),
       radius: Some(11.0),
       color: None,
     })
-    .shadow(false)
+    /* L'ombre portée est celle du SYSTÈME, et elle doit l'être.
+
+       Une `box-shadow` CSS ne conviendrait pas : le matériau occupe toute la
+       fenêtre, une ombre dessinée dans la page tomberait donc SUR le verre au
+       lieu d'être portée derrière lui — une bande grise autour du contenu, pas
+       une ombre.
+
+       Elle épouse les angles arrondis parce que la fenêtre est transparente :
+       macOS calcule alors la forme de l'ombre d'après les pixels opaques du
+       contenu, et l'opaque, ici, c'est précisément la couche de vibrancy
+       arrondie. C'est ce qui l'aurait rendue rectangulaire si la page avait
+       gardé un fond plein cadre. */
+    .shadow(true)
     .always_on_top(true)
     .resizable(false)
     .minimizable(false)
