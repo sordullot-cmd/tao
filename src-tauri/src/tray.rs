@@ -568,12 +568,20 @@ pub fn toggle_popover<R: Runtime>(app: &AppHandle<R>, icon: Rect) {
 #[cfg(desktop)]
 fn glass() -> WindowEffectsConfig {
   WindowEffectsConfig {
-    /* `Popover` et non `Menu` : les deux sont des matériaux système, mais le
-       second est presque opaque — c'est un menu déroulant, il doit couvrir ce
-       qu'il recouvre pour rester lisible sur n'importe quoi. `Popover` est
-       celui des panneaux du Centre de contrôle et du Wi-Fi, justement ceux dont
-       on veut l'aspect : assez translucide pour que le fond transparaisse. */
-    effects: vec![WindowEffect::Popover],
+    /* Le matériau le MOINS couvrant de la série.
+
+       ⚠️ À savoir avant d'y toucher : le rayon de flou d'un matériau macOS
+       n'est pas réglable — AppKit ne l'expose pas, il est le même pour tous.
+       Ce qui distingue `Sidebar`, `Popover` et `Menu` n'est donc pas la force
+       du flou mais l'épaisseur de la TEINTE posée dessus. Plus elle est dense,
+       plus les formes du fond se noient : `Menu` est presque opaque (un menu
+       doit rester lisible sur n'importe quoi), `Popover` l'est moins, `Sidebar`
+       est le plus transparent des trois. C'est celui qui laisse le mieux
+       deviner ce qu'il y a derrière — le point même de l'effet.
+
+       Si le fond reste trop noyé, ce n'est plus ici qu'il faut chercher mais
+       dans `--mac-veil` (app/globals.css), le voile que la page ajoute. */
+    effects: vec![WindowEffect::Sidebar],
     state: Some(WindowEffectState::Active),
     // Le rayon des panneaux du système, mesuré sur ceux de la barre d'état.
     radius: Some(12.0),

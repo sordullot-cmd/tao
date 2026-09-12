@@ -281,11 +281,16 @@
 
      Le matériau système prend la couleur de ce qu'il recouvre — c'est son
      principe — et sur un écran de trading, ce qu'il recouvre est sombre : le
-     panneau virait au gris foncé, et l'encre noire avec. Ce voile blanc le
-     ramène vers le clair SANS le rendre opaque : à 38 %, le fond transparaît
-     encore et la vibrancy continue de vivre, mais l'encre a de quoi se poser.
-     C'est le compromis que fait Apple lui-même dans ses panneaux clairs. */
-  --mac-veil:      rgba(255, 255, 255, 0.38);
+     panneau vire au gris foncé, et l'encre noire avec. Ce voile blanc le ramène
+     vers le clair.
+
+     Toute la difficulté est dans sa DENSITÉ, et elle se règle ici. À 38 %, il
+     éclaircissait bien mais noyait le fond : on ne distinguait plus aucune
+     forme derrière, seulement une bouillie uniforme — ce qui n'est plus du
+     verre, juste du flou. À 18 %, les formes se devinent encore, ce qui est le
+     point de l'effet, et l'encre reste lisible. C'est le curseur à bouger si le
+     panneau paraît un jour trop sombre (monter) ou trop laiteux (baisser). */
+  --mac-veil:      rgba(255, 255, 255, 0.18);
 }
 
 /* === DARK THEME ===
