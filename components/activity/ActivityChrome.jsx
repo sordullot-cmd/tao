@@ -462,7 +462,7 @@ export function DayColumn({
  * range depuis là, comme dans l'onglet « Applications » — c'est souvent en
  * lisant un pavé qu'on repère un classement faux.
  */
-export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
+export function BlockDetail({ block, activeMs, onClose, onPick, onPickTitle, blocked }) {
   const color = categoryColor(block.cat);
   const share = activeMs > 0 ? (block.ms / activeMs) * 100 : 0;
   const apps = ranked(block.apps);
@@ -500,6 +500,10 @@ export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
         <span>{block.switches} bascule{block.switches > 1 ? "s" : ""}</span>
         <span>Durée d’horloge <strong style={{ color: T.text, fontWeight: 600 }}>{fmtDur(block.end - block.start)}</strong></span>
         {strays > 0 && <span style={{ color: T.textMut }}>dont {strays} passage{strays > 1 ? "s" : ""} d’une autre catégorie</span>}
+        {/* Le geste ne se devine pas : une pastille au bout d'une ligne de titre
+            est petite, et c'est pourtant le seul endroit d'où l'on range une
+            vidéo sans ranger la chaîne qui la sert. */}
+        {onPickTitle && <span style={{ color: T.textMut }}>Chaque fenêtre se range à part</span>}
         {/* Ce qui est masqué se DIT : une liste tronquée en silence se lit
             comme une liste complète. */}
         <CrumbNote count={hidden} />
@@ -527,11 +531,29 @@ export function BlockDetail({ block, activeMs, onClose, onPick, blocked }) {
                   <div style={{ width: `${Math.max(1, Math.min(100, pct))}%`, height: "100%", background: appColor }} />
                 </div>
                 {/* Les fenêtres vues : c'est ce qui dit ce qu'on FAISAIT, pas
-                    seulement dans quoi on le faisait. */}
+                    seulement dans quoi on le faisait — et c'est là que chacune
+                    se RANGE.
+
+                    Le sélecteur de la ligne range tout ce qui porte son nom,
+                    donc tout YouTube. Or une vidéo de cours et un fil de
+                    recommandations sortent du même site : sans un geste à cette
+                    échelle-ci, déplacer la première voulait dire déplacer le
+                    second avec elle, et la correction était inutilisable là où
+                    elle sert le plus. */}
                 {a.titles.slice(0, 3).map(t => (
-                  <span key={t.title} title={t.title} style={{ fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {t.title} <span style={{ color: T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtDur(t.ms, { short: true })}</span>
-                  </span>
+                  <div key={t.title} style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+                    <span title={t.title} style={{ flex: 1, minWidth: 0, fontSize: 11, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {t.title} <span style={{ color: T.textMut, fontVariantNumeric: "tabular-nums" }}>{fmtDur(t.ms, { short: true })}</span>
+                    </span>
+                    {onPickTitle && (
+                      <CategoryPicker
+                        dot
+                        cat={a.cat}
+                        title={`Ranger cette fenêtre seule — actuellement ${categoryLabel(a.cat)}.`}
+                        onPick={(c) => onPickTitle(t.title, c)}
+                      />
+                    )}
+                  </div>
                 ))}
                 {a.titles.length > 3 && (
                   <span style={{ fontSize: 11, color: T.textMut }}>+ {a.titles.length - 3} autre{a.titles.length - 3 > 1 ? "s" : ""} fenêtre{a.titles.length - 3 > 1 ? "s" : ""}</span>
@@ -1177,7 +1199,7 @@ export function ColorPicker({ value, onPick, label = "Couleur", size = 14 }) {
  * correction se fait là où l'erreur se voit, en deux clics, et la règle écrite
  * derrière vise le bon champ toute seule.
  */
-export function CategoryPicker({ cat, onPick, label, align = "end" }) {
+export function CategoryPicker({ cat, onPick, label, align = "end", dot = false, title }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
   const color = categoryColor(cat);
@@ -1188,19 +1210,33 @@ export function CategoryPicker({ cat, onPick, label, align = "end" }) {
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
         aria-expanded={open}
-        aria-label={`Catégorie : ${categoryLabel(cat)}. Changer.`}
-        style={{
-          ...BTN.sm, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
-          border: "none", background: open ? T.rowHighlight : FIELD_BG, color: T.text,
-          fontFamily: "inherit", fontSize: 12, cursor: "pointer",
-          transition: "background 120ms ease", maxWidth: 200,
-        }}
+        aria-label={title ?? `Catégorie : ${categoryLabel(cat)}. Changer.`}
+        title={title}
+        style={dot
+          /* La forme RÉDUITE, pour une ligne de titre de fenêtre : la pastille
+             seule, à la taille du texte de onze pixels qu'elle accompagne. Le
+             bouton complet y pesait plus lourd que la ligne qu'il sert, et
+             trois d'entre eux sous chaque application faisaient du détail d'un
+             pavé une colonne de boutons. */
+          ? {
+            border: "none", background: open ? T.rowHighlight : "transparent", padding: "2px 4px",
+            borderRadius: 6, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3,
+            flexShrink: 0, transition: "background 120ms ease", lineHeight: 1,
+          }
+          : {
+            ...BTN.sm, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
+            border: "none", background: open ? T.rowHighlight : FIELD_BG, color: T.text,
+            fontFamily: "inherit", fontSize: 12, cursor: "pointer",
+            transition: "background 120ms ease", maxWidth: 200,
+          }}
       >
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {label ?? categoryLabel(cat)}
-        </span>
-        <ChevronDown size={11} style={{ flexShrink: 0, opacity: 0.6, transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms var(--ease-out, ease)" }} />
+        {!dot && (
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {label ?? categoryLabel(cat)}
+          </span>
+        )}
+        <ChevronDown size={dot ? 10 : 11} style={{ flexShrink: 0, opacity: 0.6, transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms var(--ease-out, ease)" }} />
       </button>
       <Popover
         anchorRef={ref}

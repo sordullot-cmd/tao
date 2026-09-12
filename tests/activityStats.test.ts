@@ -4,7 +4,10 @@ import { describe, it, expect } from "vitest";
 /* Le suivi d'activité mesure des durées : une erreur de découpage ne se voit pas
    à l'écran (le total « a l'air » plausible), elle se voit ici. */
 
-import { classify, classifyDetailed, productivityOf, resolveProductivity, PRODUCTIVITY_COLOR } from "@/lib/activity/categories";
+import {
+  categoryLabel, classify, classifyDetailed, productivityOf, resolveProductivity, titleRuleMatch,
+  upsertRule, PRODUCTIVITY_COLOR,
+} from "@/lib/activity/categories";
 import { DEFAULT_SETTINGS, type DayLog } from "@/lib/activity/engine";
 import { dayBlocks, dayStats, fmtDur, unclassified } from "@/lib/activity/stats";
 
@@ -207,13 +210,11 @@ describe("une chose, une seule catégorie", () => {
        gagner un vote contre quelque chose qu'on a su nommer. */
     const log = day([
       seg([9, 0], [11, 0], "BidulePro", "x", "BidulePro", ""),
-      seg([11, 0], [11, 5], "BidulePro", "x", "BidulePro", "chantier"),
+      // Le titre de la seconde se laisse lire : cinq minutes reconnues contre
+      // deux heures d'ignorance, et ce sont les cinq minutes qui décident.
+      seg([11, 0], [11, 5], "BidulePro", "x", "BidulePro", "Issue #12 | GitHub"),
     ]);
-    // Une règle ne reconnaît QUE la seconde : cinq minutes contre deux heures.
-    const stats = dayStats(log, {
-      ...DEFAULT_SETTINGS,
-      rules: [{ id: "r", match: "chantier", field: "title" as const, category: "dev" }],
-    });
+    const stats = dayStats(log, DEFAULT_SETTINGS);
     expect(stats.byApp[0].cat).toBe("dev");
     expect(stats.byApp[0].ms).toBe(125 * 60_000);
   });
@@ -241,6 +242,101 @@ describe("une chose, une seule catégorie", () => {
     expect(stats.byApp[0].ms).toBe(60 * 60_000);
     expect(stats.byCategory.find(b => b.id === "work")!.ms).toBe(60 * 60_000);
     expect(stats.byCategory.find(b => b.id === "social")).toBeUndefined();
+  });
+
+  it("fait gagner la DERNIÈRE règle écrite, et non la plus massive", () => {
+    /* Le défaut dont le symptôme était « je change la catégorie, elle revient ».
+       Deux règles de l'utilisateur tombent sur le même nom : l'une large (le
+       navigateur entier), l'autre précise (le domaine) — mais le domaine n'est
+       relevé que sur une minorité de segments, donc la large pèse plus lourd.
+       Départagées au temps, la vieille règle gagnait et la correction restait
+       sans effet visible. Elles se départagent à la DATE, comme un cran plus
+       bas (cf. `userHit`), sinon corriger devient une loterie. */
+    const log = day([
+      { ...seg([9, 0], [9, 10], "Chrome", "x", "YouTube", "Une vidéo — YouTube"), site: "www.youtube.com" },
+      seg([9, 10], [10, 10], "Chrome", "x", "YouTube", "Une autre — YouTube"),
+    ]);
+    const large = { id: "large", match: "chrome", field: "app" as const, category: "fun" };
+    const precise = { id: "precise", match: "youtube.com", field: "site" as const, category: "learning" };
+
+    expect(dayStats(log, { ...DEFAULT_SETTINGS, rules: [large, precise] }).byApp[0].cat).toBe("learning");
+    // L'ordre inverse dit l'inverse : c'est la date qui tranche, rien d'autre.
+    expect(dayStats(log, { ...DEFAULT_SETTINGS, rules: [precise, large] }).byApp[0].cat).toBe("fun");
+  });
+
+  it("range une fenêtre seule sans emporter le reste du site", () => {
+    /* Une règle de TITRE vise ce qu'on faisait, pas le lieu : elle doit donc
+       pouvoir déplacer une vidéo sans déplacer le fil qui l'a servie. Sans nom
+       à elle, elle emportait tout ce qui portait le nom du site — il n'existait
+       aucun geste plus fin que « tout YouTube ou rien ». */
+    const log = day([
+      seg([9, 0], [9, 15], "Chrome", "x", "YouTube", "Psycho-Cybernetics, le résumé — YouTube"),
+      seg([9, 15], [10, 45], "Chrome", "x", "YouTube", "Compilation de chats — YouTube"),
+    ]);
+    const stats = dayStats(log, {
+      ...DEFAULT_SETTINGS,
+      rules: [{ id: "r", match: "psycho-cybernetics", field: "title" as const, category: "learning" }],
+    });
+
+    const rangee = stats.byApp.find(a => a.cat === "learning")!;
+    expect(rangee.label).toBe(`YouTube · ${categoryLabel("learning")}`);
+    expect(rangee.ms).toBe(15 * 60_000);
+    // Le fil, lui, n'a pas bougé — c'est tout l'intérêt.
+    expect(stats.byApp.find(a => a.cat === "social")!.ms).toBe(90 * 60_000);
+  });
+
+  it("dit TOUTES les règles qui rangent une ligne, pas la première", () => {
+    /* Deux vidéos rangées séparément portent deux règles et le même nom. La
+       ligne doit les donner toutes, sinon rechoisir une catégorie dessus n'en
+       déplacerait qu'une moitié — un clic à moitié pris en compte se lit comme
+       un clic ignoré. */
+    const log = day([
+      seg([9, 0], [9, 15], "Chrome", "x", "YouTube", "Première vidéo — YouTube"),
+      seg([9, 15], [9, 30], "Chrome", "x", "YouTube", "Seconde vidéo — YouTube"),
+    ]);
+    const stats = dayStats(log, {
+      ...DEFAULT_SETTINGS,
+      rules: [
+        { id: "a", match: "première vidéo", field: "title" as const, category: "learning" },
+        { id: "b", match: "seconde vidéo", field: "title" as const, category: "learning" },
+      ],
+    });
+
+    const ligne = stats.byApp.find(a => a.cat === "learning")!;
+    expect(ligne.rules.map(r => r.match)).toEqual(["première vidéo", "seconde vidéo"]);
+  });
+});
+
+describe("écrire une règle depuis une ligne", () => {
+  it("remplace la règle qui visait déjà la même chose", () => {
+    const rules = upsertRule(
+      [{ id: "a", match: "youtube", field: "title", category: "social" }],
+      { id: "b", match: "youtube", field: "title", category: "learning" },
+    );
+    expect(rules).toHaveLength(1);
+    expect(rules[0].category).toBe("learning");
+  });
+
+  it("emporte aussi la règle qui visait la même ligne par un autre chemin", () => {
+    /* Le même clic sur la même ligne écrit une règle de DOMAINE les jours où le
+       navigateur a livré son URL, et une règle de TITRE les autres. Deux
+       corrections successives laissaient donc deux règles contradictoires sur
+       YouTube, dont une seule visible à l'œil nu dans la liste. */
+    const rules = upsertRule(
+      [{ id: "a", match: "youtube", field: "title", category: "social" }],
+      { id: "b", match: "youtube.com", field: "site", category: "learning" },
+      [{ field: "title", match: "youtube" }],
+    );
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatchObject({ field: "site", match: "youtube.com", category: "learning" });
+  });
+
+  it("coupe du titre ce que le navigateur y ajoute et qui ne dure pas", () => {
+    /* Le « (3) » des notifications change d'un instant à l'autre sur la même
+       page : une règle qui le contient cesserait de ranger la vidéo dès qu'un
+       message arrive. Le nom du site, lui, reste — il ne bouge pas. */
+    expect(titleRuleMatch("(3) Psycho-Cybernetics, le résumé — YouTube — Google Chrome"))
+      .toBe("psycho-cybernetics, le résumé — youtube");
   });
 });
 

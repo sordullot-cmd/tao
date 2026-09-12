@@ -5,6 +5,8 @@ import {
   createClient,
   clearStaleSession,
   isRefreshTokenError,
+  isOfflineError,
+  readStoredSession,
 } from "@/lib/supabase/client";
 import { clearBankAccountsCache, primeBankAccounts } from "@/lib/bank/useBankAccounts";
 import { clearBankTransactionsCache } from "@/lib/bank/useBankTransactions";
@@ -51,6 +53,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
           return;
         }
+        /* Coupure réseau : surtout pas un retour à l'état déconnecté. La
+           session dort dans le storage, on la relit telle quelle — même
+           expirée. Sans ça l'app se croit anonyme, et `useCloudState` cesse de
+           poser ses écritures en attente : tout ce qui est saisi hors ligne ne
+           remonte jamais. Le jeton sera rafraîchi au retour du réseau
+           (écouteur `online` plus bas). */
+        if (error && isOfflineError(error)) {
+          if (cancelled) return;
+          const stored = readStoredSession();
+          setSession(stored);
+          setUser(stored?.user ?? null);
+          return;
+        }
         if (error) throw error;
         if (cancelled) return;
         setSession(session);
@@ -68,6 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (!cancelled) {
             setSession(null);
             setUser(null);
+          }
+          return;
+        }
+        if (isOfflineError(error)) {
+          if (!cancelled) {
+            const stored = readStoredSession();
+            setSession(stored);
+            setUser(stored?.user ?? null);
           }
           return;
         }
@@ -95,11 +118,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Re-vérifie la session quand l'onglet redevient actif — utile quand
     // l'app a été inactive longtemps et que le token a pu expirer pendant
     // que le navigateur dormait.
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") return;
-      // Le refresh déclenché ici peut échouer si le token a été révoqué
-      // pendant la mise en veille : on purge plutôt que de laisser une
-      // promesse rejetée non traitée.
+    // Le refresh déclenché ici peut échouer si le token a été révoqué
+    // pendant la mise en veille : on purge plutôt que de laisser une
+    // promesse rejetée non traitée. Un échec RÉSEAU, lui, ne touche à rien —
+    // la session locale reste la bonne jusqu'à preuve du contraire, et cette
+    // preuve demande justement le réseau.
+    const revalidate = () => {
       supabase.auth
         .getSession()
         .then(({ error }) => {
@@ -107,17 +131,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .catch((error) => {
           if (isRefreshTokenError(error)) return clearStaleSession();
+          if (isOfflineError(error)) return;
           console.error("Error refreshing session:", error);
         });
     };
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      revalidate();
+    };
+    /* Retour du réseau : le jeton restauré depuis le storage au démarrage hors
+       ligne est probablement périmé. On le rafraîchit ici, et c'est
+       `onAuthStateChange` qui remet l'état à jour — d'où l'absence de `setState`
+       dans `revalidate`. */
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onVisibility);
+    window.addEventListener("online", revalidate);
 
     return () => {
       cancelled = true;
       subscription?.unsubscribe();
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onVisibility);
+      window.removeEventListener("online", revalidate);
     };
   }, [supabase]);
 

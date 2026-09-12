@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "app.taotrade.desktop",
   "build": {
-    "frontendDist": "https://tao-trade.vercel.app/",
-    "devUrl": "https://tao-trade.vercel.app/"
+    "frontendDist": "https://tao-trade.vercel.app/dashboard",
+    "devUrl": "https://tao-trade.vercel.app/dashboard"
   },
   "plugins": {
     "deep-link": {

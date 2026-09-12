@@ -5,6 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth/supabaseAuthProvider";
 import { UndoProvider } from "@/lib/contexts/UndoContext";
 import PWAInstall from "@/components/PWAInstall";
+import OfflineBadge from "@/components/OfflineBadge";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { DARK_PAGES, THEME_KEY, THEME_MIGRATION_KEY } from "@/lib/ui/sectionTheme";
 
@@ -155,6 +156,7 @@ export default function RootLayout({
           </AuthProvider>
         </ErrorBoundary>
         <PWAInstall />
+        <OfflineBadge />
       </body>
     </html>
   );

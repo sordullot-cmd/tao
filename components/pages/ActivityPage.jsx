@@ -41,7 +41,8 @@ import { getLocalDateString } from "@/lib/dateUtils";
 import { dayStats, fmtClock, fmtDur, ranked, rangeStats } from "@/lib/activity/stats";
 import { daySources, loadRange } from "@/lib/activity/engine";
 import {
-  categoryLabel, isBrowser, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain, upsertRule,
+  categoryLabel, isBrowser, PRODUCTIVITY_COLOR, resolveProductivity, rootDomain, titleRuleMatch,
+  upsertRule,
 } from "@/lib/activity/categories";
 import { useActivityLive, useActivitySettings, useDayLog } from "@/lib/hooks/useActivityTracker";
 import {
@@ -255,18 +256,63 @@ export default function ActivityPage({ setPage }) {
        qu'on n'a pas encore vues : sans lui, chaque nouvelle page d'un site déjà
        rangé revenait dans la file. */
     const domain = bucket.site ? rootDomain(bucket.site) : "";
-    const field = domain ? "site" : (bucket.isSite ? "title" : "app");
-    const match = (domain || (bucket.isSite ? bucket.label : bucket.app || bucket.label))
-      .trim().toLowerCase();
-    if (!match) return;
+    const byLabel = (bucket.isSite ? bucket.label : bucket.app || bucket.label || "").trim().toLowerCase();
+    /* Une ligne DÉJÀ rangée par des règles se corrige sur CES règles, et non sur
+       un champ redeviné depuis son nom : le nom d'une ligne rangée par un titre
+       porte un suffixe (« YouTube · Apprentissage ») qui ne figure dans aucun
+       titre de fenêtre, et la règle écrite dessus n'aurait rien rangé. Toutes,
+       parce qu'une ligne en réunit souvent plusieurs — deux vidéos rangées
+       séparément —, et n'en déplacer qu'une couperait la ligne en deux. */
+    const targets = bucket.rules?.length ? bucket.rules : [{
+      field: domain ? "site" : (bucket.isSite ? "title" : "app"),
+      match: domain || byLabel,
+    }];
+    /* Ce que le MÊME geste aurait pu écrire les autres jours : l'hôte n'est lu
+       que sur une partie des relevés, si bien qu'une correction sortait tantôt
+       une règle de domaine, tantôt une règle de titre. Les deux restaient, se
+       contredisaient, et c'est la morte qui l'emportait une fois sur deux.
+
+       Rien à balayer quand la ligne dit elle-même quelles règles la rangent :
+       on les réécrit, il n'y a pas de seconde cible à deviner — et deviner en
+       plus reviendrait à effacer une règle voisine qu'on n'a pas visée. */
+    const supersedes = bucket.rules?.length ? [] : [
+      domain ? { field: "site", match: domain } : null,
+      byLabel ? { field: bucket.isSite ? "title" : "app", match: byLabel } : null,
+    ].filter(Boolean);
     /* `upsertRule` et non un ajout : rechoisir une catégorie sur la même ligne
        laissait derrière elle la règle précédente, morte mais toujours listée. */
+    setSettings(s => ({
+      ...s,
+      rules: targets.reduce((acc, t) => (t.match
+        ? upsertRule(acc, {
+          id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          match: t.match,
+          field: t.field,
+          category,
+        }, supersedes)
+        : acc), s.rules),
+    }));
+  };
+
+  /**
+   * Ranger UNE fenêtre, et elle seule — la vidéo, pas la chaîne qui la sert.
+   *
+   * C'est ce qui manquait : le sélecteur d'une ligne range tout ce qui porte son
+   * nom, donc tout YouTube. Or une vidéo de développement personnel et un fil de
+   * recommandations sortent du même site, et il n'existait aucun geste pour ne
+   * déplacer que la première. La règle porte sur le titre entier nettoyé, ce qui
+   * lui interdit d'attraper autre chose, et le segment prend alors un nom à lui
+   * (cf. `userLabel`) pour ne pas repeindre le reste de la ligne au passage.
+   */
+  const assignTitle = (title, category) => {
+    const match = titleRuleMatch(title);
+    if (!match) return;
     setSettings(s => ({
       ...s,
       rules: upsertRule(s.rules, {
         id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         match,
-        field,
+        field: "title",
         category,
       }),
     }));
@@ -406,6 +452,7 @@ export default function ActivityPage({ setPage }) {
                     activeMs={stats.activeMs}
                     onClose={() => setOpenBlock(null)}
                     onPick={onPick}
+                    onPickTitle={assignTitle}
                     blocked={blocked}
                   />
                 </div>

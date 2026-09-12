@@ -66,7 +66,12 @@ prend sa valeur par défaut chez les anciens utilisateurs.
 n'embarque **aucun build JS**. Donc :
 
 - une modification du front ne demande qu'un déploiement ;
-- une modification Rust demande un `tauri:build` et une redistribution.
+- une modification Rust demande un `tauri:build` et une redistribution ;
+- **sans réseau, il ne reste que le service worker.** D'où `frontendDist` sur
+  `/dashboard` et non `/` : la racine est un `redirect()` serveur, et une
+  réponse redirigée ne peut pas être mise en cache. Démarrer sur `/` revenait à
+  démarrer sur la seule URL que le cache ne peut pas servir. Le JSON ne prend
+  pas de commentaire — la raison est ici.
 
 Les commandes sont déclarées dans `src-tauri/src/lib.rs` (`generate_handler!`).
 Les commandes de l'app elle-même n'ont pas besoin d'entrée dans
@@ -114,6 +119,28 @@ test qui a besoin d'une autre langue la pose lui-même.
 `/_next/static/`, jamais de cache sur `/api/*`. Ajouter une route à `SHELL_URLS`
 oblige à **incrémenter `VERSION`**, sinon les installations existantes gardent
 l'ancien cache.
+
+À l'installation, `precacheShellAssets` lit le HTML de `/dashboard` et `/login`
+et met en cache les `/_next/static/…` qu'il y trouve. Les noms portent un hash
+de build : on ne peut pas les écrire en dur, et sans eux le cache-first n'a rien
+à servir au premier démarrage hors ligne suivant un déploiement — shell en
+cache, JS absent, page blanche.
+
+### Hors ligne
+
+Trois étages, et il faut les trois :
+
+1. **Les données** — `useCloudState` (localStorage + file `<clé>:pending`) et
+   `useTradeData` (fast path `tr4de_trades`) partent du local et y retournent.
+2. **La session** — une panne réseau n'est pas une déconnexion. `isOfflineError`
+   la distingue d'un refus serveur, et `readStoredSession` relit la session dans
+   le storage sans appel réseau. ⚠️ Ce n'est pas du confort : la file d'attente
+   de `useCloudState` est gardée par `user?.id`. Sans utilisateur, elle ne
+   retient **rien**, et le travail hors ligne ne remonte jamais.
+3. **La coquille** — service worker ci-dessus.
+
+`components/OfflineBadge.tsx` rend l'attente visible : sans lui, une synchro en
+attente et une synchro faite se ressemblent trop.
 
 ## Conventions d'écriture
 

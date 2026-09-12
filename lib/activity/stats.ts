@@ -10,7 +10,7 @@
 
 import {
   allCategories, categoryColor, categoryLabel, isBrowser, OTHER, resolveProductivity, classifyDetailed,
-  type ClassifySource, type Productivity,
+  ruleAt, type ClassifyRule, type ClassifySource, type Productivity, type RuleTarget,
 } from "@/lib/activity/categories";
 import type { ActivitySettings, DayLog, Segment } from "@/lib/activity/engine";
 
@@ -86,6 +86,19 @@ export interface AppBucket extends Bucket {
   site: string;
   /** Ce qui a décidé du classement, pour pouvoir l'expliquer et le corriger. */
   via: ClassifySource;
+  /**
+   * Les règles de l'utilisateur qui ont rangé cette ligne, s'il y en a.
+   *
+   * Ce sont ELLES que rechoisir une catégorie doit réécrire — et non une règle
+   * déduite du nom de la ligne, qui peut désormais porter un suffixe
+   * (« YouTube · Apprentissage ») absent de tout titre de fenêtre.
+   *
+   * Une liste et non une règle, parce qu'une ligne en réunit souvent plusieurs :
+   * deux vidéos rangées séparément portent deux règles et le même nom. N'en
+   * réécrire qu'une déplaçait la moitié de la ligne, ce qui se lit comme un clic
+   * à moitié pris en compte — le défaut même qu'on répare.
+   */
+  rules: RuleTarget[];
 }
 
 /**
@@ -126,6 +139,10 @@ export interface BlockApp {
   ms: number;
   app: string;
   isSite: boolean;
+  /** Hôte relevé pour ce site, quand le navigateur a pu le dire — vide sinon. */
+  site: string;
+  /** Les règles qui ont rangé cette ligne, s'il y en a (cf. `AppBucket.rules`). */
+  rules: RuleTarget[];
   /** Titres de fenêtre les plus vus, du plus long au plus court. */
   titles: { title: string; ms: number }[];
 }
@@ -195,6 +212,8 @@ export interface JudgedSegment extends Segment {
    * contre une déduction du catalogue.
    */
   via: ClassifySource;
+  /** Rang de la règle qui a décidé, `-1` sinon — cf. `Classification.rank`. */
+  rank: number;
 }
 
 export function recategorize(day: DayLog, settings: ActivitySettings): JudgedSegment[] {
@@ -202,9 +221,9 @@ export function recategorize(day: DayLog, settings: ActivitySettings): JudgedSeg
     /* L'hôte relevé à la mesure est réutilisé tel quel : sans lui, un
        reclassement rendrait au segment le nom deviné dans son titre — et
        « Spotify » redeviendrait le nom d'un morceau. */
-    const { category, label, via } = classifyDetailed(seg.app, seg.title, settings.rules, seg.site);
-    if (category === seg.cat && label === seg.label) return { ...seg, via };
-    return { ...seg, cat: category, label, via };
+    const { category, label, via, rank } = classifyDetailed(seg.app, seg.title, settings.rules, seg.site);
+    if (category === seg.cat && label === seg.label) return { ...seg, via, rank };
+    return { ...seg, cat: category, label, via, rank };
   });
 }
 
@@ -238,23 +257,31 @@ function msOf(seg: Segment): number {
  * temps, et REPEIGNAIT au passage les segments que la règle venait de classer.
  * On choisissait une catégorie, la ligne affichait « classé par ta règle », et
  * la catégorie affichée restait l'ancienne.
+ *
+ * Et entre DEUX règles sous un même nom, c'est la plus RÉCENTE qui tranche, pas
+ * la mieux représentée. C'est la même loi qu'à l'étage du dessous
+ * (cf. `userHit` : « écrite en dernier = consultée en premier »), et les deux
+ * doivent dire pareil, sinon corriger devient une loterie. Peser au temps
+ * couvert faisait précisément perdre la dernière correction : une règle de
+ * domaine ne s'applique qu'aux segments qui ont une URL, soit une poignée, là
+ * où une vieille règle de titre les attrape tous — on choisissait une catégorie
+ * et la ligne restait sur l'ancienne, sans un mot.
  */
 function oneCategoryPerLabel(segments: JudgedSegment[]): JudgedSegment[] {
   const perLabel = new Map<string, Map<string, number>>();
-  /* Ce que l'utilisateur a explicitement demandé pour ce nom, et le temps qui
-     le porte : à deux règles contradictoires sous un même nom (l'une sur le
-     domaine, l'autre sur le titre), la plus représentée tranche — mais elles
+  /* Ce que l'utilisateur a explicitement demandé pour ce nom, et par quelle
+     règle : à deux règles contradictoires sous un même nom (l'une sur le
+     domaine, l'autre sur le titre), la dernière écrite tranche — mais elles
      restent entre elles, le catalogue n'y participe pas. */
-  const decided = new Map<string, Map<string, number>>();
+  const decided = new Map<string, { rank: number; cat: string }>();
   for (const seg of segments) {
     const cats = perLabel.get(seg.label) ?? new Map<string, number>();
     cats.set(seg.cat, (cats.get(seg.cat) || 0) + msOf(seg));
     perLabel.set(seg.label, cats);
 
     if (seg.via === "user" && seg.cat !== OTHER) {
-      const mine = decided.get(seg.label) ?? new Map<string, number>();
-      mine.set(seg.cat, (mine.get(seg.cat) || 0) + msOf(seg));
-      decided.set(seg.label, mine);
+      const mine = decided.get(seg.label);
+      if (!mine || seg.rank > mine.rank) decided.set(seg.label, { rank: seg.rank, cat: seg.cat });
     }
   }
 
@@ -265,10 +292,8 @@ function oneCategoryPerLabel(segments: JudgedSegment[]): JudgedSegment[] {
     /* Une règle a parlé : le vote n'a pas lieu. `decided` n'a jamais d'entrée
        « Non classé » — une règle qui pointe vers une catégorie supprimée est
        sans destination, et vaut alors autant qu'une absence de règle. */
-    for (const [cat, ms] of decided.get(label) ?? []) {
-      if (ms > bestMs) { best = cat; bestMs = ms; }
-    }
-    if (best) { winner.set(label, best); continue; }
+    const mine = decided.get(label);
+    if (mine) { winner.set(label, mine.cat); continue; }
     for (const [cat, ms] of cats) {
       if (cat === OTHER) continue;
       /* À égalité, la première rencontrée gagne : l'ordre des segments est
@@ -369,8 +394,11 @@ function buildFocusSessions(segments: Segment[], settings: ActivitySettings): Fo
  *     demi-heure entière sur la grille et se liraient comme une nuit de travail.
  */
 export function dayBlocks(
-  segments: Segment[],
-  opts: { slotMs?: number; minSlotMs?: number } = {}
+  /* Les segments arrivent RECLASSÉS (cf. `recategorize`) : leur rang de règle
+     est ce qui permet à chaque ligne d'un pavé de retrouver la règle qui l'a
+     rangée, et donc de la réécrire au lieu d'en empiler une seconde. */
+  segments: (Segment & { rank?: number })[],
+  opts: { slotMs?: number; minSlotMs?: number; rules?: ClassifyRule[] } = {}
 ): DayBlock[] {
   const slotMs = Math.max(60_000, opts.slotMs ?? 30 * 60_000);
   /* Trois minutes sur trente : assez pour qu'un vrai passage compte, assez pour
@@ -410,16 +438,26 @@ export function dayBlocks(
     else a.titles.push({ title, ms });
   };
 
-  const addToSlot = (slot: Slot, seg: Segment, ms: number) => {
+  /** Les règles d'une ligne, sans doublon : deux fenêtres peuvent suivre la même. */
+  const addRule = (a: BlockApp, t: RuleTarget | null) => {
+    if (!t) return;
+    if (!a.rules.some(r => r.field === t.field && r.match === t.match)) a.rules.push(t);
+  };
+
+  const addToSlot = (slot: Slot, seg: Segment & { rank?: number }, ms: number) => {
     slot.ms += ms;
     slot.byCat.set(seg.cat, (slot.byCat.get(seg.cat) || 0) + ms);
+    const mine = ruleAt(opts.rules ?? [], seg.rank ?? -1);
     const found = slot.apps.get(seg.label);
     if (found) {
       found.ms += ms;
+      addRule(found, mine);
       addTitle(found, seg.title, ms);
     } else {
       slot.apps.set(seg.label, {
         label: seg.label, cat: seg.cat, ms, app: seg.app, isSite: isBrowser(seg.app),
+        site: seg.site || "",
+        rules: mine ? [mine] : [],
         titles: seg.title ? [{ title: seg.title, ms }] : [],
       });
     }
@@ -452,8 +490,13 @@ export function dayBlocks(
 
   const mergeApp = (b: DayBlock, a: BlockApp) => {
     const found = b.apps.find(x => x.label === a.label);
-    if (!found) { b.apps.push({ ...a, titles: a.titles.map(t => ({ ...t })) }); return; }
+    if (!found) { b.apps.push({ ...a, rules: [...a.rules], titles: a.titles.map(t => ({ ...t })) }); return; }
     found.ms += a.ms;
+    /* L'hôte et la règle ne sont pas lus sur tous les segments : le premier qui
+       les porte les donne à la ligne entière, sinon la corriger dépendrait de
+       quel créneau l'a ouverte. */
+    if (!found.site && a.site) found.site = a.site;
+    for (const r of a.rules) addRule(found, r);
     for (const t of a.titles) addTitle(found, t.title, t.ms);
   };
 
@@ -500,6 +543,7 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
   const catMs = new Map<string, number>();
   const appMs = new Map<string, {
     ms: number; cat: string; app: string; isSite: boolean; site: string; via: ClassifySource;
+    rules: Map<string, RuleTarget>;
     titles: Map<string, number>;
   }>();
   const perProd: Record<Productivity, number> = { productive: 0, neutral: 0, distracting: 0 };
@@ -518,12 +562,17 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
       return {
         ms: 0, cat: seg.cat, app: seg.app, isSite: d.isSite, via: d.via,
         site: seg.site || "",
+        rules: new Map<string, RuleTarget>(),
         titles: new Map<string, number>(),
       };
     })();
     app.ms += ms;
     app.cat = seg.cat;
     if (!app.site && seg.site) app.site = seg.site;
+    /* Toutes les règles qui alimentent ce nom, pas la première : rechoisir une
+       catégorie doit les emmener toutes, sinon la ligne se coupe en deux. */
+    const mine = ruleAt(settings.rules, seg.rank);
+    if (mine) app.rules.set(`${mine.field}\n${mine.match}`, mine);
     if (seg.title) app.titles.set(seg.title, (app.titles.get(seg.title) || 0) + ms);
     appMs.set(seg.label, app);
 
@@ -562,6 +611,7 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
       isSite: v.isSite,
       site: v.site,
       via: v.via,
+      rules: [...v.rules.values()],
       ms: v.ms,
       pct: pct(v.ms),
       titles: [...v.titles.entries()].map(([title, ms]) => ({ title, ms })).sort((a, b) => b.ms - a.ms).slice(0, 6),
@@ -619,7 +669,7 @@ export function dayStats(day: DayLog, settings: ActivitySettings): DayStats {
     hourly,
     focusScore,
     segments,
-    blocks: dayBlocks(segments),
+    blocks: dayBlocks(segments, { rules: settings.rules }),
   };
 }
 
@@ -669,13 +719,15 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
      puissent pas se contredire. */
   const appMs = new Map<string, {
     ms: number; cats: Map<string, number>; app: string; isSite: boolean; site: string; via: ClassifySource;
+    rules: Map<string, RuleTarget>;
   }>();
   for (const d of days) {
     for (const b of d.byCategory) catMs.set(b.id, (catMs.get(b.id) || 0) + b.ms);
     for (const a of d.byApp) {
       const prev = appMs.get(a.label)
-        || { ms: 0, cats: new Map<string, number>(), app: a.app, isSite: a.isSite, site: a.site || "", via: a.via };
+        || { ms: 0, cats: new Map<string, number>(), app: a.app, isSite: a.isSite, site: a.site || "", via: a.via, rules: new Map<string, RuleTarget>() };
       prev.cats.set(a.cat, (prev.cats.get(a.cat) || 0) + a.ms);
+      for (const r of a.rules) prev.rules.set(`${r.field}\n${r.match}`, r);
       appMs.set(a.label, { ...prev, ms: prev.ms + a.ms, site: prev.site || a.site || "" });
     }
   }
@@ -716,7 +768,7 @@ export function rangeStats(logs: DayLog[], settings: ActivitySettings): RangeSta
         const cat = dominant(v.cats);
         return {
           id: label, label, color: categoryColor(cat), cat, app: v.app,
-          isSite: v.isSite, site: v.site, via: v.via, ms: v.ms, pct: pct(v.ms), titles: [],
+          isSite: v.isSite, site: v.site, via: v.via, rules: [...v.rules.values()], ms: v.ms, pct: pct(v.ms), titles: [],
         };
       })
       .sort((a, b) => b.ms - a.ms),
@@ -765,6 +817,7 @@ export function unclassified(logs: DayLog[], settings: ActivitySettings): AppBuc
       isSite: v.isSite,
       site: v.site,
       via: "none" as ClassifySource,
+      rules: [],
       ms: v.ms,
       pct: total ? (v.ms / total) * 100 : 0,
       titles: [...v.titles.entries()].map(([title, ms]) => ({ title, ms })).sort((a, b) => b.ms - a.ms).slice(0, 3),

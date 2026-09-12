@@ -364,6 +364,46 @@ export interface ClassifyRule {
 }
 
 /**
+ * De quoi retrouver une règle pour la réécrire : son champ et son fragment.
+ *
+ * Il est porté par chaque ligne de la page Activité, et il n'est pas
+ * décoratif : une ligne rangée par une règle de titre s'appelle désormais
+ * « YouTube · Apprentissage » (cf. `userLabel`), or c'est son NOM que le
+ * sélecteur de catégorie utilisait pour écrire la règle suivante. Sans cette
+ * cible, rechoisir une catégorie sur une ligne déjà corrigée écrivait une règle
+ * sur « youtube · apprentissage », qui ne se trouve dans aucun titre — le clic
+ * était sans effet, ce qui est exactement le défaut qu'on venait de réparer.
+ */
+export interface RuleTarget {
+  field: NonNullable<ClassifyRule["field"]>;
+  match: string;
+}
+
+/** La règle qui a rangé un relevé, d'après le rang rendu par le classement. */
+export function ruleAt(rules: ClassifyRule[], rank: number): RuleTarget | null {
+  const r = rank >= 0 ? (rules || [])[rank] : null;
+  return r?.match ? { field: r.field ?? "app", match: r.match } : null;
+}
+
+/**
+ * Le fragment sur lequel poser une règle pour UNE fenêtre précise.
+ *
+ * Le titre entier, débarrassé de ce que le NAVIGATEUR y ajoute et qui ne dure
+ * pas : le « (3) » des notifications en tête, son propre nom en queue. Les deux
+ * changent d'un instant à l'autre sur la même page, et une règle qui les
+ * contient cesserait de ranger la vidéo dès qu'un message arrive. Le nom du
+ * SITE, lui, reste — il ne bouge pas d'une page à l'autre, et l'ôter demanderait
+ * de savoir de quel site il s'agit, ce que cette fonction n'a pas à connaître.
+ *
+ * Entier, et pas un mot choisi dedans : c'est ce qui garantit qu'il ne range que
+ * cette fenêtre-là. Un fragment plus court se règle à la main dans
+ * « Catégories & règles », là où on voit ce qu'il attrape d'autre.
+ */
+export function titleRuleMatch(title: string): string {
+  return cleanBrowserTitle(title || "").trim().toLowerCase();
+}
+
+/**
  * Pose une règle en REMPLAÇANT celle qui visait déjà la même chose.
  *
  * Choisir une catégorie sur une ligne d'activité écrivait une règle de plus à
@@ -375,13 +415,28 @@ export interface ClassifyRule {
  * seul endroit d'où une correction est sûre de gagner. La remettre à son ancien
  * rang la laisserait perdre contre une règle plus récente qui attrape la même
  * chose — on aurait choisi une catégorie, et rien n'aurait changé.
+ *
+ * `supersedes` retire EN PLUS les règles qui visaient la même chose par un
+ * autre chemin. Le cas se produit tout seul, sans que personne l'ait voulu : le
+ * même clic sur la même ligne écrit une règle de DOMAINE les jours où le
+ * navigateur a livré son URL, et une règle de TITRE les autres (cf. `assign`
+ * dans la page Activité). Deux corrections successives laissaient donc deux
+ * règles contradictoires sur YouTube, dont une seule visible à l'œil — et c'est
+ * la morte qui gagnait une fois sur deux.
  */
-export function upsertRule(rules: ClassifyRule[], rule: ClassifyRule): ClassifyRule[] {
+export function upsertRule(
+  rules: ClassifyRule[],
+  rule: ClassifyRule,
+  supersedes: { field?: ClassifyRule["field"]; match: string }[] = []
+): ClassifyRule[] {
   const field = rule.field ?? "app";
   const match = (rule.match || "").trim().toLowerCase();
   if (!match) return rules;
+  const dead = [{ field, match }, ...supersedes.map(t => ({
+    field: t.field ?? "app", match: (t.match || "").trim().toLowerCase(),
+  }))].filter(t => t.match);
   const kept = (rules || []).filter(
-    (r) => !(r && (r.field ?? "app") === field && (r.match || "").toLowerCase() === match),
+    (r) => !(r && dead.some(t => t.field === (r.field ?? "app") && t.match === (r.match || "").toLowerCase())),
   );
   return [...kept, { ...rule, match, field }];
 }
@@ -410,6 +465,18 @@ export interface Classification {
   confidence: number;
   /** Mobilier du système : nommé, mais jamais proposé au classement. */
   system: boolean;
+  /**
+   * Rang de la règle qui a décidé dans la liste de l'utilisateur, `-1` sinon.
+   *
+   * Il sort d'ici parce que c'est le seul endroit qui le connaisse, et il sert
+   * un étage plus haut : `oneCategoryPerLabel` départage deux règles qui visent
+   * le même nom, et il doit les départager comme `userHit` — la dernière écrite
+   * gagne. Sans ce rang, il les pesait au temps couvert, et une correction
+   * récente qui ne touche que quelques segments perdait contre une vieille
+   * règle qui en touche beaucoup : on choisissait une catégorie, rien ne
+   * bougeait.
+   */
+  rank: number;
 }
 
 const CONFIDENCE: Record<ClassifySource, number> = {
@@ -754,6 +821,7 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
       isSite,
       confidence: CONFIDENCE.title,
       system: false,
+      rank: -1,
     };
   }
 
@@ -765,6 +833,7 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
     isSite,
     confidence: CONFIDENCE[hit.via],
     system: hit.entry.system === true,
+    rank: -1,
   };
 
   /* Cette app se découpe en trois (cf. lib/activity/self) : le titre le dit, que
@@ -779,10 +848,30 @@ function fromHit(hit: CatalogHit, label: string, isSite: boolean, matched: strin
   return base;
 }
 
+/**
+ * Le nom d'un relevé rangé par une règle de TITRE — « YouTube · Apprentissage ».
+ *
+ * Une règle de titre ne vise pas un lieu, elle vise ce qu'on y faisait : une
+ * vidéo, un document, une page. Sans nom à elle, elle était sans effet visible
+ * et pire, contagieuse — la page n'admet qu'UNE catégorie par nom
+ * (cf. `oneCategoryPerLabel`), si bien qu'une règle posée sur une seule vidéo
+ * emportait tout le fil YouTube avec elle, et qu'aucune correction ne pouvait
+ * viser plus fin que le site entier.
+ *
+ * Le suffixe est celui que porte déjà un sujet reconnu dans un titre
+ * (cf. `fromHit`) : deux lignes, deux totaux, et on lit ce que le site a servi
+ * à faire. Les règles de DOMAINE et d'APPLICATION n'en prennent pas — elles
+ * couvrent tout ce qui porte ce nom, leur donner un second nom le couperait en
+ * deux pour rien.
+ */
+function userLabel(label: string, field: ClassifyRule["field"], category: string): string {
+  return field === "title" ? `${label} · ${categoryLabel(category)}` : label;
+}
+
 /** Première règle de l'utilisateur qui reconnaît ce relevé (la plus récente). */
 function userHit(
   rules: ClassifyRule[], app: string, title: string, host = ""
-): { category: string; match: string } | null {
+): { category: string; match: string; field: ClassifyRule["field"]; rank: number } | null {
   const al = (app || "").toLowerCase();
   const tl = (title || "").toLowerCase();
   const hl = (host || "").toLowerCase();
@@ -797,12 +886,14 @@ function userHit(
          ne doit pas attraper « limited.com ». La règle vaut pour le domaine
          lui-même et pour ses sous-domaines, et pour rien d'autre. */
       if (hl && (hl === needle || hl.endsWith(`.${needle}`))) {
-        return { category: r.category, match: r.match };
+        return { category: r.category, match: r.match, field: "site", rank: i };
       }
       continue;
     }
     const hay = r.field === "title" ? tl : al;
-    if (hay.includes(needle)) return { category: r.category, match: r.match };
+    if (hay.includes(needle)) {
+      return { category: r.category, match: r.match, field: r.field ?? "app", rank: i };
+    }
   }
   return null;
 }
@@ -847,7 +938,11 @@ export function classifyDetailed(
 
   const mine = userHit(userRules, app, title, host);
   if (mine) {
-    return { category: settle(mine.category), label, via: "user", matched: mine.match, isSite: browser, confidence: 1, system: false };
+    const cat = settle(mine.category);
+    return {
+      category: cat, label: userLabel(label, mine.field, cat), via: "user", matched: mine.match,
+      isSite: browser, confidence: 1, system: false, rank: mine.rank,
+    };
   }
 
   if (browser) {
@@ -861,7 +956,7 @@ export function classifyDetailed(
        — et « Non classé » finissait première catégorie du jour.
        Navigation est NEUTRE : ce temps ne se met ni au crédit du travail ni au
        débit de la distraction, ce qui est exactement ce qu'on sait de lui. */
-    return { category: settle(BROWSING), label, via: "none", matched: null, isSite: true, confidence: 0, system: false };
+    return { category: settle(BROWSING), label, via: "none", matched: null, isSite: true, confidence: 0, system: false, rank: -1 };
   }
 
   const exact = matchAppExact(app);
@@ -879,7 +974,7 @@ export function classifyDetailed(
   })();
   if (byTitle) return fromHit(byTitle, label, false, byTitle.entry.name, title);
 
-  return { category: OTHER, label, via: "none", matched: null, isSite: false, confidence: 0, system: false };
+  return { category: OTHER, label, via: "none", matched: null, isSite: false, confidence: 0, system: false, rank: -1 };
 }
 
 /**
@@ -924,9 +1019,10 @@ export function classifyPhoneApp(
      attrape donc le paquet, une règle « dans le titre » sur « YouTube » aussi. */
   const mine = userHit(userRules, packageName, shown);
   if (mine) {
+    const cat = settle(mine.category);
     return {
-      category: settle(mine.category), label: shown, via: "user",
-      matched: mine.match, isSite: false, confidence: 1, system: false,
+      category: cat, label: userLabel(shown, mine.field, cat), via: "user",
+      matched: mine.match, isSite: false, confidence: 1, system: false, rank: mine.rank,
     };
   }
 
@@ -936,7 +1032,7 @@ export function classifyPhoneApp(
     if (hit) return fromHit(hit, shown, false, norm(candidate));
   }
 
-  return { category: OTHER, label: shown, via: "none", matched: null, isSite: false, confidence: 0, system: false };
+  return { category: OTHER, label: shown, via: "none", matched: null, isSite: false, confidence: 0, system: false, rank: -1 };
 }
 
 /* --- Hote ----------------------------------------------------------------- */
