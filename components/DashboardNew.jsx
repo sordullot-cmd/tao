@@ -81,6 +81,7 @@ import {
   ListChecks,
   NotebookPen,
   ShieldCheck,
+  FlaskConical,
   Target as LucideTarget,
   Upload as LucideUpload,
   FileText as LucideFileText,
@@ -709,6 +710,10 @@ export default function App() {
         { id: "trades",     icon: ListChecks,         label: t("nav.trades") },
         { id: "accounts",   icon: LucideWallet,       label: t("nav.accounts") },
         { id: "strategies", icon: LucideTarget,       label: t("nav.strategies") },
+        /* Le backtesting suit « Stratégies » : on rejoue à la main les setups
+           d'une stratégie qu'on vient d'y décrire. Il précède « Journal », qui
+           relève lui les trades RÉELLEMENT pris. */
+        { id: "backtest",   icon: FlaskConical,       label: t("nav.backtest") },
         { id: "journal",    icon: NotebookPen,        label: t("nav.journal") },
         { id: "discipline", icon: ShieldCheck,        label: t("nav.discipline") },
       ],
@@ -858,7 +863,6 @@ export default function App() {
     reading:   t("nav.reading"),
     drive:     t("nav.drive"),
     settings:  t("nav.settings"),
-    backtest:  "Backtest",
     brokers:   "Brokers",
   };
 
@@ -925,7 +929,7 @@ export default function App() {
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
-    backtest: <BacktestPage firms={firms} />,
+    backtest: <BacktestPage />,
     brokers: <BrokersPage />,
     accounts: <AccountsPage accountsLoading={accountsLoading} accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
     "account-detail": <AccountDetailPage accountsLoading={accountsLoading} accountId={selectedAccountDetailId} accounts={accounts} firms={firms} trades={trades} strategies={strategies} setPage={setPage} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
