@@ -29,12 +29,23 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
 
 vi.mock("@/lib/contexts/UndoContext", () => ({ useUndo: () => ({ pushUndo: vi.fn() }) }));
 
+/* Les stratégies viennent de la coquille, pas du journal : la page ne les
+   invente pas, elle les lit. */
+vi.mock("@/lib/contexts/AppContext", () => ({
+  useApp: () => ({
+    strategies: [
+      { id: "s1", name: "Breakout NY", color: "#58CC02" },
+      { id: "s2", name: "Reversal Londres", color: "#1CB0F6" },
+    ],
+  }),
+}));
+
 import BacktestPage from "@/components/pages/BacktestPage";
 
 /** Remplit la modale de saisie et valide. Les champs sont repérés par leur
  *  libellé, comme l'utilisateur les voit. */
-function addBacktest({ symbol, outcome, r, confluence, mistake, better }: {
-  symbol: string; outcome: string; r?: string;
+function addBacktest({ symbol, outcome, r, strategy, confluence, mistake, better }: {
+  symbol: string; outcome: string; r?: string; strategy?: string;
   confluence?: string; mistake?: string; better?: string;
 }) {
   fireEvent.click(screen.getAllByText("Ajouter un backtest")[0]);
@@ -42,6 +53,7 @@ function addBacktest({ symbol, outcome, r, confluence, mistake, better }: {
   fireEvent.change(within(dialog).getByPlaceholderText("NQ, EURUSD…"), { target: { value: symbol } });
   fireEvent.click(within(dialog).getByRole("button", { name: outcome }));
   if (r !== undefined) fireEvent.change(within(dialog).getByPlaceholderText("2.5"), { target: { value: r } });
+  if (strategy) fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: strategy } });
   if (confluence) fireEvent.click(within(dialog).getByRole("checkbox", { name: confluence }));
   if (mistake) fireEvent.click(within(dialog).getByRole("checkbox", { name: mistake }));
   if (better) {
@@ -113,6 +125,30 @@ describe("Page Backtest", () => {
     fireEvent.click(screen.getAllByText("Ajouter un backtest")[0]);
     dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("checkbox", { name: "Wyckoff spring" })).toBeTruthy();
+  });
+
+  it("rattache un backtest à une stratégie de la coquille et la montre sur la ligne", () => {
+    render(<BacktestPage />);
+    addBacktest({ symbol: "NQ", outcome: "Gagnant", r: "2", strategy: "s1" });
+
+    expect(screen.getAllByText("Breakout NY").length).toBeGreaterThan(0);
+  });
+
+  it("classe les stratégies entre elles", () => {
+    render(<BacktestPage />);
+    addBacktest({ symbol: "NQ", outcome: "Perdant", r: "-2", strategy: "s2" });
+    addBacktest({ symbol: "ES", outcome: "Gagnant", r: "3", strategy: "s1" });
+
+    const ranking = screen.getByRole("table", { name: "Par stratégie" });
+    const rows = within(ranking).getAllByRole("row").slice(1);
+    expect(within(rows[0]).getByText("Breakout NY")).toBeTruthy();
+    expect(within(rows[1]).getByText("Reversal Londres")).toBeTruthy();
+  });
+
+  it("n'affiche pas de classement par stratégie quand aucun backtest n'en porte", () => {
+    render(<BacktestPage />);
+    addBacktest({ symbol: "NQ", outcome: "Gagnant" });
+    expect(screen.queryByRole("table", { name: "Par stratégie" })).toBeNull();
   });
 
   it("filtre la liste sur les perdants sans toucher au bilan", () => {

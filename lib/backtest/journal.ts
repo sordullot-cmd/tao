@@ -34,6 +34,10 @@ export interface BacktestEntry {
   symbol: string;
   direction: "long" | "short";
   outcome: BacktestOutcome;
+  /** La stratégie testée, par son id (table Supabase `strategies`). `null`
+   *  quand le setup n'en relève d'aucune — on backteste aussi des idées avant
+   *  qu'elles ne deviennent une stratégie nommée. */
+  strategyId: string | null;
   /** Multiple de risque mesuré. `null` quand on ne l'a pas relevé : le trade
    *  compte alors pour ±1R (cf. `effectiveR`), ce qui est la convention d'un
    *  plan à risque fixe et évite qu'une entrée sans chiffre pèse zéro. */
@@ -116,6 +120,9 @@ function normalizeEntry(raw: Partial<BacktestEntry> | null | undefined, index: n
     symbol: String(raw.symbol ?? "").trim(),
     direction: raw.direction === "short" ? "short" : "long",
     outcome: OUTCOMES.includes(raw.outcome as BacktestOutcome) ? (raw.outcome as BacktestOutcome) : "be",
+    /* L'id est ramené à une chaîne : Supabase rend des uuid, les stratégies
+       locales des nombres, et les deux finissent dans la même clé JSON. */
+    strategyId: raw.strategyId == null || raw.strategyId === "" ? null : String(raw.strategyId),
     r: hasR ? Number(rawR) : null,
     confluences: cleanTags(raw.confluences),
     mistakes: cleanTags(raw.mistakes),
@@ -189,9 +196,30 @@ export interface TagStat {
  * alors qu'elle n'a pas perdu une fois.
  */
 export function tagStats(entries: BacktestEntry[], key: "confluences" | "mistakes"): TagStat[] {
+  return groupBy(entries, entry => entry[key]);
+}
+
+/**
+ * Le même classement, mais par stratégie.
+ *
+ * Une stratégie est au backtest ce qu'une confluence est à une entrée : une
+ * ligne de plus dans le même tableau, avec le même R et le même taux. D'où le
+ * partage de `groupBy` — deux calculs séparés auraient fini par diverger sur le
+ * traitement des scratchs, et la page dirait alors deux vérités.
+ *
+ * `tag` porte ici l'ID de la stratégie, pas son nom : les noms vivent dans la
+ * table `strategies`, et un backtest doit survivre au renommage de la sienne.
+ * Les backtests sans stratégie sortent du classement plutôt que de former une
+ * ligne « (aucune) » qui ne se compare à rien.
+ */
+export function strategyStats(entries: BacktestEntry[]): TagStat[] {
+  return groupBy(entries, entry => (entry.strategyId ? [entry.strategyId] : []));
+}
+
+function groupBy(entries: BacktestEntry[], keysOf: (entry: BacktestEntry) => string[]): TagStat[] {
   const acc = new Map<string, TagStat>();
   for (const entry of entries) {
-    for (const tag of entry[key]) {
+    for (const tag of keysOf(entry)) {
       const stat = acc.get(tag) ?? { tag, count: 0, wins: 0, losses: 0, winRate: 0, totalR: 0, avgR: 0 };
       stat.count += 1;
       if (entry.outcome === "win") stat.wins += 1;

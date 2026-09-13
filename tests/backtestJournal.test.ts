@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  emptyJournal, normalizeJournal, effectiveR, tagStats, summarize,
+  emptyJournal, normalizeJournal, effectiveR, tagStats, strategyStats, summarize,
   DEFAULT_CONFLUENCES,
 } from "@/lib/backtest/journal";
 
@@ -12,6 +12,7 @@ const entry = (over: Record<string, unknown> = {}) => ({
   symbol: "NQ",
   direction: "long",
   outcome: "win",
+  strategyId: null,
   r: null,
   confluences: [],
   mistakes: [],
@@ -101,6 +102,30 @@ describe("summarize()", () => {
 
   it("ne divise pas par zéro sur un journal vide", () => {
     expect(summarize([])).toMatchObject({ count: 0, winRate: 0, totalR: 0, avgR: 0 });
+  });
+});
+
+describe("strategyStats()", () => {
+  it("classe les stratégies par leur ID, pas par leur nom", () => {
+    const entries = normalizeJournal({
+      entries: [
+        entry({ date: "2026-01-01", outcome: "win",  r: 3, strategyId: "s1" }),
+        entry({ date: "2026-01-02", outcome: "loss", r: -1, strategyId: "s2" }),
+      ],
+    }).entries;
+    expect(strategyStats(entries).map(s => s.tag)).toEqual(["s1", "s2"]);
+  });
+
+  it("laisse dehors les backtests sans stratégie", () => {
+    const entries = normalizeJournal({
+      entries: [entry({ strategyId: null }), entry({ date: "2026-01-02", strategyId: "" })],
+    }).entries;
+    expect(strategyStats(entries)).toEqual([]);
+  });
+
+  it("ramène l'ID à une chaîne — Supabase rend des uuid, le local des nombres", () => {
+    const entries = normalizeJournal({ entries: [entry({ strategyId: 42 })] }).entries;
+    expect(entries[0].strategyId).toBe("42");
   });
 });
 

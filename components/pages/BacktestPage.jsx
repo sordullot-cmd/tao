@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Pencil, Activity, Target, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Pencil, Activity, Target, AlertTriangle, Layers } from "lucide-react";
+import { useApp } from "@/lib/contexts/AppContext";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
 import { useUndo } from "@/lib/contexts/UndoContext";
@@ -10,9 +11,9 @@ import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { TYPE, TABULAR } from "@/lib/ui/type";
 import { PALETTE } from "@/lib/ui/palette";
 import { CARD, AreaDotsDefs, areaDotsFill, PeriodPills } from "@/components/ui/da";
-import { Field, FieldGrid, Input, Textarea, Modal, PillButton, IconButton, CheckChip } from "@/components/ui/form";
+import { Field, FieldGrid, Input, Select, Textarea, Modal, PillButton, IconButton, CheckChip } from "@/components/ui/form";
 import {
-  emptyJournal, normalizeJournal, effectiveR, tagStats, summarize,
+  emptyJournal, normalizeJournal, effectiveR, tagStats, strategyStats, summarize,
 } from "@/lib/backtest/journal";
 
 /**
@@ -46,6 +47,7 @@ const emptyForm = () => ({
   date: new Date().toISOString().slice(0, 10),
   symbol: "",
   direction: "long",
+  strategyId: "",
   outcome: "win",
   r: "",
   confluences: [],
@@ -54,6 +56,10 @@ const emptyForm = () => ({
 });
 
 export default function BacktestPage() {
+  /* Les stratégies viennent de la coquille (table Supabase), pas du journal :
+     une stratégie décrite dans « Stratégies » doit être backtestable sans être
+     ressaisie, et son renommage doit suivre partout. */
+  const { strategies } = useApp();
   const [raw, setRaw, hydrated] = useCloudState(STORAGE_KEY, CLOUD_KEY, emptyJournal());
   const journal = useMemo(() => normalizeJournal(raw), [raw]);
   const { pushUndo } = useUndo();
@@ -67,6 +73,22 @@ export default function BacktestPage() {
   const confluenceStats = useMemo(() => tagStats(entries, "confluences"), [entries]);
   const mistakeStats = useMemo(() => tagStats(entries, "mistakes"), [entries]);
   const curve = useMemo(() => equityCurve(entries), [entries]);
+
+  /* Le classement par stratégie porte des IDS ; c'est ici qu'ils redeviennent
+     un nom et une couleur — une stratégie supprimée entre-temps garde sa ligne
+     sous un libellé neutre plutôt que de faire disparaître ses backtests. */
+  const strategyById = useMemo(
+    () => new Map((strategies || []).map(st => [String(st.id), st])),
+    [strategies],
+  );
+  const byStrategy = useMemo(
+    () => strategyStats(entries).map(stat => ({
+      ...stat,
+      tag: strategyById.get(stat.tag)?.name || "Stratégie supprimée",
+      color: strategyById.get(stat.tag)?.color,
+    })),
+    [entries, strategyById],
+  );
   const shown = filter === "all" ? entries : entries.filter(e => e.outcome === filter);
 
   /* Toute écriture repart du magasin NORMALISÉ : `prev` est le JSON brut du
@@ -76,7 +98,11 @@ export default function BacktestPage() {
   const openNew = () => { setEditingId(null); setForm(emptyForm()); };
   const openEdit = (entry) => {
     setEditingId(entry.id);
-    setForm({ ...entry, r: entry.r === null ? "" : String(entry.r) });
+    setForm({
+      ...entry,
+      r: entry.r === null ? "" : String(entry.r),
+      strategyId: entry.strategyId ?? "",
+    });
   };
 
   const save = () => {
@@ -86,6 +112,7 @@ export default function BacktestPage() {
       date: form.date,
       symbol: form.symbol.trim(),
       direction: form.direction,
+      strategyId: form.strategyId || null,
       outcome: form.outcome,
       r: form.r.trim() === "" ? null : Number(String(form.r).replace(",", ".")),
       confluences: form.confluences,
@@ -172,6 +199,15 @@ export default function BacktestPage() {
 
           <EquityCurve curve={curve} />
 
+          {/* Le classement le plus large d'abord : une stratégie chapeaute les
+              confluences qui la composent, et c'est d'elle qu'on décide (la
+              garder, la retravailler). Masqué tant qu'aucun backtest n'en porte
+              — une carte vide occuperait la place sans rien dire. */}
+          {byStrategy.length > 0 && (
+            <TagRanking title="Par stratégie" icon={Layers} color={T.textSub} stats={byStrategy}
+                        empty="Aucun backtest rattaché à une stratégie." />
+          )}
+
           {/* Les deux classements côte à côte : ce qui rapporte à gauche, ce qui
               coûte à droite. Les lire séparément reviendrait à comparer deux
               pages — or la question est bien « lequel des deux pèse le plus ». */}
@@ -185,6 +221,7 @@ export default function BacktestPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {shown.map(entry => (
               <EntryRow key={entry.id} entry={entry}
+                        strategy={entry.strategyId ? strategyById.get(entry.strategyId) : undefined}
                         onEdit={() => openEdit(entry)} onDelete={() => remove(entry.id)} />
             ))}
             {shown.length === 0 && (
@@ -200,6 +237,7 @@ export default function BacktestPage() {
         <EntryModal
           form={form} setForm={setForm}
           journal={journal}
+          strategies={strategies || []}
           editing={editingId !== null}
           onClose={() => { setForm(null); setEditingId(null); }}
           onSave={save}
@@ -283,7 +321,7 @@ function Chip({ label, color }) {
   );
 }
 
-function EntryRow({ entry, onEdit, onDelete }) {
+function EntryRow({ entry, strategy, onEdit, onDelete }) {
   const r = effectiveR(entry);
   return (
     <div style={{ ...CARD, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -295,6 +333,12 @@ function EntryRow({ entry, onEdit, onDelete }) {
         <span style={{ ...TYPE.caption, color: T.textSub }}>
           {entry.direction === "short" ? "Short" : "Long"}
         </span>
+        {entry.strategyId && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, ...TYPE.caption, color: T.textSub }}>
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: strategy?.color || T.textMut }} />
+            {strategy?.name || "Stratégie supprimée"}
+          </span>
+        )}
         <span style={{ ...TYPE.caption, color: T.textMut }}>{fmtDate(entry.date)}</span>
         <span style={{
           marginLeft: "auto", ...TYPE.callout, ...TABULAR, fontWeight: 600,
@@ -349,7 +393,12 @@ function TagRanking({ title, icon: Icon, color, stats, empty }) {
             <tbody>
               {stats.map(s => (
                 <tr key={s.tag} style={{ borderTop: `1px solid ${HAIRLINE}` }}>
-                  <Td>{s.tag}</Td>
+                  <Td>
+                    {/* La pastille ne sert qu'aux stratégies, qui ont une
+                        couleur à elles ; les tags n'en ont pas. */}
+                    {s.color && <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 999, background: s.color, marginRight: 7 }} />}
+                    {s.tag}
+                  </Td>
                   <Td align="right" color={T.textSub}>{s.count}</Td>
                   <Td align="right">{s.wins + s.losses > 0 ? `${s.winRate}%` : "—"}</Td>
                   <Td align="right" color={s.avgR >= 0 ? T.green : T.red}>{fmtR(s.avgR)}</Td>
@@ -460,7 +509,7 @@ function TagPicker({ label, hint, catalog, selected, color, onToggle, onAdd }) {
   );
 }
 
-function EntryModal({ form, setForm, journal, editing, onClose, onSave, onDelete }) {
+function EntryModal({ form, setForm, journal, strategies, editing, onClose, onSave, onDelete }) {
   const set = (patch) => setForm(prev => ({ ...prev, ...patch }));
   const toggle = (key, tag) => set({
     [key]: form[key].includes(tag) ? form[key].filter(t => t !== tag) : [...form[key], tag],
@@ -497,6 +546,17 @@ function EntryModal({ form, setForm, journal, editing, onClose, onSave, onDelete
             />
           </Field>
         </FieldGrid>
+
+        <Field label="Stratégie" hint={strategies.length === 0 ? "Aucune stratégie enregistrée — la page « Stratégies » les alimente." : undefined}>
+          <Select value={form.strategyId} onChange={(e) => set({ strategyId: e.target.value })}>
+            {/* « Aucune » en premier et par défaut : on backteste aussi des
+                idées avant qu'elles ne portent un nom. */}
+            <option value="">Aucune</option>
+            {strategies.map(st => (
+              <option key={st.id} value={String(st.id)}>{st.name || `Stratégie ${st.id}`}</option>
+            ))}
+          </Select>
+        </Field>
 
         <FieldGrid columns={2}>
           <Field label="Résultat">
