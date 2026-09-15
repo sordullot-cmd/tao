@@ -1,14 +1,17 @@
 /**
  * Maille des courbes de P&L.
  *
- * Ce qui est sous test, c'est le SEUIL : la semaine et le mois se lisent trade
- * par trade, les fenêtres plus larges par jour. Le reste — cumul, ordre, points
- * écartés — est vérifié sur la journée à plusieurs trades, seul cas où les deux
- * mailles divergent vraiment.
+ * Ce qui est sous test, c'est qu'il n'y a PLUS de seuil : la courbe se lit trade
+ * par trade sur toutes les pastilles, et changer de fenêtre ne change plus la
+ * nature du tracé. Le reste — cumul, ordre, points écartés — est vérifié sur la
+ * journée à plusieurs trades, seul cas où les deux mailles divergent vraiment.
+ *
+ * `cumulativeByDay` reste testé : il ne porte plus la courbe, mais toujours le
+ * drawdown des statistiques et le calendrier.
  */
 
 import { describe, it, expect } from "vitest";
-import { cumulativeByDay, cumulativeByTrade, isTradeLevel, pnlCurve } from "@/lib/ui/pnlCurve";
+import { cumulativeByDay, cumulativeByTrade, pnlCurve } from "@/lib/ui/pnlCurve";
 
 /* Une journée qui plonge puis se rattrape : son cumul quotidien (+50) ne dit
    rien du -150 traversé en cours de séance. C'est exactement ce que la maille
@@ -18,13 +21,6 @@ const JOURNEE = [
   { date: "2026-09-01", entry_time: "14:02", exit_time: "14:30", pnl: 200 },
   { date: "2026-09-02", entry_time: "10:00", exit_time: "10:20", pnl: -30 },
 ];
-
-describe("isTradeLevel", () => {
-  it("réserve la maille « trade » à la semaine et au mois", () => {
-    expect(["1S", "1M"].map(isTradeLevel)).toEqual([true, true]);
-    expect(["3M", "6M", "1A", "ALL"].map(isTradeLevel)).toEqual([false, false, false, false]);
-  });
-});
 
 describe("cumulativeByDay", () => {
   it("garde le dernier cumul de la journée, pas ce qu'elle a traversé", () => {
@@ -63,17 +59,17 @@ describe("cumulativeByTrade", () => {
 });
 
 describe("pnlCurve", () => {
-  it("suit la pastille : trois points sur le mois, deux sur l'année", () => {
-    expect(pnlCurve(JOURNEE, "1M")).toHaveLength(3);
-    expect(pnlCurve(JOURNEE, "1A")).toHaveLength(2);
+  it("descend au trade, et ne dépend plus de la fenêtre pour le faire", () => {
+    expect(pnlCurve(JOURNEE)).toEqual(cumulativeByTrade(JOURNEE));
+    expect(pnlCurve(JOURNEE)).toHaveLength(3);
   });
 
   it("ancre à zéro la veille du premier point quand la page le demande", () => {
-    const [depart] = pnlCurve(JOURNEE, "1A", { anchorZero: true });
+    const [depart] = pnlCurve(JOURNEE, { anchorZero: true });
     expect(depart).toEqual({ date: "2026-08-31", cum: 0 });
   });
 
   it("n'invente pas d'ancre pour une série vide", () => {
-    expect(pnlCurve([], "1A", { anchorZero: true })).toEqual([]);
+    expect(pnlCurve([], { anchorZero: true })).toEqual([]);
   });
 });

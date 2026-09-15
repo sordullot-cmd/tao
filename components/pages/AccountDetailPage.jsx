@@ -308,10 +308,10 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
     };
   }, [accountTrades]);
 
-  /* Courbe du compte puis fenêtre 1S/1M/3M/6M/1A. La MAILLE suit la pastille :
-     un point par trade sur la semaine et le mois, un point par jour au-delà
-     (cf. lib/ui/pnlCurve). */
-  const fullCurve = React.useMemo(() => pnlCurve(accountTrades, period), [accountTrades, period]);
+  /* Courbe du compte puis fenêtre 1S/1M/3M/6M/1A. La maille est la MÊME partout
+     — un point par trade, l'année comme la semaine (cf. lib/ui/pnlCurve) : seule
+     la profondeur change d'une pastille à l'autre, pas la nature du tracé. */
+  const fullCurve = React.useMemo(() => pnlCurve(accountTrades), [accountTrades]);
   const curve = React.useMemo(() => windowSeries(fullCurve, period, p => p.date), [fullCurve, period]);
 
   // Séries des autres comptes : la maquette montre plusieurs courbes. On ne les
@@ -334,11 +334,10 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
         id: a.id,
         name: a.name || "Compte",
         color: colorById.get(a.id),
-        // Même maille que la courbe de devant, sinon les rangs ne concordent pas.
-        points: pnlCurve(srcTrades.filter(tr => tr.account_id === a.id), period),
+        points: pnlCurve(srcTrades.filter(tr => tr.account_id === a.id)),
       }))
       .filter(s => s.points.length > 1);
-  }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId, firmById, period]);
+  }, [isArchivedView, archivedTrades, archivedAccts, trades, accounts, accountId, filterId, firmById]);
 
   /* ─── Contrat du compte : objectifs de passage, puis retraits ───────────
      Le magasin est générique (`useCloudState`) et PARTAGÉ avec la liste des

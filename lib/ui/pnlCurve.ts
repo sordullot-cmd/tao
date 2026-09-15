@@ -1,17 +1,24 @@
 /**
- * Courbes de P&L cumulé — et la granularité qu'elles prennent selon la fenêtre.
+ * Courbes de P&L cumulé — un point par TRADE, sur toutes les fenêtres.
  *
- * Un point par JOUR est la bonne maille pour lire un semestre ou une année :
- * au-delà de quelques dizaines de séances, un point par trade ne dessine plus
- * une courbe mais un peigne. Sur une semaine ou un mois, c'est l'inverse — le
- * cumul quotidien écrase justement ce qu'on vient chercher à cette échelle :
- * l'ordre des trades, la série de pertes rattrapée en fin de séance, le gain
- * unique qui porte la journée. Ces deux fenêtres se lisent donc TRADE PAR
- * TRADE.
+ * La maille a suivi la pastille pendant un temps : trade par trade sur la
+ * semaine et le mois, un point par jour au-delà, pour qu'un semestre ne
+ * devienne pas un peigne. Le prix était plus cher que le gain. En passant de
+ * 1M à 3M, la courbe ne s'allongeait pas : elle CHANGEAIT DE NATURE. Le creux
+ * traversé en séance, la série de pertes rattrapée avant la clôture, le trade
+ * unique qui porte la journée — tout cela s'effaçait d'un coup, et deux
+ * fenêtres voisines racontaient deux histoires du même compte. On ne comparait
+ * plus rien.
  *
- * Le seuil est ici et nulle part ailleurs : la page d'un compte et celle d'une
- * firme montrent la même courbe pour la même pastille, et un troisième écran
- * qui adopterait ces pastilles hériterait de la règle sans la réécrire.
+ * Le trade est l'unité de ce que fait un trader ; c'est donc l'unité de la
+ * courbe, qu'on regarde sept jours ou douze mois. Une année dense y tient : les
+ * points se serrent, la forme reste lisible, et c'est la même forme qu'en
+ * zoomant.
+ *
+ * Le cumul quotidien n'est pas parti pour autant — il garde l'emploi où la
+ * séance EST la bonne unité : le drawdown maximal des statistiques et le
+ * calendrier. Il s'appelle alors directement (`cumulativeByDay`), sans passer
+ * par la courbe.
  */
 
 import { tradeInstant, type DatedTrade } from "@/lib/tradeOrder";
@@ -20,22 +27,17 @@ import { tradeInstant, type DatedTrade } from "@/lib/tradeOrder";
 export interface CurvePoint {
   date: string;
   cum: number;
-  /** Libellé d'infobulle quand la date seule ne suffit pas (plusieurs trades le
-   *  même jour). Absent en maille quotidienne : la date se formate toute seule. */
+  /** Libellé d'infobulle : la date seule ne suffit pas, deux trades d'une même
+   *  séance porteraient le même jour. Absent des points produits par
+   *  `cumulativeByDay`, où la date se formate toute seule. */
   label?: string;
-  /** P&L du trade lui-même, à côté du cumul. Maille « trade » uniquement. */
+  /** P&L du trade lui-même, à côté du cumul. */
   delta?: number;
 }
 
 interface CurveTrade extends DatedTrade {
   pnl?: unknown;
 }
-
-/** Fenêtres qui se lisent trade par trade — cf. l'en-tête. */
-const TRADE_LEVEL = new Set(["1S", "1M"]);
-
-/** La pastille demande-t-elle la maille « un point par trade » ? */
-export const isTradeLevel = (periodId: string): boolean => TRADE_LEVEL.has(periodId);
 
 /* `entry_time` en repli : quelques trades importés n'ont pas de `date` propre
    mais un horodatage complet. Une heure seule (« 17:01 ») ne passe pas le
@@ -109,8 +111,11 @@ function tradeLabel(instant: string): string {
 }
 
 /**
- * La courbe à tracer pour une pastille donnée : par trade sur 1S et 1M, par
- * jour partout ailleurs.
+ * La courbe à tracer : le cumul, trade par trade.
+ *
+ * Le découpage en fenêtres ne se fait pas ici — `windowSeries` coupe la fin de
+ * cette série selon la pastille. La séparation tient : ce module dit CE QUI est
+ * tracé, la fenêtre dit JUSQU'OÙ on remonte.
  *
  * `anchorZero` ajoute le point de départ à zéro (cf. `zeroAnchor`). Il reste
  * une option : toutes les pages ne l'ont pas, et le poser d'office déplacerait
@@ -118,10 +123,9 @@ function tradeLabel(instant: string): string {
  */
 export function pnlCurve(
   trades: CurveTrade[] | null | undefined,
-  periodId: string,
   { anchorZero = false }: { anchorZero?: boolean } = {},
 ): CurvePoint[] {
-  const points = isTradeLevel(periodId) ? cumulativeByTrade(trades) : cumulativeByDay(trades);
+  const points = cumulativeByTrade(trades);
   if (!anchorZero || points.length === 0) return points;
   const anchor = zeroAnchor(points[0].date);
   return anchor ? [anchor, ...points] : points;

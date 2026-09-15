@@ -236,11 +236,12 @@ export default function PropFirmDetailPage({
       .sort((a, b) => msOf(a.date) - msOf(b.date));
   }, [firmAccounts, trades]);
 
-  /** Courbe cumulée de la firme. Un point par TRADE sur la semaine et le mois,
-   *  un point par jour sur les fenêtres plus larges (cf. lib/ui/pnlCurve). */
+  /** Courbe cumulée de la firme. Un point par TRADE, quelle que soit la
+   *  pastille (cf. lib/ui/pnlCurve) — c'est `windowSeries` qui, seul, dit
+   *  jusqu'où on remonte. */
   const firmCurve = React.useMemo(
-    () => pnlCurve(firmTrades, period, { anchorZero: true }),
-    [firmTrades, period]
+    () => pnlCurve(firmTrades, { anchorZero: true }),
+    [firmTrades]
   );
 
   const visibleCurve = React.useMemo(
@@ -274,10 +275,9 @@ export default function PropFirmDetailPage({
       id: acc.id,
       name: acc.name,
       color: colorByAccount.get(acc.id),
-      // Même maille que la courbe de devant, sinon les rangs ne concordent pas.
-      points: pnlCurve((trades || []).filter((tr) => tr.account_id === acc.id), period),
+      points: pnlCurve((trades || []).filter((tr) => tr.account_id === acc.id)),
     })).filter((s) => s.points.length > 1);
-  }, [firmAccounts, trades, colorByAccount, period]);
+  }, [firmAccounts, trades, colorByAccount]);
 
   /** KPI de performance, calculés comme sur la page d'un compte. */
   const perf = React.useMemo(() => {
@@ -287,10 +287,9 @@ export default function PropFirmDetailPage({
     const grossWin = sum(wins);
     const grossLoss = Math.abs(sum(losses));
     const total = firmTrades.length;
-    /* Drawdown maximal sur la courbe cumulée — sur SA PROPRE courbe quotidienne
-       et non celle qui est affichée : la maille de cette dernière suit la
-       pastille, et un chiffre de statistique ne doit pas changer parce qu'on a
-       zoomé sur la semaine. */
+    /* Drawdown maximal sur SA PROPRE courbe quotidienne et non sur celle qui est
+       affichée : cette dernière est coupée par la pastille, et un chiffre de
+       statistique ne doit pas changer parce qu'on a zoomé sur la semaine. */
     let peak = 0, maxDD = 0;
     cumulativeByDay(firmTrades).forEach((p) => {
       if (p.cum > peak) peak = p.cum;
