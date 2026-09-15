@@ -1596,12 +1596,22 @@ function StepLink({ done, color }) {
  * l'avancement, et son contour la sépare de sa voisine. Les objectifs qui la
  * mesurent se replient dedans — on les ouvre pour agir, pas pour savoir.
  *
+ * Fond et barre se partagent le travail SANS SE RECOUVRIR : l'état est binaire
+ * (franchi, en retard, ni l'un ni l'autre), l'avancement est continu. Un fond
+ * teinté dès le premier pourcent a existé le temps d'une version, et c'est ce
+ * qu'il coûtait qui l'a fait retirer : sur une carte, la seule différence entre
+ * « entamé » et « franchi » devenait l'intensité d'un aplat — 6 % contre 14 %
+ * de la même teinte, que rien ne met côte à côte — et une liste de jalons à
+ * peine commencés se lisait comme une liste de jalons faits. L'avancement est
+ * déjà dit trois fois ailleurs sur la tuile : la pastille en camembert, le
+ * pourcentage au bout de la ligne, la barre de pied.
+ *
  * Le fond est teinté à la couleur de la carte et non à une palette d'états :
  * trois objectifs de l'année côte à côte doivent rester reconnaissables au
  * premier coup d'œil, et un vert « fait » identique sur les trois effacerait
  * précisément ce qui les distingue.
  */
-function stepTile(status, color, measured, pct) {
+function stepTile(status, color) {
   if (status === "done") {
     return {
       bg: `color-mix(in srgb, ${color} 14%, transparent)`,
@@ -1611,14 +1621,10 @@ function stepTile(status, color, measured, pct) {
   if (status === "late") {
     return { bg: `color-mix(in srgb, ${T.red} 8%, transparent)`, ring: T.red };
   }
-  // Entamée : le fond s'éclaire à peine, juste assez pour la sortir des jalons
-  // intacts sans la faire passer pour franchie.
-  if (measured && pct > 0) {
-    return {
-      bg: `color-mix(in srgb, ${color} 6%, transparent)`,
-      ring: `color-mix(in srgb, ${color} 26%, transparent)`,
-    };
-  }
+  /* Entamé compris : un jalon qui n'est pas franchi garde le fond des jalons
+     intacts. La teinte de la carte ne se pose QUE sur ce qui est fait — c'est
+     ce qui permet de compter le chemin parcouru d'un coup d'œil, sans lire un
+     seul pourcentage. */
   return { bg: "transparent", ring: T.border };
 }
 
@@ -1639,7 +1645,7 @@ export function StepRow({ step, cat, status, today = "", goals = [], allObjectiv
   const measured = goals.length > 0;
   const done = isStepDone(step, pcts);
   const completion = Math.round(stepCompletion(step, pcts));
-  const tile = stepTile(done ? "done" : status, cat.color, measured, completion);
+  const tile = stepTile(done ? "done" : status, cat.color);
   /* Échéance affichée : la sienne s'il en porte une (cartes héritées), sinon
      celle de ses objectifs — la PLUS TARDIVE, puisque le jalon ne se franchit
      qu'une fois tous atteints. Prendre la plus proche daterait le jalon d'un

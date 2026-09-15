@@ -76,6 +76,21 @@ describe("tuile d'une étape", () => {
     expect(bars(finie.container)).toBe(0);
   });
 
+  it("ne teinte la tuile qu'une fois le jalon franchi, barre de pied comprise", () => {
+    /* La teinte de la carte se posait dès le premier pourcent : une liste de
+       jalons à peine entamés se lisait comme une liste de jalons faits, la
+       seule différence étant l'intensité d'un aplat que rien ne met côte à
+       côte. L'avancement reste dit par la barre de pied — c'est elle, et pas le
+       fond, qui porte un chiffre continu. */
+    const fond = (el: HTMLElement) => (el.firstChild as HTMLElement).getAttribute("style") || "";
+    const entamée = render(<StepRow {...props} step={step("a", "Courir")} status="upcoming" goals={[goal("g", "Km", 60)]} />);
+    expect(fond(entamée.container)).toContain("background: transparent");
+    expect(entamée.container.querySelectorAll("div[style*='height: 3px']").length).toBe(1);
+    cleanup();
+    const franchie = render(<StepRow {...props} step={step("b", "Semi")} status="upcoming" goals={[goal("g", "Km", 100)]} />);
+    expect(fond(franchie.container)).not.toContain("background: transparent");
+  });
+
   it("se date sur la dernière échéance de ses objectifs, faute de la sienne", () => {
     /* La modale ne propose plus de dater un jalon : sans les échéances de ses
        objectifs, un chemin mesuré par des chiffres ne dirait plus quand il se
