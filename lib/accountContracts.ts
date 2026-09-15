@@ -57,6 +57,8 @@ export interface AccountContract {
   minDays: number | null;
   dailyLoss: number | null;
   payoutMin: number | null;
+  /** Matelas à laisser sur le compte : il ne part jamais avec le retrait. */
+  payoutBuffer: number | null;
   payoutDays: number | null;
   payoutWinDays: number | null;
   /** Jour de passage financé : les compteurs du financé repartent de là. */
@@ -68,7 +70,7 @@ export type ContractStore = Record<string, AccountContract>;
 
 const EMPTY: AccountContract = {
   target: null, maxDD: null, minDays: null, dailyLoss: null,
-  payoutMin: null, payoutDays: null, payoutWinDays: null,
+  payoutMin: null, payoutBuffer: null, payoutDays: null, payoutWinDays: null,
   fundedAt: null, payouts: [],
 };
 
@@ -89,6 +91,7 @@ export function normalizeContract(raw: unknown): AccountContract {
     minDays: num(r.minDays),
     dailyLoss: num(r.dailyLoss),
     payoutMin: num(r.payoutMin),
+    payoutBuffer: num(r.payoutBuffer),
     payoutDays: num(r.payoutDays),
     payoutWinDays: num(r.payoutWinDays),
     fundedAt: dayOf(r.fundedAt) || null,
@@ -160,6 +163,7 @@ export interface Objectives {
   minDays: number;
   dailyLoss: number;
   payoutMin: number;
+  payoutBuffer: number;
   payoutDays: number;
   payoutWinDays: number;
   winDayMin: number;
@@ -172,7 +176,7 @@ export function resolveObjectives(contract: AccountContract, rules: AccountRules
   const pick = (mine: number | null, theirs: number) => (mine == null ? theirs : mine);
   const edited = [
     contract.target, contract.maxDD, contract.minDays, contract.dailyLoss,
-    contract.payoutMin, contract.payoutDays, contract.payoutWinDays,
+    contract.payoutMin, contract.payoutBuffer, contract.payoutDays, contract.payoutWinDays,
   ].some(v => v != null);
   return {
     target: pick(contract.target, rules.target),
@@ -181,6 +185,7 @@ export function resolveObjectives(contract: AccountContract, rules: AccountRules
     minDays: pick(contract.minDays, rules.minDays),
     dailyLoss: pick(contract.dailyLoss, rules.dailyLoss),
     payoutMin: pick(contract.payoutMin, rules.payoutMin),
+    payoutBuffer: pick(contract.payoutBuffer, rules.payoutBuffer),
     payoutDays: pick(contract.payoutDays, rules.payoutDays),
     payoutWinDays: pick(contract.payoutWinDays, rules.payoutWinDays),
     winDayMin: rules.winDayMin,
@@ -329,6 +334,10 @@ export interface PayoutState {
   withdrawn: number;
   /** Ce qui reste sur le compte et n'a pas encore été retiré. */
   balance: number;
+  /** Matelas que la firme veut voir rester sur le compte. 0 = aucun. */
+  buffer: number;
+  /** La part du solde qui dépasse le matelas — le plafond d'un retrait. */
+  withdrawable: number;
   min: number;
   daysTraded: number;
   daysRequired: number;
@@ -351,6 +360,12 @@ export interface PayoutState {
  * sorti. La colonne « payout dispo » de la liste des comptes montrait le P&L
  * brut, si bien qu'un retrait encaissé restait affiché comme disponible et que
  * la même somme se comptait deux fois.
+ *
+ * Et ce n'est pas non plus tout ce qui reste : le MATELAS de la firme (safety
+ * net) se gagne d'abord et ne sort jamais. Sur un Apex 50k, un compte à +3 200
+ * ne laisse pas partir 3 200 mais 600 — le reste est le matelas de 2 600 qui
+ * doit être là au moment de la demande et encore là après le virement. C'est la
+ * différence entre un payout accordé et un payout refusé en entier.
  */
 export function payoutState(
   trades: ContractTrade[] | null | undefined,
@@ -366,9 +381,20 @@ export function payoutState(
   const daysTraded = byDay.size;
   const winDays = [...byDay.values()].filter(v => v >= Math.max(1, obj.winDayMin)).length;
 
+  const buffer = Math.max(0, obj.payoutBuffer);
+  /* Ce qui DÉPASSE le matelas, jamais le solde : c'est le seul chiffre qu'on
+     ait le droit de demander, et c'est donc lui qu'on compare au minimum de
+     retrait. Comparer le solde laisserait annoncer « 500 disponibles » sur un
+     compte dont les 500 sont précisément ce qui manque au matelas. */
+  const withdrawable = Math.max(0, balance - buffer);
+
   const daysMissing = Math.max(0, obj.payoutDays - daysTraded);
   const winMissing = Math.max(0, obj.payoutWinDays - winDays);
-  const belowMin = obj.payoutMin > 0 && balance < obj.payoutMin;
+  /* `<=` et non `<` : un solde pile au niveau du matelas le constitue sans rien
+     laisser au-dessus, et annoncer « 0 à retirer » comme une éligibilité ferait
+     ouvrir une demande vide. */
+  const belowBuffer = buffer > 0 && balance <= buffer;
+  const belowMin = obj.payoutMin > 0 && withdrawable < obj.payoutMin;
 
   /* Un seul obstacle annoncé à la fois, le plus proche du terrain : savoir
      qu'il manque « 2 jours gagnants ET 300 $ » n'aide pas plus que de savoir
@@ -377,6 +403,7 @@ export function payoutState(
     balance <= 0 ? "Rien à retirer pour le moment"
     : daysMissing > 0 ? `Encore ${daysMissing} jour${daysMissing > 1 ? "s" : ""} tradé${daysMissing > 1 ? "s" : ""}`
     : winMissing > 0 ? `Encore ${winMissing} jour${winMissing > 1 ? "s" : ""} gagnant${winMissing > 1 ? "s" : ""}`
+    : belowBuffer ? `Buffer à conserver pas encore dépassé`
     : belowMin ? `Minimum de retrait non atteint`
     : null;
 
@@ -384,13 +411,15 @@ export function payoutState(
     earned,
     withdrawn,
     balance,
+    buffer,
+    withdrawable,
     min: obj.payoutMin,
     daysTraded,
     daysRequired: obj.payoutDays,
     winDays,
     winDaysRequired: obj.payoutWinDays,
     eligible: blocker === null,
-    available: blocker === null ? balance : 0,
+    available: blocker === null ? withdrawable : 0,
     blocker,
     lastAt: contract.payouts[0]?.date ?? null,
   };

@@ -1234,13 +1234,26 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
   const lastIdx = Math.max(points.length - 1, 1);
   const xAt = (i) => (i / lastIdx) * W;
 
-  /* Les autres séries sont projetées SUR CET AXE : à chaque rang de la série
-     principale, on lit la valeur que l'autre avait à cette date-là (son dernier
-     point connu, à défaut 0 tant qu'elle n'a rien produit). Elles restent donc
-     comparables rang par rang, et une série ouverte plus tard part à plat depuis
-     le bord gauche au lieu de surgir au milieu du graphique.
-     Le report à plat vaut aussi après son dernier point : la ligne se prolonge
+  /* ─── Les autres séries sur ce même axe ────────────────────────────────────
+     L'axe compte les RANGS de la série principale, mais les autres séries ont
+     leur propre rythme : elles étaient échantillonnées à chaque rang de la
+     principale — une valeur lue à sa date, son dernier point connu. Tout ce
+     qu'une série de fond faisait ENTRE deux trades de la principale disparaissait
+     donc du tracé : une stratégie active en face d'une principale à cinq trades
+     n'avait plus que cinq paliers, et quand la principale n'a pas d'heure
+     d'entrée (ses trades du jour tombent au même instant) les paliers se
+     confondaient — la courbe de fond sortait DROITE alors que la stratégie avait
+     tradé.
+
+     Chaque point des autres séries est donc gardé, et placé entre les rangs de
+     la principale : les points tombés dans l'intervalle de temps ]t(i-1), t(i)]
+     se répartissent sur le segment ]x(i-1), x(i)], le dernier d'entre eux
+     atterrissant pile sur x(i). La principale, elle, ne bouge pas d'un pixel.
+
+     Avant son premier point une série part à plat depuis le bord gauche (au lieu
+     de surgir au milieu du graphique) ; après son dernier, la ligne se prolonge
      au niveau atteint, sans redescendre vers zéro. */
+  const mainAt = points.map(p => msOf(p.date));
   const otherProjected = (others || [])
     // Une série sans aucun point n'a rien à montrer : on ne trace pas de ligne
     // plate à zéro pour elle, elle serait indiscernable d'un compte à l'équilibre.
@@ -1248,22 +1261,38 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
     .map(s => {
       const sorted = [...s.points].sort((a, b) => msOf(a.date) - msOf(b.date));
       // Rien dans la fenêtre affichée : même raison, pas de ligne.
-      if (msOf(sorted[0].date) > t1) return { ...s, values: [] };
+      if (msOf(sorted[0].date) > t1) return { ...s, samples: [] };
       let cursor = 0, held = 0;
-      const values = points.map(p => {
-        const at = msOf(p.date);
-        while (cursor < sorted.length && msOf(sorted[cursor].date) <= at) {
-          held = sorted[cursor].cum;
+      // Ce qui précède le premier rang se résume à la valeur atteinte : la série
+      // entre dans le cadre au niveau qu'elle avait déjà.
+      while (cursor < sorted.length && msOf(sorted[cursor].date) <= mainAt[0]) {
+        held = sorted[cursor].cum;
+        cursor += 1;
+      }
+      const samples = [{ x: xAt(0), v: held }];
+      for (let i = 1; i < points.length; i += 1) {
+        const x0 = xAt(i - 1), x1 = xAt(i);
+        // Les points de cette série tombés dans l'intervalle de temps du segment.
+        const within = [];
+        while (cursor < sorted.length && msOf(sorted[cursor].date) <= mainAt[i]) {
+          within.push(sorted[cursor].cum);
           cursor += 1;
         }
-        return held;
-      });
-      return { ...s, values };
+        if (within.length === 0) {
+          samples.push({ x: x1, v: held });
+          continue;
+        }
+        within.forEach((v, j) => {
+          samples.push({ x: x0 + ((j + 1) / within.length) * (x1 - x0), v });
+        });
+        held = within[within.length - 1];
+      }
+      return { ...s, samples };
     })
-    .filter(s => s.values.length > 1);
+    .filter(s => s.samples.length > 1);
 
   const values = points.map(p => p.cum);
-  otherProjected.forEach(s => s.values.forEach(v => values.push(v)));
+  otherProjected.forEach(s => s.samples.forEach(p => values.push(p.v)));
   const yMax = Math.max(...values);
   const yMin = Math.min(...values);
   const ySpan = (yMax - yMin) || 1;
@@ -1388,8 +1417,8 @@ export function PnlChart({ points, others, color, bleedLeft = true }) {
           <g mask={hoverFadeMask(uid, fadeRatio)}>
             {/* Autres comptes — lignes fines en arrière-plan */}
             {otherProjected.map(s => {
-              const d = s.values
-                .map((v, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(2)} ${yFor(v).toFixed(2)}`)
+              const d = s.samples
+                .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${yFor(p.v).toFixed(2)}`)
                 .join(" ");
               return (
                 <path

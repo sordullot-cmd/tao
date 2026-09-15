@@ -93,13 +93,16 @@ function Face({ hero, heroTone, sub, action, gauges, children }) {
  */
 function Gauge({ label, ratio, value, spent = false, marker = null }) {
   const pct = Math.max(0, Math.min(1, Number(ratio) || 0));
-  /* Une progression est VERTE, du premier pixel au dernier : c'est du chemin
-     fait, et le noir d'encre d'avant la faisait ressembler à une piste inerte
-     plutôt qu'à un acquis. La consommation, elle, garde son échelle de danger —
-     un drawdown qui se remplirait en vert féliciterait pour une perte. */
+  /* Une progression se remplit à l'ACCENT DU SITE (`--accent`, réglé dans
+     Réglages → Apparence), pas au vert des gains : c'est du chemin fait, et une
+     barre d'objectif n'est pas un P&L — la teindre en vert de profit la faisait
+     lire comme un montant gagné, et elle restait verte quand tout le reste de
+     l'app suivait un accent choisi. La consommation, elle, garde son échelle de
+     danger : un drawdown qui se remplirait à l'accent féliciterait pour une
+     perte. */
   const color = spent
     ? (pct >= 1 ? T.red : pct >= 0.75 ? T.amber : T.textMut)
-    : T.pnlPos;
+    : T.brand;
   const at = marker ? Math.max(0, Math.min(1, Number(marker.ratio) || 0)) * 100 : 0;
 
   return (
@@ -237,6 +240,11 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
           <RuleField
             label="Minimum de retrait" value={contract.payoutMin} fallback={rules.payoutMin}
             onChange={(v) => onPatch({ payoutMin: v })}
+          />
+          <RuleField
+            label="Buffer à conserver" hint="Reste sur le compte après le retrait"
+            value={contract.payoutBuffer} fallback={rules.payoutBuffer}
+            onChange={(v) => onPatch({ payoutBuffer: v })}
           />
           <RuleField
             label="Jours tradés avant retrait" value={contract.payoutDays} fallback={rules.payoutDays}
@@ -404,8 +412,15 @@ function FundedFace({ state, payouts, onAdd, onRemove }) {
      qui le replace. Ce qui bloque prend la place du pourcentage — c'est la
      phrase utile quand le chiffre, lui, ne bouge pas encore. */
   const hero = state.eligible ? `${fmt(state.available)} à retirer` : fmt(state.balance);
+  /* Quand un buffer existe, le dire ICI et pas seulement dans la jauge : le
+     chiffre héros est plus petit que le solde affiché la veille, et sans la
+     raison à côté de lui, ça se lit comme un calcul qui a perdu de l'argent. */
   const sub = state.eligible
-    ? `${fmt(state.withdrawn)} déjà retirés · ${fmt(state.earned)} gagnés depuis le passage financé`
+    ? [
+        state.buffer > 0 ? `${fmt(state.buffer)} de buffer restent sur le compte` : null,
+        `${fmt(state.withdrawn)} déjà retirés`,
+        `${fmt(state.earned)} gagnés depuis le passage financé`,
+      ].filter(Boolean).join(" · ")
     : `${state.blocker} · ${fmt(state.withdrawn)} déjà retirés`;
 
   return (
@@ -431,12 +446,23 @@ function FundedFace({ state, payouts, onAdd, onRemove }) {
             value={`${state.winDays} / ${state.winDaysRequired}`}
           />
         ) : null,
+        state.buffer > 0 ? (
+          <Gauge
+            key="buffer"
+            label="Buffer à conserver"
+            ratio={state.balance / state.buffer}
+            value={`${fmt(state.balance)} / ${fmt(state.buffer)}`}
+          />
+        ) : null,
         state.min > 0 ? (
+          /* Le minimum se compare à ce qui DÉPASSE le buffer, pas au solde :
+             sinon la jauge s'annonce pleine alors que la firme refuserait la
+             demande — c'est exactement le cas qu'elle doit signaler. */
           <Gauge
             key="min"
             label="Minimum de retrait"
-            ratio={state.balance / state.min}
-            value={`${fmt(state.balance)} / ${fmt(state.min)}`}
+            ratio={state.withdrawable / state.min}
+            value={`${fmt(state.withdrawable)} / ${fmt(state.min)}`}
           />
         ) : null,
       ].filter(Boolean)}

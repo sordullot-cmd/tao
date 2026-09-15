@@ -112,12 +112,40 @@ describe("visage « payouts »", () => {
       contract: {
         ...financé,
         payoutDays: 0,
+        // Le matelas d'Apex est mis de côté ici : ce cas ne parle que du double
+        // comptage, et il a sa propre épreuve juste en dessous.
+        payoutBuffer: 0,
         payouts: [{ id: "p1", date: "2026-09-04", amount: 1_000 }],
       },
     });
     // Gagné 1 500, sorti 1 000 : il reste 500 à demander, pas 1 500.
     expect(screen.getByText("$500.00 à retirer")).toBeTruthy();
     expect(screen.getByText(/\$1,000\.00 déjà retirés/)).toBeTruthy();
+  });
+
+  it("ne propose au retrait que ce qui dépasse le matelas de la firme", () => {
+    /* Apex 50k : 2 600 de safety net. Sur 3 200 gagnés, 600 sortent — et la
+       carte doit dire où sont passés les 2 600 autres, sinon le chiffre se lit
+       comme un calcul qui a perdu de l'argent. */
+    renderCard({
+      funded: true,
+      contract: { ...financé, payoutDays: 0 },
+      trades: [{ date: "2026-09-02", pnl: 3_200 }],
+    });
+    expect(screen.getByText("$600.00 à retirer")).toBeTruthy();
+    expect(screen.getByText(/\$2,600\.00 de buffer restent sur le compte/)).toBeTruthy();
+  });
+
+  it("bloque le retrait tant que le matelas n'est pas dépassé", () => {
+    renderCard({
+      funded: true,
+      contract: { ...financé, payoutDays: 0 },
+      trades: [{ date: "2026-09-02", pnl: 2_000 }],
+    });
+    expect(screen.queryByText(/à retirer/)).toBeNull();
+    expect(screen.getByText(/Buffer à conserver pas encore dépassé/)).toBeTruthy();
+    // La jauge dit de combien on est loin, sans avoir à ouvrir les réglages.
+    expect(screen.getByText("$2,000.00 / $2,600.00")).toBeTruthy();
   });
 
   it("dit franchement qu'aucun retrait n'a encore été enregistré", () => {

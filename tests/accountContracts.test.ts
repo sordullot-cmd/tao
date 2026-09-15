@@ -42,6 +42,17 @@ describe("barème des firmes", () => {
     expect(r.source).toBe("firm");
   });
 
+  it("reprend le safety net d'Apex comme matelas à conserver", () => {
+    // Apex le publie en valeur de compte — 52 600 sur un 50k, 103 100 sur un
+    // 100k — soit le drawdown de la taille plus 100 $, ramené ici en profit.
+    expect(resolveAccountRules("apex", 50_000).payoutBuffer).toBe(2_600);
+    expect(resolveAccountRules("apex", 100_000).payoutBuffer).toBe(3_100);
+    // Personne d'autre n'en impose un : un matelas inventé bloquerait un retrait
+    // légitime, ce qui est pire que de ne rien annoncer.
+    expect(resolveAccountRules(null, 50_000).payoutBuffer).toBe(0);
+    expect(resolveAccountRules("topstep", 50_000).payoutBuffer).toBe(0);
+  });
+
   it("ne prête à personne le barème d'une voisine", () => {
     expect(resolveAccountRules("tradeify", 50_000).source).toBe("default");
   });
@@ -144,6 +155,34 @@ describe("retraits d'un compte financé", () => {
     const st = payoutState(trades, financé, topstep);
     expect(st.winDays).toBe(2);
     expect(st.blocker).toBe("Encore 3 jours gagnants");
+  });
+
+  it("laisse le matelas sur le compte au lieu de le proposer au retrait", () => {
+    // +3 200 avec 2 600 de matelas : 600 sortent, et les 2 600 restent là —
+    // demander les 3 200 ferait refuser le payout en entier.
+    const st = payoutState([tr("2026-09-02", 3_200)], financé, plain({ payoutBuffer: 2_600 }));
+    expect(st.buffer).toBe(2_600);
+    expect(st.withdrawable).toBe(600);
+    expect(st.available).toBe(600);
+    expect(st.eligible).toBe(true);
+  });
+
+  it("bloque tant que le matelas n'est pas dépassé, compte en gain ou non", () => {
+    const st = payoutState([tr("2026-09-02", 2_000)], financé, plain({ payoutBuffer: 2_600 }));
+    expect(st.available).toBe(0);
+    expect(st.blocker).toBe("Buffer à conserver pas encore dépassé");
+    // Pile au niveau : le matelas est constitué, mais rien ne le dépasse — une
+    // demande à 0 n'existe pas.
+    const pile = payoutState([tr("2026-09-02", 2_600)], financé, plain({ payoutBuffer: 2_600 }));
+    expect(pile.eligible).toBe(false);
+  });
+
+  it("compare le minimum de retrait à ce qui dépasse le matelas, pas au solde", () => {
+    // 3 000 de solde passeraient le minimum de 500 ; les 400 qui dépassent le
+    // matelas, non.
+    const st = payoutState([tr("2026-09-02", 3_000)], financé, plain({ payoutBuffer: 2_600, payoutMin: 500 }));
+    expect(st.blocker).toBe("Minimum de retrait non atteint");
+    expect(st.available).toBe(0);
   });
 
   it("ne propose rien à retirer quand le compte est en perte", () => {

@@ -39,6 +39,14 @@ export interface AccountRules {
   dailyLoss: number;
   /** Montant minimum d'un retrait sur le compte financé. */
   payoutMin: number;
+  /**
+   * Matelas qui doit RESTER sur le compte financé — le « safety net » d'Apex.
+   * Il se gagne avant de pouvoir demander quoi que ce soit, et il ne part
+   * jamais avec le retrait : seul ce qui le dépasse sort. Le confondre avec le
+   * solde annonce un payout que la firme refuse, et pour le montant entier.
+   * 0 = la firme n'en impose pas.
+   */
+  payoutBuffer: number;
   /** Jours TRADÉS sur le compte financé avant le premier retrait. */
   payoutDays: number;
   /**
@@ -81,13 +89,18 @@ const BOOK: Record<string, FirmBook> = {
     /* Apex n'impose aucun jour minimum sur l'évaluation — c'est ce qui la rend
        passable en une séance, et l'afficher à 5 découragerait pour rien. */
     common: { trailing: true, minDays: 0, payoutDays: 8, payoutMin: 500 },
+    /* `payoutBuffer` est le safety net publié, ramené en profit : Apex l'annonce
+       en valeur de compte (52 600 sur un 50k), et c'est toujours le drawdown de
+       la taille plus 100 $. Il est écrit taille par taille plutôt que calculé —
+       la règle des 100 $ est une régularité observée, pas une promesse de la
+       firme, et une grille corrigée ne doit pas tenir à une formule. */
     sizes: {
-      25_000:  { target: 1_500, maxDD: 1_500 },
-      50_000:  { target: 3_000, maxDD: 2_500 },
-      100_000: { target: 6_000, maxDD: 3_000 },
-      150_000: { target: 9_000, maxDD: 5_000 },
-      250_000: { target: 15_000, maxDD: 6_500 },
-      300_000: { target: 20_000, maxDD: 7_500 },
+      25_000:  { target: 1_500, maxDD: 1_500, payoutBuffer: 1_600 },
+      50_000:  { target: 3_000, maxDD: 2_500, payoutBuffer: 2_600 },
+      100_000: { target: 6_000, maxDD: 3_000, payoutBuffer: 3_100 },
+      150_000: { target: 9_000, maxDD: 5_000, payoutBuffer: 5_100 },
+      250_000: { target: 15_000, maxDD: 6_500, payoutBuffer: 6_600 },
+      300_000: { target: 20_000, maxDD: 7_500, payoutBuffer: 7_600 },
     },
   },
   ftmo: {
@@ -101,7 +114,7 @@ const BOOK: Record<string, FirmBook> = {
 
 const NEUTRAL: Omit<AccountRules, "source"> = {
   target: 0, maxDD: 0, trailing: false, minDays: 0, dailyLoss: 0,
-  payoutMin: 0, payoutDays: 0, payoutWinDays: 0, winDayMin: 0,
+  payoutMin: 0, payoutBuffer: 0, payoutDays: 0, payoutWinDays: 0, winDayMin: 0,
 };
 
 /**
@@ -174,5 +187,6 @@ function scaleFromNearest(book: FirmBook, capital: number): FirmSpec | null {
     target: ref.target != null ? Math.round(ref.target * k) : undefined,
     maxDD: ref.maxDD != null ? Math.round(ref.maxDD * k) : undefined,
     dailyLoss: ref.dailyLoss != null ? Math.round(ref.dailyLoss * k) : undefined,
+    payoutBuffer: ref.payoutBuffer != null ? Math.round(ref.payoutBuffer * k) : undefined,
   };
 }
