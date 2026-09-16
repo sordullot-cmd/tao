@@ -1,147 +1,188 @@
 /**
- * La chaîne de la communication — le domaine de la page du même nom.
+ * Le parcours de communication — le domaine de la page du même nom.
  *
- * ── Le modèle ────────────────────────────────────────────────────────────
- * Parler n'est pas UNE compétence, c'est une chaîne de maillons qui se
- * transmettent le relais :
+ * ── Ce que le plan a d'inhabituel ────────────────────────────────────────
+ * Il refuse de tout travailler en même temps. Huit compétences se perturbent
+ * entre elles : chercher le mot parfait ralentit la phrase, une phrase qui
+ * s'allonge fait accélérer le débit, un débit qui s'emballe empêche d'écouter,
+ * et ne pas écouter coupe le rebond. Les monter ensemble revient à n'en monter
+ * aucune. Le parcours les prend donc DANS L'ORDRE, en dix phases, et une seule
+ * compétence est « celle du jour » à un moment donné.
  *
- *   pensée → formulation → choix des mots → construction de la phrase →
- *   débit → livraison → réaction de l'autre → rebond
+ * C'est la seule chose que ce module impose vraiment, et c'est pour ça qu'elle
+ * est ici plutôt que dans l'interface : la séance du jour se compose à partir
+ * de la PHASE COURANTE, jamais à partir de ce qui va le plus mal. Un programme
+ * qui courrait après la compétence la plus basse reviendrait à travailler les
+ * huit à la fois, par la bande.
  *
- * Quand deux ou trois maillons cèdent, on en conclut « je ne sais pas
- * communiquer », et on s'entraîne donc à tout, c'est-à-dire à rien. La page
- * existe pour rendre la chaîne VISIBLE : on voit lequel casse, on travaille
- * celui-là.
+ * ── La séance, en cinq temps ─────────────────────────────────────────────
+ *   ① échauffement  — élocution, formulation. Toujours, quelle que soit la phase.
+ *   ② compétence    — UNE seule, celle de la phase.
+ *   ③ simulation    — une vraie conversation, avec ses aléas.
+ *   ④ débrief       — ce qui a cloché, nommé précisément.
+ *   ⑤ mission       — dehors. Vérifiée à la séance SUIVANTE, pas cochée le soir
+ *                     même : c'est la seule façon de savoir si ça a été fait.
  *
  * ── Ce que ce module refuse de faire ─────────────────────────────────────
- * Pas de score d'aisance calculé par l'app, pas de badge de « niveau atteint »
- * décerné par un compteur de clics. Aucun de ces chiffres n'existe : ce qui se
- * mesure ici, c'est le VOLUME de pratique (fait / pas fait) et l'auto-note
- * hebdomadaire que l'utilisateur pose lui-même. Un progrès en conversation ne
- * se constate pas dans un navigateur, il se constate en face de quelqu'un —
- * l'app tient le carnet, elle ne remet pas les notes.
+ * Aucun score d'aisance calculé, aucune phase décernée par un compteur de
+ * clics. Ce qui se mesure : le VOLUME de pratique, les FAUTES qu'on se relève
+ * soi-même en débrief, et l'auto-note hebdomadaire. Le progrès en conversation
+ * se constate en face de quelqu'un — l'app tient le carnet, elle ne remet pas
+ * les notes.
  *
- * ── Le moteur : les preuves ──────────────────────────────────────────────
- * « J'attends d'avoir confiance pour parler » ne se réalise jamais. L'ordre
- * inverse, si : je parle → une petite interaction réussit → j'en garde la
- * trace → la trace s'accumule. `preuves` est donc la collection la plus
- * importante du magasin, et pas un journal décoratif.
- *
- * Tout est PUR ici (rien de React, rien du navigateur) pour que chaque règle
- * soit sous test : c'est le seul endroit où une erreur passerait inaperçue —
- * une séance mal composée ressemble à une séance.
+ * Tout est pur ici (rien de React, rien du navigateur) : une séance mal
+ * composée ressemble à une séance, et c'est le genre d'erreur qu'on ne voit
+ * pas à l'écran.
  */
 
 export const COMM_KEY = "tr4de_communication";
 export const COMM_CLOUD_KEY = "communication";
 
-/* ─── Les compétences ────────────────────────────────────────────────────── */
+/* ─── Les huit compétences ───────────────────────────────────────────────── */
+
+/** Le point de départ observé, tel quel : rouge = à construire, orange = amorcé. */
+export type Feu = "rouge" | "orange" | "vert";
 
 export interface Skill {
   id: string;
   label: string;
-  /** Ce que la compétence veut dire, en une phrase qu'on peut se noter. */
+  /** Ce que la compétence veut dire, dans des termes qu'on peut se noter. */
   mesure: string;
-  /** Priorité du diagnostic de départ, de 1 à 5 étoiles. */
-  priorite: number;
+  /** L'état au premier jour. Il ne bouge JAMAIS : c'est la ligne de départ. */
+  depart: Feu;
 }
 
 /**
- * Les neuf compétences, dans l'ordre de la chaîne puis des usages.
+ * Les huit, dans l'ordre où le parcours les prend.
  *
- * Ce sont EXACTEMENT celles de l'auto-évaluation : une compétence qu'on
- * entraîne sans jamais la noter ne se voit pas progresser, et une note qui ne
- * correspond à aucun exercice ne se rattrape pas. Chaque exercice pointe donc
- * vers l'une d'elles, et chacune reçoit au moins un exercice.
+ * Le départ n'est pas une note que l'app aurait calculée : c'est le diagnostic
+ * posé au début, gardé tel quel. Il sert de repère fixe — sans lui, une
+ * auto-note à 5 ne dit pas si l'on vient de 2 ou de 8.
  */
 export const SKILLS: Skill[] = [
-  { id: "debit",        label: "Débit",         mesure: "Je parle à un rythme que l'autre peut suivre, et je m'arrête entre mes idées.", priorite: 5 },
-  { id: "clarte",       label: "Clarté",        mesure: "Mes phrases ont un sujet, une action, une précision — et une idée à la fois.", priorite: 5 },
-  { id: "vocabulaire",  label: "Vocabulaire",   mesure: "Je trouve le mot juste sans le chercher.", priorite: 4 },
-  { id: "fluidite",     label: "Fluidité",      mesure: "Ça sort sans blocage ni béquille (« en fait », « enfin bref »).", priorite: 5 },
-  { id: "conversation", label: "Conversation",  mesure: "Après une réponse, j'ai toujours quelque chose à dire.", priorite: 5 },
-  { id: "storytelling", label: "Storytelling",  mesure: "Mes histoires ont un début, un problème, un moment fort — et une fin.", priorite: 5 },
-  { id: "humour",       label: "Humour",        mesure: "Des associations me viennent sur le moment, et je les dis.", priorite: 3 },
-  { id: "groupe",       label: "Groupe",        mesure: "J'entre dans une conversation à plusieurs au lieu de la regarder.", priorite: 5 },
-  { id: "confiance",    label: "Confiance",     mesure: "Je parle sans attendre d'être sûr que ce sera bien reçu.", priorite: 5 },
+  { id: "clarte",       label: "Clarté",             depart: "rouge",  mesure: "Une idée par phrase, et je termine celle que j'ai commencée." },
+  { id: "debit",        label: "Contrôle du débit",  depart: "rouge",  mesure: "Je ralentis, je pose des pauses, je tolère le silence." },
+  { id: "formulation",  label: "Formulation",        depart: "orange", mesure: "Je prends le mot précis qui me vient, pas le mot parfait que je cherche." },
+  { id: "conversation", label: "Conversation",       depart: "orange", mesure: "Je sais quelle branche prendre, sans chercher un nouveau sujet." },
+  { id: "storytelling", label: "Storytelling",       depart: "rouge",  mesure: "Mes histoires tiennent une direction et une durée." },
+  { id: "groupes",      label: "Groupes",            depart: "rouge",  mesure: "J'entre, je reprends la parole, je fais participer." },
+  { id: "humour",       label: "Humour",             depart: "orange", mesure: "Des associations me viennent sur le moment, et je les dis." },
+  { id: "confiance",    label: "Confiance",          depart: "orange", mesure: "Je parle sans guetter l'approbation." },
 ];
 
 export const skillById = (id: string): Skill | null => SKILLS.find(s => s.id === id) ?? null;
+
+/** Le feu d'une note sur dix. Trois états : un indicateur se lit d'un coup d'œil. */
+export const feuDe = (note: number | null): Feu | null =>
+  note == null ? null : note <= 3 ? "rouge" : note <= 6 ? "orange" : "vert";
 
 /* ─── La chaîne ──────────────────────────────────────────────────────────── */
 
 export interface Maillon {
   label: string;
-  /** La compétence qui tient ce maillon — c'est sa note qui le colore. */
   skill: string;
   /** Ce qui casse ICI, dit avec les mots qu'on emploie quand ça casse. */
   panne: string;
 }
 
 /**
- * Les huit maillons, dans l'ordre où le relais passe.
+ * Les huit maillons du trajet d'une phrase, dans l'ordre du relais.
  *
- * Deux maillons peuvent dépendre de la même compétence (formuler et construire
- * relèvent tous deux de la clarté) : c'est voulu. La chaîne décrit un TRAJET,
- * l'auto-évaluation décrit des aptitudes ; forcer l'une à épouser l'autre
- * aurait fait disparaître soit un maillon qu'on reconnaît, soit une note qu'on
- * sait poser.
+ * La chaîne n'est pas le programme (c'est le rôle des phases) : c'est le
+ * DIAGNOSTIC. Elle dit où le relais tombe, en mots qu'on reconnaît — « je me
+ * dépêche » se reconnaît, « débit : 4/10 » ne se reconnaît pas. Deux maillons
+ * peuvent dépendre de la même compétence : un trajet et une aptitude ne se
+ * découpent pas pareil, et forcer l'un à épouser l'autre ferait disparaître
+ * soit un maillon qu'on vit, soit une note qu'on sait poser.
  */
 export const CHAINE: Maillon[] = [
-  { label: "Pensée",      skill: "conversation", panne: "Je ne sais pas quoi dire." },
-  { label: "Formulation", skill: "clarte",       panne: "Je sais ce que je veux dire, ça sort mal." },
-  { label: "Mots",        skill: "vocabulaire",  panne: "Je cherche le mot." },
-  { label: "Phrase",      skill: "clarte",       panne: "J'empile les idées dans une seule phrase." },
+  { label: "Pensée",      skill: "conversation", panne: "Je ne sais pas quelle branche prendre." },
+  { label: "Formulation", skill: "formulation",  panne: "Je commence une phrase, je la change en route." },
+  { label: "Mots",        skill: "formulation",  panne: "Je cherche le mot parfait." },
+  { label: "Phrase",      skill: "clarte",       panne: "J'empile deux idées dans une seule phrase." },
   { label: "Débit",       skill: "debit",        panne: "Je me dépêche." },
-  { label: "Livraison",   skill: "fluidite",     panne: "Ça bloque, je reprends, je perds le fil." },
+  { label: "Livraison",   skill: "clarte",       panne: "Je reprends depuis le début, je perds le fil." },
   { label: "Réaction",    skill: "confiance",    panne: "Je guette son visage plus que mes mots." },
   { label: "Rebond",      skill: "conversation", panne: "Elle répond, et le vide revient." },
 ];
 
-/* ─── Les niveaux ────────────────────────────────────────────────────────── */
+/* ─── Les dix phases ─────────────────────────────────────────────────────── */
 
-export interface Niveau {
+export interface Phase {
   n: number;
   label: string;
-  /** Ce qu'on cherche à obtenir à ce niveau, et rien d'autre. */
-  vise: string;
+  /** La fenêtre indicative du parcours — un repère, pas une échéance. */
+  semaines: string;
+  /** Les mêmes bornes en nombres, pour situer la semaine courante. */
+  de: number;
+  a: number;
+  /** Ce qu'on cherche à obtenir, et rien d'autre. */
+  objectif: string;
+  /** LA compétence de la phase. Une seule, c'est tout le principe. */
+  skill: string;
+  /** Ce qu'on met volontairement de côté pendant cette phase. */
+  ecarte?: string;
 }
 
-/**
- * Huit niveaux, plus le zéro.
- *
- * L'ordre n'est pas décoratif : l'élégance vient APRÈS la maîtrise. Travailler
- * l'humour ou le charisme sur un instrument qui se dépêche et empile les idées
- * revient à décorer une phrase que personne ne suit. La séquence est donc
- * clarté → fluidité → précision → élégance → spontanéité, et les niveaux la
- * suivent.
- */
-export const NIVEAUX: Niveau[] = [
-  { n: 0, label: "Reconstruire l'instrument", vise: "Ralentir, poser des pauses, respirer avant de répondre." },
-  { n: 1, label: "Construire ses phrases",    vise: "Sujet, action, précision. Une idée par phrase." },
-  { n: 2, label: "Vocabulaire actif",         vise: "Des mots qu'on utilise, pas des mots qu'on reconnaît." },
-  { n: 3, label: "Ne plus jamais être bloqué", vise: "Quatre relances disponibles après n'importe quelle réponse." },
-  { n: 4, label: "Suivre les fils",           vise: "Tirer cinq minutes de conversation d'une seule phrase." },
-  { n: 5, label: "Storytelling",              vise: "L'architecture d'abord : contexte, objectif, problème, moment fort, fin." },
-  { n: 6, label: "Retrouver son humour",      vise: "Associer vite, exagérer, contraster — et le dire sur le moment." },
-  { n: 7, label: "Sortir du mode spectateur", vise: "Entrer UNE fois dans la conversation du groupe. Une phrase suffit." },
-  { n: 8, label: "Maîtrise",                  vise: "Présence, teasing, silences, relancer une discussion morte." },
+export const PHASES: Phase[] = [
+  {
+    n: 1, label: "Clarté", semaines: "Semaines 1–2", de: 1, a: 2, skill: "clarte",
+    objectif: "Parler proprement avant de chercher à parler brillamment.",
+    ecarte: "Le charisme et l'humour attendent. Ils décorent une phrase qu'on ne suit pas encore.",
+  },
+  {
+    n: 2, label: "Contrôle de la parole", semaines: "Semaines 3–4", de: 3, a: 4, skill: "debit",
+    objectif: "Passer de « pensée → panique → parole rapide → correction » à « pensée → pause → phrase → pause ».",
+  },
+  {
+    n: 3, label: "Formulation & vocabulaire", semaines: "Semaines 5–7", de: 5, a: 7, skill: "formulation",
+    objectif: "Choisir un mot, pas accumuler du vocabulaire.",
+    ecarte: "Pas de listes de cinq cents mots : on peut tous les connaître et continuer à chercher les siens.",
+  },
+  {
+    n: 4, label: "Conversation", semaines: "Semaines 8–11", de: 8, a: 11, skill: "conversation",
+    objectif: "Tenir une conversation sans chercher un nouveau sujet : extraire plusieurs conversations d'un seul.",
+  },
+  {
+    n: 5, label: "Parler avec n'importe qui", semaines: "Semaines 12–15", de: 12, a: 15, skill: "conversation",
+    objectif: "Le bavard, le silencieux, l'inconnu, celui que ça n'intéresse pas — et savoir quand s'arrêter.",
+  },
+  {
+    n: 6, label: "Groupes", semaines: "Semaines 16–19", de: 16, a: 19, skill: "groupes",
+    objectif: "Entrer sans attendre le moment parfait, reprendre la parole, faire participer les autres.",
+  },
+  {
+    n: 7, label: "Storytelling", semaines: "Semaines 20–23", de: 20, a: 23, skill: "storytelling",
+    objectif: "Contexte → objectif → problème → escalade → résultat. Court, clair, mémorable.",
+    ecarte: "Le suspense, le rythme, la punchline viennent après la structure — jamais avant.",
+  },
+  {
+    n: 8, label: "Humour & spontanéité", semaines: "Semaines 24–27", de: 24, a: 27, skill: "humour",
+    objectif: "L'humour de conversation : exagérer, taquiner, observer, associer, rappeler, rire de soi.",
+  },
+  {
+    n: 9, label: "Présence & confiance", semaines: "Semaines 28–32", de: 28, a: 32, skill: "confiance",
+    objectif: "Regard, posture, voix, silence, place prise — et ne plus chercher l'approbation.",
+    ecarte: "Ici seulement : des techniques de confiance n'entrent pas dans une tête encore occupée à construire ses phrases.",
+  },
+  {
+    n: 10, label: "Maîtrise", semaines: "Ensuite", de: 33, a: 52, skill: "confiance",
+    objectif: "Tout mélangé, sans correction phrase par phrase. On regarde la conversation entière.",
+  },
 ];
 
-export const NIVEAU_MAX = NIVEAUX.length - 1;
-export const niveauOf = (n: number): Niveau => NIVEAUX[Math.max(0, Math.min(NIVEAU_MAX, Math.round(n)))];
-
-/** Les cinq étages de la progression, du premier au dernier. */
-export const ETAGES = ["Clarté", "Fluidité", "Précision", "Élégance", "Spontanéité"];
+export const PHASE_MIN = 1;
+export const PHASE_MAX = PHASES.length;
+export const phaseOf = (n: number): Phase =>
+  PHASES[Math.max(0, Math.min(PHASE_MAX - 1, Math.round(n) - 1))];
 
 /* ─── Les exercices ──────────────────────────────────────────────────────── */
 
 /**
- * `voix`    — se fait à voix haute, seul. L'app minute et cadence.
- * `ecrit`   — se prépare par écrit dans la page, et se relit plus tard.
- * `terrain` — se fait avec de vraies personnes. L'app ne peut que le rappeler
- *             et en recueillir la preuve ; c'est le seul endroit où le progrès
- *             se joue vraiment.
+ * `voix`    — à voix haute, seul. L'app minute et cadence.
+ * `ecrit`   — se prépare dans la page, et se relit plus tard.
+ * `terrain` — avec de vraies personnes. L'app ne peut que le rappeler et en
+ *             recueillir la preuve ; c'est là que le progrès se joue.
  */
 export type Forme = "voix" | "ecrit" | "terrain";
 
@@ -149,83 +190,73 @@ export interface Drill {
   id: string;
   label: string;
   skill: string;
-  niveau: number;
-  /** Minutes. Volontairement courtes : une séance qu'on saute n'entraîne rien. */
+  /** La phase à laquelle il appartient. 0 = échauffement, disponible toujours. */
+  phase: number;
+  /** Minutes. Courtes : une séance qu'on saute n'entraîne rien. */
   duree: number;
   forme: Forme;
-  /** La consigne, à l'impératif, telle qu'on se la donne. */
   consigne: string;
   /** Le piège de l'exercice — ce qui le rend inutile quand on s'y laisse aller. */
   garde?: string;
-  /** De quoi lancer l'exercice : une réplique, une phrase à réparer, un sujet. */
   matiere?: string[];
-  /** Les cases à remplir quand l'exercice produit un écrit. */
   champs?: string[];
 }
 
-/* La matière est écrite ici, dans le domaine, et pas dans la page : c'est elle
-   qu'on corrigera le plus souvent (une réplique qui ne déclenche rien, une
-   phrase à réparer trop facile), et une donnée qu'on corrige a besoin d'être
-   sous test, pas dans un JSX de 600 lignes. */
+/* Sujets de parole, réutilisés par les exercices d'échauffement : ce qu'on
+   raconte importe moins que la façon dont on le raconte, et un sujet qu'on
+   connaît laisse toute l'attention à la forme. */
+const SUJETS = [
+  "Ce que tu as fait hier.",
+  "Un endroit où tu retournerais demain.",
+  "La dernière fois que tu as changé d'avis.",
+  "Quelque chose que tu sais faire et que peu de gens savent faire.",
+  "Ce qui t'occupe l'esprit en ce moment.",
+  "Un truc que tu recommandes à tout le monde.",
+  "Ce que tu ferais d'une journée entièrement libre.",
+  "La dernière chose qui t'a énervé.",
+  "Une personne que tu admires, et pourquoi.",
+  "Ce que tu comptes faire de ta semaine.",
+];
 
 export const DRILLS: Drill[] = [
+  /* ── Phase 0 : l'échauffement. Il ouvre CHAQUE séance, quelle que soit la
+     phase — c'est l'instrument, et on ne joue pas d'un instrument froid. ── */
   {
-    id: "frein",
-    label: "Le frein",
-    skill: "debit",
-    niveau: 0,
-    duree: 5,
-    forme: "voix",
-    consigne: "Raconte ta journée à voix haute. Une phrase, puis une pause. Une phrase, puis une pause. Interdiction de te dépêcher.",
-    garde: "Ça va sonner artificiel. C'est le but : on crée le contrôle d'abord, on le rendra naturel ensuite.",
+    id: "frein", label: "Le frein", skill: "debit", phase: 0, duree: 5, forme: "voix",
+    consigne: "Raconte le sujet à voix haute. Une phrase, puis une pause. Une phrase, puis une pause. Interdiction de te dépêcher.",
+    garde: "Ça va sonner artificiel. C'est le but : on installe le contrôle d'abord, on le rendra naturel ensuite.",
+    matiere: SUJETS,
   },
   {
-    id: "souffle",
-    label: "Deux secondes avant",
-    skill: "debit",
-    niveau: 0,
-    duree: 3,
-    forme: "voix",
-    consigne: "Lis la question, laisse passer les deux secondes, puis réponds à voix haute. Le silence avant la réponse t'appartient.",
-    garde: "Deux secondes de silence paraissent dix quand c'est toi qui les tiens. Personne d'autre ne les remarque.",
+    id: "sans-bequille", label: "Sans béquille", skill: "formulation", phase: 0, duree: 4, forme: "voix",
+    consigne: "90 secondes sur le sujet, sans « en fait », « du coup », « genre », « enfin bref ». À chaque béquille : tu t'arrêtes, tu respires, tu reprends la phrase depuis son début.",
+    garde: "Le silence qui remplace la béquille n'est pas un trou : c'est le temps que l'autre prend pour te suivre.",
+    matiere: SUJETS,
+  },
+  {
+    id: "lecture", label: "Lecture ralentie", skill: "debit", phase: 0, duree: 4, forme: "voix",
+    consigne: "Lis un paragraphe à voix haute, deux fois moins vite que ton réflexe, en groupant les mots : trois ou quatre à la fois, puis une pause.",
+    garde: "Ralentir n'est pas traîner. On ne change pas la vitesse des mots, on ajoute du blanc entre les groupes.",
+  },
+
+  /* ── Phase 1 : clarté ── */
+  {
+    id: "cinq-reponses", label: "Cinq réponses, trois phrases", skill: "clarte", phase: 1, duree: 10, forme: "voix",
+    consigne: "Réponds à voix haute en TROIS phrases maximum. Puis passe à la question suivante. Cinq en tout.",
+    garde: "Interdiction de recommencer une phrase parce qu'elle n'est pas parfaite. Tu continues. Une phrase « suffisamment bonne » est une phrase réussie.",
     matiere: [
       "Tu fais quoi dans la vie ?",
       "C'était comment ton week-end ?",
       "Tu écoutes quoi en ce moment ?",
-      "Qu'est-ce qui t'a occupé cette semaine ?",
-      "Tu connais du monde ici ?",
-      "T'aimes bien ce que tu fais ?",
+      "Qu'est-ce qui t'occupe cette semaine ?",
+      "Tu aimes bien ce que tu fais ?",
       "T'as des projets cet été ?",
+      "Tu connais du monde ici ?",
       "Raconte-moi un truc.",
     ],
   },
   {
-    id: "sans-bequille",
-    label: "Sans béquille",
-    skill: "fluidite",
-    niveau: 0,
-    duree: 4,
-    forme: "voix",
-    consigne: "Parle du sujet pendant 90 secondes sans « en fait », « du coup », « genre », « enfin bref ». À chaque béquille : tu t'arrêtes, tu respires, tu reprends la phrase depuis son début.",
-    garde: "Le silence qui remplace la béquille n'est pas un trou : c'est le temps que l'autre prend pour te suivre. Les béquilles ne comblent pas un vide, elles le signalent.",
-    matiere: [
-      "Ce que tu as fait ce week-end.",
-      "Un endroit où tu retournerais demain.",
-      "Quelque chose que tu sais faire et que peu de gens savent faire.",
-      "La dernière fois que tu as changé d'avis.",
-      "Un truc que tu recommandes à tout le monde.",
-      "Ce qui t'occupe l'esprit en ce moment.",
-      "Une personne que tu admires, et pourquoi.",
-      "Ce que tu ferais d'une journée entièrement libre.",
-    ],
-  },
-  {
-    id: "reparer",
-    label: "Sujet, action, précision",
-    skill: "clarte",
-    niveau: 1,
-    duree: 5,
-    forme: "ecrit",
+    id: "reparer", label: "Sujet, action, précision", skill: "clarte", phase: 1, duree: 8, forme: "ecrit",
     consigne: "Voici une phrase qui empile. Réécris-la en trois phrases simples, puis dis-les à voix haute.",
     garde: "Simple ne veut pas dire pauvre. Phrase simple + idée claire bat toujours phrase compliquée + confuse.",
     champs: ["Première phrase", "Deuxième phrase", "Troisième phrase"],
@@ -234,225 +265,439 @@ export const DRILLS: Drill[] = [
       "Du coup le prof il a dit qu'il fallait rendre le truc mais genre personne savait en vrai donc voilà on a fait comme on a pu.",
       "J'ai vu un film hier soir enfin c'était pas vraiment un film c'était plutôt une série mais bon c'était bien quoi.",
       "On devait partir tôt mais comme mon frère était pas prêt et qu'en plus il pleuvait ben finalement on est parti super tard et c'était mort.",
-      "Il m'a raconté un truc de ouf hier mais en vrai je crois qu'il exagère un peu parce que son frère m'avait dit autre chose enfin bref.",
-      "J'aimerais bien faire du sport mais j'ai pas trop le temps en ce moment avec les cours et tout donc je me dis que je verrai plus tard.",
       "La soirée était bien mais y'avait trop de monde et en plus la musique était nulle donc on est parti mais avant on a croisé Paul.",
-      "Franchement ce jeu il est bien mais le problème c'est que les serveurs marchent jamais et du coup ben tu peux pas jouer avec tes potes.",
+      "J'aimerais bien faire du sport mais j'ai pas trop le temps en ce moment avec les cours et tout donc je me dis que je verrai plus tard.",
     ],
   },
+
+  /* ── Phase 2 : contrôle de la parole ── */
   {
-    id: "trois-phrases",
-    label: "En trois phrases",
-    skill: "clarte",
-    niveau: 1,
-    duree: 4,
-    forme: "voix",
-    consigne: "Résume à voix haute en EXACTEMENT trois phrases. Pas quatre. Tu t'arrêtes même si tu n'as pas tout dit.",
-    garde: "Ce qui reste dehors n'est pas perdu : c'est ce qui rendait le récit illisible.",
+    id: "trente-secondes", label: "Trois secondes, puis trente", skill: "debit", phase: 2, duree: 10, forme: "voix",
+    consigne: "Trois secondes de réflexion — tu ne parles pas. Puis trente secondes de réponse, pas plus.",
+    garde: "Le but n'est pas de remplir les trente secondes. Le silence est autorisé : s'arrêter à quinze est une bonne réponse.",
+    matiere: SUJETS,
+  },
+  {
+    id: "groupes-de-mots", label: "Groupes de mots", skill: "debit", phase: 2, duree: 8, forme: "voix",
+    consigne: "Raconte le sujet en découpant : trois ou quatre mots, une respiration, trois ou quatre mots. Tu entends où tombent tes pauses.",
+    garde: "Une pause posée exprès ne s'entend pas comme une hésitation. C'est l'hésitation qu'elle remplace.",
+    matiere: SUJETS,
+  },
+
+  /* ── Phase 3 : formulation & vocabulaire ── */
+  {
+    id: "mot-juste", label: "Lequel exactement ?", skill: "formulation", phase: 3, duree: 10, forme: "ecrit",
+    consigne: "Voici une phrase générique. Écris ce que tu voulais VRAIMENT dire, avec le mot précis — puis la phrase entière, corrigée.",
+    garde: "On ne cherche pas un mot rare. On cherche celui qui correspond à ton idée : « complexe » et « stimulant » ne disent pas la même chose.",
+    champs: ["Le mot précis", "La phrase corrigée"],
     matiere: [
-      "Ta journée d'hier.",
-      "La dernière vidéo que tu as regardée en entier.",
-      "Ce que tu fais dans la vie, pour quelqu'un qui n'y connaît rien.",
-      "Le dernier film ou la dernière série que tu as vus.",
-      "Ce à quoi tu as pensé en te levant ce matin.",
-      "Le dernier truc qui t'a énervé.",
-      "Ton week-end dernier.",
-      "Ce que tu comptes faire de ta semaine.",
+      "« C'est vachement intéressant. » — intéressant comment ? fascinant, complexe, stimulant, imprévisible, technique ?",
+      "« C'était un truc de fou. » — inattendu, absurde, spectaculaire, gênant, inespéré ?",
+      "« Il est bizarre. » — imprévisible, distant, excentrique, mal à l'aise, insaisissable ?",
+      "« C'était bien. » — reposant, marquant, drôle, réussi, plus simple que prévu ?",
+      "« J'ai trouvé ça nul. » — bâclé, prévisible, prétentieux, interminable, sans enjeu ?",
+      "« Il est trop fort. » — précis, rapide, endurant, inventif, imperturbable ?",
     ],
   },
   {
-    id: "mot",
-    label: "Le mot du jour",
-    skill: "vocabulaire",
-    niveau: 2,
-    duree: 5,
-    forme: "ecrit",
-    consigne: "Un mot, cinq cases. Le mot n'est à toi que le jour où tu l'auras placé dans une vraie conversation.",
-    garde: "Apprendre des listes ne sert à rien : on peut connaître cinq cents mots et continuer à chercher les siens.",
+    id: "mot", label: "Le mot de la semaine", skill: "formulation", phase: 3, duree: 6, forme: "ecrit",
+    consigne: "Un mot, ses cases. Dix par semaine, chacun avec une phrase à toi. Le mot n'est à toi que le jour où tu l'auras placé dans une vraie conversation.",
+    garde: "Le mot passe par quatre états : reconnu, compris, utilisé, automatique. Seuls les deux derniers comptent.",
     champs: ["Le mot", "Définition", "Synonymes", "Contraire", "Une phrase à moi", "La réplique où je le placerai"],
   },
+
+  /* ── Phase 4 : conversation ── */
   {
-    id: "relances",
-    label: "Les quatre relances",
-    skill: "conversation",
-    niveau: 3,
-    duree: 5,
-    forme: "ecrit",
-    consigne: "Quelqu'un vient de dire ça. Écris les quatre relances possibles. Tu n'as pas à trouver un sujet : il vient de t'en donner un.",
+    id: "branches", label: "Les cinq branches", skill: "conversation", phase: 4, duree: 10, forme: "ecrit",
+    consigne: "Quelqu'un vient de dire ça. Écris une question par branche : le sujet, son rapport personnel, une expérience, toi, le social autour.",
+    garde: "Tu n'as pas besoin de connaître deux cents sujets. Tu dois savoir tirer cinq conversations d'un seul.",
+    champs: ["Sujet — depuis quand, quel niveau ?", "Personnel — pourquoi il aime ça ?", "Expérience — la meilleure anecdote ?", "Toi — ce que ça t'évoque", "Social — les gens autour"],
+    matiere: [
+      "« Je fais du foot. »",
+      "« J'ai commencé la boxe récemment. »",
+      "« Je bosse dans une agence. »",
+      "« Je me suis remis à la guitare. »",
+      "« Je pars en Espagne cet été. »",
+      "« On a adopté un chat. »",
+      "« Je prépare un concours en parallèle. »",
+      "« J'ai déménagé en septembre. »",
+    ],
+  },
+  {
+    id: "relances", label: "Les quatre relances", skill: "conversation", phase: 4, duree: 8, forme: "ecrit",
+    consigne: "Quelqu'un vient de dire ça. Écris les quatre relances. Tu n'as pas à trouver un sujet : il vient de t'en donner un.",
     garde: "Quatre portes ouvertes valent mieux qu'une réplique parfaite. On s'entraîne à les voir, pas à choisir.",
     champs: ["Approfondir — pourquoi ?", "Explorer — comment ça s'est passé ?", "Réagir — ah ouais, sérieux ?", "Associer — ça me fait penser à…"],
     matiere: [
-      "J'ai commencé la boxe récemment.",
-      "Je suis parti en Espagne cet été.",
       "J'ai changé de boulot il y a deux mois.",
-      "Je me suis remis à la guitare.",
-      "J'ai déménagé en septembre.",
       "J'ai passé le week-end chez mes parents.",
       "Je dors très mal en ce moment.",
       "J'ai arrêté les réseaux depuis un mois.",
-      "On a adopté un chat.",
-      "Je prépare un concours en parallèle.",
       "J'ai revu un pote que j'avais pas vu depuis dix ans.",
       "Je me suis mis à cuisiner.",
+      "J'ai racheté un vieux vélo.",
+      "Je me lève à 5 h en ce moment.",
     ],
   },
+
+  /* ── Phase 5 : parler avec n'importe qui ── */
   {
-    id: "fil",
-    label: "Le fil",
-    skill: "conversation",
-    niveau: 4,
-    duree: 5,
-    forme: "ecrit",
-    consigne: "Pars de cette phrase et écris cinq maillons : chaque sujet naît du précédent. Sport → vacances → Espagne → nourriture → cuisine.",
-    garde: "Une bonne conversation n'a pas de sujet principal, elle a des associations. Sauter n'est pas se perdre.",
-    champs: ["1 →", "2 →", "3 →", "4 →", "5 →"],
+    id: "profils", label: "Le profil du jour", skill: "conversation", phase: 5, duree: 10, forme: "ecrit",
+    consigne: "Prépare trois phrases pour ce profil précis : une pour entrer, une pour tenir, une pour sortir proprement.",
+    garde: "Reconnaître qu'il faut s'arrêter est une compétence, pas un échec. Forcer une conversation morte en crée une mauvaise.",
+    champs: ["Pour entrer", "Pour tenir", "Pour sortir"],
     matiere: [
-      "« Je suis parti en Espagne cet été. »",
-      "« J'ai mangé dans un endroit incroyable hier. »",
-      "« Je me lève à 5 h en ce moment. »",
-      "« Mon frère vient d'avoir son permis. »",
-      "« J'ai vu un documentaire sur les fonds marins. »",
-      "« Il pleut depuis trois jours. »",
-      "« J'ai racheté un vieux vélo. »",
-      "« Je bosse avec quelqu'un d'insupportable. »",
+      "Quelqu'un de très bavard : tu dois reprendre la parole sans le couper brutalement.",
+      "Quelqu'un de très silencieux : tu dois créer la matière toi-même.",
+      "Quelqu'un de passionnant : tu dois approfondir au lieu de sauter d'un sujet à l'autre.",
+      "Un inconnu complet : tu dois créer une connexion en deux minutes.",
+      "Quelqu'un que ça n'intéresse visiblement pas : tu dois savoir conclure.",
+      "Quelqu'un qui te met mal à l'aise : tu dois rester, sans te rétracter.",
     ],
   },
+
+  /* ── Phase 6 : groupes ── */
   {
-    id: "histoire",
-    label: "L'histoire en cinq temps",
-    skill: "storytelling",
-    niveau: 5,
-    duree: 8,
-    forme: "ecrit",
-    consigne: "Prends une chose qui t'est vraiment arrivée. Range-la en cinq temps, puis raconte-la à voix haute en moins de 90 secondes.",
-    garde: "L'architecture avant le style. Trop de détails, trop vite, et l'histoire n'existe plus — même quand elle est bonne.",
-    champs: ["Contexte — où, quand ?", "Objectif — je voulais quoi ?", "Problème — qu'est-ce qui a mal tourné ?", "Moment fort", "Fin — et alors ?"],
-  },
-  {
-    id: "association",
-    label: "Association express",
-    skill: "humour",
-    niveau: 6,
-    duree: 3,
-    forme: "voix",
-    consigne: "Lis la réplique. Dix secondes pour répondre à voix haute par une exagération, un contraste ou une observation. Ce qui sort, sort.",
-    garde: "On n'entraîne pas des blagues préparées, on entraîne la vitesse d'association. « Quatre heures ? Donc t'es encore dans la journée d'hier. »",
-    matiere: [
-      "J'ai dormi quatre heures.",
-      "J'ai mangé trois fois au kebab cette semaine.",
-      "Je suis arrivé en retard, encore.",
-      "J'ai passé six heures sur un jeu hier.",
-      "Ma batterie est à 2 %.",
-      "J'ai fait deux pas dehors et il s'est mis à pleuvoir.",
-      "Je répète le même week-end depuis un mois.",
-      "J'ai acheté un tapis de course, il sert à rien.",
-      "Mon chat me réveille à 4 h tous les jours.",
-      "J'ai oublié pourquoi j'ai ouvert le frigo.",
-    ],
-  },
-  {
-    id: "entrer",
-    label: "Entrer une fois",
-    skill: "groupe",
-    niveau: 2,
-    duree: 0,
-    forme: "terrain",
-    consigne: "Aujourd'hui, une seule mission : entrer UNE fois dans une conversation de groupe. Une phrase suffit.",
-    garde: "L'objectif n'est pas de prendre le groupe. C'est d'y être entré une fois — le reste s'ajoute tout seul, plus tard.",
+    id: "entrer", label: "Entrer une fois", skill: "groupes", phase: 6, duree: 0, forme: "terrain",
+    consigne: "Une seule mission : entrer UNE fois dans une conversation de groupe. Une phrase suffit.",
+    garde: "Le moment parfait n'arrive pas. Une phrase posée trop tôt vaut mieux qu'une phrase parfaite jamais dite.",
     matiere: [
       "« Vous parliez de quoi ? »",
       "« Attends, j'ai pas suivi — il s'est passé quoi ? »",
       "« Et toi, tu le connais comment ? »",
-      "« Ah oui, je vois. » (puis tu écoutes)",
       "« Raconte, ça m'intéresse. »",
       "« Ça s'est fini comment, du coup ? »",
     ],
   },
   {
-    id: "preuve",
-    label: "La preuve du jour",
-    skill: "confiance",
-    niveau: 0,
-    duree: 0,
-    forme: "terrain",
-    consigne: "Note une interaction qui s'est bien passée aujourd'hui, même minuscule. Une phrase placée, une question posée, un silence tenu.",
+    id: "reprendre", label: "Reprendre la parole", skill: "groupes", phase: 6, duree: 8, forme: "ecrit",
+    consigne: "Tu as dit une phrase, les autres ont réagi, et tu as disparu. Écris la phrase qui te fait REVENIR dans l'échange trente secondes plus tard.",
+    garde: "Disparaître après une intervention annule l'intervention. On n'entre pas pour dire une chose, on entre pour rester.",
+    champs: ["Ma première phrase", "Ce que les autres répondent", "Ma phrase pour revenir"],
+    matiere: [
+      "Le groupe parle d'un film que tu n'as pas vu.",
+      "Deux personnes racontent un souvenir commun où tu n'étais pas.",
+      "Quelqu'un vient d'arriver et tout le monde le connaît sauf toi.",
+      "La conversation est sur un sujet technique que tu connais bien.",
+      "On parle d'un endroit où tu es allé.",
+    ],
+  },
+  {
+    id: "dynamique", label: "Faire participer", skill: "groupes", phase: 6, duree: 0, forme: "terrain",
+    consigne: "Aujourd'hui, renvoie une question à quelqu'un qui n'a rien dit : « et toi, t'en penses quoi ? »",
+    garde: "Créer la dynamique d'un groupe donne une place plus sûre que la prendre. Celui qui fait parler les autres est au centre sans avoir à s'y mettre.",
+  },
+
+  /* ── Phase 7 : storytelling ── */
+  {
+    id: "histoire", label: "L'histoire en cinq temps", skill: "storytelling", phase: 7, duree: 10, forme: "ecrit",
+    consigne: "Une chose qui t'est vraiment arrivée, rangée en cinq temps. Puis raconte-la à voix haute en moins de 90 secondes.",
+    garde: "L'architecture avant le style. Trop de détails, trop vite, et l'histoire n'existe plus — même quand elle est bonne.",
+    champs: ["Contexte — où, quand ?", "Objectif — je voulais quoi ?", "Problème — qu'est-ce qui a mal tourné ?", "Escalade — ça empire comment ?", "Résultat — et alors ?"],
+  },
+  {
+    id: "elaguer", label: "Élaguer", skill: "storytelling", phase: 7, duree: 8, forme: "voix",
+    consigne: "Raconte une histoire que tu connais en 60 secondes. Puis la même en 30. Puis en 15.",
+    garde: "Ce qui tombe entre 60 et 15 secondes, c'est exactement ce qui rendait l'histoire illisible.",
+    matiere: [
+      "La dernière fois que tu as été en retard.",
+      "Une rencontre inattendue.",
+      "Un truc qui a mal tourné et qui fait rire après coup.",
+      "La dernière fois que tu t'es trompé de bout en bout.",
+      "Un souvenir de vacances.",
+    ],
+  },
+
+  /* ── Phase 8 : humour ── */
+  {
+    id: "levier", label: "Le levier du jour", skill: "humour", phase: 8, duree: 8, forme: "voix",
+    consigne: "Lis la réplique, applique le levier, dis ta réponse à voix haute en moins de dix secondes.",
+    garde: "On n'entraîne pas des blagues préparées, on entraîne la vitesse d'association. « Quatre heures ? Donc t'es encore dans la journée d'hier. »",
+    matiere: [
+      "EXAGÉRATION — « On a séché les maths. » → pousse le trait jusqu'à l'absurde.",
+      "TAQUINERIE — « On a encore perdu 5-0. » → moque gentiment, sans viser ce qui fait mal.",
+      "OBSERVATION — dis ce que tout le monde voit et que personne n'a formulé.",
+      "ASSOCIATION — « J'ai dormi quatre heures. » → rapproche ça d'autre chose, d'inattendu.",
+      "CALLBACK — reprends une information donnée cinq minutes plus tôt.",
+      "AUTODÉRISION — ris de toi sans te dévaloriser : la nuance est que tu restes debout.",
+    ],
+  },
+
+  /* ── Phase 9 : présence & confiance ── */
+  {
+    id: "silence", label: "Tenir le silence", skill: "confiance", phase: 9, duree: 6, forme: "voix",
+    consigne: "Réponds au sujet, puis TAIS-TOI trois secondes pleines avant d'ajouter quoi que ce soit. Compte-les.",
+    garde: "Parler pour combler un silence est la façon la plus sûre de perdre le fil. Trois secondes paraissent dix quand c'est toi qui les tiens ; personne d'autre ne les remarque.",
+    matiere: SUJETS,
+  },
+  {
+    id: "sans-approbation", label: "Sans chercher l'accord", skill: "confiance", phase: 9, duree: 0, forme: "terrain",
+    consigne: "Aujourd'hui, dis un avis sans le terminer par « non ? », « tu vois ? », « enfin je sais pas ».",
+    garde: "Ces trois mots demandent la permission d'avoir parlé. Les retirer ne rend pas arrogant : ça rend clair.",
+  },
+
+  /* ── Terrain, disponible à toute phase ── */
+  {
+    id: "preuve", label: "La preuve du jour", skill: "confiance", phase: 0, duree: 0, forme: "terrain",
+    consigne: "Note une interaction qui s'est bien passée aujourd'hui, même minuscule : une phrase placée, une question posée, un silence tenu.",
     garde: "La confiance ne précède pas la prise de parole, elle la suit. Ce carnet est l'endroit où la preuve s'accumule.",
   },
 ];
 
 export const drillById = (id: string): Drill | null => DRILLS.find(d => d.id === id) ?? null;
-export const drillsDuNiveau = (n: number): Drill[] => DRILLS.filter(d => d.niveau === n);
+export const drillsDeLaPhase = (n: number): Drill[] => DRILLS.filter(d => d.phase === n);
+
+/* ─── Les simulations ────────────────────────────────────────────────────── */
+
+/**
+ * Une conversation jouée, tour par tour.
+ *
+ * L'app ne peut pas improviser une réponse à ce qu'on vient de dire — elle ne
+ * l'entend pas. Elle fait donc l'autre chose, celle qui manque le plus quand on
+ * s'entraîne seul : elle DONNE LE TOUR SUIVANT sans qu'on sache lequel. On
+ * répond à voix haute, on découvre la réplique d'après, et on enchaîne. C'est
+ * la contrainte de la vraie conversation — répondre à ce qui vient, pas à ce
+ * qu'on avait préparé.
+ */
+export interface Simulation {
+  id: string;
+  titre: string;
+  /** À qui on a affaire : c'est ça qui rend la scène jouable. */
+  profil: string;
+  contexte: string;
+  phase: number;
+  consigne: string;
+  /** Les répliques de l'autre, dans l'ordre. On les découvre une par une. */
+  tours: string[];
+}
+
+export const SIMULATIONS: Simulation[] = [
+  {
+    id: "inconnu-soiree", titre: "Un inconnu, en soirée", profil: "Quelqu'un que tu ne connais pas, plutôt ouvert", phase: 1,
+    contexte: "Tu es adossé au plan de travail de la cuisine. Quelqu'un se sert un verre à côté de toi.",
+    consigne: "Trois phrases maximum par réponse. Tu ne recommences pas une phrase.",
+    tours: [
+      "« Franchement, cette soirée est morte. »",
+      "« Ouais… t'es venu avec qui ? »",
+      "« Ah ok. Et tu fais quoi sinon, dans la vie ? »",
+      "« Intéressant. Moi je suis dans la logistique, c'est moins glamour. »",
+      "« Bon, je vais refaire un tour. À tout à l'heure ! »",
+    ],
+  },
+  {
+    id: "bavard", titre: "Le bavard", profil: "Quelqu'un qui parle beaucoup et ne laisse pas de blanc", phase: 5,
+    contexte: "Il raconte son week-end depuis quatre minutes. Tu n'as encore rien dit.",
+    consigne: "Reprends la parole SANS le couper brutalement : accroche-toi à un détail qu'il vient de donner.",
+    tours: [
+      "« …et donc on arrive là-bas, il y avait un monde pas possible, mais genre vraiment, tu vois le truc ? »",
+      "« Voilà exactement ! Et après on a voulu manger, sauf que tout était plein, donc on a fini au kebab. »",
+      "« Ah mais complètement. Bref. Et toi alors, t'as fait quoi ? »",
+      "« Ah ouais ? Raconte. »",
+    ],
+  },
+  {
+    id: "silencieux", titre: "Le silencieux", profil: "Quelqu'un qui répond en trois mots", phase: 5,
+    contexte: "Vous attendez tous les deux. Il n'a pas l'air pressé de parler.",
+    consigne: "Crée la matière toi-même : donne avant de demander, et évite les questions fermées.",
+    tours: ["« Ouais. »", "« Ça va. »", "« Mouais, ça dépend des jours. »", "« Ah, ça oui. »", "« Ouais, pas faux. »"],
+  },
+  {
+    id: "groupe-en-cours", titre: "Un groupe qui parle déjà", profil: "Trois personnes, une conversation lancée", phase: 6,
+    contexte: "Tu arrives avec ton verre. Ils parlent depuis un moment, personne ne se retourne.",
+    consigne: "Entre une fois. Puis REVIENS trente secondes plus tard — disparaître après une phrase annule la phrase.",
+    tours: [
+      "PAUL : « …et il l'a fait sans prévenir personne, tu vois le genre. »",
+      "LÉA : « Bah c'est exactement ce que je disais la semaine dernière. »",
+      "PAUL (se tourne vers toi) : « Tu connais Marc, toi ? »",
+      "SAMI : « Ah, tiens. Et t'en penses quoi alors ? »",
+      "LÉA : « Ouais, c'est pas faux. »",
+    ],
+  },
+  {
+    id: "desaccord", titre: "Quelqu'un n'est pas d'accord", profil: "Quelqu'un de direct, qui te contredit", phase: 10,
+    contexte: "Tu viens de donner ton avis. Il n'est pas du même.",
+    consigne: "Tu tiens ta position sans la durcir et sans chercher son approbation. Une idée par phrase.",
+    tours: [
+      "« Non mais là franchement je suis pas d'accord du tout. »",
+      "« Ouais enfin, ça marche peut-être pour toi, mais pour la plupart des gens non. »",
+      "« Mmh. Explique, parce que là je te suis pas. »",
+      "« Ok, vu comme ça, c'est plus clair. »",
+    ],
+  },
+  {
+    id: "histoire-a-cinq", titre: "Raconter devant cinq personnes", profil: "Un groupe qui t'écoute, et qui peut décrocher", phase: 7,
+    contexte: "Quelqu'un vient de dire « raconte-leur l'histoire du magasin ». Tout le monde se tourne vers toi.",
+    consigne: "Contexte → objectif → problème → escalade → résultat. 90 secondes maximum.",
+    tours: [
+      "« Vas-y, raconte ! »",
+      "(quelqu'un regarde son téléphone — accélère vers le problème)",
+      "« Attends, attends — donc t'y étais allé pour quoi au départ ? »",
+      "(rires) « Et alors ?! »",
+      "« Ahah, énorme. »",
+    ],
+  },
+  {
+    id: "pas-interesse", titre: "Ça ne l'intéresse pas", profil: "Quelqu'un de poli, mais ailleurs", phase: 5,
+    contexte: "Il regarde par-dessus ton épaule depuis deux minutes.",
+    consigne: "Repère le signal, et conclus proprement. S'arrêter à temps est une compétence, pas un échec.",
+    tours: ["« Ah ouais, d'accord. »", "(sourit, regarde ailleurs) « Hm. »", "« Ouais ouais. »", "« Excuse-moi, je vais aller dire bonjour à quelqu'un. »"],
+  },
+];
+
+export const simulationById = (id: string): Simulation | null => SIMULATIONS.find(s => s.id === id) ?? null;
+
+/* ─── Les fautes du débrief ──────────────────────────────────────────────── */
+
+export interface Faute {
+  id: string;
+  label: string;
+  skill: string;
+}
+
+/**
+ * Ce qu'on se relève à soi-même après une simulation.
+ *
+ * L'app n'entend pas la séance : elle ne peut pas corriger. Elle fournit donc
+ * la GRILLE — les fautes précises observées au départ, formulées de façon
+ * reconnaissable — et c'est celui qui vient de parler qui coche. Cochées séance
+ * après séance, elles disent quelque chose qu'aucune auto-note ne dit : ce qui
+ * revient LE PLUS SOUVENT, et donc ce qui mérite la prochaine phase.
+ */
+export const FAUTES: Faute[] = [
+  { id: "accelere",     label: "J'ai accéléré",                                 skill: "debit" },
+  { id: "comble",       label: "J'ai parlé pour combler un silence",            skill: "debit" },
+  { id: "recommence",   label: "J'ai recommencé une phrase en cours de route",  skill: "formulation" },
+  { id: "mot-parfait",  label: "J'ai cherché le mot parfait",                   skill: "formulation" },
+  { id: "generique",    label: "Je suis resté dans le générique (truc, chose)", skill: "formulation" },
+  { id: "deux-idees",   label: "J'ai mis deux idées dans une phrase",           skill: "clarte" },
+  { id: "trop-long",    label: "J'ai développé trop longtemps",                 skill: "clarte" },
+  { id: "pas-relance",  label: "Je n'ai pas relancé sur ce qu'il a donné",      skill: "conversation" },
+  { id: "change-sujet", label: "J'ai changé de sujet trop vite",                skill: "conversation" },
+  { id: "spectateur",   label: "Je suis resté spectateur",                      skill: "groupes" },
+  { id: "parti-partout", label: "Mon histoire est partie dans tous les sens",   skill: "storytelling" },
+  { id: "approbation",  label: "J'ai cherché l'approbation",                    skill: "confiance" },
+];
+
+export const fauteById = (id: string): Faute | null => FAUTES.find(f => f.id === id) ?? null;
+
+/* ─── Les missions ───────────────────────────────────────────────────────── */
+
+/**
+ * Ce qui se passe DEHORS, et qui se vérifie à la séance suivante.
+ *
+ * Une mission cochée le soir même par celui qui se l'est donnée ne prouve rien.
+ * Reportée d'un jour, la question « tu l'as faite ? » se pose autrement : on
+ * répond à ce qui a eu lieu, pas à ce qu'on espérait faire.
+ */
+export const MISSIONS: Record<number, string[]> = {
+  1: [
+    "Réponds à une vraie question en trois phrases, puis arrête-toi.",
+    "Une conversation entière sans recommencer une seule phrase.",
+  ],
+  2: [
+    "Laisse deux secondes de silence avant de répondre à quelqu'un, une fois.",
+    "Dans une conversation, parle une fois moitié moins vite que ton réflexe.",
+  ],
+  3: [
+    "Remplace un « intéressant » ou un « truc » par le mot exact, à voix haute.",
+    "Place un des mots de ta liste dans une vraie conversation.",
+  ],
+  4: [
+    "Relance trois fois sur un détail que l'autre a donné, sans changer de sujet.",
+    "Tire cinq minutes de conversation d'une seule phrase qu'on t'a dite.",
+  ],
+  5: [
+    "Parle à quelqu'un que tu ne connais pas, deux minutes.",
+    "Repère quelqu'un qui n'a pas envie de parler, et conclus proprement.",
+  ],
+  6: [
+    "Entre une fois dans une conversation de groupe. Une phrase suffit.",
+    "Reviens une deuxième fois dans la même conversation de groupe.",
+    "Renvoie une question à quelqu'un qui n'a rien dit.",
+  ],
+  7: [
+    "Raconte une histoire en moins de 90 secondes, à une personne.",
+    "Raconte une histoire devant au moins trois personnes.",
+  ],
+  8: [
+    "Dis une association drôle sur le moment, même moyenne. Le timing compte plus que la blague.",
+    "Reprends une info donnée plus tôt dans la conversation (callback).",
+  ],
+  9: [
+    "Donne un avis sans « non ? », « tu vois ? », « enfin je sais pas ».",
+    "Tiens trois secondes de silence au milieu d'un échange, sans le combler.",
+  ],
+  10: [
+    "Une conversation entière sans rien surveiller. Tu regarderas après.",
+    "Raconte quelque chose à un groupe, sans préparation.",
+  ],
+};
 
 /* ─── Le magasin ─────────────────────────────────────────────────────────── */
 
-export interface Fait {
-  id: string;
-  /** Jour, `AAAA-MM-JJ`. */
-  date: string;
-  drillId: string;
-}
-
-export interface Preuve {
-  id: string;
-  date: string;
-  texte: string;
-  /** La compétence que cette preuve atteste, si on a su le dire. */
-  skill?: string | null;
-}
+export interface Fait { id: string; date: string; drillId: string }
+export interface Preuve { id: string; date: string; texte: string; skill?: string | null }
 
 export interface Mot {
-  id: string;
-  date: string;
-  mot: string;
-  definition: string;
-  synonymes: string;
-  contraire: string;
-  phrase: string;
-  replique: string;
+  id: string; date: string; mot: string; definition: string; synonymes: string;
+  contraire: string; phrase: string; replique: string;
   /** Jour où il a été placé dans une VRAIE conversation. Avant, il n'est pas acquis. */
   utiliseLe: string | null;
 }
 
 export interface Histoire {
-  id: string;
-  date: string;
-  titre: string;
-  contexte: string;
-  objectif: string;
-  probleme: string;
-  momentFort: string;
-  fin: string;
-  /** Nombre de fois qu'elle a été racontée pour de vrai. */
+  id: string; date: string; titre: string;
+  contexte: string; objectif: string; probleme: string; escalade: string; resultat: string;
   racontee: number;
 }
 
 export interface Travail {
-  id: string;
-  date: string;
-  drillId: string;
-  /** La matière tirée ce jour-là — sans elle, les réponses ne veulent rien dire. */
-  matiere: string;
-  reponses: string[];
+  id: string; date: string; drillId: string; matiere: string; reponses: string[];
 }
 
-export interface Evaluation {
-  /** Le lundi de la semaine notée, `AAAA-MM-JJ`. */
-  semaine: string;
-  scores: Record<string, number>;
+export interface Debrief {
+  id: string; date: string;
+  /** Identifiants de FAUTES cochées. La liste vide est une information, pas un vide. */
+  fautes: string[];
+  note: string;
+  /** La simulation jouée ce jour-là, quand il y en avait une. */
+  simulationId?: string | null;
 }
+
+export type StatutMission = "en cours" | "faite" | "ratee";
+
+export interface Mission {
+  id: string; date: string; texte: string; phase: number;
+  statut: StatutMission;
+  /** Jour où l'on a répondu « fait » ou « pas fait » — à la séance suivante. */
+  regleLe: string | null;
+}
+
+export interface Evaluation { semaine: string; scores: Record<string, number> }
 
 export interface CommStore {
-  niveau: number;
+  phase: number;
+  /** Premier jour du parcours. C'est lui qui donne l'échelle de l'année. */
+  debut: string | null;
+  /** Le cap, en une phrase. Ce qu'on veut pouvoir faire dans douze mois. */
+  cap: string;
   faits: Fait[];
   preuves: Preuve[];
   mots: Mot[];
   histoires: Histoire[];
   travaux: Travail[];
+  debriefs: Debrief[];
+  missions: Mission[];
   evaluations: Evaluation[];
 }
 
+/** Le cap par défaut — celui du départ, reformulable à tout moment. */
+export const CAP_DEFAUT =
+  "Entrer dans n'importe quelle conversation, trouver quoi dire, et y rester.";
+
 export const EMPTY_STORE: CommStore = {
-  niveau: 0, faits: [], preuves: [], mots: [], histoires: [], travaux: [], evaluations: [],
+  phase: 1, debut: null, cap: CAP_DEFAUT, faits: [], preuves: [], mots: [],
+  histoires: [], travaux: [], debriefs: [], missions: [], evaluations: [],
 };
 
 const str = (v: unknown): string => (v == null ? "" : String(v));
@@ -462,112 +707,120 @@ const int = (v: unknown, def = 0): number => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n) : def;
 };
+const recent = (a: { date: string }, b: { date: string }) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
 
 /**
  * Le magasin, lisible quelle que soit la forme trouvée.
  *
- * NORMALISÉ à la lecture plutôt que migré : un champ ajouté plus tard prend sa
- * valeur par défaut chez les anciens enregistrements, sans migration ni schéma
- * à décrire (cf. CLAUDE.md, second étage de persistance).
+ * NORMALISÉ à la lecture plutôt que migré (cf. CLAUDE.md) : un champ ajouté
+ * plus tard prend sa valeur par défaut chez les anciens enregistrements. C'est
+ * ce qui permet d'avoir remplacé les neuf « niveaux » de la première version
+ * par dix phases sans rien perdre — une clé `niveau` oubliée dans le magasin
+ * n'empêche simplement plus rien.
  */
 export function normalizeStore(raw: unknown): CommStore {
   const r = (raw || {}) as Record<string, unknown>;
   return {
-    niveau: Math.max(0, Math.min(NIVEAU_MAX, int(r.niveau, 0))),
-    faits: arr(r.faits)
-      .map((v, i) => {
-        const o = (v || {}) as Record<string, unknown>;
-        const date = day(o.date);
-        const drillId = str(o.drillId);
-        if (!date || !drillId) return null;
-        return { id: str(o.id) || `f${date}-${drillId}-${i}`, date, drillId } as Fait;
-      })
-      .filter((v): v is Fait => v !== null),
-    preuves: arr(r.preuves)
-      .map((v, i) => {
-        const o = (v || {}) as Record<string, unknown>;
-        const texte = str(o.texte).trim();
-        if (!texte) return null;
-        return {
-          id: str(o.id) || `p${i}`,
-          date: day(o.date),
-          texte,
-          skill: o.skill ? str(o.skill) : null,
-        } as Preuve;
-      })
-      .filter((v): v is Preuve => v !== null)
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    mots: arr(r.mots)
-      .map((v, i) => {
-        const o = (v || {}) as Record<string, unknown>;
-        const mot = str(o.mot).trim();
-        if (!mot) return null;
-        return {
-          id: str(o.id) || `m${i}`,
-          date: day(o.date),
-          mot,
-          definition: str(o.definition),
-          synonymes: str(o.synonymes),
-          contraire: str(o.contraire),
-          phrase: str(o.phrase),
-          replique: str(o.replique),
-          utiliseLe: o.utiliseLe ? day(o.utiliseLe) : null,
-        } as Mot;
-      })
-      .filter((v): v is Mot => v !== null)
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    histoires: arr(r.histoires)
-      .map((v, i) => {
-        const o = (v || {}) as Record<string, unknown>;
-        const titre = str(o.titre).trim();
-        if (!titre) return null;
-        return {
-          id: str(o.id) || `h${i}`,
-          date: day(o.date),
-          titre,
-          contexte: str(o.contexte),
-          objectif: str(o.objectif),
-          probleme: str(o.probleme),
-          momentFort: str(o.momentFort),
-          fin: str(o.fin),
-          racontee: Math.max(0, int(o.racontee, 0)),
-        } as Histoire;
-      })
-      .filter((v): v is Histoire => v !== null)
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    travaux: arr(r.travaux)
-      .map((v, i) => {
-        const o = (v || {}) as Record<string, unknown>;
-        const drillId = str(o.drillId);
-        if (!drillId) return null;
-        return {
-          id: str(o.id) || `t${i}`,
-          date: day(o.date),
-          drillId,
-          matiere: str(o.matiere),
-          reponses: arr(o.reponses).map(str),
-        } as Travail;
-      })
-      .filter((v): v is Travail => v !== null)
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
-    evaluations: arr(r.evaluations)
-      .map(v => {
-        const o = (v || {}) as Record<string, unknown>;
-        const semaine = day(o.semaine);
-        if (!semaine) return null;
-        const src = (o.scores || {}) as Record<string, unknown>;
-        const scores: Record<string, number> = {};
-        for (const s of SKILLS) {
-          const n = Number(src[s.id]);
-          if (Number.isFinite(n)) scores[s.id] = Math.max(0, Math.min(10, Math.round(n)));
-        }
-        return { semaine, scores } as Evaluation;
-      })
-      .filter((v): v is Evaluation => v !== null)
-      /* Les semaines sont rangées de la plus ANCIENNE à la plus récente : les
-         courbes, les écarts et « la première note » se lisent tous dans ce
-         sens, et le reste du magasin est déjà trié à l'envers pour la raison
-         opposée (on veut le dernier retrait, la dernière preuve). */
+    phase: Math.max(PHASE_MIN, Math.min(PHASE_MAX, int(r.phase, PHASE_MIN))),
+    debut: r.debut ? day(r.debut) : null,
+    cap: str(r.cap).trim() || CAP_DEFAUT,
+    faits: arr(r.faits).map((v, i) => {
+      const o = (v || {}) as Record<string, unknown>;
+      const date = day(o.date);
+      const drillId = str(o.drillId);
+      if (!date || !drillId) return null;
+      return { id: str(o.id) || `f${date}-${drillId}-${i}`, date, drillId } as Fait;
+    }).filter((v): v is Fait => v !== null),
+
+    preuves: arr(r.preuves).map((v, i) => {
+      const o = (v || {}) as Record<string, unknown>;
+      const texte = str(o.texte).trim();
+      if (!texte) return null;
+      return { id: str(o.id) || `p${i}`, date: day(o.date), texte, skill: o.skill ? str(o.skill) : null } as Preuve;
+    }).filter((v): v is Preuve => v !== null).sort(recent),
+
+    mots: arr(r.mots).map((v, i) => {
+      const o = (v || {}) as Record<string, unknown>;
+      const mot = str(o.mot).trim();
+      if (!mot) return null;
+      return {
+        id: str(o.id) || `m${i}`, date: day(o.date), mot,
+        definition: str(o.definition), synonymes: str(o.synonymes), contraire: str(o.contraire),
+        phrase: str(o.phrase), replique: str(o.replique),
+        utiliseLe: o.utiliseLe ? day(o.utiliseLe) : null,
+      } as Mot;
+    }).filter((v): v is Mot => v !== null).sort(recent),
+
+    histoires: arr(r.histoires).map((v, i) => {
+      const o = (v || {}) as Record<string, unknown>;
+      const titre = str(o.titre).trim();
+      if (!titre) return null;
+      return {
+        id: str(o.id) || `h${i}`, date: day(o.date), titre,
+        contexte: str(o.contexte), objectif: str(o.objectif), probleme: str(o.probleme),
+        /* `escalade` remplace l'ancien « moment fort » : une histoire ne monte
+           pas d'un cran, elle empire — et c'est la montée qui tient l'auditeur.
+           L'ancienne clé est relue pour ne rien perdre des histoires déjà
+           rangées. */
+        escalade: str(o.escalade || o.momentFort),
+        resultat: str(o.resultat || o.fin),
+        racontee: Math.max(0, int(o.racontee, 0)),
+      } as Histoire;
+    }).filter((v): v is Histoire => v !== null).sort(recent),
+
+    travaux: arr(r.travaux).map((v, i) => {
+      const o = (v || {}) as Record<string, unknown>;
+      const drillId = str(o.drillId);
+      if (!drillId) return null;
+      return {
+        id: str(o.id) || `t${i}`, date: day(o.date), drillId,
+        matiere: str(o.matiere), reponses: arr(o.reponses).map(str),
+      } as Travail;
+    }).filter((v): v is Travail => v !== null).sort(recent),
+
+    debriefs: arr(r.debriefs).map((v, i) => {
+      const o = (v || {}) as Record<string, unknown>;
+      const date = day(o.date);
+      if (!date) return null;
+      const connues = new Set(FAUTES.map(f => f.id));
+      return {
+        id: str(o.id) || `d${i}`, date,
+        fautes: arr(o.fautes).map(str).filter(f => connues.has(f)),
+        note: str(o.note),
+        simulationId: o.simulationId ? str(o.simulationId) : null,
+      } as Debrief;
+    }).filter((v): v is Debrief => v !== null).sort(recent),
+
+    missions: arr(r.missions).map((v, i) => {
+      const o = (v || {}) as Record<string, unknown>;
+      const texte = str(o.texte).trim();
+      const date = day(o.date);
+      if (!texte || !date) return null;
+      const statut = str(o.statut);
+      return {
+        id: str(o.id) || `mi${i}`, date, texte,
+        phase: Math.max(PHASE_MIN, Math.min(PHASE_MAX, int(o.phase, PHASE_MIN))),
+        statut: (statut === "faite" || statut === "ratee" ? statut : "en cours") as StatutMission,
+        regleLe: o.regleLe ? day(o.regleLe) : null,
+      } as Mission;
+    }).filter((v): v is Mission => v !== null).sort(recent),
+
+    evaluations: arr(r.evaluations).map(v => {
+      const o = (v || {}) as Record<string, unknown>;
+      const semaine = day(o.semaine);
+      if (!semaine) return null;
+      const src = (o.scores || {}) as Record<string, unknown>;
+      const scores: Record<string, number> = {};
+      for (const s of SKILLS) {
+        const n = Number(src[s.id]);
+        if (Number.isFinite(n)) scores[s.id] = Math.max(0, Math.min(10, Math.round(n)));
+      }
+      return { semaine, scores } as Evaluation;
+    }).filter((v): v is Evaluation => v !== null)
+      /* Les semaines montent, de la plus ancienne à la plus récente : une
+         courbe, un écart et « la première note » se lisent tous dans ce sens.
+         Le reste du magasin est trié à l'envers, pour la raison opposée — on y
+         cherche toujours la dernière entrée. */
       .sort((a, b) => a.semaine.localeCompare(b.semaine)),
   };
 }
@@ -581,7 +834,7 @@ export function newId(prefix = "c"): string {
   return `${prefix}${Date.now().toString(36)}${seq.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Marque un exercice comme fait ce jour-là. Deux fois le même jour ne compte qu'une. */
+/** Marque un exercice fait ce jour-là. Deux fois le même jour ne compte qu'une. */
 export function withFait(store: CommStore, date: string, drillId: string): CommStore {
   const d = day(date);
   if (store.faits.some(f => f.date === d && f.drillId === drillId)) return store;
@@ -619,8 +872,7 @@ export function withMot(store: CommStore, mot: Omit<Mot, "id" | "utiliseLe">): C
 export function withMotUtilise(store: CommStore, id: string, date: string): CommStore {
   return {
     ...store,
-    mots: store.mots.map(m =>
-      m.id === id ? { ...m, utiliseLe: m.utiliseLe ? null : day(date) } : m),
+    mots: store.mots.map(m => (m.id === id ? { ...m, utiliseLe: m.utiliseLe ? null : day(date) } : m)),
   };
 }
 
@@ -635,10 +887,7 @@ export function withHistoire(store: CommStore, h: Omit<Histoire, "id" | "raconte
 }
 
 export function withHistoireRacontee(store: CommStore, id: string): CommStore {
-  return {
-    ...store,
-    histoires: store.histoires.map(h => (h.id === id ? { ...h, racontee: h.racontee + 1 } : h)),
-  };
+  return { ...store, histoires: store.histoires.map(h => (h.id === id ? { ...h, racontee: h.racontee + 1 } : h)) };
 }
 
 export function withoutHistoire(store: CommStore, id: string): CommStore {
@@ -650,6 +899,32 @@ export function withTravail(store: CommStore, t: Omit<Travail, "id">): CommStore
   return { ...store, travaux: [{ ...t, id: newId("t") }, ...store.travaux] };
 }
 
+/** Le débrief du jour. Un second débrief le même jour REMPLACE le premier. */
+export function withDebrief(store: CommStore, d: Omit<Debrief, "id">): CommStore {
+  const date = day(d.date);
+  const autres = store.debriefs.filter(x => x.date !== date);
+  return normalizeStore({ ...store, debriefs: [...autres, { ...d, date, id: newId("d") }] });
+}
+
+/** Une mission prise aujourd'hui. Elle reste « en cours » jusqu'à la séance suivante. */
+export function withMission(store: CommStore, date: string, texte: string, phase: number): CommStore {
+  const t = str(texte).trim();
+  if (!t) return store;
+  return {
+    ...store,
+    missions: [{ id: newId("mi"), date: day(date), texte: t, phase, statut: "en cours", regleLe: null }, ...store.missions],
+  };
+}
+
+/** La réponse à « tu l'as faite ? », posée un autre jour que celui de la mission. */
+export function withMissionReglee(store: CommStore, id: string, faite: boolean, date: string): CommStore {
+  return {
+    ...store,
+    missions: store.missions.map(m =>
+      m.id === id ? { ...m, statut: faite ? "faite" : "ratee", regleLe: day(date) } : m),
+  };
+}
+
 /** L'auto-note de la semaine. Une semaine déjà notée est REMPLACÉE, pas doublée. */
 export function withEvaluation(store: CommStore, semaine: string, scores: Record<string, number>): CommStore {
   const s = day(semaine);
@@ -657,8 +932,25 @@ export function withEvaluation(store: CommStore, semaine: string, scores: Record
   return normalizeStore({ ...store, evaluations: [...autres, { semaine: s, scores }] });
 }
 
-export function withNiveau(store: CommStore, n: number): CommStore {
-  return { ...store, niveau: Math.max(0, Math.min(NIVEAU_MAX, Math.round(n))) };
+/**
+ * Le premier jour du parcours.
+ *
+ * Posé une fois, il ne se déplace pas tout seul : c'est l'origine de l'échelle,
+ * et une origine qui glisse rend toutes les semaines fausses. Il se règle à la
+ * main pour celui qui a commencé avant d'ouvrir la page.
+ */
+export function withDebut(store: CommStore, date: string): CommStore {
+  const d = day(date);
+  return d ? { ...store, debut: d } : store;
+}
+
+/** Le cap de l'année, reformulé. Vide = on remet celui du départ. */
+export function withCap(store: CommStore, texte: string): CommStore {
+  return { ...store, cap: str(texte).trim() || CAP_DEFAUT };
+}
+
+export function withPhase(store: CommStore, n: number): CommStore {
+  return { ...store, phase: Math.max(PHASE_MIN, Math.min(PHASE_MAX, Math.round(n))) };
 }
 
 /* ─── Lectures dérivées ──────────────────────────────────────────────────── */
@@ -696,36 +988,56 @@ export function serie(store: CommStore, today: string): number {
   return n;
 }
 
-/** Les exercices faits un jour donné. */
 export function faitsDuJour(store: CommStore, date: string): string[] {
   const d = day(date);
   return store.faits.filter(f => f.date === d).map(f => f.drillId);
 }
 
-/** La dernière auto-évaluation, ou `null` si on n'a jamais noté. */
 export function derniereEvaluation(store: CommStore): Evaluation | null {
   return store.evaluations.length > 0 ? store.evaluations[store.evaluations.length - 1] : null;
+}
+
+/**
+ * La mission d'une séance PRÉCÉDENTE qui attend encore sa réponse.
+ *
+ * Celle du jour même n'est pas rendue : on ne demande pas le matin si l'on a
+ * fait ce qu'on se propose de faire dans la journée. C'est tout l'intérêt du
+ * report — la question se pose à ce qui a eu lieu.
+ */
+export function missionEnAttente(store: CommStore, today: string): Mission | null {
+  const d = day(today);
+  return store.missions.find(m => m.statut === "en cours" && m.date < d) ?? null;
 }
 
 export interface EtatSkill {
   skill: Skill;
   /** La note la plus récente, ou `null` tant que rien n'a été noté. */
   note: number | null;
-  /** L'écart avec la toute première note — le seul chiffre de progrès honnête. */
+  /** Le feu correspondant — `null` avant la première note. */
+  feu: Feu | null;
+  /** L'écart avec la toute première note : le seul chiffre de progrès honnête. */
   ecart: number | null;
-  /** Toutes les notes, de la plus ancienne à la plus récente (pour la courbe). */
   suite: number[];
   /** Exercices faits qui visent cette compétence. */
   volume: number;
+  /** Fautes de cette compétence relevées en débrief. */
+  fautes: number;
 }
 
-/** L'état de chaque compétence : sa note, son écart depuis le début, son volume. */
 export function etatDesCompetences(store: CommStore): EtatSkill[] {
   const volumeParSkill = new Map<string, number>();
   for (const f of store.faits) {
     const d = drillById(f.drillId);
     if (!d) continue;
     volumeParSkill.set(d.skill, (volumeParSkill.get(d.skill) || 0) + 1);
+  }
+  const fautesParSkill = new Map<string, number>();
+  for (const deb of store.debriefs) {
+    for (const id of deb.fautes) {
+      const f = fauteById(id);
+      if (!f) continue;
+      fautesParSkill.set(f.skill, (fautesParSkill.get(f.skill) || 0) + 1);
+    }
   }
   return SKILLS.map(skill => {
     const suite = store.evaluations
@@ -735,32 +1047,48 @@ export function etatDesCompetences(store: CommStore): EtatSkill[] {
     return {
       skill,
       note,
+      feu: feuDe(note),
       ecart: suite.length > 1 ? suite[suite.length - 1] - suite[0] : null,
       suite,
       volume: volumeParSkill.get(skill.id) || 0,
+      fautes: fautesParSkill.get(skill.id) || 0,
     };
   });
 }
 
 /**
- * L'état d'un maillon de la chaîne.
+ * Les fautes qui REVIENNENT, sur les dernières séances.
  *
- * Trois états seulement, et pas une note sur dix : un maillon se lit d'un coup
- * d'œil ou ne sert à rien. `inconnu` tant que la compétence n'a jamais été
- * notée — dire « fragile » d'un maillon qu'on n'a pas encore regardé serait un
- * diagnostic inventé.
+ * C'est le seul endroit où la page dit quelque chose qu'on ne savait pas :
+ * une faute cochée une fois est un accident, la même cochée six fois sur dix
+ * séances est le sujet de la prochaine phase. On se souvient de la dernière
+ * séance, pas des dix.
  */
+export function fautesFrequentes(store: CommStore, fenetre = 10): Array<{ faute: Faute; n: number }> {
+  const compte = new Map<string, number>();
+  for (const d of store.debriefs.slice(0, fenetre)) {
+    for (const id of d.fautes) compte.set(id, (compte.get(id) || 0) + 1);
+  }
+  return [...compte.entries()]
+    .map(([id, n]) => ({ faute: fauteById(id), n }))
+    .filter((x): x is { faute: Faute; n: number } => x.faute !== null)
+    .sort((a, b) => b.n - a.n || a.faute.label.localeCompare(b.faute.label));
+}
+
 export type EtatMaillon = "inconnu" | "fragile" | "en travail" | "solide";
 
+/**
+ * L'état de chaque maillon de la chaîne.
+ *
+ * `inconnu` tant que la compétence n'a jamais été notée : dire « fragile » d'un
+ * maillon qu'on n'a pas encore regardé serait un diagnostic inventé.
+ */
 export function etatDeLaChaine(store: CommStore): Array<{ maillon: Maillon; etat: EtatMaillon; note: number | null }> {
   const derniere = derniereEvaluation(store);
   return CHAINE.map(maillon => {
     const note = derniere && Number.isFinite(derniere.scores[maillon.skill]) ? derniere.scores[maillon.skill] : null;
     const etat: EtatMaillon =
-      note == null ? "inconnu"
-      : note <= 3 ? "fragile"
-      : note <= 6 ? "en travail"
-      : "solide";
+      note == null ? "inconnu" : note <= 3 ? "fragile" : note <= 6 ? "en travail" : "solide";
     return { maillon, etat, note };
   });
 }
@@ -772,8 +1100,7 @@ export function etatDeLaChaine(store: CommStore): Array<{ maillon: Maillon; etat
  *
  * Math.random() redonnerait une séance différente à chaque rendu — on la
  * relirait toute la journée sans jamais la faire. La graine est donc le jour
- * lui-même, plus le numéro de relance quand on demande expressément autre
- * chose.
+ * lui-même, plus le numéro de relance quand on demande expressément autre chose.
  */
 function graine(texte: string): number {
   let h = 2166136261;
@@ -784,7 +1111,6 @@ function graine(texte: string): number {
   return Math.abs(h);
 }
 
-/** Tire un élément d'une liste, toujours le même pour une même clé. */
 export function tirage<T>(liste: T[], cle: string): T | null {
   if (!liste || liste.length === 0) return null;
   return liste[graine(cle) % liste.length];
@@ -796,116 +1122,255 @@ export function matiereDuJour(drill: Drill, date: string, roll = 0): string | nu
   return tirage(drill.matiere, `${day(date)}|${drill.id}|${roll}`);
 }
 
+export type TempsId = "echauffement" | "competence" | "simulation" | "debrief" | "mission";
+
+export interface Temps {
+  id: TempsId;
+  label: string;
+  minutes: string;
+  /** Ce qu'on fait : un exercice, une simulation, une mission, ou le débrief. */
+  drill?: Drill;
+  simulation?: Simulation;
+  mission?: string;
+}
+
 export interface Seance {
   date: string;
-  /** Instrument, atelier, terrain — dans cet ordre, et c'est un ordre de travail. */
-  drills: Drill[];
-  /** Les identifiants déjà cochés aujourd'hui. */
+  phase: Phase;
+  temps: Temps[];
+  /** Ce qui est déjà coché aujourd'hui (identifiants d'exercices et de temps). */
   faits: string[];
 }
 
 /**
- * La séance du jour : trois exercices, jamais plus.
+ * La séance du jour : cinq temps, toujours les mêmes, toujours dans cet ordre.
  *
- * L'ordre n'est pas négociable et raconte la méthode :
+ * Le choix du contenu suit LA PHASE, et non la compétence la plus mal notée.
+ * C'est une décision, pas une simplification : courir après le plus bas
+ * reviendrait à travailler les huit compétences à la fois, ce que le parcours
+ * refuse — elles se perturbent entre elles, et on ne peut pas ralentir son
+ * débit tout en cherchant le mot parfait.
  *
- *   1. l'INSTRUMENT (voix) — on ralentit avant de vouloir bien dire ;
- *   2. l'ATELIER (niveau courant) — la compétence du moment, en atelier ;
- *   3. le TERRAIN — la seule chose qui fasse vraiment progresser, et la seule
- *      que l'app ne peut pas faire à ta place.
- *
- * L'atelier est tiré parmi les exercices DÉBLOQUÉS, en préférant celui dont la
- * compétence est la plus mal notée : un programme qui ferait tourner les neuf
- * compétences à égalité passerait l'essentiel de son temps sur ce qui va déjà.
- * À notes égales, le tirage du jour tranche — on ne veut pas non plus du même
- * exercice tous les jours.
+ * L'échauffement, lui, est le même à toutes les phases : c'est l'instrument, et
+ * il se reprend en main avant chaque séance, même à la dixième.
  */
 export function seanceDuJour(store: CommStore, date: string, roll = 0): Seance {
   const d = day(date);
-  const debloque = (dr: Drill) => dr.niveau <= store.niveau;
-  const notes = new Map<string, number>();
-  const derniere = derniereEvaluation(store);
-  if (derniere) for (const [k, v] of Object.entries(derniere.scores)) notes.set(k, v);
+  const phase = phaseOf(store.phase);
 
-  /* Une compétence jamais notée passe pour moyenne (5) et non pour excellente :
-     sans ça, un utilisateur qui n'a pas encore rempli son auto-évaluation ne
-     verrait jamais sortir les exercices des compétences qu'il ignore. */
-  const noteDe = (dr: Drill) => notes.get(dr.skill) ?? 5;
+  const echauffement = tirage(drillsDeLaPhase(0).filter(x => x.forme === "voix"), `${d}|ech|${roll}`);
 
-  const choisir = (candidats: Drill[], cle: string): Drill | null => {
-    const ouverts = candidats.filter(debloque);
-    const pool = ouverts.length > 0 ? ouverts : candidats;
-    if (pool.length === 0) return null;
-    const min = Math.min(...pool.map(noteDe));
-    const faibles = pool.filter(dr => noteDe(dr) === min);
-    return tirage(faibles, `${d}|${cle}|${roll}`);
-  };
+  /* La compétence du jour vient de la phase. Une phase qui n'a que du terrain
+     (la 6 en a deux) garde son exercice de terrain ici : c'est bien lui, le
+     travail du jour. */
+  const deLaPhase = drillsDeLaPhase(phase.n);
+  const competence = tirage(deLaPhase, `${d}|comp|${roll}`)
+    /* Phase 10 : plus d'atelier, on ne corrige plus phrase par phrase. On
+       reprend alors un exercice de n'importe quelle phase précédente. */
+    ?? tirage(DRILLS.filter(x => x.phase > 0 && x.phase < phase.n), `${d}|comp2|${roll}`);
 
-  const instrument = choisir(DRILLS.filter(dr => dr.forme === "voix" && dr.niveau === 0), "instrument");
-  /* L'atelier vient du niveau courant quand celui-ci propose quelque chose, et
-     sinon de tout ce qui est débloqué : un niveau qui n'a que du terrain (le 7)
-     ne doit pas rendre la séance vide.
+  /* La simulation de la phase si elle en a une, sinon la plus proche en
+     dessous : une scène trop en avance n'entraîne rien, mais une séance sans
+     simulation perd ce qu'aucun atelier ne donne — l'imprévu. */
+  const propres = SIMULATIONS.filter(s => s.phase === phase.n);
+  const enDessous = SIMULATIONS.filter(s => s.phase <= phase.n);
+  const simulation = tirage(propres.length > 0 ? propres : (enDessous.length > 0 ? enDessous : SIMULATIONS), `${d}|sim|${roll}`);
 
-     L'exercice DÉJÀ tiré comme instrument est écarté d'office. Au niveau 0, les
-     deux puisent dans le même vivier (tout y est du travail de voix) : sans
-     cette exclusion, la séance du débutant — celui qui en a le plus besoin —
-     sortait à deux exercices au lieu de trois. */
-  const duNiveau = DRILLS.filter(dr =>
-    dr.niveau === store.niveau && dr.forme !== "terrain" && dr.id !== instrument?.id);
-  const atelier = choisir(
-    duNiveau.length > 0 ? duNiveau : DRILLS.filter(dr => dr.forme !== "terrain" && dr.id !== instrument?.id),
-    "atelier",
-  );
-  const terrain = choisir(DRILLS.filter(dr => dr.forme === "terrain"), "terrain");
+  const mission = tirage(MISSIONS[phase.n] || MISSIONS[PHASE_MIN], `${d}|mis|${roll}`);
 
-  const drills: Drill[] = [];
-  for (const dr of [instrument, atelier, terrain]) {
-    if (dr && !drills.some(x => x.id === dr.id)) drills.push(dr);
-  }
-  return { date: d, drills, faits: faitsDuJour(store, d) };
+  const temps: Temps[] = [
+    { id: "echauffement", label: "Échauffement", minutes: "5 min", drill: echauffement || undefined },
+    { id: "competence", label: "Compétence du jour", minutes: "10 min", drill: competence || undefined },
+    { id: "simulation", label: "Simulation", minutes: "10–20 min", simulation: simulation || undefined },
+    { id: "debrief", label: "Débrief", minutes: "5–10 min" },
+    { id: "mission", label: "Mission réelle", minutes: "dehors", mission: mission || undefined },
+  ];
+
+  return { date: d, phase, temps, faits: faitsDuJour(store, d) };
 }
 
-/* ─── Passage de niveau ──────────────────────────────────────────────────── */
+/* ─── Passage de phase ───────────────────────────────────────────────────── */
 
-export interface EtatNiveau {
-  niveau: Niveau;
-  /** Exercices de ce niveau déjà faits. */
+export interface EtatPhase {
+  phase: Phase;
+  /** Exercices de cette phase déjà faits. */
   volume: number;
-  /** Ce qu'on attend avant de proposer la suite. */
   volumeAttendu: number;
-  /** La note de la compétence principale du niveau, si elle existe. */
+  /** La note de la compétence de la phase, si elle existe. */
   note: number | null;
   noteAttendue: number;
-  /** Les deux conditions sont tenues : la page PROPOSE de passer. */
+  /** Missions de cette phase réellement faites. */
+  missions: number;
+  missionsAttendues: number;
+  /** Les trois conditions sont tenues : la page PROPOSE la suite. */
   pret: boolean;
 }
 
 /**
- * Faut-il proposer le niveau suivant ?
+ * Faut-il proposer la phase suivante ?
  *
- * Deux conditions, et aucune n'est un score d'aisance : du VOLUME (on a
- * pratiqué) et une AUTO-NOTE (on se sent mieux). L'app ne décide rien — elle
- * propose, le bouton reste à l'utilisateur. Un logiciel qui décrète « niveau 4
- * atteint » parce qu'on a cliqué douze fois se trompe sur ce qu'il observe.
+ * Trois conditions, et aucune n'est un score d'aisance : du VOLUME (on a
+ * pratiqué), une AUTO-NOTE (on se sent mieux), et des MISSIONS FAITES (ça a eu
+ * lieu dehors). La troisième est la seule qui parle du monde réel, et c'est
+ * précisément celle qu'un logiciel ne peut pas fabriquer tout seul : il faut
+ * être revenu dire que oui.
+ *
+ * L'app ne décide rien — elle propose, le bouton reste à l'utilisateur.
  */
-export function etatDuNiveau(store: CommStore): EtatNiveau {
-  const niveau = niveauOf(store.niveau);
-  const duNiveau = new Set(drillsDuNiveau(niveau.n).map(d => d.id));
-  const volume = store.faits.filter(f => duNiveau.has(f.drillId)).length;
-  const skills = new Set(drillsDuNiveau(niveau.n).map(d => d.skill));
+export function etatDeLaPhase(store: CommStore): EtatPhase {
+  const phase = phaseOf(store.phase);
+  const ids = new Set(drillsDeLaPhase(phase.n).map(d => d.id));
+  const volume = store.faits.filter(f => ids.has(f.drillId)).length;
   const derniere = derniereEvaluation(store);
-  const notes = derniere
-    ? [...skills].map(s => derniere.scores[s]).filter((n): n is number => Number.isFinite(n))
-    : [];
-  const note = notes.length > 0 ? Math.min(...notes) : null;
+  const note = derniere && Number.isFinite(derniere.scores[phase.skill]) ? derniere.scores[phase.skill] : null;
+  const missions = store.missions.filter(m => m.phase === phase.n && m.statut === "faite").length;
   const volumeAttendu = 10;
   const noteAttendue = 6;
+  const missionsAttendues = 3;
   return {
-    niveau,
-    volume,
-    volumeAttendu,
-    note,
-    noteAttendue,
-    pret: niveau.n < NIVEAU_MAX && volume >= volumeAttendu && note != null && note >= noteAttendue,
+    phase, volume, volumeAttendu, note, noteAttendue, missions, missionsAttendues,
+    pret: phase.n < PHASE_MAX
+      && volume >= volumeAttendu
+      && note != null && note >= noteAttendue
+      && missions >= missionsAttendues,
   };
+}
+
+/* ─── L'année ────────────────────────────────────────────────────────────── */
+
+const joursEntre = (a: string, b: string): number =>
+  Math.round((new Date(`${day(b)}T12:00:00`).getTime() - new Date(`${day(a)}T12:00:00`).getTime()) / 86400000);
+
+/** Le jour, décalé de `n` jours. */
+export function jourPlus(date: string, n: number): string {
+  const d = new Date(`${day(date)}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * La semaine du parcours, à partir du premier jour. 1 = la semaine du départ.
+ *
+ * `null` tant qu'aucun départ n'est posé : une semaine « 1 » affichée par
+ * défaut ferait croire que le compteur tourne alors que rien n'a commencé.
+ */
+export function semaineDuParcours(store: CommStore, today: string): number | null {
+  if (!store.debut) return null;
+  const jours = joursEntre(store.debut, today);
+  if (jours < 0) return 1;
+  return Math.floor(jours / 7) + 1;
+}
+
+/**
+ * La phase que le CALENDRIER suggère à cette semaine-là.
+ *
+ * Elle n'a aucune autorité : le parcours avance à la pratique, pas à la date.
+ * Elle sert à situer — « le calendrier disait 5, j'en suis à 3 » est une
+ * information utile, tant qu'elle ne se transforme pas en retard à rattraper.
+ */
+export function phaseAttendue(semaine: number | null): Phase | null {
+  if (semaine == null) return null;
+  return PHASES.find(p => semaine >= p.de && semaine <= p.a) ?? PHASES[PHASES.length - 1];
+}
+
+/** Le nombre d'exercices faits chaque jour — la trame de l'année. */
+export function joursTravailles(store: CommStore): Map<string, number> {
+  const par = new Map<string, number>();
+  for (const f of store.faits) par.set(f.date, (par.get(f.date) || 0) + 1);
+  return par;
+}
+
+export interface Bilan {
+  du: string;
+  au: string;
+  /** Jours où quelque chose a été fait — pas le nombre d'exercices. */
+  jours: number;
+  exercices: number;
+  simulations: number;
+  debriefs: number;
+  missionsFaites: number;
+  missionsRatees: number;
+  preuves: number;
+  mots: number;
+  motsUtilises: number;
+  histoires: number;
+  histoiresRacontees: number;
+  /** Les fautes de la période, les plus fréquentes d'abord. */
+  fautes: Array<{ faute: Faute; n: number }>;
+  /** Par compétence : la note au début de la période, celle à la fin. */
+  progres: Array<{ skill: Skill; de: number | null; a: number | null }>;
+}
+
+/**
+ * Le bilan d'une période — ce qu'on ne peut PAS faire de mémoire.
+ *
+ * Sur un mois, personne ne se souvient d'avoir coché « j'ai accéléré » six fois
+ * ni d'avoir noté sa clarté à 3 puis à 5. C'est la seule chose que la page
+ * apporte vraiment sur la durée : elle relit à notre place, et elle relit tout.
+ *
+ * Les bornes sont INCLUSIVES des deux côtés : un bilan « du 1er au 31 » qui
+ * laisserait le 31 dehors ferait disparaître une séance par mois.
+ */
+export function bilan(store: CommStore, du: string, au: string): Bilan {
+  const d = day(du);
+  const a = day(au);
+  const dans = (x: string) => x >= d && x <= a;
+
+  const faits = store.faits.filter(f => dans(f.date));
+  const debriefs = store.debriefs.filter(x => dans(x.date));
+  const missions = store.missions.filter(m => dans(m.date));
+  const mots = store.mots.filter(m => dans(m.date));
+
+  const compte = new Map<string, number>();
+  for (const deb of debriefs) for (const id of deb.fautes) compte.set(id, (compte.get(id) || 0) + 1);
+
+  const dedans = store.evaluations.filter(e => dans(e.semaine));
+  const premiere = dedans.length > 0 ? dedans[0] : null;
+  const derniere = dedans.length > 0 ? dedans[dedans.length - 1] : null;
+
+  return {
+    du: d,
+    au: a,
+    jours: new Set(faits.map(f => f.date)).size,
+    exercices: faits.filter(f => !f.drillId.startsWith("sim:") && f.drillId !== "debrief" && f.drillId !== "mission").length,
+    simulations: faits.filter(f => f.drillId.startsWith("sim:")).length,
+    debriefs: debriefs.length,
+    missionsFaites: missions.filter(m => m.statut === "faite").length,
+    missionsRatees: missions.filter(m => m.statut === "ratee").length,
+    preuves: store.preuves.filter(p => dans(p.date)).length,
+    mots: mots.length,
+    motsUtilises: store.mots.filter(m => m.utiliseLe && dans(m.utiliseLe)).length,
+    histoires: store.histoires.filter(h => dans(h.date)).length,
+    histoiresRacontees: store.histoires.filter(h => dans(h.date)).reduce((n, h) => n + h.racontee, 0),
+    fautes: [...compte.entries()]
+      .map(([id, n]) => ({ faute: fauteById(id), n }))
+      .filter((x): x is { faute: Faute; n: number } => x.faute !== null)
+      .sort((x, y) => y.n - x.n || x.faute.label.localeCompare(y.faute.label)),
+    progres: SKILLS.map(skill => ({
+      skill,
+      de: premiere && Number.isFinite(premiere.scores[skill.id]) ? premiere.scores[skill.id] : null,
+      a: derniere && Number.isFinite(derniere.scores[skill.id]) ? derniere.scores[skill.id] : null,
+    })),
+  };
+}
+
+/** Le premier jour du mois d'une date. */
+export function debutDuMois(date: string): string {
+  return `${day(date).slice(0, 7)}-01`;
+}
+
+/** Le dernier jour du mois d'une date. */
+export function finDuMois(date: string): string {
+  const d = new Date(`${debutDuMois(date)}T12:00:00`);
+  d.setMonth(d.getMonth() + 1);
+  d.setDate(0);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Le mois précédent celui d'une date, en bornes inclusives. */
+export function moisPrecedent(date: string): { du: string; au: string } {
+  const d = new Date(`${debutDuMois(date)}T12:00:00`);
+  d.setDate(0);
+  const dedans = d.toISOString().slice(0, 10);
+  return { du: debutDuMois(dedans), au: finDuMois(dedans) };
 }
