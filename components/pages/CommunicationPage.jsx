@@ -30,7 +30,7 @@
    de l’affichage et des gestes.
    ========================================================================== */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check, ChevronRight, ClipboardCheck, Dices, Flame, Link2, MessageSquare, Mic,
   Pause, Play, Plus, Quote, RotateCcw, Sparkles, Target, Trash2, Users, X,
@@ -43,11 +43,14 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { getLocalDateString } from "@/lib/dateUtils";
 import {
   COMM_KEY, COMM_CLOUD_KEY, DRILLS, EMPTY_STORE, FAUTES, PHASES, PHASE_MAX, SKILLS,
-  drillById, etatDeLaChaine, etatDeLaPhase, etatDesCompetences, fautesFrequentes, lundiDe,
-  matiereDuJour, missionEnAttente, normalizeStore, seanceDuJour, serie, skillById,
-  withDebrief, withEvaluation, withFait, withHistoire, withHistoireRacontee, withMission,
-  withMissionReglee, withMot, withMotUtilise, withPhase, withPreuve, withTravail,
-  withoutFait, withoutHistoire, withoutMot, withoutPreuve,
+  MESURES, MESURES_VIDES,
+  bilan, debutDuMois, drillById, etatDeLaChaine, etatDeLaPhase, etatDesCompetences,
+  fautesFrequentes, finDuMois, joursTravailles, jourPlus, lundiDe, matiereDuJour,
+  missionEnAttente, moisPrecedent, normalizeStore, phaseAttendue, seanceDuJour,
+  semaineDuParcours, serie, skillById, withCap, withDebrief, withDebut, withEvaluation,
+  withFait, withHistoire, withHistoireRacontee, withMission, withMissionReglee, withMot,
+  withMotUtilise, withPhase, withPreuve, withTravail, withoutFait, withoutHistoire,
+  withoutMot, withoutPreuve,
 } from "@/lib/communication";
 
 /* ─── Couleurs d’état ─────────────────────────────────────────────────────
@@ -239,6 +242,17 @@ function TuileTemps({ temps, rang, matiere, fait, onOuvrir, onCocher, onRetirer,
         </div>
       )}
 
+      {drill?.contraintes && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {drill.contraintes.map(c => (
+            <span key={c} style={{
+              ...TYPE.caption, padding: "3px 9px", borderRadius: 999,
+              background: `color-mix(in srgb, ${T.red} 8%, transparent)`, color: T.red,
+            }}>{c}</span>
+          ))}
+        </div>
+      )}
+
       {(drill?.garde || sim?.consigne) && (
         <div style={{ ...TYPE.caption, color: T.textMut, lineHeight: 1.4 }}>{drill?.garde || sim?.consigne}</div>
       )}
@@ -286,53 +300,111 @@ function TuileTemps({ temps, rang, matiere, fait, onOuvrir, onCocher, onRetirer,
  * qui retarde de trente secondes sur cinq minutes ne minute plus rien.
  */
 function Studio({ drill, matiere, onClose, onFait }) {
-  const total = Math.max(1, drill.duree || 1) * 60;
-  const [reste, setReste] = useState(total);
-  const [enCours, setEnCours] = useState(false);
+  /* Deux modes, et c'est l'exercice qui décide : un exercice en ÉTAPES (« trois
+     secondes de silence, puis trente de réponse ») n'a pas besoin d'un minuteur
+     de cinq minutes, il a besoin qu'on lui dise quand changer d'étape. Un seul
+     minuteur global pour les deux obligerait à compter dans sa tête ce que
+     l'exercice demande justement de ne pas compter. */
+  const etapes = drill.etapes && drill.etapes.length > 0 ? drill.etapes : null;
+  const [i, setI] = useState(0);
+  const duree = etapes
+    ? (etapes[i]?.secondes ?? 60)
+    : Math.max(1, drill.duree || 1) * 60;
+
+  const [reste, setReste] = useState(duree);
+  /* Le départ tient dans l'ÉTAT et non dans une ref : l'horloge de référence
+     (`at`) et le temps qu'il restait au moment où l'on a appuyé (`base`) sont
+     les deux seules choses dont le minuteur a besoin, et un `setInterval` qui
+     décrémenterait un compteur prendrait du retard dès que l'onglet passe en
+     arrière-plan — trente secondes d'écart sur cinq minutes, et il ne minute
+     plus rien. `null` = à l'arrêt. */
+  const [depart, setDepart] = useState(null);
   const [phase, setPhase] = useState("parle");
-  const depart = useRef(null);
-  const restant = useRef(total);
+  const enCours = depart !== null;
+
+  /* Changer d'étape remet le compteur à la durée de la nouvelle : sans ça, on
+     hériterait du reliquat de la précédente et la deuxième étape serait fausse.
+     L'ajustement se fait PENDANT le rendu et non dans un effet — c'est le
+     schéma prévu pour « un état qui dépend d'une entrée » : dans un effet, on
+     dessinerait d'abord l'ancienne durée, puis la bonne, et le minuteur
+     clignoterait à chaque étape. */
+  const [dureeCourante, setDureeCourante] = useState(duree);
+  if (dureeCourante !== duree) {
+    setDureeCourante(duree);
+    setDepart(null);
+    setReste(duree);
+  }
 
   useEffect(() => {
-    if (!enCours) return undefined;
-    depart.current = Date.now();
-    const base = restant.current;
+    if (!depart) return undefined;
     const id = setInterval(() => {
-      const ecoule = (Date.now() - depart.current) / 1000;
-      const r = Math.max(0, base - ecoule);
+      const ecoule = (Date.now() - depart.at) / 1000;
+      const r = Math.max(0, depart.base - ecoule);
       setReste(r);
       /* Quatre secondes de phrase, deux de silence. Les deux secondes
-         paraissent dix quand c’est soi qui les tient — les voir défiler est ce
+         paraissent dix quand c'est soi qui les tient — les voir défiler est ce
          qui permet de ne pas les écourter. */
       setPhase(Math.floor(ecoule % 6) < 4 ? "parle" : "pause");
-      if (r <= 0) setEnCours(false);
+      if (r <= 0) setDepart(null);
     }, 200);
-    return () => {
-      clearInterval(id);
-      restant.current = Math.max(0, base - (Date.now() - depart.current) / 1000);
-    };
-  }, [enCours]);
+    return () => clearInterval(id);
+  }, [depart]);
 
   const mm = String(Math.floor(reste / 60)).padStart(2, "0");
   const ss = String(Math.floor(reste % 60)).padStart(2, "0");
   const cadence = drill.id === "frein" || drill.id === "groupes-de-mots";
   const fini = reste <= 0;
+  const derniere = !etapes || i >= etapes.length - 1;
 
   return (
-    <Modal open onClose={onClose} title={drill.label} width={460} scrim
+    <Modal open onClose={onClose} title={drill.label} width={480} scrim
       footer={
         <>
           <PillButton onClick={onClose}>Fermer</PillButton>
-          <PillButton variant="primary" onClick={() => { onFait(); onClose(); }}>C’est fait</PillButton>
+          {etapes && !derniere
+            ? <PillButton variant="primary" onClick={() => setI(n => n + 1)}>
+                Étape suivante <ChevronRight size={13} strokeWidth={2} />
+              </PillButton>
+            : <PillButton variant="primary" onClick={() => { onFait(); onClose(); }}>C’est fait</PillButton>}
         </>
       }>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center", textAlign: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center" }}>
         <div style={{ ...TYPE.body, color: T.textSub }}>{drill.consigne}</div>
+
         {matiere && (
           <div style={{ ...TYPE.title3, color: T.text, padding: "10px 14px", borderRadius: 10, background: FIELD_BG }}>
             {matiere}
           </div>
         )}
+
+        {/* Le contenu se PARCOURT (un texte à lire, une liste de phrases) : il
+            ne se tire pas au sort, on le fait en entier. */}
+        {drill.contenu && (
+          <div style={{
+            ...TYPE.callout, color: T.text, textAlign: "left", width: "100%",
+            padding: "12px 14px", borderRadius: 10, background: FIELD_BG,
+            display: "flex", flexDirection: "column", gap: 8,
+          }}>
+            {drill.contenu.map(ligne => <span key={ligne}>{ligne}</span>)}
+          </div>
+        )}
+
+        {etapes && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+            {etapes.map((e, n) => (
+              <span key={e.label} style={{
+                ...TYPE.caption, padding: "4px 10px", borderRadius: 999,
+                background: n === i ? T.brand : FIELD_BG,
+                color: n === i ? T.onSolid : n < i ? T.textMut : T.textSub,
+                fontWeight: n === i ? 700 : 500,
+                textDecoration: n < i ? "line-through" : "none",
+              }}>
+                {e.label}{e.secondes ? ` · ${e.secondes}s` : ""}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div style={{ ...TYPE.display, ...TABULAR, color: fini ? T.brand : T.text }}>{mm}:{ss}</div>
 
         {cadence && (
@@ -349,15 +421,37 @@ function Studio({ drill, matiere, onClose, onFait }) {
         )}
 
         <div style={{ display: "flex", gap: 8 }}>
-          <PillButton variant={enCours ? "secondary" : "primary"} onClick={() => setEnCours(v => !v)} disabled={fini}>
+          <PillButton variant={enCours ? "secondary" : "primary"} disabled={fini}
+            onClick={() => setDepart(enCours ? null : { at: Date.now(), base: reste })}>
             {enCours ? <><Pause size={13} strokeWidth={2} /> Pause</> : <><Play size={13} strokeWidth={2} /> Démarrer</>}
           </PillButton>
-          <PillButton onClick={() => { setEnCours(false); restant.current = total; setReste(total); }}>
+          <PillButton onClick={() => { setDepart(null); setReste(duree); }}>
             <RotateCcw size={13} strokeWidth={2} /> Reprendre
           </PillButton>
         </div>
 
-        {drill.garde && <div style={{ ...TYPE.caption, color: T.textMut, maxWidth: 340 }}>{drill.garde}</div>}
+        {/* Les interdits sont ce qui FAIT l'exercice : « raconte ta journée »
+            n'est pas un exercice, « raconte ta journée sans recommencer une
+            phrase » en est un. Ils restent donc sous les yeux pendant. */}
+        {drill.contraintes && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+            {drill.contraintes.map(c => (
+              <span key={c} style={{
+                ...TYPE.caption, padding: "4px 10px", borderRadius: 999,
+                background: `color-mix(in srgb, ${T.red} 8%, transparent)`, color: T.red,
+              }}>
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {drill.critere && (
+          <div style={{ ...TYPE.caption, color: T.textSub, maxWidth: 380 }}>
+            <strong style={{ color: T.text }}>Réussi si :</strong> {drill.critere}
+          </div>
+        )}
+        {drill.garde && <div style={{ ...TYPE.caption, color: T.textMut, maxWidth: 380 }}>{drill.garde}</div>}
       </div>
     </Modal>
   );
@@ -400,6 +494,24 @@ function Atelier({ drill, matiere, onClose, onEnregistrer }) {
             {matiere}
           </div>
         )}
+        {drill.contenu && (
+          <div style={{
+            ...TYPE.callout, color: T.text, padding: "12px 14px", borderRadius: 9, background: FIELD_BG,
+            display: "flex", flexDirection: "column", gap: 6,
+          }}>
+            {drill.contenu.map(ligne => <span key={ligne}>{ligne}</span>)}
+          </div>
+        )}
+        {drill.contraintes && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {drill.contraintes.map(c => (
+              <span key={c} style={{
+                ...TYPE.caption, padding: "4px 10px", borderRadius: 999,
+                background: `color-mix(in srgb, ${T.red} 8%, transparent)`, color: T.red,
+              }}>{c}</span>
+            ))}
+          </div>
+        )}
         {histoire && (
           <Field label="Titre" hint="De quoi tu parles, en trois mots">
             <Input aria-label="Titre" value={titre} onChange={e => setTitre(e.target.value)} autoFocus
@@ -422,6 +534,11 @@ function Atelier({ drill, matiere, onClose, onEnregistrer }) {
             )}
           </Field>
         ))}
+        {drill.critere && (
+          <div style={{ ...TYPE.caption, color: T.textSub }}>
+            <strong style={{ color: T.text }}>Réussi si :</strong> {drill.critere}
+          </div>
+        )}
         {drill.garde && <div style={{ ...TYPE.caption, color: T.textMut }}>{drill.garde}</div>}
       </div>
     </Modal>
@@ -500,14 +617,16 @@ function SimulationJouee({ simulation, onClose, onFini }) {
 function Debrief({ simulation, depart, onClose, onValider }) {
   const [fautes, setFautes] = useState(() => depart?.fautes || []);
   const [note, setNote] = useState(() => depart?.note || "");
+  const [mesures, setMesures] = useState(() => ({ ...MESURES_VIDES, ...(depart?.mesures || {}) }));
   const basculer = (id) => setFautes(prev => (prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]));
+  const poser = (id, v) => setMesures(prev => ({ ...prev, [id]: v === "" ? null : Number(v) }));
 
   return (
     <Modal open onClose={onClose} title="Débrief" width={560} scrim
       footer={
         <>
           <PillButton onClick={onClose}>Annuler</PillButton>
-          <PillButton variant="primary" onClick={() => { onValider({ fautes, note }); onClose(); }}>
+          <PillButton variant="primary" onClick={() => { onValider({ fautes, note, mesures }); onClose(); }}>
             Enregistrer
           </PillButton>
         </>
@@ -522,6 +641,22 @@ function Debrief({ simulation, depart, onClose, onValider }) {
           {FAUTES.map(f => (
             <CheckChip key={f.id} label={f.label} checked={fautes.includes(f.id)}
               color={T.amber} onClick={() => basculer(f.id)} />
+          ))}
+        </div>
+
+        {/* Les six chiffres. Ce sont eux qui pilotent le renfort du lendemain :
+            « j’ai dit du coup onze fois » est vérifiable, « ma fluidité était à
+            6 » ne l’est pas. Chacun peut rester vide — un chiffre inventé pour
+            remplir une case vaut moins que la case vide. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          {MESURES.map(m => (
+            <Field key={m.id} label={m.label} hint={m.aide}>
+              <Input type="number" inputMode="numeric" aria-label={m.label}
+                min={0} max={m.type === "note" ? 10 : undefined}
+                placeholder={m.type === "note" ? "/10" : "combien ?"}
+                value={mesures[m.id] == null ? "" : String(mesures[m.id])}
+                onChange={e => poser(m.id, e.target.value.trim())} />
+            </Field>
           ))}
         </div>
         <Field label="Ce que je retiens" hint="Une phrase suffit">
@@ -864,6 +999,180 @@ function VueProgression({ etats, fautes, chaine, phase, onNoter, onMonter }) {
   );
 }
 
+/* ─── L’année ─────────────────────────────────────────────────────────────── */
+
+/**
+ * La trame des jours travaillés — une case par jour, une colonne par semaine.
+ *
+ * Sur douze mois, c’est la seule vue qui dise la VÉRITÉ sur la régularité : une
+ * série en cours flatte la semaine, la trame montre les trois semaines vides de
+ * février. Elle ne compte pas les exercices d’un jour au-delà de trois — au
+ * quatrième, la case est pleine, et une journée de dix ne doit pas écraser
+ * visuellement dix journées de une.
+ */
+function Trame({ jours, depuis, today }) {
+  const debut = lundiDe(depuis);
+  const semaines = [];
+  let curseur = debut;
+  let garde = 0;
+  while (curseur <= today && garde < 60) {
+    const colonne = [];
+    for (let i = 0; i < 7; i++) {
+      const jour = jourPlus(curseur, i);
+      colonne.push({ jour, n: jour <= today ? (jours.get(jour) || 0) : -1 });
+    }
+    semaines.push(colonne);
+    curseur = jourPlus(curseur, 7);
+    garde += 1;
+  }
+
+  const teinte = (n) =>
+    n < 0 ? "transparent"
+    : n === 0 ? FIELD_BG
+    : `color-mix(in srgb, ${T.brand} ${Math.min(100, 30 + n * 25)}%, transparent)`;
+
+  return (
+    <div style={{ display: "flex", gap: 3, overflowX: "auto", paddingBottom: 4 }}>
+      {semaines.map(colonne => (
+        <div key={colonne[0].jour} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {colonne.map(({ jour, n }) => (
+            <span key={jour}
+              title={n < 0 ? undefined : `${jour} — ${n} exercice${n > 1 ? "s" : ""}`}
+              style={{
+                width: 10, height: 10, borderRadius: 3, flexShrink: 0,
+                background: teinte(n),
+                boxShadow: n === 0 ? `inset 0 0 0 1px ${HAIRLINE}` : "none",
+              }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Chiffre({ valeur, label, tone }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 74 }}>
+      <span style={{ ...TYPE.title3, ...TABULAR, color: tone || T.text }}>{valeur}</span>
+      <span style={{ ...TYPE.caption, color: T.textMut }}>{label}</span>
+    </div>
+  );
+}
+
+/** Le bilan d’une période, tel que la page le recompose — pas de mémoire. */
+function BlocBilan({ titre, sous, b }) {
+  const bouges = b.progres.filter(p => p.de != null && p.a != null && p.a !== p.de);
+  return (
+    <div style={{ ...CARD, padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ ...TYPE.headline, color: T.text, flex: 1 }}>{titre}</span>
+        <Etiquette>{sous}</Etiquette>
+      </div>
+
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "14px 0 6px" }}>
+        <Chiffre valeur={b.jours} label={b.jours > 1 ? "jours travaillés" : "jour travaillé"} />
+        <Chiffre valeur={b.exercices} label="exercices" />
+        <Chiffre valeur={b.simulations} label="simulations" />
+        <Chiffre valeur={b.missionsFaites} label="missions faites" tone={b.missionsFaites > 0 ? T.brand : undefined} />
+        <Chiffre valeur={b.missionsRatees} label="missions ratées" tone={b.missionsRatees > 0 ? T.amber : undefined} />
+        <Chiffre valeur={b.preuves} label="preuves" />
+        <Chiffre valeur={b.motsUtilises} label="mots placés" />
+        <Chiffre valeur={b.histoiresRacontees} label="histoires racontées" />
+      </div>
+
+      {/* Une mission ratée n’est pas une faute : répétée, elle dit que la
+          mission était trop grosse — ce qu’on ne voit qu’au bilan. */}
+      {b.missionsRatees >= 2 && (
+        <div style={{ ...TYPE.caption, color: T.amber, marginBottom: 8 }}>
+          {b.missionsRatees} missions non faites : elles sont probablement trop grosses. Coupe-les en deux.
+        </div>
+      )}
+
+      {bouges.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+          {bouges.map(p => (
+            <span key={p.skill.id} style={{
+              ...TYPE.caption, padding: "4px 9px", borderRadius: 999,
+              background: FIELD_BG, color: T.text,
+            }}>
+              {p.skill.label} {p.de} → <strong style={{ color: p.a > p.de ? T.brand : T.red }}>{p.a}</strong>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {b.fautes.length > 0 && (
+        <div style={{ ...TYPE.caption, color: T.textSub, marginTop: 10 }}>
+          Ce qui est revenu le plus : <strong style={{ color: T.text }}>{b.fautes[0].faute.label}</strong>
+          {" "}({b.fautes[0].n} fois){b.fautes[1] ? `, puis ${b.fautes[1].faute.label} (${b.fautes[1].n})` : ""}.
+        </div>
+      )}
+
+      {b.jours === 0 && <Vide>Rien sur cette période.</Vide>}
+    </div>
+  );
+}
+
+function VueAnnee({ store, today, semaine, attendue, phase, onDemarrer, onCap }) {
+  const [cap, setCap] = useState(store.cap);
+  const jours = useMemo(() => joursTravailles(store), [store]);
+  const mois = useMemo(() => bilan(store, debutDuMois(today), finDuMois(today)), [store, today]);
+  const precedent = useMemo(() => {
+    const { du, au } = moisPrecedent(today);
+    return { bornes: { du, au }, b: bilan(store, du, au) };
+  }, [store, today]);
+  const depuis = store.debut || jourPlus(today, -7 * 25);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Le cap. Il n’est pas décoratif : à la douzième semaine, c’est lui qui
+          dit pourquoi on coche des cases, et il se reformule quand il a changé. */}
+      <div style={{ ...CARD, padding: 18 }}>
+        <span style={{ ...TYPE.headline, color: T.text }}>Le cap</span>
+        <div style={{ ...TYPE.caption, color: T.textMut, margin: "4px 0 10px" }}>
+          Ce que tu veux pouvoir faire dans douze mois. Une phrase, à la première personne.
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Input aria-label="Le cap de l’année" value={cap} onChange={e => setCap(e.target.value)} />
+          <PillButton variant="primary" disabled={cap.trim() === store.cap} onClick={() => onCap(cap)}>
+            Enregistrer
+          </PillButton>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+          {semaine == null ? (
+            <>
+              <span style={{ ...TYPE.body, color: T.textSub, flex: 1, minWidth: 220 }}>
+                Le parcours n’a pas encore de premier jour. Sans lui, pas d’échelle : ni semaine, ni année.
+              </span>
+              <PillButton variant="primary" onClick={onDemarrer}>Je commence aujourd’hui</PillButton>
+            </>
+          ) : (
+            <span style={{ ...TYPE.body, color: T.textSub }}>
+              <strong style={{ color: T.text }}>Semaine {semaine}</strong> depuis le {store.debut}.
+              {attendue && attendue.n !== phase.phase.n
+                ? ` Le calendrier situerait la phase ${attendue.n} (${attendue.label}) — tu es en ${phase.phase.n}. Le parcours avance à la pratique, pas à la date.`
+                : " Tu es à la page du calendrier."}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...CARD, padding: 18 }}>
+        <span style={{ ...TYPE.headline, color: T.text }}>La trame</span>
+        <div style={{ ...TYPE.caption, color: T.textMut, margin: "4px 0 12px" }}>
+          Un carré par jour. C’est la régularité qui se voit ici — une série en cours flatte la semaine,
+          la trame montre les trous.
+        </div>
+        <Trame jours={jours} depuis={depuis} today={today} />
+      </div>
+
+      <BlocBilan titre="Ce mois-ci" sous={`${mois.du} → ${mois.au}`} b={mois} />
+      <BlocBilan titre="Le mois précédent" sous={`${precedent.bornes.du} → ${precedent.bornes.au}`} b={precedent.b} />
+    </div>
+  );
+}
+
 /* ─── La page ─────────────────────────────────────────────────────────────── */
 
 const VUES = [
@@ -872,6 +1181,7 @@ const VUES = [
   { id: "mots", label: "Vocabulaire" },
   { id: "histoires", label: "Histoires" },
   { id: "progression", label: "Progression" },
+  { id: "annee", label: "L’année" },
 ];
 
 const RANGS = ["①", "②", "③", "④", "⑤"];
@@ -901,6 +1211,8 @@ export default function CommunicationPage() {
   const fautes = useMemo(() => fautesFrequentes(store), [store]);
   const jours = useMemo(() => serie(store, today), [store, today]);
   const attente = useMemo(() => missionEnAttente(store, today), [store, today]);
+  const semaine = useMemo(() => semaineDuParcours(store, today), [store, today]);
+  const attendue = useMemo(() => phaseAttendue(semaine), [semaine]);
   const debriefDuJour = store.debriefs.find(d => d.date === today) || null;
   const missionPrise = store.missions.some(m => m.date === today);
 
@@ -1010,6 +1322,47 @@ export default function CommunicationPage() {
             })}
           </div>
 
+          {/* Le renfort : hors des cinq temps, et avec sa RAISON écrite. Le
+              parcours reste linéaire — une phase, une compétence — mais il
+              serait absurde de dérouler le calendrier quand six débriefs de
+              suite disent la même chose. */}
+          {seance.renfort && (
+            <div style={{
+              ...CARD, padding: 16, display: "flex", flexDirection: "column", gap: 10,
+              boxShadow: `${T.elevCard}, inset 0 0 0 1px color-mix(in srgb, ${T.amber} 34%, transparent)`,
+              background: `color-mix(in srgb, ${T.amber} 5%, transparent)`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Target size={14} strokeWidth={1.75} color={T.amber} />
+                <Etiquette tone={T.amber}>Renfort · ce qui revient chez toi</Etiquette>
+                <span style={{ flex: 1 }} />
+                <Etiquette>{seance.renfort.drill.duree} min</Etiquette>
+              </div>
+              <div style={{ ...TYPE.body, color: T.textSub }}>{seance.renfort.priorite.raison}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ ...TYPE.headline, color: T.text }}>{seance.renfort.drill.label}</span>
+                <Etiquette tone={T.textMut}>{seance.renfort.priorite.skill.label}</Etiquette>
+              </div>
+              <div style={{ ...TYPE.body, color: T.textSub }}>{seance.renfort.drill.consigne}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <PillButton variant={seance.faits.includes(seance.renfort.drill.id) ? "secondary" : "primary"}
+                  onClick={() => ouvrir({ id: "libre", drill: seance.renfort.drill })}>
+                  <Play size={13} strokeWidth={2} /> Ouvrir
+                </PillButton>
+                <span style={{ flex: 1 }} />
+                <PillButton compact onClick={() => basculer(seance.renfort.drill.id)}
+                  role="checkbox" aria-checked={seance.faits.includes(seance.renfort.drill.id)}
+                  aria-label={`${seance.renfort.drill.label} — ${seance.faits.includes(seance.renfort.drill.id) ? "fait aujourd’hui" : "à faire"}`}
+                  style={seance.faits.includes(seance.renfort.drill.id)
+                    ? { background: T.brand, color: T.onSolid }
+                    : { background: "transparent", color: T.textSub, boxShadow: `inset 0 0 0 1px ${T.border}` }}>
+                  {seance.faits.includes(seance.renfort.drill.id) ? <Check size={11} strokeWidth={3} /> : null}
+                  {seance.faits.includes(seance.renfort.drill.id) ? "Fait" : "Marquer fait"}
+                </PillButton>
+              </div>
+            </div>
+          )}
+
           {/* Le catalogue complet, sous la séance : un jour où l’on a du temps,
               ou un exercice qu’on veut refaire exprès, ne doivent pas dépendre
               d’un tirage. Les exercices des phases suivantes restent VISIBLES —
@@ -1070,6 +1423,12 @@ export default function CommunicationPage() {
           onMonter={() => ecrire(s => withPhase(s, s.phase + 1))} />
       )}
 
+      {vue === "annee" && (
+        <VueAnnee store={store} today={today} semaine={semaine} attendue={attendue} phase={phase}
+          onDemarrer={() => ecrire(s => withDebut(s, today))}
+          onCap={texte => ecrire(s => withCap(s, texte))} />
+      )}
+
       {studio && (
         <Studio drill={studio.drill} matiere={studio.matiere}
           onClose={() => setStudio(null)}
@@ -1094,9 +1453,9 @@ export default function CommunicationPage() {
         <Debrief simulation={seance.temps.find(t => t.id === "simulation")?.simulation || null}
           depart={debriefDuJour}
           onClose={() => setDebrief(false)}
-          onValider={({ fautes: f, note }) => ecrire(s => withFait(
+          onValider={({ fautes: f, note, mesures }) => ecrire(s => withFait(
             withDebrief(s, {
-              date: today, fautes: f, note,
+              date: today, fautes: f, note, mesures,
               simulationId: seance.temps.find(t => t.id === "simulation")?.simulation?.id || null,
             }), today, "debrief"))} />
       )}

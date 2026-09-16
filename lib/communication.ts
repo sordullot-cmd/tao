@@ -186,6 +186,12 @@ export const phaseOf = (n: number): Phase =>
  */
 export type Forme = "voix" | "ecrit" | "terrain";
 
+export interface Etape {
+  label: string;
+  /** Durée imposée, en secondes. Absente = l'étape n'est pas chronométrée. */
+  secondes?: number;
+}
+
 export interface Drill {
   id: string;
   label: string;
@@ -198,13 +204,81 @@ export interface Drill {
   consigne: string;
   /** Le piège de l'exercice — ce qui le rend inutile quand on s'y laisse aller. */
   garde?: string;
+  /** Ce sur quoi on travaille, tiré au sort : une réplique, un sujet, une phrase. */
   matiere?: string[];
+  /** Ce qu'on travaille EN ENTIER, sans tirage : un texte, une liste à parcourir. */
+  contenu?: string[];
+  /**
+   * Les interdits. Ce sont eux qui font l'exercice : « raconte ta journée » n'est
+   * pas un exercice, « raconte ta journée sans recommencer une phrase » en est un.
+   */
+  contraintes?: string[];
+  /** À quoi on voit que c'est réussi. Un fait observable, jamais une note. */
+  critere?: string;
+  /** Les étapes chronométrées, quand l'exercice en impose. */
+  etapes?: Etape[];
   champs?: string[];
 }
 
-/* Sujets de parole, réutilisés par les exercices d'échauffement : ce qu'on
-   raconte importe moins que la façon dont on le raconte, et un sujet qu'on
-   connaît laisse toute l'attention à la forme. */
+/* ─── La matière ───────────────────────────────────────────────────────────
+   Les textes, listes et sujets que les exercices consomment. Ils vivent ici,
+   dans le domaine, et pas dans la page : c'est ce qu'on corrigera le plus
+   souvent (une réplique qui ne déclenche rien, une phrase trop facile à
+   découper), et une donnée qu'on corrige a besoin d'être sous test, pas au
+   milieu d'un JSX de six cents lignes.
+   ------------------------------------------------------------------------ */
+
+/**
+ * Le texte de lecture. Le MÊME du premier jour au dernier, et c'est voulu : un
+ * texte connu laisse toute l'attention au débit, et le relire trois semaines
+ * plus tard est la seule façon d'entendre qu'on a changé.
+ */
+export const TEXTE_LECTURE =
+  "La communication est une compétence qui se développe avec la pratique. " +
+  "On n'a pas besoin de trouver les mots parfaits pour être compris. " +
+  "Il est souvent plus important de parler simplement, de prendre son temps " +
+  "et de laisser à l'autre la possibilité de répondre. " +
+  "Une conversation n'est pas une performance. C'est un échange entre deux personnes.";
+
+export const VIRELANGUES = [
+  "Les petits poissons nagent paisiblement près des grandes pierres.",
+  "Trois très gros rats gris trottent très rapidement.",
+  "Je cherche six chemises sèches chez ce cher Serge.",
+];
+
+/** Des phrases qui empilent — à découper en phrases qui portent une idée. */
+export const PHRASES_LONGUES = [
+  "Je pense que le sport est quelque chose qui est vraiment important dans la vie parce que ça permet de rester en bonne santé mais également de rencontrer des personnes et de pouvoir se détendre après une journée compliquée.",
+  "En ce moment qu'est-ce que je fais j'essaie d'améliorer ma communication et ma compétence en terme de conversation parce que je trouve que c'est quelque chose qui me manque un peu.",
+  "Hier je devais aller au magasin mais comme j'étais en retard et qu'en plus il y avait du monde et que mon frère n'était pas prêt on est finalement partis beaucoup plus tard que prévu.",
+  "Le film était pas mal mais je trouve que la fin était bizarre enfin je veux dire pas bizarre mais plutôt décevante parce qu'on ne comprend pas vraiment ce qui arrive au personnage.",
+  "J'aimerais bien me lever plus tôt le matin pour avoir le temps de faire des choses avant les cours mais le problème c'est que je me couche tard et que du coup je suis fatigué.",
+  "Moi en fait hier j'étais avec mes potes et puis après on est sorti enfin bref je sais plus trop.",
+];
+
+/** Les amorces à terminer. On s'entraîne à FINIR, pas à bien commencer. */
+export const AMORCES = [
+  "Je pense que…",
+  "Ce qui m'énerve, c'est…",
+  "Ce que j'aimerais apprendre, c'est…",
+  "Une chose que je regrette, c'est…",
+  "Ce qui me surprend chez les gens, c'est…",
+  "Quand j'ai du temps libre, je…",
+  "La dernière fois que j'ai changé d'avis, c'était…",
+  "Ce dont je suis fier, c'est…",
+  "Ce que je ne supporte pas, c'est…",
+  "Si je devais recommencer, je…",
+];
+
+/** Un mot, trois secondes pour démarrer, trente secondes de parole. */
+export const MOTS_SPONTANES = [
+  "plage", "argent", "université", "famille", "sport", "voyage", "amitié", "liberté",
+  "travail", "réussite", "peur", "habitude", "musique", "ville", "hiver", "hasard",
+];
+
+/* Sujets de parole, réutilisés par plusieurs exercices : ce qu'on raconte
+   importe moins que la façon dont on le raconte, et un sujet qu'on connaît
+   laisse toute l'attention à la forme. */
 const SUJETS = [
   "Ce que tu as fait hier.",
   "Un endroit où tu retournerais demain.",
@@ -218,134 +292,318 @@ const SUJETS = [
   "Ce que tu comptes faire de ta semaine.",
 ];
 
+/** Les cinq étapes d'une opinion développée — la structure à automatiser. */
+const ETAPES_OPINION: Etape[] = [
+  { label: "Opinion", secondes: 20 },
+  { label: "Pourquoi", secondes: 40 },
+  { label: "Exemple concret", secondes: 40 },
+  { label: "Nuance ou contre-exemple", secondes: 40 },
+  { label: "Conclusion", secondes: 20 },
+];
+
 export const DRILLS: Drill[] = [
   /* ── Phase 0 : l'échauffement. Il ouvre CHAQUE séance, quelle que soit la
-     phase — c'est l'instrument, et on ne joue pas d'un instrument froid. ── */
+     phase — c'est l'instrument, et on ne joue pas d'un instrument froid. Ce
+     sont aussi les trois habitudes qui resteront après le parcours : lire à
+     voix haute, parler sans préparation, avoir une vraie interaction. ── */
+  {
+    id: "lecture", label: "Lecture articulée", skill: "debit", phase: 0, duree: 5, forme: "voix",
+    consigne: "Lis le texte à voix haute, deux fois. La première à ton débit naturel. La seconde à 70 % de ce débit.",
+    contenu: [TEXTE_LECTURE],
+    contraintes: ["Prononce chaque mot jusqu'au bout", "Ne mange pas les fins de phrases", "Pause après chaque point"],
+    critere: "La deuxième lecture est audiblement plus lente, et aucune fin de mot n'est avalée.",
+    etapes: [{ label: "Débit naturel" }, { label: "70 % du débit" }],
+    garde: "Ralentir n'est pas traîner : on ne change pas la vitesse des mots, on ajoute du blanc entre les groupes.",
+  },
+  {
+    id: "virelangues", label: "Articulation", skill: "debit", phase: 0, duree: 3, forme: "voix",
+    consigne: "Trois fois chaque phrase. Commence lentement, accélère progressivement. Dès que tu avales un mot, tu ralentis.",
+    contenu: VIRELANGUES,
+    critere: "Tu trouves la vitesse maximale à laquelle tu restes parfaitement compréhensible. C'est cette limite qu'on cherche, pas la vitesse.",
+  },
   {
     id: "frein", label: "Le frein", skill: "debit", phase: 0, duree: 5, forme: "voix",
-    consigne: "Raconte le sujet à voix haute. Une phrase, puis une pause. Une phrase, puis une pause. Interdiction de te dépêcher.",
-    garde: "Ça va sonner artificiel. C'est le but : on installe le contrôle d'abord, on le rendra naturel ensuite.",
+    consigne: "Raconte le sujet à voix haute. Une phrase, puis une pause. Une phrase, puis une pause.",
     matiere: SUJETS,
+    contraintes: ["Interdiction de te dépêcher", "La pause tombe entre deux phrases, jamais au milieu"],
+    critere: "Tu tiens les cinq minutes sans accélérer sur la fin.",
+    garde: "Ça va sonner artificiel. C'est le but : on installe le contrôle d'abord, on le rendra naturel ensuite.",
   },
   {
     id: "sans-bequille", label: "Sans béquille", skill: "formulation", phase: 0, duree: 4, forme: "voix",
     consigne: "90 secondes sur le sujet, sans « en fait », « du coup », « genre », « enfin bref ». À chaque béquille : tu t'arrêtes, tu respires, tu reprends la phrase depuis son début.",
-    garde: "Le silence qui remplace la béquille n'est pas un trou : c'est le temps que l'autre prend pour te suivre.",
     matiere: SUJETS,
+    contraintes: ["Zéro « du coup »", "Zéro « en fait »", "Zéro « genre »", "Le silence remplace la béquille"],
+    critere: "Compte tes béquilles. Le but n'est pas zéro aujourd'hui : c'est moins que la dernière fois.",
+    etapes: [{ label: "Parle", secondes: 90 }],
+    garde: "Le silence qui remplace la béquille n'est pas un trou : c'est le temps que l'autre prend pour te suivre.",
   },
   {
-    id: "lecture", label: "Lecture ralentie", skill: "debit", phase: 0, duree: 4, forme: "voix",
-    consigne: "Lis un paragraphe à voix haute, deux fois moins vite que ton réflexe, en groupant les mots : trois ou quatre à la fois, puis une pause.",
-    garde: "Ralentir n'est pas traîner. On ne change pas la vitesse des mots, on ajoute du blanc entre les groupes.",
+    id: "journal", label: "Journal de conversation", skill: "conversation", phase: 0, duree: 3, forme: "ecrit",
+    consigne: "Le soir, sur une vraie conversation de la journée. Dix réponses courtes valent mieux qu'une longue.",
+    champs: [
+      "Avec qui ai-je parlé, et de quoi ?",
+      "À quel moment ai-je manqué d'idées ?",
+      "Quelle question aurais-je pu poser ?",
+      "Quelle information personnelle aurais-je pu partager ?",
+      "Ai-je parlé trop vite, ou fait des phrases trop longues ?",
+      "Ai-je évité de prendre la parole ?",
+      "Qu'est-ce que je veux améliorer demain ?",
+    ],
+    critere: "Écrit le jour même. Le lendemain, on ne se souvient plus du moment où l'on a manqué d'idées.",
+  },
+  {
+    id: "preuve", label: "La preuve du jour", skill: "confiance", phase: 0, duree: 0, forme: "terrain",
+    consigne: "Note une interaction qui s'est bien passée aujourd'hui, même minuscule : une phrase placée, une question posée, un silence tenu.",
+    garde: "La confiance ne précède pas la prise de parole, elle la suit. Ce carnet est l'endroit où la preuve s'accumule.",
   },
 
   /* ── Phase 1 : clarté ── */
   {
-    id: "cinq-reponses", label: "Cinq réponses, trois phrases", skill: "clarte", phase: 1, duree: 10, forme: "voix",
-    consigne: "Réponds à voix haute en TROIS phrases maximum. Puis passe à la question suivante. Cinq en tout.",
-    garde: "Interdiction de recommencer une phrase parce qu'elle n'est pas parfaite. Tu continues. Une phrase « suffisamment bonne » est une phrase réussie.",
-    matiere: [
-      "Tu fais quoi dans la vie ?",
-      "C'était comment ton week-end ?",
-      "Tu écoutes quoi en ce moment ?",
-      "Qu'est-ce qui t'occupe cette semaine ?",
-      "Tu aimes bien ce que tu fais ?",
-      "T'as des projets cet été ?",
-      "Tu connais du monde ici ?",
-      "Raconte-moi un truc.",
+    id: "cinq-reponses", label: "Une phrase, trois phrases, trente secondes", skill: "clarte", phase: 1, duree: 10, forme: "voix",
+    consigne: "Pour chaque sujet : réponds d'abord en UNE phrase, puis en TROIS, puis développe 30 secondes.",
+    contenu: [
+      "Pourquoi veux-tu améliorer ta communication ?",
+      "Quel est ton principal objectif cette année ?",
+      "Qu'est-ce qui t'intéresse actuellement ?",
+      "Quelle qualité apprécies-tu chez quelqu'un ?",
+      "Quel défaut aimerais-tu améliorer chez toi ?",
     ],
+    contraintes: ["Fin de phrase → pause → nouvelle idée → nouvelle phrase", "Interdiction de recommencer une phrase"],
+    critere: "Des phrases propres, pas des phrases impressionnantes.",
+    etapes: [{ label: "Une phrase" }, { label: "Trois phrases" }, { label: "Développe", secondes: 30 }],
+    garde: "Une phrase « suffisamment bonne » est une phrase réussie. Tu continues.",
   },
   {
-    id: "reparer", label: "Sujet, action, précision", skill: "clarte", phase: 1, duree: 8, forme: "ecrit",
-    consigne: "Voici une phrase qui empile. Réécris-la en trois phrases simples, puis dis-les à voix haute.",
-    garde: "Simple ne veut pas dire pauvre. Phrase simple + idée claire bat toujours phrase compliquée + confuse.",
+    id: "reparer", label: "Réduire une phrase", skill: "clarte", phase: 1, duree: 8, forme: "ecrit",
+    consigne: "Cette phrase empile deux ou trois idées. Réécris-la en phrases naturelles, puis dis-la à voix haute.",
+    matiere: PHRASES_LONGUES,
     champs: ["Première phrase", "Deuxième phrase", "Troisième phrase"],
+    critere: "Chaque phrase de ta version porte UNE idée, et tu peux la dire d'un souffle.",
+    garde: "Simple ne veut pas dire pauvre. Phrase simple + idée claire bat toujours phrase compliquée + confuse.",
+  },
+  {
+    id: "finir", label: "Finir ses phrases", skill: "clarte", phase: 1, duree: 7, forme: "voix",
+    consigne: "Une amorce, tu la termines à voix haute. Les dix, sans t'arrêter entre deux.",
+    contenu: AMORCES,
+    contraintes: ["Interdiction de revenir en arrière", "Même si la fin est banale, tu la dis"],
+    critere: "Dix phrases finies. Aucune abandonnée en route.",
+  },
+  {
+    id: "sans-reprise", label: "Ne pas se corriger", skill: "clarte", phase: 1, duree: 6, forme: "voix",
+    consigne: "Trois minutes sur le sujet. Si une phrase sort mal : « enfin… je veux dire… » et tu continues.",
     matiere: [
-      "Moi en fait hier j'étais avec mes potes et puis après on est sorti enfin bref je sais plus trop.",
-      "Du coup le prof il a dit qu'il fallait rendre le truc mais genre personne savait en vrai donc voilà on a fait comme on a pu.",
-      "J'ai vu un film hier soir enfin c'était pas vraiment un film c'était plutôt une série mais bon c'était bien quoi.",
-      "On devait partir tôt mais comme mon frère était pas prêt et qu'en plus il pleuvait ben finalement on est parti super tard et c'était mort.",
-      "La soirée était bien mais y'avait trop de monde et en plus la musique était nulle donc on est parti mais avant on a croisé Paul.",
-      "J'aimerais bien faire du sport mais j'ai pas trop le temps en ce moment avec les cours et tout donc je me dis que je verrai plus tard.",
+      "Quel est ton plus gros défaut ?",
+      "Explique quelque chose que tu connais mal.",
+      "Donne ton opinion sur un sujet auquel tu n'as jamais réfléchi.",
+      "Raconte quelque chose dont tu as oublié la moitié des détails.",
+      "Qu'est-ce que tu ferais avec un an de libre ?",
     ],
+    contraintes: ["Aucune reprise depuis le début d'une phrase", "Une seule correction par phrase, jamais deux"],
+    critere: "Zéro phrase recommencée. C'est le seul critère.",
+    etapes: [{ label: "Parle", secondes: 180 }],
+    garde: "Reformuler en cours de route casse le débit, perd le fil, et fabrique l'impression de ne pas savoir parler. C'est la faute la plus coûteuse du programme.",
+  },
+  {
+    id: "expliquer-simple", label: "Trois interlocuteurs", skill: "clarte", phase: 1, duree: 10, forme: "voix",
+    consigne: "Explique la même chose trois fois, à trois personnes différentes. Trois minutes chacune.",
+    matiere: [
+      "Le trading : à un enfant de 12 ans, puis à quelqu'un de 60 ans, puis à quelqu'un qui pense que c'est du jeu.",
+      "Ton année scolaire : à un ami, puis à un recruteur, puis à un enfant.",
+      "Ce que tu fais de tes journées : à un inconnu, puis à ta grand-mère, puis à quelqu'un du métier.",
+    ],
+    contraintes: ["Aucun terme technique sans l'expliquer dans la foulée"],
+    critere: "Les trois versions sont différentes. Si elles se ressemblent, tu n'as pas adapté, tu as récité.",
+    garde: "Être compris, pas paraître intelligent.",
   },
 
   /* ── Phase 2 : contrôle de la parole ── */
   {
     id: "trente-secondes", label: "Trois secondes, puis trente", skill: "debit", phase: 2, duree: 10, forme: "voix",
     consigne: "Trois secondes de réflexion — tu ne parles pas. Puis trente secondes de réponse, pas plus.",
-    garde: "Le but n'est pas de remplir les trente secondes. Le silence est autorisé : s'arrêter à quinze est une bonne réponse.",
     matiere: SUJETS,
+    contraintes: ["Interdit de dire « attends, je réfléchis »", "S'arrêter à quinze secondes est une bonne réponse"],
+    critere: "Tu démarres dans les trois secondes, sans préambule.",
+    etapes: [{ label: "Silence", secondes: 3 }, { label: "Réponds", secondes: 30 }],
+    garde: "Le but n'est pas de remplir les trente secondes.",
   },
   {
     id: "groupes-de-mots", label: "Groupes de mots", skill: "debit", phase: 2, duree: 8, forme: "voix",
-    consigne: "Raconte le sujet en découpant : trois ou quatre mots, une respiration, trois ou quatre mots. Tu entends où tombent tes pauses.",
-    garde: "Une pause posée exprès ne s'entend pas comme une hésitation. C'est l'hésitation qu'elle remplace.",
+    consigne: "Raconte le sujet en découpant : cinq à sept mots, une respiration, cinq à sept mots.",
     matiere: SUJETS,
+    contraintes: ["La pause tombe entre les groupes, pas au milieu d'une idée"],
+    critere: "Tu entends tes propres pauses au lieu de les subir.",
+    etapes: [{ label: "Parle", secondes: 180 }],
+    garde: "Une pause posée exprès ne s'entend pas comme une hésitation. C'est l'hésitation qu'elle remplace.",
+  },
+  {
+    id: "silence-cinq", label: "Cinq secondes de silence", skill: "debit", phase: 2, duree: 6, forme: "voix",
+    consigne: "La question s'affiche. Tu attends cinq secondes en silence. Puis tu réponds.",
+    matiere: [
+      "Quelle est ta plus grande qualité ?",
+      "Quelle personne admires-tu ?",
+      "Quelle décision a changé ta vie ?",
+      "De quoi es-tu le plus fier cette année ?",
+      "Qu'est-ce que tu ferais si tu ne pouvais pas échouer ?",
+    ],
+    contraintes: ["Les cinq secondes se comptent en entier", "Pas de « alors… », pas de « euh »"],
+    critere: "Tu tiens les cinq secondes sans les combler. Elles paraissent dix ; elles font cinq.",
+    etapes: [{ label: "Silence", secondes: 5 }, { label: "Réponds", secondes: 45 }],
   },
 
   /* ── Phase 3 : formulation & vocabulaire ── */
   {
     id: "mot-juste", label: "Lequel exactement ?", skill: "formulation", phase: 3, duree: 10, forme: "ecrit",
-    consigne: "Voici une phrase générique. Écris ce que tu voulais VRAIMENT dire, avec le mot précis — puis la phrase entière, corrigée.",
-    garde: "On ne cherche pas un mot rare. On cherche celui qui correspond à ton idée : « complexe » et « stimulant » ne disent pas la même chose.",
-    champs: ["Le mot précis", "La phrase corrigée"],
+    consigne: "Voici un mot générique. Trouve cinq alternatives adaptées à des contextes différents, puis la phrase corrigée avec celle qui correspond VRAIMENT à ton idée.",
     matiere: [
-      "« C'est vachement intéressant. » — intéressant comment ? fascinant, complexe, stimulant, imprévisible, technique ?",
+      "« C'est vachement intéressant. » — fascinant, complexe, stimulant, imprévisible, technique ?",
       "« C'était un truc de fou. » — inattendu, absurde, spectaculaire, gênant, inespéré ?",
       "« Il est bizarre. » — imprévisible, distant, excentrique, mal à l'aise, insaisissable ?",
       "« C'était bien. » — reposant, marquant, drôle, réussi, plus simple que prévu ?",
+      "« C'est important. » — essentiel, primordial, déterminant, indispensable, significatif ?",
       "« J'ai trouvé ça nul. » — bâclé, prévisible, prétentieux, interminable, sans enjeu ?",
+      "« C'est difficile. » — exigeant, technique, épuisant, ingrat, décourageant ?",
       "« Il est trop fort. » — précis, rapide, endurant, inventif, imperturbable ?",
     ],
+    champs: ["Cinq alternatives", "Le mot qui correspond vraiment", "La phrase corrigée"],
+    critere: "Tu sais dire pourquoi tu choisis « captivant » plutôt que « enrichissant ».",
+    garde: "On ne cherche pas un mot rare. On cherche celui qui correspond à ton idée.",
+  },
+  {
+    id: "sans-le-mot", label: "Sans le mot", skill: "formulation", phase: 3, duree: 6, forme: "voix",
+    consigne: "Parle 30 secondes du sujet SANS utiliser le mot interdit.",
+    matiere: [
+      "Pourquoi le sport est important — sans dire « important ».",
+      "Ce que tu trouves intéressant en ce moment — sans dire « intéressant ».",
+      "Un truc difficile que tu as fait — sans dire « difficile ».",
+      "Ce qui est bien dans ta semaine — sans dire « bien ».",
+      "Raconte une chose qui t'est arrivée — sans dire « chose » ni « truc ».",
+    ],
+    critere: "Le détour t'oblige à préciser. C'est exactement le but.",
+    etapes: [{ label: "Parle", secondes: 30 }],
+  },
+  {
+    id: "bequilles", label: "Chasse aux béquilles", skill: "formulation", phase: 3, duree: 8, forme: "voix",
+    consigne: "Trois minutes sur « une journée idéale pour moi ». Compte tes béquilles. Puis refais le MÊME sujet en les remplaçant par des silences.",
+    contraintes: ["Compte : « du coup », « en fait », « bah », « genre », « voilà »"],
+    critere: "La deuxième version en a moins que la première. C'est tout ce qu'on demande aujourd'hui.",
+    etapes: [{ label: "Première prise", secondes: 180 }, { label: "Compte" }, { label: "Deuxième prise", secondes: 180 }],
+  },
+  {
+    id: "trois-niveaux", label: "Dix, trente, cent vingt", skill: "formulation", phase: 3, duree: 12, forme: "voix",
+    consigne: "La même question, trois fois : en 10 secondes, en 30, puis en 2 minutes.",
+    matiere: [
+      "Pourquoi fais-tu ce que tu fais ?",
+      "Quel est ton objectif cette année ?",
+      "Qu'est-ce qui te passionne ?",
+      "Qu'est-ce que tu aimerais changer ?",
+      "Qu'est-ce qui te rend heureux ?",
+    ],
+    contraintes: ["La version longue n'est pas la courte répétée plus lentement"],
+    critere: "Chaque allongement AJOUTE : un exemple, une nuance, un souvenir.",
+    etapes: [{ label: "Court", secondes: 10 }, { label: "Moyen", secondes: 30 }, { label: "Long", secondes: 120 }],
   },
   {
     id: "mot", label: "Le mot de la semaine", skill: "formulation", phase: 3, duree: 6, forme: "ecrit",
     consigne: "Un mot, ses cases. Dix par semaine, chacun avec une phrase à toi. Le mot n'est à toi que le jour où tu l'auras placé dans une vraie conversation.",
-    garde: "Le mot passe par quatre états : reconnu, compris, utilisé, automatique. Seuls les deux derniers comptent.",
     champs: ["Le mot", "Définition", "Synonymes", "Contraire", "Une phrase à moi", "La réplique où je le placerai"],
+    critere: "Le mot passe par quatre états : reconnu, compris, utilisé, automatique. Seuls les deux derniers comptent.",
+    garde: "Apprendre des listes ne sert à rien : on peut connaître cinq cents mots et continuer à chercher les siens.",
   },
 
   /* ── Phase 4 : conversation ── */
   {
-    id: "branches", label: "Les cinq branches", skill: "conversation", phase: 4, duree: 10, forme: "ecrit",
-    consigne: "Quelqu'un vient de dire ça. Écris une question par branche : le sujet, son rapport personnel, une expérience, toi, le social autour.",
-    garde: "Tu n'as pas besoin de connaître deux cents sujets. Tu dois savoir tirer cinq conversations d'un seul.",
-    champs: ["Sujet — depuis quand, quel niveau ?", "Personnel — pourquoi il aime ça ?", "Expérience — la meilleure anecdote ?", "Toi — ce que ça t'évoque", "Social — les gens autour"],
+    id: "developper", label: "Opinion en cinq temps", skill: "clarte", phase: 4, duree: 8, forme: "voix",
+    consigne: "Donne ton opinion sur le sujet en suivant les cinq étapes, chronomètre à l'appui.",
     matiere: [
-      "« Je fais du foot. »",
-      "« J'ai commencé la boxe récemment. »",
+      "Est-ce que l'argent rend heureux ?",
+      "La discipline est-elle plus importante que la motivation ?",
+      "Est-ce que les études sont indispensables pour réussir ?",
+      "Les réseaux sociaux font-ils plus de mal que de bien ?",
+      "Est-ce que réussir sa vie, c'est gagner beaucoup d'argent ?",
+    ],
+    etapes: ETAPES_OPINION,
+    critere: "Tu passes d'une étape à l'autre sans y penser. C'est l'objectif caché : que la structure devienne un réflexe.",
+    garde: "Ta nuance ne détruit pas ta position, elle la précise.",
+  },
+  {
+    id: "cinq-portes", label: "Cinq portes d'entrée", skill: "conversation", phase: 4, duree: 8, forme: "ecrit",
+    consigne: "Une seule phrase de l'autre contient cinq portes. Écris-les toutes les cinq, de nature différente.",
+    matiere: [
+      "« Je suis parti en Espagne cet été. »",
+      "« J'ai commencé la boxe cette année. »",
+      "« Je fais du volley depuis cinq ans. »",
+      "« J'ai changé de boulot il y a deux mois. »",
+      "« On a adopté un chat. »",
+      "« Je me lève à 5 h en ce moment. »",
+      "« J'ai revu un pote que j'avais pas vu depuis dix ans. »",
+    ],
+    champs: ["Question", "Expérience personnelle", "Opinion", "Émotion / réaction", "Nouvelle branche"],
+    critere: "Cinq réponses vraiment différentes — pas cinq questions déguisées.",
+  },
+  {
+    id: "reaction-perso", label: "Réaction, puis soi, puis question", skill: "conversation", phase: 4, duree: 8, forme: "ecrit",
+    consigne: "Ne commence jamais par la question. Réagis d'abord, apporte quelque chose de toi, et seulement ensuite relance.",
+    matiere: [
+      "« J'ai commencé la boxe cette année. »",
+      "« Je pars en Espagne cet été. »",
       "« Je bosse dans une agence. »",
       "« Je me suis remis à la guitare. »",
-      "« Je pars en Espagne cet été. »",
-      "« On a adopté un chat. »",
-      "« Je prépare un concours en parallèle. »",
       "« J'ai déménagé en septembre. »",
+      "« Je prépare un concours en parallèle. »",
     ],
+    champs: ["Ma réaction", "Ce que ça m'évoque, chez moi", "Ma question"],
+    critere: "L'autre peut rebondir sur TOI. C'est ce qui empêche l'interrogatoire.",
+    garde: "Mauvaise version : « Depuis quand ? Pourquoi ? Où ? ». Bonne version : « Ah sérieux ? J'ai toujours voulu essayer. T'en fais depuis combien de temps ? »",
+  },
+  {
+    id: "questions-ouvertes", label: "Ouvrir les questions", skill: "conversation", phase: 4, duree: 6, forme: "ecrit",
+    consigne: "Transforme chaque question fermée en question ouverte, puis trouve la suivante.",
+    contenu: [
+      "« Tu as aimé ? » → « Qu'est-ce que tu as préféré ? »",
+      "« C'était bien ? »",
+      "« Tu y retournerais ? »",
+      "« T'as fait quelque chose ce week-end ? »",
+      "« Tu connais ? »",
+      "« Ça s'est bien passé ? »",
+      "« T'aimes ton boulot ? »",
+      "« T'étais avec des amis ? »",
+    ],
+    champs: ["Version ouverte", "La question d'après"],
+    critere: "Aucune de tes questions ne peut recevoir « oui » pour réponse.",
+  },
+  {
+    id: "branches", label: "Les branches", skill: "conversation", phase: 4, duree: 10, forme: "ecrit",
+    consigne: "Un sujet central. Écris dix branches qui en partent, puis choisis-en une et parle deux minutes.",
+    matiere: [
+      "Université — cours, professeurs, logement, argent, soirées, avenir…",
+      "Voyage — pays, nourriture, culture, budget, gens, souvenirs…",
+      "Le sport — club, niveau, blessures, coéquipiers, discipline…",
+      "Le travail — métier, collègues, horaires, sens, projets…",
+      "L'enfance — école, quartier, vacances, fratrie, bêtises…",
+    ],
+    champs: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+    critere: "Dix branches trouvées. Tu n'as pas besoin de connaître deux cents sujets : tu dois savoir en tirer dix d'un seul.",
   },
   {
     id: "relances", label: "Les quatre relances", skill: "conversation", phase: 4, duree: 8, forme: "ecrit",
     consigne: "Quelqu'un vient de dire ça. Écris les quatre relances. Tu n'as pas à trouver un sujet : il vient de t'en donner un.",
-    garde: "Quatre portes ouvertes valent mieux qu'une réplique parfaite. On s'entraîne à les voir, pas à choisir.",
-    champs: ["Approfondir — pourquoi ?", "Explorer — comment ça s'est passé ?", "Réagir — ah ouais, sérieux ?", "Associer — ça me fait penser à…"],
     matiere: [
       "J'ai changé de boulot il y a deux mois.",
       "J'ai passé le week-end chez mes parents.",
       "Je dors très mal en ce moment.",
       "J'ai arrêté les réseaux depuis un mois.",
-      "J'ai revu un pote que j'avais pas vu depuis dix ans.",
       "Je me suis mis à cuisiner.",
       "J'ai racheté un vieux vélo.",
-      "Je me lève à 5 h en ce moment.",
     ],
+    champs: ["Approfondir — pourquoi ?", "Explorer — comment ça s'est passé ?", "Réagir — ah ouais, sérieux ?", "Associer — ça me fait penser à…"],
+    critere: "Quatre portes ouvertes valent mieux qu'une réplique parfaite.",
   },
 
   /* ── Phase 5 : parler avec n'importe qui ── */
   {
     id: "profils", label: "Le profil du jour", skill: "conversation", phase: 5, duree: 10, forme: "ecrit",
     consigne: "Prépare trois phrases pour ce profil précis : une pour entrer, une pour tenir, une pour sortir proprement.",
-    garde: "Reconnaître qu'il faut s'arrêter est une compétence, pas un échec. Forcer une conversation morte en crée une mauvaise.",
-    champs: ["Pour entrer", "Pour tenir", "Pour sortir"],
     matiere: [
       "Quelqu'un de très bavard : tu dois reprendre la parole sans le couper brutalement.",
       "Quelqu'un de très silencieux : tu dois créer la matière toi-même.",
@@ -354,13 +612,21 @@ export const DRILLS: Drill[] = [
       "Quelqu'un que ça n'intéresse visiblement pas : tu dois savoir conclure.",
       "Quelqu'un qui te met mal à l'aise : tu dois rester, sans te rétracter.",
     ],
+    champs: ["Pour entrer", "Pour tenir", "Pour sortir"],
+    critere: "Reconnaître qu'il faut s'arrêter est une compétence, pas un échec.",
+  },
+  {
+    id: "pas-interrogatoire", label: "Deux questions, pas plus", skill: "conversation", phase: 5, duree: 8, forme: "voix",
+    consigne: "Conversation imaginaire à voix haute. Après deux questions consécutives, ta troisième intervention DOIT être autre chose.",
+    contraintes: ["Deux questions consécutives maximum", "La troisième : une anecdote, une opinion, une réaction ou une remarque"],
+    critere: "Tu t'entends changer de registre au bon moment. C'est ce qui transforme un interrogatoire en conversation.",
+    matiere: SUJETS,
   },
 
   /* ── Phase 6 : groupes ── */
   {
     id: "entrer", label: "Entrer une fois", skill: "groupes", phase: 6, duree: 0, forme: "terrain",
     consigne: "Une seule mission : entrer UNE fois dans une conversation de groupe. Une phrase suffit.",
-    garde: "Le moment parfait n'arrive pas. Une phrase posée trop tôt vaut mieux qu'une phrase parfaite jamais dite.",
     matiere: [
       "« Vous parliez de quoi ? »",
       "« Attends, j'ai pas suivi — il s'est passé quoi ? »",
@@ -368,12 +634,24 @@ export const DRILLS: Drill[] = [
       "« Raconte, ça m'intéresse. »",
       "« Ça s'est fini comment, du coup ? »",
     ],
+    garde: "Le moment parfait n'arrive pas. Une phrase posée trop tôt vaut mieux qu'une phrase parfaite jamais dite.",
+  },
+  {
+    id: "entrer-scenarios", label: "Cinq entrées", skill: "groupes", phase: 6, duree: 10, forme: "ecrit",
+    consigne: "Trois personnes parlent déjà. Tu arrives. Écris ta phrase d'entrée pour chacune des cinq scènes.",
+    contenu: [
+      "Trois personnes parlent d'un voyage.",
+      "Trois personnes parlent de football.",
+      "Trois personnes parlent d'une soirée où tu n'étais pas.",
+      "Trois personnes parlent d'un film que tu n'as pas vu.",
+      "Trois personnes parlent de leurs études.",
+    ],
+    champs: ["Voyage", "Football", "Soirée", "Film", "Études"],
+    critere: "Aucune de tes cinq phrases n'attend qu'on te donne la parole.",
   },
   {
     id: "reprendre", label: "Reprendre la parole", skill: "groupes", phase: 6, duree: 8, forme: "ecrit",
-    consigne: "Tu as dit une phrase, les autres ont réagi, et tu as disparu. Écris la phrase qui te fait REVENIR dans l'échange trente secondes plus tard.",
-    garde: "Disparaître après une intervention annule l'intervention. On n'entre pas pour dire une chose, on entre pour rester.",
-    champs: ["Ma première phrase", "Ce que les autres répondent", "Ma phrase pour revenir"],
+    consigne: "Tu as dit une phrase, les autres ont réagi, et tu as disparu. Écris la phrase qui te fait REVENIR trente secondes plus tard.",
     matiere: [
       "Le groupe parle d'un film que tu n'as pas vu.",
       "Deux personnes racontent un souvenir commun où tu n'étais pas.",
@@ -381,38 +659,53 @@ export const DRILLS: Drill[] = [
       "La conversation est sur un sujet technique que tu connais bien.",
       "On parle d'un endroit où tu es allé.",
     ],
+    champs: ["Ma première phrase", "Ce que les autres répondent", "Ma phrase pour revenir"],
+    critere: "Disparaître après une intervention annule l'intervention.",
   },
   {
     id: "dynamique", label: "Faire participer", skill: "groupes", phase: 6, duree: 0, forme: "terrain",
     consigne: "Aujourd'hui, renvoie une question à quelqu'un qui n'a rien dit : « et toi, t'en penses quoi ? »",
-    garde: "Créer la dynamique d'un groupe donne une place plus sûre que la prendre. Celui qui fait parler les autres est au centre sans avoir à s'y mettre.",
+    garde: "Celui qui fait parler les autres est au centre sans avoir à s'y mettre.",
   },
 
   /* ── Phase 7 : storytelling ── */
   {
     id: "histoire", label: "L'histoire en cinq temps", skill: "storytelling", phase: 7, duree: 10, forme: "ecrit",
     consigne: "Une chose qui t'est vraiment arrivée, rangée en cinq temps. Puis raconte-la à voix haute en moins de 90 secondes.",
-    garde: "L'architecture avant le style. Trop de détails, trop vite, et l'histoire n'existe plus — même quand elle est bonne.",
     champs: ["Contexte — où, quand ?", "Objectif — je voulais quoi ?", "Problème — qu'est-ce qui a mal tourné ?", "Escalade — ça empire comment ?", "Résultat — et alors ?"],
+    critere: "Court, clair, mémorable. Si tu dépasses 90 secondes, c'est qu'il reste des détails à couper.",
+    garde: "L'architecture avant le style. Trop de détails, trop vite, et l'histoire n'existe plus — même quand elle est bonne.",
   },
   {
     id: "elaguer", label: "Élaguer", skill: "storytelling", phase: 7, duree: 8, forme: "voix",
-    consigne: "Raconte une histoire que tu connais en 60 secondes. Puis la même en 30. Puis en 15.",
-    garde: "Ce qui tombe entre 60 et 15 secondes, c'est exactement ce qui rendait l'histoire illisible.",
+    consigne: "Raconte l'histoire en 3 minutes. Puis la même en 60 secondes. Puis en 30.",
     matiere: [
+      "Une fois où quelque chose ne s'est absolument pas passé comme prévu.",
       "La dernière fois que tu as été en retard.",
       "Une rencontre inattendue.",
+      "Une situation embarrassante.",
       "Un truc qui a mal tourné et qui fait rire après coup.",
-      "La dernière fois que tu t'es trompé de bout en bout.",
-      "Un souvenir de vacances.",
     ],
+    etapes: [{ label: "Version longue", secondes: 180 }, { label: "60 secondes", secondes: 60 }, { label: "30 secondes", secondes: 30 }],
+    critere: "Ce qui tombe entre 180 et 30 secondes, c'est exactement ce qui rendait l'histoire illisible.",
+  },
+  {
+    id: "tension", label: "Retarder la révélation", skill: "storytelling", phase: 7, duree: 8, forme: "voix",
+    consigne: "Raconte l'histoire en gardant le résultat pour la fin. Tu annonces qu'il va se passer quelque chose, et tu fais attendre.",
+    matiere: [
+      "Une fois où tu as cru avoir un gros problème.",
+      "Le jour où tu t'es trompé de bout en bout.",
+      "Une fois où tu as failli rater quelque chose d'important.",
+      "Un moment où tout a basculé en une seconde.",
+    ],
+    contraintes: ["Le résultat ne sort pas avant la dernière phrase"],
+    critere: "« Je pensais que tout allait bien… jusqu'au moment où j'ai regardé mon téléphone. » — on doit vouloir la suite.",
   },
 
   /* ── Phase 8 : humour ── */
   {
     id: "levier", label: "Le levier du jour", skill: "humour", phase: 8, duree: 8, forme: "voix",
     consigne: "Lis la réplique, applique le levier, dis ta réponse à voix haute en moins de dix secondes.",
-    garde: "On n'entraîne pas des blagues préparées, on entraîne la vitesse d'association. « Quatre heures ? Donc t'es encore dans la journée d'hier. »",
     matiere: [
       "EXAGÉRATION — « On a séché les maths. » → pousse le trait jusqu'à l'absurde.",
       "TAQUINERIE — « On a encore perdu 5-0. » → moque gentiment, sans viser ce qui fait mal.",
@@ -421,26 +714,68 @@ export const DRILLS: Drill[] = [
       "CALLBACK — reprends une information donnée cinq minutes plus tôt.",
       "AUTODÉRISION — ris de toi sans te dévaloriser : la nuance est que tu restes debout.",
     ],
+    critere: "Dix secondes maximum. Le timing compte plus que la qualité de la vanne.",
+    garde: "On n'entraîne pas des blagues préparées, on entraîne la vitesse d'association. « Quatre heures ? Donc t'es encore dans la journée d'hier. »",
+  },
+  {
+    id: "exagerer", label: "Exagération", skill: "humour", phase: 8, duree: 8, forme: "ecrit",
+    consigne: "Transforme la situation banale en version drôle, par l'exagération.",
+    matiere: [
+      "J'ai attendu 20 minutes pour avoir mon repas.",
+      "Mon train a eu 5 minutes de retard.",
+      "Il a mis une heure à répondre à mon message.",
+      "Il fait un peu froid dans cette salle.",
+      "J'ai trois pages à lire pour demain.",
+      "Il y avait deux personnes à la soirée.",
+      "Mon téléphone est à 8 %.",
+      "J'ai perdu au premier tour.",
+    ],
+    champs: ["Version exagérée"],
+    critere: "« J'ai attendu tellement longtemps que j'ai commencé à me demander si le restaurant élevait lui-même le poulet. »",
+  },
+  {
+    id: "taquiner", label: "Cinq registres", skill: "humour", phase: 8, duree: 8, forme: "ecrit",
+    consigne: "Pour la même situation, écris cinq réponses : une neutre, une drôle, une exagérée, une comparaison, une taquinerie légère.",
+    matiere: [
+      "Un ami arrive avec 30 minutes de retard.",
+      "Il annonce qu'il commence la salle demain.",
+      "Elle dit qu'elle va se coucher tôt ce soir, pour la troisième fois cette semaine.",
+      "Il a encore oublié son chargeur.",
+      "Ils ont perdu leur match 5-0.",
+    ],
+    champs: ["Neutre", "Drôle", "Exagérée", "Comparaison", "Taquinerie"],
+    critere: "La taquinerie ne vise jamais ce qui fait vraiment mal. C'est toute la différence.",
   },
 
   /* ── Phase 9 : présence & confiance ── */
   {
     id: "silence", label: "Tenir le silence", skill: "confiance", phase: 9, duree: 6, forme: "voix",
     consigne: "Réponds au sujet, puis TAIS-TOI trois secondes pleines avant d'ajouter quoi que ce soit. Compte-les.",
-    garde: "Parler pour combler un silence est la façon la plus sûre de perdre le fil. Trois secondes paraissent dix quand c'est toi qui les tiens ; personne d'autre ne les remarque.",
     matiere: SUJETS,
+    critere: "Tu tiens les trois secondes sans les combler.",
+    etapes: [{ label: "Réponds", secondes: 45 }, { label: "Silence", secondes: 3 }],
+    garde: "Parler pour combler un silence est la façon la plus sûre de perdre le fil.",
+  },
+  {
+    id: "sous-pression", label: "Sous pression", skill: "confiance", phase: 9, duree: 10, forme: "voix",
+    consigne: "Enchaîne les quatre temps sans t'arrêter entre eux. On te coupe, on te contredit, on change de sujet : tu restes fonctionnel.",
+    matiere: [
+      "Explique en dix secondes pourquoi on devrait t'embaucher.",
+      "Défends en dix secondes une décision que tu as prise cette année.",
+      "Explique en dix secondes ce que tu veux faire de ton année.",
+    ],
+    etapes: [
+      { label: "Ta réponse", secondes: 10 },
+      { label: "On te dit non — réponds", secondes: 30 },
+      { label: "On te demande un exemple", secondes: 30 },
+      { label: "On te coupe et on change de sujet — enchaîne", secondes: 30 },
+    ],
+    critere: "Parler seul dans sa chambre et parler sous pression sont deux compétences. C'est la seconde qu'on entraîne ici.",
   },
   {
     id: "sans-approbation", label: "Sans chercher l'accord", skill: "confiance", phase: 9, duree: 0, forme: "terrain",
     consigne: "Aujourd'hui, dis un avis sans le terminer par « non ? », « tu vois ? », « enfin je sais pas ».",
     garde: "Ces trois mots demandent la permission d'avoir parlé. Les retirer ne rend pas arrogant : ça rend clair.",
-  },
-
-  /* ── Terrain, disponible à toute phase ── */
-  {
-    id: "preuve", label: "La preuve du jour", skill: "confiance", phase: 0, duree: 0, forme: "terrain",
-    consigne: "Note une interaction qui s'est bien passée aujourd'hui, même minuscule : une phrase placée, une question posée, un silence tenu.",
-    garde: "La confiance ne précède pas la prise de parole, elle la suit. Ce carnet est l'endroit où la preuve s'accumule.",
   },
 ];
 
@@ -655,10 +990,46 @@ export interface Travail {
   id: string; date: string; drillId: string; matiere: string; reponses: string[];
 }
 
+/**
+ * Ce qu'on COMPTE après une séance, en plus de ce qu'on coche.
+ *
+ * Trois notes sur dix et trois comptages. Les comptages sont là parce qu'ils
+ * sont les seuls chiffres qu'on puisse relever honnêtement tout seul : « j'ai
+ * dit du coup onze fois » est vérifiable, « ma fluidité était à 6 » ne l'est
+ * pas. Ce sont eux qui pilotent le renfort du lendemain.
+ */
+export interface Mesures {
+  /** 0 à 10 — trop rapide (0) à bien tenu (10). */
+  debit: number | null;
+  clarte: number | null;
+  /** 0 à 10 — j'ai cherché mes mots sans arrêt (0) à ils sont venus (10). */
+  mots: number | null;
+  /** Comptages bruts. */
+  abandons: number | null;
+  repetitions: number | null;
+  bequilles: number | null;
+}
+
+export const MESURES_VIDES: Mesures = {
+  debit: null, clarte: null, mots: null, abandons: null, repetitions: null, bequilles: null,
+};
+
+/** Les six mesures, telles que la fenêtre de débrief les demande. */
+export const MESURES: Array<{ id: keyof Mesures; label: string; aide: string; type: "note" | "compte"; skill: string }> = [
+  { id: "debit",       label: "Débit",              aide: "0 = je me suis emballé · 10 = tenu du début à la fin", type: "note",   skill: "debit" },
+  { id: "clarte",      label: "Clarté",             aide: "0 = j'ai empilé · 10 = une idée par phrase",           type: "note",   skill: "clarte" },
+  { id: "mots",        label: "Accès aux mots",     aide: "0 = j'ai cherché sans arrêt · 10 = ils sont venus",    type: "note",   skill: "formulation" },
+  { id: "abandons",    label: "Phrases abandonnées", aide: "Recommencées en cours de route",                      type: "compte", skill: "clarte" },
+  { id: "repetitions", label: "Répétitions",        aide: "Le même mot, la même idée",                            type: "compte", skill: "formulation" },
+  { id: "bequilles",   label: "Béquilles",          aide: "« du coup », « en fait », « bah », « genre »",          type: "compte", skill: "formulation" },
+];
+
 export interface Debrief {
   id: string; date: string;
   /** Identifiants de FAUTES cochées. La liste vide est une information, pas un vide. */
   fautes: string[];
+  /** Les six chiffres de la séance. Chacun peut rester vide. */
+  mesures: Mesures;
   note: string;
   /** La simulation jouée ce jour-là, quand il y en avait une. */
   simulationId?: string | null;
@@ -783,9 +1154,22 @@ export function normalizeStore(raw: unknown): CommStore {
       const date = day(o.date);
       if (!date) return null;
       const connues = new Set(FAUTES.map(f => f.id));
+      const src = (o.mesures || {}) as Record<string, unknown>;
+      const mesures = { ...MESURES_VIDES };
+      for (const m of MESURES) {
+        const v = Number(src[m.id]);
+        if (!Number.isFinite(v)) continue;
+        /* Une note est bornée à dix, un comptage ne l'est pas : on peut dire
+           « du coup » vingt-deux fois en trois minutes, et le plafonner à dix
+           masquerait précisément le cas qui mérite un renfort. */
+        mesures[m.id] = m.type === "note"
+          ? Math.max(0, Math.min(10, Math.round(v)))
+          : Math.max(0, Math.round(v));
+      }
       return {
         id: str(o.id) || `d${i}`, date,
         fautes: arr(o.fautes).map(str).filter(f => connues.has(f)),
+        mesures,
         note: str(o.note),
         simulationId: o.simulationId ? str(o.simulationId) : null,
       } as Debrief;
@@ -1137,7 +1521,14 @@ export interface Temps {
 export interface Seance {
   date: string;
   phase: Phase;
+  /** Les cinq temps, toujours les cinq, toujours dans cet ordre. */
   temps: Temps[];
+  /**
+   * L'exercice en plus, quand les débriefs signalent une habitude. Il est à
+   * part et non glissé dans les cinq : la séance garde sa forme, et ce qui
+   * s'ajoute se voit comme un ajout — avec sa raison écrite à côté.
+   */
+  renfort: { drill: Drill; priorite: Priorite } | null;
   /** Ce qui est déjà coché aujourd'hui (identifiants d'exercices et de temps). */
   faits: string[];
 }
@@ -1186,7 +1577,106 @@ export function seanceDuJour(store: CommStore, date: string, roll = 0): Seance {
     { id: "mission", label: "Mission réelle", minutes: "dehors", mission: mission || undefined },
   ];
 
-  return { date: d, phase, temps, faits: faitsDuJour(store, d) };
+  return { date: d, phase, temps, renfort: renfortDuJour(store, d, roll), faits: faitsDuJour(store, d) };
+}
+
+/* ─── L'adaptation ───────────────────────────────────────────────────────── */
+
+export interface Priorite {
+  /** La compétence à renforcer, indépendamment de la phase en cours. */
+  skill: Skill;
+  /** Pourquoi elle sort — la phrase à afficher, en clair. */
+  raison: string;
+  /** Sur combien de séances la lecture est faite. */
+  seances: number;
+}
+
+/**
+ * Ce qui coince VRAIMENT, d'après les dernières séances.
+ *
+ * Le parcours reste linéaire — une phase, une compétence — et c'est voulu. Mais
+ * il serait absurde de continuer à dérouler le calendrier quand six débriefs de
+ * suite disent « j'ai recommencé une phrase ». La priorité ne change donc pas la
+ * phase : elle ajoute UN exercice de renfort à la séance, et elle le dit.
+ *
+ * Deux sources, dans cet ordre : les COMPTAGES d'abord (ils sont vérifiables :
+ * on a dit « du coup » onze fois ou on ne l'a pas dit), les fautes cochées
+ * ensuite. Sous trois séances, rien n'est rendu : trois est le minimum pour
+ * distinguer une habitude d'un mauvais jour.
+ */
+export function prioriteDuMoment(store: CommStore, fenetre = 7): Priorite | null {
+  const derniers = store.debriefs.slice(0, fenetre);
+  if (derniers.length < 3) return null;
+
+  /* Un comptage qui dépasse le seuil sur la MOITIÉ des séances est une
+     habitude. Les seuils sont volontairement indulgents : le programme ne
+     cherche pas le zéro, il cherche la baisse. */
+  const seuils: Array<{ id: keyof Mesures; seuil: number; skill: string; phrase: string }> = [
+    { id: "abandons", seuil: 3, skill: "clarte", phrase: "tu recommences tes phrases en cours de route" },
+    { id: "bequilles", seuil: 6, skill: "formulation", phrase: "les béquilles (« du coup », « en fait ») reviennent" },
+    { id: "repetitions", seuil: 5, skill: "formulation", phrase: "tu répètes les mêmes mots" },
+  ];
+  for (const s of seuils) {
+    const concernees = derniers.filter(d => {
+      const v = d.mesures[s.id];
+      return v != null && v >= s.seuil;
+    }).length;
+    if (concernees * 2 >= derniers.length) {
+      const skill = skillById(s.skill);
+      if (skill) {
+        return { skill, raison: `Sur ${derniers.length} séances, ${s.phrase}.`, seances: derniers.length };
+      }
+    }
+  }
+
+  /* Une note basse tenue dans le temps compte aussi : une moyenne sous 4 sur
+     trois séances est plus parlante qu'un 2 isolé. */
+  for (const m of MESURES.filter(x => x.type === "note")) {
+    const notes = derniers.map(d => d.mesures[m.id]).filter((v): v is number => v != null);
+    if (notes.length < 3) continue;
+    const moyenne = notes.reduce((a, b) => a + b, 0) / notes.length;
+    if (moyenne < 4) {
+      const skill = skillById(m.skill);
+      if (skill) {
+        return {
+          skill,
+          raison: `${m.label} reste bas sur tes ${notes.length} dernières séances (${moyenne.toFixed(1)}/10).`,
+          seances: notes.length,
+        };
+      }
+    }
+  }
+
+  /* À défaut, la faute la plus cochée — à condition qu'elle revienne. */
+  const frequentes = fautesFrequentes(store, fenetre);
+  const tete = frequentes[0];
+  if (tete && tete.n >= 3) {
+    const skill = skillById(tete.faute.skill);
+    if (skill) {
+      return {
+        skill,
+        raison: `« ${tete.faute.label} » revient ${tete.n} fois sur tes ${derniers.length} dernières séances.`,
+        seances: derniers.length,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * L'exercice de renfort : celui qui vise la priorité, hors de la phase.
+ *
+ * Il est tiré parmi les exercices DÉJÀ ouverts (phase courante ou en dessous) :
+ * répondre à une faiblesse de clarté par un exercice de storytelling ajouterait
+ * une difficulté au lieu d'en retirer une.
+ */
+export function renfortDuJour(store: CommStore, date: string, roll = 0): { drill: Drill; priorite: Priorite } | null {
+  const priorite = prioriteDuMoment(store);
+  if (!priorite) return null;
+  const candidats = DRILLS.filter(d =>
+    d.skill === priorite.skill.id && d.phase <= store.phase && d.forme !== "terrain");
+  const drill = tirage(candidats, `${day(date)}|renfort|${roll}`);
+  return drill ? { drill, priorite } : null;
 }
 
 /* ─── Passage de phase ───────────────────────────────────────────────────── */
