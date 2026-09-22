@@ -2,15 +2,18 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { t, useLang } from "@/lib/i18n";
-const TIMER_KEY = "tr4de_focus_timer_v1";
-const loadTimer = () => {
-  if (typeof window === "undefined") return null;
-  try { return JSON.parse(localStorage.getItem(TIMER_KEY) || "null"); } catch { return null; }
-};
-const saveTimer = (s) => {
-  if (typeof window === "undefined") return;
-  try { localStorage.setItem(TIMER_KEY, JSON.stringify(s)); } catch {}
-};
+/* Clés, durées d'origine et accès au stockage vivent dans lib/focus/pomodoro :
+   la barre d'état lit le même minuteur pour l'afficher à côté de son icône
+   (cf. components/TrayTimer.jsx), et deux copies du format finiraient par
+   diverger en silence. */
+import {
+  DEFAULT_DURATIONS,
+  loadDurations,
+  loadTimer,
+  resolveDurations,
+  saveDurations,
+  saveTimer,
+} from "@/lib/focus/pomodoro";
 import { Play, Pause, RotateCcw, SkipForward, Square, Coffee, Focus, Flame, CheckCircle2, Pencil, Check, X } from "lucide-react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
@@ -26,19 +29,10 @@ const T = { ...BaseT };
 const LOG_KEY = "tr4de_focus_sessions";
 
 const MODES = {
-  work:       { id: "work",       label: "Focus",        color: "#58CC02", duration: 25 * 60 },
-  shortBreak: { id: "shortBreak", label: "Pause",        color: "#1CB0F6", duration: 5 * 60 },
-  longBreak:  { id: "longBreak",  label: "Longue pause", color: "#CE82FF", duration: 15 * 60 },
+  work:       { id: "work",       label: "Focus",        color: "#58CC02", duration: DEFAULT_DURATIONS.work },
+  shortBreak: { id: "shortBreak", label: "Pause",        color: "#1CB0F6", duration: DEFAULT_DURATIONS.shortBreak },
+  longBreak:  { id: "longBreak",  label: "Longue pause", color: "#CE82FF", duration: DEFAULT_DURATIONS.longBreak },
   stopwatch:  { id: "stopwatch",  label: "Chrono",       color: "#0D0D0D", duration: 0, manual: true },
-};
-const DURATIONS_KEY = "tr4de_focus_durations_v1";
-const loadDurations = () => {
-  if (typeof window === "undefined") return null;
-  try { return JSON.parse(localStorage.getItem(DURATIONS_KEY) || "null"); } catch { return null; }
-};
-const saveDurations = (d) => {
-  if (typeof window === "undefined") return;
-  try { localStorage.setItem(DURATIONS_KEY, JSON.stringify(d)); } catch {}
 };
 
 const todayIso = () => {
@@ -67,14 +61,7 @@ export default function FocusTimerPage() {
   const [sessions, setSessions, sessionsReady] = useCloudState(LOG_KEY, "focus_sessions", []);
 
   // Custom durations per mode (persisted)
-  const [durations, setDurations] = useState(() => {
-    const saved = loadDurations() || {};
-    return {
-      work: saved.work ?? MODES.work.duration,
-      shortBreak: saved.shortBreak ?? MODES.shortBreak.duration,
-      longBreak: saved.longBreak ?? MODES.longBreak.duration,
-    };
-  });
+  const [durations, setDurations] = useState(() => resolveDurations(loadDurations()));
   useEffect(() => { saveDurations(durations); }, [durations]);
 
   // Timer state — endAt is the source of truth when running

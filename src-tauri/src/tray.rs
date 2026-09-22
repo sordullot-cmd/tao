@@ -45,6 +45,14 @@
 //! popover. Une seule vérité, toujours dans la fenêtre principale — un popover
 //! qui lirait `user_productivity` lui-même serait une deuxième session à
 //! authentifier, et deux magasins à accorder.
+//!
+//! ── ET UN TITRE ───────────────────────────────────────────────────────────
+//!
+//! Les deux surfaces ci-dessus ont un défaut commun : il faut CLIQUER pour les
+//! voir. Une session de concentration qui tourne pendant que la fenêtre est
+//! cachée n'a donc, sans un troisième canal, aucune trace visible. D'où le
+//! décompte posé à côté de l'icône (`tray_set_timer`) — la seule chose que la
+//! barre de menus montre en permanence.
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
@@ -365,6 +373,36 @@ pub fn tray_set_checklist<R: Runtime>(
   #[cfg(not(desktop))]
   {
     let _ = (&app, &title, &items, &lists, recording); // pas de barre d'état sur mobile
+  }
+  Ok(())
+}
+
+/// Pose (ou retire) le décompte affiché À CÔTÉ de l'icône, dans la barre de
+/// menus. `None` rend l'icône seule.
+///
+/// Le titre est le SEUL endroit où une session en cours reste visible quand la
+/// fenêtre est cachée : le menu ne se déroule qu'au clic, et le popover aussi.
+/// C'est donc le front qui pousse, à la seconde, ce qu'il est seul à savoir
+/// calculer — deux minuteurs y coexistent (cf. lib/tray/timer.ts).
+///
+/// ⚠️ macOS seulement, dans les faits : un `NSStatusItem` accepte un texte à
+/// côté de son image, la zone de notification de Windows et les AppIndicator de
+/// Linux non. La commande y est un no-op plutôt qu'une erreur — le front n'a
+/// pas à savoir sur quoi il tourne, comme pour le reste de ce module.
+#[tauri::command]
+pub fn tray_set_timer<R: Runtime>(app: AppHandle<R>, label: Option<String>) -> Result<(), String> {
+  #[cfg(desktop)]
+  {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+      /* Une chaîne vide vaut un retrait : le front qui efface son chronomètre
+         n'a pas à choisir entre `null` et `""` pour être compris. */
+      let title = label.filter(|l| !l.is_empty());
+      tray.set_title(title.as_deref()).map_err(|e| e.to_string())?;
+    }
+  }
+  #[cfg(not(desktop))]
+  {
+    let _ = (&app, &label); // pas de barre d'état sur mobile
   }
   Ok(())
 }

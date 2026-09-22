@@ -128,6 +128,7 @@ pub fn run() {
       apps::installed_apps,
       tray::tray_set_checklist,
       tray::tray_get_checklist,
+      tray::tray_set_timer,
       tray::tray_popover_resize,
       tray::tray_popover_close,
       tray_open_main,

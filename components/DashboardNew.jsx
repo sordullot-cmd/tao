@@ -28,6 +28,7 @@ import RevisionsPage from "@/components/pages/RevisionsPage";
 import FocusPage from "@/components/pages/FocusPage";
 import FocusSentinel from "@/components/focus/FocusSentinel";
 import TrayBridge from "@/components/TrayBridge";
+import TrayTimer from "@/components/TrayTimer";
 import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
 import DrivePage from "@/components/pages/DrivePage";
 import LifeRpgPage from "@/components/pages/LifeRpgPage";
@@ -1002,6 +1003,10 @@ export default function App() {
           cachée, c'est-à-dire quand ce menu est le seul accès à la routine.
           Ne rend rien ; inerte hors de l'app de bureau. */}
       <TrayBridge />
+      {/* Le décompte de la session en cours, à côté de l'icône de la barre de
+          menus : c'est la seule façon de savoir combien il reste sans rouvrir
+          la fenêtre — donc sans couper la session qu'on regarde. */}
+      <TrayTimer />
       {/* `--shell-left` : la place tenue par la barre latérale (sa largeur + sa
           gouttière de 12 px). Elle n'est plus dans le flux — c'est ce padding
           qui la remplace, appliqué au conteneur SCROLLABLE et non au cadre :
