@@ -2,9 +2,7 @@
  * La table des pages : dans quelle partie de tao trade vit chaque écran.
  *
  * Séparée de lib/activity/self, dont elle vient, pour une raison de bundle et
- * non de rangement : le thème de la coquille descend de cette même table (cf.
- * lib/ui/sectionTheme) et doit être posé AVANT l'hydratation, donc écrit par
- * app/layout.tsx — un composant serveur. Or `self` a besoin de la langue pour
+ * non de rangement : elle doit rester importable depuis un composant serveur. Or `self` a besoin de la langue pour
  * nommer les parties, et lib/i18n expose des hooks React : l'importer depuis le
  * serveur fait échouer le build. La table, elle, ne dépend de rien.
  *

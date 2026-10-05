@@ -5,7 +5,7 @@ import { Search, ArrowRight, ChevronUp, ChevronDown, CornerDownLeft } from "luci
 import { useApp } from "@/lib/contexts/AppContext";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { backdropDismiss } from "@/lib/hooks/useBackdropDismiss";
-import { effectiveTheme, setThemeMode } from "@/lib/ui/sectionTheme";
+import { effectiveTheme, setThemeMode } from "@/lib/ui/theme";
 
 export interface Command {
   id: string;
@@ -39,14 +39,8 @@ const DEFAULT_COMMANDS: Command[] = [
   { id: "nav.settings",      group: "Navigation", label: "Paramètres",                 keywords: ["preferences", "profile"], run: c => c.setPage("settings") },
 
   // Actions
-  /* Basculer FIGE le thème : la bascule par section reprendrait la main à la
-     première navigation (cf. lib/ui/sectionTheme). D'où la commande suivante,
-     qui est le seul chemin de retour depuis le clavier. */
-  { id: "action.toggle-theme", group: "Actions", label: "Basculer mode sombre / clair", keywords: ["dark", "light", "theme"], run: c => {
-      setThemeMode(effectiveTheme() === "dark" ? "light" : "dark", c.page);
-  }},
-  { id: "action.theme-section", group: "Actions", label: "Thème automatique par section", keywords: ["dark", "light", "theme", "trading", "auto"], run: c => {
-      setThemeMode("section", c.page);
+  { id: "action.toggle-theme", group: "Actions", label: "Basculer mode sombre / clair", keywords: ["dark", "light", "theme"], run: () => {
+      setThemeMode(effectiveTheme() === "dark" ? "light" : "dark");
   }},
   { id: "action.lang-fr", group: "Actions", label: "Passer en français", keywords: ["language"], run: () => {
       try { localStorage.setItem("tr4de_lang", "fr"); window.dispatchEvent(new CustomEvent("tr4de:lang-changed", { detail: { lang: "fr" } })); } catch {}

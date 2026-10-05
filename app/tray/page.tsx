@@ -128,11 +128,10 @@ export default function TrayPopoverPage() {
   const [ready, setReady] = useState(false);
   const panel = useRef<HTMLDivElement | null>(null);
 
-  /* Le thème suit l'APPARENCE DU SYSTÈME, et non la section de l'app.
-     C'est la seule surface où la règle de `lib/ui/sectionTheme` ne s'applique
-     pas, pour la même raison que la palette : ce panneau s'ouvre entre ceux du
-     Wi-Fi et de la batterie, qui suivent tous les réglages du Mac. Lui faire
-     porter le thème de la page Discipline — sombre, puisque trading — le
+  /* Le thème suit l'APPARENCE DU SYSTÈME, et non le réglage de l'app.
+     C'est la seule surface où `lib/ui/theme` ne s'applique pas, pour la même
+     raison que la palette : ce panneau s'ouvre entre ceux du Wi-Fi et de la
+     batterie, qui suivent tous les réglages du Mac. Un app réglée en sombre le
      rendait noir au milieu de panneaux blancs sur un Mac en apparence claire.
 
      L'écoute vaut le détour : macOS bascule seul au coucher du soleil, et un

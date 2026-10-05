@@ -7,7 +7,7 @@ import { UndoProvider } from "@/lib/contexts/UndoContext";
 import PWAInstall from "@/components/PWAInstall";
 import OfflineBadge from "@/components/OfflineBadge";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { DARK_PAGES, THEME_KEY, THEME_MIGRATION_KEY } from "@/lib/ui/sectionTheme";
+import { THEME_KEY } from "@/lib/ui/theme";
 
 // OpenAI Sans (locale) — variable utilisée dans toute l'app : --font-geist-sans
 const openAISans = localFont({
@@ -121,26 +121,15 @@ export default function RootLayout({
             <script> côté client, que React ignore en émettant un warning. Ici le script
             part dans le HTML du serveur et s'exécute une seule fois, au bon moment.
 
-            Le thème suit la PARTIE de l'app (trading sombre, vie perso et finance
-            clairs, cf. lib/ui/sectionTheme). La liste des pages sombres est
-            SÉRIALISÉE depuis ce module, et non recopiée ici : deux tables de pages
-            auraient divergé au premier écran ajouté. La page de départ se lit dans
-            le hash — la navigation n'a pas d'autre trace d'URL (cf. AppContext) —
-            et retombe sur le tableau de bord, qui est celle du trading.
-
-            Hors de la coquille (/login, /privacy…), la règle n'a rien à dire : il
-            n'y a pas de partie, et on laisse donc le thème au système plutôt que
-            d'imposer un fond à des pages qui n'appartiennent pas à l'app.
+            Un seul fond pour tout le site (cf. lib/ui/theme) : seuls "dark" et
+            "light" posent l'attribut, tout le reste — dont l'ancien "section" —
+            le laisse au système.
 
             L'accent vient de Réglages → Apparence (lib/ui/accent.ts). */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var r=document.documentElement,D=${JSON.stringify(DARK_PAGES)};`
-              + `if(!localStorage.getItem(${JSON.stringify(THEME_MIGRATION_KEY)})){localStorage.setItem(${JSON.stringify(THEME_KEY)},'section');localStorage.setItem(${JSON.stringify(THEME_MIGRATION_KEY)},'1');}`
-              + `var m=localStorage.getItem(${JSON.stringify(THEME_KEY)})||'section',t=null;`
-              + `if(m==='section'){if(/^\\/dashboard\\/?$/.test(location.pathname)){var p=(location.hash||'').replace(/^#/,'').trim()||'dashboard';t=D.indexOf(p)>=0?'dark':'light';}}`
-              + `else if(m==='dark'||m==='light')t=m;`
-              + `if(t)r.dataset.theme=t;`
+            __html: `try{var r=document.documentElement,m=localStorage.getItem(${JSON.stringify(THEME_KEY)});`
+              + `if(m==='dark'||m==='light')r.dataset.theme=m;`
               + `var h=/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,a=localStorage.getItem('tr4de_accent'),b=localStorage.getItem('tr4de_accent_2');if(a&&h.test(a))r.style.setProperty('--accent',a);if(b&&h.test(b))r.style.setProperty('--accent-2',b);}catch(e){}`,
           }}
         />
