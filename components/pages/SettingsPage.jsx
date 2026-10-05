@@ -24,6 +24,8 @@ import {
   Upload,
   Database,
   Video as IconVideo,
+  GitMerge as IconMerge,
+  Copy as IconCopy,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { refreshTradesCache } from "@/lib/tradesCache";
@@ -43,7 +45,7 @@ import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { useIcsFeeds, useIcsKindColors, useIcsHiddenEvents, probeFeed } from "@/lib/hooks/useIcsFeeds";
 import { BTN } from "@/lib/ui/buttons";
-import { readThemeMode, setThemeMode } from "@/lib/ui/sectionTheme";
+import { readThemeMode, setThemeMode } from "@/lib/ui/theme";
 import { KIND_LABELS, kindColorId } from "@/lib/icsCategories";
 import { GCAL_COLORS } from "@/lib/gcalColors";
 import Popover from "@/components/ui/Popover";
@@ -68,6 +70,7 @@ const buildSections = () => [
       { id: "profile",      label: t("settings.nav.profile"),      Icon: IconUser },
       { id: "security",     label: t("settings.nav.security"),     Icon: IconShield },
       { id: "subscription", label: t("settings.nav.subscription"), Icon: IconCard },
+      { id: "merge",        label: t("settings.nav.merge"),        Icon: IconMerge },
     ],
   },
   {
@@ -104,6 +107,7 @@ export default function SettingsPage({ user, onBack, setPage }) {
           {active === "profile"      && <ProfileSection user={user} />}
           {active === "security"     && <SecuritySection />}
           {active === "subscription" && <SubscriptionSection user={user} />}
+          {active === "merge"        && <MergeAccountsSection />}
           {active === "accounts"     && <AccountsSection setPage={setPage} />}
           {active === "globals"      && <GlobalsSection />}
           {active === "alerts"       && <AlertsSection />}
@@ -685,12 +689,6 @@ function GlobalsSection() {
      démarrage. */
   const { accent, setAccent: setAccentColors } = useAccentSetting();
 
-  /* Applique le thème choisi (cf. lib/ui/sectionTheme) : "section" le fait
-     suivre la partie de l'app, "system" suit l'OS, les deux autres le figent.
-     Choisir « Par section » depuis CETTE page ne change rien à l'écran : les
-     réglages n'appartiennent à aucune partie, l'effet se voit à la navigation
-     suivante. */
-  const applyTheme = (v) => setThemeMode(v, "settings");
 
   // Charger depuis Supabase au montage (et sur focus)
   useEffect(() => {
@@ -844,16 +842,15 @@ function GlobalsSection() {
       <SectionLabel mt={20}>Thème</SectionLabel>
       <SearchableSelect
         value={theme}
-        onChange={(v) => { setThemeState(v); applyTheme(v); }}
+        onChange={(v) => { setThemeState(v); setThemeMode(v); }}
         options={[
-          { id: "section", label: "Par section" },
           { id: "system", label: "Système" },
           { id: "light", label: "Clair" },
           { id: "dark", label: "Sombre" },
         ]}
         searchable={false}
       />
-      <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>Par section : Trading en sombre, Vie perso et Finance en clair. Système suit ton OS.</div>
+      <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>Le même thème sur tout le site. Système suit ton OS.</div>
 
       <SectionLabel mt={20}>Couleurs d'accent</SectionLabel>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
@@ -1714,6 +1711,165 @@ function DataExportSection() {
         </div>
       )}
     </Card>
+  );
+}
+
+/* =================== FUSION DE COMPTES =================== */
+
+/* Ce que le récapitulatif nomme. Les tables de liaison (tags, stratégies par
+   trade, suivi de discipline) suivent leurs trades : les compter à part
+   noierait les deux chiffres qui comptent. */
+const MERGE_SUMMARY = [
+  ["trading_accounts", "compte(s) de trading"],
+  ["apex_trades", "trade(s)"],
+  ["prop_firms", "firme(s)"],
+  ["strategies", "stratégie(s)"],
+  ["daily_session_notes", "note(s) de session"],
+];
+
+/* La source n'est jamais celle où l'on est connecté : il faudrait sinon se
+   déconnecter pour prouver l'autre compte, et perdre la cible au passage. Le
+   code fait le trajet entre les deux sessions. */
+async function callMergeApi(supabase, body) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Non connecté.");
+  const res = await fetch("/api/user/merge-trading", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`);
+  return json;
+}
+
+function MergeAccountsSection() {
+  useLang();
+  const supabase = createClient();
+  const [code, setCode] = useState("");
+  const [merging, setMerging] = useState(false);
+  const [msg, setMsg] = useState({ kind: "idle", text: "" });
+  const [issued, setIssued] = useState(null);
+  const [issuing, setIssuing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleMerge = async () => {
+    if (!code.trim()) return;
+    const ok = window.confirm(
+      "Tout le trading de l'autre compte (comptes, trades, firmes, stratégies, discipline, notes de session) va être déplacé ici.\n\nL'autre compte garde le reste (agenda, sport, patrimoine…) mais n'aura plus ces données. Continuer ?"
+    );
+    if (!ok) return;
+    setMerging(true);
+    setMsg({ kind: "idle", text: "" });
+    try {
+      const { moved, sourceEmail } = await callMergeApi(supabase, { code: code.trim() });
+      const parts = MERGE_SUMMARY
+        .filter(([table]) => moved?.[table] > 0)
+        .map(([table, label]) => `${moved[table]} ${label}`);
+      const from = sourceEmail ? ` depuis ${sourceEmail}` : "";
+      setMsg({
+        kind: "success",
+        text: parts.length ? `Fusion terminée${from} : ${parts.join(", ")}.` : `Rien à rapatrier${from} : l'autre compte n'avait pas de données de trading.`,
+      });
+      setCode("");
+      // Sans ça les pages de trading reliraient l'ancien cache local.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await refreshTradesCache(user.id);
+      notifyAccountsChanged();
+    } catch (e) {
+      setMsg({ kind: "error", text: e?.message || "La fusion a échoué." });
+    } finally {
+      setMerging(false);
+    }
+  };
+
+  const handleIssue = async () => {
+    setIssuing(true);
+    setCopied(false);
+    try {
+      setIssued(await callMergeApi(supabase, { action: "code" }));
+    } catch (e) {
+      setIssued(null);
+      setMsg({ kind: "error", text: e?.message || "Impossible de générer le code." });
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!issued?.code) return;
+    try { await navigator.clipboard.writeText(issued.code); setCopied(true); } catch {}
+  };
+
+  const expiresAt = issued?.expiresAt
+    ? new Date(issued.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <>
+      <Card>
+        <CardHeader
+          title="Rapatrier le trading d'un autre compte"
+          subtitle="Comptes, trades, firmes, stratégies, discipline et notes de session viennent ici. Le reste de l'autre compte n'est pas touché."
+        />
+        <ol style={{ margin: "0 0 16px", paddingLeft: 18, fontSize: 13, color: T.textSub, lineHeight: 1.6 }}>
+          <li>Connecte-toi à l’autre compte, ouvre Paramètres → Fusion de comptes et génère un code.</li>
+          <li>Reviens sur ce compte-ci et colle le code ci-dessous.</li>
+        </ol>
+        <SectionLabel><label htmlFor="tr4de-merge-code">Code de transfert</label></SectionLabel>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            id="tr4de-merge-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="tr4de-…"
+            autoComplete="off"
+            spellCheck={false}
+            style={{ ...inputStyle(), flex: "1 1 240px", minWidth: 0, fontFamily: "var(--font-mono, monospace)" }}
+          />
+          <PrimaryButton icon={IconMerge} onClick={handleMerge} disabled={merging || !code.trim()}>
+            {merging ? "Fusion…" : "Fusionner"}
+          </PrimaryButton>
+        </div>
+
+        {msg.text && (
+          <div style={{
+            marginTop: 12, padding: "10px 12px", borderRadius: "var(--radius-card)", fontSize: 12, fontWeight: 500,
+            background: msg.kind === "error" ? T.redBg : T.greenBg,
+            color: msg.kind === "error" ? T.red : T.green,
+            border: `1px solid ${msg.kind === "error" ? T.redBd : T.greenBd}`,
+          }}>
+            {msg.text}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Envoyer le trading de ce compte ailleurs"
+          subtitle="Génère un code ici, colle-le dans le compte qui doit tout recevoir. Valable 15 minutes."
+        />
+        {issued?.code ? (
+          <>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <code style={{
+                flex: "1 1 240px", minWidth: 0, padding: "8px 12px", borderRadius: "var(--radius-card)",
+                background: T.panel, color: T.text, fontSize: 12, wordBreak: "break-all",
+              }}>
+                {issued.code}
+              </code>
+              <SecondaryButton icon={IconCopy} onClick={handleCopy}>{copied ? "Copié" : "Copier"}</SecondaryButton>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 10, fontSize: 12, color: T.amber }}>
+              <AlertTriangle size={14} strokeWidth={1.75} />
+              Expire à {expiresAt}. Quiconque a ce code peut prendre ton trading : ne le partage pas.
+            </div>
+          </>
+        ) : (
+          <SecondaryButton onClick={handleIssue}>{issuing ? "Génération…" : "Générer un code"}</SecondaryButton>
+        )}
+      </Card>
+    </>
   );
 }
 

@@ -1068,6 +1068,19 @@ export default function AgendaPage() {
   const goToday = () => setCursor(startOfDay(new Date()));
   const openDay = (d) => { setCursor(startOfDay(d)); setView("day"); };
   const openCreate = (day, startTime, endTime) => { setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setAnchorMenuOpen(false); setAnchorDaysOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft(""); setModal(blankForm(day || cursor, startTime, endTime)); };
+  /* Tâche posée sur la journée entière : c'est le cas courant (« à faire
+     aujourd'hui »), l'heure n'est qu'une précision. Le formulaire s'ouvre déjà
+     déplié sur la date pour qu'on puisse la décaler sans un clic de plus.
+     Par défaut aujourd'hui si la période affichée le contient, sinon le jour
+     visé — on ne veut pas créer en juin une tâche qu'on regardait en mars. */
+  const openCreateTask = () => {
+    const today = startOfDay(now);
+    const day = today >= range.start && today < range.end ? today : cursor;
+    openCreate(day);
+    setModalTab("tasks");
+    setTimeEdit(true);
+    setModal((m) => ({ ...m, allDay: true }));
+  };
   const openEdit = (item) => {
     setModalError(null); setColorOpen(false); setRemindOpen(false); setRecurOpen(false); setAnchorMenuOpen(false); setAnchorDaysOpen(false); setTimeEdit(false); setModalTab("event"); setTaskDraft("");
     /* Bloc ancré : l'occurrence cliquée sert de brouillon (titre, couleur, et
@@ -1953,6 +1966,12 @@ export default function AgendaPage() {
             </button>
           </span>
         )}
+        {connected && (
+          <button type="button" onClick={openCreateTask} title="Ajouter une tâche" style={{ ...todayBtn(), gap: 6 }}>
+            <Plus size={15} strokeWidth={2} />
+            Tâche
+          </button>
+        )}
         {connected && !isMobile && (
           <>
             {segmented}
@@ -2784,12 +2803,15 @@ export default function AgendaPage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <DateField value={modal.date} onChange={(v) => setModal({ ...modal, date: v, endDate: modal.endDate < v ? v : modal.endDate })} />
-                      {modal.allDay ? (
+                      {/* Une tâche ne retient qu'un jour (cf. `taskTimes`) :
+                          lui offrir une date de fin, ce serait promettre une
+                          plage qu'on jetterait à l'enregistrement. */}
+                      {modal.allDay ? (!(modal.kind === "task" || modalTab === "tasks") && (
                         <>
                           <span style={{ color: T.textMut, fontSize: 13 }}>au</span>
                           <DateField value={modal.endDate} min={modal.date} onChange={(v) => setModal({ ...modal, endDate: v })} />
                         </>
-                      ) : (
+                      )) : (
                         <>
                           <TimeField value={modal.startTime} onChange={(v) => setModal({ ...modal, startTime: v })} />
                           <span style={{ color: T.textMut }}>–</span>
@@ -2797,6 +2819,30 @@ export default function AgendaPage() {
                         </>
                       )}
                     </div>
+                    {/* Raccourcis de jour d'une tâche : « demain » est le
+                        report le plus fréquent, il ne doit pas passer par le
+                        calendrier du champ date. */}
+                    {(modal.kind === "task" || modalTab === "tasks") && (() => {
+                      const today = dateKey(now);
+                      return (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {[{ label: "Aujourd'hui", d: today }, { label: "Demain", d: addDayStr(today, 1) }].map(({ label, d }) => {
+                            const active = modal.date === d;
+                            return (
+                              <button key={label} type="button" onClick={() => setModal({ ...modal, date: d, endDate: d })}
+                                style={{
+                                  ...pillBtn,
+                                  background: active ? `color-mix(in srgb, ${T.blue} 10%, transparent)` : T.white,
+                                  borderColor: active ? `color-mix(in srgb, ${T.blue} 33%, transparent)` : T.border,
+                                  color: active ? T.blue : T.text,
+                                }}>
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                     <button type="button" onClick={() => setModal({ ...modal, allDay: !modal.allDay })}
                       style={{
                         ...pillBtn, alignSelf: "flex-start",
