@@ -82,7 +82,7 @@ export const PLATFORMS: Platform[] = [
   { id: "topstep",      name: "Topstep",             kind: "propfirm", format: "csv", iconPath: "/brokers/Topstep_Logo.jpg",  platformIds: ["tradovate", "ninjatrader", "rithmic", "quantower"] },
   { id: "apex",         name: "Apex Trader Funding", kind: "propfirm", format: "csv", iconPath: "/brokers/apex.avif",         platformIds: ["tradovate", "wealthcharts", "ninjatrader", "rithmic", "tradingview"], aliases: ["apex trader"] },
   { id: "alphafutures", name: "Alpha Futures",       kind: "propfirm", format: "csv", iconPath: "/brokers/alpha%20futur.svg", platformIds: ["alphatrader", "quantower", "deepchart", "wealthcharts"] },
-  { id: "tradeify",     name: "Tradeify",            kind: "propfirm", format: "csv", iconPath: "/brokers/Tradeify.png",      platformIds: ["wealthcharts", "tradovate", "rithmic", "tradesea"] },
+  { id: "tradeify",     name: "Tradeify",            kind: "propfirm", format: "csv", iconPath: "/brokers/Tradeify.png",      platformIds: ["tradovate", "wealthcharts", "rithmic", "tradesea"] },
   { id: "lucid",        name: "Lucid Trading",       kind: "propfirm", format: "csv", iconPath: "/brokers/lucid.png",         platformIds: ["ninjatrader", "rithmic", "tradovate", "tradesea"] },
   { id: "tradeday",     name: "TradeDay",            kind: "propfirm", format: "csv", iconPath: "/brokers/tradeday_logo.jpeg", platformIds: ["rithmic", "ninjatrader", "tradovate"], aliases: ["trade day"] },
   { id: "myfundedfutures", name: "MyFundedFutures",  kind: "propfirm", format: "csv", iconPath: "/brokers/myfundedfuture.svg", platformIds: ["tradovate", "rithmic", "tradingview"], aliases: ["my funded futures", "mffu"] },

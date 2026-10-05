@@ -546,13 +546,32 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         entities.set(`acc:${acc.id}`, { ...e, key: `acc:${acc.id}`, firm: null, account: acc });
       }
     }
-    return [...entities.values()]
-      .sort((a, b) => {
-        if (b.recent !== a.recent) return b.recent - a.recent;
-        if (b.trades !== a.trades) return b.trades - a.trades;
-        return b.last - a.last;
-      })
-      .slice(0, 6);
+    const byActivity = (a, b) => {
+      if (b.recent !== a.recent) return b.recent - a.recent;
+      if (b.trades !== a.trades) return b.trades - a.trades;
+      return b.last - a.last;
+    };
+    const top = [...entities.values()].sort(byActivity).slice(0, 6);
+
+    /* Le regroupement par firme laisse des cases vides : deux firmes à deux
+       comptes, c'était deux cartes et quatre trous. Les places restantes vont
+       aux comptes de ces firmes, les plus actifs d'abord — mais chacun est
+       rangé juste derrière SA firme, pour que la rangée se lise par groupe
+       plutôt que comme un mélange. */
+    const free = 6 - top.length;
+    if (free <= 0) return top;
+    const extras = top
+      .filter((e) => e.firm)
+      .flatMap((e) => e.accounts.map((acc) => {
+        const a = activity.get(acc.id) || { recent: 0, last: 0 };
+        return {
+          key: `acc:${acc.id}`, firm: null, account: acc, parentKey: e.key,
+          recent: a.recent, last: a.last, trades: viewOf(acc).trades,
+        };
+      }))
+      .sort(byActivity)
+      .slice(0, free);
+    return top.flatMap((e) => [e, ...extras.filter((x) => x.parentKey === e.key)]);
   }, [visibleAccounts, trades, viewOf, firmById]);
 
 
