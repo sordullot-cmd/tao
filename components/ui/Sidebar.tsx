@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import Popover from "@/components/ui/Popover";
+import UserAvatar from "@/components/ui/UserAvatar";
 import { useSwipeToDismiss } from "@/lib/hooks/useSwipeToDismiss";
 
 export interface SidebarItem {
@@ -49,6 +50,8 @@ export interface SidebarProps {
     name: string;
     initials: string;
     avatarUrl?: string | null;
+    /** Teinte des initiales ; absente = l'accent de l'app. */
+    avatarColor?: string | null;
   };
   onUserMenu?: () => void;
   onProfile?: () => void;
@@ -345,31 +348,7 @@ export default function Sidebar(props: SidebarProps) {
             onMouseEnter={e => { if (!userMenuOpen) e.currentTarget.style.background = "var(--color-nav-hover-bg)"; }}
             onMouseLeave={e => { if (!userMenuOpen) e.currentTarget.style.background = "transparent"; }}
           >
-            {user.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt=""
-                referrerPolicy="no-referrer"
-                width={34}
-                height={34}
-                style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-              />
-            ) : (
-              /* Pastille pastel : un voile de l'accent de marque plutôt qu'un
-                 aplat saturé — la barre reste calme, les initiales portent la
-                 couleur. Le liseré intérieur, à peine plus dense que le fond,
-                 dessine le disque sans ajouter de bordure franche. */
-              <div style={{
-                width: 34, height: 34, borderRadius: "50%",
-                background: "var(--accent-pastel)",
-                boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 14, fontWeight: 700, letterSpacing: 0.2,
-                color: "var(--accent-ink)", flexShrink: 0,
-              }}>
-                {user.initials}
-              </div>
-            )}
+            <UserAvatar src={user.avatarUrl} initials={user.initials} color={user.avatarColor} />
             {!collapsed && (
               <span style={{
                 flex: 1, minWidth: 0, textAlign: "left",

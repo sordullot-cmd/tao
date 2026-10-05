@@ -12,28 +12,36 @@
 -- sautées plutôt que de faire échouer l'ensemble.
 
 -- Union de deux JSON où `a` (la cible) l'emporte : tableaux réunis sans
--- doublon dans l'ordre d'origine, objets fusionnés au premier niveau, valeur
--- simple de la cible conservée. Les magasins de user_productivity sont des
--- listes (plans, comptes de scaling) ou des tables indexées par trade/jour.
+-- doublon dans l'ordre d'origine, objets fusionnés clé par clé à toute
+-- profondeur, valeur simple de la cible conservée. Récursif parce que les
+-- magasins sont emboîtés (`{ sessions: [...] }`) : une fusion au premier
+-- niveau seulement garderait le tableau de la cible et jetterait l'autre.
 create or replace function public._merge_jsonb_keep_first(a jsonb, b jsonb)
 returns jsonb
-language sql
+language plpgsql
 immutable
 as $$
-  select case
-    when a is null or a = 'null'::jsonb then b
-    when b is null or b = 'null'::jsonb then a
-    when jsonb_typeof(a) = 'array' and jsonb_typeof(b) = 'array' then coalesce((
+begin
+  if a is null or a = 'null'::jsonb then return b; end if;
+  if b is null or b = 'null'::jsonb then return a; end if;
+  if jsonb_typeof(a) = 'array' and jsonb_typeof(b) = 'array' then
+    return coalesce((
       select jsonb_agg(e order by i)
       from (
         select e, min(i) as i
         from jsonb_array_elements(a || b) with ordinality as u(e, i)
         group by e
       ) d
-    ), '[]'::jsonb)
-    when jsonb_typeof(a) = 'object' and jsonb_typeof(b) = 'object' then b || a
-    else a
-  end
+    ), '[]'::jsonb);
+  end if;
+  if jsonb_typeof(a) = 'object' and jsonb_typeof(b) = 'object' then
+    return coalesce((
+      select jsonb_object_agg(k, public._merge_jsonb_keep_first(a -> k, b -> k))
+      from (select jsonb_object_keys(a) as k union select jsonb_object_keys(b)) ks
+    ), '{}'::jsonb);
+  end if;
+  return a;
+end;
 $$;
 
 create or replace function public.merge_trading_data(p_source uuid, p_target uuid)
@@ -64,7 +72,8 @@ declare
   -- Clés de user_productivity qui relèvent du trading. Les préférences
   -- d'affichage (tri, colonnes, panneaux ouverts) restent à chacun.
   cloud_keys text[] := array[
-    'account_plans', 'accounts_order', 'prop_firm_accounts',
+    'account_plans', 'accounts_order', 'prop_firm_accounts', 'account_contracts',
+    'backtest_journal',
     'discipline_active_days', 'discipline_rules_config',
     'scaling_sim', 'scaling_step',
     'trades_checked_rules', 'trades_checklist', 'trades_entry_tags'

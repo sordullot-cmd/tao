@@ -14,6 +14,8 @@ import { useActivityTracker } from "@/lib/hooks/useActivityTracker";
 import { setSelfSection } from "@/lib/activity/engine";
 import { sectionOfPage, selfTitleOf } from "@/lib/activity/self";
 import { effectiveTheme, setThemeMode } from "@/lib/ui/theme";
+import { useProfileAvatar } from "@/lib/hooks/useProfileAvatar";
+import { resolveAvatar } from "@/lib/profileAvatar";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
@@ -290,12 +292,16 @@ export default function App() {
     });
   }, []);
 
+  const [avatarStore] = useProfileAvatar();
+  const avatar = resolveAvatar(avatarStore, user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null);
+
   // Construire l'objet affichage utilisateur à partir de l'utilisateur authentifié
   const displayUser = {
     name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "Trader",
     email: user?.email || "trader@taotrade.com",
     initials: (user?.email?.split('@')[0] || "TR").substring(0, 2).toUpperCase(),
-    avatarUrl: user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
+    avatarUrl: avatar.src,
+    avatarColor: avatar.color,
   };
 
   /* La sélection de comptes a été supprimée : le site travaille en permanence
@@ -1021,7 +1027,7 @@ export default function App() {
             });
           }}
           brand="tao trade"
-          user={{ name: displayUser.name, initials: displayUser.initials, avatarUrl: displayUser.avatarUrl }}
+          user={{ name: displayUser.name, initials: displayUser.initials, avatarUrl: displayUser.avatarUrl, avatarColor: displayUser.avatarColor }}
           onProfile={() => setPage("settings")}
           onSettings={() => setPage("settings")}
           onDarkMode={() => setThemeMode(effectiveTheme() === "dark" ? "light" : "dark")}

@@ -38,7 +38,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { notify, ensureNotifyPermission, isNotifyGranted, isTauri } from "@/lib/notify";
 import { T as BaseT } from "@/lib/ui/tokens";
-import { ACCENT_PRESETS, isHexColor } from "@/lib/ui/accent";
+import { ACCENT_PRESETS, DEFAULT_ACCENT, isHexColor } from "@/lib/ui/accent";
 import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
 import { Field as DAField, FIELD as DA_FIELD } from "@/components/ui/form";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
@@ -46,9 +46,13 @@ import { useGoogleCalendar } from "@/lib/hooks/useGoogleCalendar";
 import { useIcsFeeds, useIcsKindColors, useIcsHiddenEvents, probeFeed } from "@/lib/hooks/useIcsFeeds";
 import { BTN } from "@/lib/ui/buttons";
 import { readThemeMode, setThemeMode } from "@/lib/ui/theme";
+import UserAvatar from "@/components/ui/UserAvatar";
+import { useProfileAvatar } from "@/lib/hooks/useProfileAvatar";
+import { AVATAR_COLORS, fileToAvatarDataUrl, resolveAvatar } from "@/lib/profileAvatar";
 import { KIND_LABELS, kindColorId } from "@/lib/icsCategories";
 import { GCAL_COLORS } from "@/lib/gcalColors";
 import Popover from "@/components/ui/Popover";
+import { PeriodPills } from "@/components/ui/da";
 import {
   DEFAULT_REMINDERS_STORAGE_KEY,
   DEFAULT_REMINDERS_CLOUD_KEY,
@@ -322,6 +326,9 @@ function ProfileSection({ user }) {
   }, []);
 
   const initials = (firstName?.[0] || user?.email?.[0] || "U").toUpperCase() + (lastName?.[0] || "").toUpperCase();
+  const [avatarStore, setAvatarStore] = useProfileAvatar();
+  const providerUrl = meta.avatar_url || meta.picture || null;
+  const avatar = resolveAvatar(avatarStore, providerUrl);
   const fullName = [firstName, lastName].filter(Boolean).join(" ") || (user?.email?.split("@")[0] || t("settings.userFallback"));
   const timeStr = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
   const tzAbbr = (() => {
@@ -350,13 +357,7 @@ function ProfileSection({ user }) {
       {/* Bloc 1 : identite */}
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: "50%", background: T.panel,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 24, fontWeight: 600, color: T.text, flexShrink: 0,
-          }}>
-            {initials}
-          </div>
+          <UserAvatar src={avatar.src} initials={initials} color={avatar.color} size={64} fontSize={24} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>{fullName}</div>
             <div style={{ fontSize: 13, color: T.textMut, marginTop: 2 }}>{user?.email}</div>
@@ -367,6 +368,7 @@ function ProfileSection({ user }) {
             </div>
           </div>
         </div>
+        <AvatarEditor store={avatarStore} setStore={setAvatarStore} providerUrl={providerUrl} initials={initials} />
       </Card>
 
       {/* Bloc 2 : informations personnelles */}
@@ -395,6 +397,117 @@ function ProfileSection({ user }) {
         </div>
       </Card>
     </>
+  );
+}
+
+/* Réglage de l'avatar : d'où vient l'image, et la teinte des initiales.
+   Trois sources plutôt qu'un simple « importer » : la photo Google existait
+   déjà, et l'on doit pouvoir y revenir — ou la quitter pour les initiales —
+   sans perdre la photo importée, que le magasin garde de côté. */
+function AvatarEditor({ store, setStore, providerUrl, initials }) {
+  const fileRef = React.useRef(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // « auto » s'affiche comme la source qu'il produit réellement.
+  const current = store.mode === "auto" ? (providerUrl ? "provider" : "initials") : store.mode;
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reprendre le même fichier doit redéclencher onChange
+    if (!file) return;
+    setError("");
+    setBusy(true);
+    try {
+      const image = await fileToAvatarDataUrl(file);
+      setStore((prev) => ({ ...prev, mode: "image", image }));
+    } catch (err) {
+      setError(err?.message === "too_large" ? "Image trop lourde (15 Mo maximum)."
+        : err?.message === "not_image" ? "Ce fichier n'est pas une image."
+        : "Impossible de lire cette image.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sources = [
+    { id: "initials", label: "Initiales", src: null },
+    store.image && { id: "image", label: "Photo", src: store.image },
+    providerUrl && { id: "provider", label: "Google", src: providerUrl },
+  ].filter(Boolean);
+
+  /* Une teinte ne se voit que sur les initiales : la choisir y bascule,
+     sinon le clic ne changerait rien à l'écran. */
+  const swatch = (color, label) => {
+    const active = (store.color || null) === color;
+    return (
+      <button key={label} type="button" title={label} aria-label={label} aria-pressed={active}
+        onClick={() => setStore((prev) => ({ ...prev, color, mode: "initials" }))}
+        style={{
+          width: 28, height: 28, borderRadius: "50%", padding: 0, cursor: "pointer", flexShrink: 0,
+          border: "none", background: color || "var(--accent)",
+          boxShadow: active ? `0 0 0 2px ${T.white}, 0 0 0 4px ${T.text}` : "none",
+        }} />
+    );
+  };
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 500, color: T.text, opacity: 0.5, marginBottom: 8 }}>Avatar</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {sources.map((s) => {
+            const active = current === s.id;
+            return (
+              <button key={s.id} type="button" onClick={() => setStore((prev) => ({ ...prev, mode: s.id }))}
+                aria-pressed={active}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  padding: "4px 14px 4px 4px", minHeight: 34, borderRadius: 999, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 13, fontWeight: 500,
+                  border: `1px solid ${active ? T.text : T.border}`, background: T.white, color: T.text,
+                }}>
+                <UserAvatar src={s.src} initials={initials} color={store.color} size={26} fontSize={11} />
+                {s.label}
+              </button>
+            );
+          })}
+          <SecondaryButton onClick={() => fileRef.current?.click()}>
+            {busy ? "Import…" : store.image ? "Changer la photo" : "Importer une photo"}
+          </SecondaryButton>
+          {store.image && (
+            <SecondaryButton onClick={() => setStore((prev) => ({ ...prev, image: null, mode: prev.mode === "image" ? "initials" : prev.mode }))}>
+              Retirer la photo
+            </SecondaryButton>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display: "none" }} />
+        </div>
+        {error && <div style={{ fontSize: 12, color: T.red, marginTop: 6 }}>{error}</div>}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 500, color: T.text, opacity: 0.5, marginBottom: 8 }}>Couleur des initiales</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {swatch(null, "Couleur de l'app")}
+          {AVATAR_COLORS.map((c) => swatch(c, c))}
+          {/* Teinte libre : la pastille native, entourée quand la couleur
+              choisie n'est aucune des teintes proposées. */}
+          <label title="Autre couleur" style={{
+            position: "relative", width: 28, height: 28, borderRadius: "50%", cursor: "pointer", flexShrink: 0,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            background: store.color && !AVATAR_COLORS.includes(store.color) ? store.color : DA_FIELD_BG,
+            color: T.textSub, fontSize: 16, lineHeight: 1,
+            boxShadow: store.color && !AVATAR_COLORS.includes(store.color) ? `0 0 0 2px ${T.white}, 0 0 0 4px ${T.text}` : "none",
+          }}>
+            <input type="color" aria-label="Autre couleur"
+              value={store.color && store.color.length === 7 ? store.color : DEFAULT_ACCENT}
+              onChange={(e) => { const color = e.target.value.toUpperCase(); setStore((prev) => ({ ...prev, color, mode: "initials" })); }}
+              style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", width: "100%", height: "100%", border: "none", padding: 0 }} />
+            {!(store.color && !AVATAR_COLORS.includes(store.color)) && "+"}
+          </label>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1539,6 +1652,10 @@ function DataExportSection() {
   const [msg, setMsg] = useState({ kind: "idle", text: "" });
   const fileInputRef = React.useRef(null);
 
+  /* Ce que l'import sait remettre. Plus étroit que l'export : ces lignes
+     gardent leur id, et réimportées dans un AUTRE compte alors que l'original
+     existe encore, elles heurteraient la clé primaire. Pour déménager, c'est
+     la Fusion de comptes qui sert. */
   const TABLES = [
     "trading_accounts",
     "apex_trades",
@@ -1547,6 +1664,18 @@ function DataExportSection() {
     "trade_details",
     "daily_session_notes",
     "user_preferences",
+  ];
+
+  /* L'export, lui, emporte tout ce que le compte possède : c'est une
+     sauvegarde, pas un format d'échange. Une table absente de la base est
+     sautée, pas fatale. */
+  const EXPORT_TABLES = [
+    ...TABLES,
+    "prop_firms", "trades", "trade_emotion_tags", "trade_error_tags",
+    "daily_discipline_tracking", "custom_discipline_rules", "trading_journal", "trading_rules",
+    "user_productivity", "user_settings",
+    "bank_connections", "bank_transactions",
+    "ai_conversations", "ai_messages", "ai_patterns", "ai_reports", "ai_user_memory", "agent_notifications",
   ];
 
   const handleExport = async () => {
@@ -1563,17 +1692,30 @@ function DataExportSection() {
         data: {},
       };
 
-      for (const table of TABLES) {
+      const grab = async (table, build) => {
         try {
-          const { data, error } = await supabase.from(table).select("*").eq("user_id", user.id);
-          if (error) {
-            console.warn(`⚠️ skip ${table}:`, error.message);
-            continue;
-          }
+          const { data, error } = await build(supabase.from(table).select("*"));
+          if (error) { console.warn(`⚠️ skip ${table}:`, error.message); return []; }
           payload.data[table] = data || [];
+          return payload.data[table];
         } catch (e) {
           console.warn(`⚠️ skip ${table}:`, e?.message);
+          return [];
         }
+      };
+
+      for (const table of EXPORT_TABLES) {
+        await grab(table, (q) => q.eq("user_id", user.id));
+      }
+      await grab("profiles", (q) => q.eq("id", user.id));
+      // Drive : la propriété passe par owner_id et l'accès par l'adhésion ;
+      // les fichiers suivent leurs projets (le contenu binaire reste dans le
+      // bucket, l'export en garde le chemin).
+      const memberships = await grab("drive_project_members", (q) => q.eq("user_id", user.id));
+      const projectIds = memberships.map((m) => m.project_id);
+      if (projectIds.length) {
+        await grab("drive_projects", (q) => q.in("id", projectIds));
+        await grab("drive_files", (q) => q.in("project_id", projectIds));
       }
 
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -1725,6 +1867,17 @@ const MERGE_SUMMARY = [
   ["prop_firms", "firme(s)"],
   ["strategies", "stratégie(s)"],
   ["daily_session_notes", "note(s) de session"],
+  ["bank_connections", "banque(s) liée(s)"],
+  ["bank_transactions", "opération(s) bancaire(s)"],
+  ["drive_projects", "projet(s) Drive"],
+  ["ai_conversations", "conversation(s) IA"],
+  // Une ligne par module (habitudes, objectifs, agenda, sport…).
+  ["user_productivity", "module(s) perso"],
+];
+
+const MERGE_SCOPES = [
+  { id: "trading", label: "Trading seulement" },
+  { id: "all", label: "Tout" },
 ];
 
 /* La source n'est jamais celle où l'on est connecté : il faudrait sinon se
@@ -1747,6 +1900,7 @@ function MergeAccountsSection() {
   useLang();
   const supabase = createClient();
   const [code, setCode] = useState("");
+  const [scope, setScope] = useState("trading");
   const [merging, setMerging] = useState(false);
   const [msg, setMsg] = useState({ kind: "idle", text: "" });
   const [issued, setIssued] = useState(null);
@@ -1755,24 +1909,27 @@ function MergeAccountsSection() {
 
   const handleMerge = async () => {
     if (!code.trim()) return;
-    const ok = window.confirm(
-      "Tout le trading de l'autre compte (comptes, trades, firmes, stratégies, discipline, notes de session) va être déplacé ici.\n\nL'autre compte garde le reste (agenda, sport, patrimoine…) mais n'aura plus ces données. Continuer ?"
+    const ok = window.confirm(scope === "all"
+      ? "TOUTES les données de l'autre compte vont être déplacées ici : trading, banques liées, habitudes, objectifs, agenda, sport, patrimoine, Drive, IA…\n\nL'autre compte ne gardera que son identité (nom, connexion). Continuer ?"
+      : "Tout le trading de l'autre compte (comptes, trades, firmes, stratégies, discipline, notes de session) va être déplacé ici.\n\nL'autre compte garde le reste (agenda, sport, patrimoine…) mais n'aura plus ces données. Continuer ?"
     );
     if (!ok) return;
     setMerging(true);
     setMsg({ kind: "idle", text: "" });
     try {
-      const { moved, sourceEmail } = await callMergeApi(supabase, { code: code.trim() });
+      const { moved, sourceEmail } = await callMergeApi(supabase, { code: code.trim(), scope });
       const parts = MERGE_SUMMARY
         .filter(([table]) => moved?.[table] > 0)
         .map(([table, label]) => `${moved[table]} ${label}`);
       const from = sourceEmail ? ` depuis ${sourceEmail}` : "";
       setMsg({
         kind: "success",
-        text: parts.length ? `Fusion terminée${from} : ${parts.join(", ")}.` : `Rien à rapatrier${from} : l'autre compte n'avait pas de données de trading.`,
+        text: parts.length
+          ? `Fusion terminée${from} : ${parts.join(", ")}.${scope === "all" ? " Recharge l'app pour tout voir." : ""}`
+          : `Rien à rapatrier${from} : l'autre compte était vide.`,
       });
       setCode("");
-      // Sans ça les pages de trading reliraient l'ancien cache local.
+      // Sans ça les pages reliraient l'ancien cache local.
       const { data: { user } } = await supabase.auth.getUser();
       if (user) await refreshTradesCache(user.id);
       notifyAccountsChanged();
@@ -1809,9 +1966,14 @@ function MergeAccountsSection() {
     <>
       <Card>
         <CardHeader
-          title="Rapatrier le trading d'un autre compte"
-          subtitle="Comptes, trades, firmes, stratégies, discipline et notes de session viennent ici. Le reste de l'autre compte n'est pas touché."
+          title="Rapatrier les données d'un autre compte"
+          subtitle={scope === "all"
+            ? "Tout vient ici : trading, banques liées, habitudes, objectifs, agenda, sport, patrimoine, Drive, IA. L'autre compte n'en garde que son identité."
+            : "Comptes, trades, firmes, stratégies, discipline et notes de session viennent ici. Le reste de l'autre compte n'est pas touché."}
         />
+        <div style={{ marginBottom: 16 }}>
+          <PeriodPills value={scope} onChange={setScope} options={MERGE_SCOPES} rail />
+        </div>
         <ol style={{ margin: "0 0 16px", paddingLeft: 18, fontSize: 13, color: T.textSub, lineHeight: 1.6 }}>
           <li>Connecte-toi à l’autre compte, ouvre Paramètres → Fusion de comptes et génère un code.</li>
           <li>Reviens sur ce compte-ci et colle le code ci-dessous.</li>
@@ -1846,7 +2008,7 @@ function MergeAccountsSection() {
 
       <Card>
         <CardHeader
-          title="Envoyer le trading de ce compte ailleurs"
+          title="Envoyer les données de ce compte ailleurs"
           subtitle="Génère un code ici, colle-le dans le compte qui doit tout recevoir. Valable 15 minutes."
         />
         {issued?.code ? (
