@@ -1890,10 +1890,8 @@ button img,
 /* Tao Score : radar + catégories côte à côte en desktop, empilés dès que la
    colonne des catégories ne peut plus tenir ses quatre colonnes de chiffres. */
 @media (max-width: 1023px) {
-  /* Blocs « mesure à gauche / lecture à droite » : dashboard (Tao Score) et
-     Éloquence (progression + conseils). Même repli, une seule déclaration. */
-  .tr4de-dash-score,
-  .tr4de-eloq-follow { grid-template-columns: minmax(0, 1fr) !important; }
+  /* Bloc « mesure à gauche / lecture à droite » du dashboard (Tao Score). */
+  .tr4de-dash-score { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* Journal : notes à gauche / trades à droite, empilés quand la liste de trades

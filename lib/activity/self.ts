@@ -12,9 +12,10 @@
  * C'est donc l'app qui doit le DIRE, et elle le dit par le TITRE — le seul
  * canal que la relecture n'oublie pas :
  *
- *   • en navigateur, `document.title` suffit, et c'est aussi ce que voit un
- *     poste de bureau mesurant tao trade ouvert dans un onglet (il ne lit alors
- *     rien d'autre que le titre de cet onglet) ;
+ *   • en navigateur, l'onglet n'en dit rien : il reste « tao », par choix de
+ *     l'utilisateur, qui ne veut pas voir la partie dans la barre du
+ *     navigateur (cf. components/DashboardNew). Un onglet titré à l'ancienne
+ *     (« Finance · tao trade ») reste reconnu à la relecture ;
  *   • dans l'app de bureau, dont le titre de fenêtre ne bouge pas, le moteur
  *     ÉCRIT ce titre lui-même (cf. `selfTitle` dans lib/activity/categories).
  *

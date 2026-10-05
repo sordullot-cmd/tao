@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Pencil, Activity, Target, AlertTriangle, Layers } from "lucide-react";
+import { Plus, Trash2, Pencil, Activity, Target, AlertTriangle, Layers, FolderPlus } from "lucide-react";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
@@ -14,6 +14,7 @@ import { CARD, AreaDotsDefs, areaDotsFill, PeriodPills } from "@/components/ui/d
 import { Field, FieldGrid, Input, Select, Textarea, Modal, PillButton, IconButton, CheckChip } from "@/components/ui/form";
 import {
   emptyJournal, normalizeJournal, effectiveR, tagStats, strategyStats, summarize,
+  sessionLabel, groupBySession, equityBySession,
 } from "@/lib/backtest/journal";
 
 /**
@@ -43,17 +44,28 @@ const OUTCOMES = [
 ];
 const OUTCOME_BY_ID = Object.fromEntries(OUTCOMES.map(o => [o.id, o]));
 
-const emptyForm = () => ({
-  date: new Date().toISOString().slice(0, 10),
-  symbol: "",
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** Un backtest neuf hérite des défauts de sa session : on y teste en général
+ *  une stratégie sur un instrument, les ressaisir à chaque setup est du bruit. */
+const emptyForm = (session) => ({
+  date: today(),
+  symbol: session?.symbol || "",
   direction: "long",
-  strategyId: "",
+  strategyId: session?.strategyId || "",
+  sessionId: session?.id || "",
   outcome: "win",
   r: "",
   confluences: [],
   mistakes: [],
   better: "",
 });
+
+const emptySessionForm = () => ({ name: "", date: today(), strategyId: "", symbol: "", notes: "" });
+
+/* Valeurs spéciales du sélecteur de session. */
+const ALL = "all";
+const NONE = "none";
 
 export default function BacktestPage() {
   /* Les stratégies viennent de la coquille (table Supabase), pas du journal :
@@ -65,14 +77,31 @@ export default function BacktestPage() {
   const { pushUndo } = useUndo();
 
   const [filter, setFilter] = useState("all");
+  const [sessionView, setSessionView] = useState(ALL);
   const [form, setForm] = useState(null);      // null = modale fermée
   const [editingId, setEditingId] = useState(null);
+  const [sessionForm, setSessionForm] = useState(null);
+  const [editingSessionId, setEditingSessionId] = useState(null);
 
-  const { entries } = journal;
+  const { sessions } = journal;
+  const sessionById = useMemo(() => new Map(sessions.map(s => [s.id, s])), [sessions]);
+  /* Une session supprimée ailleurs (autre appareil) ne doit pas laisser la page
+     sur une vue vide sans issue : on retombe sur l'ensemble. */
+  const view = sessionView === ALL || sessionView === NONE || sessionById.has(sessionView) ? sessionView : ALL;
+  const currentSession = sessionById.get(view) || null;
+
+  /* Tout ce qui se lit — bilan, courbe, classements — porte sur la session
+     affichée : c'est le sens même d'une session, qu'on juge seule. */
+  const entries = useMemo(() => {
+    if (view === ALL) return journal.entries;
+    if (view === NONE) return journal.entries.filter(e => e.sessionId === null);
+    return journal.entries.filter(e => e.sessionId === view);
+  }, [journal.entries, view]);
   const stats = useMemo(() => summarize(entries), [entries]);
   const confluenceStats = useMemo(() => tagStats(entries, "confluences"), [entries]);
   const mistakeStats = useMemo(() => tagStats(entries, "mistakes"), [entries]);
-  const curve = useMemo(() => equityCurve(entries), [entries]);
+  const curve = useMemo(() => equityBySession(entries), [entries]);
+  const hasOrphans = journal.entries.some(e => e.sessionId === null);
 
   /* Le classement par stratégie porte des IDS ; c'est ici qu'ils redeviennent
      un nom et une couleur — une stratégie supprimée entre-temps garde sa ligne
@@ -89,36 +118,50 @@ export default function BacktestPage() {
     })),
     [entries, strategyById],
   );
-  const shown = filter === "all" ? entries : entries.filter(e => e.outcome === filter);
+  const matches = (e) => filter === "all" || e.outcome === filter;
+  const groups = useMemo(
+    () => (view === ALL && sessions.length > 0 ? groupBySession(journal.entries, sessions) : null),
+    [view, sessions, journal.entries],
+  );
 
   /* Toute écriture repart du magasin NORMALISÉ : `prev` est le JSON brut du
      cache, qui peut venir d'une version antérieure du modèle. */
   const update = (fn) => setRaw(prev => fn(normalizeJournal(prev)));
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm()); };
+  /* Un backtest ajouté depuis la vue d'ensemble va dans la session la plus
+     récente : c'est presque toujours celle qu'on est en train de mener. */
+  const openNew = (session = currentSession || (view === ALL ? sessions[0] : null)) => {
+    setEditingId(null);
+    setForm(emptyForm(session));
+  };
   const openEdit = (entry) => {
     setEditingId(entry.id);
     setForm({
       ...entry,
       r: entry.r === null ? "" : String(entry.r),
       strategyId: entry.strategyId ?? "",
+      sessionId: entry.sessionId ?? "",
     });
   };
 
   const save = () => {
     if (!form) return;
+    const previous = editingId ? journal.entries.find(e => e.id === editingId) : null;
     const entry = {
       id: editingId ?? `bt_${Date.now()}`,
       date: form.date,
       symbol: form.symbol.trim(),
       direction: form.direction,
       strategyId: form.strategyId || null,
+      sessionId: form.sessionId || null,
       outcome: form.outcome,
       r: form.r.trim() === "" ? null : Number(String(form.r).replace(",", ".")),
       confluences: form.confluences,
       mistakes: form.mistakes,
       better: form.better,
-      createdAt: new Date().toISOString(),
+      /* L'horodatage de saisie ordonne les setups d'une même journée : le
+         réécrire à chaque modification déplacerait le setup en fin de série. */
+      createdAt: previous?.createdAt ?? new Date().toISOString(),
     };
     update(store => ({
       ...store,
@@ -137,7 +180,7 @@ export default function BacktestPage() {
   };
 
   const remove = (id) => {
-    const snapshot = entries.find(e => e.id === id);
+    const snapshot = journal.entries.find(e => e.id === id);
     update(store => ({ ...store, entries: store.entries.filter(e => e.id !== id) }));
     if (snapshot) pushUndo({
       label: "Suppression du backtest",
@@ -146,13 +189,81 @@ export default function BacktestPage() {
     });
   };
 
+  const openNewSession = () => { setEditingSessionId(null); setSessionForm(emptySessionForm()); };
+  const openEditSession = (session) => {
+    setEditingSessionId(session.id);
+    setSessionForm({ ...session, strategyId: session.strategyId ?? "" });
+  };
+  const saveSession = () => {
+    if (!sessionForm) return;
+    const previous = editingSessionId ? sessionById.get(editingSessionId) : null;
+    const session = {
+      id: editingSessionId ?? `bts_${Date.now()}`,
+      name: sessionForm.name.trim(),
+      date: sessionForm.date || today(),
+      strategyId: sessionForm.strategyId || null,
+      symbol: sessionForm.symbol.trim(),
+      notes: sessionForm.notes,
+      createdAt: previous?.createdAt ?? new Date().toISOString(),
+    };
+    update(store => ({
+      ...store,
+      sessions: editingSessionId
+        ? store.sessions.map(s => (s.id === editingSessionId ? session : s))
+        : [session, ...store.sessions],
+    }));
+    setSessionForm(null);
+    setEditingSessionId(null);
+    // Une session qu'on vient d'ouvrir est celle qu'on va remplir.
+    setSessionView(session.id);
+  };
+
+  /* Supprimer une session emporte ses backtests : une session est une unité de
+     travail, et ses setups n'ont de sens que lus ensemble. L'annulation rend
+     les deux d'un coup. */
+  const removeSession = (id) => {
+    const snapshot = sessionById.get(id);
+    const owned = journal.entries.filter(e => e.sessionId === id);
+    const drop = (store) => ({
+      ...store,
+      sessions: store.sessions.filter(s => s.id !== id),
+      entries: store.entries.filter(e => e.sessionId !== id),
+    });
+    update(drop);
+    setSessionView(ALL);
+    if (snapshot) pushUndo({
+      label: "Suppression de la session",
+      undo: async () => update(store => ({
+        ...store,
+        sessions: [snapshot, ...store.sessions],
+        entries: [...owned, ...store.entries],
+      })),
+      redo: async () => update(drop),
+    });
+  };
+
   if (useFirstLoad(hydrated, STORAGE_KEY)) {
     return <PageSkeleton variant="stats" label="Backtest" gap={16} toolbarRight={[168]} />;
   }
 
+  const isEmpty = journal.entries.length === 0 && sessions.length === 0;
+  const rowOf = (entry) => (
+    <EntryRow key={entry.id} entry={entry}
+              strategy={entry.strategyId ? strategyById.get(entry.strategyId) : undefined}
+              onEdit={() => openEdit(entry)} onDelete={() => remove(entry.id)} />
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        {!isEmpty && (
+          <Select aria-label="Session" value={view} onChange={(e) => setSessionView(e.target.value)}
+                  style={{ width: "auto", minWidth: 200, maxWidth: 280 }}>
+            <option value={ALL}>Toutes les sessions</option>
+            {sessions.map(s => <option key={s.id} value={s.id}>{sessionLabel(s)}</option>)}
+            {hasOrphans && <option value={NONE}>Sans session</option>}
+          </Select>
+        )}
         {entries.length > 0 && (
           <PeriodPills
             value={filter}
@@ -166,21 +277,47 @@ export default function BacktestPage() {
             ]}
           />
         )}
-        <PillButton variant="primary" onClick={openNew} style={{ marginLeft: "auto" }}>
-          <Plus size={14} strokeWidth={2} /> Ajouter un backtest
-        </PillButton>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <PillButton onClick={openNewSession}>
+            <FolderPlus size={14} strokeWidth={2} /> Nouvelle session
+          </PillButton>
+          <PillButton variant="primary" onClick={() => openNew()}>
+            <Plus size={14} strokeWidth={2} /> Ajouter un backtest
+          </PillButton>
+        </div>
         <div id="tr4de-page-header-slot" />
       </div>
 
-      {entries.length === 0 ? (
+      {currentSession && (
+        <SessionHeader session={currentSession}
+                       strategy={currentSession.strategyId ? strategyById.get(currentSession.strategyId) : undefined}
+                       onEdit={() => openEditSession(currentSession)}
+                       onDelete={() => removeSession(currentSession.id)} />
+      )}
+
+      {isEmpty ? (
         <div style={{ ...CARD, padding: "60px 24px", textAlign: "center" }}>
           <div style={{ ...TYPE.headline, color: T.text, marginBottom: 8 }}>Aucun backtest pour l&apos;instant</div>
           <div style={{ ...TYPE.body, color: T.textSub, maxWidth: 420, margin: "0 auto 18px" }}>
-            Note chaque setup rejoué : gagnant ou perdant, les confluences qui
-            l&apos;ont justifié, les erreurs commises, et ce que tu aurais dû mieux
-            faire. Le classement des confluences se construit tout seul ensuite.
+            Ouvre une session — une stratégie, un instrument, une question à
+            vérifier — puis note chaque setup rejoué : gagnant ou perdant, les
+            confluences, les erreurs, et ce que tu aurais dû mieux faire.
           </div>
-          <PillButton variant="primary" onClick={openNew}>
+          <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+            <PillButton variant="primary" onClick={openNewSession}>
+              <FolderPlus size={14} strokeWidth={2} /> Nouvelle session
+            </PillButton>
+            <PillButton onClick={() => openNew()}>
+              <Plus size={14} strokeWidth={2} /> Ajouter un backtest
+            </PillButton>
+          </div>
+        </div>
+      ) : entries.length === 0 ? (
+        <div style={{ ...CARD, padding: "40px 24px", textAlign: "center" }}>
+          <div style={{ ...TYPE.body, color: T.textSub, marginBottom: 14 }}>
+            {currentSession ? "Session ouverte — ajoute son premier setup." : "Aucun backtest ici."}
+          </div>
+          <PillButton variant="primary" onClick={() => openNew()}>
             <Plus size={14} strokeWidth={2} /> Ajouter un backtest
           </PillButton>
         </div>
@@ -197,7 +334,13 @@ export default function BacktestPage() {
                  color={stats.avgR >= 0 ? T.green : T.red} sub="par backtest" />
           </div>
 
-          <EquityCurve curve={curve} />
+          <EquityCurve curve={curve.points} breaks={view === ALL ? curve.breaks : []} />
+
+          {/* Vue d'ensemble : les sessions côte à côte, chacune avec son bilan.
+              C'est ici qu'on compare deux séances — et d'ici qu'on en ouvre une. */}
+          {view === ALL && sessions.length > 0 && (
+            <SessionList groups={groups} strategyById={strategyById} onOpen={(id) => setSessionView(id ?? NONE)} />
+          )}
 
           {/* Le classement le plus large d'abord : une stratégie chapeaute les
               confluences qui la composent, et c'est d'elle qu'on décide (la
@@ -219,12 +362,28 @@ export default function BacktestPage() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {shown.map(entry => (
-              <EntryRow key={entry.id} entry={entry}
-                        strategy={entry.strategyId ? strategyById.get(entry.strategyId) : undefined}
-                        onEdit={() => openEdit(entry)} onDelete={() => remove(entry.id)} />
-            ))}
-            {shown.length === 0 && (
+            {groups ? (
+              /* Dans la vue d'ensemble, les setups restent rangés par session :
+                 une liste continue recollerait les séances bout à bout. */
+              groups.filter(g => g.entries.some(matches)).map(g => (
+                <React.Fragment key={g.session?.id ?? NONE}>
+                  <button type="button" onClick={() => setSessionView(g.session?.id ?? NONE)}
+                    style={{
+                      display: "flex", alignItems: "baseline", gap: 8, marginTop: 6, padding: 0,
+                      border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                    }}>
+                    <span style={{ ...TYPE.callout, fontWeight: 600, color: T.text }}>
+                      {g.session ? sessionLabel(g.session) : "Sans session"}
+                    </span>
+                    <span style={{ ...TYPE.caption, color: T.textMut }}>
+                      {g.entries.length} backtest{g.entries.length > 1 ? "s" : ""}
+                    </span>
+                  </button>
+                  {g.entries.filter(matches).map(rowOf)}
+                </React.Fragment>
+              ))
+            ) : entries.filter(matches).map(rowOf)}
+            {entries.filter(matches).length === 0 && (
               <div style={{ ...CARD, padding: 24, textAlign: "center", ...TYPE.body, color: T.textMut }}>
                 Aucun backtest dans ce filtre.
               </div>
@@ -242,6 +401,17 @@ export default function BacktestPage() {
           onClose={() => { setForm(null); setEditingId(null); }}
           onSave={save}
           onDelete={editingId ? () => { remove(editingId); setForm(null); setEditingId(null); } : undefined}
+        />
+      )}
+
+      {sessionForm && (
+        <SessionModal
+          form={sessionForm} setForm={setSessionForm}
+          strategies={strategies || []}
+          editing={editingSessionId !== null}
+          onClose={() => { setSessionForm(null); setEditingSessionId(null); }}
+          onSave={saveSession}
+          onDelete={editingSessionId ? () => { removeSession(editingSessionId); setSessionForm(null); setEditingSessionId(null); } : undefined}
         />
       )}
     </div>
@@ -268,20 +438,6 @@ function fmtDate(iso) {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
-
-/**
- * L'équité en R, backtest par backtest — et non jour par jour comme une courbe
- * de trading. Un après-midi de backtest produit trente setups à la même date :
- * les agréger par jour écraserait la séquence, alors que c'est exactement ce
- * qu'on vient lire (les séries perdantes, l'ordre dans lequel ça s'est passé).
- */
-function equityCurve(entries) {
-  let cum = 0;
-  return [...entries].reverse().map(entry => {
-    cum += effectiveR(entry);
-    return { date: entry.date, cum };
-  });
 }
 
 /* ── Sous-composants ────────────────────────────────────────────────────── */
@@ -420,9 +576,12 @@ function Td({ children, align = "left", color }) {
   return <td style={{ padding: "9px 16px", textAlign: align, ...TYPE.label, ...TABULAR, color: color || T.text }}>{children}</td>;
 }
 
-/** Courbe d'équité en R. Reprend la trame de points commune aux graphiques du
- *  site (`AreaDotsDefs`), pour que la page n'invente pas un second dessin. */
-function EquityCurve({ curve }) {
+/** Courbe d'équité en R, backtest par backtest — et non jour par jour comme
+ *  une courbe de trading : un après-midi de backtest produit trente setups à la
+ *  même date, et c'est leur séquence qu'on vient lire. Reprend la trame de
+ *  points commune aux graphiques du site (`AreaDotsDefs`). `breaks` marque en
+ *  pointillé les changements de session dans la vue d'ensemble. */
+function EquityCurve({ curve, breaks = [] }) {
   if (curve.length < 2) {
     return (
       <div style={{ ...CARD, padding: 24, textAlign: "center", ...TYPE.body, color: T.textMut }}>
@@ -460,6 +619,10 @@ function EquityCurve({ curve }) {
           <AreaDotsDefs id="btj" color={positive ? T.green : T.red} top={pad.t} bottom={H - pad.b} width={W} height={H} />
         </defs>
         <line x1={pad.l} y1={y(0)} x2={W - pad.r} y2={y(0)} stroke={T.border} strokeWidth="1" />
+        {breaks.map(i => {
+          const bx = (x(i - 1) + x(i)) / 2;
+          return <line key={i} x1={bx} y1={pad.t} x2={bx} y2={H - pad.b} stroke={T.border} strokeWidth="1" strokeDasharray="3 4" />;
+        })}
         <polyline points={`${pad.l},${y(0)} ${points} ${x(curve.length - 1)},${y(0)}`} {...areaDotsFill("btj")} stroke="none" />
         <polyline points={points} fill="none" stroke={positive ? T.green : T.red} strokeWidth="2" />
         <text x={pad.l - 6} y={y(max)} textAnchor="end" fontSize="10" fill={T.textMut} alignmentBaseline="middle">{fmtR(max)}</text>
@@ -510,6 +673,7 @@ function TagPicker({ label, hint, catalog, selected, color, onToggle, onAdd }) {
 }
 
 function EntryModal({ form, setForm, journal, strategies, editing, onClose, onSave, onDelete }) {
+  const sessionOf = (id) => journal.sessions.find(s => s.id === id);
   const set = (patch) => setForm(prev => ({ ...prev, ...patch }));
   const toggle = (key, tag) => set({
     [key]: form[key].includes(tag) ? form[key].filter(t => t !== tag) : [...form[key], tag],
@@ -547,16 +711,32 @@ function EntryModal({ form, setForm, journal, strategies, editing, onClose, onSa
           </Field>
         </FieldGrid>
 
-        <Field label="Stratégie" hint={strategies.length === 0 ? "Aucune stratégie enregistrée — la page « Stratégies » les alimente." : undefined}>
-          <Select value={form.strategyId} onChange={(e) => set({ strategyId: e.target.value })}>
-            {/* « Aucune » en premier et par défaut : on backteste aussi des
-                idées avant qu'elles ne portent un nom. */}
-            <option value="">Aucune</option>
-            {strategies.map(st => (
-              <option key={st.id} value={String(st.id)}>{st.name || `Stratégie ${st.id}`}</option>
-            ))}
-          </Select>
-        </Field>
+        <FieldGrid columns={2}>
+          <Field label="Session">
+            <Select aria-label="Session du backtest" value={form.sessionId}
+              onChange={(e) => {
+                /* Changer de session sur un setup NEUF reprend ses défauts ;
+                   sur un setup existant, on ne touche qu'au rattachement. */
+                const next = sessionOf(e.target.value);
+                set(editing || !next
+                  ? { sessionId: e.target.value }
+                  : { sessionId: next.id, strategyId: next.strategyId || form.strategyId, symbol: next.symbol || form.symbol });
+              }}>
+              <option value="">Sans session</option>
+              {journal.sessions.map(s => <option key={s.id} value={s.id}>{sessionLabel(s)}</option>)}
+            </Select>
+          </Field>
+          <Field label="Stratégie" hint={strategies.length === 0 ? "Aucune stratégie enregistrée — la page « Stratégies » les alimente." : undefined}>
+            <Select aria-label="Stratégie" value={form.strategyId} onChange={(e) => set({ strategyId: e.target.value })}>
+              {/* « Aucune » en premier et par défaut : on backteste aussi des
+                  idées avant qu'elles ne portent un nom. */}
+              <option value="">Aucune</option>
+              {strategies.map(st => (
+                <option key={st.id} value={String(st.id)}>{st.name || `Stratégie ${st.id}`}</option>
+              ))}
+            </Select>
+          </Field>
+        </FieldGrid>
 
         <FieldGrid columns={2}>
           <Field label="Résultat">
@@ -594,6 +774,118 @@ function EntryModal({ form, setForm, journal, strategies, editing, onClose, onSa
             onChange={(e) => set({ better: e.target.value })}
             placeholder="Attendre la clôture de la bougie de rejet avant d'entrer…"
           />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+/** L'en-tête d'une session ouverte : ce qu'on y teste, et de quoi la régler. */
+function SessionHeader({ session, strategy, onEdit, onDelete }) {
+  return (
+    <div style={{ ...CARD, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ ...TYPE.headline, color: T.text }}>{sessionLabel(session)}</span>
+        <span style={{ ...TYPE.caption, color: T.textMut }}>{fmtDate(session.date)}</span>
+        {session.strategyId && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, ...TYPE.caption, color: T.textSub }}>
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: strategy?.color || T.textMut }} />
+            {strategy?.name || "Stratégie supprimée"}
+          </span>
+        )}
+        {session.symbol && <Chip label={session.symbol} />}
+        <span style={{ marginLeft: "auto", display: "inline-flex", gap: 4 }}>
+          <IconButton onClick={onEdit} aria-label="Modifier la session"><Pencil size={13} strokeWidth={1.75} /></IconButton>
+          <IconButton tone="danger" onClick={onDelete} aria-label="Supprimer la session"><Trash2 size={13} strokeWidth={1.75} /></IconButton>
+        </span>
+      </div>
+      {session.notes.trim() && (
+        <div style={{ ...TYPE.body, color: T.textSub, whiteSpace: "pre-wrap" }}>{session.notes}</div>
+      )}
+    </div>
+  );
+}
+
+/** Le bilan de chaque session, une ligne par séance : c'est la comparaison
+ *  qu'une liste continue de setups empêchait. */
+function SessionList({ groups, strategyById, onOpen }) {
+  return (
+    <div style={{ ...CARD, padding: 0 }}>
+      <div style={{ padding: "12px 16px", ...TYPE.callout, fontWeight: 600, color: T.text }}>Sessions</div>
+      <div style={{ overflowX: "auto" }}>
+        <table aria-label="Sessions" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <Th>Session</Th><Th>Stratégie</Th><Th align="right">N</Th><Th align="right">Réussite</Th><Th align="right">R total</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(({ session, entries }) => {
+              const s = summarize(entries);
+              const strategy = session?.strategyId ? strategyById.get(session.strategyId) : undefined;
+              return (
+                <tr key={session?.id ?? "none"} onClick={() => onOpen(session?.id ?? null)}
+                    style={{ borderTop: `1px solid ${HAIRLINE}`, cursor: "pointer" }}>
+                  <Td>
+                    {session ? sessionLabel(session) : "Sans session"}
+                    {session && <span style={{ color: T.textMut, marginLeft: 8 }}>{fmtDate(session.date)}</span>}
+                  </Td>
+                  <Td color={T.textSub}>{session?.strategyId ? (strategy?.name || "Stratégie supprimée") : "—"}</Td>
+                  <Td align="right" color={T.textSub}>{s.count}</Td>
+                  <Td align="right">{s.wins + s.losses > 0 ? `${s.winRate}%` : "—"}</Td>
+                  <Td align="right" color={s.count === 0 ? T.textMut : s.totalR >= 0 ? T.green : T.red}>{s.count ? fmtR(s.totalR) : "—"}</Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SessionModal({ form, setForm, strategies, editing, onClose, onSave, onDelete }) {
+  const set = (patch) => setForm(prev => ({ ...prev, ...patch }));
+  return (
+    <Modal
+      open
+      title={editing ? "Modifier la session" : "Nouvelle session"}
+      onClose={onClose}
+      onDelete={onDelete}
+      deleteLabel="Supprimer la session"
+      width={520}
+      footer={
+        <>
+          <PillButton variant="ghost" onClick={onClose}>Annuler</PillButton>
+          <PillButton variant="primary" onClick={onSave}>{editing ? "Enregistrer" : "Créer la session"}</PillButton>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <FieldGrid columns={2}>
+          <Field label="Nom" hint="Vide = la date.">
+            <Input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="iFVG hors killzone" />
+          </Field>
+          <Field label="Date">
+            <Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
+          </Field>
+        </FieldGrid>
+        <FieldGrid columns={2}>
+          <Field label="Stratégie testée" hint="Reprise par chaque backtest de la session.">
+            <Select aria-label="Stratégie de la session" value={form.strategyId} onChange={(e) => set({ strategyId: e.target.value })}>
+              <option value="">Aucune</option>
+              {strategies.map(st => (
+                <option key={st.id} value={String(st.id)}>{st.name || `Stratégie ${st.id}`}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Instrument">
+            <Input value={form.symbol} onChange={(e) => set({ symbol: e.target.value })} placeholder="NQ, EURUSD…" />
+          </Field>
+        </FieldGrid>
+        <Field label="Ce que la session doit vérifier">
+          <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })}
+                    placeholder="Le iFVG tient-il hors des killzones ?" />
         </Field>
       </div>
     </Modal>

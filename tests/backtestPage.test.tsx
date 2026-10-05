@@ -53,7 +53,7 @@ function addBacktest({ symbol, outcome, r, strategy, confluence, mistake, better
   fireEvent.change(within(dialog).getByPlaceholderText("NQ, EURUSD…"), { target: { value: symbol } });
   fireEvent.click(within(dialog).getByRole("button", { name: outcome }));
   if (r !== undefined) fireEvent.change(within(dialog).getByPlaceholderText("2.5"), { target: { value: r } });
-  if (strategy) fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: strategy } });
+  if (strategy) fireEvent.change(within(dialog).getByRole("combobox", { name: "Stratégie" }), { target: { value: strategy } });
   if (confluence) fireEvent.click(within(dialog).getByRole("checkbox", { name: confluence }));
   if (mistake) fireEvent.click(within(dialog).getByRole("checkbox", { name: mistake }));
   if (better) {
@@ -162,5 +162,47 @@ describe("Page Backtest", () => {
     // Le bilan porte sur tout le journal, pas sur le filtre : +2R et -1R.
     const cumul = screen.getByText("R cumulé").parentElement as HTMLElement;
     expect(within(cumul).getByText("+1R")).toBeTruthy();
+  });
+
+  it("ouvre une session dont les backtests héritent la stratégie et l'instrument", () => {
+    render(<BacktestPage />);
+    fireEvent.click(screen.getAllByText("Nouvelle session")[0]);
+    let dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("iFVG hors killzone"), { target: { value: "Test NY" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Stratégie de la session" }), { target: { value: "s1" } });
+    fireEvent.change(within(dialog).getByPlaceholderText("NQ, EURUSD…"), { target: { value: "NQ" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Créer la session" }));
+
+    fireEvent.click(screen.getAllByText("Ajouter un backtest")[0]);
+    dialog = screen.getByRole("dialog");
+    expect((within(dialog).getByPlaceholderText("NQ, EURUSD…") as HTMLInputElement).value).toBe("NQ");
+    expect((within(dialog).getByRole("combobox", { name: "Stratégie" }) as HTMLSelectElement).value).toBe("s1");
+  });
+
+  it("juge chaque session seule, sans recoller les séances bout à bout", () => {
+    render(<BacktestPage />);
+    const openSession = (name: string) => {
+      fireEvent.click(screen.getAllByText("Nouvelle session")[0]);
+      const dialog = screen.getByRole("dialog");
+      fireEvent.change(within(dialog).getByPlaceholderText("iFVG hors killzone"), { target: { value: name } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Créer la session" }));
+    };
+    openSession("Mars");
+    addBacktest({ symbol: "NQ", outcome: "Gagnant", r: "3" });
+    openSession("Avril");
+    addBacktest({ symbol: "ES", outcome: "Perdant", r: "-1" });
+
+    // La session ouverte ne montre que ses setups, et son propre bilan.
+    expect(screen.queryByText("NQ")).toBeNull();
+    let cumul = screen.getByText("R cumulé").parentElement as HTMLElement;
+    expect(within(cumul).getByText("−1R")).toBeTruthy();
+
+    // La vue d'ensemble range les setups par session et compare les séances.
+    fireEvent.change(screen.getByRole("combobox", { name: "Session" }), { target: { value: "all" } });
+    cumul = screen.getByText("R cumulé").parentElement as HTMLElement;
+    expect(within(cumul).getByText("+2R")).toBeTruthy();
+    const rows = within(screen.getByRole("table", { name: "Sessions" })).getAllByRole("row").slice(1);
+    expect(within(rows[0]).getByText("−1R")).toBeTruthy();
+    expect(within(rows[1]).getByText("+3R")).toBeTruthy();
   });
 });

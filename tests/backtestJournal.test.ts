@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   emptyJournal, normalizeJournal, effectiveR, tagStats, strategyStats, summarize,
-  DEFAULT_CONFLUENCES,
+  DEFAULT_CONFLUENCES, groupBySession, equityBySession, sessionLabel,
 } from "@/lib/backtest/journal";
 
 /** Raccourci de saisie : tout ce qui n'est pas dit n'a pas d'importance pour
@@ -159,3 +159,56 @@ describe("tagStats()", () => {
     expect(tagStats(entries, "mistakes").map(s => s.tag)).toEqual(["FOMO"]);
   });
 });
+
+describe("sessions de backtest", () => {
+  it("rend « sans session » un backtest dont la session a disparu", () => {
+    const store = normalizeJournal({
+      sessions: [{ id: "a", date: "2026-03-01" }],
+      entries: [
+        { id: "1", date: "2026-03-01", outcome: "win", sessionId: "a" },
+        { id: "2", date: "2026-03-02", outcome: "win", sessionId: "fantome" },
+      ],
+    });
+    expect(store.entries.find(e => e.id === "1")?.sessionId).toBe("a");
+    expect(store.entries.find(e => e.id === "2")?.sessionId).toBeNull();
+  });
+
+  it("garde les anciens journaux, sans session, tels quels", () => {
+    const store = normalizeJournal({ entries: [{ id: "1", date: "2026-01-01", outcome: "loss" }] });
+    expect(store.sessions).toEqual([]);
+    expect(store.entries[0].sessionId).toBeNull();
+  });
+
+  it("groupe par session, la plus récente d'abord, les orphelins à la fin", () => {
+    const store = normalizeJournal({
+      sessions: [{ id: "a", date: "2026-03-01" }, { id: "b", date: "2026-04-01" }],
+      entries: [
+        { id: "1", date: "2026-03-01", outcome: "win", sessionId: "a" },
+        { id: "2", date: "2026-02-01", outcome: "win" },
+      ],
+    });
+    const groups = groupBySession(store.entries, store.sessions);
+    expect(groups.map(g => g.session?.id ?? null)).toEqual(["b", "a", null]);
+    expect(groups[0].entries).toEqual([]);
+  });
+
+  it("marque où une session en remplace une autre sur la courbe", () => {
+    const store = normalizeJournal({
+      sessions: [{ id: "a", date: "2026-03-01" }, { id: "b", date: "2026-04-01" }],
+      entries: [
+        { id: "1", date: "2026-03-01", outcome: "win", sessionId: "a" },
+        { id: "2", date: "2026-03-01", outcome: "win", sessionId: "a", createdAt: "2026-03-01T10:00:00Z" },
+        { id: "3", date: "2026-04-01", outcome: "loss", sessionId: "b" },
+      ],
+    });
+    const { points, breaks } = equityBySession(store.entries);
+    expect(points.map(p => p.cum)).toEqual([1, 2, 1]);
+    expect(breaks).toEqual([2]);
+  });
+
+  it("nomme une session sans nom par sa date", () => {
+    expect(sessionLabel({ name: "", date: "2026-03-01" })).toMatch(/^Session du /);
+    expect(sessionLabel({ name: "Test NY", date: "2026-03-01" })).toBe("Test NY");
+  });
+});
+

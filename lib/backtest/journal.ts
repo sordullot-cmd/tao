@@ -20,6 +20,15 @@
  * lecture depuis les entrées (cf. `normalizeJournal`) : un tag employé dans une
  * entrée mais absent du catalogue y rentre plutôt que de disparaître de la
  * liste des cases à cocher.
+ *
+ * ── Les sessions ──────────────────────────────────────────────────────────
+ * On backteste par séances : un après-midi sur une stratégie, un instrument, une
+ * question précise. Sans elles, trois mois de backtests s'enchaînaient en une
+ * seule courbe, et un essai abandonné en mars diluait le test sérieux d'avril.
+ * Une session porte donc ses défauts (stratégie, instrument) et se lit seule ;
+ * la vue d'ensemble reste là pour les classements qui gagnent à tout agréger.
+ * Les backtests d'avant les sessions restent « sans session » plutôt que d'être
+ * versés d'office dans une séance qui n'a pas eu lieu.
  */
 
 /** Ce que l'utilisateur DÉCLARE du trade. Le « BE » couvre le scratch : sorti
@@ -46,11 +55,30 @@ export interface BacktestEntry {
   mistakes: string[];
   /** « Ce que j'aurais dû mieux faire » — le champ qui fait le travail. */
   better: string;
+  /** La session de backtest, ou `null` (entrée d'avant les sessions, ou dont
+   *  la session a été supprimée sans elle). */
+  sessionId: string | null;
+  createdAt: string;
+}
+
+export interface BacktestSession {
+  id: string;
+  name: string;
+  /** YYYY-MM-DD — le jour où l'on s'est assis pour backtester. */
+  date: string;
+  /** Défauts des backtests saisis dans la session : on y teste en général une
+   *  stratégie sur un instrument, les ressaisir à chaque setup est du bruit. */
+  strategyId: string | null;
+  symbol: string;
+  /** Ce qu'on vient vérifier — « le iFVG tient-il hors killzone ? ». */
+  notes: string;
   createdAt: string;
 }
 
 export interface BacktestJournal {
   entries: BacktestEntry[];
+  /** Du plus récent au plus ancien. */
+  sessions: BacktestSession[];
   /** Catalogues de cases à cocher, enrichis par l'usage. */
   confluences: string[];
   mistakes: string[];
@@ -85,6 +113,7 @@ export const DEFAULT_MISTAKES = [
 export function emptyJournal(): BacktestJournal {
   return {
     entries: [],
+    sessions: [],
     confluences: [...DEFAULT_CONFLUENCES],
     mistakes: [...DEFAULT_MISTAKES],
   };
@@ -127,8 +156,33 @@ function normalizeEntry(raw: Partial<BacktestEntry> | null | undefined, index: n
     confluences: cleanTags(raw.confluences),
     mistakes: cleanTags(raw.mistakes),
     better: String(raw.better ?? ""),
+    sessionId: raw.sessionId == null || raw.sessionId === "" ? null : String(raw.sessionId),
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
   };
+}
+
+function normalizeSession(raw: Partial<BacktestSession> | null | undefined, index: number): BacktestSession | null {
+  if (!raw || typeof raw !== "object") return null;
+  const date = String(raw.date ?? "").slice(0, 10);
+  if (!date) return null;
+  return {
+    id: String(raw.id ?? `session-${date}-${index}`),
+    name: String(raw.name ?? "").trim(),
+    date,
+    strategyId: raw.strategyId == null || raw.strategyId === "" ? null : String(raw.strategyId),
+    symbol: String(raw.symbol ?? "").trim(),
+    notes: String(raw.notes ?? ""),
+    createdAt: String(raw.createdAt ?? new Date().toISOString()),
+  };
+}
+
+/** Le nom affiché d'une session : le sien, sinon sa date — une session sans
+ *  nom reste reconnaissable dans la liste. */
+export function sessionLabel(session: Pick<BacktestSession, "name" | "date">): string {
+  if (session.name) return session.name;
+  const d = new Date(`${session.date}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "Session";
+  return `Session du ${d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
 /**
@@ -143,11 +197,21 @@ function normalizeEntry(raw: Partial<BacktestEntry> | null | undefined, index: n
  */
 export function normalizeJournal(raw: unknown): BacktestJournal {
   const src = (raw && typeof raw === "object" ? raw : {}) as Partial<BacktestJournal>;
+  const sessions = (Array.isArray(src.sessions) ? src.sessions : [])
+    .map(normalizeSession)
+    .filter((s): s is BacktestSession => s !== null)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  const known = new Set(sessions.map(s => s.id));
   const entries = (Array.isArray(src.entries) ? src.entries : [])
     .map(normalizeEntry)
     .filter((e): e is BacktestEntry => e !== null)
-    /* Le plus récent en tête : c'est l'ordre dans lequel on relit un journal. */
-    .sort((a, b) => b.date.localeCompare(a.date));
+    /* Une session disparue ne doit pas emporter ses backtests dans un groupe
+       qu'aucune liste n'affiche : ils redeviennent « sans session ». */
+    .map(e => (e.sessionId && !known.has(e.sessionId) ? { ...e, sessionId: null } : e))
+    /* Le plus récent en tête : c'est l'ordre dans lequel on relit un journal.
+       À date égale, l'ordre de saisie — une session produit trente setups le
+       même jour, et leur séquence est ce qu'on vient relire. */
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
 
   const used = (key: "confluences" | "mistakes") =>
     cleanTags([...(Array.isArray(src[key]) ? src[key] : []), ...entries.flatMap(e => e[key])]);
@@ -156,6 +220,7 @@ export function normalizeJournal(raw: unknown): BacktestJournal {
   const mistakes = used("mistakes");
   return {
     entries,
+    sessions,
     /* Catalogue vide ≠ catalogue absent : on ne repose les valeurs de départ
        que sur un magasin qui n'en a jamais eu, sinon un utilisateur qui a tout
        décoché verrait la liste d'usine revenir à chaque rechargement. */
@@ -278,4 +343,41 @@ export function summarize(entries: BacktestEntry[]): JournalSummary {
     totalR,
     avgR: entries.length > 0 ? totalR / entries.length : 0,
   };
+}
+
+/**
+ * Les backtests regroupés par session, dans l'ordre de lecture : sessions de
+ * la plus récente à la plus ancienne, puis les « sans session ». Les groupes
+ * vides restent — une session qu'on vient d'ouvrir doit apparaître avant son
+ * premier setup.
+ */
+export function groupBySession(
+  entries: BacktestEntry[],
+  sessions: BacktestSession[],
+): { session: BacktestSession | null; entries: BacktestEntry[] }[] {
+  const groups = sessions.map(session => ({ session, entries: entries.filter(e => e.sessionId === session.id) }));
+  const orphans = entries.filter(e => e.sessionId === null);
+  return orphans.length ? [...groups, { session: null, entries: orphans }] : groups;
+}
+
+/**
+ * La courbe d'équité en R, dans l'ordre chronologique, et les indices où une
+ * session en remplace une autre. La courbe reste continue — le R cumulé est
+ * celui du journal — mais une coupure marquée dit où une séance s'arrête :
+ * sans elle, la série perdante d'une session paraît prolonger celle d'avant.
+ */
+export function equityBySession(
+  entries: BacktestEntry[],
+): { points: { date: string; cum: number }[]; breaks: number[] } {
+  let cum = 0;
+  const points: { date: string; cum: number }[] = [];
+  const breaks: number[] = [];
+  let prev: string | null | undefined;
+  for (const entry of [...entries].reverse()) {
+    if (prev !== undefined && entry.sessionId !== prev) breaks.push(points.length);
+    prev = entry.sessionId;
+    cum += effectiveR(entry);
+    points.push({ date: entry.date, cum });
+  }
+  return { points, breaks };
 }

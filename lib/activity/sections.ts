@@ -58,8 +58,6 @@ export const SECTION_OF_PAGE: Record<string, SelfSection> = {
   focus: "perso",
   drive: "perso",
   "life-rpg": "perso",
-  eloquence: "perso",
-  communication: "perso",
   activity: "perso",
   "activity-reports": "perso",
   "activity-rules": "perso",

@@ -92,8 +92,6 @@ const FR: Dict = {
   // mesurent — elle porte donc ce nom dans la navigation.
   "nav.lifeRpg": "Objectifs",
   "nav.blueprint": "Plan de réussite",
-  "nav.eloquence": "Éloquence",
-  "nav.communication": "Communication",
 
   // Common
   "common.save": "Enregistrer",
@@ -1490,8 +1488,6 @@ const EN: Dict = {
   "nav.reading": "Reading List",
   "nav.lifeRpg": "Goals",
   "nav.blueprint": "Success Blueprint",
-  "nav.eloquence": "Eloquence",
-  "nav.communication": "Communication",
 
   // Common
   "common.save": "Save",

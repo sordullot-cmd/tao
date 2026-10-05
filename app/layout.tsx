@@ -47,7 +47,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://tao-trade.vercel.app"),
   title: {
-    default: "tao trade",
+    default: "tao",
     template: "%s · tao trade",
   },
   description: "Plateforme de trading : journal, stratégies, discipline, productivité.",
