@@ -131,7 +131,7 @@ export default function TrayPopoverPage() {
   /* Le thème suit l'APPARENCE DU SYSTÈME, et non le réglage de l'app.
      C'est la seule surface où `lib/ui/theme` ne s'applique pas, pour la même
      raison que la palette : ce panneau s'ouvre entre ceux du Wi-Fi et de la
-     batterie, qui suivent tous les réglages du Mac. Un app réglée en sombre le
+     batterie, qui suivent tous les réglages du Mac. Une app réglée en sombre le
      rendait noir au milieu de panneaux blancs sur un Mac en apparence claire.
 
      L'écoute vaut le détour : macOS bascule seul au coucher du soleil, et un
