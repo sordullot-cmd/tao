@@ -12,7 +12,6 @@ import {
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 
-import { createClient } from "@/lib/supabase/client";
 import { t, useLang } from "@/lib/i18n";
 
 const fmtNoCents = (n) => {
@@ -28,7 +27,7 @@ import { useCloudState } from "@/lib/hooks/useCloudState";
 import { moveEntry, orderEntries } from "@/lib/accountsOrder";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
 import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
-import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm } from "@/lib/propFirms";
+import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm, passAccountToFunded } from "@/lib/propFirms";
 import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount } from "@/lib/accountContracts";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
@@ -134,55 +133,14 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     if (!acc || passing) return;
     setPassing(acc.id);
     try {
-      const sb = createClient();
-      const { data: { user } } = await sb.auth.getUser();
-      const userId = user?.id;
-      if (!userId) { console.error("⚠️ passToFunded: pas d'utilisateur connecté"); setPassing(null); return; }
-
-      // trade_ids de l'eval (pour garder l'attribution dans la carte agrégée)
+      if (!userId) { console.error("⚠️ passToFunded: pas d'utilisateur connecté"); return; }
       const evalTradeIds = (trades || [])
         .filter(t => t.account_id === acc.id)
         .map(t => t.id)
         .filter(Boolean);
-
-      // 1. Créer le nouveau compte funded vierge — MÊME nom (pas de suffixe)
-      const { data: created, error: insErr } = await sb
-        .from("trading_accounts")
-        .insert([{
-          user_id: userId,
-          name: acc.name || "Compte",
-          broker: acc.broker || null,
-          account_type: "funded",
-          eval_account_size: acc.eval_account_size || null,
-          // Le compte funded reste dans la même firme que l'eval qu'il remplace.
-          firm_id: acc.firm_id || null,
-        }])
-        .select();
-      if (insErr) { console.error("⚠️ Création compte funded échouée:", insErr); setPassing(null); return; }
-      const newAcc = created?.[0];
-
-      // 2. Mémoriser l'eval passé (snapshot pour la carte agrégée)
-      setArchivedMeta?.(prev => ({
-        ...(prev || {}),
-        [acc.id]: {
-          archived_at: new Date().toISOString(),
-          name: acc.name || "Compte",
-          broker: acc.broker || null,
-          firm_id: acc.firm_id || null,
-          eval_account_size: acc.eval_account_size || null,
-          trade_ids: evalTradeIds,
-          funded_child_id: newAcc?.id || null,
-        },
-      }));
-
-      // 3. Supprimer le compte eval en base (trades conservés via SET NULL)
-      const { error: delErr } = await sb.from("trading_accounts").delete().eq("id", acc.id);
-      if (delErr) console.error("⚠️ Suppression compte eval échouée:", delErr);
-
-      // 4. MAJ locale : retirer l'eval, ajouter le funded, ajuster la sélection
-      if (setAccounts) {
-        setAccounts(prev => [newAcc, ...(prev || []).filter(a => a.id !== acc.id)]);
-      }
+      const { funded, archive } = await passAccountToFunded(acc, evalTradeIds, userId);
+      setArchivedMeta?.(prev => ({ ...(prev || {}), [acc.id]: archive }));
+      setAccounts?.(prev => [funded, ...(prev || []).filter(a => a.id !== acc.id)]);
     } catch (e) {
       console.error("⚠️ passToFunded exception:", e);
     } finally {

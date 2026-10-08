@@ -7,7 +7,7 @@ import { getCurrencySymbol } from "@/lib/userPrefs";
 import { ArrowUpRight, ArrowDownRight, Pencil, Link2, Check, Plus, Trash2 } from "lucide-react";
 import { t, useLang } from "@/lib/i18n";
 import { ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
-import { parseAccountSize, updateTradingAccount, deleteTradingAccount } from "@/lib/propFirms";
+import { parseAccountSize, updateTradingAccount, deleteTradingAccount, passAccountToFunded } from "@/lib/propFirms";
 import { platformName, resolvePlatformIcon } from "@/lib/brokers/platforms";
 import {
   CARD, SectionTitle, SectionAction, HeroAmount, BackLink,
@@ -61,7 +61,7 @@ const fmtNoCents = (n) => {
    clés de stratégie) vivent avec la liste elle-même, dans
    components/ui/tradesList.jsx — une seule source pour toutes les pages. */
 
-export default function AccountDetailPage({ accountsLoading = false, accountId, accounts = [], firms = [], trades = [], strategies = [], setPage, setSelectedFirmId, setAccounts, archivedMeta = {} }) {
+export default function AccountDetailPage({ accountsLoading = false, accountId, accounts = [], firms = [], trades = [], strategies = [], setPage, setSelectedFirmId, setSelectedAccountDetailId, setAccounts, archivedMeta = {}, setArchivedMeta }) {
   useLang();
   const { user } = useAuth();
   /* Les couleurs de courbe suivent la prop firm du compte avant son broker :
@@ -377,23 +377,27 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
   }, [setContractStore, accountId]);
 
   const [passError, setPassError] = React.useState("");
-  /* Passer financé change DEUX choses : le type du compte (table Supabase) et
-     la date d'où repartent ses compteurs (contrat). La date d'abord — elle est
-     locale et ne peut pas échouer ; si l'écriture distante rate, on a au pire
-     une date en avance sur un compte encore marqué eval, pas un compte financé
-     dont on ne sait plus depuis quand il l'est. */
+  /* Passer financé ne MODIFIE pas ce compte : on en crée un neuf (même chemin
+     que la page Comptes, `passAccountToFunded`). Changer le type sur place
+     faisait hériter au funded des trades et du P&L de l'évaluation — un solde
+     gonflé, un drawdown et des payouts calculés sur des gains d'éval. L'eval
+     part dans « Comptes eval passés », et la page bascule sur le nouveau
+     compte, dont le contrat part du jour du passage. */
   const passFunded = React.useCallback(async () => {
-    if (!accountId) return;
+    if (!account || !user?.id) return;
     setPassError("");
-    const day = getLocalDateString(new Date());
-    patchContract({ fundedAt: contract.fundedAt || day });
     try {
-      await updateTradingAccount(accountId, { account_type: "funded" });
-      setAccounts?.(prev => (prev || []).map(a => (a.id === accountId ? { ...a, account_type: "funded" } : a)));
+      const evalTradeIds = accountTrades.map(tr => tr.id).filter(Boolean);
+      const { funded, archive } = await passAccountToFunded(account, evalTradeIds, user.id);
+      const day = getLocalDateString(new Date());
+      setContractStore(prev => withContract(normalizeStore(prev), funded.id, { fundedAt: day }));
+      setArchivedMeta?.(prev => ({ ...(prev || {}), [account.id]: archive }));
+      setAccounts?.(prev => [funded, ...(prev || []).filter(a => a.id !== account.id)]);
+      setSelectedAccountDetailId?.(funded.id);
     } catch (e) {
       setPassError(e instanceof Error ? e.message : "Le compte n'a pas pu être marqué financé.");
     }
-  }, [accountId, contract.fundedAt, patchContract, setAccounts]);
+  }, [account, user, accountTrades, setContractStore, setArchivedMeta, setAccounts, setSelectedAccountDetailId]);
 
   /* Avant le garde du dessous : sans compte chargé, `account` est introuvable
      et la page annonce « compte introuvable » — un message d'erreur pour ce

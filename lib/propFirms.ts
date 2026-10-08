@@ -388,4 +388,67 @@ export async function deleteTradingAccount(accountId: string, userId: string): P
   notifyAccountsChanged();
 }
 
+/** Instantané d'un eval passé, tel que le lit `lib/utils/archivedAccounts`. */
+export interface ArchivedEvalEntry {
+  archived_at: string;
+  name: string;
+  broker: string | null;
+  firm_id: string | null;
+  eval_account_size: string | null;
+  trade_ids: string[];
+  funded_child_id: string | null;
+}
+
+/**
+ * Passage funded : un compte financé repart de ZÉRO chez la firme — nouveau
+ * solde, nouveau drawdown, nouveaux objectifs. Changer le type du compte eval
+ * sur place lui faisait hériter des trades et du P&L de l'évaluation, ce qui
+ * gonflait le solde du funded et faussait payout et drawdown.
+ *
+ * On crée donc un compte funded vierge (même nom, même firme), puis on
+ * supprime l'eval : ses trades survivent (FK ON DELETE SET NULL) et restent
+ * attribués via `trade_ids` dans la vue « Comptes eval passés ».
+ *
+ * Ordre voulu : la création d'abord. Si elle échoue, rien n'a bougé ; si
+ * c'est la suppression qui échoue, l'eval est masqué par l'archivage côté
+ * client — un doublon invisible vaut mieux qu'un compte perdu.
+ */
+export async function passAccountToFunded(
+  account: FirmAccount,
+  evalTradeIds: string[],
+  userId: string
+): Promise<{ funded: FirmAccount; archive: ArchivedEvalEntry }> {
+  const sb = createClient();
+  const { data, error } = await sb
+    .from("trading_accounts")
+    .insert([{
+      user_id: userId,
+      name: account.name || "Compte",
+      broker: account.broker || null,
+      account_type: "funded",
+      eval_account_size: account.eval_account_size || null,
+      firm_id: account.firm_id || null,
+    }])
+    .select()
+    .single();
+  if (error) throwDbError(error);
+
+  const { error: delErr } = await sb.from("trading_accounts").delete().eq("id", account.id);
+  if (delErr) console.error("⚠️ Suppression compte eval échouée:", delErr);
+  notifyAccountsChanged();
+
+  return {
+    funded: data as FirmAccount,
+    archive: {
+      archived_at: new Date().toISOString(),
+      name: account.name || "Compte",
+      broker: account.broker || null,
+      firm_id: account.firm_id || null,
+      eval_account_size: account.eval_account_size || null,
+      trade_ids: evalTradeIds,
+      funded_child_id: (data as FirmAccount)?.id || null,
+    },
+  };
+}
+
 export { errMsg as firmErrorMessage };
