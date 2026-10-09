@@ -48,7 +48,7 @@ export default function MobileHeader({ title, onBack, action, scrollRef }: Mobil
   }, [scrollRef]);
 
   return (
-    <header ref={ref} className="tr4de-mobile-header">
+    <header ref={ref} className="tao-mobile-header">
       {onBack && (
         <button
           type="button"

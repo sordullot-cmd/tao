@@ -13,7 +13,7 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
 
 export function getUserCurrency(): string {
   if (typeof window === "undefined") return "USD";
-  try { return localStorage.getItem("tr4de_base_currency") || "USD"; }
+  try { return localStorage.getItem("tao_base_currency") || "USD"; }
   catch { return "USD"; }
 }
 
@@ -27,7 +27,7 @@ export function getCurrencySymbol(code?: string): string {
 export function getDefaultRiskPerTrade(): number {
   if (typeof window === "undefined") return 100;
   try {
-    const raw = localStorage.getItem("tr4de_risk_per_trade");
+    const raw = localStorage.getItem("tao_risk_per_trade");
     const n = raw ? parseFloat(raw) : NaN;
     return Number.isFinite(n) && n > 0 ? n : 100;
   } catch { return 100; }
@@ -35,7 +35,7 @@ export function getDefaultRiskPerTrade(): number {
 
 export function setDefaultRiskPerTrade(n: number): void {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem("tr4de_risk_per_trade", String(Math.max(1, n))); } catch {}
+  try { localStorage.setItem("tao_risk_per_trade", String(Math.max(1, n))); } catch {}
 }
 
 /** Calcule le R-multiple d'un trade. trade.risk override le défaut si présent. */
@@ -56,7 +56,7 @@ export function getUserTimezone(): string {
   if (typeof window === "undefined") return "UTC";
   try {
     return (
-      localStorage.getItem("tr4de_timezone") ||
+      localStorage.getItem("tao_timezone") ||
       Intl.DateTimeFormat().resolvedOptions().timeZone ||
       "UTC"
     );

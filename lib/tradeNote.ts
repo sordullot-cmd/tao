@@ -1,9 +1,9 @@
 // Note d'un trade (sur 10) calculée à partir des règles respectées (checklist
 // Oui/Non) et des émotions associées. Lit directement les données persistées
 // dans localStorage (mêmes clés que le panneau de détail des trades) :
-//   - tr4de_trade_checklist   : { [tradeId]: { [ruleId]: "yes" | "no" } }
-//   - tr4de_emotion_tags      : { [tradeId]: string[] }
-//   - tr4de_checklist_rules_v2: [{ id, label }]  (liste des règles)
+//   - tao_trade_checklist   : { [tradeId]: { [ruleId]: "yes" | "no" } }
+//   - tao_emotion_tags      : { [tradeId]: string[] }
+//   - tao_checklist_rules_v2: [{ id, label }]  (liste des règles)
 //
 // Règle "Oui" = +1 positif, "Non" = −1 négatif. Émotion selon EMOTION_SENTIMENT.
 // Note = positifs / (positifs + négatifs) × 10. null si rien n'est renseigné.
@@ -30,9 +30,9 @@ export function computeTradeNote(trade: { id?: string | null } | null | undefine
   const id = trade?.id;
   if (!id) return null;
 
-  const checklist = safeParse("tr4de_trade_checklist", {});
-  const emotions = safeParse("tr4de_emotion_tags", {});
-  const rulesRaw = safeParse("tr4de_checklist_rules_v2", null);
+  const checklist = safeParse("tao_trade_checklist", {});
+  const emotions = safeParse("tao_emotion_tags", {});
+  const rulesRaw = safeParse("tao_checklist_rules_v2", null);
   const ruleIds: string[] = Array.isArray(rulesRaw) && rulesRaw.length
     ? rulesRaw.map((r: any) => r?.id).filter(Boolean)
     : DEFAULT_RULE_IDS;

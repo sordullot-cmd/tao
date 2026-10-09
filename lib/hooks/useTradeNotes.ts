@@ -49,7 +49,7 @@ export function useTradeNotes() {
         console.error("❌ Erreur récupération notes trades:", err?.message);
         // Essayer localStorage comme fallback
         try {
-          const stored = localStorage.getItem("tr4de_trade_notes");
+          const stored = localStorage.getItem("tao_trade_notes");
           const notesData = stored ? JSON.parse(stored) : {};
           setNotes(notesData);
         } catch (parseErr) {
@@ -103,9 +103,9 @@ export function useTradeNotes() {
         } catch (supabaseErr: any) {
           console.error("❌ Supabase upsert trade_details FAILED:", supabaseErr?.message || supabaseErr, "code:", supabaseErr?.code, "details:", supabaseErr?.details, "hint:", supabaseErr?.hint);
           // Fallback to localStorage
-          const allNotes = JSON.parse(localStorage.getItem("tr4de_trade_notes") || "{}");
+          const allNotes = JSON.parse(localStorage.getItem("tao_trade_notes") || "{}");
           allNotes[tradeId] = noteText;
-          localStorage.setItem("tr4de_trade_notes", JSON.stringify(allNotes));
+          localStorage.setItem("tao_trade_notes", JSON.stringify(allNotes));
         }
 
         console.log("✅ Note sauvegardée");

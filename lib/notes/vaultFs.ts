@@ -36,7 +36,7 @@ export interface VaultFs {
 
 export type VaultMode = "tauri" | "web" | "none";
 
-const MODE_KEY = "tr4de_obsidian_vault_mode";
+const MODE_KEY = "tao_obsidian_vault_mode";
 
 /** Comment ce poste peut accéder au disque. */
 export function vaultMode(): VaultMode {

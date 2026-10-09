@@ -18,7 +18,7 @@ import { useCallback, useMemo } from "react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { emptyStore, normalizeStore, type FocusStore } from "./model";
 
-export const FOCUS_STORAGE_KEY = "tr4de_focus_block";
+export const FOCUS_STORAGE_KEY = "tao_focus_block";
 const STORAGE_KEY = FOCUS_STORAGE_KEY;
 const CLOUD_KEY = "focus_blocker";
 

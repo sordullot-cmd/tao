@@ -18,7 +18,7 @@ export function useStrategies() {
     try {
       // ✅ Vérifier qu'on est en client-side
       if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
-        const stored = localStorage.getItem("tr4de_strategies");
+        const stored = localStorage.getItem("tao_strategies");
         const cachedStrategies = stored ? JSON.parse(stored) : [];
         setStrategies(cachedStrategies);
         console.log("⚡ Stratégies chargées depuis localStorage:", cachedStrategies.length);
@@ -137,7 +137,7 @@ export function useStrategies() {
           if (data && data.length > 0) {
             console.log("✅ Strategy created on Supabase:", data[0]);
             setStrategies([...strategies, data[0]]);
-            localStorage.setItem("tr4de_strategies", JSON.stringify([...strategies, data[0]]));
+            localStorage.setItem("tao_strategies", JSON.stringify([...strategies, data[0]]));
             return data[0];
           }
         } catch (supabaseErr) {
@@ -151,7 +151,7 @@ export function useStrategies() {
         console.log("💾 Sauvegarde stratégie dans localStorage");
         const updated = [...strategies, newStrategy];
         setStrategies(updated);
-        localStorage.setItem("tr4de_strategies", JSON.stringify(updated));
+        localStorage.setItem("tao_strategies", JSON.stringify(updated));
         console.log("✅ Strategy saved to localStorage:", newStrategy);
         return newStrategy;
       } catch (err) {
@@ -202,7 +202,7 @@ export function useStrategies() {
           s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s
         );
         setStrategies(updated);
-        localStorage.setItem("tr4de_strategies", JSON.stringify(updated));
+        localStorage.setItem("tao_strategies", JSON.stringify(updated));
         return updated.find((s) => s.id === id);
       } catch (err) {
         console.error("❌ Erreur mise à jour stratégie:", err);
@@ -239,7 +239,7 @@ export function useStrategies() {
         console.log("🗑️ Suppression stratégie depuis localStorage");
         const updated = strategies.filter((s) => s.id !== id);
         setStrategies(updated);
-        localStorage.setItem("tr4de_strategies", JSON.stringify(updated));
+        localStorage.setItem("tao_strategies", JSON.stringify(updated));
       } catch (err) {
         console.error("❌ Erreur suppression stratégie:", err);
         throw err;

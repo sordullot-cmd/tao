@@ -57,7 +57,7 @@ export const CALENDAR_SCOPES = [
   // ne l'autorise pas. Sans ce scope, les agendas abonnés — dont l'emploi du temps
   // universitaire importé par URL iCal — restent invisibles, seul « primary » répond.
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-  // Vraies tâches Google (l'heure précise est conservée côté tr4de).
+  // Vraies tâches Google (l'heure précise est conservée côté tao).
   "https://www.googleapis.com/auth/tasks",
   "openid",
   "email",

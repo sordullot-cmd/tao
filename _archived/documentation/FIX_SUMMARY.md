@@ -96,7 +96,7 @@ if (firstLine.includes('b/s') || firstLine.includes('contract')) {
 
 ### Test 1: Parser Test
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-advanced.js
 ```
 

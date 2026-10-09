@@ -25,7 +25,7 @@ import {
 } from "@/lib/ui/accent";
 
 /** Marque « la teinte de cet appareil a déjà été proposée au compte ». */
-const SEEDED_KEY = "tr4de_accent_seeded";
+const SEEDED_KEY = "tao_accent_seeded";
 
 export function useAccentSetting(): {
   accent: { primary: string; secondary: string };

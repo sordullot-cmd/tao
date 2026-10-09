@@ -1,4 +1,4 @@
--- Migration 036 : fusion de la partie trading d'un compte tr4de dans un autre.
+-- Migration 036 : fusion de la partie trading d'un compte tao dans un autre.
 --
 -- Appelée par /api/user/merge-trading avec la clé service, après que l'appelant
 -- a prouvé posséder les deux comptes (session sur la cible, code de transfert

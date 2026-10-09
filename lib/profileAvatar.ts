@@ -15,7 +15,7 @@
 import { isHexColor } from "@/lib/ui/accent";
 import { PALETTE } from "@/lib/ui/palette";
 
-export const AVATAR_STORAGE_KEY = "tr4de_profile_avatar";
+export const AVATAR_STORAGE_KEY = "tao_profile_avatar";
 export const AVATAR_CLOUD_KEY = "profile_avatar";
 
 /** "auto" : la photo Google s'il y en a une, sinon les initiales — le

@@ -148,7 +148,7 @@ export const SPENDING_CATEGORIES: { id: SpendingCategory; color: string }[] = [
   { id: "education", color: HUE.narwhal },
   { id: "kids", color: HUE.beluga },
   // L'argent
-  { id: "trading", color: HUE.turtle },        // le poste propre à tr4de
+  { id: "trading", color: HUE.turtle },        // le poste propre à tao
   { id: "savings", color: HUE.owl },           // page Budget
   { id: "credit", color: HUE.anchovy },
   { id: "taxes", color: HUE.pig },             // rose sourd

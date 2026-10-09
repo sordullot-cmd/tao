@@ -704,7 +704,7 @@ body {
    (onglets, boutons, en-têtes) : elle fait surgir la loupe et les poignées de
    sélection au moindre appui maintenu. On la garde évidemment sur le CONTENU —
    d'où le ciblage par rôle plutôt qu'un `user-select: none` global. */
-button, [role="button"], [role="tab"], nav, label, .tr4de-tabbar, .tr4de-sheet-handle {
+button, [role="button"], [role="tab"], nav, label, .tao-tabbar, .tao-sheet-handle {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -880,7 +880,7 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
 /* === Tableau des trades : scrollbar bien visible (surtout l'horizontale) ===
    Surcharge les scrollbars globales ultra-fines (4px) afin que la barre de
    défilement horizontale du tableau soit clairement perceptible sur desktop. */
-.tr4de-trades-scroll {
+.tao-trades-scroll {
   scrollbar-width: auto;
   scrollbar-color: rgba(0, 0, 0, 0.32) rgba(0, 0, 0, 0.05);
   /* Empêche le scroll vertical interne de se propager au conteneur de page
@@ -889,34 +889,34 @@ html, body, * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transpa
      (« scroll à l'infini »). */
   overscroll-behavior: contain;
 }
-.tr4de-trades-scroll::-webkit-scrollbar {
+.tao-trades-scroll::-webkit-scrollbar {
   width: 12px !important;
   height: 12px !important;
 }
-.tr4de-trades-scroll::-webkit-scrollbar-track {
+.tao-trades-scroll::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.05) !important;
   border-radius: 999px !important;
 }
-.tr4de-trades-scroll::-webkit-scrollbar-thumb {
+.tao-trades-scroll::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.32) !important;
   border: 3px solid transparent !important;
   background-clip: padding-box !important;
   border-radius: 999px !important;
 }
-.tr4de-trades-scroll::-webkit-scrollbar-thumb:hover {
+.tao-trades-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.5) !important;
   background-clip: padding-box !important;
 }
-.tr4de-trades-scroll::-webkit-scrollbar-corner {
+.tao-trades-scroll::-webkit-scrollbar-corner {
   background: transparent !important;
 }
-:root[data-theme="dark"] .tr4de-trades-scroll {
+:root[data-theme="dark"] .tao-trades-scroll {
   scrollbar-color: rgba(255, 255, 255, 0.32) rgba(255, 255, 255, 0.06);
 }
-:root[data-theme="dark"] .tr4de-trades-scroll::-webkit-scrollbar-track {
+:root[data-theme="dark"] .tao-trades-scroll::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.06) !important;
 }
-:root[data-theme="dark"] .tr4de-trades-scroll::-webkit-scrollbar-thumb {
+:root[data-theme="dark"] .tao-trades-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.32) !important;
   background-clip: padding-box !important;
 }
@@ -1390,7 +1390,7 @@ a, [role="button"] {
    Deuxième signal d'accessibilité visuelle : l'utilisateur demande des
    surfaces opaques. On densifie les voiles et on retire les flous. */
 @media (prefers-reduced-transparency: reduce) {
-  [data-scrim], .tr4de-sidebar-backdrop {
+  [data-scrim], .tao-sidebar-backdrop {
     background: rgba(0, 0, 0, 0.6) !important;
     backdrop-filter: none !important;
   }
@@ -1404,7 +1404,7 @@ a, [role="button"] {
    Troisième signal : fonds quasi opaques et bordure franche sur les surfaces
    flottantes, pour que le bord de la couche reste lisible. */
 @media (prefers-contrast: more) {
-  [data-popover-panel], [data-glass], .tr4de-modal-card {
+  [data-popover-panel], [data-glass], .tao-modal-card {
     background: var(--color-bg) !important;
     border: 1px solid var(--color-text) !important;
     backdrop-filter: none !important;
@@ -1445,8 +1445,8 @@ img, canvas {
   /* Surfaces qui se DÉPLACENT : elles arrivent d'un coup au lieu de glisser.
      C'est l'équivalent doux du glissement, pas sa suppression pure — le voile
      et le fondu restent là pour signaler l'arrivée du tiroir. */
-  .tr4de-sidebar { transition: none !important; }
-  .tr4de-drawer, [data-sheet] { transition: none !important; animation: none !important; }
+  .tao-sidebar { transition: none !important; }
+  .tao-drawer, [data-sheet] { transition: none !important; animation: none !important; }
 }
 
 /* Reduced motion : on garde la fade (compréhension) mais on retire les
@@ -1460,10 +1460,10 @@ img, canvas {
 }
 
 /* === Sidebar nav : scrollbar masquée === */
-.tr4de-sidebar nav { scrollbar-width: none !important; -ms-overflow-style: none !important; }
-.tr4de-sidebar nav::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; }
-.tr4de-sidebar nav::-webkit-scrollbar-thumb { display: none !important; background: transparent !important; }
-.tr4de-sidebar nav::-webkit-scrollbar-track { display: none !important; background: transparent !important; }
+.tao-sidebar nav { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+.tao-sidebar nav::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; }
+.tao-sidebar nav::-webkit-scrollbar-thumb { display: none !important; background: transparent !important; }
+.tao-sidebar nav::-webkit-scrollbar-track { display: none !important; background: transparent !important; }
 
 /* === Responsive breakpoints ===
    Mobile-first overrides pour les grilles / layouts les plus courants.
@@ -1472,16 +1472,16 @@ img, canvas {
 
 /* Desktop medium (<1200px) : condense un peu */
 @media (max-width: 1199px) {
-  .tr4de-root { --sidebar-width: 200px; }
+  .tao-root { --sidebar-width: 200px; }
 }
 
 /* Tablet (<1024px) */
 @media (max-width: 1023px) {
   /* La barre latérale devient un tiroir : elle ne réserve plus de place, donc
      le contenu ne compense plus rien à gauche. */
-  .tr4de-root { --shell-left: 0px; }
+  .tao-root { --shell-left: 0px; }
   /* Sidebar passe en overlay sur mobile */
-  .tr4de-sidebar {
+  .tao-sidebar {
     position: fixed !important;
     top: 0; left: 0; bottom: 0;
     z-index: 80;
@@ -1489,28 +1489,28 @@ img, canvas {
     transition: transform 220ms var(--ease-drawer);
     box-shadow: 0 0 30px rgba(0,0,0,0.15);
   }
-  .tr4de-sidebar.is-open { transform: translateX(0); }
+  .tao-sidebar.is-open { transform: translateX(0); }
   /* Voile simple, sans flou : l'assombrissement suffit à détacher le tiroir du
      contenu, et le `backdrop-filter` coûtait une passe de composition à chaque
      frame de l'ouverture. */
-  .tr4de-sidebar-backdrop {
+  .tao-sidebar-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.35);
     z-index: 79;
     animation: fadeIn 180ms ease both;
   }
   /* Hamburger visible dans la topbar */
-  .tr4de-hamburger { display: inline-flex !important; }
+  .tao-hamburger { display: inline-flex !important; }
   /* Topbar sticky : descend avec le scroll, le bandeau gris suit */
-  .tr4de-topbar {
+  .tao-topbar {
     position: sticky !important;
     top: 0 !important;
     z-index: 50 !important;
   }
   /* Contenu principal : pleine largeur */
-  .tr4de-main { margin-left: 0 !important; padding-left: 16px !important; padding-right: 16px !important; }
+  .tao-main { margin-left: 0 !important; padding-left: 16px !important; padding-right: 16px !important; }
   /* Le hamburger réapparaît ici : la topbar reprend sa hauteur, que les pages
      de la DA annulent en desktop (padding vertical inline à 0). */
-  .tr4de-topbar {
+  .tao-topbar {
     padding-left: 12px !important; padding-right: 12px !important;
     padding-top: 10px !important; padding-bottom: 10px !important;
   }
@@ -1551,12 +1551,12 @@ img, canvas {
 
   /* Exceptions : grilles qui doivent rester en 2 colonnes même sur tablette/mobile.
      Le collapse `1fr 1fr → 1fr` au-dessus est trop large pour ces cas. */
-  .tr4de-journal-kpis { grid-template-columns: 1fr 1fr !important; }
+  .tao-journal-kpis { grid-template-columns: 1fr 1fr !important; }
 
   /* Journal : sur tablette (<1024px), réduire la carte du jour pour laisser
      de la place au textarea + tableau à droite. */
-  .tr4de-journal-row { gap: 14px !important; }
-  .tr4de-journal-row > div:first-child {
+  .tao-journal-row { gap: 14px !important; }
+  .tao-journal-row > div:first-child {
     width: 180px !important;
     flex-shrink: 0 !important;
   }
@@ -1566,12 +1566,12 @@ img, canvas {
    seule dès que la place manque. Le seuil est celui du conteneur réel et non
    celui de la fenêtre — une modale de 480 px sur un écran de 1440 px est
    étroite, même si la fenêtre ne l'est pas. */
-.tr4de-field-grid { container-type: inline-size; }
+.tao-field-grid { container-type: inline-size; }
 @container (max-width: 380px) {
-  .tr4de-field-grid { grid-template-columns: 1fr !important; }
+  .tao-field-grid { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 560px) {
-  .tr4de-field-grid { grid-template-columns: 1fr !important; }
+  .tao-field-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Mobile (<768px) */
@@ -1579,14 +1579,14 @@ img, canvas {
   /* Mobile : laisser le body scroller (au lieu d'un conteneur interne fixe).
      Sinon le scroll tactile est fragile / cassé sur iOS et Android. */
   html, body { overflow: auto !important; height: auto !important; min-height: 100% !important; }
-  .tr4de-root { min-height: 100dvh !important; height: auto !important; }
-  .tr4de-main { height: auto !important; min-height: 100dvh !important; }
-  .tr4de-main > div:last-child { min-height: 0 !important; }
-  .tr4de-main .scroll-thin { overflow: visible !important; height: auto !important; flex: none !important; }
+  .tao-root { min-height: 100dvh !important; height: auto !important; }
+  .tao-main { height: auto !important; min-height: 100dvh !important; }
+  .tao-main > div:last-child { min-height: 0 !important; }
+  .tao-main .scroll-thin { overflow: visible !important; height: auto !important; flex: none !important; }
 
   /* Header compressé */
-  .tr4de-topbar { height: auto !important; padding: 10px 12px !important; gap: 8px !important; flex-wrap: wrap !important; }
-  .tr4de-main { padding: 12px !important; }
+  .tao-topbar { height: auto !important; padding: 10px 12px !important; gap: 8px !important; flex-wrap: wrap !important; }
+  .tao-main { padding: 12px !important; }
 
   /* Typo titres page */
   h1[style*="font-size: 26"], h1[style*="fontSize: 26"] { font-size: 20px !important; }
@@ -1598,12 +1598,12 @@ img, canvas {
   [style*="grid-template-columns: repeat(5"] { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
 
   /* Tables natives : scroll horizontal */
-  .tr4de-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .tr4de-table-wrap table { min-width: 640px; }
+  .tao-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tao-table-wrap table { min-width: 640px; }
 
   /* Modals / drawers fluides */
-  .tr4de-modal-card { width: calc(100vw - 24px) !important; max-width: 100% !important; }
-  .tr4de-drawer { width: 100% !important; }
+  .tao-modal-card { width: calc(100vw - 24px) !important; max-width: 100% !important; }
+  .tao-drawer { width: 100% !important; }
 }
 
 /* Mobile small (<480px) */
@@ -1626,28 +1626,28 @@ img, canvas {
    Invisible au repos, révélée au survol de son en-tête. Elle vit dans la
    gouttière entre deux colonnes : la montrer en permanence encombrait la ligne
    de titres, et la loger dans le padding la faisait chevaucher le libellé. */
-.tr4de-col-grip {
+.tao-col-grip {
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
   pointer-events: none;
 }
-th:hover > .tr4de-col-grip { opacity: 0.55; }
+th:hover > .tao-col-grip { opacity: 0.55; }
 
 /* Barre de records de haut de page (Stratégies) : quatre colonnes espacées.
    Sous 720 px elles passent en 2×2, avec un écart resserré ; sous 420 px, une
    par ligne. */
 @media (max-width: 720px) {
-  .tr4de-kpi-cards { gap: 20px 32px !important; }
-  .tr4de-kpi-cards > * { flex: 1 1 calc(50% - 32px) !important; }
+  .tao-kpi-cards { gap: 20px 32px !important; }
+  .tao-kpi-cards > * { flex: 1 1 calc(50% - 32px) !important; }
   /* Le bouton de création partage la rangée : en 2x2 il reprend sa taille
      naturelle et son décalage de calage disparaît. */
-  .tr4de-kpi-cards > button:last-child {
+  .tao-kpi-cards > button:last-child {
     flex: 0 0 auto !important;
     margin-top: 0 !important;
   }
 }
 @media (max-width: 420px) {
-  .tr4de-kpi-cards > * { flex: 1 1 100% !important; }
+  .tao-kpi-cards > * { flex: 1 1 100% !important; }
 }
 
 /* === Icônes non cliquables DANS un bouton ===
@@ -1668,14 +1668,14 @@ button img,
    l'écran est étroit — les deux côtés descendent à 16 px.
    `!important` parce que les variables sont posées en style inline. */
 @media (max-width: 767px) {
-  .tr4de-main .scroll-thin {
+  .tao-main .scroll-thin {
     --page-gutter: 16px !important;
     --page-gutter-left: 16px !important;
   }
 }
 @media (min-width: 1024px) {
   /* Sur desktop, le bouton de collapse interne du Sidebar prend le relais */
-  .tr4de-hamburger { display: none !important; }
+  .tao-hamburger { display: none !important; }
 }
 @media (min-width: 768px) {
   .show-mobile { display: none !important; }
@@ -1700,7 +1700,7 @@ button img,
   [style*="padding: 18px 20px"] { padding: 12px 14px !important; }
 
   /* Boutons pleine largeur sur mobile quand ils sont seuls dans un flex */
-  .tr4de-mobile-fullwidth { width: 100% !important; }
+  .tao-mobile-fullwidth { width: 100% !important; }
 
   /* Panneaux latéraux 360px (TradesPage detail, etc.) → pleine largeur */
   [style*="width: 360px"], [style*="width:360px"] {
@@ -1708,25 +1708,25 @@ button img,
   }
 
   /* Reading list : form 7-col → 2-col */
-  .tr4de-book-form { grid-template-columns: 1fr 1fr !important; }
+  .tao-book-form { grid-template-columns: 1fr 1fr !important; }
 
   /* Settings : sidebar + contenu → stack */
-  .tr4de-settings-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+  .tao-settings-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
 
   /* Calendrier : l'en-tête (période + navigation) s'empile */
-  .tr4de-cal-head { align-items: flex-start !important; }
+  .tao-cal-head { align-items: flex-start !important; }
 
   /* Agenda Google : grille mois + panneau latéral → empilés sur mobile */
-  .tr4de-agenda-grid { grid-template-columns: 1fr !important; }
-  .tr4de-agenda-grid > div:last-child { position: static !important; }
+  .tao-agenda-grid { grid-template-columns: 1fr !important; }
+  .tao-agenda-grid > div:last-child { position: static !important; }
 
   /* TradesPage : table + détail latéral → stack vertical sur mobile */
-  .tr4de-trades-layout { flex-direction: column !important; }
-  .tr4de-trades-main { flex: 1 1 100% !important; max-height: none !important; }
+  .tao-trades-layout { flex-direction: column !important; }
+  .tao-trades-main { flex: 1 1 100% !important; max-height: none !important; }
 
   /* Détail d'un trade : en mobile, on l'affiche en plein écran (overlay) au lieu
      de le masquer — sinon cliquer sur un trade n'ouvrait rien. */
-  .tr4de-trade-side {
+  .tao-trade-side {
     position: fixed !important;
     inset: 0 !important;
     width: 100% !important;
@@ -1735,7 +1735,7 @@ button img,
     border: none !important;
     border-radius: 0 !important;
     z-index: 1000 !important;
-    animation: tr4deTradeSheetIn 220ms var(--ease-drawer) both;
+    animation: taoTradeSheetIn 220ms var(--ease-drawer) both;
     /* Depuis que la page passe en `viewport-fit: cover`, `inset: 0` veut dire
        « tout l'écran, encoche comprise » : sans cette réserve, le titre du
        trade se glisserait sous l'heure et le bouton de fermeture sous la barre
@@ -1747,20 +1747,20 @@ button img,
     padding-right: var(--sa-right) !important;
     box-sizing: border-box !important;
   }
-  @keyframes tr4deTradeSheetIn {
+  @keyframes taoTradeSheetIn {
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
   }
 
   /* Page Comptes : grille 2 colonnes → 1 colonne sur mobile (cartes lisibles) */
-  .tr4de-accounts-grid { grid-template-columns: 1fr !important; }
+  .tao-accounts-grid { grid-template-columns: 1fr !important; }
 
   /* Sport : historique à gauche, panneau collant à droite. La colonne de droite
      réclamait 300 px de large — sur un écran de 375 px il ne restait que
      dix-neuf pixels à la timeline. Elle passe dessous, et perd son ancrage
      collant : il n'y a plus rien à côté de quoi rester visible. */
-  .tr4de-sport-layout { grid-template-columns: minmax(0, 1fr) !important; }
-  .tr4de-sport-layout > div:last-child { position: static !important; }
+  .tao-sport-layout { grid-template-columns: minmax(0, 1fr) !important; }
+  .tao-sport-layout > div:last-child { position: static !important; }
 
   /* Inputs / cards "centrés" qui forçaient maxWidth: 360 */
   [style*="max-width: 360"], [style*="maxWidth: 360"] { max-width: 100% !important; }
@@ -1771,17 +1771,17 @@ button img,
   /* Contrôles d'en-tête (sélecteur de comptes) injectés dans
      le slot : pleine largeur sous le titre, passage à la ligne, jamais de
      débordement horizontal (sinon les boutons sont coupés par overflow-x). */
-  #tr4de-page-header-slot {
+  #tao-page-header-slot {
     margin-left: 0 !important;
     width: 100% !important;
     flex: 1 1 100% !important;
   }
-  #tr4de-page-header-slot > div {
+  #tao-page-header-slot > div {
     width: 100% !important;
     flex-wrap: wrap !important;
     justify-content: flex-start !important;
   }
-  #tr4de-page-header-slot > div > * {
+  #tao-page-header-slot > div > * {
     max-width: 100% !important;
     min-width: 0 !important;
   }
@@ -1794,78 +1794,78 @@ button img,
   /* Journal de trading (mobile <768px) : carte sparkline + notes + tableau
      empilés verticalement. Carte en largeur limitée centrée, contenu droit
      pleine largeur. */
-  .tr4de-journal-row {
+  .tao-journal-row {
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 14px !important;
   }
-  .tr4de-journal-row > div:first-child {
+  .tao-journal-row > div:first-child {
     width: min(100%, 260px) !important;
     align-self: center !important;
     aspect-ratio: 1 / 1 !important;
     height: auto !important;
     flex-shrink: 0 !important;
   }
-  .tr4de-journal-row > div:nth-child(2) {
+  .tao-journal-row > div:nth-child(2) {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
   }
   /* Textarea daily notes : hauteur réduite sur mobile */
-  .tr4de-journal-row textarea {
+  .tao-journal-row textarea {
     height: 140px !important;
   }
 
   /* Goals page : grid 5-cols → empilé en 2 lignes (titre+actions / meta) */
-  .tr4de-goals-row {
+  .tao-goals-row {
     grid-template-columns: 1fr auto !important;
     grid-auto-rows: auto !important;
     row-gap: 12px !important;
     column-gap: 12px !important;
   }
   /* Created date column : caché sur mobile */
-  .tr4de-goals-row > *:nth-child(1) { display: none !important; }
+  .tao-goals-row > *:nth-child(1) { display: none !important; }
   /* Title (icon + label) : pleine largeur, à gauche */
-  .tr4de-goals-row > *:nth-child(2) { grid-column: 1 / 2 !important; grid-row: 1 !important; min-width: 0 !important; }
+  .tao-goals-row > *:nth-child(2) { grid-column: 1 / 2 !important; grid-row: 1 !important; min-width: 0 !important; }
   /* Actions (edit/delete) : à droite, ligne 1 */
-  .tr4de-goals-row > *:nth-child(5) { grid-column: 2 / 3 !important; grid-row: 1 !important; align-self: center !important; }
+  .tao-goals-row > *:nth-child(5) { grid-column: 2 / 3 !important; grid-row: 1 !important; align-self: center !important; }
   /* Deadline : ligne 2 gauche */
-  .tr4de-goals-row > *:nth-child(3) { grid-column: 1 / 2 !important; grid-row: 2 !important; font-size: 11px !important; }
+  .tao-goals-row > *:nth-child(3) { grid-column: 1 / 2 !important; grid-row: 2 !important; font-size: 11px !important; }
   /* Cible (progression) : ligne 2 droite ou pleine largeur */
-  .tr4de-goals-row > *:nth-child(4) { grid-column: 1 / 3 !important; grid-row: 3 !important; }
+  .tao-goals-row > *:nth-child(4) { grid-column: 1 / 3 !important; grid-row: 3 !important; }
 
   /* Lignes de KPIs (4 blocs côte-à-côte) : 2x2 sur mobile.
      display:flex forcé pour que les conteneurs en `display:grid` (grilles à
      colonnes figées repeat(4/6,…)) re-flow aussi, pas seulement les flex. */
-  .tr4de-kpi-row { display: flex !important; flex-wrap: wrap !important; }
-  .tr4de-kpi-row > * {
+  .tao-kpi-row { display: flex !important; flex-wrap: wrap !important; }
+  .tao-kpi-row > * {
     flex: 1 1 50% !important;
     min-width: 50% !important;
     box-sizing: border-box !important;
     border-right: none !important;
   }
-  .tr4de-kpi-row > *:nth-child(odd) {
+  .tao-kpi-row > *:nth-child(odd) {
     border-right: 1px solid var(--color-border, #E5E5E5) !important;
   }
-  .tr4de-kpi-row > *:not(:nth-last-child(-n+2)) {
+  .tao-kpi-row > *:not(:nth-last-child(-n+2)) {
     border-bottom: 1px solid var(--color-border, #E5E5E5) !important;
   }
 }
 
 /* Très petit mobile : chaque KPI sur sa propre ligne */
 @media (max-width: 479px) {
-  .tr4de-kpi-row > * {
+  .tao-kpi-row > * {
     flex: 1 1 100% !important;
     min-width: 100% !important;
     border-right: none !important;
   }
-  .tr4de-kpi-row > *:nth-child(odd) {
+  .tao-kpi-row > *:nth-child(odd) {
     border-right: none !important;
   }
-  .tr4de-kpi-row > *:not(:last-child) {
+  .tao-kpi-row > *:not(:last-child) {
     border-bottom: 1px solid var(--color-border, #E5E5E5) !important;
   }
-  .tr4de-kpi-row > *:last-child {
+  .tao-kpi-row > *:last-child {
     border-bottom: none !important;
   }
 }
@@ -1874,30 +1874,30 @@ button img,
    que d'écraser sept colonnes jusqu'à l'illisible. La largeur plancher garde
    des cellules capables d'afficher « +$1,158 » sans le tronquer. */
 @media (max-width: 900px) {
-  .tr4de-cal-inner { min-width: 700px; }
+  .tao-cal-inner { min-width: 700px; }
 }
 
 /* Calendrier, vue « Mois » : trois mini-calendriers par rangée en desktop, deux
    en tablette, un en mobile — sous 320 px de large, les cases de jour tombent
    à 30 px et les chiffres se chevauchent. */
 @media (max-width: 1100px) {
-  .tr4de-cal-year { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .tao-cal-year { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 @media (max-width: 700px) {
-  .tr4de-cal-year { grid-template-columns: minmax(0, 1fr) !important; }
+  .tao-cal-year { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* Tao Score : radar + catégories côte à côte en desktop, empilés dès que la
    colonne des catégories ne peut plus tenir ses quatre colonnes de chiffres. */
 @media (max-width: 1023px) {
   /* Bloc « mesure à gauche / lecture à droite » du dashboard (Tao Score). */
-  .tr4de-dash-score { grid-template-columns: minmax(0, 1fr) !important; }
+  .tao-dash-score { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* Journal : notes à gauche / trades à droite, empilés quand la liste de trades
    n'a plus la place de tenir ses colonnes à côté de la zone de notes. */
 @media (max-width: 1023px) {
-  .tr4de-journal-day { grid-template-columns: minmax(0, 1fr) !important; }
+  .tao-journal-day { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* Import de trades : formulaire à gauche, marche à suivre du broker à droite.
@@ -1906,8 +1906,8 @@ button img,
    minimum). Elle perd alors son ancrage collant — elle n'a plus rien à côté de
    quoi rester visible. */
 @media (max-width: 1023px) {
-  .tr4de-import-grid { grid-template-columns: minmax(0, 1fr) !important; }
-  .tr4de-import-grid > aside { position: static !important; }
+  .tao-import-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .tao-import-grid > aside { position: static !important; }
 }
 
 /* ============================================================
@@ -1949,7 +1949,7 @@ button img,
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
-  /* GoalsPage header/row 5-col à minmax → géré par .tr4de-goals-row,
+  /* GoalsPage header/row 5-col à minmax → géré par .tao-goals-row,
      mais sécurise les variantes : */
   [style*="minmax(70px, 110px) minmax(0, 1fr)"] {
     grid-template-columns: 1fr auto !important;
@@ -1995,8 +1995,8 @@ button img,
   }
 
   /* Badges absolus en haut-droite des KPIs : repositionner en flow */
-  .tr4de-kpi-row [style*="position: absolute"][style*="top: 10"],
-  .tr4de-kpi-row [style*="position:absolute"][style*="top:10"] {
+  .tao-kpi-row [style*="position: absolute"][style*="top: 10"],
+  .tao-kpi-row [style*="position:absolute"][style*="top:10"] {
     position: static !important;
     margin-bottom: 4px !important;
     display: block !important;
@@ -2021,17 +2021,17 @@ button img,
   }
 
   /* NotesPage : "320px 1fr" → stack vertical, liste hauteur limitée */
-  .tr4de-notes-layout {
+  .tao-notes-layout {
     grid-template-columns: 1fr !important;
     grid-template-rows: 220px 1fr !important;
     height: auto !important;
     min-height: calc(100dvh - 140px) !important;
   }
-  .tr4de-notes-layout > div:first-child {
+  .tao-notes-layout > div:first-child {
     max-height: 220px !important;
     min-height: 0 !important;
   }
-  .tr4de-notes-page {
+  .tao-notes-page {
     height: auto !important;
     min-height: calc(100dvh - 100px) !important;
   }
@@ -2068,7 +2068,7 @@ button img,
 
   /* Tableaux dans un wrapper non explicite : essaye de scroller le parent.
      On évite display:block sur <table> qui casse les colgroup widths. */
-  .tr4de-main table:not(.tr4de-table-wrap table) {
+  .tao-main table:not(.tao-table-wrap table) {
     max-width: 100% !important;
   }
 }
@@ -2090,8 +2090,8 @@ button img,
   /* NotesPage : le bouton « Nouvelle note » garde son + et perd son libellé —
      l'en-tête porte déjà le titre de la page, l'icône seule reste comprise.
      (Cette règle vivait dans une feuille <style> embarquée dans la page, en
-     double avec les règles `.tr4de-notes-*` déjà présentes ici.) */
-  .tr4de-notes-newbtn-label { display: none; }
+     double avec les règles `.tao-notes-*` déjà présentes ici.) */
+  .tao-notes-newbtn-label { display: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2128,37 +2128,37 @@ button img,
    Le retrait porte sur le CONTENU de l'onglet, pas sur l'onglet lui-même : si
    la cible de 44 px rétrécissait à l'appui, un doigt posé près du bord
    sortirait de la zone cliquable en cours de geste et le tap serait perdu. */
-.tr4de-tab > * {
+.tao-tab > * {
   transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
-.tr4de-tab:active > * {
+.tao-tab:active > * {
   transform: scale(0.88);
 }
 
 /* L'onglet actif : l'icône remonte d'un cheveu et la couleur passe à l'accent.
    Deux signaux, pas un — la couleur seule ne suffit pas (daltonisme), et le
    libellé passe en 600 dans le composant. */
-.tr4de-tab[data-active] svg {
+.tao-tab[data-active] svg {
   transform: translateY(-1px);
 }
 
-.tr4de-tab-fab {
+.tao-tab-fab {
   transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
-.tr4de-tab:active .tr4de-tab-fab {
+.tao-tab:active .tao-tab-fab {
   transform: scale(0.9);
   box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* ─── Feuille basse ────────────────────────────────────────────────────── */
 
-.tr4de-sheet-scrim {
+.tao-sheet-scrim {
   position: fixed;
   inset: 0;
   background: var(--color-scrim, rgba(0, 0, 0, 0.45));
   animation: scrimIn 220ms var(--ease-out) both;
 }
-.tr4de-sheet-scrim.is-closing {
+.tao-sheet-scrim.is-closing {
   animation: scrimOut 220ms var(--ease-out) both;
 }
 
@@ -2168,7 +2168,7 @@ button img,
    à une surface déjà placée par son parent — le cas de la modale partagée, qui
    emprunte cette même apparence en tactile — et les deux mécanismes se
    contrediraient. */
-.tr4de-sheet {
+.tao-sheet {
   position: relative;
   /* Au-dessus du voile, qui est son frère dans le même conteneur. */
   z-index: 1;
@@ -2192,7 +2192,7 @@ button img,
   touch-action: pan-y;
   overscroll-behavior: contain;
 }
-.tr4de-sheet.is-closing {
+.tao-sheet.is-closing {
   animation: sheetOut 220ms var(--ease-out) both;
 }
 
@@ -2203,7 +2203,7 @@ button img,
 
 /* Poignée de préhension. Sa zone tactile fait 28 px de haut alors que le trait
    n'en fait que 4 : on agrandit la CIBLE, pas le dessin. */
-.tr4de-sheet-handle {
+.tao-sheet-handle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2211,13 +2211,13 @@ button img,
   flex-shrink: 0;
   cursor: grab;
 }
-.tr4de-sheet-handle > span {
+.tao-sheet-handle > span {
   width: 36px;
   height: 4px;
   border-radius: 999px;
   background: var(--sheet-handle);
 }
-.tr4de-sheet-handle:active { cursor: grabbing; }
+.tao-sheet-handle:active { cursor: grabbing; }
 
 /* Pied d'une feuille : les actions s'étalent au lieu de se serrer à droite.
    Sur un téléphone, un bouton de 90 px calé dans l'angle inférieur droit est
@@ -2225,14 +2225,14 @@ button img,
    toute la largeur et se visent sans regarder.
    `flex-basis: 0` force le partage à parts égales — sans lui, « Enregistrer »
    serait plus large qu'« Annuler » du seul fait de son libellé. */
-.tr4de-sheet-footer > * {
+.tao-sheet-footer > * {
   flex: 1 1 0;
   min-width: 0;
 }
 
 /* ─── En-tête mobile ───────────────────────────────────────────────────── */
 
-.tr4de-mobile-header {
+.tao-mobile-header {
   position: sticky;
   top: 0;
   z-index: 50;
@@ -2252,7 +2252,7 @@ button img,
 /* Bord de défilement plutôt qu'un filet de 1 px : le trait n'apparaît que
    lorsque du contenu passe RÉELLEMENT sous l'en-tête. Une bordure permanente
    dessine une frontière même quand il n'y a rien derrière. */
-.tr4de-mobile-header::after {
+.tao-mobile-header::after {
   content: "";
   position: absolute;
   left: 0; right: 0; bottom: -1px;
@@ -2261,14 +2261,14 @@ button img,
   opacity: 0;
   transition: opacity var(--dur-base) var(--ease-out);
 }
-.tr4de-mobile-header[data-scrolled]::after { opacity: 1; }
+.tao-mobile-header[data-scrolled]::after { opacity: 1; }
 
 /* Verrou de défilement (cf. lib/hooks/useScrollLock).
    `position: fixed` plutôt que `overflow: hidden` : c'est le seul des deux que
    Safari iOS respecte réellement. Le `!important` est nécessaire — la règle
    mobile rend `overflow: auto !important` au corps de page, et un style inline
    perdrait contre elle. */
-body.tr4de-scroll-locked {
+body.tao-scroll-locked {
   position: fixed !important;
   left: 0;
   right: 0;
@@ -2285,9 +2285,9 @@ body.tr4de-scroll-locked {
      dix-sept entrées sont dans la feuille « Plus », et ses quatre destinations
      principales sont dans la barre d'onglets. Garder les deux en parallèle
      donnerait deux navigations concurrentes pour un même produit. */
-  .tr4de-sidebar,
-  .tr4de-sidebar-backdrop,
-  .tr4de-hamburger {
+  .tao-sidebar,
+  .tao-sidebar-backdrop,
+  .tao-hamburger {
     display: none !important;
   }
 
@@ -2297,7 +2297,7 @@ body.tr4de-scroll-locked {
      page, donc jamais pendant le développement.
      Les gouttières intègrent au passage les coins arrondis / l'encoche en
      paysage, d'où les `max()`. */
-  .tr4de-main .scroll-thin {
+  .tao-main .scroll-thin {
     padding-bottom: calc(24px + var(--tabbar-total)) !important;
     --page-gutter: max(16px, var(--sa-right)) !important;
     --page-gutter-left: max(16px, var(--sa-left)) !important;
@@ -2311,21 +2311,21 @@ body.tr4de-scroll-locked {
        `clip` et non `hidden` : `hidden` ferait de ce bloc un conteneur de
        défilement, ce qui rognerait aussi en HAUTEUR alors que c'est le corps
        de page qui doit défiler. Les surfaces qui ont vraiment besoin de la
-       largeur (`.tr4de-table-wrap`) gardent leur propre défilement. */
+       largeur (`.tao-table-wrap`) gardent leur propre défilement. */
     overflow-x: clip !important;
     overflow-y: visible !important;
   }
 
   /* L'ancienne barre du haut ne portait que le hamburger : elle n'a plus rien
      à montrer, et l'en-tête mobile la remplace. */
-  .tr4de-topbar { display: none !important; }
+  .tao-topbar { display: none !important; }
 
   /* Le cadre principal ne porte plus de gouttière : elle appartient au
      conteneur qui défile (`--page-gutter`). La garder ici la comptait DEUX
      fois — et surtout, elle empêchait l'en-tête translucide d'atteindre les
      bords de l'écran, laissant deux bandes de fond de chaque côté d'une
      surface censée être pleine largeur. */
-  .tr4de-main {
+  .tao-main {
     padding: 0 !important;
     margin-left: 0 !important;
   }
@@ -2333,22 +2333,22 @@ body.tr4de-scroll-locked {
   /* Cibles tactiles : plancher de 44 px sur tout ce qui se tape. Le `min-height`
      agrandit la zone sans toucher au dessin — un bouton de 34 px garde son
      allure et gagne 5 px de marge cliquable de chaque côté. */
-  .tr4de-main button:not(.tr4de-tab):not([data-tap-exempt]),
-  .tr4de-main [role="button"]:not([data-tap-exempt]) {
+  .tao-main button:not(.tao-tab):not([data-tap-exempt]),
+  .tao-main [role="button"]:not([data-tap-exempt]) {
     min-height: var(--tap-min);
   }
   /* Exception : les boutons qui vivent DANS une ligne dense (cellules de
      tableau, pastilles de filtre) — les grandir casserait la ligne. Ils
      gagnent à la place une zone étendue par pseudo-élément. */
-  .tr4de-main td button,
-  .tr4de-main th button,
-  .tr4de-main .tr4de-dense button {
+  .tao-main td button,
+  .tao-main th button,
+  .tao-main .tao-dense button {
     min-height: 0;
     position: relative;
   }
-  .tr4de-main td button::after,
-  .tr4de-main th button::after,
-  .tr4de-main .tr4de-dense button::after {
+  .tao-main td button::after,
+  .tao-main th button::after,
+  .tao-main .tao-dense button::after {
     content: "";
     position: absolute;
     inset: 50% 0 0 0;
@@ -2372,16 +2372,16 @@ body.tr4de-scroll-locked {
   /* Mouvement réduit ne veut pas dire aucun retour : la feuille cesse de
      GLISSER (c'est le déplacement qui gêne, pas le changement d'état) et se
      contente d'un fondu. */
-  .tr4de-sheet {
+  .tao-sheet {
     animation: scrimIn var(--dur-base) var(--ease-out) both;
     transition: opacity var(--dur-base) var(--ease-out);
   }
-  .tr4de-sheet.is-closing {
+  .tao-sheet.is-closing {
     animation: scrimOut var(--dur-base) var(--ease-out) both;
   }
-  .tr4de-tab:active > *,
-  .tr4de-tab:active .tr4de-tab-fab { transform: none; }
-  .tr4de-tab[data-active] svg { transform: none; }
+  .tao-tab:active > *,
+  .tao-tab:active .tao-tab-fab { transform: none; }
+  .tao-tab[data-active] svg { transform: none; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -2389,15 +2389,15 @@ body.tr4de-scroll-locked {
      plutôt que de dégrader la lisibilité. */
   :root { --tabbar-bg: #FFFFFF; }
   :root[data-theme="dark"] { --tabbar-bg: #1A1A1B; }
-  .tr4de-tabbar, .tr4de-mobile-header {
+  .tao-tabbar, .tao-mobile-header {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
 }
 
 @media (prefers-contrast: more) {
-  .tr4de-tabbar, .tr4de-mobile-header {
+  .tao-tabbar, .tao-mobile-header {
     border-color: var(--color-text) !important;
   }
-  .tr4de-tab[data-active] { outline: 1px solid var(--accent); outline-offset: -3px; }
+  .tao-tab[data-active] { outline: 1px solid var(--accent); outline-offset: -3px; }
 }

@@ -12,7 +12,7 @@ import { createHmac, timingSafeEqual } from "crypto";
  * une seconde fusion ne trouve plus rien à déplacer. */
 
 export const MERGE_CODE_TTL_MS = 15 * 60 * 1000;
-const PREFIX = "tr4de-";
+const PREFIX = "tao-";
 
 const b64url = (buf: Buffer) => buf.toString("base64url");
 

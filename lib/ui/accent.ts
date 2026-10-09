@@ -10,7 +10,7 @@
  *
  * Application : style inline sur <html>, qui prime sur les valeurs par défaut
  * du CSS. Persistance en localStorage, relue avant l'hydratation par le script
- * `tr4de-accent-init` de app/layout.tsx (évite le flash de l'ancienne couleur).
+ * `tao-accent-init` de app/layout.tsx (évite le flash de l'ancienne couleur).
  *
  * ── LE COMPTE, ET PAS SEULEMENT L'APPAREIL ────────────────────────────────
  * Les deux clés localStorage restent le cache rapide — c'est tout ce que peut
@@ -22,13 +22,13 @@
  * de la première lecture : le script d'avant-hydratation n'a pas de réseau.
  */
 
-export const ACCENT_KEY = "tr4de_accent";
-export const ACCENT_2_KEY = "tr4de_accent_2";
+export const ACCENT_KEY = "tao_accent";
+export const ACCENT_2_KEY = "tao_accent_2";
 
 /** Cache local du couple de teintes, tel que le range `useCloudState`. Distinct
  *  des deux clés ci-dessus, qui restent lues telles quelles par le script
  *  d'avant-hydratation et ne portent qu'une chaîne. */
-export const ACCENT_STATE_KEY = "tr4de_accent_state";
+export const ACCENT_STATE_KEY = "tao_accent_state";
 /** Colonne `key` de `user_productivity` où dort la teinte du compte. */
 export const ACCENT_CLOUD_KEY = "accent";
 

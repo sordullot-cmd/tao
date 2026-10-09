@@ -25,7 +25,7 @@ const note = (over: Partial<Note> = {}): Note => ({
 describe("sérialisation markdown des notes", () => {
   it("écrit un front-matter avec l'id, les dates et les tags du texte", () => {
     const md = noteToMarkdown(note());
-    expect(md).toContain('tr4de-id: "1755424521234.5671"');
+    expect(md).toContain('tao-id: "1755424521234.5671"');
     expect(md).toContain("created: 2026-08-17T10:12:33.000Z");
     expect(md).toContain("updated: 2026-08-17T11:40:02.000Z");
     expect(md).toContain("tags:\n  - trading\n  - psycho");

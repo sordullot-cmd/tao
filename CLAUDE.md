@@ -131,7 +131,7 @@ cache, JS absent, page blanche.
 Trois étages, et il faut les trois :
 
 1. **Les données** — `useCloudState` (localStorage + file `<clé>:pending`) et
-   `useTradeData` (fast path `tr4de_trades`) partent du local et y retournent.
+   `useTradeData` (fast path `tao_trades`) partent du local et y retournent.
 2. **La session** — une panne réseau n'est pas une déconnexion. `isOfflineError`
    la distingue d'un refus serveur, et `readStoredSession` relit la session dans
    le storage sans appel réseau. ⚠️ Ce n'est pas du confort : la file d'attente
@@ -141,6 +141,15 @@ Trois étages, et il faut les trois :
 
 `components/OfflineBadge.tsx` rend l'attente visible : sans lui, une synchro en
 attente et une synchro faite se ressemblent trop.
+
+### Ancien nom : tr4de
+
+L'app s'appelait `tr4de`. Les clés locales `tr4de*` sont déplacées vers `tao*`
+au démarrage par un script du `<head>` (`lib/legacyStorage.ts`), avant toute
+lecture. Restent volontairement à l'ancien nom, ou lus sous les deux : la base
+IndexedDB `tr4de-vault` (handle du coffre Obsidian), le front-matter `tr4de-id`
+des notes déjà écrites, et les propriétés `tr4deKind`/`tr4deDone` des
+évènements Google existants. Ne pas les « nettoyer ».
 
 ## Conventions d'écriture
 

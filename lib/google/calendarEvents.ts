@@ -1,5 +1,5 @@
 /**
- * Mise à plat des évènements Google en la forme attendue par l'agenda tr4de.
+ * Mise à plat des évènements Google en la forme attendue par l'agenda tao.
  *
  * Isolé de la route pour être testable sans mock de `googleapis` : la fusion de
  * plusieurs agendas est la partie qui se casse en silence (un doublon affiché
@@ -30,6 +30,7 @@ export interface FlatEvent {
 
 /** Un évènement de l'API Google → la forme plate consommée par l'agenda. */
 export function flattenEvent(ev: any, calendarId: string): FlatEvent {
+  const priv = ev.extendedProperties?.private;
   return {
     id: ev.id,
     calendarId,
@@ -48,8 +49,9 @@ export function flattenEvent(ev: any, calendarId: string): FlatEvent {
     visibility: ev.visibility || "default",
     reminders: ev.reminders || null,
     hangoutLink: ev.hangoutLink || null,
-    isTask: ev.extendedProperties?.private?.tr4deKind === "task",
-    done: ev.extendedProperties?.private?.tr4deDone === "1",
+    // Les évènements créés avant le renommage portent encore `tr4de*` chez Google.
+    isTask: (priv?.taoKind ?? priv?.tr4deKind) === "task",
+    done: (priv?.taoDone ?? priv?.tr4deDone) === "1",
   };
 }
 

@@ -15,7 +15,7 @@ interface SheetProps {
   children: React.ReactNode;
 }
 
-/** Durée de la sortie — doit rester égale à celle de `.tr4de-sheet.is-closing`. */
+/** Durée de la sortie — doit rester égale à celle de `.tao-sheet.is-closing`. */
 const EXIT_MS = 220;
 
 /**
@@ -80,14 +80,14 @@ export default function Sheet({ open, onClose, title, maxHeight = "min(80dvh, 64
        partagée qui, elle, est placée par son propre voile. */
     <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "flex-end" }}>
       <div
-        className={`tr4de-sheet-scrim ${closing ? "is-closing" : ""}`}
+        className={`tao-sheet-scrim ${closing ? "is-closing" : ""}`}
         onClick={requestClose}
         aria-hidden="true"
       />
       <div
         ref={sheetRef}
         {...swipeHandlers}
-        className={`tr4de-sheet ${closing ? "is-closing" : ""}`}
+        className={`tao-sheet ${closing ? "is-closing" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === "string" ? title : undefined}
@@ -96,7 +96,7 @@ export default function Sheet({ open, onClose, title, maxHeight = "min(80dvh, 64
         {/* Poignée : elle dit « ceci se saisit » avant tout geste. Sans cet
             indice, la possibilité de repousser la feuille au doigt n'existe
             que pour qui l'essaie par hasard. */}
-        <div className="tr4de-sheet-handle" aria-hidden="true">
+        <div className="tao-sheet-handle" aria-hidden="true">
           <span />
         </div>
 

@@ -257,7 +257,7 @@ export function fromAnkiText(text: string, defaultDeck = "Import"): ImportResult
 /** Le magasin entier, historique et paramètres compris. C'est ce qu'il faut
  *  pour changer d'appareil sans rien perdre. */
 export function toJsonBackup(store: SrsStore): string {
-  return JSON.stringify({ format: "tr4de-srs", version: 1, exportedAt: new Date().toISOString(), store }, null, 2);
+  return JSON.stringify({ format: "tao-srs", version: 1, exportedAt: new Date().toISOString(), store }, null, 2);
 }
 
 /** Relit une sauvegarde. Renvoie `null` si ce n'est pas une des nôtres — mieux
@@ -265,7 +265,7 @@ export function toJsonBackup(store: SrsStore): string {
 export function fromJsonBackup(text: string): SrsStore | null {
   try {
     const parsed = JSON.parse(text);
-    if (parsed?.format !== "tr4de-srs" || !parsed.store) return null;
+    if (parsed?.format !== "tao-srs" || !parsed.store) return null;
     return parsed.store as SrsStore;
   } catch {
     return null;

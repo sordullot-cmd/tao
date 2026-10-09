@@ -13,7 +13,7 @@
  * Deux sections de l'original ne sont pas reprises, faute de source :
  *   — « Transactions récentes » lisait les opérations de la banque connectée ;
  *   — le Sankey de budget lisait ces mêmes opérations catégorisées. Le budget de
- *     tr4de est un budget PRÉVISIONNEL saisi à la main (page Budget) : on renvoie
+ *     tao est un budget PRÉVISIONNEL saisi à la main (page Budget) : on renvoie
  *     donc vers elle plutôt que d'afficher un flux qu'on n'a pas.
  *
  * La courbe est RECONSTRUITE (cf. `lib/patrimoineHistory`) : les soldes
@@ -109,7 +109,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
      retour sur la page — y compris depuis un autre appareil. Même mécanique que
      le tri et les colonnes de la page Trades : cache localStorage immédiat,
      Supabase derrière. */
-  const [rawView, setView] = useCloudState("tr4de_patrimoine_view", "patrimoine_view", "net");
+  const [rawView, setView] = useCloudState("tao_patrimoine_view", "patrimoine_view", "net");
   // Une valeur venue du cloud n'est pas garantie : tout ce qui n'est pas « brut »
   // retombe sur le net, plutôt que d'afficher un héros vide.
   const view = rawView === "brut" ? "brut" : "net";
@@ -146,7 +146,7 @@ export default function PatrimoinePage({ setPage, setSelectedAssetId, setSelecte
 
   /* Fenêtre de la courbe. Elle suit le COMPTE comme la vue net/brut : on ne
      revient pas sur « Tout » à chaque visite quand on suit son année en cours. */
-  const [rawPeriod, setPeriod] = useCloudState("tr4de_patrimoine_period", "patrimoine_period", PERIOD_ALL);
+  const [rawPeriod, setPeriod] = useCloudState("tao_patrimoine_period", "patrimoine_period", PERIOD_ALL);
   const period = HISTORY_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : PERIOD_ALL;
 
   /* Relevés de TOUS les comptes agrégés : c'est la matière de la courbe.

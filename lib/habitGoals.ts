@@ -22,14 +22,14 @@
 // dans DailyPlannerPage ; elles ont déménagé ici pour que la page Objectifs
 // puisse les lire sans importer la page Habitudes. DailyPlannerPage les
 // ré-exporte : les imports existants (Vie RPG, tests) ne bougent pas.
-export const STORAGE_HABITS = "tr4de_habits";
-export const STORAGE_HABITS_HISTORY = "tr4de_habits_history";
+export const STORAGE_HABITS = "tao_habits";
+export const STORAGE_HABITS_HISTORY = "tao_habits_history";
 export const CLOUD_HABITS = "habits";
 export const CLOUD_HABITS_HISTORY = "habits_history";
 
 // Idem pour les objectifs chiffrés, que la page Habitudes doit pouvoir
 // rattacher. GoalsPage les ré-exporte.
-export const GOALS_STORAGE_KEY = "tr4de_goals_v2";
+export const GOALS_STORAGE_KEY = "tao_goals_v2";
 export const GOALS_CLOUD_KEY = "goals";
 
 // Identifiant de la source de suivi « habitudes » (champ `autoType` d'un objectif).

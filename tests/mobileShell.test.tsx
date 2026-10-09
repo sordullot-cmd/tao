@@ -59,7 +59,7 @@ describe("Barre d'onglets", () => {
     render(<TabBar items={ITEMS} activeId="add-trade" onSelect={() => {}} />);
     // Même « actif », le « + » ne s'affiche pas comme un lieu où l'on serait :
     // on y va pour faire quelque chose, puis on en repart.
-    expect(screen.getByLabelText("Ajouter").querySelector(".tr4de-tab-fab")).not.toBeNull();
+    expect(screen.getByLabelText("Ajouter").querySelector(".tao-tab-fab")).not.toBeNull();
   });
 
   it("relaie la sélection", () => {
@@ -96,12 +96,12 @@ describe("Feuille basse", () => {
     Object.defineProperty(window, "scrollTo", { value: scrollTo, writable: true, configurable: true });
 
     const { unmount } = render(<Sheet open onClose={() => {}}>contenu</Sheet>);
-    expect(document.body.classList.contains("tr4de-scroll-locked")).toBe(true);
+    expect(document.body.classList.contains("tao-scroll-locked")).toBe(true);
     // La position est mémorisée dans le décalage, pas perdue.
     expect(document.body.style.top).toBe("-320px");
 
     unmount();
-    expect(document.body.classList.contains("tr4de-scroll-locked")).toBe(false);
+    expect(document.body.classList.contains("tao-scroll-locked")).toBe(false);
     expect(document.body.style.top).toBe("");
     // Et rendue telle quelle au démontage : refermer ne renvoie pas en haut.
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 320 }));
@@ -151,7 +151,7 @@ describe("En-tête mobile", () => {
     // position laissée par le test du verrou de défilement se glisse ici.
     Object.defineProperty(window, "scrollY", { value: 0, writable: true, configurable: true });
     const { container } = render(<MobileHeader title="Trades" />);
-    const header = container.querySelector(".tr4de-mobile-header")!;
+    const header = container.querySelector(".tao-mobile-header")!;
     expect(header.hasAttribute("data-scrolled")).toBe(false);
 
     Object.defineProperty(window, "scrollY", { value: 120, writable: true, configurable: true });
@@ -178,8 +178,8 @@ describe("Branchement dans la coquille", () => {
   const css = readFileSync("app/globals.css", "utf8");
 
   it("masque bien l'ancienne navigation sous 768 px — la prémisse de tout le reste", () => {
-    expect(css).toMatch(/\.tr4de-hamburger\s*\{\s*display: none !important;/);
-    expect(css).toMatch(/\.tr4de-topbar\s*\{\s*display: none !important;/);
+    expect(css).toMatch(/\.tao-hamburger\s*\{\s*display: none !important;/);
+    expect(css).toMatch(/\.tao-topbar\s*\{\s*display: none !important;/);
   });
 
   it("monte les trois pièces là où la barre latérale disparaît", () => {

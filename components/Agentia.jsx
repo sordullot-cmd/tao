@@ -58,7 +58,7 @@ export default function Agentia({ trades: initialTrades = [] }) {
       // Charger les assignments depuis localStorage
       let assignments = {};
       try {
-        const stored = localStorage.getItem('tr4de_trade_strategies');
+        const stored = localStorage.getItem('tao_trade_strategies');
         assignments = stored ? JSON.parse(stored) : {};
       } catch (err) {
         console.warn("Erreur loading trade assignments:", err);
@@ -118,9 +118,9 @@ export default function Agentia({ trades: initialTrades = [] }) {
         .map(([trade_id, notes]) => ({ trade_id, notes: String(notes) }));
 
     // 1️⃣ Charger IMMÉDIATEMENT depuis localStorage (marche pour démo + auth)
-    const localStrategies = readLocal("tr4de_strategies", []);
-    const localDailyNotes = readLocal("tr4de_daily_notes", {});
-    const localTradeNotes = tradeNotesMapToArray(readLocal("tr4de_trade_notes", {}));
+    const localStrategies = readLocal("tao_strategies", []);
+    const localDailyNotes = readLocal("tao_daily_notes", {});
+    const localTradeNotes = tradeNotesMapToArray(readLocal("tao_trade_notes", {}));
 
     console.log("⚡ Agentia: chargement localStorage", {
       strategies: localStrategies.length,

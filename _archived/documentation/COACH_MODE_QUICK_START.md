@@ -13,7 +13,7 @@
 ```
 Dashboard Layout:
 ┌─────────────────────────────────────────────────────────────┐
-│  🤖 Assistant IA Tr4de     [📊 Analyser]  [🏆 Coach Mode]  │  ← NEW BUTTON
+│  🤖 Assistant IA tao     [📊 Analyser]  [🏆 Coach Mode]  │  ← NEW BUTTON
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  Chat Area               │  Statistics Sidebar             │

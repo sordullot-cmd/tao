@@ -9,7 +9,7 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import AddTradePage from "@/components/pages/AddTradePage";
 
 /* Le parseur est piloté par le test : c'est la plateforme passée en second
@@ -24,11 +24,25 @@ vi.mock("@/lib/csvParsers", () => ({
         ],
 }));
 
+/* Une chaîne qui accepte n'importe quel enchaînement de filtres : l'import en
+   aligne une dizaine, et un mock taillé à la requête près casserait au premier
+   `.order()` ajouté sans que rien d'utile n'ait changé. Seule la table décide
+   de la réponse — le compte existe, aucun trade n'est encore en base. */
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
-    }),
+    from: (table: string) => {
+      const result = {
+        data: table === "trading_accounts" ? [{ id: "acc1", name: "Solo" }] : [],
+        error: null,
+      };
+      const chain: any = {};
+      for (const m of ["select", "eq", "in", "order", "insert", "update", "upsert"]) {
+        chain[m] = () => chain;
+      }
+      chain.maybeSingle = async () => ({ data: null, error: null });
+      chain.then = (ok: any, ko: any) => Promise.resolve(result).then(ok, ko);
+      return chain;
+    },
   }),
 }));
 
@@ -54,7 +68,7 @@ const props = {
 /* Les favoris de courtiers survivent d'un test à l'autre via localStorage : on
    retire LA clé, pas tout le magasin — `tests/setup.ts` y pose la langue. */
 beforeEach(() => {
-  localStorage.removeItem("tr4de_favorite_brokers");
+  localStorage.removeItem("tao_favorite_brokers");
 });
 
 describe("écran d'ajout de trades", () => {
@@ -175,6 +189,34 @@ describe("écran d'ajout de trades", () => {
     // L'aperçu, lui, vient du convertisseur et non du mock.
     expect(screen.getByText("MNQ")).toBeTruthy();
     expect(screen.getByText("00:00:11 → 00:01:01")).toBeTruthy();
+  });
+
+  /* Après un import, la page reste ouverte pour enchaîner le relevé suivant —
+     encore faut-il que le bouton revive. La destination était vidée à moitié :
+     le sélecteur montrait toujours le compte, mais plus rien ne le visait. */
+  it("garde la destination après un import, pour enchaîner le suivant", async () => {
+    const SOLO = [{ id: "acc1", name: "Solo", account_type: "live" }];
+    render(<AddTradePage {...props} accounts={SOLO} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /pick a prop firm or an account/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Solo/ }));
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["x"], "lundi.csv", { type: "text/csv" })] },
+    });
+    const importBtn = () => screen.getByRole("button", { name: /^import$/i }) as HTMLButtonElement;
+    await waitFor(() => expect(importBtn().disabled).toBe(false));
+
+    fireEvent.click(importBtn());
+    expect(await screen.findByRole("status")).toBeTruthy();
+
+    // Un second relevé suffit à rallumer le bouton : le compte n'est pas à rechoisir.
+    fireEvent.change(input, {
+      target: { files: [new File(["y"], "mardi.csv", { type: "text/csv" })] },
+    });
+    await waitFor(() => expect(importBtn().disabled).toBe(false));
+    expect(screen.queryByText(/pick where these trades go first/i)).toBeNull();
   });
 
   it("ne compte rien quand le collage n'est pas lisible", async () => {

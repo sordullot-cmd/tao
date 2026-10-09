@@ -40,6 +40,8 @@ interface FsDirHandle extends FsHandle {
   values: () => AsyncIterable<FsHandle>;
 }
 
+/* Nom d'avant le renommage, gardé exprès : la base ne contient que le handle du
+   dossier choisi, et la renommer obligerait chacun à re-sélectionner son coffre. */
 const DB_NAME = "tr4de-vault";
 const STORE = "handles";
 const KEY = "notesDir";
@@ -225,7 +227,7 @@ export async function pickWebVault(): Promise<VaultFs | null> {
   if (!show) return null;
   let handle: FsDirHandle;
   try {
-    handle = await show({ id: "tr4de-obsidian", mode: "readwrite", startIn: "documents" });
+    handle = await show({ id: "tao-obsidian", mode: "readwrite", startIn: "documents" });
   } catch {
     return null; // l'utilisateur a annulé
   }

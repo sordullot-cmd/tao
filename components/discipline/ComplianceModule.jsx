@@ -250,7 +250,7 @@ function KpiRow({ stats, sessionViolations, activeRules, totalRules, isClean, fl
   );
   if (flat) return grid;
   return (
-    <div className="tr4de-kpi-row" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+    <div className="tao-kpi-row" style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "var(--radius-card)", overflow: "hidden" }}>
       {grid}
     </div>
   );
@@ -262,13 +262,13 @@ function ViolationsLog({ stats, rules }) {
   const ruleById = new Map(rules.map(r => [r.id, r]));
   const [open, setOpen] = React.useState(() => {
     if (typeof window === "undefined") return true;
-    const v = window.localStorage.getItem("tr4de.violationsLog.open");
+    const v = window.localStorage.getItem("tao.violationsLog.open");
     return v === null ? true : v === "1";
   });
   const toggle = () => {
     setOpen(o => {
       const next = !o;
-      try { window.localStorage.setItem("tr4de.violationsLog.open", next ? "1" : "0"); } catch {}
+      try { window.localStorage.setItem("tao.violationsLog.open", next ? "1" : "0"); } catch {}
       return next;
     });
   };

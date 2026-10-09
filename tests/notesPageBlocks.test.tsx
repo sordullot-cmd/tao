@@ -160,7 +160,7 @@ describe("Page Notes — liens entre notes", () => {
   beforeEach(() => cloudStore.clear());
 
   it("propose les autres notes après « [[ » et insère le titre choisi", () => {
-    cloudStore.set("tr4de_notes", [
+    cloudStore.set("tao_notes", [
       { id: 1, content: "# Plan 2026\nsuite", createdAt: "", updatedAt: "" },
     ]);
     const ta = openEditor();
@@ -191,7 +191,7 @@ describe("Page Notes — clic dans l'éditeur", () => {
   });
 
   it("ouvre la note visée en cliquant sur un [[lien]] écrit en édition", async () => {
-    cloudStore.set("tr4de_notes", [
+    cloudStore.set("tao_notes", [
       { id: 1, content: "# Plan 2026\ncorps", createdAt: "", updatedAt: "" },
     ]);
     const ta = openEditor();
@@ -235,7 +235,7 @@ describe("Page Notes — la note s'ouvre sur son rendu", () => {
   beforeEach(() => cloudStore.clear());
 
   it("montre le rendu, pas la syntaxe, quand la note a déjà du contenu", async () => {
-    cloudStore.set("tr4de_notes", [
+    cloudStore.set("tao_notes", [
       { id: 1, content: "# Mon titre\n\n- [ ] tâche\n\nvoir [[Ailleurs]]", createdAt: "", updatedAt: "" },
     ]);
     const { container } = render(<NotesPage />);
@@ -252,7 +252,7 @@ describe("Page Notes — la note s'ouvre sur son rendu", () => {
   });
 
   it("rouvre l'édition sur la ligne cliquée", async () => {
-    cloudStore.set("tr4de_notes", [
+    cloudStore.set("tao_notes", [
       { id: 1, content: "# Titre\n\nPremier paragraphe\n\nSecond paragraphe", createdAt: "", updatedAt: "" },
     ]);
     const { container } = render(<NotesPage />);

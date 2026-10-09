@@ -154,7 +154,7 @@ export default function DrawingToolbar({
       <IconButton icon={Trash2} label="Effacer tout le dessin" danger disabled={!strokeCount} onClick={onClear} />
 
       <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap" }} className="tr4de-draw-hint">
+        <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap" }} className="tao-draw-hint">
           Maj = trait droit · Échap = écrire
         </span>
         <IconButton icon={X} label="Quitter le mode dessin (Échap)" onClick={onClose} />

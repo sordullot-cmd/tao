@@ -27,13 +27,13 @@ import {
 import { PALETTE, PALETTE_DARK, GREY } from "@/lib/ui/palette";
 
 // Clés de persistance de l'état Vie RPG (localStorage + Supabase).
-export const RPG_STORAGE_KEY = "tr4de_life_rpg";
+export const RPG_STORAGE_KEY = "tao_life_rpg";
 export const RPG_CLOUD_KEY = "life_rpg";
 
 // Lien « tâche d'agenda → cartes Vie RPG » (+ état de complétion), partagé entre
 // la page Agenda (qui l'écrit) et la page Vie RPG (qui le lit pour l'XP). On
 // l'indexe par id de Google Task : { [taskId]: { categories, completedAt, title } }.
-export const TASK_RPG_STORAGE_KEY = "tr4de_agenda_task_rpg";
+export const TASK_RPG_STORAGE_KEY = "tao_agenda_task_rpg";
 export const TASK_RPG_CLOUD_KEY = "agenda_task_rpg";
 // XP gagnée pour une tâche terminée, par catégorie liée (≈ une habitude « normale »).
 export const TASK_XP = 25;
@@ -42,7 +42,7 @@ export const TASK_XP = 25;
 // avancer. Écrit par la page Agenda, lu par la page Vie RPG — même partage que
 // `taskRpg` ci-dessus, mais indexé par identifiant d'ÉVÈNEMENT (les deux
 // espaces d'identifiants sont distincts, et un créneau n'est pas une tâche).
-export const EVENT_RPG_STORAGE_KEY = "tr4de_agenda_event_rpg";
+export const EVENT_RPG_STORAGE_KEY = "tao_agenda_event_rpg";
 export const EVENT_RPG_CLOUD_KEY = "agenda_event_rpg";
 
 /* XP d'une étape cochée dans un évènement lié à un objectif.
@@ -88,8 +88,8 @@ export function hasTradingCategory(categories) {
 // indexés par id de Google Task : { [taskId]: { day, startTime?, endTime?, colorId } }.
 // Partagé entre la page Agenda et la page Vie RPG (qui peut créer une tâche datée
 // rattachée à une carte). Google Tasks ne stocke que la date limite (`due`), pas
-// le jour où l'on pose la tâche → on le conserve côté tr4de.
-export const TASK_TIMES_STORAGE_KEY = "tr4de_task_times";
+// le jour où l'on pose la tâche → on le conserve côté tao.
+export const TASK_TIMES_STORAGE_KEY = "tao_task_times";
 export const TASK_TIMES_CLOUD_KEY = "task_times";
 
 // Catégories (« cartes ») rattachées à une habitude. Une habitude peut être

@@ -26,7 +26,7 @@ import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
 const T = { ...BaseT };
 
-const LOG_KEY = "tr4de_focus_sessions";
+const LOG_KEY = "tao_focus_sessions";
 
 const MODES = {
   work:       { id: "work",       label: "Focus",        color: "#58CC02", duration: DEFAULT_DURATIONS.work },
@@ -250,7 +250,7 @@ export default function FocusTimerPage() {
         <SkeletonStats count={4} flat />
         {/* Le minuteur à gauche (1.2fr), l'historique à droite (1fr) : la même
             grille que la page, sinon les deux colonnes changent de largeur. */}
-        <div className="tr4de-focus-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
+        <div className="tao-focus-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
           <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
             <Skeleton width={220} height={34} radius={999} />
             <Skeleton width={220} height={220} radius="50%" />
@@ -306,11 +306,11 @@ export default function FocusTimerPage() {
                     opacity: running ? 1 : 0.3,
                     transition: "opacity .3s ease",
                     transformOrigin: "140px 140px",
-                    animation: running ? "tr4de-chrono-spin 1.6s linear infinite" : "none",
+                    animation: running ? "tao-chrono-spin 1.6s linear infinite" : "none",
                   }} />
               )}
             </svg>
-            <style>{`@keyframes tr4de-chrono-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            <style>{`@keyframes tao-chrono-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
               <div style={{ fontSize: 40, fontWeight: 700, color: T.text, letterSpacing: -1, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtMMSS(remaining)}</div>
               {taskLabel.trim() ? (

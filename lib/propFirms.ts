@@ -80,7 +80,7 @@ function throwDbError(error: { code?: string; message?: string }): never {
  * date de passage funded et minimum de retrait. Partagé par la page Comptes et
  * la page détail d'une firme, pour que « Payout dispo » y soit identique.
  */
-export const FUNDED_META_KEY = "tr4de_accounts_funded_meta";
+export const FUNDED_META_KEY = "tao_accounts_funded_meta";
 
 export function readFundedMeta(): Record<string, { funded_at?: string; funded_payout_min?: number; funded_max_dd?: number }> {
   if (typeof window === "undefined") return {};
@@ -104,7 +104,7 @@ export function writeFundedMeta(meta: Record<string, unknown>): void {
    métadonnées « funded », donc sans migration de base : c'est une préférence
    d'affichage, pas une donnée de trading. */
 
-export const FIRM_META_KEY = "tr4de_firms_display_meta";
+export const FIRM_META_KEY = "tao_firms_display_meta";
 
 /** "value" = capital géré + P&L · "pnl" = P&L des comptes seul. */
 export type FirmHeroMode = "value" | "pnl";
@@ -136,7 +136,7 @@ export function writeFirmHeroMode(firmId: string, hero: FirmHeroMode): void {
 export function notifyAccountsChanged(): void {
   if (typeof window === "undefined") return;
   try {
-    window.dispatchEvent(new CustomEvent("tr4de:accounts-changed"));
+    window.dispatchEvent(new CustomEvent("tao:accounts-changed"));
   } catch {}
 }
 

@@ -32,7 +32,7 @@ export function useScrollLock(active: boolean): void {
 
     if (locks === 0) {
       restoreY = window.scrollY;
-      body.classList.add("tr4de-scroll-locked");
+      body.classList.add("tao-scroll-locked");
       body.style.top = `${-restoreY}px`;
     }
     locks += 1;
@@ -40,7 +40,7 @@ export function useScrollLock(active: boolean): void {
     return () => {
       locks -= 1;
       if (locks > 0) return;
-      body.classList.remove("tr4de-scroll-locked");
+      body.classList.remove("tao-scroll-locked");
       body.style.top = "";
       /* `instant` et non `smooth` : ce n'est pas un déplacement, c'est la
          restitution d'une position. L'animer donnerait un saut visible là où

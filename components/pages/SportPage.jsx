@@ -243,28 +243,28 @@ function pickMetric(available, allowed = METRIC_ORDER) {
 
 export default function SportPage() {
   useLang();
-  const [sessions, setSessions, sessionsReady] = useCloudState("tr4de_sport_sessions", "sport_sessions", []);
+  const [sessions, setSessions, sessionsReady] = useCloudState("tao_sport_sessions", "sport_sessions", []);
   // Bibliothèque personnalisable :
   // - customExercises : exercices ajoutés par l'utilisateur ({ name, category })
   // - hiddenExercises : noms (de la lib intégrée OU custom) que l'utilisateur a masqués
   // - favoriteExercises : noms en favoris (affichés en haut)
-  const [customExercises, setCustomExercises] = useCloudState("tr4de_sport_custom_exercises", "sport_custom_exercises", []);
-  const [hiddenExercises, setHiddenExercises] = useCloudState("tr4de_sport_hidden_exercises", "sport_hidden_exercises", []);
-  const [favoriteExercises, setFavoriteExercises] = useCloudState("tr4de_sport_favorite_exercises", "sport_favorite_exercises", []);
-  const [customPresets, setCustomPresets] = useCloudState("tr4de_sport_custom_presets", "sport_custom_presets", []);
+  const [customExercises, setCustomExercises] = useCloudState("tao_sport_custom_exercises", "sport_custom_exercises", []);
+  const [hiddenExercises, setHiddenExercises] = useCloudState("tao_sport_hidden_exercises", "sport_hidden_exercises", []);
+  const [favoriteExercises, setFavoriteExercises] = useCloudState("tao_sport_favorite_exercises", "sport_favorite_exercises", []);
+  const [customPresets, setCustomPresets] = useCloudState("tao_sport_custom_presets", "sport_custom_presets", []);
   /* Plan de la semaine — RÉCURRENT, pas daté : `{ "0": [entrée…], … "6": [] }`
      avec 0 = lundi. Un plan daté obligerait à le re-remplir tous les dimanches
      soir, alors qu'une routine d'entraînement est justement ce qui ne change
      pas d'une semaine à l'autre ; ce qui change — ce qui a vraiment été fait —
      se lit dans `sessions`, et l'appariement se refait à l'affichage. */
-  const [weekPlan, setWeekPlan] = useCloudState("tr4de_sport_week_plan", "sport_week_plan", {});
+  const [weekPlan, setWeekPlan] = useCloudState("tao_sport_week_plan", "sport_week_plan", {});
   // Photos de progression physique ({ id, date, dataUrl, weight?, note? }).
-  const [progressPhotos, setProgressPhotos] = useCloudState("tr4de_sport_progress_photos", "sport_progress_photos", []);
+  const [progressPhotos, setProgressPhotos] = useCloudState("tao_sport_progress_photos", "sport_progress_photos", []);
   /* Mois de l'historique repliés — on stocke les CLÉS REPLIÉES (et non les
      dépliées) pour qu'un mois qui n'existe pas encore s'affiche ouvert : sans
      ça, chaque nouveau mois arriverait fermé chez les utilisateurs existants.
      Dans le nuage, donc le repli survit au navigateur et à la machine. */
-  const [collapsedMonths, setCollapsedMonths] = useCloudState("tr4de_sport_collapsed_months", "sport_collapsed_months", []);
+  const [collapsedMonths, setCollapsedMonths] = useCloudState("tao_sport_collapsed_months", "sport_collapsed_months", []);
   const toggleMonth = (key) => setCollapsedMonths(prev => (
     (prev || []).includes(key) ? (prev || []).filter(k => k !== key) : [...(prev || []), key]
   ));
@@ -336,7 +336,7 @@ export default function SportPage() {
      revient sur la page pour voir sa progression sur le même mouvement, et un
      `useState` la faisait retomber sur le premier de la liste à chaque retour.
      Il vit donc dans le nuage, comme le repli des mois. */
-  const [chartExerciseName, setChartExerciseName, chartExerciseReady] = useCloudState("tr4de_sport_chart_exercise", "sport_chart_exercise", "");
+  const [chartExerciseName, setChartExerciseName, chartExerciseReady] = useCloudState("tao_sport_chart_exercise", "sport_chart_exercise", "");
   // Métrique choisie à la main dans le graphique (null = celle de l'exercice).
   const [chartMetricChoice, setChartMetricChoice] = useState(null);
 
@@ -686,7 +686,7 @@ export default function SportPage() {
     }));
   }, [sortedSessions]);
 
-  if (useFirstLoad(sessionsReady, "tr4de_sport_sessions")) {
+  if (useFirstLoad(sessionsReady, "tao_sport_sessions")) {
     return <PageSkeleton variant="stats" stats={3} gap={24} toolbarLeft={[124, 88]} toolbarRight={[148]} />;
   }
 
@@ -715,7 +715,7 @@ export default function SportPage() {
         </span>
 
         <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-          <div id="tr4de-page-header-slot" />
+          <div id="tao-page-header-slot" />
           {tab === "workout" && (
             <button onClick={openCreate}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, background: T.text, border: "none", color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
@@ -752,7 +752,7 @@ export default function SportPage() {
 
       {/* Layout en 2 colonnes : timeline à gauche, panneau collant à droite */}
       {tab === "workout" && (
-      <div className="tr4de-sport-layout" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(300px, 1fr)", gap: 24, alignItems: "start" }}>
+      <div className="tao-sport-layout" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(300px, 1fr)", gap: 24, alignItems: "start" }}>
 
         {/* Colonne gauche : timeline mensuelle */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

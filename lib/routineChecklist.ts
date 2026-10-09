@@ -57,11 +57,11 @@ export interface RoutineStore {
 /** `{ [id de règle]: coché }`. Une règle absente vaut « pas cochée ». */
 export type RoutineChecks = Record<string, boolean>;
 
-export const ROUTINE_RULES_KEY = "tr4de_routine_rules";
+export const ROUTINE_RULES_KEY = "tao_routine_rules";
 export const ROUTINE_RULES_CLOUD_KEY = "routine_rules";
 
 /** Le préfixe est public : la heatmap balaie localStorage avec. */
-export const ROUTINE_CHECKS_PREFIX = "tr4de_routine_checklist_";
+export const ROUTINE_CHECKS_PREFIX = "tao_routine_checklist_";
 
 /** Règles servies tant que l'utilisateur n'a pas fait les siennes. */
 export const DEFAULT_ROUTINE_ITEMS: RoutineRule[] = [
@@ -301,7 +301,7 @@ export function readRoutineChecks(date?: string): RoutineChecks {
    plutôt que l'événement `storage` du navigateur : celui-ci ne se déclenche PAS
    dans l'onglet qui écrit, c'est-à-dire précisément celui où vivent les deux
    lecteurs qu'on veut accorder. */
-const CHANGE_EVENT = "tr4de:routine-checklist";
+const CHANGE_EVENT = "tao:routine-checklist";
 
 export function writeRoutineChecks(checks: RoutineChecks, date?: string): RoutineChecks {
   try {

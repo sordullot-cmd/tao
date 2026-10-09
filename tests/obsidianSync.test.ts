@@ -82,7 +82,7 @@ describe("synchronisation avec un vault Obsidian", () => {
     expect(vault.md()).toEqual(["Plan de la semaine.md", "Revue mensuelle.md"]);
     expect(res.report.created).toBe(2);
     expect(res.changed).toBe(false); // rien à réécrire côté app
-    expect(vault.text("Plan de la semaine.md")).toContain('tr4de-id: "101"');
+    expect(vault.text("Plan de la semaine.md")).toContain('tao-id: "101"');
     expect(Object.keys(res.index.entries)).toEqual(["101", "102"]);
   });
 
@@ -189,9 +189,9 @@ describe("synchronisation avec un vault Obsidian", () => {
     expect(res.report.imported).toBe(1);
     const imported = res.notes.find((n) => n.id === 900)!;
     expect(imported.content).toBe("Idée de setup\n\nRSI en divergence #trading");
-    // Sans `tr4de-id` dans le fichier, la note serait réimportée en double le
+    // Sans `tao-id` dans le fichier, la note serait réimportée en double le
     // jour où l'index local est perdu.
-    expect(vault.text("Idée de setup.md")).toContain('tr4de-id: "900"');
+    expect(vault.text("Idée de setup.md")).toContain('tao-id: "900"');
 
     const again = await syncVault(vault.fs, res.notes, res.index, options);
     expect(again.report.imported).toBe(0);

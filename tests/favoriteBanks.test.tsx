@@ -25,7 +25,7 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
 
 import { useFavoriteBanks } from "@/lib/bank/useFavoriteBanks";
 
-const KEY = "tr4de_bank_favorites";
+const KEY = "tao_bank_favorites";
 
 describe("useFavoriteBanks", () => {
   it("ajoute une banque en favori avec son nom et son logo", () => {

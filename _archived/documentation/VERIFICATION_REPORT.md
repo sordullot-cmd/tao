@@ -160,7 +160,7 @@ Memory Usage: Normal
 
 **Option 2: Detailed Test (Command Line)**
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-csv.js
 ```
 Expected: "Total trades parsed: 25" ✅
@@ -247,7 +247,7 @@ If you encounter issues:
    - Try: Use sample_trades.csv first
 
 3. **"CSV not found"**
-   - Check: File exists in e:\tr4de directory
+   - Check: File exists in e:\tao directory
    - Test: Use sample_trades.csv from root directory
    - Try: Drag and drop file instead of browsing
 

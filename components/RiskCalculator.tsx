@@ -27,7 +27,7 @@ import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
  * pour réouverture rapide.
  */
 
-const LS_KEY = "tr4de_risk_calc_inputs";
+const LS_KEY = "tao_risk_calc_inputs";
 
 interface RiskInputs {
   accountSize: string;

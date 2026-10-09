@@ -41,8 +41,8 @@ export interface PomodoroDurations {
   longBreak: number;
 }
 
-export const POMODORO_TIMER_KEY = "tr4de_focus_timer_v1";
-export const POMODORO_DURATIONS_KEY = "tr4de_focus_durations_v1";
+export const POMODORO_TIMER_KEY = "tao_focus_timer_v1";
+export const POMODORO_DURATIONS_KEY = "tao_focus_durations_v1";
 
 /** Durées d'origine (s) — celles qu'on retrouve tant qu'on n'a rien réglé. */
 export const DEFAULT_DURATIONS: PomodoroDurations = {

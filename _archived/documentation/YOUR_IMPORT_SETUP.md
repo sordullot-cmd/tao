@@ -56,7 +56,7 @@ If your full export has the columns B/S, Contract, avgPrice, and PnL anywhere in
 ### Step 1: Check File Format
 ```bash
 # In terminal:
-cd e:\tr4de
+cd e:\tao
 
 # Create a test file from your export
 # (copy first few lines of your CSV and save as test-import.csv)

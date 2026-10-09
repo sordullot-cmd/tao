@@ -116,27 +116,27 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // Mapping trades → stratégies (depuis localStorage)
   const tradeStrategiesData = React.useMemo(() => {
     if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem("tr4de_trade_strategies") || "{}"); }
+    try { return JSON.parse(localStorage.getItem("tao_trade_strategies") || "{}"); }
     catch { return {}; }
   }, []);
   // État des règles cochées par trade × stratégie × règle.
   // Live-updated quand TradesPage (même onglet) émet
-  // 'tr4de:checked-rules-changed', ou quand un autre onglet modifie le storage.
+  // 'tao:checked-rules-changed', ou quand un autre onglet modifie le storage.
   const [checkedRules, setCheckedRules] = React.useState(() => {
     if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem("tr4de_checked_rules") || "{}"); }
+    try { return JSON.parse(localStorage.getItem("tao_checked_rules") || "{}"); }
     catch { return {}; }
   });
   React.useEffect(() => {
     const reload = () => {
-      try { setCheckedRules(JSON.parse(localStorage.getItem("tr4de_checked_rules") || "{}")); }
+      try { setCheckedRules(JSON.parse(localStorage.getItem("tao_checked_rules") || "{}")); }
       catch { setCheckedRules({}); }
     };
-    const onStorage = (e) => { if (e.key === "tr4de_checked_rules") reload(); };
-    window.addEventListener("tr4de:checked-rules-changed", reload);
+    const onStorage = (e) => { if (e.key === "tao_checked_rules") reload(); };
+    window.addEventListener("tao:checked-rules-changed", reload);
     window.addEventListener("storage", onStorage);
     return () => {
-      window.removeEventListener("tr4de:checked-rules-changed", reload);
+      window.removeEventListener("tao:checked-rules-changed", reload);
       window.removeEventListener("storage", onStorage);
     };
   }, []);
@@ -223,7 +223,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // Load emotion tags from localStorage
   React.useEffect(() => {
     try {
-      const saved = localStorage.getItem("tr4de_emotion_tags");
+      const saved = localStorage.getItem("tao_emotion_tags");
       if (saved) {
         const parsed = JSON.parse(saved);
         setEmotionTags(parsed);
@@ -236,7 +236,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // Load error tags from localStorage
   React.useEffect(() => {
     try {
-      const saved = localStorage.getItem("tr4de_error_tags");
+      const saved = localStorage.getItem("tao_error_tags");
       if (saved) {
         const parsed = JSON.parse(saved);
         setErrorTags(parsed);
@@ -256,9 +256,9 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
         console.error(`Error loading ${key}:`, err);
       }
     };
-    load("tr4de_trade_liquidity_tags", setLiquidityTags);
-    load("tr4de_trade_entry_tags", setEntryTags);
-    load("tr4de_trade_timeframe", setTimeframeTags);
+    load("tao_trade_liquidity_tags", setLiquidityTags);
+    load("tao_trade_entry_tags", setEntryTags);
+    load("tao_trade_timeframe", setTimeframeTags);
   }, []);
 
   /* Capital des comptes actifs — base du pourcentage de variation quand la
@@ -1186,10 +1186,10 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
             </span>
           }
         >
-          {t("dash.tr4deScore")}
+          {t("dash.taoScore")}
         </SectionTitle>
 
-        <div className="tr4de-dash-score" style={{
+        <div className="tao-dash-score" style={{
           display:"grid", gridTemplateColumns:"minmax(330px,400px) minmax(0,1fr)",
           gap:12, alignItems:"stretch",
         }}>

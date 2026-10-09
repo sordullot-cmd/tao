@@ -30,7 +30,7 @@ import { firmBrandId } from "@/lib/accountBrand";
 import { resolveAccountRules, type AccountRules } from "@/lib/propFirmRules";
 import { tradeInstant, type DatedTrade } from "@/lib/tradeOrder";
 
-export const CONTRACTS_KEY = "tr4de_account_contracts";
+export const CONTRACTS_KEY = "tao_account_contracts";
 export const CONTRACTS_CLOUD_KEY = "account_contracts";
 
 /** Un retrait effectivement demandé, avec ce que l'utilisateur en sait. */

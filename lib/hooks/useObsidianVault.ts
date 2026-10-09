@@ -34,9 +34,9 @@ import {
   type VaultMode,
 } from "@/lib/notes/vaultFs";
 
-const INDEX_KEY = "tr4de_obsidian_index";
-const AUTO_KEY = "tr4de_obsidian_autosync";
-const LAST_KEY = "tr4de_obsidian_last_sync";
+const INDEX_KEY = "tao_obsidian_index";
+const AUTO_KEY = "tao_obsidian_autosync";
+const LAST_KEY = "tao_obsidian_last_sync";
 
 /** Cadence de fond : attrape les modifications faites dans Obsidian. */
 const POLL_MS = 90_000;
@@ -54,7 +54,7 @@ function loadIndex(): SyncIndex {
     }
   } catch {
     /* index illisible : on repart de zéro, les fichiers seront retrouvés par
-       leur `tr4de-id` */
+       leur `tao-id` */
   }
   return emptyIndex();
 }

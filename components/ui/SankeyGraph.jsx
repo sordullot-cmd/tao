@@ -279,10 +279,10 @@ export default function SankeyGraph({
           tour à opacité nulle pendant son délai — et rend `opacity` à la forme
           dès l'entrée terminée. */}
       <style>{`
-        @keyframes tr4de-sankeygraph-in { from { opacity: 0 } to { opacity: 1 } }
-        .tr4de-sankeygraph-part { animation: tr4de-sankeygraph-in 460ms var(--ease-out, ease) backwards }
+        @keyframes tao-sankeygraph-in { from { opacity: 0 } to { opacity: 1 } }
+        .tao-sankeygraph-part { animation: tao-sankeygraph-in 460ms var(--ease-out, ease) backwards }
         @media (prefers-reduced-motion: reduce) {
-          .tr4de-sankeygraph-part { animation: none }
+          .tao-sankeygraph-part { animation: none }
         }
       `}</style>
 
@@ -299,7 +299,7 @@ export default function SankeyGraph({
         {layout.links.map((band, i) => (
           <path
             key={`ribbon-${band.id}`}
-            className="tr4de-sankeygraph-part"
+            className="tao-sankeygraph-part"
             d={band.path}
             fill={tint(band.color, RIBBON_TINT)}
             opacity={linkDimmed(band) ? RIBBON_OFF : RIBBON}
@@ -350,7 +350,7 @@ export default function SankeyGraph({
         return (
           <div
             key={`label-${n.id}`}
-            className="tr4de-sankeygraph-part"
+            className="tao-sankeygraph-part"
             /* Le nom est une cible de survol au même titre que le ruban : c'est
                souvent lui qu'on vise, et une branche fine n'offre que 3 px de
                haut à la souris. */

@@ -23,7 +23,7 @@ export interface RecordSettings {
   showClicks: boolean;
 }
 
-export const RECORD_SETTINGS_KEY = "tr4de_record_settings";
+export const RECORD_SETTINGS_KEY = "tao_record_settings";
 
 export const DEFAULT_RECORD_SETTINGS: RecordSettings = {
   dir: "",
@@ -55,7 +55,7 @@ export function readRecordSettings(): RecordSettings {
   }
 }
 
-const CHANGE_EVENT = "tr4de:record-settings";
+const CHANGE_EVENT = "tao:record-settings";
 
 export function writeRecordSettings(next: RecordSettings): RecordSettings {
   const clean = normalizeRecordSettings(next);

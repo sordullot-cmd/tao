@@ -5,11 +5,11 @@ import { ComplianceRule, RULE_LOCK_MS } from "@/lib/compliance";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
 
-const RULES_KEY = "tr4de_compliance_rules";
-const WEBHOOK_KEY = "tr4de_compliance_webhook";
-const RULES_EVENT = "tr4de:compliance-rules-changed";
+const RULES_KEY = "tao_compliance_rules";
+const WEBHOOK_KEY = "tao_compliance_webhook";
+const RULES_EVENT = "tao:compliance-rules-changed";
 // Flag de seed (une seule fois) — voir seedDefaultRules().
-const SEED_KEY = "tr4de_compliance_seeded_v1";
+const SEED_KEY = "tao_compliance_seeded_v1";
 
 function readRules(): ComplianceRule[] {
   try {

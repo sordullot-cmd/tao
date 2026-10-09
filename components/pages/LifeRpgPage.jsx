@@ -2,7 +2,7 @@
 
 /**
  * LifeRpgPage — « Objectifs » dans la navigation (anciennement « Quête de soi »,
- * nom conservé dans les clés de stockage `tr4de_life_rpg*` et le nom du fichier).
+ * nom conservé dans les clés de stockage `tao_life_rpg*` et le nom du fichier).
  *
  * TROIS OBJECTIFS DE L'ANNÉE, pas un de plus. La page ne présente plus une
  * dizaine de catégories de vie mais exactement trois cartes : les trois combats
@@ -965,7 +965,7 @@ export default function LifeRpgPage() {
           par XP) pour que chaque objectif garde sa place dans la page. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <SectionTitle size="sm">Mes {MAX_YEAR_GOALS} objectifs {YEAR}</SectionTitle>
-        <div className="tr4de-rpg-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${MAX_YEAR_GOALS}, minmax(0, 1fr))`, gap: 12, alignItems: "start" }}>
+        <div className="tao-rpg-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${MAX_YEAR_GOALS}, minmax(0, 1fr))`, gap: 12, alignItems: "start" }}>
             {categories.slice(0, MAX_YEAR_GOALS).map((cat, i) => (
               <YearGoalCard key={cat.id} cat={cat} rank={i + 1} year={YEAR}
                 stepsEnabled={stepsEnabledOf(cat)}
@@ -1039,16 +1039,16 @@ export default function LifeRpgPage() {
           au clavier : sans lui, tabuler dessus déplacerait le focus sur un
           bouton invisible. */}
       <style>{`
-        @media (max-width: 1180px) { .tr4de-rpg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
-        @media (max-width: 760px)  { .tr4de-rpg-grid { grid-template-columns: 1fr !important; } }
-        .tr4de-linked-goal-x { opacity: 0; transition: opacity var(--dur-fast, .12s) var(--ease-out, ease); }
-        .tr4de-linked-goal:hover .tr4de-linked-goal-x,
-        .tr4de-linked-goal-x:focus-visible { opacity: 1; }
-        @media (hover: none) { .tr4de-linked-goal-x { opacity: 1; } }
-        .tr4de-year-goal-actions { opacity: 0; transition: opacity var(--dur-fast, .12s) var(--ease-out, ease); }
-        .tr4de-year-goal:hover .tr4de-year-goal-actions,
-        .tr4de-year-goal-actions:focus-within { opacity: 1; }
-        @media (hover: none) { .tr4de-year-goal-actions { opacity: 1; } }
+        @media (max-width: 1180px) { .tao-rpg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+        @media (max-width: 760px)  { .tao-rpg-grid { grid-template-columns: 1fr !important; } }
+        .tao-linked-goal-x { opacity: 0; transition: opacity var(--dur-fast, .12s) var(--ease-out, ease); }
+        .tao-linked-goal:hover .tao-linked-goal-x,
+        .tao-linked-goal-x:focus-visible { opacity: 1; }
+        @media (hover: none) { .tao-linked-goal-x { opacity: 1; } }
+        .tao-year-goal-actions { opacity: 0; transition: opacity var(--dur-fast, .12s) var(--ease-out, ease); }
+        .tao-year-goal:hover .tao-year-goal-actions,
+        .tao-year-goal-actions:focus-within { opacity: 1; }
+        @media (hover: none) { .tao-year-goal-actions { opacity: 1; } }
       `}</style>
     </div>
   );
@@ -1139,7 +1139,7 @@ function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = 
     }
   };
   return (
-    <div className="tr4de-year-goal"
+    <div className="tao-year-goal"
       /* `overflow: visible` contre le réglage par défaut de CARD : le menu
          « Ajouter un objectif » s'ouvre en position absolue sous son
          déclencheur et serait sinon coupé par le bord de la carte. */
@@ -1164,7 +1164,7 @@ function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = 
         {/* Boutons modifier / supprimer : masqués, révélés au survol de la
             carte (règles dans le <style> de la page, comme la croix qui retire
             un objectif — le focus clavier et le tactile les rouvrent). */}
-        <div className="tr4de-year-goal-actions" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+        <div className="tao-year-goal-actions" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
           <button onClick={onEdit} title="Modifier" aria-label={`Modifier ${cat.label}`} style={iconBtnSm()}><Pencil size={14} strokeWidth={1.75} /></button>
           {onDelete && <button onClick={onDelete} title="Supprimer" aria-label={`Supprimer ${cat.label}`} style={iconBtnSm()}><Trash2 size={14} strokeWidth={1.75} /></button>}
         </div>
@@ -1256,7 +1256,7 @@ function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = 
               const reached = g.pct >= 100;
               const negative = g.rawPct < 0;
               return (
-                <div key={g.id} className="tr4de-linked-goal">
+                <div key={g.id} className="tao-linked-goal">
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                     {!g.pctOnly && (
@@ -1268,7 +1268,7 @@ function YearGoalCard({ cat, rank, year, xp, habits, steps = [], stepsEnabled = 
                          affichée en permanence, faisait de la liste un
                          formulaire de suppression. */
                       <button onClick={() => onDetachObjective(g.id)} title="Retirer de cette catégorie" aria-label={`Retirer « ${g.label} » de cette catégorie`}
-                        className="tr4de-linked-goal-x"
+                        className="tao-linked-goal-x"
                         style={{ ...iconBtnSm(), width: 18, height: 18, pointerEvents: "auto" }}>
                         <X size={12} strokeWidth={2} />
                       </button>

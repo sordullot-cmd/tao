@@ -87,7 +87,7 @@ const TICK_MS = 30 * 1000;
 const ALL_DAY_ANCHOR_H = 9;
 
 // Rappels déjà sonnés, gardés d'une session à l'autre.
-const FIRED_STORAGE_KEY = "tr4de_agenda_fired";
+const FIRED_STORAGE_KEY = "tao_agenda_fired";
 // Passé ce délai après l'évènement, plus rien ne peut le faire re-sonner : la
 // mémoire n'a plus de raison de le retenir.
 const FIRED_TTL_MS = 24 * 60 * 60 * 1000;

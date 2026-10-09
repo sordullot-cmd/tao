@@ -4,7 +4,7 @@
  * Porté de `lib/connectors/enablebanking.ts` de l'app patrimoine. Le flux et les
  * appels à l'API sont repris tels quels ; la persistance change : l'original
  * écrivait dans Postgres via Drizzle sans notion d'utilisateur (app mono-compte),
- * tr4de écrit dans Supabase et rattache chaque session à son `user_id`, protégé
+ * tao écrit dans Supabase et rattache chaque session à son `user_id`, protégé
  * par RLS (migration 033).
  *
  * Flux complet :

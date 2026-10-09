@@ -39,7 +39,7 @@ import type { DayLog, Segment } from "@/lib/activity/engine";
 
 /* ─── Ce poste ───────────────────────────────────────────────────────────── */
 
-const DEVICE_KEY = "tr4de_activity_device";
+const DEVICE_KEY = "tao_activity_device";
 
 interface DeviceStamp {
   id: string;

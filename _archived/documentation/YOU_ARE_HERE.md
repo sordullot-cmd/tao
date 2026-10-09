@@ -91,7 +91,7 @@ Date       Symbol  Direction  Entry    Exit     P&L     Qty
 
 ### To Use Your Own CSV
 1. Export trades from your broker as CSV
-2. Place file in e:\tr4de\ folder (same location as sample_trades.csv)
+2. Place file in e:\tao\ folder (same location as sample_trades.csv)
 3. Click "📥 Import Trades"
 4. Select your file and import
 
@@ -180,7 +180,7 @@ Each person gets their own instance:
 
 ### Start Servers (if needed)
 ```bash
-cd e:\tr4de
+cd e:\tao
 npm run dev
 ```
 

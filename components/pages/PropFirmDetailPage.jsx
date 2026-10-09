@@ -167,14 +167,14 @@ export default function PropFirmDetailPage({
   React.useEffect(() => {
     const byId = new Map();
     try {
-      const raw = localStorage.getItem("tr4de_strategies") || localStorage.getItem("apex_strategies");
+      const raw = localStorage.getItem("tao_strategies") || localStorage.getItem("apex_strategies");
       const list = raw ? JSON.parse(raw) : [];
       (Array.isArray(list) ? list : []).forEach((s) => { if (s?.id) byId.set(s.id, s); });
     } catch {}
     (strategies || []).forEach((s) => { if (s?.id) byId.set(s.id, s); });
     setStrategyDefs(Array.from(byId.values()));
     try {
-      const raw = localStorage.getItem("tr4de_trade_strategies");
+      const raw = localStorage.getItem("tao_trade_strategies");
       setTradeStrategyMap(raw ? JSON.parse(raw) : {});
     } catch {}
   }, [strategies]);

@@ -12,7 +12,7 @@ import { Download, X } from "lucide-react";
  *   discret en bas-gauche (dismissible 7 jours via localStorage)
  */
 
-const DISMISS_KEY = "tr4de_pwa_install_dismissed";
+const DISMISS_KEY = "tao_pwa_install_dismissed";
 const DISMISS_DAYS = 7;
 const DISMISS_MS = DISMISS_DAYS * 24 * 60 * 60 * 1000;
 

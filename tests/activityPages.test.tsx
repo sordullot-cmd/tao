@@ -92,7 +92,7 @@ describe("page Activité (journée)", () => {
       date: today, awayMs: 0, updatedAt: Date.now(),
       segments: [
         { s: at(0), e: at(40), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
-        { s: at(40), e: at(60), app: "Chrome", label: "GitHub", title: "PR · github.com/tr4de", cat: "dev" },
+        { s: at(40), e: at(60), app: "Chrome", label: "GitHub", title: "PR · github.com/tao", cat: "dev" },
       ],
     });
     render(<ActivityPage setPage={vi.fn()} />);
@@ -326,7 +326,7 @@ describe("page Catégories & règles", () => {
 
   it("réordonne les catégories au glisser-déposer", () => {
     const { container } = render(<ActivityRulesPage setPage={vi.fn()} />);
-    const rows = () => [...container.querySelectorAll(".tr4de-cat-row")];
+    const rows = () => [...container.querySelectorAll(".tao-cat-row")];
     // Dans une ligne : la pastille de couleur, puis le nom (un bouton qui
     // devient un champ au clic).
     const names = () => rows().map(r => (r.querySelectorAll("button")[1]?.textContent || "").trim());
@@ -343,7 +343,7 @@ describe("page Catégories & règles", () => {
        fait que recevoir. Rendre la ligne `draggable` au `pointerdown` ne
        marchait pas dans un vrai navigateur — le `mousedown` suit de trop près
        pour qu'un rendu React ait posé l'attribut. */
-    fireEvent.dragStart(third.querySelector(".tr4de-cat-grip")!);
+    fireEvent.dragStart(third.querySelector(".tao-cat-grip")!);
     fireEvent.dragOver(rows()[0], { clientY: 0 });
     fireEvent.drop(rows()[0]);
     expect(names().indexOf(label)).toBe(1);
@@ -351,7 +351,7 @@ describe("page Catégories & règles", () => {
 
     // « Non classé » ferme la liste quoi qu'il arrive : elle n'a pas de poignée.
     const last = rows()[rows().length - 1];
-    expect(last.querySelector(".tr4de-cat-grip")).toBeNull();
+    expect(last.querySelector(".tao-cat-grip")).toBeNull();
   });
 
   it("propose de classer les applications inconnues", () => {

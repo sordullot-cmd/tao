@@ -43,7 +43,7 @@ interface TabBarProps {
 export default function TabBar({ items, activeId, onSelect, moreOpen = false }: TabBarProps) {
   return (
     <nav
-      className="tr4de-tabbar"
+      className="tao-tabbar"
       aria-label="Navigation principale"
       style={{
         position: "fixed",
@@ -75,7 +75,7 @@ export default function TabBar({ items, activeId, onSelect, moreOpen = false }: 
           <button
             key={item.id}
             type="button"
-            className="tr4de-tab"
+            className="tao-tab"
             data-active={active ? "" : undefined}
             aria-current={active && item.id !== "more" ? "page" : undefined}
             aria-label={item.label}
@@ -108,7 +108,7 @@ export default function TabBar({ items, activeId, onSelect, moreOpen = false }: 
                  une destination — on n'y « est » jamais —, donc il ne prend
                  jamais l'état actif, il reste une cible constante. */
               <span
-                className="tr4de-tab-fab"
+                className="tao-tab-fab"
                 style={{
                   display: "grid",
                   placeItems: "center",

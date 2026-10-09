@@ -574,7 +574,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
 
   // Favoris brokers : localStorage = cache rapide, Supabase = source de vérité.
   const [favoriteBrokers, setFavoriteBrokers] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("tr4de_favorite_brokers") || "[]"); }
+    try { return JSON.parse(localStorage.getItem("tao_favorite_brokers") || "[]"); }
     catch { return []; }
   });
 
@@ -597,7 +597,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
         if (cancelled) return;
         const list = Array.isArray(data?.favorite_brokers) ? data.favorite_brokers : [];
         setFavoriteBrokers(list);
-        try { localStorage.setItem("tr4de_favorite_brokers", JSON.stringify(list)); } catch {}
+        try { localStorage.setItem("tao_favorite_brokers", JSON.stringify(list)); } catch {}
       } catch (e) { console.error("⚠️ load favorite_brokers failed:", e?.message || e); }
     };
     load();
@@ -609,7 +609,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
   const toggleFavoriteBroker = (id) => {
     setFavoriteBrokers((prev) => {
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      try { localStorage.setItem("tr4de_favorite_brokers", JSON.stringify(next)); } catch {}
+      try { localStorage.setItem("tao_favorite_brokers", JSON.stringify(next)); } catch {}
       // Push vers Supabase (upsert sur user_id UNIQUE)
       if (user?.id) {
         const supabase = createClient();
@@ -956,7 +956,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
         // Les trades sont écrits en base : on continue malgré tout.
         console.error("Relecture des trades impossible :", fetchError);
       } else if (allUserTrades && allUserTrades.length > 0) {
-        localStorage.setItem("tr4de_trades", JSON.stringify(allUserTrades));
+        localStorage.setItem("tao_trades", JSON.stringify(allUserTrades));
         /* `storage` ne se déclenche PAS dans l'onglet qui écrit : sans cet
            événement, l'app n'affiche les trades importés qu'au rechargement. */
         window.dispatchEvent(new CustomEvent("trades-refreshed", { detail: { trades: allUserTrades } }));
@@ -971,7 +971,12 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
 
       if (setAccounts) setAccounts(updatedAccounts || []);
 
-      setTargetIds([]);
+      /* La destination est GARDÉE, seuls les fichiers partent. Vider `targetIds`
+         sans vider `target` laissait le sélecteur afficher un compte que plus
+         rien ne visait : bouton éteint, et rechoisir la même entrée ne
+         relançait pas la présélection — l'écran paraissait gelé. Le second
+         relevé va presque toujours au même compte, et l'anti-doublons couvre
+         un réimport du même fichier. */
       setFiles([]);
       setPasteText("");
       setError("");
@@ -994,8 +999,8 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
       );
       setLoading(false);
 
-      /* On RESTE sur la page. Elle est repartie vierge (destination et fichiers
-         vidés) et le compte rendu est affiché : importer un second relevé
+      /* On RESTE sur la page. Les fichiers sont vidés, la destination tenue, et
+         le compte rendu est affiché : importer un second relevé
          s'enchaîne sans avoir à revenir. Partir tout seul vers la liste des
          trades emportait aussi le compte rendu avant qu'on ait fini de le lire,
          et coûtait un aller-retour dès qu'il y avait un deuxième fichier. */

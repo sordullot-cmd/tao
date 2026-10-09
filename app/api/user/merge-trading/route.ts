@@ -6,7 +6,7 @@ import { createMergeCode, verifyMergeCode } from "@/lib/accountMerge";
  * POST /api/user/merge-trading
  *
  *   { action: "code" }   → émet un code de transfert pour le compte connecté
- *   { code: "tr4de-…", scope?: "trading" | "all" }
+ *   { code: "tao-…", scope?: "trading" | "all" }
  *                        → rapatrie le trading (ou tout) du compte émetteur
  *                          dans le compte connecté
  *

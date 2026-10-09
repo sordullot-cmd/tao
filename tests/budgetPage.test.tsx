@@ -3,7 +3,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 /* La page Budget vient d'une autre app (Tailwind + react-query + API bancaire) ;
-   elle a été réécrite dans l'idiome de tr4de. Ce test garde les règles de
+   elle a été réécrite dans l'idiome de tao. Ce test garde les règles de
    calcul qui font la valeur de la page — le reste (couleurs, marges) n'a pas à
    être figé par un test. */
 const cloudStore = new Map<string, unknown>();

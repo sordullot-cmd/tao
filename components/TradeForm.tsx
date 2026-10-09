@@ -209,7 +209,7 @@ export default function TradeForm({
       // 5. Link trade to strategy if selected
       if (selectedStrategy) {
         const tradeIdKey = `${entryTime.split("T")[0]}${symbol}${entryPrice}`;
-        const savedTradeStrategies = localStorage.getItem("tr4de_trade_strategies");
+        const savedTradeStrategies = localStorage.getItem("tao_trade_strategies");
         const tradeStrategies = savedTradeStrategies ? JSON.parse(savedTradeStrategies) : {};
         
         if (!tradeStrategies[tradeIdKey]) {
@@ -222,7 +222,7 @@ export default function TradeForm({
           tradeStrategies[tradeIdKey].push(strategyId);
         }
         
-        localStorage.setItem("tr4de_trade_strategies", JSON.stringify(tradeStrategies));
+        localStorage.setItem("tao_trade_strategies", JSON.stringify(tradeStrategies));
       }
 
       // 6. Déclencher l'analyse IA

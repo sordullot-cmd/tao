@@ -42,7 +42,7 @@ const assets: Asset[] = [
   { id: "l1", name: "Home loan", type: "loan", balance: -1_000, institution: null, updatedAt: null },
 ];
 
-const VIEW_KEY = "tr4de_patrimoine_view";
+const VIEW_KEY = "tao_patrimoine_view";
 
 /* Un relevé ancien, avec son brut : net 2 000 → 3 000 (+1 000), brut 3 500 →
    4 000 (+500). Deux variations DIFFÉRENTES, sans quoi le test ne dirait pas

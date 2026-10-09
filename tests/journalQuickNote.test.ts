@@ -17,7 +17,7 @@ vi.mock("@/lib/supabase/client", () => ({
 
 import { appendDailyNote, mergeNote } from "@/lib/journal/quickNote";
 
-const KEY = "tr4de_daily_notes";
+const KEY = "tao_daily_notes";
 const DAY = "2026-03-12";
 const at = new Date("2026-03-12T14:32:00");
 

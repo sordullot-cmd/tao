@@ -215,13 +215,13 @@ export default function ApexChatNew({
     setInput("");
   };
 
-  // Lit les notes de la page Productivité (clé "tr4de_notes") au moment de
+  // Lit les notes de la page Productivité (clé "tao_notes") au moment de
   // construire le payload. On garde le contenu textuel + tags, on retire les
   // images data URLs (trop lourdes pour le LLM) — seul leur compte est envoyé.
   const readProductivityNotes = () => {
     if (typeof window === "undefined") return [];
     try {
-      const raw = window.localStorage.getItem("tr4de_notes");
+      const raw = window.localStorage.getItem("tao_notes");
       const arr = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(arr)) return [];
       return arr.map((n: any) => ({

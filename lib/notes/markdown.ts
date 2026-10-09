@@ -6,7 +6,7 @@
  * FICHIER, celle qu'Obsidian sait lire et éditer :
  *
  *   ---
- *   tr4de-id: "1755424521234.5671"
+ *   tao-id: "1755424521234.5671"
  *   created: 2026-08-17T10:12:33.000Z
  *   updated: 2026-08-17T11:40:02.000Z
  *   pinned: true
@@ -16,9 +16,9 @@
  *
  *   Le texte de la note, tel qu'écrit dans l'app.
  *
- *   <!-- tr4de:attachments -->
+ *   <!-- tao:attachments -->
  *   ![](attachments/ma-note-1.jpg)
- *   <!-- /tr4de:attachments -->
+ *   <!-- /tao:attachments -->
  *
  * Deux règles gouvernent tout le fichier, parce que la synchro est
  * bidirectionnelle et doit CONVERGER (sinon chaque passe croit voir une
@@ -62,8 +62,8 @@ export const ATTACH_DIR = "attachments";
 /** Sous-dossier des copies de sauvegarde en cas de conflit. */
 export const CONFLICT_DIR = "conflicts";
 
-const ATTACH_OPEN = "<!-- tr4de:attachments -->";
-const ATTACH_CLOSE = "<!-- /tr4de:attachments -->";
+const ATTACH_OPEN = "<!-- tao:attachments -->";
+const ATTACH_CLOSE = "<!-- /tao:attachments -->";
 
 const TAG_RE = /#([a-zA-Z][a-zA-Z0-9_-]*)/g;
 
@@ -155,7 +155,7 @@ function buildFrontMatter(note: Note): string {
   const now = new Date().toISOString();
   const lines = [
     "---",
-    `tr4de-id: ${yamlQuote(String(note.id))}`,
+    `tao-id: ${yamlQuote(String(note.id))}`,
     `created: ${isoOr(note.createdAt, isoOr(note.updatedAt, now))}`,
     `updated: ${isoOr(note.updatedAt, now)}`,
   ];
@@ -195,7 +195,8 @@ function parseFrontMatter(block: string): ParsedFrontMatter {
     ) {
       value = value.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
     }
-    if (key === "tr4de-id" || key === "tr4de_id") out.id = value || null;
+    // `tr4de-id` : les notes écrites avant le renommage, déjà dans le coffre.
+    if (key === "tao-id" || key === "tao_id" || key === "tr4de-id" || key === "tr4de_id") out.id = value || null;
     else if (key === "created") out.created = value || null;
     else if (key === "updated") out.updated = value || null;
     else if (key === "pinned") out.pinned = value === "true" || value === "yes";

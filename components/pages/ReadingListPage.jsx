@@ -18,7 +18,7 @@ import { WRITING_BG as DA_WRITING_BG } from "@/lib/ui/tokens";
 
 const T = { ...BaseT };
 
-const STORAGE_KEY = "tr4de_books";
+const STORAGE_KEY = "tao_books";
 
 const STATUSES = [
   { id: "toRead",  label: "À lire",     color: GREY.grey700 },
@@ -55,7 +55,7 @@ export default function ReadingListPage() {
   const [expandedId, setExpandedId] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [filter, setFilter] = useState("all"); // all | toRead | reading | done
-  const [showIntro, setShowIntro] = useCloudState("tr4de_reading_show_intro", "reading_show_intro", true);
+  const [showIntro, setShowIntro] = useCloudState("tao_reading_show_intro", "reading_show_intro", true);
 
 
   const save = () => {
@@ -111,7 +111,7 @@ export default function ReadingListPage() {
           style={{ marginLeft: "auto", padding: "8px 16px", height: 34, minHeight: 34, borderRadius: 999, background: T.text, border: `1px solid ${T.text}`, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <Plus size={14} strokeWidth={2} /> Ajouter un livre
         </button>
-        <div id="tr4de-page-header-slot" />
+        <div id="tao-page-header-slot" />
       </div>
 
       {/* Importance de la lecture */}

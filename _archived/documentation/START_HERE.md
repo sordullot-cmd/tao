@@ -55,7 +55,7 @@ http://localhost:3000
 
 ### Command-Line Test
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-advanced.js
 ```
 
@@ -160,7 +160,7 @@ Press: Ctrl + R
 Get-Process node | Stop-Process -Force
 
 # Restart
-cd e:\tr4de
+cd e:\tao
 npm run dev
 ```
 

@@ -8,6 +8,7 @@ import PWAInstall from "@/components/PWAInstall";
 import OfflineBadge from "@/components/OfflineBadge";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { THEME_KEY } from "@/lib/ui/theme";
+import { LEGACY_STORAGE_SCRIPT } from "@/lib/legacyStorage";
 
 // OpenAI Sans (locale) — variable utilisée dans toute l'app : --font-geist-sans
 const openAISans = localFont({
@@ -116,6 +117,8 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* En premier : le script de thème lit déjà les clés renommées (cf. lib/legacyStorage). */}
+        <script dangerouslySetInnerHTML={{ __html: LEGACY_STORAGE_SCRIPT }} />
         {/* Thème + accent appliqués avant l'hydratation (évite le flash de couleur).
             Script brut plutôt que next/script : `beforeInteractive` re-rend une balise
             <script> côté client, que React ignore en émettant un warning. Ici le script
@@ -130,7 +133,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `try{var r=document.documentElement,m=localStorage.getItem(${JSON.stringify(THEME_KEY)});`
               + `if(m==='dark'||m==='light')r.dataset.theme=m;`
-              + `var h=/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,a=localStorage.getItem('tr4de_accent'),b=localStorage.getItem('tr4de_accent_2');if(a&&h.test(a))r.style.setProperty('--accent',a);if(b&&h.test(b))r.style.setProperty('--accent-2',b);}catch(e){}`,
+              + `var h=/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i,a=localStorage.getItem('tao_accent'),b=localStorage.getItem('tao_accent_2');if(a&&h.test(a))r.style.setProperty('--accent',a);if(b&&h.test(b))r.style.setProperty('--accent-2',b);}catch(e){}`,
           }}
         />
       </head>

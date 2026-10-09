@@ -6,7 +6,7 @@
 
 #### **Agent Files** (lib/agents/)
 ```
-e:\tr4de\lib\agents\
+e:\tao\lib\agents\
 ├── types.ts ........................ All TypeScript types & interfaces
 ├── patternAnalyst.ts .............. Pattern detection engine  
 ├── psychologyMonitor.ts ........... Psychological error detector
@@ -17,7 +17,7 @@ e:\tr4de\lib\agents\
 
 #### **API Routes** (app/api/agents/)
 ```
-e:\tr4de\app\api\agents\
+e:\tao\app\api\agents\
 ├── analyze\
 │   └── route.ts ................... Triggered after CSV import [AUTOMATIC]
 ├── session-report\
@@ -28,7 +28,7 @@ e:\tr4de\app\api\agents\
 
 #### **React Components** (components/)
 ```
-e:\tr4de\components\
+e:\tao\components\
 ├── AgentNotifications.tsx ......... Beautiful alert notifications
 ├── AgentChat.tsx .................. Interactive chat interface
 └── TradeImportModal.jsx (MODIFIED). Now triggers agent analysis
@@ -36,7 +36,7 @@ e:\tr4de\components\
 
 #### **Documentation**
 ```
-e:\tr4de\
+e:\tao\
 ├── APEXAGENT_DONE.md ............. ← You just read this!
 ├── APEXAGENT_START_HERE.md ....... Step-by-step integration
 ├── APEXAGENT_SETUP.md ............ Detailed technical setup
@@ -46,7 +46,7 @@ e:\tr4de\
 
 #### **Layout Integration**
 ```
-e:\tr4de\app\
+e:\tao\app\
 └── layout-client.tsx ............. Server layout wrapper
 ```
 
@@ -283,7 +283,7 @@ const interval = setInterval(pollNotifications, 30000); // ← 30 seconds
 
 ### **.env.local location:**
 ```
-e:\tr4de\.env.local ← Create this file in root
+e:\tao\.env.local ← Create this file in root
 ```
 
 **Add these:**
@@ -300,7 +300,7 @@ SUPABASE_SERVICE_ROLE_KEY=... # (optional) for database
 
 ### Start Dev Server
 ```bash
-cd e:\tr4de
+cd e:\tao
 npm run dev
 ```
 

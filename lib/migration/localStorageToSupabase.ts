@@ -62,7 +62,7 @@ export async function migrateLocalStorageToSupabase(userId) {
 
     // ==================== NOTES DE TRADES ====================
     try {
-      const savedNotes = localStorage.getItem("tr4de_trade_notes");
+      const savedNotes = localStorage.getItem("tao_trade_notes");
       if (savedNotes) {
         const notes = JSON.parse(savedNotes);
         const noteIds = Object.keys(notes);
@@ -143,7 +143,7 @@ export async function migrateLocalStorageToSupabase(userId) {
       "\n💡 Conseil: Vous pouvez maintenant vider le localStorage"
     );
     console.log("localStorage.removeItem('apex_strategies')");
-    console.log("localStorage.removeItem('tr4de_trade_notes')");
+    console.log("localStorage.removeItem('tao_trade_notes')");
 
     return { success: true, migratedCount };
   } catch (error) {

@@ -2,7 +2,7 @@
 
 /**
  * Flux iCal ajoutés par l'utilisateur (emploi du temps universitaire en premier
- * lieu), lus par tr4de sans passer par Google.
+ * lieu), lus par tao sans passer par Google.
  *
  * Pourquoi ce chemin existe alors que Google Agenda sait s'abonner à une URL :
  * l'API Calendar, elle, ne le sait pas. `calendarList.insert` n'accepte que
@@ -23,16 +23,16 @@ import {
 } from "@/lib/icsCategories";
 import { GCAL_COLORS } from "@/lib/gcalColors";
 
-export const ICS_FEEDS_KEY = "tr4de_ics_feeds";
+export const ICS_FEEDS_KEY = "tao_ics_feeds";
 export const ICS_FEEDS_CLOUD_KEY = "ics_feeds";
 
-export const ICS_KIND_COLORS_KEY = "tr4de_ics_kind_colors";
+export const ICS_KIND_COLORS_KEY = "tao_ics_kind_colors";
 export const ICS_KIND_COLORS_CLOUD_KEY = "ics_kind_colors";
 
-export const ICS_EVENT_COLORS_KEY = "tr4de_ics_event_colors";
+export const ICS_EVENT_COLORS_KEY = "tao_ics_event_colors";
 export const ICS_EVENT_COLORS_CLOUD_KEY = "ics_event_colors";
 
-export const ICS_HIDDEN_KEY = "tr4de_ics_hidden";
+export const ICS_HIDDEN_KEY = "tao_ics_hidden";
 export const ICS_HIDDEN_CLOUD_KEY = "ics_hidden";
 
 /** Palette d'attribution : couleurs distinctes de la teinte par défaut des évènements Google. */

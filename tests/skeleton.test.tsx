@@ -13,7 +13,7 @@ import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
 function resetStorage() {
   cleanup();
   localStorage.clear();
-  localStorage.setItem("tr4de_lang", "en");
+  localStorage.setItem("tao_lang", "en");
 }
 
 describe("Squelettes de chargement", () => {
@@ -30,10 +30,10 @@ describe("Squelettes de chargement", () => {
   });
 
   it("laisse passer la classe de l'appelant sans perdre la sienne", () => {
-    const { container } = render(<Skeleton className="tr4de-custom" />);
+    const { container } = render(<Skeleton className="tao-custom" />);
     const bar = container.firstElementChild as HTMLElement;
     expect(bar.classList.contains("anim-shimmer")).toBe(true);
-    expect(bar.classList.contains("tr4de-custom")).toBe(true);
+    expect(bar.classList.contains("tao-custom")).toBe(true);
   });
 
   it("tait les barres au lecteur d'écran et n'annonce l'attente qu'une fois", () => {
@@ -97,7 +97,7 @@ describe("useFirstLoad", () => {
   beforeEach(resetStorage);
 
   it("montre le squelette quand rien n'est en cache et que le cloud n'a pas répondu", () => {
-    render(<Probe hydrated={false} keys={["tr4de_x"]} />);
+    render(<Probe hydrated={false} keys={["tao_x"]} />);
     expect(verdict()).toBe("true");
   });
 
@@ -106,15 +106,15 @@ describe("useFirstLoad", () => {
        frame. Brancher le squelette sur la seule hydratation cloud
        remplacerait des données réelles par des barres grises — un
        ralentissement perçu, pas un chargement. */
-    localStorage.setItem("tr4de_x", JSON.stringify([{ id: 1 }]));
-    render(<Probe hydrated={false} keys={["tr4de_x"]} />);
+    localStorage.setItem("tao_x", JSON.stringify([{ id: 1 }]));
+    render(<Probe hydrated={false} keys={["tao_x"]} />);
     expect(verdict()).toBe("false");
   });
 
   it("s'efface dès que l'hydratation est terminée", () => {
-    const { rerender } = render(<Probe hydrated={false} keys={["tr4de_x"]} />);
+    const { rerender } = render(<Probe hydrated={false} keys={["tao_x"]} />);
     expect(verdict()).toBe("true");
-    rerender(<Probe hydrated keys={["tr4de_x"]} />);
+    rerender(<Probe hydrated keys={["tao_x"]} />);
     expect(verdict()).toBe("false");
   });
 
@@ -122,8 +122,8 @@ describe("useFirstLoad", () => {
     /* Une page qui lit journée + habitudes n'a pas besoin des deux pour
        montrer quelque chose : le squelette est réservé à l'écran totalement
        vide. */
-    localStorage.setItem("tr4de_habits", JSON.stringify([]));
-    render(<Probe hydrated={false} keys={["tr4de_planner", "tr4de_habits"]} />);
+    localStorage.setItem("tao_habits", JSON.stringify([]));
+    render(<Probe hydrated={false} keys={["tao_planner", "tao_habits"]} />);
     expect(verdict()).toBe("false");
   });
 
@@ -131,10 +131,10 @@ describe("useFirstLoad", () => {
     /* Sinon la première écriture locale — celle que fait la page elle-même en
        s'initialisant — ferait disparaître le squelette au milieu de
        l'attente, puis le contenu sauterait à l'arrivée du cloud. */
-    const { rerender } = render(<Probe hydrated={false} keys={["tr4de_x"]} />);
+    const { rerender } = render(<Probe hydrated={false} keys={["tao_x"]} />);
     expect(verdict()).toBe("true");
-    act(() => { localStorage.setItem("tr4de_x", JSON.stringify([1])); });
-    rerender(<Probe hydrated={false} keys={["tr4de_x"]} />);
+    act(() => { localStorage.setItem("tao_x", JSON.stringify([1])); });
+    rerender(<Probe hydrated={false} keys={["tao_x"]} />);
     expect(verdict()).toBe("true");
   });
 
@@ -147,7 +147,7 @@ describe("useFirstLoad", () => {
     const spy = vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
       throw new Error("SecurityError");
     });
-    render(<Probe hydrated={false} keys={["tr4de_x"]} />);
+    render(<Probe hydrated={false} keys={["tao_x"]} />);
     expect(verdict()).toBe("false");
     spy.mockRestore();
   });

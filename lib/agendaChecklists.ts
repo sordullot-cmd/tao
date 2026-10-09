@@ -31,7 +31,7 @@ export interface ChecklistItem {
 
 export type ChecklistStore = Record<string, ChecklistItem[]>;
 
-export const EVENT_CHECKLISTS_KEY = "tr4de_event_checklists";
+export const EVENT_CHECKLISTS_KEY = "tao_event_checklists";
 export const EVENT_CHECKLISTS_CLOUD_KEY = "event_checklists";
 
 /** Identifiant d'étape. Le hasard suffit : rien ne les compare entre listes. */

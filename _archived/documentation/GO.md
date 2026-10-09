@@ -37,7 +37,7 @@ http://localhost:3000
 
 ### Option B: Test in Terminal
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-advanced.js
 ```
 

@@ -19,7 +19,7 @@
    # Choose: "📄 Format Générique"
 
 # 5️⃣ SELECT FILE: sample_trades.csv
-   # Click and browse to: e:\tr4de\sample_trades.csv
+   # Click and browse to: e:\tao\sample_trades.csv
 
 # 6️⃣ PREVIEW TRADES
    # Modal shows first 5 trades
@@ -44,7 +44,7 @@
 # ============================================
 
 # Test CSV parsing:
-   cd e:\tr4de
+   cd e:\tao
    node test-csv.js
 
 # Expected output:

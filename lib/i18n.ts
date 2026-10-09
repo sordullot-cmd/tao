@@ -1,5 +1,5 @@
 // Ultra-light i18n helper.
-// Stocke la langue dans localStorage ("tr4de_lang"), émet "tr4de:lang-changed"
+// Stocke la langue dans localStorage ("tao_lang"), émet "tao:lang-changed"
 // pour que les composants puissent forcer un re-render.
 // Utilisation :
 //   import { t, useLang } from "@/lib/i18n";
@@ -22,7 +22,7 @@ export type Lang = "fr" | "en";
 export function getLang(): Lang {
   if (typeof window === "undefined") return "fr";
   try {
-    const v = localStorage.getItem("tr4de_lang");
+    const v = localStorage.getItem("tao_lang");
     if (v === "en" || v === "fr") return v;
     return "fr";
   } catch { return "fr"; }
@@ -31,8 +31,8 @@ export function getLang(): Lang {
 export function setLang(lang: Lang) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem("tr4de_lang", lang);
-    window.dispatchEvent(new CustomEvent("tr4de:lang-changed", { detail: { lang } }));
+    localStorage.setItem("tao_lang", lang);
+    window.dispatchEvent(new CustomEvent("tao:lang-changed", { detail: { lang } }));
   } catch {}
 }
 
@@ -41,11 +41,11 @@ export function useLang(): Lang {
   const [lang, setLocal] = useState<Lang>(() => getLang());
   useEffect(() => {
     const onChange = () => setLocal(getLang());
-    window.addEventListener("tr4de:lang-changed", onChange);
+    window.addEventListener("tao:lang-changed", onChange);
     window.addEventListener("storage", (e) => {
-      if (e.key === "tr4de_lang") onChange();
+      if (e.key === "tao_lang") onChange();
     });
-    return () => window.removeEventListener("tr4de:lang-changed", onChange);
+    return () => window.removeEventListener("tao:lang-changed", onChange);
   }, []);
   return lang;
 }
@@ -154,8 +154,8 @@ const FR: Dict = {
   "dash.recentTrades": "Trades récents",
   "dash.emotionalImpact": "Impact émotionnel",
   "dash.emotionalImpactSub": "Effet des émotions sur le P&L",
-  "dash.tr4deScore": "tao score",
-  "dash.tr4deScoreSub": "Évaluation globale de ta performance",
+  "dash.taoScore": "tao score",
+  "dash.taoScoreSub": "Évaluation globale de ta performance",
   "dash.globalScore": "Score global",
   "dash.perfByDay": "Performance par jour",
   "dash.perfByDayDesc": "Winrate, gain/perte moyens et espérance selon le jour de la semaine",
@@ -1062,7 +1062,7 @@ const FR: Dict = {
   // La fenêtre demandée n'est pas celle couverte (historique trop court, ou
   // repli sur les deux derniers points) : annoncer son horizon serait faux.
   "patrimoine.changeShort": "sur l'historique affiché",
-  "patrimoine.budgetHint": "Le budget de tr4de est un budget prévisionnel : tu y répartis ton revenu mensuel à la main, il ne lit aucune opération bancaire.",
+  "patrimoine.budgetHint": "Le budget de tao est un budget prévisionnel : tu y répartis ton revenu mensuel à la main, il ne lit aucune opération bancaire.",
   "patrimoine.openBudget": "Ouvrir le budget",
   // Classes d'actifs
   "patrimoine.class.investments": "Investissements",
@@ -1086,7 +1086,7 @@ const FR: Dict = {
   "patrimoine.type.other": "Autre",
   // Page Actifs
   "patrimoine.assets.title": "Actifs",
-  "patrimoine.assets.subtitle": "Saisis ici tout ce qui compose ton patrimoine : PEA, assurance-vie, livrets, immobilier, crypto, et les crédits en cours. L'app d'origine importait aussi des relevés PDF pour récupérer les valeurs automatiquement — tr4de n'a pas de lecteur de relevés, tout se met à jour à la main.",
+  "patrimoine.assets.subtitle": "Saisis ici tout ce qui compose ton patrimoine : PEA, assurance-vie, livrets, immobilier, crypto, et les crédits en cours. L'app d'origine importait aussi des relevés PDF pour récupérer les valeurs automatiquement — tao n'a pas de lecteur de relevés, tout se met à jour à la main.",
   "patrimoine.assets.listTitle": "Mes actifs",
   "patrimoine.assets.add": "Ajouter un actif",
   "patrimoine.assets.editTitle": "Modifier l'actif",
@@ -1334,7 +1334,7 @@ const FR: Dict = {
   "spending.txMore": "Voir les {n} autres opérations",
   "spending.txLess": "Voir moins",
   "spending.merchants": "Enseignes",
-  "spending.merchantsEmpty": "Aucune enseigne reconnue sur la période. Un paiement chez un commerçant que tr4de ne connaît pas reste compté dans sa catégorie, mais ne peut pas être classé ici.",
+  "spending.merchantsEmpty": "Aucune enseigne reconnue sur la période. Un paiement chez un commerçant que tao ne connaît pas reste compté dans sa catégorie, mais ne peut pas être classé ici.",
   "spending.merchantsHint": "Seules les enseignes reconnues apparaissent ici : le libellé d'un paiement par carte porte la date et le numéro de terminal, deux passages chez le même commerçant n'y ont donc pas la même chaîne. Un regroupement sur le libellé brut ne compterait rien.",
   // Détail d'une ligne de titres
   "patrimoine.holding.notFound": "Ligne introuvable. Elle a peut-être été supprimée.",
@@ -1344,7 +1344,7 @@ const FR: Dict = {
   "patrimoine.holding.weight": "Poids du compte",
   "patrimoine.holding.cost": "Prix de revient",
   "patrimoine.holding.movements": "Mouvements",
-  "patrimoine.holding.noMovements": "Pas d'historique des mouvements : il venait des avis d'opéré du courtier, que tr4de ne reçoit pas.",
+  "patrimoine.holding.noMovements": "Pas d'historique des mouvements : il venait des avis d'opéré du courtier, que tao ne reçoit pas.",
   "patrimoine.loading": "Récupération des comptes connectés…",
   // Connexion bancaire (Enable Banking, DSP2, lecture seule)
   "nav.patrimoineBank": "Compte courant",
@@ -1550,8 +1550,8 @@ const EN: Dict = {
   "dash.recentTrades": "Recent Trades",
   "dash.emotionalImpact": "Emotional Impact",
   "dash.emotionalImpactSub": "Effect of emotions on P&L",
-  "dash.tr4deScore": "tao score",
-  "dash.tr4deScoreSub": "Overall performance rating",
+  "dash.taoScore": "tao score",
+  "dash.taoScoreSub": "Overall performance rating",
   "dash.globalScore": "Overall score",
   "dash.perfByDay": "Performance by day",
   "dash.perfByDayDesc": "Win rate, average win/loss and expectancy by day of the week",
@@ -2446,7 +2446,7 @@ const EN: Dict = {
   "patrimoine.period.6M": "6 months",
   "patrimoine.period.1A": "1 year",
   "patrimoine.changeShort": "over the shown history",
-  "patrimoine.budgetHint": "The tr4de budget is a planned budget: you split your monthly income by hand, it does not read any bank transactions.",
+  "patrimoine.budgetHint": "The tao budget is a planned budget: you split your monthly income by hand, it does not read any bank transactions.",
   "patrimoine.openBudget": "Open the budget",
   // Asset classes
   "patrimoine.class.investments": "Investments",
@@ -2470,7 +2470,7 @@ const EN: Dict = {
   "patrimoine.type.other": "Other",
   // Assets page
   "patrimoine.assets.title": "Assets",
-  "patrimoine.assets.subtitle": "Enter everything your net worth is made of: brokerage and savings accounts, life insurance, property, crypto, and any outstanding loans. The original app also imported PDF statements to pull values automatically — tr4de has no statement reader, so everything is updated by hand.",
+  "patrimoine.assets.subtitle": "Enter everything your net worth is made of: brokerage and savings accounts, life insurance, property, crypto, and any outstanding loans. The original app also imported PDF statements to pull values automatically — tao has no statement reader, so everything is updated by hand.",
   "patrimoine.assets.listTitle": "My assets",
   "patrimoine.assets.add": "Add an asset",
   "patrimoine.assets.editTitle": "Edit asset",
@@ -2707,7 +2707,7 @@ const EN: Dict = {
   "spending.txMore": "Show {n} more transactions",
   "spending.txLess": "Show less",
   "spending.merchants": "Merchants",
-  "spending.merchantsEmpty": "No recognised brand over this period. A payment at a shop tr4de does not know still counts in its category, but cannot be ranked here.",
+  "spending.merchantsEmpty": "No recognised brand over this period. A payment at a shop tao does not know still counts in its category, but cannot be ranked here.",
   "spending.merchantsHint": "Only recognised brands show up here: a card payment label carries the date and the terminal number, so two visits to the same shop never share the same string. Grouping on the raw label would count nothing.",
   // Holding detail
   "patrimoine.holding.notFound": "Holding not found. It may have been deleted.",
@@ -2717,7 +2717,7 @@ const EN: Dict = {
   "patrimoine.holding.weight": "Share of account",
   "patrimoine.holding.cost": "Cost basis total",
   "patrimoine.holding.movements": "Transactions",
-  "patrimoine.holding.noMovements": "No transaction history: it came from broker contract notes, which tr4de does not receive.",
+  "patrimoine.holding.noMovements": "No transaction history: it came from broker contract notes, which tao does not receive.",
   "patrimoine.loading": "Fetching connected accounts…",
   // Bank connection (Enable Banking, PSD2, read-only)
   "nav.patrimoineBank": "Current account",

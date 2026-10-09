@@ -388,7 +388,7 @@ export async function syncVault(
       updatedAt: iso(mtime ?? parseTime(file.parsed.updated) ?? now),
       pinned: file.parsed.pinned,
     };
-    // On réécrit le fichier avec son `tr4de-id` : sans lui, la note serait
+    // On réécrit le fichier avec son `tao-id` : sans lui, la note serait
     // réimportée en double le jour où l'index local est perdu.
     const canon = noteToMarkdown(note, []);
     let hash = file.hash;

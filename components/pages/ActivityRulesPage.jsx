@@ -326,7 +326,7 @@ export default function ActivityRulesPage({ setPage }) {
     const url = URL.createObjectURL(new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `tr4de-activite-${today}.csv`;
+    a.download = `tao-activite-${today}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -441,10 +441,10 @@ export default function ActivityRulesPage({ setPage }) {
           l’anneau, les légendes, les listes de choix.
         </span>
         <style>{
-          ".tr4de-cat-del,.tr4de-cat-grip{opacity:0;transition:opacity 120ms var(--ease-out, ease)}" +
-          ".tr4de-cat-row:hover .tr4de-cat-del,.tr4de-cat-row:focus-within .tr4de-cat-del," +
-          ".tr4de-cat-row:hover .tr4de-cat-grip{opacity:1}" +
-          "@media (hover:none){.tr4de-cat-del,.tr4de-cat-grip{opacity:1}}"
+          ".tao-cat-del,.tao-cat-grip{opacity:0;transition:opacity 120ms var(--ease-out, ease)}" +
+          ".tao-cat-row:hover .tao-cat-del,.tao-cat-row:focus-within .tao-cat-del," +
+          ".tao-cat-row:hover .tao-cat-grip{opacity:1}" +
+          "@media (hover:none){.tao-cat-del,.tao-cat-grip{opacity:1}}"
         }</style>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {categories.map(c => {
@@ -457,7 +457,7 @@ export default function ActivityRulesPage({ setPage }) {
             return (
               <div
                 key={c.id}
-                className="tr4de-cat-row"
+                className="tao-cat-row"
                 onDragOver={(e) => {
                   if (!drag.from || drag.from === c.id || movable === false) return;
                   e.preventDefault();
@@ -488,7 +488,7 @@ export default function ActivityRulesPage({ setPage }) {
               >
                 {movable ? (
                   <span
-                    className="tr4de-cat-grip"
+                    className="tao-cat-grip"
                     title="Glisser pour déplacer"
                     draggable
                     onDragStart={(e) => {
@@ -499,7 +499,7 @@ export default function ActivityRulesPage({ setPage }) {
                         /* Sans ça, le fantôme du glissé serait la poignée seule
                            — quatre points gris qui ne disent pas ce qu'on
                            déplace. On lui donne la ligne entière. */
-                        const row = e.currentTarget.closest(".tr4de-cat-row");
+                        const row = e.currentTarget.closest(".tao-cat-row");
                         if (row) e.dataTransfer.setDragImage(row, 12, row.getBoundingClientRect().height / 2);
                       } catch { /* Safari */ }
                     }}
@@ -580,7 +580,7 @@ export default function ActivityRulesPage({ setPage }) {
                   {/* « Non classé » n'est pas une catégorie mais la file d'attente
                       du classement : la retirer n'aurait aucun sens. */}
                   {c.id !== "other" && (
-                    <span className="tr4de-cat-del">
+                    <span className="tao-cat-del">
                       <IconButton
                         tone="danger"
                         aria-label={`Supprimer « ${categoryLabel(c.id)} »`}

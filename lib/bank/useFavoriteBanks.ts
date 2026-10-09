@@ -27,7 +27,7 @@ export interface FavoriteBank {
   logo: string | null;
 }
 
-const LOCAL_KEY = "tr4de_bank_favorites";
+const LOCAL_KEY = "tao_bank_favorites";
 const CLOUD_KEY = "bank_favorites";
 
 interface FavoriteBanks {

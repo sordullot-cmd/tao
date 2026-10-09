@@ -80,7 +80,7 @@ const EMPTY: State = {
    à comprendre qu'une simple attente.
    ------------------------------------------------------------------------ */
 
-const CACHE_KEY = "tr4de_bank_accounts";
+const CACHE_KEY = "tao_bank_accounts";
 const CACHE_VERSION = 1;
 
 /** Fenêtre pendant laquelle on ne rappelle même pas la banque. Elle couvre la

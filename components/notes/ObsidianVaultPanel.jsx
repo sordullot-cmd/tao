@@ -103,7 +103,7 @@ export default function ObsidianVaultPanel({ vault }) {
           className={syncing ? "anim-spin" : undefined}
           style={{ color: T.textMut }}
         />
-        <span className="tr4de-notes-newbtn-label">{triggerLabel}</span>
+        <span className="tao-notes-newbtn-label">{triggerLabel}</span>
         {tone && <StateDot tone={tone} />}
       </button>
 
@@ -149,7 +149,7 @@ export default function ObsidianVaultPanel({ vault }) {
             <>
               <div style={{ fontSize: 12, lineHeight: 1.55, color: T.textSub }}>
                 Choisis le dossier de ton vault où déposer les notes (par exemple
-                <span style={{ color: T.text }}> Vault/tr4de</span>). Chaque note y devient un
+                <span style={{ color: T.text }}> Vault/tao</span>). Chaque note y devient un
                 fichier <code style={{ background: FIELD_BG, padding: "1px 5px", borderRadius: "var(--radius-field)" }}>.md</code>,
                 images et schémas dans <span style={{ color: T.text }}>attachments/</span>. Tes
                 modifications faites dans Obsidian reviennent dans l&apos;app.

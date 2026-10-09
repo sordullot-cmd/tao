@@ -23,7 +23,7 @@ export default function LoadingScreen({ label, fullscreen = true }: Props) {
       }}
     >
       <style>{`
-        @keyframes tr4de-loading-dot {
+        @keyframes tao-loading-dot {
           0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
           40%           { opacity: 1;    transform: translateY(-3px); }
         }
@@ -67,7 +67,7 @@ export default function LoadingScreen({ label, fullscreen = true }: Props) {
               borderRadius: "50%",
               background: "var(--color-text, #0D0D0D)",
               display: "inline-block",
-              animation: "tr4de-loading-dot 1.2s ease-in-out infinite",
+              animation: "tao-loading-dot 1.2s ease-in-out infinite",
               animationDelay: `${i * 0.18}s`,
             }}
           />

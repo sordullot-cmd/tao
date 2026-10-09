@@ -78,7 +78,7 @@ import PatrimoineAssetPage from "@/components/pages/PatrimoineAssetPage";
 beforeEach(() => {
   cleanup();
   cloudStore.clear();
-  cloudStore.set("tr4de_patrimoine", { assets: [], history: [] });
+  cloudStore.set("tao_patrimoine", { assets: [], history: [] });
 });
 
 /** La ligne de relevé qui porte ce texte — c'est elle qu'on interroge, et non la

@@ -4,7 +4,7 @@
  * Ajouter une ligne au journal du jour, depuis n'importe où.
  *
  * Écrit dans la MÊME entrée que la page Journal : `daily_session_notes`, une
- * ligne par date, doublée dans `tr4de_daily_notes` côté local (cf.
+ * ligne par date, doublée dans `tao_daily_notes` côté local (cf.
  * `lib/hooks/useDailySessionNotes.ts`). Le popover de la barre d'état écrit ici,
  * et la page Journal relit la même chose — sans quoi on aurait un second
  * journal, invisible depuis le premier.
@@ -29,7 +29,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { getLocalDateString } from "@/lib/dateUtils";
 
-const LOCAL_KEY = "tr4de_daily_notes";
+const LOCAL_KEY = "tao_daily_notes";
 
 export interface AppendResult {
   ok: boolean;

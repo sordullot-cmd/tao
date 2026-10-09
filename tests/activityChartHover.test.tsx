@@ -218,7 +218,7 @@ describe("détail au survol de l'anneau (Journée)", () => {
       updatedAt: Date.now(),
       segments: [
         { s: at(0), e: at(60), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
-        { s: at(60), e: at(80), app: "Chrome", label: "GitHub", title: "PR · github.com/tr4de", cat: "dev" },
+        { s: at(60), e: at(80), app: "Chrome", label: "GitHub", title: "PR · github.com/tao", cat: "dev" },
         { s: at(80), e: at(110), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
       ],
     });
@@ -322,7 +322,7 @@ describe("détail au survol des figures de la semaine (Journée)", () => {
       date: getLocalDateString(monday), awayMs: 0, updatedAt: Date.now(),
       segments: [
         { s: at(9), e: at(11), app: "Code", label: "VS Code", title: "engine.ts", cat: "dev" },
-        { s: at(11), e: at(12), app: "Chrome", label: "GitHub", title: "PR · github.com/tr4de", cat: "dev" },
+        { s: at(11), e: at(12), app: "Chrome", label: "GitHub", title: "PR · github.com/tao", cat: "dev" },
         { s: at(14), e: at(15), app: "Chrome", label: "Youtube", title: "Compilation de chats - YouTube", cat: "fun" },
       ],
     });

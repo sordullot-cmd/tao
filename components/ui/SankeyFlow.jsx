@@ -145,10 +145,10 @@ export default function SankeyFlow({
   return (
     <div ref={ref} style={{ width: "100%", position: "relative" }}>
       <style>{`
-        @keyframes tr4de-sankey-in { from { opacity: 0 } to { opacity: 1 } }
-        .tr4de-sankey-band { animation: tr4de-sankey-in 460ms var(--ease-out, ease) both }
+        @keyframes tao-sankey-in { from { opacity: 0 } to { opacity: 1 } }
+        .tao-sankey-band { animation: tao-sankey-in 460ms var(--ease-out, ease) both }
         @media (prefers-reduced-motion: reduce) {
-          .tr4de-sankey-band { animation: none }
+          .tao-sankey-band { animation: none }
         }
       `}</style>
 
@@ -184,7 +184,7 @@ export default function SankeyFlow({
         {layout.bands.map((band, i) => (
           <path
             key={`ribbon-${keyOf(band)}`}
-            className="tr4de-sankey-band"
+            className="tao-sankey-band"
             d={band.path}
             fill={`url(#${uid}-${i})`}
             opacity={dimmed(band) ? DIMMED : 1}
@@ -263,7 +263,7 @@ export default function SankeyFlow({
         return (
           <div
             key={`label-${keyOf(band)}`}
-            className="tr4de-sankey-band"
+            className="tao-sankey-band"
             onMouseEnter={() => setHover(keyOf(band))}
             onMouseLeave={() => setHover(null)}
             style={{

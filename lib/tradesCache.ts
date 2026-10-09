@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
  * Re-synchronise le cache local des trades après une mutation qui les touche
  * (suppression d'un compte, suppression d'un import, import de données…).
  *
- * C'est `localStorage.tr4de_trades` qui alimente le hook useTrades() dans toute
+ * C'est `localStorage.tao_trades` qui alimente le hook useTrades() dans toute
  * l'app, et l'événement `trades-refreshed` qui pousse la nouvelle liste aux
  * composants déjà montés. Sans ces deux-là, l'UI continue d'afficher les trades
  * supprimés jusqu'à un rechargement complet de la page — et le hook, qui
@@ -25,7 +25,7 @@ export async function refreshTradesCache(userId: string): Promise<unknown[] | nu
       .order("created_at", { ascending: false });
     if (error) throw error;
     const fresh = data || [];
-    try { localStorage.setItem("tr4de_trades", JSON.stringify(fresh)); } catch {}
+    try { localStorage.setItem("tao_trades", JSON.stringify(fresh)); } catch {}
     try {
       window.dispatchEvent(new CustomEvent("trades-refreshed", { detail: { trades: fresh } }));
     } catch {}

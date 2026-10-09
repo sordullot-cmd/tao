@@ -296,9 +296,11 @@ export function CheckBox({ on = false, partial = false, color = T.text, size = 1
 /** @param {{ label: import("react").ReactNode, color?: string, checked?: boolean, onClick?: Function, title?: string }} props */
 export function CheckChip({ label, color = undefined, checked = false, onClick = undefined, title = undefined }) {
   const ink = checked ? (color || T.text) : T.textSub;
-  /* La coche s'adapte à l'aplat : les teintes de tag sont les principales de la
-     charte, et un blanc figé disparaît sur les plus claires. */
-  const glyph = checked && color && luminance(color) > 0.45 ? T.text : T.onSolid;
+  /* Coche toujours blanche. L'ancien seuil de luminance (0,45) faisait basculer
+     le vert Owl (0,453) seul en noir : une puce sur cinq dépareillée, pour un
+     gain de contraste nul à l'œil. Aucun appelant ne passe de jaune, la seule
+     teinte où le blanc décrocherait vraiment. */
+  const glyph = T.onSolid;
   return (
     <button
       type="button" role="checkbox" aria-checked={checked}
@@ -398,12 +400,12 @@ export function Field({ label, hint = undefined, error = undefined, required = f
 }
 
 /** Grille de champs : N colonnes en large, une seule dès que c'est étroit
- *  (le repli est dans globals.css, sur `.tr4de-field-grid`). */
+ *  (le repli est dans globals.css, sur `.tao-field-grid`). */
 /** @param {{ columns?: number, gap?: number, children?: import("react").ReactNode, style?: import("react").CSSProperties }} props */
 export function FieldGrid({ columns = 2, gap = 14, children = undefined, style = undefined }) {
   return (
     <div
-      className="tr4de-field-grid"
+      className="tao-field-grid"
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
@@ -567,7 +569,7 @@ export function Modal({
         /* Une fois la fenêtre déplacée, plus d'animation : elle vit dans le même
            `transform` que la position, et l'animation l'écraserait — la fenêtre
            sauterait au centre le temps de jouer. */
-        className={`tr4de-modal-card ${moved ? "" : (closing ? "anim-modal-out" : "anim-modal")}`}
+        className={`tao-modal-card ${moved ? "" : (closing ? "anim-modal-out" : "anim-modal")}`}
         style={{
           width: `min(${width}px, 100%)`,
           maxHeight,

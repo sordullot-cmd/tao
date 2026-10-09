@@ -15,7 +15,7 @@ import { mergeUnique } from "@/lib/utils/tradeDedup";
  *  - Bouton "Connecter" (OAuth) — affiché seulement si features.apiSync
  *  - Documentation broker (liens externes)
  *
- * L'import déclenche `tr4de:trades-imported` event que les pages écoutent
+ * L'import déclenche `tao:trades-imported` event que les pages écoutent
  * déjà pour rafraîchir l'affichage.
  */
 
@@ -39,10 +39,10 @@ export default function BrokersPage() {
       if (!trades || trades.length === 0) {
         throw new Error("Aucun trade trouvé dans ce fichier.");
       }
-      const existing = JSON.parse(localStorage.getItem("tr4de_trades") || "[]");
+      const existing = JSON.parse(localStorage.getItem("tao_trades") || "[]");
       const { merged, report } = mergeUnique(existing, trades);
-      localStorage.setItem("tr4de_trades", JSON.stringify(merged));
-      window.dispatchEvent(new CustomEvent("tr4de:trades-imported", { detail: { count: report.added.length } }));
+      localStorage.setItem("tao_trades", JSON.stringify(merged));
+      window.dispatchEvent(new CustomEvent("tao:trades-imported", { detail: { count: report.added.length } }));
       const skipped = report.skipped.length;
       setFeedback(prev => ({
         ...prev,

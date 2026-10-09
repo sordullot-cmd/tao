@@ -63,7 +63,7 @@ export default function MultiAccountSelector({
           cible tactile ≥44px pour l'accessibilité. */}
       <style>{`
         @media (pointer: coarse) {
-          .tr4de-acct-iconbtn { opacity: 1 !important; width: 44px !important; height: 44px !important; }
+          .tao-acct-iconbtn { opacity: 1 !important; width: 44px !important; height: 44px !important; }
         }
       `}</style>
       {/* Trigger */}
@@ -197,7 +197,7 @@ export default function MultiAccountSelector({
                   {onDeleteAccount && (
                     <button
                       data-del-btn
-                      className="tr4de-acct-iconbtn"
+                      className="tao-acct-iconbtn"
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDelete(account); }}
                       title={t("accounts.deleteTip")}

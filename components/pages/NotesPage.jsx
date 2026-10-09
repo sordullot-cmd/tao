@@ -50,7 +50,7 @@ const NotePreview = dynamic(() => import("@/components/notes/NotePreview"), {
 
 const T = { ...BaseT };
 
-const STORAGE_KEY = "tr4de_notes";
+const STORAGE_KEY = "tao_notes";
 
 /* Pastille d'action de la barre d'outils de l'éditeur (épingler, dessiner,
    image, supprimer). Ronde et de 32 px comme les commandes des autres pages de
@@ -820,7 +820,7 @@ export default function NotesPage() {
         {/* La MÊME grille que la page : `minmax(240px, 320px) 1fr`. Une largeur
             fixe à sa place décalerait l'éditeur au moment où les notes
             arrivent — le pire endroit, puisque c'est là que l'œil se pose. */}
-        <div className="tr4de-notes-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 12, flex: 1, minHeight: 0 }}>
+        <div className="tao-notes-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 12, flex: 1, minHeight: 0 }}>
           <div style={{ ...CARD, padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
             {/* Champ de recherche, dans son bandeau à filet dilué. */}
             <div style={{ padding: 12, borderBottom: `1px solid ${HAIRLINE}` }}>
@@ -849,10 +849,10 @@ export default function NotesPage() {
   return (
     <div
       style={{ display: "flex", flexDirection: "column", gap: 16, height: "calc(100vh - 120px)", fontFamily: "var(--font-sans)" }}
-      className="anim-1 tr4de-notes-page"
+      className="anim-1 tao-notes-page"
     >
       {/* Les reprises responsive de cette page vivent dans globals.css avec
-          celles des autres pages (`.tr4de-notes-*`) : elles y étaient déjà, et
+          celles des autres pages (`.tao-notes-*`) : elles y étaient déjà, et
           une feuille <style> embarquée ici en portait une seconde version aux
           seuils différents — les deux se contredisaient entre 767 et 900 px. */}
 
@@ -872,17 +872,17 @@ export default function NotesPage() {
           }}
         >
           <Plus size={13} strokeWidth={1.75} />
-          <span className="tr4de-notes-newbtn-label">Nouvelle note</span>
+          <span className="tao-notes-newbtn-label">Nouvelle note</span>
         </button>
         </div>
-        <div id="tr4de-page-header-slot" />
+        <div id="tao-page-header-slot" />
       </div>
 
-      <div className="tr4de-notes-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 12, flex: 1, minHeight: 0 }}>
+      <div className="tao-notes-layout" style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 12, flex: 1, minHeight: 0 }}>
         {/* Left : list — carte de la nouvelle DA (ombre douce, coins 12, aucune
             bordure). Les séparations internes passent par le trait dilué
             `HAIRLINE` : une bordure franche redécouperait la carte en boîtes. */}
-        <div className="tr4de-notes-list" style={{ ...CARD, padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div className="tao-notes-list" style={{ ...CARD, padding: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* Search */}
           <div style={{ padding: 12, borderBottom: `1px solid ${HAIRLINE}` }}>
             <div style={{ position: "relative" }}>
@@ -963,7 +963,7 @@ export default function NotesPage() {
         </div>
 
         {/* Right : editor */}
-        <div className="tr4de-notes-editor" style={{ ...CARD, position: "relative", padding: selected ? 0 : 20, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div className="tao-notes-editor" style={{ ...CARD, position: "relative", padding: selected ? 0 : 20, display: "flex", flexDirection: "column", minHeight: 0 }}>
           {selected ? (
             <>
               <div style={{ padding: "10px 14px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>

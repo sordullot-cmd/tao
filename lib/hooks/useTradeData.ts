@@ -286,7 +286,7 @@ export function useTrades() {
 
     // Charger localStorage IMMÉDIATEMENT
     try {
-      const stored = localStorage.getItem("tr4de_trades");
+      const stored = localStorage.getItem("tao_trades");
       const cachedTrades = stored ? JSON.parse(stored) : [];
       setTrades(cachedTrades);
       setLoading(false); // ✅ UI prête instantanément
@@ -331,7 +331,7 @@ export function useTrades() {
         
         // Sauvegarder dans localStorage
         const tradesArray = data || [];
-        localStorage.setItem("tr4de_trades", JSON.stringify(tradesArray));
+        localStorage.setItem("tao_trades", JSON.stringify(tradesArray));
       } catch (err) {
         console.error("❌ Erreur sync trades:", getErrorMessage(err) || JSON.stringify(err));
       }
@@ -351,7 +351,7 @@ export function useTrades() {
 
     // ✅ NEW: Listen for storage changes from other tabs/windows
     const handleStorageChange = (e) => {
-      if (e.key === "tr4de_trades" && e.newValue) {
+      if (e.key === "tao_trades" && e.newValue) {
         try {
           const updatedTrades = JSON.parse(e.newValue);
           console.log("📡 Storage change detected - updating trades from:", updatedTrades.length);
@@ -393,7 +393,7 @@ export function useTrades() {
         
         // Sauvegarder dans localStorage
         setTrades(prev => {
-          localStorage.setItem("tr4de_trades", JSON.stringify(prev));
+          localStorage.setItem("tao_trades", JSON.stringify(prev));
           return prev;
         });
         
@@ -420,7 +420,7 @@ export function useTrades() {
         // Mettre à jour avec l'ID Supabase si nouveau
         if (data?.[0]?.id && data[0].id !== newTrade.id) {
           setTrades(prev => prev.map(t => t.id === newTrade.id ? data[0] : t));
-          localStorage.setItem("tr4de_trades", JSON.stringify(trades.map(t => t.id === newTrade.id ? data[0] : t)));
+          localStorage.setItem("tao_trades", JSON.stringify(trades.map(t => t.id === newTrade.id ? data[0] : t)));
         }
         return data?.[0] || newTrade;
       } catch (err) {
@@ -441,7 +441,7 @@ export function useTrades() {
         // Update local state immédiatement
         setTrades(prev => {
           const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
-          localStorage.setItem("tr4de_trades", JSON.stringify(updated));
+          localStorage.setItem("tao_trades", JSON.stringify(updated));
           return updated;
         });
 
@@ -477,7 +477,7 @@ export function useTrades() {
         // Supprimer localement IMMÉDIATEMENT
         setTrades(prev => {
           const filtered = prev.filter(t => t.id !== id);
-          localStorage.setItem("tr4de_trades", JSON.stringify(filtered));
+          localStorage.setItem("tao_trades", JSON.stringify(filtered));
           console.log("✅ Trade supprimé localement, now", filtered.length, "trades");
           return filtered;
         });

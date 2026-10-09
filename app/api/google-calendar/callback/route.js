@@ -43,7 +43,7 @@ export async function GET(req) {
         <script>
           try {
             var data = ${payload};
-            localStorage.setItem('tr4de_gcal_tokens', JSON.stringify(data));
+            localStorage.setItem('tao_gcal_tokens', JSON.stringify(data));
           } catch (e) {}
           window.location.replace('/#agenda');
         </script>

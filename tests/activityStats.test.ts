@@ -23,7 +23,7 @@ const day = (segments: DayLog["segments"]): DayLog => ({ date: DATE, segments, a
 
 describe("classement", () => {
   it("classe une application de bureau connue", () => {
-    expect(classify("Code", "engine.ts — tr4de", []).category).toBe("dev");
+    expect(classify("Code", "engine.ts — tao", []).category).toBe("dev");
   });
 
   it("classe un navigateur par le titre de sa page, pas par son nom", () => {
@@ -172,7 +172,7 @@ describe("GitHub et GitHub Desktop, une seule chose", () => {
   it("réunit le site et l'application sous le même nom et la même catégorie", () => {
     /* Deux entrées de catalogue en faisaient deux lignes, deux parts et deux
        totaux à rapprocher à la main — alors qu'on travaille sur le même dépôt. */
-    const web = classifyDetailed("Arc", "PR · github.com/tr4de", []);
+    const web = classifyDetailed("Arc", "PR · github.com/tao", []);
     const app = classifyDetailed("GitHub Desktop", "", []);
     expect(web.label).toBe("GitHub");
     expect(app.label).toBe("GitHub");
@@ -191,7 +191,7 @@ describe("une chose, une seule catégorie", () => {
        la première porte le domaine dans son titre, la seconde seulement le nom.
        Le nom deviné est identique, la catégorie ne l'était pas. */
     const log = day([
-      seg([9, 0], [10, 0], "Chrome", "x", "GitHub", "PR · github.com/tr4de"),
+      seg([9, 0], [10, 0], "Chrome", "x", "GitHub", "PR · github.com/tao"),
       seg([10, 0], [10, 20], "Chrome", "x", "GitHub", "Issue #12 | GitHub"),
     ]);
     const stats = dayStats(log, DEFAULT_SETTINGS);

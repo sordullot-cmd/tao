@@ -3,7 +3,7 @@ import { t, getLang, setLang } from "@/lib/i18n";
 
 describe("i18n", () => {
   beforeEach(() => {
-    window.localStorage.removeItem("tr4de_lang");
+    window.localStorage.removeItem("tao_lang");
   });
 
   it("defaults to 'fr' when no value in localStorage", () => {
@@ -12,7 +12,7 @@ describe("i18n", () => {
 
   it("setLang persists to localStorage", () => {
     setLang("en");
-    expect(localStorage.getItem("tr4de_lang")).toBe("en");
+    expect(localStorage.getItem("tao_lang")).toBe("en");
     expect(getLang()).toBe("en");
   });
 

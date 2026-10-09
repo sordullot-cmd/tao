@@ -86,7 +86,7 @@ export function remindersToGoogle(list: ReminderValue[]): {
  * directement n'a pas de rappel du tout. Sans repli, ces évènements-là ne
  * notifiaient jamais rien.
  */
-export const DEFAULT_REMINDERS_STORAGE_KEY = "tr4de_agenda_default_reminders";
+export const DEFAULT_REMINDERS_STORAGE_KEY = "tao_agenda_default_reminders";
 export const DEFAULT_REMINDERS_CLOUD_KEY = "agenda_default_reminders";
 
 /** Repli d'usine, appliqué tant que l'utilisateur n'a rien choisi. */

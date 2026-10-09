@@ -38,7 +38,7 @@ import NoteEditor from "@/components/revisions/NoteEditor";
 import Workshop from "@/components/revisions/Workshop";
 import DeckBrowser from "@/components/revisions/DeckBrowser";
 
-const STORAGE_KEY = "tr4de_srs";
+const STORAGE_KEY = "tao_srs";
 
 /** Couleurs attribuées aux paquets créés automatiquement à l'import, dans
  *  l'ordre : deux paquets voisins ne se retrouvent pas de la même teinte. */
@@ -83,8 +83,8 @@ function DueCounter({ value, label, color }) {
 
 export default function RevisionsPage() {
   const [raw, setRaw, srsReady] = useCloudState(STORAGE_KEY, "srs", emptyStore());
-  const [notes] = useCloudState("tr4de_notes", "notes", []);
-  const [books] = useCloudState("tr4de_books", "reading_list", []);
+  const [notes] = useCloudState("tao_notes", "notes", []);
+  const [books] = useCloudState("tao_books", "reading_list", []);
   const { pushUndo } = useUndo();
 
   const [tab, setTab] = useState("today");

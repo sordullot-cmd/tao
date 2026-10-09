@@ -124,7 +124,7 @@ export function LiveBadge({ live }) {
     }}>
       <span style={{
         width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: dotRing(color),
-        flexShrink: 0, animation: running && !away ? "tr4de-pulse 2s ease-in-out infinite" : "none",
+        flexShrink: 0, animation: running && !away ? "tao-pulse 2s ease-in-out infinite" : "none",
       }} />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{text}</span>
       {running && !away && live?.since && now > 0 && (
@@ -132,7 +132,7 @@ export function LiveBadge({ live }) {
           {fmtDur(now - live.since)}
         </span>
       )}
-      <style>{"@keyframes tr4de-pulse{0%,100%{opacity:1}50%{opacity:.35}}"}</style>
+      <style>{"@keyframes tao-pulse{0%,100%{opacity:1}50%{opacity:.35}}"}</style>
     </div>
   );
 }

@@ -162,8 +162,8 @@ export default function CalendarPage({ trades = [], setPage }) {
         {/* Sous 900 px, sept colonnes de 158 px ne tiennent plus : la grille
             défile horizontalement d'un bloc — en-têtes et jours ensemble, pour
             qu'une colonne reste alignée avec son libellé. */}
-        <div className="tr4de-cal-scroll scroll-thin" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", padding: 16 }}>
-          <div className="tr4de-cal-inner" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="tao-cal-scroll scroll-thin" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", padding: 16 }}>
+          <div className="tao-cal-inner" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {/* En-têtes de jours */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 8 }}>
               {WEEKDAY_KEYS.map(key => (
@@ -317,7 +317,7 @@ export default function CalendarPage({ trades = [], setPage }) {
         {/* Trois mois par rangée, sans filet de séparation. La classe porte les
             reprises responsive (deux colonnes en tablette, une en mobile) —
             cf. globals.css. */}
-        <div className="tr4de-cal-year" style={{
+        <div className="tao-cal-year" style={{
           display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10,
         }}>
           {Array.from({ length: 12 }, (_, m) => <MiniMonth key={m} m={m} />)}
@@ -409,7 +409,7 @@ export default function CalendarPage({ trades = [], setPage }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 24, width: "100%" }}>
           {/* En-tête : période + montant héros à gauche, commandes à droite —
               les mêmes 34 px de haut que `StepperPill` et `PeriodPills`. */}
-          <div className="tr4de-cal-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div className="tao-cal-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, maxWidth: 364 }}>
               <Skeleton width={132} height={18} />
               <Skeleton width={216} height={31} radius={8} />
@@ -455,7 +455,7 @@ export default function CalendarPage({ trades = [], setPage }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 48, fontFamily: "var(--font-sans)" }} className="anim-1">
       <div style={{ display: "flex", flexDirection: "column", gap: 24, width: "100%" }}>
         {/* En-tête : période + P&L héros à gauche, navigation à droite */}
-        <div className="tr4de-cal-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div className="tao-cal-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, maxWidth: 364 }}>
             <span style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, textTransform: "capitalize" }}>
               {periodLabel}

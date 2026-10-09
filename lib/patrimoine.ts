@@ -2,7 +2,7 @@
  * Socle de la section Finance — patrimoine.
  *
  * Porté de l'app patrimoine, dont les pages lisaient une base Postgres alimentée
- * par une connexion bancaire (Enable Banking) et l'API Kraken. tr4de n'a ni
+ * par une connexion bancaire (Enable Banking) et l'API Kraken. tao n'a ni
  * l'une ni l'autre : la source de vérité devient un store `useCloudState`, saisi
  * à la main depuis la page « Actifs ». Toutes les pages Finance lisent ce même
  * store, ce qui remplace les six `useQuery` de l'original.
@@ -255,7 +255,7 @@ export function assetTypeKey(type: AssetType): string {
 }
 
 /** Types proposés à la saisie. `crypto` en fait partie ici — l'original le
- *  réservait au connecteur Kraken, qui n'existe pas dans tr4de. */
+ *  réservait au connecteur Kraken, qui n'existe pas dans tao. */
 export const ASSET_TYPES: AssetType[] = [
   "pea",
   "securities",
@@ -477,7 +477,7 @@ function daysBetween(a: string, b: string): number {
 
 /* ── Store ─────────────────────────────────────────────────────────────── */
 
-export const PATRIMOINE_LOCAL_KEY = "tr4de_patrimoine";
+export const PATRIMOINE_LOCAL_KEY = "tao_patrimoine";
 export const PATRIMOINE_CLOUD_KEY = "patrimoine";
 
 export const emptyStore = (): PatrimoineStore => ({ assets: [], history: [] });

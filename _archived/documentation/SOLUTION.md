@@ -73,13 +73,13 @@ Date, Account, OrderID, B/S, Contract, Product, avgPrice, FillTime, PnL, Qty, St
 1. Open http://localhost:3000
 2. Click "📥 Import Trades"
 3. Select "🏦 Export Broker"
-4. Choose: sample_trades_format2.csv (in e:\tr4de\)
+4. Choose: sample_trades_format2.csv (in e:\tao\)
 5. Should see 25 trades immediately ✅
 ```
 
 ### Option 2: Test in Terminal
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-advanced.js
 ```
 
@@ -312,8 +312,8 @@ Backend:          http://localhost:5000
 
 ### Files
 ```
-Your test file:   e:\tr4de\sample_trades_format2.csv (25 trades)
-Generic test:     e:\tr4de\sample_trades.csv (25 trades)
+Your test file:   e:\tao\sample_trades_format2.csv (25 trades)
+Generic test:     e:\tao\sample_trades.csv (25 trades)
 ```
 
 ---

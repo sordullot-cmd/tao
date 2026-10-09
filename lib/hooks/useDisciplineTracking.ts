@@ -47,7 +47,7 @@ export function useDisciplineTracking() {
 
     // ⚡ FAST PATH: Charger localStorage IMMÉDIATEMENT pour aujourd'hui (évite le flicker)
     try {
-      const stored = localStorage.getItem(`tr4de_checked_rules_${today}`);
+      const stored = localStorage.getItem(`tao_checked_rules_${today}`);
       const rulesData = stored ? JSON.parse(stored) : {};
       setDisciplineData({ [today]: rulesData });
       setLoading(false);
@@ -135,9 +135,9 @@ export function useDisciplineTracking() {
         }));
 
         // Sauvegarder dans localStorage d'abord (synchrone et immédiat)
-        const allRules = JSON.parse(localStorage.getItem(`tr4de_checked_rules_${dateStr}`) || "{}");
+        const allRules = JSON.parse(localStorage.getItem(`tao_checked_rules_${dateStr}`) || "{}");
         allRules[ruleId] = completed;
-        localStorage.setItem(`tr4de_checked_rules_${dateStr}`, JSON.stringify(allRules));
+        localStorage.setItem(`tao_checked_rules_${dateStr}`, JSON.stringify(allRules));
         console.log("✅ Sauvegardé dans localStorage");
 
         // Essayer Supabase en arrière-plan (ne pas bloquer)

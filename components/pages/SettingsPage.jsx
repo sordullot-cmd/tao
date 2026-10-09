@@ -102,7 +102,7 @@ export default function SettingsPage({ user, onBack, setPage }) {
         <p style={{ fontSize: 13, color: T.textSub, margin: "4px 0 0" }}>{t("settings.subtitle")}</p>
       </div>
 
-      <div className="tr4de-settings-grid" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 32, alignItems: "start" }}>
+      <div className="tao-settings-grid" style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 32, alignItems: "start" }}>
         {/* Left nav */}
         <SettingsNav active={active} setActive={setActive} />
 
@@ -778,12 +778,12 @@ function GlobalsSection() {
   const [timezone, setTimezone] = useState(() => {
     if (typeof window === "undefined") return "America/New_York";
     try {
-      return localStorage.getItem("tr4de_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return localStorage.getItem("tao_timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
     } catch { return "America/New_York"; }
   });
   const [currency, setCurrency] = useState(() => {
     if (typeof window === "undefined") return "USD";
-    return localStorage.getItem("tr4de_base_currency") || "USD";
+    return localStorage.getItem("tao_base_currency") || "USD";
   });
   /* `getLang()` répond déjà pour le rendu serveur : dupliquer la valeur par
      défaut ici, c'est afficher « anglais » dans le sélecteur d'une app qui
@@ -792,7 +792,7 @@ function GlobalsSection() {
   const [theme, setThemeState] = useState(() => readThemeMode());
   const [risk, setRisk] = useState(() => {
     if (typeof window === "undefined") return 100;
-    try { return parseFloat(localStorage.getItem("tr4de_risk_per_trade") || "100") || 100; } catch { return 100; }
+    try { return parseFloat(localStorage.getItem("tao_risk_per_trade") || "100") || 100; } catch { return 100; }
   });
   const [savedMsg, setSavedMsg] = useState("");
   const [loadedFromCloud, setLoadedFromCloud] = useState(false);
@@ -821,11 +821,11 @@ function GlobalsSection() {
         } else if (!cancelled) {
           if (data?.timezone) {
             setTimezone(data.timezone);
-            try { localStorage.setItem("tr4de_timezone", data.timezone); } catch {}
+            try { localStorage.setItem("tao_timezone", data.timezone); } catch {}
           }
           if (data?.base_currency) {
             setCurrency(data.base_currency);
-            try { localStorage.setItem("tr4de_base_currency", data.base_currency); } catch {}
+            try { localStorage.setItem("tao_base_currency", data.base_currency); } catch {}
           }
         }
       } catch (e) {
@@ -845,9 +845,9 @@ function GlobalsSection() {
     if (!user?.id) return;
     if (!loadedFromCloud) return;
     try {
-      localStorage.setItem("tr4de_timezone", timezone);
-      localStorage.setItem("tr4de_base_currency", currency);
-      window.dispatchEvent(new Event("tr4de:prefs-changed"));
+      localStorage.setItem("tao_timezone", timezone);
+      localStorage.setItem("tao_base_currency", currency);
+      window.dispatchEvent(new Event("tao:prefs-changed"));
     } catch {}
     const handle = setTimeout(async () => {
       try {
@@ -873,8 +873,8 @@ function GlobalsSection() {
 
   const onSave = () => {
     try {
-      localStorage.setItem("tr4de_timezone", timezone);
-      localStorage.setItem("tr4de_base_currency", currency);
+      localStorage.setItem("tao_timezone", timezone);
+      localStorage.setItem("tao_base_currency", currency);
       setSavedMsg(t("settings.prefsSaved"));
       setTimeout(() => setSavedMsg(""), 3000);
     } catch (e) { console.error(e); }
@@ -922,9 +922,9 @@ function GlobalsSection() {
       />
       <div style={{ fontSize: 11, color: T.textMut, marginTop: 4 }}>{t("settings.globals.currencyHint")}</div>
 
-      <SectionLabel mt={20}><label htmlFor="tr4de-risk">{t("settings.globals.risk")}</label></SectionLabel>
+      <SectionLabel mt={20}><label htmlFor="tao-risk">{t("settings.globals.risk")}</label></SectionLabel>
       <input
-        id="tr4de-risk"
+        id="tao-risk"
         type="number"
         min={1}
         step={10}
@@ -934,7 +934,7 @@ function GlobalsSection() {
           if (raw === "") { setRisk(""); return; }
           const n = Math.max(1, parseFloat(raw) || 0);
           setRisk(n);
-          try { localStorage.setItem("tr4de_risk_per_trade", String(n)); } catch {}
+          try { localStorage.setItem("tao_risk_per_trade", String(n)); } catch {}
         }}
         style={{ width: "100%", padding: "8px 10px", border: "none", borderRadius: "var(--radius-field)", fontSize: 13, fontFamily: "inherit", color: T.text, outline: "none", background: DA_FIELD_BG }}
       />
@@ -1089,7 +1089,7 @@ function SectionLabel({ children, mt }) {
    Pourquoi le lien est le seul moyen d'ajouter un emploi du temps : l'API Google
    Calendar ne sait pas s'abonner à une URL. `calendarList.insert` n'accepte que
    l'identifiant d'un agenda Google existant ; l'abonnement « à partir de l'URL »
-   n'existe que dans l'interface web de Google. C'est donc tr4de qui lit le flux. */
+   n'existe que dans l'interface web de Google. C'est donc tao qui lit le flux. */
 
 // Messages d'échec : le code brut de la route ne dit rien à qui colle une URL.
 // Chacun nomme la correction à faire, pas la cause technique.
@@ -1723,7 +1723,7 @@ function DataExportSection() {
       const a = document.createElement("a");
       const stamp = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `tr4de-export-${stamp}.json`;
+      a.download = `tao-export-${stamp}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1775,7 +1775,7 @@ function DataExportSection() {
       }
 
       await refreshTradesCache(user.id);
-      try { window.dispatchEvent(new CustomEvent("tr4de:accounts-changed")); } catch {}
+      try { window.dispatchEvent(new CustomEvent("tao:accounts-changed")); } catch {}
 
       setMsg({ kind: "success", text: t("settings.data.importDone").replace("{n}", String(inserted)) });
     } catch (e) {
@@ -1978,13 +1978,13 @@ function MergeAccountsSection() {
           <li>Connecte-toi à l’autre compte, ouvre Paramètres → Fusion de comptes et génère un code.</li>
           <li>Reviens sur ce compte-ci et colle le code ci-dessous.</li>
         </ol>
-        <SectionLabel><label htmlFor="tr4de-merge-code">Code de transfert</label></SectionLabel>
+        <SectionLabel><label htmlFor="tao-merge-code">Code de transfert</label></SectionLabel>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
-            id="tr4de-merge-code"
+            id="tao-merge-code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="tr4de-…"
+            placeholder="tao-…"
             autoComplete="off"
             spellCheck={false}
             style={{ ...inputStyle(), flex: "1 1 240px", minWidth: 0, fontFamily: "var(--font-mono, monospace)" }}

@@ -48,8 +48,8 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
   // Load data from localStorage on mount
   useEffect(() => {
     try {
-      // ✅ Load from CORRECT keys (tr4de_trades, not apex_trades)
-      const tradesData = localStorage.getItem('tr4de_trades');
+      // ✅ Load from CORRECT keys (tao_trades, not apex_trades)
+      const tradesData = localStorage.getItem('tao_trades');
       if (tradesData) {
         try {
           setTrades(withNetPnl(JSON.parse(tradesData)));
@@ -60,7 +60,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
         }
       }
 
-      const strategiesData = localStorage.getItem('tr4de_strategies');
+      const strategiesData = localStorage.getItem('tao_strategies');
       if (strategiesData) {
         try {
           setStrategies(JSON.parse(strategiesData));
@@ -72,19 +72,19 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
       }
 
       // Load trade-strategy mappings
-      const mappingsData = localStorage.getItem('tr4de_trade_strategies');
+      const mappingsData = localStorage.getItem('tao_trade_strategies');
       if (mappingsData) setTradeStrategiesData(JSON.parse(mappingsData));
 
-      const checkedRulesData = localStorage.getItem('tr4de_checked_rules');
+      const checkedRulesData = localStorage.getItem('tao_checked_rules');
       if (checkedRulesData) setCheckedRules(JSON.parse(checkedRulesData));
 
       // Load selected strategy ID
       const selectedId = localStorage.getItem('selectedStrategyId');
       if (selectedId) {
-        // First try tr4de_strategies, then apex_strategies
+        // First try tao_strategies, then apex_strategies
         let strats = [];
         try {
-          const stored = localStorage.getItem('tr4de_strategies');
+          const stored = localStorage.getItem('tao_strategies');
           strats = stored ? JSON.parse(stored) : [];
         } catch {
           const apexStrats = localStorage.getItem('apex_strategies');
@@ -107,15 +107,15 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
   useEffect(() => {
     const reload = () => {
       try {
-        const data = localStorage.getItem('tr4de_checked_rules');
+        const data = localStorage.getItem('tao_checked_rules');
         setCheckedRules(data ? JSON.parse(data) : {});
       } catch {}
     };
-    const onStorage = (e) => { if (e.key === 'tr4de_checked_rules') reload(); };
-    window.addEventListener('tr4de:checked-rules-changed', reload);
+    const onStorage = (e) => { if (e.key === 'tao_checked_rules') reload(); };
+    window.addEventListener('tao:checked-rules-changed', reload);
     window.addEventListener('storage', onStorage);
     return () => {
-      window.removeEventListener('tr4de:checked-rules-changed', reload);
+      window.removeEventListener('tao:checked-rules-changed', reload);
       window.removeEventListener('storage', onStorage);
     };
   }, []);

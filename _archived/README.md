@@ -1,6 +1,6 @@
 # Archived Files
 
-Ce dossier contient les fichiers non utilisés ou obsolètes du projet tr4de.
+Ce dossier contient les fichiers non utilisés ou obsolètes du projet tao.
 
 ## Structure
 

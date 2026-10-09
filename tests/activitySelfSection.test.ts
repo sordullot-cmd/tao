@@ -86,7 +86,7 @@ describe("le titre, seul canal qui survit à la relecture", () => {
   });
 
   it("ne touche au titre d'aucune autre application", () => {
-    expect(selfTitle("Code", "engine.ts — tr4de", "trading")).toBe("engine.ts — tr4de");
+    expect(selfTitle("Code", "engine.ts — tao", "trading")).toBe("engine.ts — tao");
     expect(selfTitle("Google Chrome", "Compilation de chats - YouTube", "perso"))
       .toBe("Compilation de chats - YouTube");
   });

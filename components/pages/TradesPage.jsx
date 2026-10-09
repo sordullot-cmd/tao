@@ -48,7 +48,7 @@ import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
 
 /* Tailles de page proposées sous le tableau. Le choix est mémorisé en local
-   (clé tr4de_trades_page_size). */
+   (clé tao_trades_page_size). */
 const PAGE_SIZES = [25, 50, 100, 200];
 
 /* Colonnes retirées des tableaux encastrés (journal, détail de stratégie) :
@@ -160,7 +160,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   /* Clés en v2 : l'ordre et la visibilité stockés par l'ancienne version
      l'emporteraient sur les nouveaux défauts, et la page ne ressemblerait pas à
      la maquette pour les comptes existants. Le renommage repart des défauts. */
-  const [rawColumnOrder, setRawColumnOrder] = useCloudState("tr4de_trades_columns_v2", "trades_column_order_v2", TRADE_COLUMN_IDS);
+  const [rawColumnOrder, setRawColumnOrder] = useCloudState("tao_trades_columns_v2", "trades_column_order_v2", TRADE_COLUMN_IDS);
   // Validation : tout id stocké doit appartenir à TRADE_COLUMN_IDS et toutes
   // les colonnes du code doivent y être. Une colonne ajoutée après coup reprend
   // sa place canonique (juste avant le premier voisin déjà présent) plutôt que
@@ -184,7 +184,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   // distingue « jamais proposée » de « décochée par l'utilisateur » : on repart
   // donc des défauts (l'ordre personnalisé, lui, est conservé en v2).
   const [rawVisibleColumns, setRawVisibleColumns] = useCloudState(
-    "tr4de_trades_visible_columns_v3", "trades_visible_columns_v3", DEFAULT_VISIBLE_COLUMNS
+    "tao_trades_visible_columns_v3", "trades_visible_columns_v3", DEFAULT_VISIBLE_COLUMNS
   );
   const visibleColumns = Array.isArray(rawVisibleColumns)
     ? rawVisibleColumns.filter(id => TRADE_COLUMN_IDS.includes(id))
@@ -207,8 +207,8 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     { id: "side",     label: "Sens" },
     { id: "lots",     label: "Lots" },
   ];
-  const [sortBy, setSortBy] = useCloudState("tr4de_trades_sort_by", "trades_sort_by", "date");
-  const [sortDir, setSortDir] = useCloudState("tr4de_trades_sort_dir", "trades_sort_dir", "desc");
+  const [sortBy, setSortBy] = useCloudState("tao_trades_sort_by", "trades_sort_by", "date");
+  const [sortDir, setSortDir] = useCloudState("tao_trades_sort_dir", "trades_sort_dir", "desc");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   // Filtres de la barre au-dessus du tableau (maquette node 293:12628).
   const [symbolFilter, setSymbolFilter] = useState([]);
@@ -265,21 +265,21 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false);
   // Cases cochées des règles de stratégie : persistées côté compte (Supabase via
   // useCloudState) avec fallback localStorage. La clé localStorage reste
-  // "tr4de_checked_rules" pour que les autres pages (Dashboard, Stratégies) les lisent.
-  const [checkedRules, setCheckedRules] = useCloudState("tr4de_checked_rules", "trades_checked_rules", {});
+  // "tao_checked_rules" pour que les autres pages (Dashboard, Stratégies) les lisent.
+  const [checkedRules, setCheckedRules] = useCloudState("tao_checked_rules", "trades_checked_rules", {});
   const [emotionTags, setEmotionTags] = useState({});
   const [errorTags, setErrorTags] = useState({});
   // Réponses à la checklist Oui/Non par trade : { [tradeId]: { [questionId]: "yes" | "no" } }
   // Persistées côté compte (Supabase via useCloudState) avec fallback localStorage.
-  const [tradeChecklist, setTradeChecklist] = useCloudState("tr4de_trade_checklist", "trades_checklist", {});
+  const [tradeChecklist, setTradeChecklist] = useCloudState("tao_trade_checklist", "trades_checklist", {});
   // Unité de temps (timeframe) d'analyse par trade : { [tradeId]: "M15" }. Sélection unique.
   // Persistée côté compte (Supabase via useCloudState) avec fallback localStorage.
-  const [tradeTimeframe, setTradeTimeframe] = useCloudState("tr4de_trade_timeframe", "trades_timeframe", {});
+  const [tradeTimeframe, setTradeTimeframe] = useCloudState("tao_trade_timeframe", "trades_timeframe", {});
   const TIMEFRAME_OPTIONS = ["M1", "M5", "M15", "H1", "H4"];
   // Catégorie multi-sélection du panneau détail : type d'entrée.
   // Structure { [tradeId]: [tagId, ...] }. Persistée côté compte
   // (Supabase via useCloudState) avec fallback localStorage.
-  const [tradeEntryTags, setTradeEntryTags] = useCloudState("tr4de_trade_entry_tags", "trades_entry_tags", {});
+  const [tradeEntryTags, setTradeEntryTags] = useCloudState("tao_trade_entry_tags", "trades_entry_tags", {});
   // Liste complète des règles de la checklist (base + ajoutées), toutes
   // éditables/supprimables. Persistée globalement.
   const DEFAULT_CHECKLIST_RULES = [
@@ -299,7 +299,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const [loadedStrategies, setLoadedStrategies] = useState([]);
   const [activeTab, setActiveTab] = useState("infos");
 
-  const persistRules = (next) => { try { localStorage.setItem("tr4de_checklist_rules_v2", JSON.stringify(next)); } catch {} };
+  const persistRules = (next) => { try { localStorage.setItem("tao_checklist_rules_v2", JSON.stringify(next)); } catch {} };
   const addCustomRule = (label) => {
     const text = String(label || "").trim();
     if (!text) return;
@@ -532,7 +532,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
         else cur[questionId] = answer;
         updated[cid] = cur;
       }
-      try { localStorage.setItem("tr4de_trade_checklist", JSON.stringify(updated)); } catch {}
+      try { localStorage.setItem("tao_trade_checklist", JSON.stringify(updated)); } catch {}
       return updated;
     });
   };
@@ -549,7 +549,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
         if (updated[cid] === tf) delete updated[cid];
         else updated[cid] = tf;
       }
-      try { localStorage.setItem("tr4de_trade_timeframe", JSON.stringify(updated)); } catch {}
+      try { localStorage.setItem("tao_trade_timeframe", JSON.stringify(updated)); } catch {}
       return updated;
     });
   };
@@ -574,7 +574,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       }
     }
     setEmotionTags(updated);
-    try { localStorage.setItem("tr4de_emotion_tags", JSON.stringify(updated)); } catch {}
+    try { localStorage.setItem("tao_emotion_tags", JSON.stringify(updated)); } catch {}
   };
 
   // Bascule une erreur (multi-sélection) et propage aux trades enfants d'un groupe.
@@ -597,7 +597,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       }
     }
     setErrorTags(updated);
-    try { localStorage.setItem("tr4de_error_tags", JSON.stringify(updated)); } catch {}
+    try { localStorage.setItem("tao_error_tags", JSON.stringify(updated)); } catch {}
   };
 
   // Bascule un tag (multi-sélection) sur un state persisté par useCloudState et
@@ -636,19 +636,19 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   React.useEffect(() => {
     if (notesFromHook && Object.keys(notesFromHook).length > 0) {
       setTradeNotes(notesFromHook);
-      try { localStorage.setItem("tr4de_trade_notes", JSON.stringify(notesFromHook)); } catch {}
+      try { localStorage.setItem("tao_trade_notes", JSON.stringify(notesFromHook)); } catch {}
     }
   }, [notesFromHook]);
   React.useEffect(() => {
     if (emotionsFromHook && Object.keys(emotionsFromHook).length > 0) {
       setEmotionTags(emotionsFromHook);
-      try { localStorage.setItem("tr4de_emotion_tags", JSON.stringify(emotionsFromHook)); } catch {}
+      try { localStorage.setItem("tao_emotion_tags", JSON.stringify(emotionsFromHook)); } catch {}
     }
   }, [emotionsFromHook]);
   React.useEffect(() => {
     if (errorsFromHook && Object.keys(errorsFromHook).length > 0) {
       setErrorTags(errorsFromHook);
-      try { localStorage.setItem("tr4de_error_tags", JSON.stringify(errorsFromHook)); } catch {}
+      try { localStorage.setItem("tao_error_tags", JSON.stringify(errorsFromHook)); } catch {}
     }
   }, [errorsFromHook]);
 
@@ -666,7 +666,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
   // Charger l'onglet actif depuis localStorage au démarrage
   React.useEffect(() => {
-    const savedTab = localStorage.getItem("tr4de_active_tab");
+    const savedTab = localStorage.getItem("tao_active_tab");
     if (savedTab) {
       setActiveTab(savedTab);
     }
@@ -674,39 +674,39 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
   // Sauvegarder l'onglet actif dans localStorage quand il change
   React.useEffect(() => {
-    localStorage.setItem("tr4de_active_tab", activeTab);
+    localStorage.setItem("tao_active_tab", activeTab);
   }, [activeTab]);
 
   // Load trade notes and strategies from localStorage - RUNS EVERY TIME COMPONENT MOUNTS
   React.useEffect(() => {
     
     try {
-      const savedNotes = localStorage.getItem("tr4de_trade_notes");
+      const savedNotes = localStorage.getItem("tao_trade_notes");
       if (savedNotes) {
         setTradeNotes(JSON.parse(savedNotes));
       }
       
       // ✅ Fast path: localStorage. Sync depuis Supabase juste après (voir useEffect dédié).
-      const savedTradeStrategies = localStorage.getItem("tr4de_trade_strategies");
+      const savedTradeStrategies = localStorage.getItem("tao_trade_strategies");
       if (savedTradeStrategies) {
         const parsed = JSON.parse(savedTradeStrategies);
         setTradeStrategies(parsed);
       }
       
       // ✅ CRITICAL: Always reload strategies list
-      // Source de vérité : tr4de_strategies (clé actuelle). Fallback sur apex_strategies (legacy).
-      const savedStrategies = localStorage.getItem("tr4de_strategies") || localStorage.getItem("apex_strategies");
+      // Source de vérité : tao_strategies (clé actuelle). Fallback sur apex_strategies (legacy).
+      const savedStrategies = localStorage.getItem("tao_strategies") || localStorage.getItem("apex_strategies");
       if (savedStrategies) {
         const parsed = JSON.parse(savedStrategies);
         setLoadedStrategies(parsed);
       }
 
-      const savedEmotionTags = localStorage.getItem("tr4de_emotion_tags");
+      const savedEmotionTags = localStorage.getItem("tao_emotion_tags");
       if (savedEmotionTags) {
         setEmotionTags(JSON.parse(savedEmotionTags));
       }
 
-      const savedErrorTags = localStorage.getItem("tr4de_error_tags");
+      const savedErrorTags = localStorage.getItem("tao_error_tags");
       if (savedErrorTags) {
         setErrorTags(JSON.parse(savedErrorTags));
       }
@@ -714,7 +714,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       // tradeChecklist & tradeTimeframe : hydratation gérée par useCloudState
       // (localStorage + Supabase), plus de chargement manuel ici.
 
-      const savedRules = localStorage.getItem("tr4de_checklist_rules_v2");
+      const savedRules = localStorage.getItem("tao_checklist_rules_v2");
       if (savedRules) {
         const parsed = JSON.parse(savedRules);
         // On respecte aussi un tableau vide : si l'utilisateur a supprimé toutes
@@ -723,13 +723,13 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
         if (Array.isArray(parsed)) setChecklistRules(parsed);
       } else {
         // Migration depuis l'ancienne clé (ne contenait que les règles ajoutées)
-        const old = localStorage.getItem("tr4de_checklist_rules");
+        const old = localStorage.getItem("tao_checklist_rules");
         if (old) {
           const oldArr = JSON.parse(old);
           if (Array.isArray(oldArr) && oldArr.length) {
             const merged = [...DEFAULT_CHECKLIST_RULES, ...oldArr];
             setChecklistRules(merged);
-            try { localStorage.setItem("tr4de_checklist_rules_v2", JSON.stringify(merged)); } catch {}
+            try { localStorage.setItem("tao_checklist_rules_v2", JSON.stringify(merged)); } catch {}
           }
         }
       }
@@ -764,7 +764,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           map[row.trade_id].push(row.strategy_id);
         });
         setTradeStrategies(map);
-        try { localStorage.setItem("tr4de_trade_strategies", JSON.stringify(map)); } catch {}
+        try { localStorage.setItem("tao_trade_strategies", JSON.stringify(map)); } catch {}
       } catch (err) {
         console.error("❌ Erreur chargement trade_strategies:", err?.message || err);
       }
@@ -780,7 +780,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const lastSyncedRef = React.useRef(null);
   React.useEffect(() => {
     if (Object.keys(tradeStrategies).length > 0) {
-      try { localStorage.setItem("tr4de_trade_strategies", JSON.stringify(tradeStrategies)); } catch {}
+      try { localStorage.setItem("tao_trade_strategies", JSON.stringify(tradeStrategies)); } catch {}
     }
 
     if (!user?.id) return;
@@ -839,7 +839,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   // le `storage` event natif ne se déclenche que pour les autres onglets).
   React.useEffect(() => {
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("tr4de:checked-rules-changed"));
+      window.dispatchEvent(new CustomEvent("tao:checked-rules-changed"));
     }
   }, [checkedRules]);
 
@@ -969,7 +969,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const paginated = !embedded;
   const [pageSize, setPageSize] = React.useState(() => {
     if (typeof window === "undefined") return 50;
-    const v = parseInt(localStorage.getItem("tr4de_trades_page_size") || "", 10);
+    const v = parseInt(localStorage.getItem("tao_trades_page_size") || "", 10);
     return PAGE_SIZES.includes(v) ? v : 50;
   });
   const [pageIndex, setPageIndex] = React.useState(0);
@@ -984,7 +984,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
   const changePageSize = (n) => {
     setPageSize(n);
-    try { localStorage.setItem("tr4de_trades_page_size", String(n)); } catch {}
+    try { localStorage.setItem("tao_trades_page_size", String(n)); } catch {}
   };
 
   const pagedGroups = React.useMemo(() => {
@@ -1197,19 +1197,19 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       )}
 
       {/* LAYOUT WITH TABLE + SIDE PANEL WITH TABS */}
-      <div className="tr4de-trades-layout" style={{display:"flex",gap:16,alignItems:"flex-start"}}>
+      <div className="tao-trades-layout" style={{display:"flex",gap:16,alignItems:"flex-start"}}>
 
         {/* LEFT - TRADES TABLE.
             Carte de la maquette : coins 12, ombre très douce, PAS de bordure —
             la séparation des lignes se fait par l'espace, pas par des filets. */}
-        <div ref={tradesMainRef} className="tr4de-trades-main" style={{...CARD,flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,display:"flex",flexDirection:"column",maxHeight:isMobile?"none":"calc(100vh - 200px)",padding:isMobile?10:16,gap:12}}>
+        <div ref={tradesMainRef} className="tao-trades-main" style={{...CARD,flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,display:"flex",flexDirection:"column",maxHeight:isMobile?"none":"calc(100vh - 200px)",padding:isMobile?10:16,gap:12}}>
 
           {/* Sur téléphone, c'est la PAGE qui défile — pas un cadre interne.
               Un conteneur à défilement propre y créerait deux zones
               concurrentes : le doigt ne saurait pas laquelle il fait bouger, et
               la barre d'onglets masquerait la fin de la liste sans qu'on puisse
               l'atteindre. */}
-          <div className="tr4de-trades-scroll" style={{overflowX:isMobile?"visible":"auto",overflowY:isMobile?"visible":"auto",overscrollBehavior:"contain",flex:1,minHeight:0}}>
+          <div className="tao-trades-scroll" style={{overflowX:isMobile?"visible":"auto",overflowY:isMobile?"visible":"auto",overscrollBehavior:"contain",flex:1,minHeight:0}}>
             {/* `table-layout: fixed` : sans lui, chaque colonne s'élargissait à la
                 taille de son contenu (`max-content`), et l'écart entre deux
                 intitulés changeait d'une colonne à l'autre — et d'un filtre à
@@ -1347,11 +1347,11 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                               deux colonnes (left négatif) et non dans le padding : celui-ci
                               ne fait que 6 px alors que l'icône en mesure 11, elle mordait
                               donc sur le libellé. Elle n'apparaît qu'au survol de l'en-tête,
-                              via `.tr4de-col-grip` (cf. globals.css) : au repos, rien ne
+                              via `.tao-col-grip` (cf. globals.css) : au repos, rien ne
                               vient parasiter la ligne de titres. */}
                           {!lockColumns && (
                             <LucideGripVertical
-                              className="tr4de-col-grip"
+                              className="tao-col-grip"
                               size={11}
                               strokeWidth={1.75}
                               style={{ position: "absolute", left: -5, top: "50%", transform: "translateY(-50%)", color: T.text }}
@@ -1813,7 +1813,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           // (paddings et marges verticales réduits). Le même panneau, plus dense.
           const compact = embedded;
           const panel = (
-          <div ref={tradeSideRef} className="tr4de-trade-side" style={{...CARD,padding:0,width:360,maxHeight:"calc(100vh - 200px)",display:"flex",flexDirection:"column"}}>
+          <div ref={tradeSideRef} className="tao-trade-side" style={{...CARD,padding:0,width:360,maxHeight:"calc(100vh - 200px)",display:"flex",flexDirection:"column"}}>
 
             {/* EN-TÊTE — plus de titre : « Trade info » nommait ce que le
                 contenu montre déjà (l'instrument, le sens, le P&L sont juste
@@ -2048,7 +2048,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                         if (!key) return;
                         const updated = {...tradeNotes, [key]: e.target.value};
                         setTradeNotes(updated);
-                        localStorage.setItem("tr4de_trade_notes", JSON.stringify(updated));
+                        localStorage.setItem("tao_trade_notes", JSON.stringify(updated));
                         persistNote(key, e.target.value);
                       }}
                       /* Même zone d'écriture que les notes du journal : pas de
@@ -2227,7 +2227,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                                           newTradeStrategies[k] = current.filter(id => id !== strat.id);
                                         });
                                         setTradeStrategies(newTradeStrategies);
-                                        localStorage.setItem("tr4de_trade_strategies", JSON.stringify(newTradeStrategies));
+                                        localStorage.setItem("tao_trade_strategies", JSON.stringify(newTradeStrategies));
                                         setOpenStratMenuId(null);
                                         if (thenPick) setShowStrategyDropdown(true);
                                       }}

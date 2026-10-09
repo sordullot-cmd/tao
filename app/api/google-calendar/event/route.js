@@ -58,7 +58,7 @@ export async function POST(req) {
       await cal.events.patch({
         calendarId: target,
         eventId,
-        requestBody: { extendedProperties: { private: { tr4deDone: event?.done ? "1" : "0" } } },
+        requestBody: { extendedProperties: { private: { taoDone: event?.done ? "1" : "0" } } },
       });
       return json({ ok: true });
     }
@@ -97,9 +97,9 @@ export async function POST(req) {
             : event.reminder !== undefined
               ? remindersToGoogle(event.reminder)
               : undefined,
-        // Marqueur "tâche" tr4de (un évènement-tâche avec état terminé/non).
+        // Marqueur "tâche" tao (un évènement-tâche avec état terminé/non).
         extendedProperties: event.isTask
-          ? { private: { tr4deKind: "task", tr4deDone: event.done ? "1" : "0" } }
+          ? { private: { taoKind: "task", taoDone: event.done ? "1" : "0" } }
           : undefined,
       };
 
@@ -109,7 +109,7 @@ export async function POST(req) {
         conferenceDataVersion = 1;
         resource.conferenceData = {
           createRequest: {
-            requestId: `tr4de-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            requestId: `tao-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             conferenceSolutionKey: { type: "hangoutsMeet" },
           },
         };

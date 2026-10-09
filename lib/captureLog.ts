@@ -51,7 +51,7 @@ export interface CaptureEntry {
   error?: string | null;
 }
 
-export const CAPTURE_LOG_PREFIX = "tr4de_captures_";
+export const CAPTURE_LOG_PREFIX = "tao_captures_";
 
 /* Un identifiant est aussi un nom de fichier, et le Rust refuse tout ce qui
    sort de `[A-Za-z0-9_-]`. La base 36 n'en sort jamais. */
@@ -84,7 +84,7 @@ export function videosOfDay(date?: string): CaptureEntry[] {
   return readCaptureLog(date).filter(e => e.kind === "video");
 }
 
-const CHANGE_EVENT = "tr4de:captures";
+const CHANGE_EVENT = "tao:captures";
 
 function write(entries: CaptureEntry[], date?: string): CaptureEntry[] {
   try {

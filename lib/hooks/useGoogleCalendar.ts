@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 
-const TOKENS_KEY = "tr4de_gcal_tokens";
+const TOKENS_KEY = "tao_gcal_tokens";
 // Agendas décochés par l'utilisateur. On mémorise les EXCLUSIONS et non les
 // inclusions : un agenda auquel on s'abonne plus tard côté Google (l'emploi du
 // temps universitaire, par exemple) apparaît alors tout seul, sans avoir à
 // revenir cocher une case ici.
-const HIDDEN_CALS_KEY = "tr4de_gcal_hidden_calendars";
+const HIDDEN_CALS_KEY = "tao_gcal_hidden_calendars";
 const HIDDEN_CALS_CLOUD_KEY = "gcal_hidden_calendars";
 
 interface Tokens {
@@ -64,7 +64,7 @@ function writeTokens(tokens: Tokens | null) {
 
 /**
  * Gère la connexion à Google Agenda et la récupération des évènements.
- * Tokens persistés en localStorage (`tr4de_gcal_tokens`), rafraîchis
+ * Tokens persistés en localStorage (`tao_gcal_tokens`), rafraîchis
  * automatiquement quand l'access token expire (si un refresh_token existe).
  */
 export function useGoogleCalendar() {
@@ -282,7 +282,7 @@ export function useGoogleCalendar() {
     async (
       action: "create" | "update" | "delete" | "get" | "setDone",
       // `calendarId` : l'agenda propriétaire. Omis = agenda principal, ce qui
-      // reste juste pour tout ce que tr4de crée lui-même.
+      // reste juste pour tout ce que tao crée lui-même.
       payload: { eventId?: string; event?: any; calendarId?: string },
     ) => {
       const res = await authedCall((accessToken) =>

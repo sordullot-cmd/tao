@@ -31,7 +31,7 @@ import {
  * confondre avec `lib/backtest/engine.ts`, qui rejoue les trades réels).
  */
 
-const STORAGE_KEY = "tr4de_backtest_journal";
+const STORAGE_KEY = "tao_backtest_journal";
 const CLOUD_KEY = "backtest_journal";
 
 /* Les trois résultats, avec leur couleur. Des hex pris dans la palette et non
@@ -285,7 +285,7 @@ export default function BacktestPage() {
             <Plus size={14} strokeWidth={2} /> Ajouter un backtest
           </PillButton>
         </div>
-        <div id="tr4de-page-header-slot" />
+        <div id="tao-page-header-slot" />
       </div>
 
       {currentSession && (
@@ -323,7 +323,7 @@ export default function BacktestPage() {
         </div>
       ) : (
         <>
-          <div className="tr4de-field-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
+          <div className="tao-field-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
             <Kpi label="Backtests" value={String(stats.count)}
                  sub={`${stats.wins}G · ${stats.losses}P · ${stats.breakevens}BE`} />
             <Kpi label="Taux de réussite" value={`${stats.winRate}%`}
@@ -354,7 +354,7 @@ export default function BacktestPage() {
           {/* Les deux classements côte à côte : ce qui rapporte à gauche, ce qui
               coûte à droite. Les lire séparément reviendrait à comparer deux
               pages — or la question est bien « lequel des deux pèse le plus ». */}
-          <div className="tr4de-field-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+          <div className="tao-field-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
             <TagRanking title="Confluences" icon={Target} color={PALETTE.green} stats={confluenceStats}
                         empty="Coche des confluences dans tes backtests pour voir lesquelles tiennent." />
             <TagRanking title="Erreurs" icon={AlertTriangle} color={PALETTE.red} stats={mistakeStats}

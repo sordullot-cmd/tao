@@ -23,7 +23,7 @@
 
 1. Go to https://platform.openai.com/api/keys
 2. Create a new API key (or copy existing)
-3. Add to `e:\tr4de\.env.local`:
+3. Add to `e:\tao\.env.local`:
    ```
    GOOGLE_API_KEY=AIza...
    ```

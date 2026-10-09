@@ -12,8 +12,8 @@ import { T as BaseT } from "@/lib/ui/tokens";
 
 const T = { ...BaseT };
 
-const STORAGE_KEY = "tr4de_prop_firm_accounts";
-const STORAGE_SIM_KEY = "tr4de_scaling_sim";
+const STORAGE_KEY = "tao_prop_firm_accounts";
+const STORAGE_SIM_KEY = "tao_scaling_sim";
 
 const STATUS_META = {
   funded:  { label: "Financé",  color: T.green, bg: T.greenBg },
@@ -62,7 +62,7 @@ export default function ScalingPage({ onGeneratePlan }) {
   return (
     <div className="anim-1" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* SECTION 1 — Header metrics */}
-      <div className="tr4de-kpi-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+      <div className="tao-kpi-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
         <MetricCard label="Capital total géré" value={fmtMoney(totalCapital)} />
         <MetricCard label="Profit cumulé" value={`${totalPnL >= 0 ? "+" : ""}${fmtMoney(Math.abs(totalPnL))}`} valueColor={totalPnL > 0 ? T.green : totalPnL < 0 ? T.red : T.text} />
         <MetricCard label="Comptes actifs" value={`${activeCount} / ${accounts.length || 0}`} />
@@ -377,7 +377,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
   const total = accounts.length;
   // Taille de compte persistée — partage le même cloud-state que le
   // simulateur de ScalingPage pour rester sync entre les deux pages.
-  const [simState, setSimState] = useCloudState("tr4de_scaling_sim", "scaling_sim", {
+  const [simState, setSimState] = useCloudState("tao_scaling_sim", "scaling_sim", {
     capitalSize: sim?.capitalSize || 50000, pctMonthly: 5, accountsTarget: 3, weeksPerEval: 7,
   });
   const capital = simState.capitalSize || sim?.capitalSize || 50000;
@@ -443,7 +443,7 @@ export function RoadmapSection({ accounts, sim, glued }) {
     if (fundedCount >= 1) return 1;
     return 0;
   })();
-  const [stepIdx, setStepIdx] = useCloudState("tr4de_scaling_step", "scaling_step", autoIdx);
+  const [stepIdx, setStepIdx] = useCloudState("tao_scaling_step", "scaling_step", autoIdx);
   const currentStep = Math.max(0, Math.min(steps.length - 1, Number(stepIdx) || 0));
 
   const [open, setOpen] = useState(false);
@@ -754,22 +754,22 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
   return (
     <div>
       <style>{`
-        input[type="range"].tr4de-slim {
+        input[type="range"].tao-slim {
           -webkit-appearance: none; appearance: none;
           width: 100%; height: 4px; padding: 0; margin: 0;
           background: transparent; cursor: pointer; outline: none;
         }
-        input[type="range"].tr4de-slim::-webkit-slider-runnable-track {
+        input[type="range"].tao-slim::-webkit-slider-runnable-track {
           height: 4px; border-radius: 2px;
           background: linear-gradient(to right, ${T.text} 0%, ${T.text} var(--p,0%), ${T.border} var(--p,0%), ${T.border} 100%);
         }
-        input[type="range"].tr4de-slim::-moz-range-track {
+        input[type="range"].tao-slim::-moz-range-track {
           height: 4px; border-radius: 2px; background: ${T.border};
         }
-        input[type="range"].tr4de-slim::-moz-range-progress {
+        input[type="range"].tao-slim::-moz-range-progress {
           height: 4px; border-radius: 2px; background: ${T.text};
         }
-        input[type="range"].tr4de-slim::-webkit-slider-thumb {
+        input[type="range"].tao-slim::-webkit-slider-thumb {
           -webkit-appearance: none; appearance: none;
           width: 12px; height: 12px; border-radius: 50%;
           background: ${T.white}; border: 2px solid ${T.text};
@@ -777,8 +777,8 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
           box-shadow: 0 1px 3px rgba(0,0,0,0.12);
           transition: transform .12s ease;
         }
-        input[type="range"].tr4de-slim::-webkit-slider-thumb:hover { transform: scale(1.15); }
-        input[type="range"].tr4de-slim::-moz-range-thumb {
+        input[type="range"].tao-slim::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        input[type="range"].tao-slim::-moz-range-thumb {
           width: 12px; height: 12px; border-radius: 50%;
           background: ${T.white}; border: 2px solid ${T.text}; cursor: pointer;
         }
@@ -789,7 +789,7 @@ function Slider({ label, value, min, max, step, fmt, onChange }) {
       </div>
       <input
         id={id}
-        className="tr4de-slim"
+        className="tao-slim"
         type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(Number(e.target.value))}
         style={{ "--p": `${pct}%` }}

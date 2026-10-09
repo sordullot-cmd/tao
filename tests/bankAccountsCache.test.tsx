@@ -13,7 +13,7 @@ import { render, screen, waitFor, act } from "@testing-library/react";
  * l'état d'un cas fuirait dans le suivant.
  */
 
-const CACHE_KEY = "tr4de_bank_accounts";
+const CACHE_KEY = "tao_bank_accounts";
 
 const account = (id: string, balance = 1000) => ({
   id: `enablebanking-${id}`,

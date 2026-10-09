@@ -25,11 +25,11 @@ describe("code de transfert de fusion", () => {
 
   it("refuse un code dont on a changé le compte source", () => {
     const { code } = createMergeCode(SOURCE, SECRET, NOW);
-    const [body, mac] = code.slice("tr4de-".length).split(".");
+    const [body, mac] = code.slice("tao-".length).split(".");
     const forged = Buffer.from(
       JSON.stringify({ ...JSON.parse(Buffer.from(body, "base64url").toString()), s: "un-autre-compte" }),
     ).toString("base64url");
-    expect(verifyMergeCode(`tr4de-${forged}.${mac}`, SECRET, NOW)).toEqual({ ok: false, reason: "invalid" });
+    expect(verifyMergeCode(`tao-${forged}.${mac}`, SECRET, NOW)).toEqual({ ok: false, reason: "invalid" });
   });
 
   it("refuse un code signé avec un autre secret", () => {
@@ -38,7 +38,7 @@ describe("code de transfert de fusion", () => {
   });
 
   it("refuse le n'importe quoi sans jeter", () => {
-    for (const junk of ["", "tr4de-", "tr4de-abc", "tr4de-abc.def", "bonjour", "tr4de-.x"]) {
+    for (const junk of ["", "tao-", "tao-abc", "tao-abc.def", "bonjour", "tao-.x"]) {
       expect(verifyMergeCode(junk, SECRET, NOW)).toEqual({ ok: false, reason: "invalid" });
     }
   });

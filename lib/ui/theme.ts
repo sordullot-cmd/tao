@@ -7,10 +7,10 @@
  * Un ancien réglage "section" encore stocké est lu comme le défaut.
  */
 
-/** Le mode d'apparence, tel qu'il est stocké dans `tr4de_theme`. */
+/** Le mode d'apparence, tel qu'il est stocké dans `tao_theme`. */
 export type ThemeMode = "system" | "light" | "dark";
 
-export const THEME_KEY = "tr4de_theme";
+export const THEME_KEY = "tao_theme";
 
 /** Le mode enregistré. Par défaut : le système. */
 export function readThemeMode(): ThemeMode {

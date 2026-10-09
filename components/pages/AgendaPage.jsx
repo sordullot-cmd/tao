@@ -236,7 +236,7 @@ function payloadFromForm(form) {
   return { summary: form.summary, location: form.location, description: form.description, allDay: false, start, end, timeZone: tz, ...extra };
 }
 
-/* ─────────────── Tâches Google : heure conservée côté tr4de ───────────────
+/* ─────────────── Tâches Google : heure conservée côté tao ───────────────
    Persistées via useCloudState (table user_productivity, clé "task_times")
    pour une synchro en ligne ; le storageKey localStorage sert de cache.
    Clés partagées avec la page Vie RPG (cf. lib/lifeRpgCategories). */
@@ -246,15 +246,15 @@ const TASK_TIMES_KEY = TASK_TIMES_STORAGE_KEY;
    Les tâches sont de VRAIES Google Tasks. On mémorise seulement l'association
    évènement → ids de tâches, indexée par id d'évènement. Persistée en ligne
    via useCloudState (clé "event_task_links"). */
-const EVENT_TASK_LINKS_KEY = "tr4de_event_task_links";
+const EVENT_TASK_LINKS_KEY = "tao_event_task_links";
 
 /** Convertit une Google Task (+ heure locale) en item affiché comme un évènement. */
 function taskToItem(tk, times) {
   const t = times[tk.id];
   // Date limite (échéance) : champ `due` de Google Tasks, facultatif.
   const dueDate = tk.due ? tk.due.slice(0, 10) : null;
-  // Jour de planification dans l'agenda : conservé côté tr4de. Repli sur la date
-  // limite pour les tâches créées hors tr4de (sans jour planifié enregistré).
+  // Jour de planification dans l'agenda : conservé côté tao. Repli sur la date
+  // limite pour les tâches créées hors tao (sans jour planifié enregistré).
   const day = (t && t.day) || dueDate;
   if (!day) return null; // ni jour planifié ni échéance → pas placée sur le calendrier
   const hasTime = !!(t && t.startTime);
@@ -286,7 +286,7 @@ function formFromTaskItem(item, times) {
     location: "", description: item.description || "",
     guests: "", addMeet: false, hadMeet: false, colorId: item.colorId || null,
     transparency: "opaque", visibility: "default",
-    // Google Tasks n'a pas de rappels : ils vivent avec l'heure, côté tr4de.
+    // Google Tasks n'a pas de rappels : ils vivent avec l'heure, côté tao.
     reminders: normalizeReminders(t?.reminders),
     rpgCategories: [], // renseigné par openEdit depuis le store `taskRpg`
   };
@@ -1504,7 +1504,7 @@ export default function AgendaPage() {
     const endM = endMin >= 24 * 60 ? 24 * 60 - 1 : endMin; // 24:00 impossible → 23:59
     const dk = dateKey(d);
     if (ev.isTask) {
-      /* Tâche : son créneau vit côté tr4de (`taskTimes`), Google Tasks ne
+      /* Tâche : son créneau vit côté tao (`taskTimes`), Google Tasks ne
          connaissant qu'une date limite. Même chemin que le déplacement — et le
          jour ne change pas, un redimensionnement reste dans sa colonne. */
       setTaskTimes((prevTimes) => {
@@ -1589,7 +1589,7 @@ export default function AgendaPage() {
     const toTime = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
     const endM = endMin >= 24 * 60 ? 24 * 60 - 1 : endMin; // 24:00 impossible → 23:59
     if (ev.isTask) {
-      // Tâche : le jour de planification et l'heure sont conservés côté tr4de
+      // Tâche : le jour de planification et l'heure sont conservés côté tao
       // (la date limite Google `due` n'est pas affectée par un déplacement).
       setTaskTimes((prevTimes) => {
         const times = { ...prevTimes };
@@ -1657,7 +1657,7 @@ export default function AgendaPage() {
         let taskId = modal.kind === "task" ? modal.id : null;
         if (taskId) await updateTask(taskId, payload);
         else { const r = await createTask(payload); taskId = r?.task?.id; }
-        // Jour de planification + heure conservés côté tr4de : Google Tasks ne
+        // Jour de planification + heure conservés côté tao : Google Tasks ne
         // stocke que la date limite (`due`), pas le jour où l'on pose la tâche.
         // Les rappels suivent le même chemin : l'API Tasks n'en a pas, ils sont
         // programmés localement par `useAgendaReminders`.
@@ -1981,7 +1981,7 @@ export default function AgendaPage() {
           </>
         )}
       </div>
-      <div id="tr4de-page-header-slot" />
+      <div id="tao-page-header-slot" />
     </div>
   );
 
@@ -2510,7 +2510,7 @@ export default function AgendaPage() {
         </div>
         <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 6 }}>Connecte ton Google Agenda</div>
         <p style={{ fontSize: 13, color: T.textSub, maxWidth: 380, margin: "0 auto 20px", lineHeight: 1.6 }}>
-          Visualise tes évènements directement dans tr4de. L'accès est en lecture seule — rien n'est modifié dans ton agenda.
+          Visualise tes évènements directement dans tao. L'accès est en lecture seule — rien n'est modifié dans ton agenda.
         </p>
         <button onClick={connect} style={primaryBtn()}>
           <Plug size={15} strokeWidth={2} style={{ marginRight: 8 }} /> Connecter Google Agenda

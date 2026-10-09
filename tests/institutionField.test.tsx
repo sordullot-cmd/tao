@@ -166,7 +166,7 @@ describe("formulaire d'un crédit", () => {
     cloudStore.clear();
     resetInstitutionsCache();
     // L'interface est en français par défaut dans l'application.
-    localStorage.setItem("tr4de_lang", "fr");
+    localStorage.setItem("tao_lang", "fr");
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       status: 200,
@@ -193,7 +193,7 @@ describe("formulaire d'un crédit", () => {
     saisir("150000", "150000");
     fireEvent.click(screen.getByRole("button", { name: "Ajouter un actif" }));
 
-    const assets = (cloudStore.get("tr4de_patrimoine") as { assets: Record<string, unknown>[] }).assets;
+    const assets = (cloudStore.get("tao_patrimoine") as { assets: Record<string, unknown>[] }).assets;
     expect(assets).toHaveLength(1);
     expect(assets[0]).toMatchObject({
       name: "Crédit immobilier",
@@ -213,7 +213,7 @@ describe("formulaire d'un crédit", () => {
     saisir("150000", "8000");
     fireEvent.click(screen.getByRole("button", { name: "Ajouter un actif" }));
 
-    const assets = (cloudStore.get("tr4de_patrimoine") as { assets: Record<string, unknown>[] }).assets;
+    const assets = (cloudStore.get("tao_patrimoine") as { assets: Record<string, unknown>[] }).assets;
     expect(assets[0]).toMatchObject({ institution: "Mon oncle", logo: null, balance: -8000 });
   });
 });

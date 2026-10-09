@@ -83,8 +83,8 @@ describe("Graphique de progression (Sport)", () => {
   beforeEach(() => cloudStore.clear());
 
   it("reprend l'exercice retenu la fois précédente", () => {
-    cloudStore.set("tr4de_sport_sessions", TWO_EXERCISES);
-    cloudStore.set("tr4de_sport_chart_exercise", "Tractions");
+    cloudStore.set("tao_sport_sessions", TWO_EXERCISES);
+    cloudStore.set("tao_sport_chart_exercise", "Tractions");
     render(<SportPage />);
 
     // Sans mémoire, le sélecteur retombait sur le premier exercice de la liste.
@@ -92,12 +92,12 @@ describe("Graphique de progression (Sport)", () => {
   });
 
   it("écrit le choix, et le rend au montage suivant", () => {
-    cloudStore.set("tr4de_sport_sessions", TWO_EXERCISES);
+    cloudStore.set("tao_sport_sessions", TWO_EXERCISES);
     const first = render(<SportPage />);
 
     fireEvent.click(chartPicker());
     fireEvent.click(screen.getByRole("option", { name: /Tractions/ }));
-    expect(cloudStore.get("tr4de_sport_chart_exercise")).toBe("Tractions");
+    expect(cloudStore.get("tao_sport_chart_exercise")).toBe("Tractions");
 
     first.unmount();
     render(<SportPage />);
@@ -105,19 +105,19 @@ describe("Graphique de progression (Sport)", () => {
   });
 
   it("retombe sur un exercice existant quand celui retenu a disparu", () => {
-    cloudStore.set("tr4de_sport_sessions", TWO_EXERCISES);
-    cloudStore.set("tr4de_sport_chart_exercise", "Soulevé de terre");
+    cloudStore.set("tao_sport_sessions", TWO_EXERCISES);
+    cloudStore.set("tao_sport_chart_exercise", "Soulevé de terre");
     render(<SportPage />);
 
     expect(chartPicker().textContent).not.toContain("Soulevé de terre");
-    expect(cloudStore.get("tr4de_sport_chart_exercise")).toBe("Squat");
+    expect(cloudStore.get("tao_sport_chart_exercise")).toBe("Squat");
   });
 });
 
 describe("Plan de la semaine (Sport)", () => {
   beforeEach(() => {
     cloudStore.clear();
-    cloudStore.set("tr4de_sport_custom_presets", [PRESET]);
+    cloudStore.set("tao_sport_custom_presets", [PRESET]);
   });
 
   it("ouvre sept jours au repos tant que rien n'est posé", () => {
@@ -138,7 +138,7 @@ describe("Plan de la semaine (Sport)", () => {
   });
 
   it("coche la ligne prévue dès qu'une séance de la même discipline existe ce jour-là", () => {
-    cloudStore.set("tr4de_sport_sessions", [
+    cloudStore.set("tao_sport_sessions", [
       { id: 1, date: mondayISO(), discipline: "musculation", duration: 60, exercises: [] },
     ]);
     openPlan();
@@ -149,7 +149,7 @@ describe("Plan de la semaine (Sport)", () => {
   });
 
   it("ne coche pas une séance d'une autre discipline, et la montre quand même", () => {
-    cloudStore.set("tr4de_sport_sessions", [
+    cloudStore.set("tao_sport_sessions", [
       { id: 1, date: mondayISO(), discipline: "cardio", duration: 30, exercises: [] },
     ]);
     openPlan();

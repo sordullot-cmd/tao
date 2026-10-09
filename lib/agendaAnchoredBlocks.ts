@@ -17,7 +17,7 @@
  *     notification déjà programmée.
  */
 
-export const ANCHORED_STORAGE_KEY = "tr4de_anchored_blocks";
+export const ANCHORED_STORAGE_KEY = "tao_anchored_blocks";
 export const ANCHORED_CLOUD_KEY = "agenda_anchored_blocks";
 
 /** Durée proposée quand rien ne la dit (le temps d'un lever tranquille). */

@@ -1481,7 +1481,7 @@ export function TimelineRow({ goal: g, compute, unitOf, fmtVal, onEdit, onDelete
   return (
     <>
       <div
-        className="tr4de-goals-row"
+        className="tao-goals-row"
         draggable
         onPointerDown={handlePointerDown}
         onPointerUp={releaseDrag}

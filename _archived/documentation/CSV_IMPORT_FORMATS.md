@@ -120,7 +120,7 @@ Date,Symbol,Direction,Entry,Exit,PnL
 
 ## 📊 Sample Files Included
 
-Test with these files in e:\tr4de:
+Test with these files in e:\tao:
 
 1. **sample_trades.csv** - Generic format (25 trades)
    - Format: Date, Symbol, Direction, Entry, Exit, PnL
@@ -170,7 +170,7 @@ $19,842  → incorrect
 
 **Test your CSV in terminal:**
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-advanced.js
 ```
 

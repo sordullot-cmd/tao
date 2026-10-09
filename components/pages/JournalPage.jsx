@@ -71,7 +71,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
   const [tradeStrategies, setTradeStrategies] = React.useState({});
   React.useEffect(() => {
     try {
-      const raw = localStorage.getItem("tr4de_trade_strategies");
+      const raw = localStorage.getItem("tao_trade_strategies");
       if (raw) setTradeStrategies(JSON.parse(raw) || {});
     } catch {}
   }, []);
@@ -187,7 +187,7 @@ export default function JournalPage({ trades = [], strategies = [], onImportClic
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <PeriodPills value={period} onChange={setPeriod} />
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-          <div id="tr4de-page-header-slot" />
+          <div id="tao-page-header-slot" />
           <button
             type="button"
             aria-label={t("journal.exportAria")}
@@ -314,7 +314,7 @@ function DayCard({ day, note, onNoteChange, noteColor, strategies, tradeStrategi
               resserre. Le plafond de 340 px qui bornait la colonne de gauche a
               sauté — c'est la zone d'écriture qui mérite la place, la liste n'a
               que six colonnes courtes à tenir. */}
-          <div className="tr4de-journal-day" style={{
+          <div className="tao-journal-day" style={{
             display: "grid", gridTemplateColumns: "minmax(320px, 1.15fr) minmax(0, 1fr)",
             gap: 20, alignItems: "start",
           }}>

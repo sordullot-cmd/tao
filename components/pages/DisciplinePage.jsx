@@ -122,7 +122,7 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
       {/* Backdrop avec slide-in fade */}
       <div {...backdropDismiss(onClose)} style={{
         position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",zIndex:9998,
-        animation:"tr4de-drawer-fade 180ms ease both",
+        animation:"tao-drawer-fade 180ms ease both",
       }}/>
 
       {/* Drawer latéral.
@@ -237,7 +237,7 @@ function EditListModal({ open, title, accent, items, isCheckList, onClose, onSav
       </aside>
 
       <style>{`
-        @keyframes tr4de-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes tao-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
       `}</style>
     </>,
     document.body
@@ -677,7 +677,7 @@ export default function DisciplinePage({ trades = [] }) {
   const [checkedRuleIds, setCheckedRuleIds] = useState(() => {
     try {
       const todayKey = getLocalDateString();
-      return JSON.parse(localStorage.getItem(`tr4de_checked_rules_${todayKey}`) || "{}");
+      return JSON.parse(localStorage.getItem(`tao_checked_rules_${todayKey}`) || "{}");
     } catch {
       return {};
     }
@@ -686,8 +686,8 @@ export default function DisciplinePage({ trades = [] }) {
   const [ruleCategory, setRuleCategory] = useState("texte");
   const [ruleTime, setRuleTime] = useState("09:00");
   const [ruleAmount, setRuleAmount] = useState("");
-  const [disciplineRules, setDisciplineRules] = useCloudState("tr4de_discipline_rules_config", "discipline_rules_config", {});
-  const [activeDays, setActiveDays] = useCloudState("tr4de_discipline_active_days", "discipline_active_days", {});
+  const [disciplineRules, setDisciplineRules] = useCloudState("tao_discipline_rules_config", "discipline_rules_config", {});
+  const [activeDays, setActiveDays] = useCloudState("tao_discipline_active_days", "discipline_active_days", {});
 
   // Listes éditables pour Bias / Règles à suivre / Erreurs à éviter — vides
   // par défaut pour que chaque utilisateur les remplisse lui-même.
@@ -696,25 +696,25 @@ export default function DisciplinePage({ trades = [] }) {
   const DEFAULT_ERRORS = [];
   const [biasItems, setBiasItems] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("tr4de_bias_items") || "null");
+      const saved = JSON.parse(localStorage.getItem("tao_bias_items") || "null");
       return Array.isArray(saved) ? saved : DEFAULT_BIAS;
     } catch { return DEFAULT_BIAS; }
   });
   const [personalRules, setPersonalRules] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("tr4de_personal_rules") || "null");
+      const saved = JSON.parse(localStorage.getItem("tao_personal_rules") || "null");
       return Array.isArray(saved) ? saved : DEFAULT_PERSONAL;
     } catch { return DEFAULT_PERSONAL; }
   });
   const [errorItems, setErrorItems] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("tr4de_error_items") || "null");
+      const saved = JSON.parse(localStorage.getItem("tao_error_items") || "null");
       return Array.isArray(saved) ? saved : DEFAULT_ERRORS;
     } catch { return DEFAULT_ERRORS; }
   });
-  React.useEffect(() => { try { localStorage.setItem("tr4de_bias_items", JSON.stringify(biasItems)); } catch {} }, [biasItems]);
-  React.useEffect(() => { try { localStorage.setItem("tr4de_personal_rules", JSON.stringify(personalRules)); } catch {} }, [personalRules]);
-  React.useEffect(() => { try { localStorage.setItem("tr4de_error_items", JSON.stringify(errorItems)); } catch {} }, [errorItems]);
+  React.useEffect(() => { try { localStorage.setItem("tao_bias_items", JSON.stringify(biasItems)); } catch {} }, [biasItems]);
+  React.useEffect(() => { try { localStorage.setItem("tao_personal_rules", JSON.stringify(personalRules)); } catch {} }, [personalRules]);
+  React.useEffect(() => { try { localStorage.setItem("tao_error_items", JSON.stringify(errorItems)); } catch {} }, [errorItems]);
 
   // === Sync online (Supabase user_preferences) des 3 listes Discipline ===
   const [listsLoadedFromCloud, setListsLoadedFromCloud] = useState(false);
@@ -787,7 +787,7 @@ export default function DisciplinePage({ trades = [] }) {
     const fromSupabase = (disciplineData && disciplineData[today]) || {};
     let hasNote = false;
     try {
-      const dailyNotesData = JSON.parse(localStorage.getItem("tr4de_daily_notes") || "{}");
+      const dailyNotesData = JSON.parse(localStorage.getItem("tao_daily_notes") || "{}");
       const note = dailyNotesData[today];
       hasNote = !!(note && String(note).trim().length > 0);
     } catch {}
@@ -798,7 +798,7 @@ export default function DisciplinePage({ trades = [] }) {
   React.useEffect(() => {
     const handleStorageChange = () => {
       const currentDate = getLocalDateString();
-      const dailyNotesData = JSON.parse(localStorage.getItem("tr4de_daily_notes") || "{}");
+      const dailyNotesData = JSON.parse(localStorage.getItem("tao_daily_notes") || "{}");
       const todayNote = dailyNotesData[currentDate];
       
       setCheckedRuleIds(prev => {
@@ -853,7 +853,7 @@ export default function DisciplinePage({ trades = [] }) {
   const toggleRule = (ruleId, currentAllRules) => {
     setCheckedRuleIds(prev => {
       const updated = { ...prev, [ruleId]: !prev[ruleId] };
-      localStorage.setItem(`tr4de_checked_rules_${today}`, JSON.stringify(updated));
+      localStorage.setItem(`tao_checked_rules_${today}`, JSON.stringify(updated));
 
       // ✅ Sauvegarder dans Supabase via le hook
       const newStatus = !prev[ruleId];
@@ -879,7 +879,7 @@ export default function DisciplinePage({ trades = [] }) {
     setCheckedRuleIds(prev => {
       const updated = { ...prev };
       ids.forEach(id => { updated[id] = value; });
-      localStorage.setItem(`tr4de_checked_rules_${today}`, JSON.stringify(updated));
+      localStorage.setItem(`tao_checked_rules_${today}`, JSON.stringify(updated));
       ids.forEach(id => {
         setRuleCompleted(today, id, value).catch(err => console.error("❌ Erreur sauvegarde discipline Supabase:", err));
       });
@@ -1062,7 +1062,7 @@ export default function DisciplinePage({ trades = [] }) {
                 minWidth={280}
                 atLeastAnchorWidth
                 maxHeight={420}
-                id="tr4de-routine-popover"
+                id="tao-routine-popover"
                 role="listbox"
                 style={{
                   background:T.white,
@@ -1326,7 +1326,7 @@ export default function DisciplinePage({ trades = [] }) {
                 />
               )}
             </div>
-            <div id="tr4de-page-header-slot" />
+            <div id="tao-page-header-slot" />
           </div>
         </div>
 
@@ -1463,7 +1463,7 @@ export default function DisciplinePage({ trades = [] }) {
                 
                 // Historique des checklists de routine, indexé par date.
                 // Les checks du jour sont persistés localement sous
-                // `tr4de_routine_checklist_${date}`. On les relit tous ici pour
+                // `tao_routine_checklist_${date}`. On les relit tous ici pour
                 // pouvoir colorer chaque case du calendrier. Le total de règles
                 // est celui de la définition courante (ROUTINE_ITEMS) ; un jour
                 // sans aucune donnée de routine n'entre pas dans le calcul.

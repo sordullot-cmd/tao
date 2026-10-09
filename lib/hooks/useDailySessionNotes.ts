@@ -24,7 +24,7 @@ export function useDailySessionNotes() {
     // 1️⃣ CHARGER localStorage IMMÉDIATEMENT (stale-while-revalidate)
     try {
       console.log("⚡ Chargement rapide depuis localStorage");
-      const stored = localStorage.getItem("tr4de_daily_notes");
+      const stored = localStorage.getItem("tao_daily_notes");
       const notesMap = stored ? JSON.parse(stored) : {};
       setNotes(notesMap);
       setLoading(false); // ✅ Fini le loading immédiatement
@@ -105,9 +105,9 @@ export function useDailySessionNotes() {
         }));
 
         // Sauvegarder dans localStorage immédiatement
-        const allNotes = JSON.parse(localStorage.getItem("tr4de_daily_notes") || "{}");
+        const allNotes = JSON.parse(localStorage.getItem("tao_daily_notes") || "{}");
         allNotes[dateStr] = noteText;
-        localStorage.setItem("tr4de_daily_notes", JSON.stringify(allNotes));
+        localStorage.setItem("tao_daily_notes", JSON.stringify(allNotes));
         console.log("✅ Sauvegardé dans localStorage");
 
         // Essayer Supabase en arrière-plan (ne pas bloquer si ça échoue)
@@ -177,9 +177,9 @@ export function useDailySessionNotes() {
         });
 
         // Supprimer de localStorage immédiatement
-        const allNotes = JSON.parse(localStorage.getItem("tr4de_daily_notes") || "{}");
+        const allNotes = JSON.parse(localStorage.getItem("tao_daily_notes") || "{}");
         delete allNotes[dateStr];
-        localStorage.setItem("tr4de_daily_notes", JSON.stringify(allNotes));
+        localStorage.setItem("tao_daily_notes", JSON.stringify(allNotes));
         console.log("✅ Supprimé de localStorage");
 
         // Essayer Supabase en arrière-plan

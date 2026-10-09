@@ -182,8 +182,8 @@ export default function App() {
   const [, forcePrefRefresh] = useState(0);
   useEffect(() => {
     const onPrefs = () => forcePrefRefresh(v => v + 1);
-    window.addEventListener("tr4de:prefs-changed", onPrefs);
-    return () => window.removeEventListener("tr4de:prefs-changed", onPrefs);
+    window.addEventListener("tao:prefs-changed", onPrefs);
+    return () => window.removeEventListener("tao:prefs-changed", onPrefs);
   }, []);
   const [accountType, setAccountType] = useState(() => {
     try {
@@ -229,7 +229,7 @@ export default function App() {
   // Firme dont on affiche les paramètres (page "firm-detail").
   const [selectedFirmId, setSelectedFirmId] = useState(null);
   /* Section Finance — patrimoine. L'app d'origine passait ces identifiants par
-     l'URL ([id], [slug], [isin]) ; tr4de navigue par état, comme pour les
+     l'URL ([id], [slug], [isin]) ; tao navigue par état, comme pour les
      comptes de trading et les prop firms. */
   const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [selectedClassSlug, setSelectedClassSlug] = useState(null);
@@ -388,8 +388,8 @@ export default function App() {
     // Resynchronise quand un compte est créé/modifié/supprimé ailleurs
     // (modales de la page Comptes, page détail d'une firme, sélecteurs).
     const onAccountsChanged = () => { if (user?.id) loadAccounts(); };
-    window.addEventListener("tr4de:accounts-changed", onAccountsChanged);
-    return () => window.removeEventListener("tr4de:accounts-changed", onAccountsChanged);
+    window.addEventListener("tao:accounts-changed", onAccountsChanged);
+    return () => window.removeEventListener("tao:accounts-changed", onAccountsChanged);
   }, [user?.id]);
 
   // Fonction pour se déconnecter
@@ -541,7 +541,7 @@ export default function App() {
 
     // --- localStorage : tradeStrategies ---
     try {
-      const raw = localStorage.getItem("tr4de_trade_strategies");
+      const raw = localStorage.getItem("tao_trade_strategies");
       if (raw) {
         const map = JSON.parse(raw);
         const keysToDelete = new Set();
@@ -558,7 +558,7 @@ export default function App() {
         for (const k of Object.keys(map)) {
           if (keysToDelete.has(k)) { delete map[k]; changed = true; }
         }
-        if (changed) localStorage.setItem("tr4de_trade_strategies", JSON.stringify(map));
+        if (changed) localStorage.setItem("tao_trade_strategies", JSON.stringify(map));
       }
     } catch (err) {
       console.error("⚠️ Erreur nettoyage local tradeStrategies:", err);
@@ -566,12 +566,12 @@ export default function App() {
 
     // --- localStorage : trade_notes ---
     try {
-      const raw = localStorage.getItem("tr4de_trade_notes");
+      const raw = localStorage.getItem("tao_trade_notes");
       if (raw && tid) {
         const map = JSON.parse(raw);
         if (map[tid] !== undefined) {
           delete map[tid];
-          localStorage.setItem("tr4de_trade_notes", JSON.stringify(map));
+          localStorage.setItem("tao_trade_notes", JSON.stringify(map));
         }
       }
     } catch (err) {
@@ -582,7 +582,7 @@ export default function App() {
     // Clé = `${date}_${symbol}_${entry}_${exit}_${direction}_${stratId}_${ruleId}`
     // (variantes : exit "none" / direction "long")
     try {
-      const raw = localStorage.getItem("tr4de_checked_rules");
+      const raw = localStorage.getItem("tao_checked_rules");
       if (raw) {
         const map = JSON.parse(raw);
         const prefixes = [
@@ -594,9 +594,9 @@ export default function App() {
           if (prefixes.some(p => k.startsWith(p))) { delete map[k]; changed = true; }
         }
         if (changed) {
-          localStorage.setItem("tr4de_checked_rules", JSON.stringify(map));
+          localStorage.setItem("tao_checked_rules", JSON.stringify(map));
           if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("tr4de:checked-rules-changed"));
+            window.dispatchEvent(new CustomEvent("tao:checked-rules-changed"));
           }
         }
       }
@@ -999,7 +999,7 @@ export default function App() {
           le contenu part ainsi du bord de la fenêtre, et un bloc pleine largeur
           peut reprendre cette réserve pour passer derrière la barre. Remise à 0
           en mobile, où la barre est un tiroir (cf. globals.css). */}
-      <div className="tr4de-root" style={{display:"flex",minHeight:"100vh",background:"var(--color-bg-subtle, #F5F5F5)","--shell-left":`${sidebarWidth + 12}px`}}>
+      <div className="tao-root" style={{display:"flex",minHeight:"100vh",background:"var(--color-bg-subtle, #F5F5F5)","--shell-left":`${sidebarWidth + 12}px`}}>
         {/* SIDEBAR (OpenAI-style) */}
         <Sidebar
           mobileOpen={mobileNavOpen}
@@ -1036,7 +1036,7 @@ export default function App() {
 
 
         {/* MAIN */}
-        <div className="tr4de-main" style={{flex:1,minWidth:0,height:"100vh",display:"flex",flexDirection:"column",background:"transparent"}}>
+        <div className="tao-main" style={{flex:1,minWidth:0,height:"100vh",display:"flex",flexDirection:"column",background:"transparent"}}>
           {/* En-tête tactile — il remplace la barre du haut, masquée sous 768 px
               parce qu'elle ne portait que le hamburger. Il est la SEULE chose
               qui nomme l'écran courant en application installée : là, il n'y a
@@ -1064,10 +1064,10 @@ export default function App() {
               haute de son bloc de tête (`HEAD_PAD_TOP`), ce qui pose son chiffre
               héros à la même hauteur que le premier élément des autres pages
               sans river la courbe au passage. */}
-          <div className="tr4de-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #F5F5F5)",padding:page === "dashboard" ? "0 28px 0 calc(var(--shell-left, 0px) + 28px)" : "10px 28px 10px calc(var(--shell-left, 0px) + 28px)",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
+          <div className="tao-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #F5F5F5)",padding:page === "dashboard" ? "0 28px 0 calc(var(--shell-left, 0px) + 28px)" : "10px 28px 10px calc(var(--shell-left, 0px) + 28px)",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
             <button
               type="button"
-              className="tr4de-hamburger"
+              className="tao-hamburger"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Ouvrir le menu"
               style={{display:"none",width:36,height:36,borderRadius:8,border:"1px solid "+T.border,background:T.white,color:T.text,cursor:"pointer",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"inherit"}}

@@ -31,7 +31,7 @@ async function fetchFeed(url) {
     const res = await fetch(url.toString(), {
       redirect: "follow",
       signal: controller.signal,
-      headers: { Accept: "text/calendar, text/plain;q=0.9, */*;q=0.8", "User-Agent": "tr4de-agenda/1.0" },
+      headers: { Accept: "text/calendar, text/plain;q=0.9, */*;q=0.8", "User-Agent": "tao-agenda/1.0" },
     });
     if (!res.ok) return { error: `http_${res.status}`, status: res.status === 404 ? 404 : 502 };
 

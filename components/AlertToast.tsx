@@ -46,7 +46,7 @@ const COLORS: Record<Severity, { bg: string; bd: string; fg: string; ico: React.
 const MAX_VISIBLE = 3;
 
 /**
- * Écoute l'événement `tr4de:alert` (émis par DrivePage et StrategyPage quand une
+ * Écoute l'événement `tao:alert` (émis par DrivePage et StrategyPage quand une
  * opération échoue) et affiche les messages en pile, en bas à droite. Chacun
  * s'efface seul au bout de six secondes : plus rien ici n'attend la croix.
  */
@@ -110,8 +110,8 @@ export default function AlertToast() {
       });
       scheduleDismiss(id);
     };
-    window.addEventListener("tr4de:alert", onAlert);
-    return () => window.removeEventListener("tr4de:alert", onAlert);
+    window.addEventListener("tao:alert", onAlert);
+    return () => window.removeEventListener("tao:alert", onAlert);
   }, [scheduleDismiss, clearTimer]);
 
   // Nettoyage des timers au démontage.
@@ -140,7 +140,7 @@ export default function AlertToast() {
 
   const resetDrag = (el: HTMLElement | null) => {
     if (el) {
-      el.classList.remove("tr4de-toast--dragging");
+      el.classList.remove("tao-toast--dragging");
       el.style.transform = "";
       el.style.opacity = "";
       el.style.willChange = "";
@@ -176,7 +176,7 @@ export default function AlertToast() {
       if (Math.abs(dy) > Math.abs(dx)) { d.decided = 0; return; }
       d.decided = 1;
       clearTimer(d.toast);                     // on ne retire pas sous le doigt
-      e.currentTarget.classList.add("tr4de-toast--dragging");
+      e.currentTarget.classList.add("tao-toast--dragging");
       e.currentTarget.style.willChange = "transform, opacity";
       /* La capture garde le geste vivant même si le doigt sort de la carte —
          ce qui arrive systématiquement, puisque le but est de l'emmener hors
@@ -232,7 +232,7 @@ export default function AlertToast() {
 
            Le point de départ vient de @starting-style : il remplace le
            traditionnel useEffect(() => setMounted(true)), sans re-rendu. */
-        .tr4de-toast {
+        .tao-toast {
           opacity: 1;
           transform: translateX(0);
           transition: opacity 220ms var(--ease-out),
@@ -240,13 +240,13 @@ export default function AlertToast() {
           touch-action: pan-y;
         }
         @starting-style {
-          .tr4de-toast { opacity: 0; transform: translateX(16px); }
+          .tao-toast { opacity: 0; transform: translateX(16px); }
         }
         /* Sortie par le MÊME bord que l'entrée : c'est cette symétrie qui rend
            le geste de renvoi vers la droite évident sans qu'on l'explique.
            Plus rapide que l'entrée (180 contre 220 ms) : on prend son temps
            pour proposer, jamais pour retirer. */
-        .tr4de-toast--leaving {
+        .tao-toast--leaving {
           opacity: 0;
           transform: translateX(16px);
           transition: opacity 180ms var(--ease-out),
@@ -254,9 +254,9 @@ export default function AlertToast() {
           pointer-events: none;
         }
         /* Pendant le glissé : suivi au pixel, aucune interpolation. */
-        .tr4de-toast--dragging { transition: none; }
+        .tao-toast--dragging { transition: none; }
         @media (prefers-reduced-motion: reduce) {
-          .tr4de-toast, .tr4de-toast--leaving { transform: none !important; }
+          .tao-toast, .tao-toast--leaving { transform: none !important; }
         }
       `}</style>
       {items.map(item => {
@@ -274,7 +274,7 @@ export default function AlertToast() {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            className={item.leaving ? "tr4de-toast tr4de-toast--leaving" : "tr4de-toast"}
+            className={item.leaving ? "tao-toast tao-toast--leaving" : "tao-toast"}
             style={{
               background: c.bg,
               /* Couche flottante : `--elev-overlay` la detache, et la gravite se lit

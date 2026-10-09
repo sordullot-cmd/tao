@@ -115,7 +115,7 @@ This page allows you to:
 
 ### Command-Line Test
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-csv.js
 ```
 

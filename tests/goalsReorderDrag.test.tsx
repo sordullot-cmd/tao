@@ -26,7 +26,7 @@ function row() {
       unitOf={() => "km"} fmtVal={(v: number) => String(v)}
       drag={{ sourceId: null, overId: null, mode: null }} setDrag={setDrag} onDrop={() => {}} />,
   );
-  return { el: container.querySelector(".tr4de-goals-row") as HTMLElement, setDrag };
+  return { el: container.querySelector(".tao-goals-row") as HTMLElement, setDrag };
 }
 
 /** Un `dragstart` dont on peut relire si quelqu'un l'a annulé. */

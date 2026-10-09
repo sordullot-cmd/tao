@@ -251,7 +251,7 @@ http://localhost:3000/csv-parser-test.html
 
 ### Command Line Test
 ```bash
-cd e:\tr4de
+cd e:\tao
 node test-advanced.js
 ```
 
@@ -267,7 +267,7 @@ node test-advanced.js
 
 ## 📋 CSV Template Files
 
-Ready to use templates in e:\tr4de:
+Ready to use templates in e:\tao:
 
 ```
 sample_trades.csv

@@ -40,7 +40,7 @@ import { T as BaseT } from "@/lib/ui/tokens";
 import { Field as DAField, Modal as DAModal, FIELD as DA_FIELD } from "@/components/ui/form";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 
-export const BLUEPRINT_STORAGE_KEY = "tr4de_blueprints";
+export const BLUEPRINT_STORAGE_KEY = "tao_blueprints";
 export const BLUEPRINT_CLOUD_KEY = "blueprints";
 
 // `bg` local (#F5F5F5) = fond subtil, mappé sur la var de survol (thème sombre).

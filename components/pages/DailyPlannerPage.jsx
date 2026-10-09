@@ -109,7 +109,7 @@ const primaryBtn = (small = false) => ({
   fontSize: small ? 12 : 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
 });
 
-const STORAGE_PLANNER = "tr4de_daily_planner";
+const STORAGE_PLANNER = "tao_daily_planner";
 /* Clés des habitudes (localStorage + Supabase) — partagées avec la page
    « Vie RPG » pour que les deux pages lisent/écrivent la même source de vérité.
    Elles vivent désormais dans `lib/habitGoals` : la page Objectifs doit les
@@ -643,7 +643,7 @@ export default function DailyPlannerPage() {
           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", minHeight: 34, borderRadius: 999, border: "none", background: T.text, color: T.textInverted, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap" }}>
           <Plus size={14} strokeWidth={1.75} /> Nouvelle habitude
         </button>
-        <div id="tr4de-page-header-slot" />
+        <div id="tao-page-header-slot" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24, alignItems: "start" }}>

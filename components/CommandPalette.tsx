@@ -43,10 +43,10 @@ const DEFAULT_COMMANDS: Command[] = [
       setThemeMode(effectiveTheme() === "dark" ? "light" : "dark");
   }},
   { id: "action.lang-fr", group: "Actions", label: "Passer en français", keywords: ["language"], run: () => {
-      try { localStorage.setItem("tr4de_lang", "fr"); window.dispatchEvent(new CustomEvent("tr4de:lang-changed", { detail: { lang: "fr" } })); } catch {}
+      try { localStorage.setItem("tao_lang", "fr"); window.dispatchEvent(new CustomEvent("tao:lang-changed", { detail: { lang: "fr" } })); } catch {}
   }},
   { id: "action.lang-en", group: "Actions", label: "Switch to English", keywords: ["language"], run: () => {
-      try { localStorage.setItem("tr4de_lang", "en"); window.dispatchEvent(new CustomEvent("tr4de:lang-changed", { detail: { lang: "en" } })); } catch {}
+      try { localStorage.setItem("tao_lang", "en"); window.dispatchEvent(new CustomEvent("tao:lang-changed", { detail: { lang: "en" } })); } catch {}
   }},
 ];
 

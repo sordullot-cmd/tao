@@ -57,7 +57,7 @@ export function LegalLayout({
             Dernière mise à jour : {updatedAt}
           </p>
           <div
-            className="tr4de-legal-body"
+            className="tao-legal-body"
             style={{ marginTop: 24, fontSize: 14, lineHeight: 1.65, color: T.textSub }}
           >
             {children}

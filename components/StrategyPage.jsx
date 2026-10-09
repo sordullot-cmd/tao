@@ -21,7 +21,7 @@ const T = { ...BaseT };
 // Émet un toast d'erreur via le système global (voir components/AlertToast.tsx).
 const fireError = (title, body) => {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("tr4de:alert", { detail: { title, body, severity: "danger" } }));
+    window.dispatchEvent(new CustomEvent("tao:alert", { detail: { title, body, severity: "danger" } }));
   }
 };
 
@@ -68,7 +68,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
   React.useEffect(() => {
     const loadTradeStrategiesData = () => {
       try {
-        const saved = localStorage.getItem('tr4de_trade_strategies');
+        const saved = localStorage.getItem('tao_trade_strategies');
         const data = saved ? JSON.parse(saved) : {};
         setTradeStrategiesData(data);
       } catch (err) {
@@ -79,7 +79,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     
     const loadCheckedRules = () => {
       try {
-        const saved = localStorage.getItem('tr4de_checked_rules');
+        const saved = localStorage.getItem('tao_checked_rules');
         if (!saved) {
           setCheckedRules({});
           return;
@@ -104,10 +104,10 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
     
     // Écouter les changements de localStorage
     const handleStorageChange = (e) => {
-      if (e.key === 'tr4de_trade_strategies') {
+      if (e.key === 'tao_trade_strategies') {
         loadTradeStrategiesData();
       }
-      if (e.key === 'tr4de_checked_rules') {
+      if (e.key === 'tao_checked_rules') {
         loadCheckedRules();
       }
     };
@@ -127,7 +127,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
   React.useEffect(() => {
     if (strategies && strategies.length > 0) {
       localStorage.setItem("apex_strategies", JSON.stringify(strategies));
-      localStorage.setItem("tr4de_strategies", JSON.stringify(strategies));
+      localStorage.setItem("tao_strategies", JSON.stringify(strategies));
     }
   }, [strategies]);
 
@@ -410,7 +410,7 @@ export default function StrategyPage({ setPage = () => {}, setSelectedStrategyId
         return (
           /* Plus de filets : ce sont les colonnes elles-mêmes, régulièrement
              espacées, qui structurent la barre. */
-          <div className="tr4de-kpi-cards" style={{ display: "flex", alignItems: "flex-start", gap: 40, flexWrap: "wrap", minWidth: 0 }}>
+          <div className="tao-kpi-cards" style={{ display: "flex", alignItems: "flex-start", gap: 40, flexWrap: "wrap", minWidth: 0 }}>
             {/* Ces quatre valeurs sont les MEILLEURES de chaque catégorie : les
                 peindre en vert n'apporte rien, elles sont bonnes par
                 définition. Elles restent donc en encre pleine — seule une perte

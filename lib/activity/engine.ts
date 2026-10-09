@@ -138,8 +138,8 @@ export interface LiveState {
 
 /* ─── Persistance ───────────────────────────────────────────────────────── */
 
-const DAY_KEY = (date: string) => `tr4de_activity_day_${date}`;
-const INDEX_KEY = "tr4de_activity_days";
+const DAY_KEY = (date: string) => `tao_activity_day_${date}`;
+const INDEX_KEY = "tao_activity_days";
 /** Au-delà, les vieux jours sont effacés : le localStorage n'est pas un entrepôt. */
 const KEEP_DAYS = 120;
 

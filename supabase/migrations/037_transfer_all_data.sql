@@ -1,4 +1,4 @@
--- Migration 037 : transfert de TOUTES les données d'un compte tr4de vers un autre.
+-- Migration 037 : transfert de TOUTES les données d'un compte tao vers un autre.
 --
 -- Pendant de merge_trading_data (036), qu'elle appelle d'abord : banques,
 -- habitudes, objectifs, agenda, sport, patrimoine, drive, IA… changent de

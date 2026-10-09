@@ -26,12 +26,12 @@ import { Modal as DAModal, PillButton as DAPillButton, Field as DAField, Input a
 const T = { ...BaseT };
 
 // Notification non bloquante via le toast global (AlertToast écoute
-// l'événement "tr4de:alert"). Remplace les alert() natifs, indisponibles dans
+// l'événement "tao:alert"). Remplace les alert() natifs, indisponibles dans
 // la webview Tauri (où ils sont neutralisés → les fonctions restaient muettes).
 function notify(title, body, severity = "danger") {
   if (typeof window === "undefined") return;
   try {
-    window.dispatchEvent(new CustomEvent("tr4de:alert", {
+    window.dispatchEvent(new CustomEvent("tao:alert", {
       detail: { title, body: String(body ?? ""), severity },
     }));
   } catch {}
@@ -169,13 +169,13 @@ export default function DrivePage() {
   // exactement lÃ  oÃ¹ on Ã©tait en relanÃ§ant la page Drive.
   const [selectedProjectId, _setSelectedProjectId] = useState(() => {
     if (typeof window === "undefined") return null;
-    try { return window.localStorage.getItem("tr4de.drive.currentProject") || null; } catch { return null; }
+    try { return window.localStorage.getItem("tao.drive.currentProject") || null; } catch { return null; }
   });
   const setSelectedProjectId = (id) => {
     _setSelectedProjectId(id);
     try {
-      if (id) window.localStorage.setItem("tr4de.drive.currentProject", id);
-      else    window.localStorage.removeItem("tr4de.drive.currentProject");
+      if (id) window.localStorage.setItem("tao.drive.currentProject", id);
+      else    window.localStorage.removeItem("tao.drive.currentProject");
     } catch {}
   };
   const [error, setError] = useState(null);
@@ -460,10 +460,10 @@ export default function DrivePage() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "calc(100vh - 120px)" }} className="anim-1 tr4de-drive-page">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "calc(100vh - 120px)" }} className="anim-1 tao-drive-page">
       <style>{`
         @media (max-width: 600px) {
-          .tr4de-drive-page { height: auto !important; min-height: calc(100vh - 120px); }
+          .tao-drive-page { height: auto !important; min-height: calc(100vh - 120px); }
         }
       `}</style>
 
@@ -521,7 +521,7 @@ export default function DrivePage() {
             <Plus size={14} strokeWidth={2} /> Nouveau projet
           </button>
         </div>
-        <div id="tr4de-page-header-slot" />
+        <div id="tao-page-header-slot" />
       </div>
 
       {error && (
@@ -699,7 +699,7 @@ function ProjectsCanvas({
   const [selectedCardId, setSelectedCardId] = useState(null);
   // Zoom canvas : 0.25 → 2x. Persiste pour que la position de scroll restauree
   // au prochain mount corresponde bien aux memes cartes a l'ecran.
-  const ZOOM_KEY = "tr4de.drive.zoom.__projects";
+  const ZOOM_KEY = "tao.drive.zoom.__projects";
   const [zoom, setZoom] = useState(() => {
     if (typeof window === "undefined") return 1;
     try {
@@ -735,7 +735,7 @@ function ProjectsCanvas({
   const WORLD_H = 40000;
   const ORIGIN_X = WORLD_W / 2;
   const ORIGIN_Y = WORLD_H / 2;
-  const SCROLL_KEY = "tr4de.drive.scroll.v2.__projects";
+  const SCROLL_KEY = "tao.drive.scroll.v2.__projects";
 
   const canvasRef = useRef(null);
   const [creating, setCreating] = useState(null); // { pos_x, pos_y } | null
@@ -1391,7 +1391,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
   const closeCanvasMenu = useCallback(() => setCanvasMenu(null), []);
 
   // â”€â”€â”€ Verrouillage local persistÃ© par projet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const LOCK_KEY = `tr4de.drive.locked.${project.id}`;
+  const LOCK_KEY = `tao.drive.locked.${project.id}`;
   const [lockedIds, setLockedIds] = useState(() => {
     if (typeof window === "undefined") return new Set();
     try {
@@ -1463,7 +1463,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
   const ORIGIN_Y = WORLD_H / 2;
 
   // Zoom du canvas (Ctrl+molette), persisté par projet.
-  const ZOOM_KEY = `tr4de.drive.zoom.${project.id}`;
+  const ZOOM_KEY = `tao.drive.zoom.${project.id}`;
   const [zoom, setZoom] = useState(() => {
     if (typeof window === "undefined") return 1;
     try {
@@ -1507,7 +1507,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
   // Au mount, restore la derniÃ¨re position de scroll pour ce projet
   // (sinon la vue se dÃ©cale par rapport Ã  ce que l'utilisateur voyait avant
   // reload, mÃªme si la position en DB est correcte).
-  const SCROLL_KEY = `tr4de.drive.scroll.v2.${project.id}`;
+  const SCROLL_KEY = `tao.drive.scroll.v2.${project.id}`;
   const initialScrollDone = useRef(false);
   useEffect(() => {
     if (initialScrollDone.current) return;
@@ -2211,7 +2211,7 @@ function ProjectDetail({ project, currentUserId, onProjectRenamed }) {
         onPointerDown={onCanvasPointerDown}
         onContextMenu={(e) => {
           // Si la cible est une carte, le menu carte gÃ¨re ; ici on cible le fond.
-          if (e.target.closest("[data-tr4de-card]")) return;
+          if (e.target.closest("[data-tao-card]")) return;
           e.preventDefault();
           const world = clientToWorld(e.clientX, e.clientY);
           setCanvasMenu({ x: e.clientX, y: e.clientY, worldX: world.x, worldY: world.y });
@@ -2694,7 +2694,7 @@ function CanvasCard({ file, zoom = 1, selected, isTop, locked, previewUrl, audio
 
   return (
     <div
-      data-tr4de-card="1"
+      data-tao-card="1"
       onPointerDown={startDrag}
       onContextMenu={onContextMenu}
       onDoubleClick={(e) => { e.stopPropagation(); onOpen(); }}
@@ -2961,10 +2961,10 @@ function ImageLightbox({ url, alt, onClose, onDownload }) {
         background: "rgba(0,0,0,0.78)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 32,
-        animation: "tr4de-lightbox-in 140ms ease-out",
+        animation: "tao-lightbox-in 140ms ease-out",
       }}
     >
-      <style>{`@keyframes tr4de-lightbox-in { from { opacity: 0 } to { opacity: 1 } }`}</style>
+      <style>{`@keyframes tao-lightbox-in { from { opacity: 0 } to { opacity: 1 } }`}</style>
 
       {/* Bouton fermer */}
       <button

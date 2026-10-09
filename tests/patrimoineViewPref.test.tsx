@@ -30,7 +30,7 @@ vi.mock("@/lib/bank/useBankAccounts", async (importOriginal) => ({
 import PatrimoinePage from "@/components/pages/PatrimoinePage";
 import { PATRIMOINE_LOCAL_KEY, type Asset } from "@/lib/patrimoine";
 
-const VIEW_KEY = "tr4de_patrimoine_view";
+const VIEW_KEY = "tao_patrimoine_view";
 
 /* Un actif ET un passif : sans passif, net et brut sont égaux et la bascule
    n'est pas rendue du tout. */

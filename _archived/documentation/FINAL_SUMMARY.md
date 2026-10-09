@@ -83,7 +83,7 @@ Privacy: ✅ Completely local (no server upload)
 File: sample_trades.csv
 Trades: 25 verified trades
 Status: ✅ Ready to import
-Location: e:\tr4de\sample_trades.csv
+Location: e:\tao\sample_trades.csv
 ```
 
 ---

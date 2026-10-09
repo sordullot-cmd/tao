@@ -20,7 +20,7 @@
 import type { VaultFs, VaultAccess } from "./vaultFs";
 import { isTauri } from "@/lib/notify";
 
-const PATH_KEY = "tr4de_obsidian_vault_path";
+const PATH_KEY = "tao_obsidian_vault_path";
 
 export function isTauriVaultSupported(): boolean {
   return isTauri();

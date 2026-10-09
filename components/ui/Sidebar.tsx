@@ -33,7 +33,7 @@ export interface SidebarAccount {
 }
 
 export interface SidebarProps {
-  brand: string;                       // "tr4de"
+  brand: string;                       // "tao"
   workspace?: SidebarAccount | null;   // current trading account selected
   workspaces?: SidebarAccount[];       // list of accounts
   onSelectWorkspace?: (id: string) => void;
@@ -115,7 +115,7 @@ export default function Sidebar(props: SidebarProps) {
   const userBtnRef = useRef<HTMLButtonElement>(null);
 
   // Sections de la navbar repliables — état mémorisé en localStorage par label.
-  const NAV_COLLAPSE_KEY = "tr4de_nav_collapsed_sections";
+  const NAV_COLLAPSE_KEY = "tao_nav_collapsed_sections";
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   useEffect(() => {
     try {
@@ -151,11 +151,11 @@ export default function Sidebar(props: SidebarProps) {
   return (
     <>
     {mobileOpen && (
-      <div className="tr4de-sidebar-backdrop" onClick={onMobileClose} />
+      <div className="tao-sidebar-backdrop" onClick={onMobileClose} />
     )}
     <aside
       ref={asideRef}
-      className={`tr4de-sidebar ${mobileOpen ? "is-open" : ""}`}
+      className={`tao-sidebar ${mobileOpen ? "is-open" : ""}`}
       {...swipeHandlers}
       style={{
         // Carte blanche flottante posée sur le fond de page, gouttière de 12 px

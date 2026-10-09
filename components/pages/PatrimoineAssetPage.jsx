@@ -5,7 +5,7 @@
  *
  * Portée de `app/comptes/[id]/page.tsx`. L'original recevait l'id par l'URL et
  * lisait quatre sources distinctes (patrimoine, historique du compte, positions,
- * avis d'opéré). tr4de navigue par état et non par routeur : l'id arrive en
+ * avis d'opéré). tao navigue par état et non par routeur : l'id arrive en
  * prop, comme pour `AccountDetailPage` et `PropFirmDetailPage`.
  *
  * Ce qui change, faute de source :

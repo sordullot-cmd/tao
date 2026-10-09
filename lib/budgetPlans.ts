@@ -13,7 +13,7 @@
  * là où la question se pose.
  */
 
-export const BUDGET_STORAGE_KEY = "tr4de_budget_plans";
+export const BUDGET_STORAGE_KEY = "tao_budget_plans";
 export const BUDGET_CLOUD_KEY = "budget_plans";
 
 export interface BudgetItem {

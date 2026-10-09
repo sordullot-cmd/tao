@@ -42,7 +42,7 @@ describe("AttachAccountsModal", () => {
     updateTradingAccount.mockClear();
     // Les libellés attendus ci-dessous sont ceux du dictionnaire FR ; sans ça
     // l'app retombe sur l'anglais.
-    localStorage.setItem("tr4de_lang", "fr");
+    localStorage.setItem("tao_lang", "fr");
   });
 
   /* Le cœur de la fonctionnalité : la firme est le point de départ, on y récupère

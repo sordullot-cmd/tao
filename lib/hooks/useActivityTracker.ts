@@ -27,7 +27,7 @@ import { usageAccess } from "@/lib/activity/phone";
 /** Réglages du suivi, complétés par les valeurs par défaut. */
 export function useActivitySettings(): [ActivitySettings, (updater: ActivitySettings | ((prev: ActivitySettings) => ActivitySettings)) => void] {
   const [raw, setRaw] = useCloudState<Partial<ActivitySettings>>(
-    "tr4de_activity_settings",
+    "tao_activity_settings",
     "activity_settings",
     DEFAULT_SETTINGS
   );

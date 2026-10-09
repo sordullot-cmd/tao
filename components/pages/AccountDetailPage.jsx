@@ -69,13 +69,13 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
   const firmById = React.useMemo(() => new Map((firms || []).map((f) => [f.id, f])), [firms]);
 
   /* Assignations trade ↔ stratégie : même source que la page Trades (table
-     Supabase `trade_strategies`, miroir local `tr4de_trade_strategies`). Sans
+     Supabase `trade_strategies`, miroir local `tao_trade_strategies`). Sans
      ça la colonne « stratégie » du tableau serait vide alors que la donnée
      existe. */
   const [tradeStrategies, setTradeStrategies] = React.useState({});
   React.useEffect(() => {
     try {
-      const raw = localStorage.getItem("tr4de_trade_strategies");
+      const raw = localStorage.getItem("tao_trade_strategies");
       if (raw) setTradeStrategies(JSON.parse(raw) || {});
     } catch {}
   }, []);

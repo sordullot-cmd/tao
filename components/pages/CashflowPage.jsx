@@ -32,7 +32,7 @@
  *      chiffres.
  *
  * Tout vient des RELEVÉS des comptes agrégés : il n'y a aucune saisie manuelle
- * de dépense dans tr4de, et il n'en est pas prévu. Sans banque connectée, la
+ * de dépense dans tao, et il n'en est pas prévu. Sans banque connectée, la
  * page le dit et ne montre rien d'autre — des colonnes et des zéros se liraient
  * comme « tu n'as rien dépensé », ce qui est faux. Le renvoi vers le budget
  * reste, lui : le plan ne dépend d'aucun compte.
@@ -46,7 +46,7 @@
  * ici ne redemande que ce que la banque n'a pas encore donné.
  *
  * La fenêtre choisie est rangée sous les clés de l'ancienne page Dépenses
- * (`tr4de_spending_period`) : c'est le même réglage, sur la même matière, et une
+ * (`tao_spending_period`) : c'est le même réglage, sur la même matière, et une
  * clé neuve aurait renvoyé chacun à « 1 mois » le jour de la fusion.
  */
 
@@ -228,13 +228,13 @@ export default function CashflowPage({ setPage }) {
   /* La fenêtre suit le COMPTE et non l'onglet : quelqu'un qui suit son mois en
      cours ne doit pas retrouver « Tout » à chaque visite. Même mécanique que la
      synthèse Patrimoine. */
-  const [rawPeriod, setPeriod] = useCloudState("tr4de_spending_period", "spending_period", "1M");
+  const [rawPeriod, setPeriod] = useCloudState("tao_spending_period", "spending_period", "1M");
   const period = CASHFLOW_PERIODS.some((p) => p.id === rawPeriod) ? rawPeriod : "1M";
 
 
   /* La fenêtre libre, gardée avec la période : revenir sur « Personnalisé » doit
      rouvrir les dates qu'on y avait posées, pas trente jours par défaut. */
-  const [rawCustom, setCustom] = useCloudState("tr4de_spending_custom", "spending_custom", defaultCustom());
+  const [rawCustom, setCustom] = useCloudState("tao_spending_custom", "spending_custom", defaultCustom());
   const custom = rawCustom?.start && rawCustom?.end ? rawCustom : defaultCustom();
 
   /* La fenêtre a une LONGUEUR (les pastilles, ou les dates saisies) et une

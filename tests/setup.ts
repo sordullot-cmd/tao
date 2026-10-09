@@ -28,10 +28,10 @@ if (typeof window !== "undefined") {
  * raison qui n'a rien à voir avec ce qu'ils testent.
  *
  * Un test qui a besoin d'une autre langue la pose lui-même — c'est déjà ce que
- * font ceux qui écrivent `setItem("tr4de_lang", "fr")`. Et la valeur par défaut
+ * font ceux qui écrivent `setItem("tao_lang", "fr")`. Et la valeur par défaut
  * du produit, elle, reste couverte : tests/i18n.test.ts efface la clé avant de
  * l'interroger.
  */
 beforeEach(() => {
-  try { window.localStorage.setItem("tr4de_lang", "en"); } catch { /* pas de storage : le défaut suffit */ }
+  try { window.localStorage.setItem("tao_lang", "en"); } catch { /* pas de storage : le défaut suffit */ }
 });

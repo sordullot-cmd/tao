@@ -83,8 +83,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   React.useEffect(() => {
     const reload = () => setFirmMeta(readFirmMeta());
     reload();
-    window.addEventListener("tr4de:accounts-changed", reload);
-    return () => window.removeEventListener("tr4de:accounts-changed", reload);
+    window.addEventListener("tao:accounts-changed", reload);
+    return () => window.removeEventListener("tao:accounts-changed", reload);
   }, [firms]);
   // Modales de création : la firme (objet parent) et le compte isolé sont deux
   // parcours distincts, séparés de l'import de trades.
@@ -210,7 +210,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   };
 
   // Taille de compte partagée avec la roadmap (même clé Supabase).
-  const [simState, setSimState] = useCloudState("tr4de_scaling_sim", "scaling_sim", {
+  const [simState, setSimState] = useCloudState("tao_scaling_sim", "scaling_sim", {
     capitalSize: 50000, pctMonthly: 5, accountsTarget: 3, weeksPerEval: 7,
   });
   const capitalSize = simState?.capitalSize || 50000;
@@ -537,7 +537,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   const dragArmed = React.useRef(false);
 
   const [expandedIds, setExpandedIds] = useCloudState(
-    "tr4de_accounts_expanded_rows", "accounts_expanded_rows", []
+    "tao_accounts_expanded_rows", "accounts_expanded_rows", []
   );
   const expanded = React.useMemo(
     () => new Set(Array.isArray(expandedIds) ? expandedIds : []),
@@ -554,7 +554,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
      L'ordre suit le COMPTE et non l'appareil — on range ses firmes une fois.
      ---------------------------------------------------------------------- */
   const [rowOrder, setRowOrder] = useCloudState(
-    "tr4de_accounts_order", "accounts_order", []
+    "tao_accounts_order", "accounts_order", []
   );
 
   /* Firmes et comptes autonomes sur UN seul rang. Sans cette liste unique, un
@@ -826,7 +826,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
             l'en-tête d'une fiche de compte — le montant en tête, puis une
             ligne de repères. Les cinq cartes d'avant donnaient à des totaux le
             même poids visuel qu'aux comptes eux-mêmes, qui sont le sujet. */}
-        <div className="tr4de-accounts-kpis" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div className="tao-accounts-kpis" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Même construction que le chiffre héros du dashboard : libellé
               au-dessus, montant en 40 px, variation en montant PUIS en
               pourcentage — les deux pages doivent se lire de la même façon. */}
@@ -899,7 +899,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
             <SectionTitle>{t("accountsPage.mostActive")}</SectionTitle>
             {/* Six colonnes : le gap descend à 16 pour laisser de la largeur
                 aux cartes, qui portent chacune un chiffre et une courbe. */}
-            <div className="tr4de-accounts-live" style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 16 }}>
+            <div className="tao-accounts-live" style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 16 }}>
               {topActiveEntities.map((entity) => {
                 /* Une entité rattachée à une firme est présentée par sa FIRME :
                    nom, logo, courbe et chiffres agrégés de tous ses comptes. */
@@ -1224,22 +1224,22 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
           leur espacement pour qu'ils tiennent sur deux lignes. */}
       <style>{`
         @media (max-width: 1600px) {
-          .tr4de-accounts-live { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+          .tao-accounts-live { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 1360px) {
-          .tr4de-accounts-live { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+          .tao-accounts-live { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 1100px) {
-          .tr4de-accounts-live { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          .tao-accounts-live { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 860px) {
-          .tr4de-accounts-live { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .tao-accounts-live { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 400px) {
-          .tr4de-accounts-live { grid-template-columns: minmax(0, 1fr) !important; }
+          .tao-accounts-live { grid-template-columns: minmax(0, 1fr) !important; }
         }
         @media (max-width: 720px) {
-          .tr4de-accounts-kpis > div:last-child { gap: 18px !important; row-gap: 12px !important; }
+          .tao-accounts-kpis > div:last-child { gap: 18px !important; row-gap: 12px !important; }
         }
       `}</style>
     </div>
@@ -1447,8 +1447,8 @@ function accountTypeLabel(account) {
 
 /* ============== SCALING SIMULATOR ============== */
 function ScalingSimulator({ accounts = [] }) {
-  const [sim, setSim] = useCloudState("tr4de_scaling_sim", "scaling_sim", { capitalSize: 100000, pctMonthly: 5, accountsTarget: 3, weeksPerEval: 7 });
-  const [open, setOpen] = useCloudState("tr4de_scaling_sim_open", "scaling_sim_open", false);
+  const [sim, setSim] = useCloudState("tao_scaling_sim", "scaling_sim", { capitalSize: 100000, pctMonthly: 5, accountsTarget: 3, weeksPerEval: 7 });
+  const [open, setOpen] = useCloudState("tao_scaling_sim_open", "scaling_sim_open", false);
 
   // Comptes "financés" = ceux dont le type est funded dans la liste de comptes existante.
   const fundedAccounts = (accounts || []).filter(a => (a.account_type || "live") === "funded");
@@ -1622,18 +1622,18 @@ function SimSlider({ label, value, min, max, step, fmt, onChange }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1fr) 2fr 80px", alignItems: "center", gap: 16 }}>
       <style>{`
-        input[type="range"].tr4de-slim {
+        input[type="range"].tao-slim {
           -webkit-appearance: none; appearance: none;
           width: 100%; height: 4px; padding: 0; margin: 0;
           background: transparent; cursor: pointer; outline: none;
         }
-        input[type="range"].tr4de-slim::-webkit-slider-runnable-track {
+        input[type="range"].tao-slim::-webkit-slider-runnable-track {
           height: 4px; border-radius: 2px;
           background: linear-gradient(to right, ${T.blue} 0%, ${T.blue} var(--p,0%), ${T.border} var(--p,0%), ${T.border} 100%);
         }
-        input[type="range"].tr4de-slim::-moz-range-track { height: 4px; border-radius: 2px; background: ${T.border}; }
-        input[type="range"].tr4de-slim::-moz-range-progress { height: 4px; border-radius: 2px; background: ${T.blue}; }
-        input[type="range"].tr4de-slim::-webkit-slider-thumb {
+        input[type="range"].tao-slim::-moz-range-track { height: 4px; border-radius: 2px; background: ${T.border}; }
+        input[type="range"].tao-slim::-moz-range-progress { height: 4px; border-radius: 2px; background: ${T.blue}; }
+        input[type="range"].tao-slim::-webkit-slider-thumb {
           -webkit-appearance: none; appearance: none;
           width: 14px; height: 14px; border-radius: 50%;
           background: ${T.blue}; border: 2px solid ${T.white};
@@ -1641,8 +1641,8 @@ function SimSlider({ label, value, min, max, step, fmt, onChange }) {
           box-shadow: 0 0 0 1px ${T.blue}, 0 1px 3px rgba(0,0,0,0.12);
           transition: transform .12s ease;
         }
-        input[type="range"].tr4de-slim::-webkit-slider-thumb:hover { transform: scale(1.15); }
-        input[type="range"].tr4de-slim::-moz-range-thumb {
+        input[type="range"].tao-slim::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        input[type="range"].tao-slim::-moz-range-thumb {
           width: 14px; height: 14px; border-radius: 50%;
           background: ${T.blue}; border: 2px solid ${T.white};
           box-shadow: 0 0 0 1px ${T.blue}; cursor: pointer;
@@ -1650,7 +1650,7 @@ function SimSlider({ label, value, min, max, step, fmt, onChange }) {
       `}</style>
       <span style={{ fontSize: 12, color: T.text, fontWeight: 500 }}>{label}</span>
       <input
-        className="tr4de-slim"
+        className="tao-slim"
         type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ "--p": `${pct}%` }}
@@ -1862,7 +1862,7 @@ const PLAN_TYPES = [
 ];
 
 function AccountPlans({ accounts, trades }) {
-  const [plans, setPlans] = useCloudState("tr4de_account_plans", "account_plans", []);
+  const [plans, setPlans] = useCloudState("tao_account_plans", "account_plans", []);
   const [showForm, setShowForm] = React.useState(false);
   const [editingId, setEditingId] = React.useState(null);
   // Form supporte les 2 modes : `mode: "template"` (templateId, accountIds…)

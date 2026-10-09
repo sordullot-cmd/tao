@@ -68,8 +68,8 @@ export default function QuickAccountSelector({
     loadAccounts();
     // Réagit aux mises à jour de comptes (ex: changement de broker dans AddTradePage)
     const onAccountsChanged = () => loadAccounts();
-    window.addEventListener("tr4de:accounts-changed", onAccountsChanged);
-    return () => window.removeEventListener("tr4de:accounts-changed", onAccountsChanged);
+    window.addEventListener("tao:accounts-changed", onAccountsChanged);
+    return () => window.removeEventListener("tao:accounts-changed", onAccountsChanged);
   }, [user?.id, accountsProp]);
 
   // Réinitialise les états transitoires quand le dropdown se ferme.
@@ -195,8 +195,8 @@ export default function QuickAccountSelector({
       setAccounts(prev => prev.filter(a => a.id !== acc.id));
       // Resync parent (mode piloté par prop) + autres vues
       if (onAccountDeleted) onAccountDeleted(acc.id);
-      try { window.dispatchEvent(new CustomEvent("tr4de:accounts-changed")); } catch {}
-      try { window.dispatchEvent(new CustomEvent("tr4de:trades-imported", { detail: { count: 0 } })); } catch {}
+      try { window.dispatchEvent(new CustomEvent("tao:accounts-changed")); } catch {}
+      try { window.dispatchEvent(new CustomEvent("tao:trades-imported", { detail: { count: 0 } })); } catch {}
     } catch (e) {
       console.error(e);
       if (typeof window !== "undefined") window.alert("Erreur lors de la suppression : " + (e?.message || e));
@@ -213,7 +213,7 @@ export default function QuickAccountSelector({
           cible tactile ≥44px pour l'accessibilité. */}
       <style>{`
         @media (pointer: coarse) {
-          .tr4de-acct-iconbtn { opacity: 1 !important; width: 44px !important; height: 44px !important; }
+          .tao-acct-iconbtn { opacity: 1 !important; width: 44px !important; height: 44px !important; }
         }
       `}</style>
       {/* Trigger — identique au mode mono ; en multi, affiche le 1er compte + badge "+N" */}
@@ -456,7 +456,7 @@ export default function QuickAccountSelector({
                       {!isEditing && !selectionOnly && (
                         <span
                           data-hover
-                          className="tr4de-acct-iconbtn"
+                          className="tao-acct-iconbtn"
                           role="button"
                           title={t("accounts.rename")}
                           aria-label={t("accounts.rename")}
@@ -475,7 +475,7 @@ export default function QuickAccountSelector({
                       {allowDelete && !isEditing && !selectionOnly && (
                         <span
                           data-hover
-                          className="tr4de-acct-iconbtn"
+                          className="tao-acct-iconbtn"
                           role="button"
                           title={t("accounts.deleteTip")}
                           aria-label={t("accounts.deleteTip")}
