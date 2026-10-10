@@ -182,7 +182,8 @@ describe("Page Backtest", () => {
   it("juge chaque session seule, sans recoller les séances bout à bout", () => {
     render(<BacktestPage />);
     const openSession = (name: string) => {
-      fireEvent.click(screen.getAllByText("Nouvelle session")[0]);
+      // Une fois une session ouverte, l'action vit dans la colonne des sessions.
+      fireEvent.click(screen.getAllByRole("button", { name: "Nouvelle session" })[0]);
       const dialog = screen.getByRole("dialog");
       fireEvent.change(within(dialog).getByPlaceholderText("iFVG hors killzone"), { target: { value: name } });
       fireEvent.click(within(dialog).getByRole("button", { name: "Créer la session" }));
@@ -197,12 +198,37 @@ describe("Page Backtest", () => {
     let cumul = screen.getByText("R cumulé").parentElement as HTMLElement;
     expect(within(cumul).getByText("−1R")).toBeTruthy();
 
-    // La vue d'ensemble range les setups par session et compare les séances.
-    fireEvent.change(screen.getByRole("combobox", { name: "Session" }), { target: { value: "all" } });
+    // La colonne des sessions compare les séances, chacune avec son bilan.
+    const rail = screen.getByRole("navigation", { name: "Sessions" });
+    expect(within(within(rail).getByText("Avril").closest("button") as HTMLElement).getByText("−1R")).toBeTruthy();
+    expect(within(within(rail).getByText("Mars").closest("button") as HTMLElement).getByText("+3R")).toBeTruthy();
+
+    // La vue d'ensemble agrège tout, et range les setups par session.
+    fireEvent.click(within(rail).getByText("Vue d'ensemble"));
     cumul = screen.getByText("R cumulé").parentElement as HTMLElement;
     expect(within(cumul).getByText("+2R")).toBeTruthy();
-    const rows = within(screen.getByRole("table", { name: "Sessions" })).getAllByRole("row").slice(1);
-    expect(within(rows[0]).getByText("−1R")).toBeTruthy();
-    expect(within(rows[1]).getByText("+3R")).toBeTruthy();
+    expect(screen.getByText("NQ")).toBeTruthy();
+  });
+
+  it("note un setup d'une frappe : le signe du R dit le résultat", () => {
+    render(<BacktestPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Nouvelle session" })[0]);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("NQ, EURUSD…"), { target: { value: "NQ" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Créer la session" }));
+
+    const field = screen.getByRole("textbox", { name: /saisie rapide/ });
+    fireEvent.change(field, { target: { value: "-1,5" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    fireEvent.change(field, { target: { value: "3" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    const list = screen.getByRole("list", { name: "Setups" });
+    expect(within(list).getByText("Perdant")).toBeTruthy();
+    expect(within(list).getByText("Gagnant")).toBeTruthy();
+    // Le setup hérite l'instrument de la session.
+    expect(within(list).getAllByText("NQ")).toHaveLength(2);
+    const cumul = screen.getByText("R cumulé").parentElement as HTMLElement;
+    expect(within(cumul).getByText("+1.5R")).toBeTruthy();
   });
 });

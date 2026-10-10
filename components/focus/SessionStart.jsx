@@ -186,11 +186,9 @@ export default function SessionStart({ store, setStore, onStart, actionSlot }) {
 
   /* Session verrouillée en attente de confirmation.
 
-     Le cran verrouillé ne donne plus AUCUNE sortie : la session va jusqu'au
-     bout. Ce qui se paie une fois lancé doit donc se décider avant — un clic de
-     travers sur « Verrouillé · 2 h » ne peut pas être irréversible. C'est le
-     seul cran qui demande à confirmer, et c'est exactement la raison pour
-     laquelle il tient. */
+     Le cran verrouillé ne se quitte qu'au prix d'une attente et d'une phrase :
+     ce qui coûte cher une fois lancé doit se décider avant. C'est le seul cran
+     qui demande à confirmer, et c'est en partie pour ça qu'il tient. */
   const [pending, setPending] = useState(null);
   const launch = (session) => {
     if (session.mode === "locked") { setPending(session); return; }
@@ -390,11 +388,11 @@ export default function SessionStart({ store, setStore, onStart, actionSlot }) {
             <strong style={{ color: T.text }}>
               {pending.plannedMs ? fmtDur(pending.plannedMs) : "Durée libre"}
             </strong>{" "}
-            sans arrêt possible : ni pause, ni annulation depuis l’app. Le bouton « Arrêter »
-            n’existera pas tant que le minuteur n’est pas au bout.
+            sans pause. L’annuler restera possible, mais pas sur un coup de tête : il faudra
+            la demander, attendre deux minutes, puis recopier une phrase.
             <br />
             Ce que ça ne fait pas : t’empêcher de fermer l’app ou d’éteindre la machine — aucun
-            logiciel ne le peut. Ça empêche de l’annuler là où l’envie se présente.
+            logiciel ne le peut. Ça rend l’annulation plus lente que l’envie qui la réclame.
           </div>
         </Modal>
       )}

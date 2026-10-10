@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Pencil, Activity, Target, AlertTriangle, Layers, FolderPlus } from "lucide-react";
+import { Plus, Trash2, Pencil, FolderPlus, CornerDownLeft, SlidersHorizontal } from "lucide-react";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
@@ -189,6 +189,32 @@ export default function BacktestPage() {
     });
   };
 
+  /* La saisie rapide ne connaît que le résultat, le R et le sens : le reste
+     vient de la session visée, ou à défaut du dernier setup noté — pendant une
+     séance, c'est le même instrument et la même stratégie d'un setup à l'autre.
+     La date reprend celle du dernier setup de la session : on rejoue une même
+     journée de graphique, pas le jour où l'on saisit. */
+  const quickAdd = ({ outcome, r, direction }) => {
+    const target = currentSession || (view === ALL ? sessions[0] : null) || null;
+    const pool = target ? journal.entries.filter(e => e.sessionId === target.id) : journal.entries;
+    const previous = pool[0] || journal.entries[0];
+    const entry = {
+      id: `bt_${Date.now()}`,
+      date: previous?.date || target?.date || today(),
+      symbol: target?.symbol || previous?.symbol || "",
+      direction,
+      strategyId: target?.strategyId || previous?.strategyId || null,
+      sessionId: target?.id ?? null,
+      outcome,
+      r,
+      confluences: [],
+      mistakes: [],
+      better: "",
+      createdAt: new Date().toISOString(),
+    };
+    update(store => ({ ...store, entries: [entry, ...store.entries] }));
+  };
+
   const openNewSession = () => { setEditingSessionId(null); setSessionForm(emptySessionForm()); };
   const openEditSession = (session) => {
     setEditingSessionId(session.id);
@@ -247,150 +273,146 @@ export default function BacktestPage() {
   }
 
   const isEmpty = journal.entries.length === 0 && sessions.length === 0;
+  const visible = entries.filter(matches);
+  /* Le numéro d'un setup est son rang dans la séquence affichée : c'est lui
+     qu'on retrouve sur la courbe au survol (« #12 »), et c'est par lui qu'on
+     se repère quand on relit une série de trente. */
+  const rankOf = new Map(entries.map((e, i) => [e.id, entries.length - i]));
   const rowOf = (entry) => (
-    <EntryRow key={entry.id} entry={entry}
+    <EntryRow key={entry.id} entry={entry} rank={rankOf.get(entry.id)}
               strategy={entry.strategyId ? strategyById.get(entry.strategyId) : undefined}
               onEdit={() => openEdit(entry)} onDelete={() => remove(entry.id)} />
   );
+  const quickTarget = currentSession || (view === ALL ? sessions[0] : null) || null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }} className="anim-1">
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        {!isEmpty && (
-          <Select aria-label="Session" value={view} onChange={(e) => setSessionView(e.target.value)}
-                  style={{ width: "auto", minWidth: 200, maxWidth: 280 }}>
-            <option value={ALL}>Toutes les sessions</option>
-            {sessions.map(s => <option key={s.id} value={s.id}>{sessionLabel(s)}</option>)}
-            {hasOrphans && <option value={NONE}>Sans session</option>}
-          </Select>
-        )}
-        {entries.length > 0 && (
-          <PeriodPills
-            value={filter}
-            onChange={setFilter}
-            track
-            size={13}
-            options={[
-              { id: "all",  label: `Tous (${stats.count})` },
-              { id: "win",  label: `Gagnants (${stats.wins})` },
-              { id: "loss", label: `Perdants (${stats.losses})` },
-            ]}
-          />
-        )}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <PillButton onClick={openNewSession}>
-            <FolderPlus size={14} strokeWidth={2} /> Nouvelle session
-          </PillButton>
-          <PillButton variant="primary" onClick={() => openNew()}>
-            <Plus size={14} strokeWidth={2} /> Ajouter un backtest
-          </PillButton>
-        </div>
-        <div id="tao-page-header-slot" />
-      </div>
-
-      {currentSession && (
-        <SessionHeader session={currentSession}
-                       strategy={currentSession.strategyId ? strategyById.get(currentSession.strategyId) : undefined}
-                       onEdit={() => openEditSession(currentSession)}
-                       onDelete={() => removeSession(currentSession.id)} />
+    <div className="anim-1 tao-bt-wrap">
+      <div className="tao-bt-layout">
+      {!isEmpty && (
+        <SessionRail
+          sessions={sessions}
+          entries={journal.entries}
+          hasOrphans={hasOrphans}
+          value={view}
+          onSelect={setSessionView}
+          onNew={openNewSession}
+        />
       )}
 
-      {isEmpty ? (
-        <div style={{ ...CARD, padding: "60px 24px", textAlign: "center" }}>
-          <div style={{ ...TYPE.headline, color: T.text, marginBottom: 8 }}>Aucun backtest pour l&apos;instant</div>
-          <div style={{ ...TYPE.body, color: T.textSub, maxWidth: 420, margin: "0 auto 18px" }}>
-            Ouvre une session — une stratégie, un instrument, une question à
-            vérifier — puis note chaque setup rejoué : gagnant ou perdant, les
-            confluences, les erreurs, et ce que tu aurais dû mieux faire.
-          </div>
-          <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-            <PillButton variant="primary" onClick={openNewSession}>
-              <FolderPlus size={14} strokeWidth={2} /> Nouvelle session
-            </PillButton>
-            <PillButton onClick={() => openNew()}>
-              <Plus size={14} strokeWidth={2} /> Ajouter un backtest
-            </PillButton>
-          </div>
-        </div>
-      ) : entries.length === 0 ? (
-        <div style={{ ...CARD, padding: "40px 24px", textAlign: "center" }}>
-          <div style={{ ...TYPE.body, color: T.textSub, marginBottom: 14 }}>
-            {currentSession ? "Session ouverte — ajoute son premier setup." : "Aucun backtest ici."}
-          </div>
-          <PillButton variant="primary" onClick={() => openNew()}>
-            <Plus size={14} strokeWidth={2} /> Ajouter un backtest
-          </PillButton>
-        </div>
-      ) : (
-        <>
-          <div className="tao-field-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
-            <Kpi label="Backtests" value={String(stats.count)}
-                 sub={`${stats.wins}G · ${stats.losses}P · ${stats.breakevens}BE`} />
-            <Kpi label="Taux de réussite" value={`${stats.winRate}%`}
-                 sub={stats.breakevens > 0 ? "scratchs exclus" : "sur les trades tranchés"} />
-            <Kpi label="R cumulé" value={fmtR(stats.totalR)}
-                 color={stats.totalR >= 0 ? T.green : T.red} sub="multiples de risque" />
-            <Kpi label="Espérance" value={fmtR(stats.avgR)}
-                 color={stats.avgR >= 0 ? T.green : T.red} sub="par backtest" />
-          </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0, gridColumn: isEmpty ? "1 / -1" : undefined }}>
+        <PageHeader
+          session={currentSession}
+          view={view}
+          strategy={currentSession?.strategyId ? strategyById.get(currentSession.strategyId) : undefined}
+          sessionCount={sessions.length}
+          onEditSession={currentSession ? () => openEditSession(currentSession) : undefined}
+          onDeleteSession={currentSession ? () => removeSession(currentSession.id) : undefined}
+          onNewSession={isEmpty ? undefined : openNewSession}
+          onAdd={() => openNew()}
+        />
 
-          <EquityCurve curve={curve.points} breaks={view === ALL ? curve.breaks : []} />
-
-          {/* Vue d'ensemble : les sessions côte à côte, chacune avec son bilan.
-              C'est ici qu'on compare deux séances — et d'ici qu'on en ouvre une. */}
-          {view === ALL && sessions.length > 0 && (
-            <SessionList groups={groups} strategyById={strategyById} onOpen={(id) => setSessionView(id ?? NONE)} />
-          )}
-
-          {/* Le classement le plus large d'abord : une stratégie chapeaute les
-              confluences qui la composent, et c'est d'elle qu'on décide (la
-              garder, la retravailler). Masqué tant qu'aucun backtest n'en porte
-              — une carte vide occuperait la place sans rien dire. */}
-          {byStrategy.length > 0 && (
-            <TagRanking title="Par stratégie" icon={Layers} color={T.textSub} stats={byStrategy}
-                        empty="Aucun backtest rattaché à une stratégie." />
-          )}
-
-          {/* Les deux classements côte à côte : ce qui rapporte à gauche, ce qui
-              coûte à droite. Les lire séparément reviendrait à comparer deux
-              pages — or la question est bien « lequel des deux pèse le plus ». */}
-          <div className="tao-field-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-            <TagRanking title="Confluences" icon={Target} color={PALETTE.green} stats={confluenceStats}
-                        empty="Coche des confluences dans tes backtests pour voir lesquelles tiennent." />
-            <TagRanking title="Erreurs" icon={AlertTriangle} color={PALETTE.red} stats={mistakeStats}
-                        empty="Aucune erreur relevée pour l'instant." />
+        {isEmpty ? (
+          <div style={{ ...CARD, padding: "56px 24px", textAlign: "center" }}>
+            <div style={{ ...TYPE.headline, color: T.text, marginBottom: 8 }}>Aucun backtest pour l&apos;instant</div>
+            <div style={{ ...TYPE.body, color: T.textSub, maxWidth: 420, margin: "0 auto 18px" }}>
+              Ouvre une session — une stratégie, un instrument, une question à
+              vérifier — puis note chaque setup rejoué : gagnant ou perdant, les
+              confluences, les erreurs, et ce que tu aurais dû mieux faire.
+            </div>
+            <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+              <PillButton variant="primary" onClick={openNewSession}>
+                <FolderPlus size={14} strokeWidth={2} /> Nouvelle session
+              </PillButton>
+              <PillButton onClick={() => openNew()}>
+                <Plus size={14} strokeWidth={2} /> Ajouter un backtest
+              </PillButton>
+            </div>
           </div>
+        ) : (
+          <>
+            {/* La saisie rapide d'abord : pendant une séance on enchaîne les
+                setups sans quitter le graphique des yeux, et une modale par
+                setup transformait trente relevés en trente formulaires. */}
+            <QuickAdd target={quickTarget} onAdd={quickAdd} onDetails={() => openNew()} />
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {groups ? (
-              /* Dans la vue d'ensemble, les setups restent rangés par session :
-                 une liste continue recollerait les séances bout à bout. */
-              groups.filter(g => g.entries.some(matches)).map(g => (
-                <React.Fragment key={g.session?.id ?? NONE}>
-                  <button type="button" onClick={() => setSessionView(g.session?.id ?? NONE)}
-                    style={{
-                      display: "flex", alignItems: "baseline", gap: 8, marginTop: 6, padding: 0,
-                      border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                    }}>
-                    <span style={{ ...TYPE.callout, fontWeight: 600, color: T.text }}>
-                      {g.session ? sessionLabel(g.session) : "Sans session"}
-                    </span>
-                    <span style={{ ...TYPE.caption, color: T.textMut }}>
-                      {g.entries.length} backtest{g.entries.length > 1 ? "s" : ""}
-                    </span>
-                  </button>
-                  {g.entries.filter(matches).map(rowOf)}
-                </React.Fragment>
-              ))
-            ) : entries.filter(matches).map(rowOf)}
-            {entries.filter(matches).length === 0 && (
-              <div style={{ ...CARD, padding: 24, textAlign: "center", ...TYPE.body, color: T.textMut }}>
-                Aucun backtest dans ce filtre.
+            {entries.length === 0 ? (
+              <div style={{ ...CARD, padding: "32px 24px", textAlign: "center", ...TYPE.body, color: T.textSub }}>
+                {currentSession ? "Session ouverte — note son premier setup ci-dessus." : "Aucun backtest ici."}
               </div>
+            ) : (
+              <>
+                <Overview stats={stats} curve={curve.points} breaks={view === ALL ? curve.breaks : []} />
+
+                {/* Ce qui rapporte à gauche, ce qui coûte à droite : la question
+                    est « lequel des deux pèse le plus », elle se lit d'un regard
+                    et non en comparant deux cartes l'une sous l'autre. */}
+                <div className="tao-field-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                  <TagRanking title="Confluences" subtitle="Ce qui rapporte" color={PALETTE.green} stats={confluenceStats}
+                              empty="Coche des confluences dans tes backtests pour voir lesquelles tiennent." />
+                  <TagRanking title="Erreurs" subtitle="Ce qui coûte" color={PALETTE.red} stats={mistakeStats}
+                              empty="Aucune erreur relevée pour l'instant." />
+                </div>
+
+                {/* Masqué tant qu'aucun backtest ne porte de stratégie : une
+                    carte vide occuperait la place sans rien dire. */}
+                {byStrategy.length > 0 && (
+                  <TagRanking title="Par stratégie" subtitle="Laquelle garder" color={T.textSub} stats={byStrategy}
+                              empty="Aucun backtest rattaché à une stratégie." />
+                )}
+
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                  <div style={{ ...TYPE.headline, color: T.text }}>Setups</div>
+                  <div style={{ marginLeft: "auto" }}>
+                    <PeriodPills
+                      value={filter}
+                      onChange={setFilter}
+                      track
+                      size={13}
+                      options={[
+                        { id: "all",  label: `Tous (${stats.count})` },
+                        { id: "win",  label: `Gagnants (${stats.wins})` },
+                        { id: "loss", label: `Perdants (${stats.losses})` },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div role="list" aria-label="Setups" style={{ ...CARD, padding: 0 }}>
+                  {groups ? (
+                    /* Dans la vue d'ensemble, les setups restent rangés par
+                       session : une liste continue recollerait les séances. */
+                    groups.filter(g => g.entries.some(matches)).map((g, i) => (
+                      <React.Fragment key={g.session?.id ?? NONE}>
+                        <button type="button" onClick={() => setSessionView(g.session?.id ?? NONE)}
+                          style={{
+                            display: "flex", alignItems: "baseline", gap: 8, width: "100%",
+                            padding: "12px 16px 8px", border: "none", cursor: "pointer", textAlign: "left",
+                            borderTop: i > 0 ? `1px solid ${HAIRLINE}` : "none",
+                            background: "transparent", fontFamily: "inherit",
+                          }}>
+                          <span style={{ ...TYPE.label, fontWeight: 600, color: T.text }}>
+                            {g.session ? sessionLabel(g.session) : "Sans session"}
+                          </span>
+                          <span style={{ ...TYPE.caption, color: T.textMut }}>
+                            {g.entries.length} setup{g.entries.length > 1 ? "s" : ""}
+                          </span>
+                        </button>
+                        {g.entries.filter(matches).map(rowOf)}
+                      </React.Fragment>
+                    ))
+                  ) : visible.map(rowOf)}
+                  {visible.length === 0 && (
+                    <div style={{ padding: 24, textAlign: "center", ...TYPE.body, color: T.textMut }}>
+                      Aucun backtest dans ce filtre.
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
+      </div>
 
       {form && (
         <EntryModal
@@ -440,25 +462,269 @@ function fmtDate(iso) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-/* ── Sous-composants ────────────────────────────────────────────────────── */
+/** Sans l'année : dans la colonne des sessions, elle se répète d'une ligne à
+ *  l'autre et repousse le nom hors de la largeur. */
+function fmtShortDate(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
 
-function Kpi({ label, value, sub, color }) {
+const rColor = (r) => (r > 0 ? T.pnlPos : r < 0 ? T.pnlNeg : T.textMut);
+
+/* ── Colonne des sessions ───────────────────────────────────────────────── */
+
+/** Les sessions en colonne plutôt que dans un menu déroulant : on passe de
+ *  l'une à l'autre pour les comparer, et le menu cachait justement ce qu'on
+ *  compare — le bilan de chacune. */
+function SessionRail({ sessions, entries, hasOrphans, value, onSelect, onNew }) {
+  const items = [
+    { id: ALL, label: "Vue d'ensemble", sub: `${sessions.length} session${sessions.length > 1 ? "s" : ""}`, entries },
+    ...sessions.map(s => ({
+      id: s.id, label: sessionLabel(s), sub: fmtShortDate(s.date),
+      entries: entries.filter(e => e.sessionId === s.id),
+    })),
+    ...(hasOrphans ? [{ id: NONE, label: "Sans session", sub: "Avant les sessions", entries: entries.filter(e => e.sessionId === null) }] : []),
+  ];
   return (
-    <div style={{ ...CARD, padding: 14 }}>
-      <div style={{ ...TYPE.label, color: T.textMut, marginBottom: 6 }}>{label}</div>
-      <div style={{ ...TYPE.title2, ...TABULAR, fontWeight: 600, color: color || T.text }}>{value}</div>
-      {sub && <div style={{ ...TYPE.caption, color: T.textMut, marginTop: 4 }}>{sub}</div>}
+    <nav aria-label="Sessions" className="tao-bt-rail">
+      <div className="tao-bt-rail-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 4px 12px" }}>
+        <span style={{ ...TYPE.label, fontWeight: 600, color: T.textSub }}>Sessions</span>
+        <IconButton onClick={onNew} aria-label="Nouvelle session" title="Nouvelle session">
+          <Plus size={15} strokeWidth={2} />
+        </IconButton>
+      </div>
+      {items.map((item, i) => {
+        const s = summarize(item.entries);
+        const active = value === item.id;
+        return (
+          <React.Fragment key={item.id}>
+            {/* La vue d'ensemble n'est pas une session : un filet la sépare
+                des séances, qu'on lit comme une liste homogène. */}
+            {i === 1 && <div className="tao-bt-rail-sep" style={{ height: 1, background: HAIRLINE, margin: "6px 12px" }} />}
+            <button
+              type="button"
+              onClick={() => onSelect(item.id)}
+              aria-current={active ? "true" : undefined}
+              className="tao-bt-rail-item"
+              style={{
+                display: "flex", flexDirection: "column", gap: 6, width: "100%",
+                padding: "10px 12px", border: "none", borderRadius: 10, cursor: "pointer",
+                textAlign: "left", fontFamily: "inherit",
+                background: active ? T.white : "transparent",
+                boxShadow: active ? T.elevCard : "none",
+                transition: "var(--tr-ui)",
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "baseline", gap: 8, width: "100%" }}>
+                <span style={{
+                  ...TYPE.body, fontWeight: 600, color: T.text, flex: 1, minWidth: 0,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {item.label}
+                </span>
+                <span style={{ ...TYPE.label, ...TABULAR, fontWeight: 600, color: s.count ? rColor(s.totalR) : T.textMut }}>
+                  {s.count ? fmtR(s.totalR) : "—"}
+                </span>
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                <span style={{ ...TYPE.caption, color: T.textMut, whiteSpace: "nowrap" }}>
+                  {item.sub} · {s.count} setup{s.count > 1 ? "s" : ""}
+                </span>
+                <OutcomeBar stats={s} />
+              </span>
+            </button>
+          </React.Fragment>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** La répartition gagnants / perdants / BE en une barre : assez pour situer
+ *  une séance d'un coup d'œil, sans relire trois chiffres par ligne. */
+function OutcomeBar({ stats }) {
+  if (!stats.count) return <span style={{ flex: 1 }} />;
+  const parts = [
+    { n: stats.wins, color: PALETTE.green },
+    { n: stats.breakevens, color: PALETTE.blue },
+    { n: stats.losses, color: PALETTE.red },
+  ];
+  return (
+    <span aria-hidden style={{ flex: 1, display: "flex", gap: 2, height: 4, minWidth: 24 }}>
+      {parts.filter(p => p.n > 0).map((p, i) => (
+        <span key={i} style={{ flex: p.n, background: p.color, borderRadius: 999, opacity: 0.85 }} />
+      ))}
+    </span>
+  );
+}
+
+/* ── En-tête ────────────────────────────────────────────────────────────── */
+
+/** Le titre de ce qu'on regarde, et les actions qui s'y rapportent. Une
+ *  session porte sa question (« ce que la session doit vérifier ») sous son
+ *  nom : c'est ce qu'on doit pouvoir trancher en lisant la page. */
+function PageHeader({ session, view, strategy, sessionCount, onEditSession, onDeleteSession, onNewSession, onAdd }) {
+  const title = session ? sessionLabel(session) : view === NONE ? "Sans session" : "Backtest";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <h1 style={{ ...TYPE.title2, fontWeight: 500, color: T.text, margin: 0, minWidth: 0 }}>{title}</h1>
+        {session && (
+          <span style={{ display: "inline-flex", gap: 2 }}>
+            <IconButton onClick={onEditSession} aria-label="Modifier la session"><Pencil size={13} strokeWidth={1.75} /></IconButton>
+            <IconButton tone="danger" onClick={onDeleteSession} aria-label="Supprimer la session"><Trash2 size={13} strokeWidth={1.75} /></IconButton>
+          </span>
+        )}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {onNewSession && sessionCount === 0 && (
+            <PillButton onClick={onNewSession}>
+              <FolderPlus size={14} strokeWidth={2} /> Nouvelle session
+            </PillButton>
+          )}
+          <PillButton variant="primary" onClick={onAdd}>
+            <Plus size={14} strokeWidth={2} /> Ajouter un backtest
+          </PillButton>
+        </div>
+        <div id="tao-page-header-slot" />
+      </div>
+      {session && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", ...TYPE.label, color: T.textSub }}>
+          <span>{fmtDate(session.date)}</span>
+          {session.strategyId && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 7, height: 7, borderRadius: 999, background: strategy?.color || T.textMut }} />
+              {strategy?.name || "Stratégie supprimée"}
+            </span>
+          )}
+          {session.symbol && <Chip label={session.symbol} />}
+        </div>
+      )}
+      {session?.notes.trim() && (
+        <div style={{ ...TYPE.body, color: T.text, whiteSpace: "pre-wrap", borderLeft: `2px solid ${HAIRLINE}`, paddingLeft: 10, marginTop: 4 }}>
+          {session.notes}
+        </div>
+      )}
     </div>
   );
 }
+
+/* ── Saisie rapide ──────────────────────────────────────────────────────── */
+
+/**
+ * Un setup en une frappe : le R puis Entrée. Le signe dit le résultat
+ * (positif gagnant, négatif perdant, zéro BE), les trois boutons servent quand
+ * on n'a pas mesuré le R ou qu'un gagnant sort à +0,2. Tout le reste — tags,
+ * leçon — se complète ensuite en cliquant la ligne, ou d'emblée par
+ * « Détails ».
+ */
+function QuickAdd({ target, onAdd, onDetails }) {
+  const [r, setR] = useState("");
+  const [direction, setDirection] = useState("long");
+  const inputRef = React.useRef(null);
+  const parsed = r.trim() === "" ? null : Number(r.replace(",", ".").replace("−", "-"));
+  const invalid = parsed !== null && Number.isNaN(parsed);
+
+  const commit = (outcome) => {
+    if (invalid) return;
+    const resolved = outcome ?? (parsed === null ? null : parsed > 0 ? "win" : parsed < 0 ? "loss" : "be");
+    if (!resolved) return;
+    onAdd({ outcome: resolved, r: parsed, direction });
+    setR("");
+    // Le curseur reste dans le champ : le setup suivant se tape aussitôt.
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div style={{ ...CARD, padding: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 120, paddingLeft: 4 }}>
+        <span style={{ ...TYPE.label, fontWeight: 600, color: T.text }}>Saisie rapide</span>
+        <span style={{ ...TYPE.caption, color: T.textMut, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {target ? `→ ${sessionLabel(target)}` : "→ sans session"}
+        </span>
+      </div>
+      <div style={{ width: 132 }}>
+        <Segmented value={direction} onChange={setDirection}
+                   options={[{ id: "long", label: "Long" }, { id: "short", label: "Short" }]} />
+      </div>
+      <div style={{ position: "relative", flex: "1 1 140px", minWidth: 120 }}>
+        <Input
+          ref={inputRef}
+          aria-label="Résultat en R (saisie rapide)"
+          value={r}
+          onChange={(e) => setR(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
+          inputMode="decimal"
+          placeholder="R, puis Entrée — ex. 2.5 ou -1"
+          style={{ paddingRight: 34, ...(invalid ? { boxShadow: `inset 0 0 0 1px ${T.red}` } : null) }}
+        />
+        <CornerDownLeft size={14} strokeWidth={1.75} color={T.textMut}
+                        style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {OUTCOMES.map(o => (
+          <button key={o.id} type="button" onClick={() => commit(o.id)}
+            aria-label={`Ajouter un setup ${o.label.toLowerCase()}`}
+            style={{
+              minHeight: 34, padding: "0 14px", borderRadius: 999, border: "none", cursor: "pointer",
+              fontFamily: "inherit", ...TYPE.label, fontWeight: 600, whiteSpace: "nowrap",
+              background: `${o.color}1F`, color: o.color, transition: "var(--tr-ui)",
+            }}>
+            + {o.id === "be" ? "BE" : o.id === "win" ? "Gain" : "Perte"}
+          </button>
+        ))}
+      </div>
+      <PillButton variant="ghost" onClick={onDetails} title="Saisie complète : confluences, erreurs, leçon">
+        <SlidersHorizontal size={14} strokeWidth={1.75} /> Détails
+      </PillButton>
+    </div>
+  );
+}
+
+/* ── Bilan ──────────────────────────────────────────────────────────────── */
+
+function Stat({ label, value, sub, color }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+      <span style={{ ...TYPE.label, color: T.textSub, whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ ...TYPE.title3, ...TABULAR, fontWeight: 500, color: color || T.text, whiteSpace: "nowrap" }}>{value}</span>
+      {sub && <span style={{ ...TYPE.caption, color: T.textMut, whiteSpace: "nowrap" }}>{sub}</span>}
+    </div>
+  );
+}
+
+/** Le bilan et la courbe dans un même bloc : le R cumulé est le dernier point
+ *  de la courbe, les séparer obligeait à faire le lien de tête. */
+function Overview({ stats, curve, breaks }) {
+  return (
+    <div style={{ ...CARD, padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 32, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginRight: "auto" }}>
+          <span style={{ ...TYPE.label, color: T.textSub }}>R cumulé</span>
+          <span style={{ ...TYPE.display, ...TABULAR, fontWeight: 500, letterSpacing: -0.4, color: rColor(stats.totalR) }}>
+            {fmtR(stats.totalR)}
+          </span>
+        </div>
+        <Stat label="Backtests" value={String(stats.count)}
+              sub={`${stats.wins}G · ${stats.losses}P · ${stats.breakevens}BE`} />
+        <Stat label="Taux de réussite" value={`${stats.winRate}%`}
+              sub={stats.breakevens > 0 ? "scratchs exclus" : "sur les trades tranchés"} />
+        <Stat label="Espérance" value={fmtR(stats.avgR)} color={rColor(stats.avgR)} sub="par backtest" />
+      </div>
+      <EquityCurve curve={curve} breaks={breaks} />
+    </div>
+  );
+}
+
+/* ── Lignes ─────────────────────────────────────────────────────────────── */
 
 /** Pastille de résultat : la couleur porte l'information, le mot la confirme. */
 function OutcomeTag({ outcome }) {
   const o = OUTCOME_BY_ID[outcome] || OUTCOME_BY_ID.be;
   return (
     <span style={{
-      ...TYPE.caption, fontWeight: 600, color: o.color,
-      background: `${o.color}1F`, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap",
+      ...TYPE.caption, fontWeight: 600, color: o.color, textAlign: "center",
+      background: `${o.color}1F`, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap", minWidth: 58,
     }}>
       {o.label}
     </span>
@@ -477,67 +743,91 @@ function Chip({ label, color }) {
   );
 }
 
-function EntryRow({ entry, strategy, onEdit, onDelete }) {
+/** Une ligne par setup, cliquable pour la compléter : la saisie rapide laisse
+ *  volontairement les tags pour après, il faut donc qu'y revenir coûte un clic. */
+function EntryRow({ entry, rank, strategy, onEdit, onDelete }) {
   const r = effectiveR(entry);
+  const [hover, setHover] = useState(false);
   return (
-    <div style={{ ...CARD, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+    <div
+      role="listitem"
+      onClick={onEdit}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex", flexDirection: "column", gap: 8, padding: "12px 16px",
+        borderTop: `1px solid ${HAIRLINE}`, cursor: "pointer",
+        background: hover ? T.rowHighlight : "transparent", transition: "var(--tr-ui)",
+      }}
+    >
+      <div className="tao-bt-row" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ ...TYPE.caption, ...TABULAR, color: T.textMut, width: 24, textAlign: "right", flexShrink: 0 }}>
+          {rank ? `#${rank}` : ""}
+        </span>
         <OutcomeTag outcome={entry.outcome} />
-        <span style={{ ...TYPE.callout, fontWeight: 600, color: T.text }}>
-          {entry.symbol || "—"}
-        </span>
-        <span style={{ ...TYPE.caption, color: T.textSub }}>
-          {entry.direction === "short" ? "Short" : "Long"}
-        </span>
+        <span style={{ ...TYPE.body, fontWeight: 600, color: T.text, whiteSpace: "nowrap" }}>{entry.symbol || "—"}</span>
+        <span style={{ ...TYPE.label, color: T.textSub }}>{entry.direction === "short" ? "Short" : "Long"}</span>
         {entry.strategyId && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, ...TYPE.caption, color: T.textSub }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, ...TYPE.label, color: T.textSub, whiteSpace: "nowrap" }}>
             <span style={{ width: 7, height: 7, borderRadius: 999, background: strategy?.color || T.textMut }} />
             {strategy?.name || "Stratégie supprimée"}
           </span>
         )}
-        <span style={{ ...TYPE.caption, color: T.textMut }}>{fmtDate(entry.date)}</span>
-        <span style={{
-          marginLeft: "auto", ...TYPE.callout, ...TABULAR, fontWeight: 600,
-          color: r > 0 ? T.green : r < 0 ? T.red : T.textMut,
-        }}>
-          {fmtR(r)}
-          {/* Le R non mesuré est signalé : sans ça, un ±1R de convention se lit
-              comme un relevé, et le total paraît plus précis qu'il ne l'est. */}
-          {entry.r === null && <span style={{ ...TYPE.caption, color: T.textMut, fontWeight: 500 }}> (par défaut)</span>}
-        </span>
-        <IconButton onClick={onEdit} aria-label="Modifier"><Pencil size={13} strokeWidth={1.75} /></IconButton>
-        <IconButton tone="danger" onClick={onDelete} aria-label="Supprimer"><Trash2 size={13} strokeWidth={1.75} /></IconButton>
-      </div>
-
-      {(entry.confluences.length > 0 || entry.mistakes.length > 0) && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {/* En ligne sur grand écran ; sous la ligne quand la place manque
+            (cf. `.tao-bt-tags`), sans quoi les tags écrasaient le résultat. */}
+        <div className="tao-bt-tags" style={{ display: "flex", gap: 6, flexWrap: "wrap", minWidth: 0, flex: 1 }}>
           {entry.confluences.map(tag => <Chip key={`c-${tag}`} label={tag} color={PALETTE.green} />)}
           {entry.mistakes.map(tag => <Chip key={`m-${tag}`} label={tag} color={PALETTE.red} />)}
         </div>
-      )}
+        <span className="tao-bt-date" style={{ ...TYPE.caption, color: T.textMut, whiteSpace: "nowrap" }}>{fmtShortDate(entry.date)}</span>
+        <span style={{ ...TYPE.body, ...TABULAR, fontWeight: 600, color: rColor(r), whiteSpace: "nowrap", textAlign: "right", minWidth: 56, marginLeft: "auto" }}>
+          {fmtR(r)}
+          {/* Le R non mesuré est signalé : sans ça, un ±1R de convention se lit
+              comme un relevé, et le total paraît plus précis qu'il ne l'est. */}
+          {entry.r === null && (
+            <span title="R non mesuré : compté ±1R" style={{ display: "block", ...TYPE.caption2, color: T.textMut, fontWeight: 500 }}>par défaut</span>
+          )}
+        </span>
+        <IconButton tone="danger" aria-label="Supprimer"
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    style={{ opacity: hover ? 1 : 0.35 }}>
+          <Trash2 size={13} strokeWidth={1.75} />
+        </IconButton>
+      </div>
 
       {entry.better.trim() && (
-        /* La leçon en retrait, sur un filet : c'est la seule ligne qu'on relit
-           avant de retourner sur le graphique. Elle ne doit pas se confondre
-           avec les métadonnées du dessus. */
-        <div style={{ borderLeft: `2px solid ${HAIRLINE}`, paddingLeft: 10 }}>
-          <div style={{ ...TYPE.caption, color: T.textMut, marginBottom: 2 }}>J&apos;aurais dû</div>
-          <div style={{ ...TYPE.body, color: T.text, whiteSpace: "pre-wrap" }}>{entry.better}</div>
+        /* La leçon en retrait, sous le résultat : c'est la seule ligne qu'on
+           relit avant de retourner sur le graphique. */
+        <div style={{ display: "flex", gap: 8, paddingLeft: 36, ...TYPE.body, color: T.textSub }}>
+          <span style={{ ...TYPE.caption, color: T.textMut, whiteSpace: "nowrap", paddingTop: 1 }}>J&apos;aurais dû</span>
+          <span style={{ color: T.text, whiteSpace: "pre-wrap" }}>{entry.better}</span>
         </div>
       )}
     </div>
   );
 }
 
-function TagRanking({ title, icon: Icon, color, stats, empty }) {
+/* ── Classements ────────────────────────────────────────────────────────── */
+
+const RANKING_ROWS = 6;
+
+/** Un classement : chaque ligne porte une barre proportionnelle à son R total,
+ *  qui fait voir l'écart entre le premier et le reste — dans une colonne de
+ *  chiffres, +18R et +2R ont la même largeur. Replié sur les premiers rangs :
+ *  la queue du classement se consulte, elle ne se lit pas. */
+function TagRanking({ title, subtitle, color, stats, empty }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? stats : stats.slice(0, RANKING_ROWS);
+  const scale = Math.max(...stats.map(s => Math.abs(s.totalR)), 0) || 1;
   return (
-    <div style={{ ...CARD, padding: 0 }}>
-      <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 8 }}>
-        <Icon size={14} strokeWidth={1.75} color={color} />
-        <div style={{ ...TYPE.callout, fontWeight: 600, color: T.text }}>{title}</div>
+    <div style={{ ...CARD, padding: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "14px 16px 6px", display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: color, alignSelf: "center" }} />
+        <span style={{ ...TYPE.callout, fontWeight: 600, color: T.text }}>{title}</span>
+        <span style={{ ...TYPE.caption, color: T.textMut }}>{subtitle}</span>
       </div>
       {stats.length === 0 ? (
-        <div style={{ padding: "0 16px 16px", ...TYPE.body, color: T.textMut }}>{empty}</div>
+        <div style={{ padding: "4px 16px 16px", ...TYPE.body, color: T.textMut }}>{empty}</div>
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table aria-label={title} style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -547,34 +837,57 @@ function TagRanking({ title, icon: Icon, color, stats, empty }) {
               </tr>
             </thead>
             <tbody>
-              {stats.map(s => (
+              {shown.map(s => (
                 <tr key={s.tag} style={{ borderTop: `1px solid ${HAIRLINE}` }}>
                   <Td>
-                    {/* La pastille ne sert qu'aux stratégies, qui ont une
-                        couleur à elles ; les tags n'en ont pas. */}
-                    {s.color && <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 999, background: s.color, marginRight: 7 }} />}
-                    {s.tag}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                        {/* La pastille ne sert qu'aux stratégies, qui ont une
+                            couleur à elles ; les tags n'en ont pas. */}
+                        {s.color && <span style={{ width: 7, height: 7, borderRadius: 999, background: s.color }} />}
+                        {s.tag}
+                      </span>
+                      <span aria-hidden style={{ height: 3, borderRadius: 999, background: FIELD_BG, overflow: "hidden" }}>
+                        <span style={{
+                          display: "block", height: "100%", borderRadius: 999,
+                          width: `${(Math.abs(s.totalR) / scale) * 100}%`,
+                          background: s.totalR >= 0 ? T.pnlPos : T.pnlNeg,
+                        }} />
+                      </span>
+                    </div>
                   </Td>
                   <Td align="right" color={T.textSub}>{s.count}</Td>
                   <Td align="right">{s.wins + s.losses > 0 ? `${s.winRate}%` : "—"}</Td>
-                  <Td align="right" color={s.avgR >= 0 ? T.green : T.red}>{fmtR(s.avgR)}</Td>
-                  <Td align="right" color={s.totalR >= 0 ? T.green : T.red}>{fmtR(s.totalR)}</Td>
+                  <Td align="right" color={rColor(s.avgR)}>{fmtR(s.avgR)}</Td>
+                  <Td align="right" color={rColor(s.totalR)} strong>{fmtR(s.totalR)}</Td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      {stats.length > RANKING_ROWS && (
+        <button type="button" onClick={() => setAll(v => !v)}
+          style={{
+            marginTop: "auto", padding: "10px 16px", border: "none", borderTop: `1px solid ${HAIRLINE}`,
+            background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+            ...TYPE.label, color: T.textSub,
+          }}>
+          {all ? "Replier" : `Voir les ${stats.length} lignes`}
+        </button>
+      )}
     </div>
   );
 }
 
 function Th({ children, align = "left" }) {
-  return <th style={{ padding: "8px 16px", textAlign: align, ...TYPE.caption, fontWeight: 500, color: T.textMut }}>{children}</th>;
+  return <th style={{ padding: "8px 16px", textAlign: align, ...TYPE.caption, fontWeight: 500, color: T.textMut, whiteSpace: "nowrap" }}>{children}</th>;
 }
-function Td({ children, align = "left", color }) {
-  return <td style={{ padding: "9px 16px", textAlign: align, ...TYPE.label, ...TABULAR, color: color || T.text }}>{children}</td>;
+function Td({ children, align = "left", color, strong }) {
+  return <td style={{ padding: "10px 16px", textAlign: align, verticalAlign: "top", ...TYPE.label, ...TABULAR, fontWeight: strong ? 600 : 400, color: color || T.text }}>{children}</td>;
 }
+
+/* ── Courbe ─────────────────────────────────────────────────────────────── */
 
 /** Courbe d'équité en R, backtest par backtest — et non jour par jour comme
  *  une courbe de trading : un après-midi de backtest produit trente setups à la
@@ -582,52 +895,109 @@ function Td({ children, align = "left", color }) {
  *  points commune aux graphiques du site (`AreaDotsDefs`). `breaks` marque en
  *  pointillé les changements de session dans la vue d'ensemble. */
 function EquityCurve({ curve, breaks = [] }) {
-  if (curve.length < 2) {
+  /* Le viewBox suit la largeur mesurée plutôt que d'étirer une largeur fixe
+     avec `preserveAspectRatio="none"` : l'étirement ovalisait les points de la
+     trame et écrasait les libellés d'axe. */
+  const ref = React.useRef(null);
+  const [width, setWidth] = useState(800);
+  const [hover, setHover] = useState(null);
+  const uid = React.useId().replace(/:/g, "");
+  // Le <svg> n'existe qu'à partir de deux points : l'observer se rebranche alors.
+  const drawable = curve.length >= 2;
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(entries => {
+      const w = Math.round(entries[0].contentRect.width);
+      if (w > 0) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [drawable]);
+
+  if (!drawable) {
     return (
-      <div style={{ ...CARD, padding: 24, textAlign: "center", ...TYPE.body, color: T.textMut }}>
+      <div style={{ padding: "28px 0 8px", textAlign: "center", ...TYPE.body, color: T.textMut }}>
         Deux backtests suffiront à tracer la courbe.
       </div>
     );
   }
 
-  const W = 800, H = 220;
-  const pad = { l: 40, r: 16, t: 16, b: 20 };
+  /* La série part de 0 (avant le premier setup) : sans ce point d'origine, un
+     premier gagnant à +3R faisait démarrer la courbe en l'air. */
+  const series = [{ date: curve[0].date, cum: 0 }, ...curve];
+  const W = width, H = 200;
+  const pad = { l: 44, r: 8, t: 12, b: 12 };
   const innerW = W - pad.l - pad.r;
   const innerH = H - pad.t - pad.b;
-  const max = Math.max(...curve.map(p => p.cum), 0);
-  const min = Math.min(...curve.map(p => p.cum), 0);
-  const range = Math.max(Math.abs(max), Math.abs(min)) || 1;
+  /* L'échelle suit l'étendue réelle, zéro compris — et non une échelle
+     symétrique autour de zéro, qui laissait vide la moitié du cadre dès que la
+     courbe restait d'un seul côté. */
+  const max = Math.max(...series.map(p => p.cum), 0);
+  const min = Math.min(...series.map(p => p.cum), 0);
+  const span = (max - min) || 1;
+  const lo = min - span * 0.06, hi = max + span * 0.06;
 
-  const x = (i) => pad.l + (i / (curve.length - 1)) * innerW;
-  const y = (v) => pad.t + innerH / 2 - (v / range) * (innerH / 2);
-  const points = curve.map((p, i) => `${x(i)},${y(p.cum)}`).join(" ");
-  const last = curve[curve.length - 1];
-  const positive = last.cum >= 0;
+  const x = (i) => pad.l + (i / (series.length - 1)) * innerW;
+  const y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * innerH;
+  const line = series.map((p, i) => `${x(i)},${y(p.cum)}`).join(" ");
+  const last = series[series.length - 1];
+  const color = last.cum >= 0 ? T.pnlPos : T.pnlNeg;
+  const ticks = [...new Set([max, 0, min])];
+
+  const onMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    const i = Math.round(((px - pad.l) / innerW) * (series.length - 1));
+    setHover(Math.max(1, Math.min(series.length - 1, i)));
+  };
+  const hp = hover != null ? series[hover] : null;
 
   return (
-    <div style={{ ...CARD }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <Activity size={14} strokeWidth={1.75} color={T.textMut} />
-        <div style={{ ...TYPE.callout, fontWeight: 600, color: T.text }}>Équité cumulée</div>
-        <div style={{ marginLeft: "auto", ...TYPE.callout, ...TABULAR, fontWeight: 600, color: positive ? T.green : T.red }}>
-          {fmtR(last.cum)}
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ position: "relative" }}>
+        <svg ref={ref} width="100%" height={H} viewBox={`0 0 ${W} ${H}`}
+          style={{ display: "block", overflow: "visible", cursor: "crosshair" }}
+          onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+          <defs>
+            <AreaDotsDefs id={uid} color={color} top={pad.t} bottom={H - pad.b} width={W} height={H} />
+          </defs>
+          {ticks.map(v => (
+            <g key={v}>
+              <line x1={pad.l} y1={y(v)} x2={W - pad.r} y2={y(v)}
+                    stroke={T.text} strokeOpacity={v === 0 ? 0.14 : 0.05} strokeWidth="1"
+                    strokeDasharray={v === 0 ? "3 4" : undefined} />
+              <text x={pad.l - 8} y={y(v)} textAnchor="end" fontSize="10" fill={T.textMut} dominantBaseline="middle">{fmtR(v)}</text>
+            </g>
+          ))}
+          {breaks.map(i => {
+            // `breaks` indexe la courbe sans origine : décalé d'un rang ici.
+            const bx = (x(i) + x(i + 1)) / 2;
+            return <line key={i} x1={bx} y1={pad.t} x2={bx} y2={H - pad.b} stroke={T.text} strokeOpacity="0.12" strokeWidth="1" strokeDasharray="2 4" />;
+          })}
+          <polygon points={`${x(0)},${y(0)} ${line} ${x(series.length - 1)},${y(0)}`} {...areaDotsFill(uid)} stroke="none" />
+          <polyline points={line} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          {hp ? (
+            <g>
+              <line x1={x(hover)} y1={pad.t} x2={x(hover)} y2={H - pad.b} stroke={T.text} strokeOpacity="0.2" strokeWidth="1" />
+              <circle cx={x(hover)} cy={y(hp.cum)} r="4.5" fill={T.white} stroke={color} strokeWidth="2" />
+            </g>
+          ) : (
+            <circle cx={x(series.length - 1)} cy={y(last.cum)} r="3.5" fill={color} />
+          )}
+        </svg>
+        {hp && (
+          <div style={{
+            position: "absolute", top: 0, pointerEvents: "none",
+            left: Math.min(Math.max(x(hover) - 60, 0), W - 120), width: 120,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+            ...CARD, padding: "6px 10px",
+          }}>
+            <span style={{ ...TYPE.caption, color: T.textMut, whiteSpace: "nowrap" }}>#{hover} · {fmtShortDate(hp.date)}</span>
+            <span style={{ ...TYPE.label, ...TABULAR, fontWeight: 600, color: rColor(hp.cum) }}>{fmtR(hp.cum)}</span>
+          </div>
+        )}
       </div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-        style={{ display: "block" }}>
-        <defs>
-          <AreaDotsDefs id="btj" color={positive ? T.green : T.red} top={pad.t} bottom={H - pad.b} width={W} height={H} />
-        </defs>
-        <line x1={pad.l} y1={y(0)} x2={W - pad.r} y2={y(0)} stroke={T.border} strokeWidth="1" />
-        {breaks.map(i => {
-          const bx = (x(i - 1) + x(i)) / 2;
-          return <line key={i} x1={bx} y1={pad.t} x2={bx} y2={H - pad.b} stroke={T.border} strokeWidth="1" strokeDasharray="3 4" />;
-        })}
-        <polyline points={`${pad.l},${y(0)} ${points} ${x(curve.length - 1)},${y(0)}`} {...areaDotsFill("btj")} stroke="none" />
-        <polyline points={points} fill="none" stroke={positive ? T.green : T.red} strokeWidth="2" />
-        <text x={pad.l - 6} y={y(max)} textAnchor="end" fontSize="10" fill={T.textMut} alignmentBaseline="middle">{fmtR(max)}</text>
-        <text x={pad.l - 6} y={y(min)} textAnchor="end" fontSize="10" fill={T.textMut} alignmentBaseline="middle">{fmtR(min)}</text>
-      </svg>
       <div style={{ display: "flex", justifyContent: "space-between", ...TYPE.caption2, color: T.textMut, paddingLeft: pad.l, paddingRight: pad.r }}>
         <span>{fmtDate(curve[0].date)}</span>
         <span>{fmtDate(last.date)}</span>
@@ -777,70 +1147,6 @@ function EntryModal({ form, setForm, journal, strategies, editing, onClose, onSa
         </Field>
       </div>
     </Modal>
-  );
-}
-
-/** L'en-tête d'une session ouverte : ce qu'on y teste, et de quoi la régler. */
-function SessionHeader({ session, strategy, onEdit, onDelete }) {
-  return (
-    <div style={{ ...CARD, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ ...TYPE.headline, color: T.text }}>{sessionLabel(session)}</span>
-        <span style={{ ...TYPE.caption, color: T.textMut }}>{fmtDate(session.date)}</span>
-        {session.strategyId && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, ...TYPE.caption, color: T.textSub }}>
-            <span style={{ width: 7, height: 7, borderRadius: 999, background: strategy?.color || T.textMut }} />
-            {strategy?.name || "Stratégie supprimée"}
-          </span>
-        )}
-        {session.symbol && <Chip label={session.symbol} />}
-        <span style={{ marginLeft: "auto", display: "inline-flex", gap: 4 }}>
-          <IconButton onClick={onEdit} aria-label="Modifier la session"><Pencil size={13} strokeWidth={1.75} /></IconButton>
-          <IconButton tone="danger" onClick={onDelete} aria-label="Supprimer la session"><Trash2 size={13} strokeWidth={1.75} /></IconButton>
-        </span>
-      </div>
-      {session.notes.trim() && (
-        <div style={{ ...TYPE.body, color: T.textSub, whiteSpace: "pre-wrap" }}>{session.notes}</div>
-      )}
-    </div>
-  );
-}
-
-/** Le bilan de chaque session, une ligne par séance : c'est la comparaison
- *  qu'une liste continue de setups empêchait. */
-function SessionList({ groups, strategyById, onOpen }) {
-  return (
-    <div style={{ ...CARD, padding: 0 }}>
-      <div style={{ padding: "12px 16px", ...TYPE.callout, fontWeight: 600, color: T.text }}>Sessions</div>
-      <div style={{ overflowX: "auto" }}>
-        <table aria-label="Sessions" style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <Th>Session</Th><Th>Stratégie</Th><Th align="right">N</Th><Th align="right">Réussite</Th><Th align="right">R total</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map(({ session, entries }) => {
-              const s = summarize(entries);
-              const strategy = session?.strategyId ? strategyById.get(session.strategyId) : undefined;
-              return (
-                <tr key={session?.id ?? "none"} onClick={() => onOpen(session?.id ?? null)}
-                    style={{ borderTop: `1px solid ${HAIRLINE}`, cursor: "pointer" }}>
-                  <Td>
-                    {session ? sessionLabel(session) : "Sans session"}
-                    {session && <span style={{ color: T.textMut, marginLeft: 8 }}>{fmtDate(session.date)}</span>}
-                  </Td>
-                  <Td color={T.textSub}>{session?.strategyId ? (strategy?.name || "Stratégie supprimée") : "—"}</Td>
-                  <Td align="right" color={T.textSub}>{s.count}</Td>
-                  <Td align="right">{s.wins + s.losses > 0 ? `${s.winRate}%` : "—"}</Td>
-                  <Td align="right" color={s.count === 0 ? T.textMut : s.totalR >= 0 ? T.green : T.red}>{s.count ? fmtR(s.totalR) : "—"}</Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }
 

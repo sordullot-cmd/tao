@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 
 /* La page Focus tient tout son état dans une clé de `useCloudState`.
    Le remplaçant RELAIE entre ses instances, comme le vrai hook : la page et la
@@ -48,7 +48,8 @@ import FocusSentinel from "@/components/focus/FocusSentinel";
 function Focus() {
   return <><FocusSentinel /><FocusPage /></>;
 }
-import { EXIT_PHRASE } from "@/lib/focus/model";
+import { EXIT_PHRASE, LOCKED_EXIT_PHRASE, LOCKED_EXIT_WAIT_MS } from "@/lib/focus/model";
+import { FOCUS_STORAGE_KEY } from "@/lib/focus/useFocusStore";
 
 /** Lien externe posé dans le document, comme n'importe quel lien de l'app. */
 function clickLink(href: string) {
@@ -142,25 +143,59 @@ describe("Page Focus", () => {
     throw new Error("bouton « Démarrer » de la session libre introuvable");
   };
 
-  it("ne laisse aucune sortie à une session verrouillée", () => {
+  it("ne laisse sortir d'une session verrouillée qu'après l'attente et la phrase", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false, toFake: ["Date", "setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
+    try {
+      render(<Focus />);
+      // Session libre → cran « Verrouillé ».
+      fireEvent.click(screen.getByText(/durée, listes et fermeté/));
+      fireEvent.click(screen.getByText("Verrouillé"));
+      fireEvent.click(freeStart());
+
+      /* Le verrou se confirme AVANT de partir : ce qui coûte cher à quitter doit
+         se décider en connaissance de cause. (Le titre de la modale vit dans son
+         `aria-label`, pas dans un nœud de texte.) */
+      expect(screen.getByRole("dialog", { name: "Verrouiller cette session ?" })).toBeInTheDocument();
+      fireEvent.click(screen.getByText("Je verrouille"));
+
+      // Une fois lancée : pas de pause, pas d'arrêt direct.
+      expect(screen.getByText(/Verrouillée/)).toBeInTheDocument();
+      expect(screen.queryByText("Arrêter")).toBeNull();
+      const pause = screen.getByText(/Pause/).closest("button") as HTMLButtonElement;
+      expect(pause.disabled).toBe(true);
+
+      // La demande ouvre l'attente — et pas encore le champ de la phrase.
+      fireEvent.click(screen.getByText("Annuler le verrou"));
+      expect(screen.getByText(/Annulation demandée/)).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(LOCKED_EXIT_PHRASE)).toBeNull();
+      const stop = () => screen.getByText("Arrêter maintenant").closest("button") as HTMLButtonElement;
+      expect(stop().disabled).toBe(true);
+
+      act(() => { vi.advanceTimersByTime(LOCKED_EXIT_WAIT_MS + 1000); });
+      const input = screen.getByPlaceholderText(LOCKED_EXIT_PHRASE);
+      expect(stop().disabled).toBe(true);
+      fireEvent.change(input, { target: { value: LOCKED_EXIT_PHRASE } });
+      fireEvent.click(stop());
+
+      expect(screen.queryByText("Annuler le verrou")).toBeNull();
+      const log = (cloudStore.get(FOCUS_STORAGE_KEY) as { log: { endedBy?: string }[] }).log;
+      expect(log.at(-1)?.endedBy).toBe("emergency");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("remet le verrou en place quand on renonce à l'annuler", () => {
     render(<Focus />);
-    // Session libre → cran « Verrouillé ».
     fireEvent.click(screen.getByText(/durée, listes et fermeté/));
     fireEvent.click(screen.getByText("Verrouillé"));
     fireEvent.click(freeStart());
-
-    /* Le verrou se confirme AVANT de partir : ce qui n'a plus de sortie doit se
-       décider en connaissance de cause. (Le titre de la modale vit dans son
-       `aria-label`, pas dans un nœud de texte.) */
-    expect(screen.getByRole("dialog", { name: "Verrouiller cette session ?" })).toBeInTheDocument();
     fireEvent.click(screen.getByText("Je verrouille"));
 
-    // Une fois lancée : ni arrêt, ni pause.
-    expect(screen.getByText(/Verrouillée jusqu’au bout/)).toBeInTheDocument();
-    expect(screen.queryByText("Arrêter")).toBeNull();
-    expect(screen.queryByText("Arrêter maintenant")).toBeNull();
-    const pause = screen.getByText(/Pause/).closest("button") as HTMLButtonElement;
-    expect(pause.disabled).toBe(true);
+    fireEvent.click(screen.getByText("Annuler le verrou"));
+    fireEvent.click(screen.getByText("Continuer la session"));
+    expect(screen.queryByText(/Annulation demandée/)).toBeNull();
+    expect(screen.getByText("Annuler le verrou")).toBeInTheDocument();
   });
 
   it("laisse revenir sans lancer quand on refuse le verrou", () => {

@@ -1574,6 +1574,40 @@ img, canvas {
   .tao-field-grid { grid-template-columns: 1fr !important; }
 }
 
+/* Page Backtest : les sessions en colonne à gauche, la session ouverte à
+   droite. En requête de conteneur et non de fenêtre : la barre latérale de la
+   coquille mange une largeur variable. Sous 860 px, la colonne devient une
+   rangée qui défile — on y garde l'accès d'un geste à chaque séance plutôt
+   que de la renvoyer tout en bas de la page. */
+.tao-bt-wrap { container-type: inline-size; }
+.tao-bt-layout {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.tao-bt-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+}
+@container (max-width: 860px) {
+  .tao-bt-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .tao-bt-rail { position: static; flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+  .tao-bt-rail-head, .tao-bt-rail-sep { display: none !important; }
+  .tao-bt-rail-item { width: 200px !important; flex-shrink: 0; }
+}
+@container (max-width: 620px) {
+  .tao-bt-tags { order: 10; flex-basis: 100% !important; padding-left: 36px; }
+  .tao-bt-tags:empty { display: none; }
+  /* La date se répète d'une ligne à l'autre dans une même séance : c'est
+     elle qu'on sacrifie pour garder le R sur la ligne du résultat. */
+  .tao-bt-row { gap: 8px !important; }
+  .tao-bt-date { display: none; }
+}
+
 /* Mobile (<768px) */
 @media (max-width: 767px) {
   /* Mobile : laisser le body scroller (au lieu d'un conteneur interne fixe).

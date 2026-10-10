@@ -210,27 +210,34 @@ export type FocusMode = "normal" | "deep" | "locked";
  * La friction n'est pas de la décoration : c'est la seule variable qui décide si
  * la session tient. Le geste doit coûter plus cher que l'envie qui le motive.
  *
- * ── Verrouillé veut dire verrouillé ───────────────────────────────────────
- * Ce cran donnait une « sortie de secours » unique. Une porte de sortie, même
- * unique, transforme la question « est-ce que je continue ? » en « est-ce que
- * j'utilise MA sortie ? » — et cette question-là se pose, se négocie, et se
- * perd. Il n'y en a donc plus aucune : la session va jusqu'au bout. C'est le
- * seul cran qui promette quelque chose, et une promesse avec une exception n'en
- * est pas une.
+ * ── Verrouillé : une sortie, mais qui se mérite ────────────────────────────
+ * Ce cran a été sans aucune sortie. C'était intenable : une session lancée par
+ * erreur, un imprévu réel, ou un chronomètre libre verrouillé (qui n'a pas de
+ * fin) ne laissaient que tuer l'app. Une promesse qu'on ne peut tenir qu'en
+ * contournant l'outil finit par faire abandonner l'outil.
+ *
+ * La sortie existe donc, mais elle coûte plus que l'envie qui la motive : on la
+ * DEMANDE, puis on attend `LOCKED_EXIT_WAIT_MS` — le blocage tient pendant ce
+ * temps — et seulement ensuite on recopie une phrase. Une envie passe en deux
+ * minutes ; une vraie raison, non. L'heure de la demande vit dans la session
+ * (`exitRequestedAt`) et non dans l'écran : changer d'onglet ou recharger ne
+ * doit ni remettre l'attente à zéro, ni la sauter.
+ *
+ * La sortie est journalisée `emergency`, distincte d'un abandon ordinaire : le
+ * bilan doit montrer qu'un verrou a cédé.
  *
  * Ce que ce cran ne prétend PAS faire : empêcher de quitter l'app ou d'éteindre
- * la machine. Aucun logiciel ne le peut. Il empêche de l'annuler DEPUIS l'app,
- * là où l'envie se présente.
+ * la machine. Aucun logiciel ne le peut.
  */
 export const MODES: Record<FocusMode, {
   id: FocusMode;
   label: string;
   hint: string;
-  /** Comment on arrête avant la fin — `none` : on n'arrête pas. */
-  exit: "free" | "typed" | "none";
+  /** Comment on arrête avant la fin — `delayed` : demande, attente, puis phrase. */
+  exit: "free" | "typed" | "delayed";
   /**
-   * Sorties de secours autorisées. Plus aucun cran n'en donne (cf. ci-dessus) ;
-   * le champ reste pour lire les sessions et les journaux déjà enregistrés.
+   * Sorties de secours autorisées. La sortie du verrou n'est pas comptée (elle
+   * met fin à la session) ; le champ reste pour lire les journaux enregistrés.
    */
   emergencies: number;
   /** Pauses autorisées dans la session. */
@@ -248,14 +255,23 @@ export const MODES: Record<FocusMode, {
     color: "purple",
   },
   locked: {
-    id: "locked", label: "Verrouillé", exit: "none", emergencies: 0, breaks: 0,
-    hint: "Aucun arrêt, aucune pause : la session va jusqu'au bout. À ne choisir qu'en le voulant vraiment.",
+    id: "locked", label: "Verrouillé", exit: "delayed", emergencies: 0, breaks: 0,
+    hint: "Aucune pause. L'annuler demande deux minutes d'attente, puis une phrase à recopier.",
     color: "red",
   },
 };
 
 /** Phrase à recopier pour quitter une session en mode profond. */
 export const EXIT_PHRASE = "je choisis de perdre cette session";
+
+/** Phrase à recopier pour rompre une session verrouillée, une fois l'attente
+ *  écoulée. Différente de la précédente : la mémoire musculaire du mode profond
+ *  ne doit pas suffire ici. */
+export const LOCKED_EXIT_PHRASE = "je romps ma session verrouillée";
+
+/** Attente entre la demande d'annulation d'un verrou et la possibilité de la
+ *  confirmer. */
+export const LOCKED_EXIT_WAIT_MS = 2 * 60_000;
 
 /* ── Presets ──────────────────────────────────────────────────────────────── */
 
@@ -331,6 +347,8 @@ export interface RunningSession {
   breaks: number;
   emergencies: number;
   attempts: FocusAttempt[];
+  /** Mode verrouillé : heure de la demande d'annulation en attente. */
+  exitRequestedAt?: string | null;
 }
 
 /** Session terminée, telle qu'elle part au journal. */
@@ -507,6 +525,7 @@ function normalizeRunning(r: RunningSession): RunningSession {
     breaks: Number.isFinite(r.breaks) ? r.breaks : 0,
     emergencies: Number.isFinite(r.emergencies) ? r.emergencies : 0,
     attempts: Array.isArray(r.attempts) ? r.attempts : [],
+    exitRequestedAt: r.exitRequestedAt ?? null,
   };
 }
 
@@ -572,6 +591,16 @@ export function isDone(r: RunningSession, now = new Date()): boolean {
 export function canPause(r: RunningSession): boolean {
   if (r.pausedAt) return true; // reprendre est toujours permis
   return r.breaks < MODES[r.mode].breaks;
+}
+
+/**
+ * Temps restant avant de pouvoir confirmer l'annulation d'un verrou, en ms.
+ * `null` : aucune demande en cours. 0 : l'attente est écoulée.
+ */
+export function lockedExitWaitMs(r: RunningSession, now = new Date()): number | null {
+  if (!r.exitRequestedAt) return null;
+  const since = now.getTime() - new Date(r.exitRequestedAt).getTime();
+  return Math.max(0, LOCKED_EXIT_WAIT_MS - since);
 }
 
 export function pause(r: RunningSession, now = new Date()): RunningSession {

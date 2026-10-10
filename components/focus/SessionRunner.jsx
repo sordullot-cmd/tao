@@ -16,7 +16,8 @@ import { T, FIELD_BG, HAIRLINE } from "@/lib/ui/tokens";
 import { PALETTE } from "@/lib/ui/palette";
 import { CARD, Input, PillButton } from "@/components/ui/da";
 import {
-  EXIT_PHRASE, MODES, canPause, focusedMs, isDone, listSize, progress, remainingMs,
+  EXIT_PHRASE, LOCKED_EXIT_PHRASE, MODES, canPause, focusedMs, isDone, listSize,
+  lockedExitWaitMs, progress, remainingMs,
 } from "@/lib/focus/model";
 import { fmtClock, fmtDur } from "@/lib/focus/stats";
 
@@ -61,7 +62,9 @@ function ModeBadge({ mode }) {
   );
 }
 
-export default function SessionRunner({ session, store, now, onPause, onResume, onEnd, onExtend }) {
+export default function SessionRunner({
+  session, store, now, onPause, onResume, onEnd, onExtend, onRequestExit, onCancelExit,
+}) {
   const [exiting, setExiting] = useState(false);
   const [typed, setTyped] = useState("");
 
@@ -79,11 +82,21 @@ export default function SessionRunner({ session, store, now, onPause, onResume, 
 
   /* Ce qu'il faut pour sortir avant la fin, par cran de fermeté. La session
      terminée se ferme toujours d'un clic : la friction protège la session, pas
-     l'écran de fin. En verrouillé, il n'y a rien à demander — on ne sort pas. */
-  const sealed = mode.exit === "none" && !done;
+     l'écran de fin. En verrouillé, la demande est gardée dans la session : le
+     panneau se rouvre de lui-même tant qu'elle court. */
+  const sealed = mode.exit === "delayed" && !done;
+  const wait = sealed ? lockedExitWaitMs(session, now) : null;
+  const phrase = sealed ? LOCKED_EXIT_PHRASE : EXIT_PHRASE;
   const canExitNow = done
     || mode.exit === "free"
-    || (mode.exit === "typed" && typed.trim().toLowerCase() === EXIT_PHRASE);
+    || (mode.exit === "typed" && typed.trim().toLowerCase() === EXIT_PHRASE)
+    || (sealed && wait === 0 && typed.trim().toLowerCase() === LOCKED_EXIT_PHRASE);
+  const showExit = !done && (sealed ? wait !== null : exiting);
+  const closeExit = () => {
+    setExiting(false);
+    setTyped("");
+    if (sealed) onCancelExit?.();
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -143,28 +156,31 @@ export default function SessionRunner({ session, store, now, onPause, onResume, 
               {Boolean(session.plannedMs) && (
                 <PillButton onClick={() => onExtend(15)}><Plus size={14} /> 15 min</PillButton>
               )}
-              {/* Verrouillé : pas de bouton « Arrêter » du tout. Un bouton
-                  désactivé serait une porte fermée qu'on continue de pousser —
-                  et la seule chose qu'on ait à décider ici est déjà décidée. */}
-              {!sealed && (
+              {sealed ? (
+                wait === null && (
+                  <PillButton variant="ghost" onClick={onRequestExit}>Annuler le verrou</PillButton>
+                )
+              ) : (
                 <PillButton variant="ghost" onClick={() => setExiting(v => !v)}>Arrêter</PillButton>
               )}
             </>
           )}
         </div>
 
-        {sealed && (
+        {sealed && wait === null && (
           <div style={{
             display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 999,
             background: FIELD_BG, fontSize: 12, color: T.textSub,
           }}>
             <Lock size={13} style={{ flexShrink: 0 }} />
-            Verrouillée jusqu’au bout — il reste {fmtDur(left || 0)}. Ni pause, ni arrêt.
+            {left === null
+              ? "Verrouillée — chronomètre libre, sans pause."
+              : `Verrouillée jusqu’au bout — il reste ${fmtDur(left)}. Aucune pause.`}
           </div>
         )}
 
         {/* La sortie ne s'ouvre qu'à la demande, et elle porte son prix. */}
-        {exiting && !done && !sealed && (
+        {showExit && (
           <div style={{
             width: "100%", maxWidth: 460, padding: 16, borderRadius: 12,
             background: FIELD_BG, display: "flex", flexDirection: "column", gap: 10,
@@ -174,21 +190,31 @@ export default function SessionRunner({ session, store, now, onPause, onResume, 
                 Il reste {fmtDur(left || 0)}. La session sera enregistrée comme interrompue.
               </div>
             )}
-            {mode.exit === "typed" && (
+            {/* L'attente d'abord, la phrase ensuite : le champ n'apparaît pas
+                tant qu'il reste du temps, sinon on le remplit pendant l'attente
+                et elle ne sert plus à rien. */}
+            {sealed && wait > 0 && (
+              <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.6 }}>
+                Annulation demandée. Le blocage tient encore{" "}
+                <strong style={{ color: T.text, fontVariantNumeric: "tabular-nums" }}>{fmtClock(wait)}</strong>
+                {" "}— si l’envie passe d’ici là, continuez la session.
+              </div>
+            )}
+            {(mode.exit === "typed" || (sealed && wait === 0)) && (
               <>
                 <div style={{ fontSize: 13, color: T.textSub, lineHeight: 1.6 }}>
-                  Recopiez <strong style={{ color: T.text }}>« {EXIT_PHRASE} »</strong> pour arrêter maintenant.
+                  Recopiez <strong style={{ color: T.text }}>« {phrase} »</strong> pour arrêter maintenant.
                 </div>
-                <Input value={typed} onChange={e => setTyped(e.target.value)} placeholder={EXIT_PHRASE} autoFocus />
+                <Input value={typed} onChange={e => setTyped(e.target.value)} placeholder={phrase} autoFocus />
               </>
             )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <PillButton variant="ghost" compact onClick={() => { setExiting(false); setTyped(""); }}>
+              <PillButton variant="ghost" compact onClick={closeExit}>
                 Continuer la session
               </PillButton>
               <PillButton
                 variant="danger" compact disabled={!canExitNow}
-                onClick={() => onEnd("abandoned")}
+                onClick={() => onEnd(sealed ? "emergency" : "abandoned")}
               >
                 Arrêter maintenant
               </PillButton>

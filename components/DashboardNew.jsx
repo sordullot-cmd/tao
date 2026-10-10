@@ -54,6 +54,7 @@ import TradesPage from "@/components/pages/TradesPage";
 import TradeChartPage from "@/components/pages/TradeChartPage";
 import AddTradePage from "@/components/pages/AddTradePage";
 import BacktestPage from "@/components/pages/BacktestPage";
+import PlaybookPage from "@/components/pages/PlaybookPage";
 import BrokersPage from "@/components/pages/BrokersPage";
 import AccountsPage from "@/components/pages/AccountsPage";
 import AccountDetailPage from "@/components/pages/AccountDetailPage";
@@ -84,6 +85,7 @@ import {
   NotebookPen,
   ShieldCheck,
   FlaskConical,
+  BookMarked as LucideBookMarked,
   Target as LucideTarget,
   Upload as LucideUpload,
   FileText as LucideFileText,
@@ -140,7 +142,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -707,6 +709,10 @@ export default function App() {
         { id: "trades",     icon: ListChecks,         label: t("nav.trades") },
         { id: "accounts",   icon: LucideWallet,       label: t("nav.accounts") },
         { id: "strategies", icon: LucideTarget,       label: t("nav.strategies") },
+        /* Le playbook entre la stratégie et son backtest : la stratégie liste
+           les règles à cocher, la fiche montre à quoi le setup RESSEMBLE
+           (captures, exemples) — c'est elle qu'on rejoue ensuite. */
+        { id: "playbook",   icon: LucideBookMarked,   label: t("nav.playbook") },
         /* Le backtesting suit « Stratégies » : on rejoue à la main les setups
            d'une stratégie qu'on vient d'y décrire. Il précède « Journal », qui
            relève lui les trades RÉELLEMENT pris. */
@@ -925,6 +931,7 @@ export default function App() {
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
+    playbook: <PlaybookPage />,
     backtest: <BacktestPage />,
     brokers: <BrokersPage />,
     accounts: <AccountsPage accountsLoading={accountsLoading} accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,

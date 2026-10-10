@@ -25,6 +25,7 @@ const DEFAULT_COMMANDS: Command[] = [
   { id: "nav.calendar",      group: "Navigation", label: "Aller au calendrier",        shortcut: "Alt+3", run: c => c.setPage("calendar") },
   { id: "nav.trades",        group: "Navigation", label: "Voir les trades",            shortcut: "Alt+4", keywords: ["liste"], run: c => c.setPage("trades") },
   { id: "nav.strategies",    group: "Navigation", label: "Voir les stratégies",        shortcut: "Alt+5", run: c => c.setPage("strategies") },
+  { id: "nav.playbook",      group: "Navigation", label: "Ouvrir le playbook",          keywords: ["setup", "setups", "fiche", "modèle", "playbook"], run: c => c.setPage("playbook") },
   { id: "nav.journal",       group: "Navigation", label: "Ouvrir le journal",          shortcut: "Alt+6", keywords: ["notes"], run: c => c.setPage("journal") },
   { id: "nav.discipline",    group: "Navigation", label: "Discipline",                                        run: c => c.setPage("discipline") },
   { id: "nav.daily-planner", group: "Navigation", label: "Planning du jour",           keywords: ["habitudes", "tâches"], run: c => c.setPage("daily-planner") },

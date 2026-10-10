@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  CATCH_UP_MIN, EXIT_PHRASE, MODES, appVerdictFor, canPause, closeSession, dayKey, emptyStore,
+  CATCH_UP_MIN, EXIT_PHRASE, LOCKED_EXIT_WAIT_MS, MODES, appVerdictFor, lockedExitWaitMs, canPause, closeSession, dayKey, emptyStore,
   focusedMs, hostOf, isDone, listApps, listSize, matchesApp, matchesDomain, nextRun,
   alwaysBlocklistIds, isBrowserApp, normalizeStore, pause, progress, remainingMs, resume,
   sessionFromPreset, sessionFromSchedule,
@@ -255,6 +255,14 @@ describe("session", () => {
     const normal = startSession({ name: "Jour", durationMin: 30, blocklistIds: [], mode: "normal" }, t0);
     expect(canPause(normal)).toBe(true);
     expect(canPause({ ...normal, breaks: MODES.normal.breaks })).toBe(false);
+  });
+
+  it("ne rend l'annulation d'un verrou confirmable qu'après l'attente", () => {
+    const s = startSession({ name: "Nuit", durationMin: 30, blocklistIds: [], mode: "locked" }, t0);
+    expect(lockedExitWaitMs(s, at(5))).toBeNull();
+    const asked = { ...s, exitRequestedAt: at(5).toISOString() };
+    expect(lockedExitWaitMs(asked, at(6))).toBe(LOCKED_EXIT_WAIT_MS - MIN_MS);
+    expect(lockedExitWaitMs(asked, at(10))).toBe(0);
   });
 
   it("clôt sur une entrée de journal fidèle", () => {

@@ -70,7 +70,7 @@ export default function FocusPage() {
   /* Une horloge qui ne tourne QUE pendant une session, et seulement hors pause :
      sans session, la page n'a aucune raison de se redessiner chaque seconde. */
   const tick = useTicker(Boolean(running) && !running?.pausedAt);
-  const now = useMemo(() => new Date(), [tick, running?.pausedAt, running?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const now = useMemo(() => new Date(), [tick, running?.pausedAt, running?.id, running?.exitRequestedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Cycle de vie d'une session ────────────────────────────────────────── */
 
@@ -98,10 +98,20 @@ export default function FocusPage() {
 
   /* La fin AUTOMATIQUE, elle, appartient à la sentinelle : le minuteur ne doit
      pas dépendre de l'onglet ouvert. Ce qui reste ici ne se déclenche que sur
-     un clic — arrêter, ou la sortie de secours d'un mode verrouillé. */
+     un clic — arrêter, ou l'annulation d'un mode verrouillé. */
 
   const onPause = useCallback(() => setStore(prev => (prev.running ? { ...prev, running: pause(prev.running) } : prev)), [setStore]);
   const onResume = useCallback(() => setStore(prev => (prev.running ? { ...prev, running: resume(prev.running) } : prev)), [setStore]);
+  /* Annulation d'un verrou : la demande est horodatée DANS la session, pour que
+     l'attente survive à un changement d'onglet ou à un rechargement. */
+  const onRequestExit = useCallback(() => setStore(prev => (
+    prev.running && !prev.running.exitRequestedAt
+      ? { ...prev, running: { ...prev.running, exitRequestedAt: new Date().toISOString() } }
+      : prev
+  )), [setStore]);
+  const onCancelExit = useCallback(() => setStore(prev => (
+    prev.running ? { ...prev, running: { ...prev.running, exitRequestedAt: null } } : prev
+  )), [setStore]);
   const onExtend = useCallback((min) => setStore(prev => (
     prev.running ? { ...prev, running: { ...prev.running, plannedMs: prev.running.plannedMs + min * MIN_MS } } : prev
   )), [setStore]);
@@ -143,6 +153,8 @@ export default function FocusPage() {
               onResume={onResume}
               onEnd={end}
               onExtend={onExtend}
+              onRequestExit={onRequestExit}
+              onCancelExit={onCancelExit}
             />
           ) : (
             <SessionStart store={store} setStore={setStore} onStart={start} actionSlot={actionSlot} />

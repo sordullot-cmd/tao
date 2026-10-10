@@ -40,6 +40,7 @@ export const SECTION_OF_PAGE: Record<string, SelfSection> = {
   discipline: "trading",
   strategies: "trading",
   "strategy-detail": "trading",
+  playbook: "trading",
   backtest: "trading",
   brokers: "trading",
   accounts: "trading",
