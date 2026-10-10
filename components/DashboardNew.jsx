@@ -37,6 +37,8 @@ import LifeRpgPage from "@/components/pages/LifeRpgPage";
 import ActivityPage from "@/components/pages/ActivityPage";
 import ActivityReportsPage from "@/components/pages/ActivityReportsPage";
 import ActivityRulesPage from "@/components/pages/ActivityRulesPage";
+import EloquencePage from "@/components/pages/EloquencePage";
+import CommunicationPage from "@/components/pages/CommunicationPage";
 import CashflowPage from "@/components/pages/CashflowPage";
 import BudgetPage from "@/components/pages/BudgetPage";
 import PatrimoinePage from "@/components/pages/PatrimoinePage";
@@ -98,6 +100,7 @@ import {
   SlidersHorizontal as LucideSlidersHorizontal,
   Check as LucideCheck,
   Mountain,
+  MessagesSquare,
   Pencil,
   Plus,
   GripVertical,
@@ -110,6 +113,7 @@ import {
   Wallet as LucideWallet,
   Dumbbell as LucideDumbbell,
   FolderOpen as LucideFolderOpen,
+  Mic as LucideMic,
   ArrowRightLeft as LucideArrowRightLeft,
   Landmark as LucideLandmark,
   ChartPie as LucideChartPie,
@@ -142,7 +146,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "communication", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -747,6 +751,12 @@ export default function App() {
         /* « Révisions » n'est plus dans la navigation : la page reste routée et
            joignable (palette de commandes, liens depuis Notes), elle est
            seulement masquée ici — pas retirée. */
+        { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
+        /* « Communication » est une page À PART, et pas un onglet de la
+           précédente : elle ne travaille pas la prise de parole préparée mais
+           la conversation ordinaire — entrer dans un groupe, rebondir, tenir
+           un récit court. Les deux n'ont ni exercices ni mesures en commun. */
+        { id: "communication", icon: MessagesSquare,     label: t("nav.communication") },
       ],
     },
     /* Finance — l'argent personnel, à distinguer du capital de trading qui vit
@@ -952,6 +962,8 @@ export default function App() {
     focus: <FocusPage />,
     drive: <DrivePage />,
     "life-rpg": <LifeRpgPage />,
+    eloquence: <EloquencePage />,
+    communication: <CommunicationPage />,
     activity: <ActivityPage setPage={setPage} />,
     "activity-reports": <ActivityReportsPage setPage={setPage} />,
     "activity-rules": <ActivityRulesPage setPage={setPage} />,
