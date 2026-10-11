@@ -881,7 +881,7 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
       {/* PLAYBOOK — l'ancienne page du même nom, ramenée ici : la fiche décrit
           CETTE stratégie, elle n'avait pas à vivre sur un autre écran. Avant
           les trades : c'est ce qu'on relit avant d'en prendre un. */}
-      <StrategyPlaybook strategy={selectedStrategy} />
+      <StrategyPlaybook strategy={selectedStrategy} trades={filteredTrades} />
 
       {/* HEADER VISUEL collé au tableau — petite barre titre + bouton "Tout
           voir". Le tableau réel est rendu juste en-dessous via TradesPage

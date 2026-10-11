@@ -29,10 +29,17 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
 const pushUndo = vi.fn();
 vi.mock("@/lib/contexts/UndoContext", () => ({ useUndo: () => ({ pushUndo }) }));
 vi.mock("@/lib/auth/supabaseAuthProvider", () => ({ useAuth: () => ({ user: null }) }));
+vi.mock("@/lib/hooks/useTradeScreenshots", () => ({ useTradeScreenshots: () => ({ urls: {} }) }));
 
 import StrategyPlaybook from "@/components/strategy/StrategyPlaybook";
 
 const STRATEGY = { id: 7, name: "iFVG NY", color: "#58CC02" };
+/* Les trades AFFECTÉS à la stratégie, tels que le détail les lui passe. */
+const TRADES = [
+  { id: 101, symbol: "NQ", date: "2026-10-01", direction: "long", pnl: 450 },
+  { id: 102, symbol: "ES", date: "2026-10-02", direction: "short", pnl: -120 },
+  { id: 103, symbol: "NQ", date: "2026-10-03", direction: "long", pnl: 80 },
+];
 const setups = () => (cloudStore.get("tao_playbook") as { setups: { strategyId: string | null; name: string }[] }).setups;
 
 describe("Playbook de la stratégie", () => {
@@ -57,11 +64,34 @@ describe("Playbook de la stratégie", () => {
     expect((setups()[0] as unknown as { invalidation: string }).invalidation).toBe("Clôture sous le FVG");
   });
 
-  it("ajoute un exemple gagnant et en tire le bilan", () => {
+  it("tire les exemples des trades de la stratégie, gagnants et perdants rangés par leur P&L", () => {
+    render(<StrategyPlaybook strategy={STRATEGY} trades={TRADES} />);
+    fireEvent.click(screen.getByText("Créer le playbook"));
+    fireEvent.click(screen.getByText("Choisir des trades"));
+
+    const dialog = screen.getByRole("dialog");
+    // Du plus récent au plus ancien : 103, 102, 101.
+    const boxes = within(dialog).getAllByRole("checkbox");
+    fireEvent.click(boxes[1]);
+    fireEvent.click(boxes[2]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ajouter 2 trades" }));
+
+    expect(screen.getByText(/1 G · 1 P/)).toBeTruthy();
+    const examples = (cloudStore.get("tao_playbook") as { setups: { examples: { tradeId: string; outcome: string }[] }[] }).setups[0].examples;
+    expect(examples.map(e => [e.tradeId, e.outcome]).sort()).toEqual([["101", "win"], ["102", "loss"]]);
+
+    // Un trade déjà pris en exemple ne se propose plus.
+    fireEvent.click(screen.getByText("Choisir des trades"));
+    expect(within(screen.getByRole("dialog")).getAllByRole("checkbox")).toHaveLength(1);
+  });
+
+  it("garde l'exemple sans trade en second choix", () => {
     render(<StrategyPlaybook strategy={STRATEGY} />);
     fireEvent.click(screen.getByText("Créer le playbook"));
+    // Sans trade affecté, il n'y a rien à choisir.
+    expect(screen.getByRole("button", { name: /Choisir des trades/ }).hasAttribute("disabled")).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ajouter un exemple gagnant" }));
+    fireEvent.click(screen.getByText("Exemple sans trade"));
     const dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByPlaceholderText("NQ, EURUSD…"), { target: { value: "NQ" } });
     fireEvent.change(within(dialog).getByPlaceholderText("2.5"), { target: { value: "3" } });

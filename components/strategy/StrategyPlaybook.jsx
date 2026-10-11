@@ -2,13 +2,15 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Pencil, ImagePlus, X } from "lucide-react";
+import { getCurrencySymbol } from "@/lib/userPrefs";
+import { useTradeScreenshots } from "@/lib/hooks/useTradeScreenshots";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { T, HAIRLINE, FIELD_BG } from "@/lib/ui/tokens";
-import { CARD, SectionTitle, SectionAction } from "@/components/ui/da";
+import { CARD, SectionTitle, SectionAction, PeriodPills } from "@/components/ui/da";
 import { Field, FieldGrid, Input, Select, Textarea, Modal, PillButton, IconButton } from "@/components/ui/form";
-import { emptyPlaybook, normalizePlaybook, emptySetup, newId, exampleStats } from "@/lib/playbook/model";
+import { emptyPlaybook, normalizePlaybook, emptySetup, newId } from "@/lib/playbook/model";
 import { uploadPlaybookImage } from "@/lib/playbook/images";
 
 /**
@@ -58,15 +60,31 @@ function fmtDate(iso) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-const toneOf = (v) => (v > 0 ? T.green : v < 0 ? T.red : T.textMut);
+function fmtMoney(value) {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${getCurrencySymbol()}${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
-export default function StrategyPlaybook({ strategy }) {
+const toneOf = (v) => (v > 0 ? T.green : v < 0 ? T.red : T.textMut);
+const pnlOf = (tr) => (typeof tr?.pnl === "number" ? tr.pnl : Number(tr?.pnl) || 0);
+const dayOf = (tr) => String(tr?.date || "").slice(0, 10);
+const sideOf = (tr) => (String(tr?.direction || "").toLowerCase().startsWith("s") ? "Short" : "Long");
+
+/**
+ * `trades` : les trades AFFECTÉS à la stratégie (filtrés par le détail). Les
+ * exemples se tirent d'abord de là — un setup qu'on a réellement pris enseigne
+ * plus qu'une capture choisie après coup pour sa clarté.
+ */
+export default function StrategyPlaybook({ strategy, trades = [] }) {
   const { user } = useAuth();
   const { pushUndo } = useUndo();
   const [raw, setRaw] = useCloudState(STORAGE_KEY, CLOUD_KEY, emptyPlaybook());
   const playbook = useMemo(() => normalizePlaybook(raw), [raw]);
   const [exampleForm, setExampleForm] = useState(null);
   const [viewer, setViewer] = useState(null);
+  const [picking, setPicking] = useState(false);
+  const { urls: tradeShots } = useTradeScreenshots();
+  const tradeById = useMemo(() => new Map(trades.map(tr => [String(tr.id), tr])), [trades]);
 
   const strategyId = String(strategy.id);
   /* Plusieurs fiches pouvaient viser la même stratégie dans l'ancienne page :
@@ -114,10 +132,27 @@ export default function StrategyPlaybook({ strategy }) {
     });
   };
 
+  /* Le résultat se déduit du P&L au moment de l'ajout ; le montant, lui, reste
+     sur le trade et se relit à l'affichage. Un trade à 0 compte en perdant :
+     un exemple n'a que deux colonnes, et un scratch n'a rien gagné. */
+  const addTrades = (picked) => {
+    const fresh = picked.map(tr => ({
+      id: newId("ex"),
+      tradeId: String(tr.id),
+      outcome: pnlOf(tr) > 0 ? "win" : "loss",
+      date: dayOf(tr),
+      symbol: String(tr.symbol || ""),
+      r: null, note: "", image: "",
+    }));
+    patch(s => ({ examples: [...fresh, ...s.examples] }));
+    setPicking(false);
+  };
+
   const saveExample = (form) => {
     const r = String(form.r).trim() === "" ? null : Number(String(form.r).replace(",", "."));
     const example = {
       id: form.id || newId("ex"),
+      tradeId: form.tradeId ?? null,
       outcome: form.outcome,
       date: form.date,
       symbol: form.symbol.trim(),
@@ -187,16 +222,30 @@ export default function StrategyPlaybook({ strategy }) {
 
           <Examples
             examples={setup.examples}
-            onAdd={(outcome) => setExampleForm(blankExample(outcome))}
+            tradeById={tradeById}
+            tradeShots={tradeShots}
+            hasTrades={trades.length > 0}
+            onPick={() => setPicking(true)}
+            onAddManual={() => setExampleForm(blankExample("win"))}
             onEdit={(e) => setExampleForm({ ...e, r: e.r === null ? "" : String(e.r) })}
             onView={setViewer}
           />
         </>
       )}
 
+      {picking && setup && (
+        <TradePicker
+          trades={trades}
+          taken={new Set(setup.examples.map(e => e.tradeId).filter(Boolean))}
+          onClose={() => setPicking(false)}
+          onAdd={addTrades}
+        />
+      )}
+
       {exampleForm && setup && (
         <ExampleModal
           form={exampleForm} setForm={setExampleForm} userId={user?.id}
+          trade={exampleForm.tradeId ? tradeById.get(exampleForm.tradeId) : undefined}
           editing={setup.examples.some(e => e.id === exampleForm.id)}
           onClose={() => setExampleForm(null)}
           onSave={() => saveExample(exampleForm)}
@@ -217,7 +266,7 @@ export default function StrategyPlaybook({ strategy }) {
 }
 
 const blankExample = (outcome) => ({
-  id: "", outcome, date: new Date().toISOString().slice(0, 10), symbol: "", r: "", note: "", image: "",
+  id: "", tradeId: null, outcome, date: new Date().toISOString().slice(0, 10), symbol: "", r: "", note: "", image: "",
 });
 
 /* ── Briques ─────────────────────────────────────────────────────────────
@@ -379,55 +428,88 @@ function Screenshots({ images, userId, onAdd, onCaption, onRemove, onView }) {
 
 /** Gagnants et perdants côte à côte, séparés d'un filet — la disposition
  *  meilleur / pire de la carte « Probabilité ». */
-function Examples({ examples, onAdd, onEdit, onView }) {
-  const ex = exampleStats(examples);
+function Examples({ examples, tradeById, tradeShots, hasTrades, onPick, onAddManual, onEdit, onView }) {
+  const linked = examples.filter(e => e.tradeId && tradeById.has(e.tradeId));
+  const pnl = linked.reduce((sum, e) => sum + pnlOf(tradeById.get(e.tradeId)), 0);
+  const wins = examples.filter(e => e.outcome === "win");
+  const losses = examples.filter(e => e.outcome === "loss");
   const columns = [
-    { outcome: "win", title: "Gagnants", one: "gagnant", color: T.green, items: examples.filter(e => e.outcome === "win") },
-    { outcome: "loss", title: "Perdants", one: "perdant", color: T.red, items: examples.filter(e => e.outcome === "loss") },
+    { outcome: "win", title: "Gagnants", color: T.green, items: wins },
+    { outcome: "loss", title: "Perdants", color: T.red, items: losses },
   ];
+  const sub = examples.length > 0
+    ? [`${wins.length} G · ${losses.length} P`, linked.length > 0 ? `${fmtMoney(pnl)} sur ${linked.length} trade${linked.length > 1 ? "s" : ""}` : null]
+        .filter(Boolean).join(" · ")
+    : hasTrades
+      ? "Choisis parmi tes trades de cette stratégie ceux qui montrent le setup — réussi ou raté."
+      : "Aucun trade dans cette stratégie : affecte-en depuis la page Trades pour les choisir ici.";
   return (
     <CardShell
       title="Exemples"
-      sub={ex.count > 0
-        ? `${ex.wins} G · ${ex.losses} P · réussite ${ex.winRate}% · ${fmtR(ex.avgR)} / exemple`
-        : "Des trades choisis pour leur clarté — ceux qui ont marché, et ceux qui n'auraient pas dû être pris."}
+      sub={sub}
+      action={
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+          {/* Le choix d'un trade réel passe devant : l'exemple saisi à la main
+              reste possible (un setup vu sans l'avoir pris), mais en retrait. */}
+          <button type="button" onClick={onAddManual}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: T.textSub }}>
+            Exemple sans trade
+          </button>
+          <PillButton compact variant="primary" onClick={onPick} disabled={!hasTrades}>
+            <Plus size={13} strokeWidth={2} /> Choisir des trades
+          </PillButton>
+        </div>
+      }
     >
       <div className="tao-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
         {columns.map((col, i) => (
           <div key={col.outcome} style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10, minWidth: 0, borderRight: i === 0 ? `1px solid ${HAIRLINE}` : "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: col.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: T.text, flex: 1 }}>{col.title} <span style={{ color: T.textMut, fontWeight: 500 }}>{col.items.length}</span></span>
-              <PillButton compact onClick={() => onAdd(col.outcome)} aria-label={`Ajouter un exemple ${col.one}`}>
-                <Plus size={13} strokeWidth={2} /> Ajouter
-              </PillButton>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{col.title} <span style={{ color: T.textMut, fontWeight: 500 }}>{col.items.length}</span></span>
             </div>
             {col.items.length === 0 && <div style={{ fontSize: 13, color: T.textMut }}>Aucun exemple.</div>}
-            {col.items.map(e => (
-              <div key={e.id} style={{ display: "flex", gap: 10, padding: 10, borderRadius: 10, background: FIELD_BG }}>
-                {e.image && (
-                  <button type="button" onClick={() => onView(e.image)} aria-label="Agrandir"
-                          style={{ all: "unset", cursor: "zoom-in", width: 96, height: 60, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-                    <img src={e.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </button>
-                )}
-                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{e.symbol || "—"}</span>
-                    <span style={{ fontSize: 11, color: T.textMut }}>{fmtDate(e.date)}</span>
-                    <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
-                      {e.r !== null && (
-                        <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: toneOf(e.r) }}>{fmtR(e.r)}</span>
-                      )}
-                      <IconButton aria-label="Modifier l'exemple" onClick={() => onEdit(e)}>
-                        <Pencil size={12} strokeWidth={1.75} />
-                      </IconButton>
-                    </span>
+            {col.items.map(e => {
+              const trade = e.tradeId ? tradeById.get(e.tradeId) : undefined;
+              /* La capture propre à l'exemple d'abord, sinon celle déjà jointe
+                 au trade dans la page Trades : pas besoin de la recoller. */
+              const image = e.image || (e.tradeId ? tradeShots[e.tradeId] : "") || "";
+              return (
+                <div key={e.id} style={{ display: "flex", gap: 10, padding: 10, borderRadius: 10, background: FIELD_BG }}>
+                  {image && (
+                    <button type="button" onClick={() => onView(image)} aria-label="Agrandir"
+                            style={{ all: "unset", cursor: "zoom-in", width: 96, height: 60, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+                      <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </button>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{(trade?.symbol ?? e.symbol) || "—"}</span>
+                      {trade && <span style={{ fontSize: 11, color: T.textSub }}>{sideOf(trade)}</span>}
+                      <span style={{ fontSize: 11, color: T.textMut, whiteSpace: "nowrap" }}>{fmtDate(trade ? dayOf(trade) : e.date)}</span>
+                      <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                        {trade && (
+                          <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: toneOf(pnlOf(trade)) }}>{fmtMoney(pnlOf(trade))}</span>
+                        )}
+                        {e.r !== null && (
+                          <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: "tabular-nums", color: toneOf(e.r) }}>{fmtR(e.r)}</span>
+                        )}
+                        <IconButton aria-label="Modifier l'exemple" onClick={() => onEdit(e)}>
+                          <Pencil size={12} strokeWidth={1.75} />
+                        </IconButton>
+                      </span>
+                    </div>
+                    {/* Trade supprimé ou désaffecté depuis : l'exemple garde ce
+                        qu'il en savait, mais le dit plutôt que d'afficher 0. */}
+                    {e.tradeId && !trade && (
+                      <div style={{ fontSize: 11, color: T.textMut }}>Trade introuvable dans cette stratégie</div>
+                    )}
+                    {!e.tradeId && <div style={{ fontSize: 11, color: T.textMut }}>Sans trade</div>}
+                    {e.note.trim() && <div style={{ fontSize: 13, color: T.textSub, whiteSpace: "pre-wrap" }}>{e.note}</div>}
                   </div>
-                  {e.note.trim() && <div style={{ fontSize: 13, color: T.textSub, whiteSpace: "pre-wrap" }}>{e.note}</div>}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ))}
       </div>
@@ -435,7 +517,85 @@ function Examples({ examples, onAdd, onEdit, onView }) {
   );
 }
 
-function ExampleModal({ form, setForm, userId, editing, onClose, onSave, onDelete }) {
+/** Choix parmi les trades de la stratégie. Plusieurs d'un coup : on remplit
+ *  souvent la fiche en relisant une semaine entière, pas trade par trade. */
+function TradePicker({ trades, taken, onClose, onAdd }) {
+  const [filter, setFilter] = useState("all");
+  const [selected, setSelected] = useState(() => new Set());
+  const available = trades
+    .filter(tr => tr.id != null && !taken.has(String(tr.id)))
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  const visible = available.filter(tr => filter === "all" || (filter === "win" ? pnlOf(tr) > 0 : pnlOf(tr) <= 0));
+  const toggle = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const picked = available.filter(tr => selected.has(String(tr.id)));
+
+  return (
+    <Modal
+      open
+      title="Choisir des trades"
+      onClose={onClose}
+      width={620}
+      footer={
+        <>
+          <PillButton variant="ghost" onClick={onClose}>Annuler</PillButton>
+          <PillButton variant="primary" onClick={() => onAdd(picked)} disabled={picked.length === 0}>
+            {picked.length > 0 ? `Ajouter ${picked.length} trade${picked.length > 1 ? "s" : ""}` : "Ajouter"}
+          </PillButton>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <PeriodPills
+          value={filter}
+          onChange={setFilter}
+          rail
+          size={12}
+          options={[
+            { id: "all", label: `Tous (${available.length})` },
+            { id: "win", label: "Gagnants" },
+            { id: "loss", label: "Perdants" },
+          ]}
+        />
+        {available.length === 0 ? (
+          <div style={{ fontSize: 13, color: T.textMut, padding: "16px 0" }}>Tous les trades de cette stratégie sont déjà dans les exemples.</div>
+        ) : visible.length === 0 ? (
+          <div style={{ fontSize: 13, color: T.textMut, padding: "16px 0" }}>Aucun trade dans ce filtre.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {visible.map((tr, i) => {
+              const id = String(tr.id);
+              const pnl = pnlOf(tr);
+              const time = tr.entryTime || tr.entry_time;
+              return (
+                <label key={id}
+                       style={{
+                         display: "flex", alignItems: "center", gap: 12, padding: "10px 4px", cursor: "pointer",
+                         borderTop: i > 0 ? `1px solid ${HAIRLINE}` : "none",
+                       }}>
+                  <input type="checkbox" checked={selected.has(id)} onChange={() => toggle(id)}
+                         aria-label={`${tr.symbol || "Trade"} du ${fmtDate(dayOf(tr))}`}
+                         style={{ width: 16, height: 16, accentColor: "var(--color-text)", flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 500, color: T.text, minWidth: 64 }}>{tr.symbol || "—"}</span>
+                  <span style={{ fontSize: 12, color: T.textSub, minWidth: 40 }}>{sideOf(tr)}</span>
+                  <span style={{ fontSize: 12, color: T.textMut, flex: 1, whiteSpace: "nowrap" }}>
+                    {fmtDate(dayOf(tr))}{time ? ` · ${String(time).slice(0, 5)}` : ""}
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: toneOf(pnl) }}>{fmtMoney(pnl)}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ExampleModal({ form, setForm, userId, trade, editing, onClose, onSave, onDelete }) {
   const set = (p) => setForm(f => ({ ...f, ...p }));
   const input = useRef(null);
   const { busy, upload } = useImageUpload(userId);
@@ -444,6 +604,9 @@ function ExampleModal({ form, setForm, userId, editing, onClose, onSave, onDelet
     { id: "win", label: "Gagnant", color: T.green, bg: T.greenBg },
     { id: "loss", label: "Perdant", color: T.red, bg: T.redBg },
   ];
+  /* Exemple tiré d'un trade : date, instrument et P&L viennent du trade et ne
+     se ressaisissent pas. Seuls restent le R, la capture et la leçon. */
+  const fromTrade = Boolean(form.tradeId);
 
   return (
     <Modal
@@ -461,35 +624,48 @@ function ExampleModal({ form, setForm, userId, editing, onClose, onSave, onDelet
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}
            onPaste={(e) => { const files = imagesOf(e.clipboardData?.items); if (files.length) { e.preventDefault(); take(files); } }}>
-        <Field label="Résultat">
-          <div style={{ display: "flex", gap: 4, background: FIELD_BG, borderRadius: 999, padding: 3 }}>
-            {outcomes.map(o => {
-              const active = form.outcome === o.id;
-              return (
-                <button key={o.id} type="button" aria-pressed={active} onClick={() => set({ outcome: o.id })}
-                  style={{
-                    flex: 1, minHeight: 30, borderRadius: 999, border: "none", cursor: "pointer",
-                    fontFamily: "inherit", fontSize: 13, fontWeight: 600,
-                    background: active ? o.bg : "transparent",
-                    color: active ? o.color : T.textSub,
-                  }}>
-                  {o.label}
-                </button>
-              );
-            })}
+        {fromTrade ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 10, background: FIELD_BG }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{(trade?.symbol ?? form.symbol) || "—"}</span>
+            {trade && <span style={{ fontSize: 12, color: T.textSub }}>{sideOf(trade)}</span>}
+            <span style={{ fontSize: 12, color: T.textMut, flex: 1 }}>{fmtDate(trade ? dayOf(trade) : form.date)}</span>
+            {trade
+              ? <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: toneOf(pnlOf(trade)) }}>{fmtMoney(pnlOf(trade))}</span>
+              : <span style={{ fontSize: 12, color: T.textMut }}>Trade introuvable</span>}
           </div>
+        ) : (
+          <>
+            <Field label="Résultat">
+              <div style={{ display: "flex", gap: 4, background: FIELD_BG, borderRadius: 999, padding: 3 }}>
+                {outcomes.map(o => {
+                  const active = form.outcome === o.id;
+                  return (
+                    <button key={o.id} type="button" aria-pressed={active} onClick={() => set({ outcome: o.id })}
+                      style={{
+                        flex: 1, minHeight: 30, borderRadius: 999, border: "none", cursor: "pointer",
+                        fontFamily: "inherit", fontSize: 13, fontWeight: 600,
+                        background: active ? o.bg : "transparent",
+                        color: active ? o.color : T.textSub,
+                      }}>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <FieldGrid columns={2}>
+              <Field label="Date">
+                <Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
+              </Field>
+              <Field label="Instrument">
+                <Input value={form.symbol} onChange={(e) => set({ symbol: e.target.value })} placeholder="NQ, EURUSD…" />
+              </Field>
+            </FieldGrid>
+          </>
+        )}
+        <Field label="Résultat en R" hint={fromTrade ? "Facultatif — le P&L vient du trade." : undefined}>
+          <Input value={form.r} onChange={(e) => set({ r: e.target.value })} inputMode="decimal" placeholder="2.5" />
         </Field>
-        <FieldGrid columns={3}>
-          <Field label="Date">
-            <Input type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
-          </Field>
-          <Field label="Instrument">
-            <Input value={form.symbol} onChange={(e) => set({ symbol: e.target.value })} placeholder="NQ, EURUSD…" />
-          </Field>
-          <Field label="Résultat en R">
-            <Input value={form.r} onChange={(e) => set({ r: e.target.value })} inputMode="decimal" placeholder="2.5" />
-          </Field>
-        </FieldGrid>
         <Field label="Capture" hint="Colle une image (⌘V) dans la fenêtre ou choisis un fichier.">
           {form.image ? (
             <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", background: FIELD_BG }}>

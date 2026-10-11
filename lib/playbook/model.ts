@@ -36,6 +36,10 @@ export interface PlaybookImage {
 
 export interface PlaybookExample {
   id: string;
+  /** Le trade réel dont l'exemple est tiré, `null` pour un exemple saisi à la
+   *  main (ancienne page, ou setup vu sans l'avoir pris). Le P&L n'est PAS
+   *  recopié : il se relit sur le trade, seule source fiable des chiffres. */
+  tradeId: string | null;
   outcome: ExampleOutcome;
   /** YYYY-MM-DD — la date du trade sur le graphique. Vide si inconnue. */
   date: string;
@@ -170,6 +174,7 @@ function normalizeExample(raw: unknown, i: number): PlaybookExample | null {
   const hasR = rawR !== null && rawR !== undefined && rawR !== "" && Number.isFinite(Number(rawR));
   return {
     id: str(o.id) || `ex${i}`,
+    tradeId: o.tradeId == null || o.tradeId === "" ? null : String(o.tradeId),
     outcome: o.outcome === "loss" ? "loss" : "win",
     date: str(o.date).slice(0, 10),
     symbol: str(o.symbol).trim(),
