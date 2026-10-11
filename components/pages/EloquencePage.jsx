@@ -30,6 +30,7 @@ import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
 import { SkeletonScreen, SkeletonCard, SkeletonStats, SkeletonList, Skeleton } from "@/components/ui/Skeleton";
 import { useAudioRecorder } from "@/lib/hooks/useAudioRecorder";
 import { useEloquenceAudio } from "@/lib/hooks/useEloquenceAudio";
+import CommunicationPage from "@/components/pages/CommunicationPage";
 import { decodeAudioBlob, analyzeAudioBuffer, deriveAudioScores, encodeWav } from "@/lib/eloquenceAudioAnalysis";
 import {
   ELOQ_STORAGE_KEY, ELOQ_CLOUD_KEY, LEVELS, SCORE_AXES, FIDELITY_AXIS, AUDIO_AXES,
@@ -1946,7 +1947,7 @@ function trimReps(reps) {
   );
 }
 
-export default function EloquencePage() {
+function PriseDeParole() {
   const [tab, setTab] = useState(EXERCISE_MODES.articulation);
   const [store, setStore, hydrated] = useCloudState(ELOQ_STORAGE_KEY, ELOQ_CLOUD_KEY, { sessions: [] });
 
@@ -2142,6 +2143,32 @@ export default function EloquencePage() {
           <RecordingsPanel sessions={sessions} mode={tab} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ÉLOQUENCE = PRISE DE PAROLE + CONVERSATION
+   ═══════════════════════════════════════════════════════════
+   Deux pratiques sous une seule entrée de navigation, mais deux magasins
+   distincts (`ELOQ_*` et `COMM_*`) qu'on ne fusionne pas : elles n'ont ni
+   exercices ni mesures en commun, et réunir les données n'aurait rien apporté
+   qu'une migration à risque. Seul l'écran est commun. */
+const SECTIONS = [
+  { id: "parole",       label: "Prise de parole" },
+  { id: "conversation", label: "Conversation" },
+];
+
+export default function EloquencePage({ initialSection = "parole" }) {
+  const [section, setSection] = useState(initialSection);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Le rail distingue ce sélecteur-ci, qui change de PRATIQUE, des
+          pastilles d'exercice en dessous, qui restent dans la même. */}
+      <div className="scroll-thin" style={{ maxWidth: "100%", overflowX: "auto", alignSelf: "flex-start" }}>
+        <PeriodPills value={section} onChange={setSection} options={SECTIONS} rail size={14} />
+      </div>
+      {section === "conversation" ? <CommunicationPage /> : <PriseDeParole />}
     </div>
   );
 }

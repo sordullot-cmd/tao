@@ -38,7 +38,6 @@ import ActivityPage from "@/components/pages/ActivityPage";
 import ActivityReportsPage from "@/components/pages/ActivityReportsPage";
 import ActivityRulesPage from "@/components/pages/ActivityRulesPage";
 import EloquencePage from "@/components/pages/EloquencePage";
-import CommunicationPage from "@/components/pages/CommunicationPage";
 import CashflowPage from "@/components/pages/CashflowPage";
 import BudgetPage from "@/components/pages/BudgetPage";
 import PatrimoinePage from "@/components/pages/PatrimoinePage";
@@ -56,7 +55,6 @@ import TradesPage from "@/components/pages/TradesPage";
 import TradeChartPage from "@/components/pages/TradeChartPage";
 import AddTradePage from "@/components/pages/AddTradePage";
 import BacktestPage from "@/components/pages/BacktestPage";
-import PlaybookPage from "@/components/pages/PlaybookPage";
 import BrokersPage from "@/components/pages/BrokersPage";
 import AccountsPage from "@/components/pages/AccountsPage";
 import AccountDetailPage from "@/components/pages/AccountDetailPage";
@@ -87,7 +85,6 @@ import {
   NotebookPen,
   ShieldCheck,
   FlaskConical,
-  BookMarked as LucideBookMarked,
   Target as LucideTarget,
   Upload as LucideUpload,
   FileText as LucideFileText,
@@ -100,7 +97,6 @@ import {
   SlidersHorizontal as LucideSlidersHorizontal,
   Check as LucideCheck,
   Mountain,
-  MessagesSquare,
   Pencil,
   Plus,
   GripVertical,
@@ -713,10 +709,6 @@ export default function App() {
         { id: "trades",     icon: ListChecks,         label: t("nav.trades") },
         { id: "accounts",   icon: LucideWallet,       label: t("nav.accounts") },
         { id: "strategies", icon: LucideTarget,       label: t("nav.strategies") },
-        /* Le playbook entre la stratégie et son backtest : la stratégie liste
-           les règles à cocher, la fiche montre à quoi le setup RESSEMBLE
-           (captures, exemples) — c'est elle qu'on rejoue ensuite. */
-        { id: "playbook",   icon: LucideBookMarked,   label: t("nav.playbook") },
         /* Le backtesting suit « Stratégies » : on rejoue à la main les setups
            d'une stratégie qu'on vient d'y décrire. Il précède « Journal », qui
            relève lui les trades RÉELLEMENT pris. */
@@ -751,12 +743,9 @@ export default function App() {
         /* « Révisions » n'est plus dans la navigation : la page reste routée et
            joignable (palette de commandes, liens depuis Notes), elle est
            seulement masquée ici — pas retirée. */
+        /* « Communication » a fusionné dans « Éloquence » : une seule entrée,
+           la page bascule entre prise de parole et conversation. */
         { id: "eloquence",     icon: LucideMic,          label: t("nav.eloquence") },
-        /* « Communication » est une page À PART, et pas un onglet de la
-           précédente : elle ne travaille pas la prise de parole préparée mais
-           la conversation ordinaire — entrer dans un groupe, rebondir, tenir
-           un récit court. Les deux n'ont ni exercices ni mesures en commun. */
-        { id: "communication", icon: MessagesSquare,     label: t("nav.communication") },
       ],
     },
     /* Finance — l'argent personnel, à distinguer du capital de trading qui vit
@@ -941,7 +930,10 @@ export default function App() {
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
-    playbook: <PlaybookPage />,
+    /* Le playbook est devenu une section du détail de stratégie. L'entrée
+       reste pour la page mémorisée d'une session antérieure : sans elle, on
+       rouvrirait l'app sur un écran vide. */
+    playbook: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     backtest: <BacktestPage />,
     brokers: <BrokersPage />,
     accounts: <AccountsPage accountsLoading={accountsLoading} accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
@@ -963,7 +955,9 @@ export default function App() {
     drive: <DrivePage />,
     "life-rpg": <LifeRpgPage />,
     eloquence: <EloquencePage />,
-    communication: <CommunicationPage />,
+    /* La page mémorisée d'une session antérieure peut encore être
+       « communication » : on rouvre Éloquence sur la même pratique. */
+    communication: <EloquencePage initialSection="conversation" />,
     activity: <ActivityPage setPage={setPage} />,
     "activity-reports": <ActivityReportsPage setPage={setPage} />,
     "activity-rules": <ActivityRulesPage setPage={setPage} />,

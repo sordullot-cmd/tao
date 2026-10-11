@@ -5,6 +5,7 @@ import { getCurrencySymbol, rMultiple, fmtR } from "@/lib/userPrefs";
 import { withNetPnl } from "@/lib/tradeFees";
 import TradesPage from "@/components/pages/TradesPage";
 import LoadingScreen from "@/components/ui/LoadingScreen";
+import StrategyPlaybook from "@/components/strategy/StrategyPlaybook";
 import { t, useLang } from "@/lib/i18n";
 import {
   CARD, HAIRLINE, BackLink, SectionTitle, SectionAction, HeroAmount, MiniKpi, PnlChart,
@@ -876,6 +877,11 @@ export default function StrategyDetailPage({ setPage = () => {} }) {
         </div>
       </div>
       )}
+
+      {/* PLAYBOOK — l'ancienne page du même nom, ramenée ici : la fiche décrit
+          CETTE stratégie, elle n'avait pas à vivre sur un autre écran. Avant
+          les trades : c'est ce qu'on relit avant d'en prendre un. */}
+      <StrategyPlaybook strategy={selectedStrategy} />
 
       {/* HEADER VISUEL collé au tableau — petite barre titre + bouton "Tout
           voir". Le tableau réel est rendu juste en-dessous via TradesPage

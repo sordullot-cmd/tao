@@ -123,4 +123,22 @@ describe("Page Éloquence", () => {
     expect(tab("du coup")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/mot à bannir/)).toBeInTheDocument();
   });
+
+  it("bascule vers la conversation, l'ancienne page Communication, sans quitter Éloquence", () => {
+    render(<EloquencePage />);
+    expect(screen.queryByText("La séance du jour")).toBeNull();
+
+    fireEvent.click(tab("Conversation"));
+    expect(screen.getByText("La séance du jour")).toBeInTheDocument();
+    // Les pastilles d'exercice appartiennent à la prise de parole : elles partent avec elle.
+    expect(screen.queryByRole("button", { name: "Articulation" })).toBeNull();
+
+    fireEvent.click(tab("Prise de parole"));
+    expect(tab("Articulation")).toBeInTheDocument();
+  });
+
+  it("rouvre sur la conversation quand la page mémorisée était « communication »", () => {
+    render(<EloquencePage initialSection="conversation" />);
+    expect(screen.getByText("La séance du jour")).toBeInTheDocument();
+  });
 });

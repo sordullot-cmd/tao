@@ -1274,7 +1274,7 @@ export default function CommunicationPage() {
           (ça marche). */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <h1 style={{ ...TYPE.title2, color: T.text, margin: 0 }}>Communication</h1>
+          <h1 style={{ ...TYPE.title2, color: T.text, margin: 0 }}>Conversation</h1>
           <div style={{ ...TYPE.body, color: T.textSub, marginTop: 4 }}>
             Phase {phase.phase.n} · {phase.phase.label} — {phase.phase.semaines}
           </div>
