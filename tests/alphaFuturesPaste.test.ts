@@ -104,9 +104,10 @@ describe("parseAlphaFuturesPaste()", () => {
   });
 });
 
-/* Relevé complet d'une journée, dix lignes, avec ses scale-in : trois paires
-   partagent instrument, sens, prix ET seconde d'entrée. C'est le relevé sur
-   lequel le site annonçait 167 $ là où Alpha en comptait 270. */
+/* Relevé complet d'une journée, dix lignes : trois paires partagent
+   instrument, sens, prix ET centième de seconde d'entrée — c'est Alpha qui
+   découpe un ordre de 5 contrats en 4 + 1. C'est le relevé sur lequel le site
+   annonçait 167 $ là où Alpha en comptait 270. */
 const JOURNEE = [
   "XCME_Eq NQ (U26)\tLONG\t1.00\tbda8dd55c8665f50\tBUY\tSELL\t$29,230.50\t$29,231.25\t+$15.00\t$4.78\t01/09/2026 05:00:12.94 PM\t01/09/2026 05:01:15.32 PM",
   "XCME_Eq NQ (U26)\tSHORT\t1.00\t4c884c79f4f2593f\tSELL\tBUY\t$29,215.75\t$29,211.75\t+$80.00\t$4.78\t01/09/2026 04:56:20.99 PM\t01/09/2026 04:57:43.32 PM",
@@ -121,10 +122,39 @@ const JOURNEE = [
 ].join("\n");
 
 describe("une journée entière d'Alpha Futures", () => {
-  it("rend les dix lignes, scale-in compris", () => {
+  it("recolle en un seul trade les morceaux ouverts au même instant", () => {
     const { rows, skipped } = parseAlphaFuturesPaste(JOURNEE);
-    expect(rows).toHaveLength(10);
+    expect(rows).toHaveLength(7);
     expect(skipped).toEqual([]);
+    const fusion = rows.find((r) => r.entryTime === "16:56:20")!;
+    expect(fusion.quantity).toBe(5);
+    expect(fusion.pnlGross).toBe(400);
+    expect(fusion.fees).toBe(23.9);
+    expect(fusion.pnl).toBe(376.1);
+    expect(fusion.points).toBe(4);
+    expect(fusion.tradeId).toBe("4c884c79f4f2593f+d79f3be23fb750bf");
+  });
+
+  it("pondère les prix et garde la dernière sortie quand les morceaux divergent", () => {
+    const paste = [
+      "XCME_Eq NQ (U26)\tLONG\t1.00\ta\tBUY\tSELL\t$100.00\t$110.00\t+$200.00\t$4.78\t01/09/2026 03:00:00.50 PM\t01/09/2026 03:01:00.00 PM",
+      "XCME_Eq NQ (U26)\tLONG\t3.00\tb\tBUY\tSELL\t$104.00\t$106.00\t+$120.00\t$14.34\t01/09/2026 03:00:00.50 PM\t01/09/2026 03:02:00.00 PM",
+    ].join("\n");
+    const [r] = parseAlphaFuturesPaste(paste).rows;
+    expect(r.quantity).toBe(4);
+    expect(r.entry).toBe(103);
+    expect(r.exit).toBe(107);
+    expect(r.pnlGross).toBe(320);
+    expect(r.exitTime).toBe("15:02:00");
+    expect(r.duration).toBe("119.50s");
+  });
+
+  it("ne fusionne pas deux entrées de la même seconde à des centièmes différents", () => {
+    const paste = [
+      "XCME_Eq NQ (U26)\tLONG\t1.00\ta\tBUY\tSELL\t$100.00\t$110.00\t+$200.00\t$4.78\t01/09/2026 03:00:00.50 PM\t01/09/2026 03:01:00.00 PM",
+      "XCME_Eq NQ (U26)\tLONG\t1.00\tb\tBUY\tSELL\t$100.00\t$110.00\t+$200.00\t$4.78\t01/09/2026 03:00:00.90 PM\t01/09/2026 03:01:00.00 PM",
+    ].join("\n");
+    expect(parseAlphaFuturesPaste(paste).rows).toHaveLength(2);
   });
 
   it("retombe au dollar près sur le net du relevé", () => {
@@ -134,14 +164,14 @@ describe("une journée entière d'Alpha Futures", () => {
     expect(Math.round(net * 100) / 100).toBe(270.06);
   });
 
-  it("n'insère aucune des dix lignes deux fois, et n'en perd aucune", () => {
+  it("n'insère aucun trade deux fois, et n'en perd aucun", () => {
     const { csv } = parseAlphaFuturesPaste(JOURNEE);
     const batch = parseCSV(csv, null).map((t) => ({
       date: t.date, symbol: t.symbol, direction: t.direction,
       entry: t.entry, exit: t.exit,
       entry_time: t.entryTime, exit_time: t.exitTime,
     }));
-    expect(splitNewTrades(batch, []).toInsert).toHaveLength(10);
+    expect(splitNewTrades(batch, []).toInsert).toHaveLength(7);
     // Le même relevé recollé ne rentre pas une seconde fois.
     expect(splitNewTrades(batch, batch).toInsert).toHaveLength(0);
   });

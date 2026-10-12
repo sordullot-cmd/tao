@@ -143,6 +143,57 @@ const CSV_COLUMNS: Array<[string, (r: AlphaPasteRow) => string | number]> = [
   ["Broker", () => "Alpha Futures"],
 ];
 
+/** Ligne déjà rendue, et ce qu'il faut garder de ses horodatages pour la prolonger. */
+interface OpenedRow {
+  row: AlphaPasteRow;
+  startSeconds: number;
+  startDay: string;
+  endSeconds: number;
+  endDay: string;
+}
+
+/**
+ * Ajoute un morceau à la ligne déjà ouverte au même instant.
+ *
+ * Les prix d'entrée et de sortie deviennent des moyennes pondérées par les
+ * contrats — un ordre de 5 peut être rempli à deux prix — : ce sont les seuls
+ * qui, multipliés par la quantité totale, redonnent le P&L brut du relevé.
+ * Les montants s'additionnent tels quels — jamais recalculés depuis les prix,
+ * pour que le net retombe au cent près sur celui d'Alpha. La sortie retenue est
+ * la DERNIÈRE : la position n'est close qu'une fois le dernier contrat sorti.
+ */
+const mergeInto = (
+  prev: OpenedRow,
+  part: {
+    quantity: number; entry: number; exit: number; gross: number; fees: number; tradeId: string;
+    end: NonNullable<ReturnType<typeof parseStamp>>;
+  },
+) => {
+  const r = prev.row;
+  const total = r.quantity + part.quantity;
+  const sign = r.direction === "Long" ? 1 : -1;
+  r.entry = Math.round(((r.entry * r.quantity + part.entry * part.quantity) / total) * 100) / 100;
+  r.exit = Math.round(((r.exit * r.quantity + part.exit * part.quantity) / total) * 100) / 100;
+  r.pnlGross = Math.round((r.pnlGross + part.gross) * 100) / 100;
+  r.fees = Math.round((r.fees + part.fees) * 100) / 100;
+  r.pnl = Math.round((r.pnlGross - r.fees) * 100) / 100;
+  r.quantity = total;
+  r.volume = total * r.entry * r.pointValue;
+  r.points = Math.round(sign * (r.exit - r.entry) * 100) / 100;
+  r.tradeId = `${r.tradeId}+${part.tradeId}`;
+
+  const later = part.end.date > prev.endDay ||
+    (part.end.date === prev.endDay && part.end.seconds > prev.endSeconds);
+  if (!later) return;
+  prev.endSeconds = part.end.seconds;
+  prev.endDay = part.end.date;
+  r.exitTime = part.end.time;
+  r.exitTimestamp = `${part.end.date} ${part.end.time}`;
+  let seconds = prev.endSeconds - prev.startSeconds;
+  if (prev.endDay !== prev.startDay) seconds += 24 * 3600;
+  r.duration = `${seconds.toFixed(2)}s`;
+};
+
 export const parseAlphaFuturesPaste = (text: string): AlphaPasteResult => {
   const lines = String(text || "").split(/\r?\n/).filter((l) => l.trim() !== "");
 
@@ -157,6 +208,13 @@ export const parseAlphaFuturesPaste = (text: string): AlphaPasteResult => {
 
   const rows: AlphaPasteRow[] = [];
   const skipped: string[] = [];
+  /* Clé d'ouverture → ligne déjà rendue. Alpha découpe une même position en
+     plusieurs lignes (5 contrats arrivent en 4 + 1), qui partagent instrument,
+     sens et horodatage d'entrée au centième de seconde près. Ce sont les
+     morceaux d'UN trade : les laisser séparés comptait deux trades, deux
+     résultats et deux lignes de journal pour un seul clic. Un vrai scale-in,
+     lui, part à un autre instant — le centième de seconde les distingue. */
+  const opened = new Map<string, OpenedRow>();
 
   for (const line of lines) {
     const cells = splitCells(line);
@@ -193,7 +251,14 @@ export const parseAlphaFuturesPaste = (text: string): AlphaPasteResult => {
     let seconds = end.seconds - start.seconds;
     if (seconds < 0) seconds += 24 * 3600; // trade à cheval sur minuit
 
-    rows.push({
+    const key = [contract, dir, start.date, start.seconds].join("|");
+    const prev = opened.get(key);
+    if (prev) {
+      mergeInto(prev, { quantity, entry, exit, gross, fees, tradeId, end });
+      continue;
+    }
+
+    const row: AlphaPasteRow = {
       date: start.date,
       symbol,
       direction: dir === "LONG" ? "Long" : "Short",
@@ -218,6 +283,11 @@ export const parseAlphaFuturesPaste = (text: string): AlphaPasteResult => {
       entryTimestamp: `${start.date} ${start.time}`,
       exitTimestamp: `${end.date} ${end.time}`,
       session: sessionOf(start.hour),
+    };
+    rows.push(row);
+    opened.set(key, {
+      row, startSeconds: start.seconds, startDay: start.date,
+      endSeconds: end.seconds, endDay: end.date,
     });
   }
 

@@ -60,12 +60,15 @@ describe("anti-doublons de l'import", () => {
   });
 
   it("importe en entier un collage Alpha dont trois lignes sortent au même prix", () => {
-    const line = (id: string, out: string) =>
-      `XCME_Eq MNQ (U26)\tLONG\t1\t${id}\tBUY\tSELL\t23500.00\t23510.00\t20.00\t0.74\t01/09/2026 10:00:00.00 AM\t01/09/2026 ${out}.00 AM`;
+    /* Trois entrées dans la même SECONDE — `entry_time` ne garde pas mieux —
+       mais à des centièmes différents : trois trades pour le parseur, que seule
+       l'heure de sortie distingue ensuite dans la signature. */
+    const line = (id: string, cs: string, out: string) =>
+      `XCME_Eq MNQ (U26)\tLONG\t1\t${id}\tBUY\tSELL\t23500.00\t23510.00\t20.00\t0.74\t01/09/2026 10:00:00.${cs} AM\t01/09/2026 ${out}.00 AM`;
     const paste = parseAlphaFuturesPaste([
-      line("9001", "10:05:00"),
-      line("9002", "10:06:00"),
-      line("9003", "10:07:00"),
+      line("9001", "10", "10:05:00"),
+      line("9002", "20", "10:06:00"),
+      line("9003", "30", "10:07:00"),
     ].join("\n"));
     expect(paste.rows).toHaveLength(3);
 
