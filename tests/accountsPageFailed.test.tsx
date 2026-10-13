@@ -97,5 +97,29 @@ describe("Page Comptes — comptes en échec", () => {
     expect(inActive().getByText("Comptes échoués")).toBeTruthy();
     expect(inActive().queryByText("Tombé 1")).toBeNull();
     expect(inActive().queryByText("Tombé 2")).toBeNull();
+    // Les échecs ferment la rangée, à droite des comptes vivants.
+    const cards = (screen.getByText("Most active").closest("section") as HTMLElement)
+      .querySelectorAll("[data-card]");
+    expect(cards[cards.length - 1].textContent).toContain("Comptes échoués");
+  });
+
+  it("ouvre la page du groupe depuis sa carte", () => {
+    const setPage = vi.fn();
+    render(
+      <AccountsPage
+        accounts={[acc("ok", "Vivant"), acc("ko1", "Tombé 1"), acc("ko2", "Tombé 2")]}
+        trades={[trade("ok", 300), trade("ko1", -2_100), trade("ko2", -2_500)]}
+        firms={FIRMS}
+        archivedMeta={{}}
+        setAccounts={() => {}}
+        setFirms={() => {}}
+        setArchivedMeta={() => {}}
+        setPage={setPage}
+        setSelectedAccountDetailId={() => {}}
+        setSelectedFirmId={() => {}}
+      />
+    );
+    fireEvent.click(inActive().getByText("Comptes échoués"));
+    expect(setPage).toHaveBeenCalledWith("failed-accounts");
   });
 });

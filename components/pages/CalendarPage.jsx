@@ -34,7 +34,7 @@ const WEEKDAY_KEYS = ["wd.monday", "wd.tuesday", "wd.wednesday", "wd.thursday", 
 /* Les props de comptes (evalAccountSize / accounts / selectedAccountIds) ne sont
    plus lues depuis le retrait de l'indicateur d'objectif : la page ne dépend
    plus que des trades. L'appelant peut continuer à les passer sans effet. */
-export default function CalendarPage({ trades = [], setPage }) {
+export default function CalendarPage({ trades = [], setPage, onlyFailedTrades = false }) {
   const lang = useLang();
   const locale = lang === "fr" ? "fr-FR" : "en-US";
 
@@ -489,7 +489,9 @@ export default function CalendarPage({ trades = [], setPage }) {
           </div>
         </div>
 
-        {trades.length === 0 ? (
+        {/* Seuls des comptes en échec ont tradé : la grille à zéro plutôt
+            que l'invitation à importer. */}
+        {trades.length === 0 && !onlyFailedTrades ? (
           <div style={{ ...CARD, padding: "64px 40px", textAlign: "center" }}>
             <div style={{ fontSize: 16, fontWeight: 500, color: T.text, marginBottom: 8 }}>{t("cal.noTradesImported")}</div>
             <p style={{ color: T.textSub, margin: 0 }}>{t("cal.noTradesImportedSub")}</p>

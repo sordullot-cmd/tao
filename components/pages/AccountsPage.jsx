@@ -28,7 +28,7 @@ import { moveEntry, orderEntries } from "@/lib/accountsOrder";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
 import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm, passAccountToFunded } from "@/lib/propFirms";
-import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount, progressByAccount, isFailedAccount } from "@/lib/accountContracts";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount, progressByAccount, isFailedAccount, FAILED_GROUP } from "@/lib/accountContracts";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { firmLogo } from "@/lib/accountBrand";
@@ -538,13 +538,19 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         entities.set(`acc:${acc.id}`, { ...e, key: `acc:${acc.id}`, firm: null, failed: false, account: acc });
       }
     }
-    return [...entities.values()]
-      .sort((a, b) => {
-        if (b.recent !== a.recent) return b.recent - a.recent;
-        if (b.trades !== a.trades) return b.trades - a.trades;
-        return b.last - a.last;
-      })
-      .slice(0, 6);
+    /* Les échecs ferment la rangée, à droite de tous les comptes vivants, quel
+       que soit leur volume : on les garde en vue sans qu'ils passent devant
+       un compte qu'on trade encore. Ils réservent donc leur place sur les six. */
+    const isFailedEntity = (e) => e.failed || (e.account && isFailed(e.account));
+    const byActivity = (a, b) => {
+      if (b.recent !== a.recent) return b.recent - a.recent;
+      if (b.trades !== a.trades) return b.trades - a.trades;
+      return b.last - a.last;
+    };
+    const all = [...entities.values()];
+    const failedTail = all.filter(isFailedEntity);
+    const live = all.filter((e) => !isFailedEntity(e)).sort(byActivity);
+    return [...live.slice(0, 6 - failedTail.length), ...failedTail];
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cf. standaloneAccounts
   }, [visibleAccounts, trades, viewOf, firmById, progressStates]);
 
@@ -580,17 +586,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     () => new Set(Array.isArray(expandedIds) ? expandedIds : []),
     [expandedIds]
   );
-  /* La carte « Comptes échoués » ouvre le groupe dans la liste plutôt que de
-     le refermer s'il l'était déjà : un clic sur une carte ne replie rien. */
-  const openFailedGroup = () => {
-    setExpandedIds((prev) => {
-      const arr = Array.isArray(prev) ? prev : [];
-      return arr.includes(FAILED_GROUP) ? arr : [...arr, FAILED_GROUP];
-    });
-    if (typeof document !== "undefined") {
-      document.getElementById("tao-failed-accounts")?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    }
-  };
+  /* Le groupe des échecs s'ouvre sur sa page, comme une firme sur la sienne. */
+  const openFailedGroup = () => setPage?.("failed-accounts");
   const toggleRow = (id) => setExpandedIds((prev) => {
     const arr = Array.isArray(prev) ? prev : [];
     return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
@@ -824,7 +821,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         expandable
         open={open}
         onToggle={() => toggleRow(id)}
-        onOpen={() => toggleRow(id)}
+        onOpen={openFailedGroup}
         reserveActions
       >
         {failedAccounts.map((acc) => {
@@ -1144,9 +1141,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                   ? renderFirmRow(row.summary, dragFor(row.id))
                   : renderAccountRow(row.account, dragFor(row.id))))}
 
-                <div id="tao-failed-accounts">
-                  {renderFailedRows()}
-                </div>
+                {renderFailedRows()}
 
                 {/* Enfin l'agrégat des comptes eval archivés (hors totaux du site) */}
                 {archivedAccounts.length > 0 && (() => {
@@ -1476,7 +1471,8 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
      d'exécution ne sert qu'à défaut de maison connue (lib/ui/brandColors). Le
      chiffre du P&L garde, lui, le code gain/perte, sinon un compte perdant en
      vert serait trompeur. */
-  const curveColor = accountBrandColor(account, firm);
+  // Un compte tombé se trace en rouge : la couleur de sa firme le dirait vivant.
+  const curveColor = failed ? T.red : accountBrandColor(account, firm);
   const pnlColor = view.pnl > 0 ? T.pnlPos : view.pnl < 0 ? T.pnlNeg : T.textSub;
   /* Montant principal : valeur des comptes, ou P&L seul quand la firme est
      réglée ainsi (« Paramètres de la firme »). Le même réglage pilote le
@@ -1587,10 +1583,6 @@ function AccountDot({ account, firm }) {
     />
   );
 }
-
-/* Clé du groupe des comptes en échec — ligne dépliée, entité des plus actifs
-   et série agrégée. Préfixée pour ne jamais croiser un id de firme. */
-const FAILED_GROUP = "group:failed";
 
 /* Le type reste lisible à côté du mot : « Échec » seul ne dirait pas si c'est
    l'éval ou le financé qui est tombé, et la couleur ne suffit jamais. */

@@ -46,6 +46,7 @@ export const SECTION_OF_PAGE: Record<string, SelfSection> = {
   accounts: "trading",
   "account-detail": "trading",
   "firm-detail": "trading",
+  "failed-accounts": "trading",
 
   // Vie perso — le quotidien, le corps, les idées. Y compris la page Activité
   // elle-même : la relire est du temps de vie perso, pas du temps de marché.

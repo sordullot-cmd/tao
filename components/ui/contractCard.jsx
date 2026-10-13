@@ -200,13 +200,13 @@ function RuleField({ label, hint, value, fallback, onChange }) {
   );
 }
 
-function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPatch }) {
+function RulesModal({ open, onClose, funded, contract, objectives, rules, firmName, onPatch }) {
   if (!open) return null;
   const origin = objectives.source === "firm"
     ? `Barème ${firmName || "de la firme"} — modifiable ici, compte par compte.`
     : objectives.source === "custom"
       ? "Valeurs saisies pour ce compte. Vider un champ le rend au barème."
-      : "Aucun barème connu pour cette firme : ces valeurs sont un défaut (6 % de cible, 4 % de drawdown). Corrige-les.";
+      : "Aucun barème connu pour cette firme : ces valeurs sont un défaut (6 % de cible, 4 % de drawdown, 2 % de perte par jour, 2 jours minimum). Corrige-les.";
 
   return (
     <Modal open onClose={onClose} title="Objectifs du compte" width={520} scrim>
@@ -223,6 +223,14 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
             value={contract.maxDD} fallback={rules.maxDD}
             onChange={(v) => onPatch({ maxDD: v })}
           />
+          {/* Le minimum de jours ne borne que l'évaluation : sur un financé, il
+              n'y a plus de passage à valider. */}
+          {!funded && (
+            <RuleField
+              label="Jours de trading minimum" value={contract.minDays} fallback={rules.minDays}
+              onChange={(v) => onPatch({ minDays: v })}
+            />
+          )}
           <RuleField
             label="Perte maximale par jour" hint="0 = pas de limite"
             value={contract.dailyLoss} fallback={rules.dailyLoss}
@@ -241,24 +249,28 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
           }}
         />
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <RuleField
-            label="Minimum de retrait" value={contract.payoutMin} fallback={rules.payoutMin}
-            onChange={(v) => onPatch({ payoutMin: v })}
-          />
-          <RuleField
-            label="Buffer à conserver" hint="Reste sur le compte après le retrait"
-            value={contract.payoutBuffer} fallback={rules.payoutBuffer}
-            onChange={(v) => onPatch({ payoutBuffer: v })}
-          />
-          <Field label="Passage en financé" hint="Le compte financé repart de cette date">
-            <Input
-              type="date"
-              value={contract.fundedAt || ""}
-              onChange={(e) => onPatch({ fundedAt: e.target.value || null })}
+        {/* Les retraits n'existent qu'en financé : les proposer en éval laisse
+            croire qu'ils comptent déjà. */}
+        {funded && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <RuleField
+              label="Minimum de retrait" value={contract.payoutMin} fallback={rules.payoutMin}
+              onChange={(v) => onPatch({ payoutMin: v })}
             />
-          </Field>
-        </div>
+            <RuleField
+              label="Buffer à conserver" hint="Reste sur le compte après le retrait"
+              value={contract.payoutBuffer} fallback={rules.payoutBuffer}
+              onChange={(v) => onPatch({ payoutBuffer: v })}
+            />
+            <Field label="Passage en financé" hint="Le compte financé repart de cette date">
+              <Input
+                type="date"
+                value={contract.fundedAt || ""}
+                onChange={(e) => onPatch({ fundedAt: e.target.value || null })}
+              />
+            </Field>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -583,7 +595,7 @@ export default function ContractCard({
 
       <RulesModal
         open={rulesOpen} onClose={() => setRulesOpen(false)}
-        contract={contract} objectives={objectives} rules={rules}
+        funded={funded} contract={contract} objectives={objectives} rules={rules}
         firmName={firmName} onPatch={onPatch}
       />
       <PayoutModal

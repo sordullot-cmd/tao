@@ -20,7 +20,9 @@
  * firme, résolu par `firmBrandId`).
  */
 
-import { DEFAULT_TARGET_PCT, DEFAULT_MAX_DD_PCT } from "@/lib/propFirms";
+import {
+  DEFAULT_TARGET_PCT, DEFAULT_MAX_DD_PCT, DEFAULT_DAILY_LOSS_PCT, DEFAULT_MIN_DAYS,
+} from "@/lib/propFirms";
 
 export interface AccountRules {
   /** Cible de profit de l'évaluation. */
@@ -80,9 +82,9 @@ const BOOK: Record<string, FirmBook> = {
   topstep: {
     common: { trailing: true, minDays: 2, payoutWinDays: 5, winDayMin: 200 },
     sizes: {
-      50_000:  { target: 3_000, maxDD: 2_000 },
-      100_000: { target: 6_000, maxDD: 3_000 },
-      150_000: { target: 9_000, maxDD: 4_500 },
+      50_000:  { target: 3_000, maxDD: 2_000, dailyLoss: 1_000 },
+      100_000: { target: 6_000, maxDD: 3_000, dailyLoss: 2_000 },
+      150_000: { target: 9_000, maxDD: 4_500, dailyLoss: 3_000 },
     },
   },
   apex: {
@@ -122,7 +124,7 @@ const NEUTRAL: Omit<AccountRules, "source"> = {
 
 /**
  * Le barème d'un compte : celui de sa firme si elle est au catalogue, sinon le
- * repli historique (6 % de cible, 4 % de drawdown).
+ * repli (6 % de cible, 4 % de drawdown, 2 % de perte par jour, 2 jours minimum).
  *
  * `capital` nul rend un barème à zéro plutôt que null : l'appelant affiche
  * alors « à renseigner » sans avoir à distinguer deux formes de réponse.
@@ -136,6 +138,8 @@ export function resolveAccountRules(brand: string | null | undefined, capital: n
       ...NEUTRAL,
       target: Math.round(c * (DEFAULT_TARGET_PCT / 100)),
       maxDD: Math.round(c * (DEFAULT_MAX_DD_PCT / 100)),
+      dailyLoss: Math.round(c * (DEFAULT_DAILY_LOSS_PCT / 100)),
+      minDays: DEFAULT_MIN_DAYS,
       source: "default",
     };
   }

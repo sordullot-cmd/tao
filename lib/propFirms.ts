@@ -47,6 +47,11 @@ export interface FirmAccount {
 /** Seuils appliqués à tous les comptes (en % du capital du compte). */
 export const DEFAULT_TARGET_PCT = 6;
 export const DEFAULT_MAX_DD_PCT = 4;
+export const DEFAULT_DAILY_LOSS_PCT = 2;
+/** Jours minimum d'une évaluation sans barème connu — le plancher le plus
+    répandu chez les firmes futures, et un 0 laisserait croire à un passage
+    en une séance. */
+export const DEFAULT_MIN_DAYS = 2;
 
 export const ACCOUNT_TYPES: AccountType[] = ["eval", "funded", "live", "demo"];
 

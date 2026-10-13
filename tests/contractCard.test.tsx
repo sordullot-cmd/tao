@@ -166,3 +166,24 @@ describe("visage « payouts »", () => {
     expect(screen.getByText("Aucun retrait enregistré.")).toBeTruthy();
   });
 });
+
+describe("réglages des objectifs", () => {
+  const ouvrir = () => fireEvent.click(screen.getByRole("button", { name: "Régler les objectifs" }));
+
+  it("ne montre en éval que ce qui borne le passage, sans les retraits", () => {
+    renderCard();
+    ouvrir();
+    expect(screen.getByText("Jours de trading minimum")).toBeTruthy();
+    expect(screen.queryByText("Le compte financé repart de cette date")).toBeNull();
+    expect(screen.queryByText("Buffer à conserver")).toBeNull();
+  });
+
+  it("rend les retraits au financé et lui retire le minimum de jours", () => {
+    renderCard({ funded: true, contract: { fundedAt: "2026-09-01" } });
+    ouvrir();
+    // « Minimum de retrait » se lit aussi sur la carte : on vise ce que seule
+    // la modale porte.
+    expect(screen.getByText("Le compte financé repart de cette date")).toBeTruthy();
+    expect(screen.queryByText("Jours de trading minimum")).toBeNull();
+  });
+});

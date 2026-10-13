@@ -105,7 +105,7 @@ function StackedAmount({ value, align = "flex-end" }) {
   );
 }
 
-export default function DashboardPage({ trades = [], allTrades = [], accounts = [], selectedAccountIds = [], strategies = [], setPage }) {
+export default function DashboardPage({ trades = [], allTrades = [], accounts = [], selectedAccountIds = [], strategies = [], setPage, onlyFailedTrades = false }) {
   useLang();
   // Le site n'a plus de filtre de dates : le clic sur un jour ouvre simplement
   // la page Trades, qui liste tout l'historique.
@@ -316,7 +316,8 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
       </SkeletonScreen>
     );
   }
-  if (!trades || trades.length === 0) {
+  // Seuls des comptes en échec ont tradé : on montre des zéros, pas « importez ».
+  if ((!trades || trades.length === 0) && !onlyFailedTrades) {
     return (
       <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
         <div style={{background:T.white,borderRadius:12,boxShadow:T.elevCard,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>

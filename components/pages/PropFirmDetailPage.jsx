@@ -80,6 +80,7 @@ const typeLabel = (type, size) => {
   const base =
     type === "eval" ? t("addTrade.eval")
       : type === "funded" ? t("addTrade.funded")
+        : type === "failed" ? "Échec"
         : type === "demo" ? t("accountsPage.demo")
           : t("accountsPage.live");
   return size ? `${base} · ${size}` : base;
@@ -110,9 +111,16 @@ export default function PropFirmDetailPage({
   setAccounts,
   setFirms,
   setSelectedAccountDetailId,
+  /* `{ id, name, accounts }` : la page montre un GROUPE de comptes de firmes
+     diverses (les comptes en échec) au lieu d'une firme. Tout ce qui agit sur
+     la firme elle-même — réglages, ajout, suppression — disparaît. */
+  group = null,
 }) {
   useLang();
-  const firm = firms.find((f) => f.id === firmId) || null;
+  const isGroup = !!group;
+  const firm = isGroup
+    ? { id: group.id, name: group.name }
+    : firms.find((f) => f.id === firmId) || null;
 
   const [editingFirm, setEditingFirm] = React.useState(false);
   const [editingAccount, setEditingAccount] = React.useState(null);
@@ -153,9 +161,11 @@ export default function PropFirmDetailPage({
   const addSizeValue = isSizedType ? addSize : (addBalance || null);
 
   const firmAccounts = React.useMemo(
-    () => accounts.filter((a) => a.firm_id === firmId),
-    [accounts, firmId]
+    () => (isGroup ? group.accounts || [] : accounts.filter((a) => a.firm_id === firmId)),
+    [isGroup, group, accounts, firmId]
   );
+  // En groupe, chaque compte garde SA firme : c'est elle qui donne son barème.
+  const allFirms = React.useMemo(() => new Map((firms || []).map((f) => [f.id, f])), [firms]);
 
   /* Stratégies : la page n'en reçoit pas toujours en props (l'écran parent ne
      les lui passe pas systématiquement). On fusionne le cache local que la page
@@ -199,7 +209,10 @@ export default function PropFirmDetailPage({
      colonnes affichent les mêmes chiffres des deux côtés — le payout compris,
      qui se calcule dans lib/accountContracts et nulle part ailleurs. */
   const [contractStore] = useCloudState(CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, {});
-  const firmOnly = React.useMemo(() => new Map(firm ? [[firm.id, firm]] : []), [firm]);
+  const firmOnly = React.useMemo(
+    () => (isGroup ? allFirms : new Map(firm ? [[firm.id, firm]] : [])),
+    [isGroup, allFirms, firm],
+  );
   const payoutStates = React.useMemo(
     () => payoutsByAccount(firmAccounts, trades, normalizeStore(contractStore), firmOnly),
     [firmAccounts, trades, contractStore, firmOnly],
@@ -258,8 +271,9 @@ export default function PropFirmDetailPage({
   /* Couleur de marque de la firme : elle porte la courbe agrégée de la page.
      Repli sur l'accent des agrégats si la firme n'est pas au catalogue. */
   const firmColor = React.useMemo(
-    () => firmBrandColor(firm) || AGGREGATE_CURVE_COLOR,
-    [firm]
+    // Le groupe des échecs se trace en rouge, comme sa carte des plus actifs.
+    () => (isGroup ? T.red : firmBrandColor(firm) || AGGREGATE_CURVE_COLOR),
+    [isGroup, firm]
   );
 
   /* Tous les comptes de cette page appartiennent à la MÊME firme : leur donner
@@ -269,10 +283,10 @@ export default function PropFirmDetailPage({
      graphique lit la même map, pour que pastille et courbe concordent. */
   const colorByAccount = React.useMemo(
     () => assignSeriesColors(
-      (firmAccounts || []).map((acc) => ({ id: acc.id, account: acc, firm })),
+      (firmAccounts || []).map((acc) => ({ id: acc.id, account: acc, firm: isGroup ? allFirms.get(acc.firm_id) || null : firm })),
       { skipPrimary: true }
     ),
-    [firmAccounts, firm]
+    [firmAccounts, firm, isGroup, allFirms]
   );
 
   const accountSeries = React.useMemo(() => {
@@ -357,7 +371,7 @@ export default function PropFirmDetailPage({
   /* Logo de la firme, résolu sur son NOM. Sa plateforme d'exécution
      (Tradovate, Rithmic…) ne sert qu'à l'import : la firme reste identifiée
      par sa propre marque. */
-  const logo = firmLogo(firm);
+  const logo = isGroup ? null : firmLogo(firm);
 
   /* ─── Actions ─── */
 
@@ -461,7 +475,7 @@ export default function PropFirmDetailPage({
             comptes), donc pleine ; le destructif reste à l'extrémité.
             Créer et rattacher répondent à la même intention — « garnir cette
             firme » — d'où un seul bouton qui ouvre les deux chemins. */}
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        {!isGroup && <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <AddAccountsButton
             onCreate={() => setAddOpen(true)}
             onAttach={() => setAttachOpen(true)}
@@ -496,7 +510,7 @@ export default function PropFirmDetailPage({
           >
             <Trash2 size={14} strokeWidth={1.75} />
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* ═══ 2. IDENTITÉ (node 369:3989) ═══
@@ -532,7 +546,7 @@ export default function PropFirmDetailPage({
               }}
               onEditAccount={(acc) => setEditingAccount(acc)}
               onDeleteAccount={(acc) => setConfirmAccount(acc)}
-              onAddAccount={() => setAddOpen(true)}
+              onAddAccount={isGroup ? undefined : () => setAddOpen(true)}
             />
           </div>
         </div>
@@ -999,7 +1013,7 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
                       background: colorByAccount?.get(acc.id) || T.textSub,
                     }} />}
                     name={acc.name || acc.eval_account_size || "Compte"}
-                    type={v.failed ? `${typeLabel(acc.account_type)} · Échec` : typeLabel(acc.account_type)}
+                    type={v.failed && acc.account_type !== "failed" ? `${typeLabel(acc.account_type)} · Échec` : typeLabel(acc.account_type)}
                     value={value}
                     valueColor={v.pnl > 0 ? T.pnlPos : v.pnl < 0 ? T.pnlNeg : T.textSub}
                   />

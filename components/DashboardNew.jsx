@@ -20,7 +20,7 @@ import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { readArchivedMeta, writeArchivedMeta, isArchivedAccount } from "@/lib/utils/archivedAccounts";
-import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, withContract, accountsToFail, isFailedAccount, FAILED_TYPE } from "@/lib/accountContracts";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, withContract, accountsToFail, isFailedAccount, FAILED_TYPE, FAILED_GROUP } from "@/lib/accountContracts";
 import { updateTradingAccount } from "@/lib/propFirms";
 import StrategyPage from "@/components/StrategyPage";
 import StrategyDetailPage from "@/components/StrategyDetailPage";
@@ -144,7 +144,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "communication", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
+const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "failed-accounts", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "communication", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -512,12 +512,19 @@ export default function App() {
   // Trades passés à la page Discipline : les trades filtrés (comptes actifs
   // sélectionnés) PLUS les trades des comptes eval passés, pour que l'historique
   // de discipline de ces anciens trades reste conservé. Dédoublonnés par id.
+  /* Les comptes en échec y restent aussi : la discipline se juge sur ce qui
+     a été tradé, y compris ce qui a fait tomber le compte. */
   const disciplineTrades = (() => {
-    if (archivedTradeIds.size === 0) return filteredTrades;
-    const seen = new Set(filteredTrades.map(t => t.id));
+    if (archivedTradeIds.size === 0) return journalTrades;
+    const seen = new Set(journalTrades.map(t => t.id));
     const extra = trades.filter(t => archivedTradeIds.has(t.id) && !seen.has(t.id));
-    return extra.length ? [...filteredTrades, ...extra] : filteredTrades;
+    return extra.length ? [...journalTrades, ...extra] : journalTrades;
   })();
+
+  /* Des trades existent, mais tous sur des comptes en échec : le tableau de
+     bord et le calendrier affichent alors des zéros plutôt que l'invitation
+     à importer — il y a bien eu des trades, ils ne comptent simplement plus. */
+  const onlyFailedTrades = filteredTrades.length === 0 && journalTrades.length > 0;
 
   // ✅ DEBUG: Log when account selection changes
   React.useEffect(() => {
@@ -902,6 +909,7 @@ export default function App() {
     "strategy-detail":         t("nav.strategies"),
     "account-detail":          t("nav.accounts"),
     "firm-detail":             t("nav.accounts"),
+    "failed-accounts":         t("nav.accounts"),
     "activity-reports":        t("nav.activity"),
     "activity-rules":          t("nav.activity"),
     "patrimoine-asset":        t("nav.patrimoine"),
@@ -971,11 +979,13 @@ export default function App() {
   ]);
 
   const pages = {
-    dashboard:  <DashboardPage trades={filteredTrades} allTrades={filteredTrades} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
+    dashboard:  <DashboardPage onlyFailedTrades={onlyFailedTrades} trades={filteredTrades} allTrades={filteredTrades} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
     "add-trade": <AddTradePage setPage={setPage} setAccounts={setAccounts} accounts={accounts.filter(a => !isFailedAccount(a))} firms={firms} user={user} />,
-    trades:     <TradesPage trades={filteredTrades} strategies={strategies} accounts={visibleAccounts} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
+    /* La page Trades garde les comptes en échec : c'est le registre de ce
+       qui a été tradé, pas un tableau de bord. */
+    trades:     <TradesPage trades={journalTrades} strategies={strategies} accounts={ownedAccounts} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     "trade-chart": <TradeChartPage trades={filteredTrades} />,
-    calendar:   <CalendarPage trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,
+    calendar:   <CalendarPage onlyFailedTrades={onlyFailedTrades} trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,
     journal: <JournalPage trades={journalTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
@@ -990,6 +1000,21 @@ export default function App() {
     "account-detail": <AccountDetailPage accountsLoading={accountsLoading} accountId={selectedAccountDetailId} accounts={accounts} firms={firms} trades={trades} strategies={strategies} setPage={setPage} setSelectedFirmId={setSelectedFirmId} setSelectedAccountDetailId={setSelectedAccountDetailId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
     // `strategies` alimente la colonne « Stratégie » du tableau de trades :
     // sans elle, la page retombe sur le cache localStorage de TradesPage.
+    /* Le groupe des comptes en échec s'ouvre comme une firme : même page,
+       sans ce qui n'a de sens que pour une firme (réglages, ajout, suppression). */
+    "failed-accounts": <PropFirmDetailPage
+        accountsLoading={accountsLoading}
+        firms={firms}
+        accounts={ownedAccounts}
+        trades={trades}
+        strategies={strategies}
+        userId={user?.id}
+        setPage={setPage}
+        setAccounts={setAccounts}
+        setFirms={setFirms}
+        setSelectedAccountDetailId={setSelectedAccountDetailId}
+        group={{ id: FAILED_GROUP, name: "Comptes échoués", accounts: ownedAccounts.filter(isFailedAccount) }}
+      />,
     "firm-detail": <PropFirmDetailPage accountsLoading={accountsLoading} firmId={selectedFirmId} firms={firms} accounts={accounts.filter(a => !isFailedAccount(a))} trades={trades} strategies={strategies} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} />,
     /* Ancienne route « Objectifs » : elle mène désormais à la page fusionnée,
        pour que les liens existants (palette de commandes, renvois d'autres

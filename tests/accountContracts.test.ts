@@ -18,7 +18,7 @@ import {
 const tr = (date: string, pnl: number, time = "10:00") => ({ date, exit_time: time, pnl });
 const EMPTY = normalizeContract({});
 
-/** Les objectifs d'un compte 50k sans firme connue : repli 6 % / 4 %. */
+/** Les objectifs d'un compte 50k sans firme connue : repli 6 % / 4 % / 2 % par jour. */
 const plain = (over: Record<string, unknown> = {}) =>
   resolveObjectives(normalizeContract(over), resolveAccountRules(null, 50_000));
 
@@ -52,6 +52,15 @@ describe("barème des firmes", () => {
     // légitime, ce qui est pire que de ne rien annoncer.
     expect(resolveAccountRules(null, 50_000).payoutBuffer).toBe(0);
     expect(resolveAccountRules("topstep", 50_000).payoutBuffer).toBe(0);
+  });
+
+  it("remplit une éval sans barème connu : 3 000 de cible, 2 000 de DD, 2 jours, 1 000 par jour sur un 50k", () => {
+    expect(resolveAccountRules(null, 50_000)).toMatchObject({
+      target: 3_000, maxDD: 2_000, minDays: 2, dailyLoss: 1_000, source: "default",
+    });
+    expect(resolveAccountRules("topstep", 50_000)).toMatchObject({
+      target: 3_000, maxDD: 2_000, minDays: 2, dailyLoss: 1_000,
+    });
   });
 
   it("ne prête à personne le barème d'une voisine", () => {
@@ -130,7 +139,8 @@ describe("drawdown EOD et échec du compte", () => {
   });
 
   it("garde le drawdown statique quand le compte le demande", () => {
-    const statique = plain({ maxDD: 2_500, trailing: false });
+    // Perte journalière levée : ce cas ne parle que du plancher statique.
+    const statique = plain({ maxDD: 2_500, trailing: false, dailyLoss: 0 });
     const p = evalProgress([tr("2026-09-01", 2_000), tr("2026-09-02", -2_400)], statique);
     expect(p.floor).toBe(-2_500);
     expect(p.breached).toBe(false);

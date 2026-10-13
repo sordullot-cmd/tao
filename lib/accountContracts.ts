@@ -569,6 +569,11 @@ export function withoutPayout(
 
 export const FAILED_TYPE = "failed";
 
+/* Clé du GROUPE des comptes en échec — ligne dépliée de la page Comptes,
+   entité des plus actifs, page du groupe. Préfixée pour ne jamais croiser un
+   id de firme. */
+export const FAILED_GROUP = "group:failed";
+
 /** Le compte a été basculé en échec — c'est le seul test que les pages font. */
 export function isFailedAccount(account: object | null | undefined): boolean {
   // `object` et non un type de compte : les hooks n'exposent pas tous `account_type`.
