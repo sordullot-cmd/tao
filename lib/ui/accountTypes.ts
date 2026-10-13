@@ -35,6 +35,10 @@ export const ACCOUNT_TYPE_COLORS: Record<string, AccountTypeStyle> = {
   funded: { fg: PALETTE.blue,   bg: veil(PALETTE.blue),   bd: PALETTE.blue,   label: () => t("addTrade.funded") },
   live:   { fg: PALETTE.green,  bg: veil(PALETTE.green),  bd: PALETTE.green,  label: () => t("addTrade.live") },
   demo:   { fg: PALETTE.purple, bg: veil(PALETTE.purple), bd: PALETTE.purple, label: () => t("addTrade.demo") },
+  /* Un compte dont le plancher a été touché (cf. lib/accountContracts). Pas
+     un type qu'on choisit à la création : la coquille y bascule le compte, et
+     presque toute l'app cesse alors de le compter. */
+  failed: { fg: PALETTE.red,    bg: veil(PALETTE.red),    bd: PALETTE.red,    label: () => "Échec" },
 };
 
 export const DEFAULT_ACCOUNT_TYPE = "live";

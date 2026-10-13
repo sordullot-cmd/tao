@@ -20,6 +20,8 @@ import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { readArchivedMeta, writeArchivedMeta, isArchivedAccount } from "@/lib/utils/archivedAccounts";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, withContract, accountsToFail, isFailedAccount, FAILED_TYPE } from "@/lib/accountContracts";
+import { updateTradingAccount } from "@/lib/propFirms";
 import StrategyPage from "@/components/StrategyPage";
 import StrategyDetailPage from "@/components/StrategyDetailPage";
 import DailyPlannerPage from "@/components/pages/DailyPlannerPage";
@@ -434,7 +436,47 @@ export default function App() {
   // eval archivés — ces derniers ne doivent plus apparaître dans le sélecteur
   // ni compter dans le P&L du site ; seule la page Comptes les affiche encore
   // dans une section « Comptes eval passés »).
-  const visibleAccounts = accounts.filter(acc => !isPlaceholderAccount(acc.id) && !isArchivedAccount(acc.id, archivedMeta));
+  const ownedAccounts = accounts.filter(acc => !isPlaceholderAccount(acc.id) && !isArchivedAccount(acc.id, archivedMeta));
+  /* Les comptes en échec sortent de la même façon que les eval archivés :
+     sélecteur, dashboard, calendrier, trades, objectifs. Restent à eux le
+     journal et les stratégies (l'historique d'un setup ne s'efface pas avec
+     le compte qui l'a tradé), le groupe « Comptes échoués » de la page Comptes
+     et la page du compte lui-même. */
+  const visibleAccounts = ownedAccounts.filter(acc => !isFailedAccount(acc));
+
+  /* ── Bascule en échec ────────────────────────────────────────────────────
+     Ici et pas dans une page : seule la coquille reste montée, et un plancher
+     touché doit faire tomber le compte même si l'on n'ouvre jamais la page
+     Comptes. La bascule ÉCRIT `account_type = "failed"` plutôt que de rester
+     un calcul : les pages qui chargent elles-mêmes leurs comptes (Objectifs,
+     Life RPG) n'ont ni les firmes ni les contrats, et recalculeraient un autre
+     verdict. Un type en base, c'est un seul test partout.
+     Le type d'avant part dans le contrat (`failedFrom`), pour que la page du
+     compte sache encore quel barème relire. */
+  const [contractStore, setContractStore] = useCloudState(CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, {});
+  const failingRef = useRef(new Set());
+  useEffect(() => {
+    if (!user?.id || accountsLoading || !trades?.length) return;
+    const firmById = new Map((firms || []).map(f => [f.id, f]));
+    const due = accountsToFail(ownedAccounts, trades, normalizeStore(contractStore), firmById)
+      .filter(d => !failingRef.current.has(d.id));
+    if (due.length === 0) return;
+    due.forEach(d => failingRef.current.add(d.id));
+    setContractStore(prev => due.reduce(
+      (store, d) => withContract(store, d.id, { failedFrom: d.from }),
+      normalizeStore(prev),
+    ));
+    const ids = new Set(due.map(d => d.id));
+    setAccounts(prev => (prev || []).map(a => (ids.has(a.id) ? { ...a, account_type: FAILED_TYPE } : a)));
+    for (const d of due) {
+      updateTradingAccount(d.id, { account_type: FAILED_TYPE }).catch((e) => {
+        // Hors ligne ou refus : on retentera au prochain passage.
+        console.error("⚠️ bascule en échec:", e);
+        failingRef.current.delete(d.id);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ownedAccounts est refait à chaque rendu ; `accounts` est sa source
+  }, [user?.id, accountsLoading, accounts, archivedMeta, trades, firms, contractStore, setContractStore]);
 
   /* Tous les comptes actifs, en permanence : c'est ce que « selectedAccountIds »
      vaut désormais partout. Dérivé de `visibleAccounts`, donc les comptes
@@ -458,6 +500,14 @@ export default function App() {
     Object.values(archivedMeta || {}).forEach(m => (m?.trade_ids || []).forEach(id => s.add(id)));
     return s;
   }, [archivedMeta]);
+
+  /* Le journal garde les trades des comptes en échec : c'est le récit de ce
+     qui s'est passé, et le compte tombé en fait partie. */
+  const journalTrades = React.useMemo(() => {
+    const owned = new Set(ownedAccounts.map(a => a.id));
+    return trades.filter(t => owned.has(t.account_id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf. la bascule ci-dessus
+  }, [trades, accounts, archivedMeta]);
 
   // Trades passés à la page Discipline : les trades filtrés (comptes actifs
   // sélectionnés) PLUS les trades des comptes eval passés, pour que l'historique
@@ -921,12 +971,12 @@ export default function App() {
   ]);
 
   const pages = {
-    dashboard:  <DashboardPage trades={filteredTrades} allTrades={trades} accounts={accounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
-    "add-trade": <AddTradePage setPage={setPage} setAccounts={setAccounts} accounts={accounts} firms={firms} user={user} />,
+    dashboard:  <DashboardPage trades={filteredTrades} allTrades={filteredTrades} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
+    "add-trade": <AddTradePage setPage={setPage} setAccounts={setAccounts} accounts={accounts.filter(a => !isFailedAccount(a))} firms={firms} user={user} />,
     trades:     <TradesPage trades={filteredTrades} strategies={strategies} accounts={visibleAccounts} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     "trade-chart": <TradeChartPage trades={filteredTrades} />,
-    calendar:   <CalendarPage trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={accounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,
-    journal: <JournalPage trades={filteredTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
+    calendar:   <CalendarPage trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,
+    journal: <JournalPage trades={journalTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
@@ -940,7 +990,7 @@ export default function App() {
     "account-detail": <AccountDetailPage accountsLoading={accountsLoading} accountId={selectedAccountDetailId} accounts={accounts} firms={firms} trades={trades} strategies={strategies} setPage={setPage} setSelectedFirmId={setSelectedFirmId} setSelectedAccountDetailId={setSelectedAccountDetailId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
     // `strategies` alimente la colonne « Stratégie » du tableau de trades :
     // sans elle, la page retombe sur le cache localStorage de TradesPage.
-    "firm-detail": <PropFirmDetailPage accountsLoading={accountsLoading} firmId={selectedFirmId} firms={firms} accounts={accounts} trades={trades} strategies={strategies} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} />,
+    "firm-detail": <PropFirmDetailPage accountsLoading={accountsLoading} firmId={selectedFirmId} firms={firms} accounts={accounts.filter(a => !isFailedAccount(a))} trades={trades} strategies={strategies} userId={user?.id} setPage={setPage} setAccounts={setAccounts} setFirms={setFirms} setSelectedAccountDetailId={setSelectedAccountDetailId} />,
     /* Ancienne route « Objectifs » : elle mène désormais à la page fusionnée,
        pour que les liens existants (palette de commandes, renvois d'autres
        pages) tombent au bon endroit plutôt que sur un doublon. */

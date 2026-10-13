@@ -869,7 +869,9 @@ export function AccountModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firmId, linkedFirm?.platform]);
 
-  const isSized = type === "eval" || type === "funded";
+  /* Un compte en échec garde sa taille : la perdre ici, au simple
+     renommage d'un compte tombé, effacerait le capital de sa page. */
+  const isSized = type === "eval" || type === "funded" || type === "failed";
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -965,6 +967,9 @@ export function AccountModal({
             { id: "funded", label: t("addTrade.funded") },
             { id: "live", label: t("addTrade.live") },
             { id: "demo", label: t("addTrade.demo") },
+            /* « Échec » n'est proposé qu'au compte qui l'est déjà : on n'y
+               entre pas à la main, c'est le plancher touché qui y mène. */
+            ...(account?.account_type === "failed" ? [{ id: "failed", label: "Échec" }] : []),
           ]}
         />
       </Field>

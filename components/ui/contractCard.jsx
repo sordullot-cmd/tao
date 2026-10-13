@@ -206,7 +206,7 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
     ? `Barème ${firmName || "de la firme"} — modifiable ici, compte par compte.`
     : objectives.source === "custom"
       ? "Valeurs saisies pour ce compte. Vider un champ le rend au barème."
-      : "Aucun barème connu pour cette firme : ces valeurs sont un défaut (6 % de cible, 5 % de drawdown). Corrige-les.";
+      : "Aucun barème connu pour cette firme : ces valeurs sont un défaut (6 % de cible, 4 % de drawdown). Corrige-les.";
 
   return (
     <Modal open onClose={onClose} title="Objectifs du compte" width={520} scrim>
@@ -222,10 +222,6 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
             label={objectives.trailing ? "Drawdown EOD (suit la clôture)" : "Drawdown maximal"}
             value={contract.maxDD} fallback={rules.maxDD}
             onChange={(v) => onPatch({ maxDD: v })}
-          />
-          <RuleField
-            label="Jours de trading minimum" value={contract.minDays} fallback={rules.minDays}
-            onChange={(v) => onPatch({ minDays: v })}
           />
           <RuleField
             label="Perte maximale par jour" hint="0 = pas de limite"
@@ -245,8 +241,6 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
           }}
         />
 
-        <div style={{ height: 1, background: HAIRLINE }} />
-
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <RuleField
             label="Minimum de retrait" value={contract.payoutMin} fallback={rules.payoutMin}
@@ -256,16 +250,6 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
             label="Buffer à conserver" hint="Reste sur le compte après le retrait"
             value={contract.payoutBuffer} fallback={rules.payoutBuffer}
             onChange={(v) => onPatch({ payoutBuffer: v })}
-          />
-          <RuleField
-            label="Jours tradés avant retrait" value={contract.payoutDays} fallback={rules.payoutDays}
-            onChange={(v) => onPatch({ payoutDays: v })}
-          />
-          <RuleField
-            label="Jours gagnants avant retrait"
-            hint={rules.winDayMin > 0 ? `Une journée compte à partir de ${fmt(rules.winDayMin)}` : undefined}
-            value={contract.payoutWinDays} fallback={rules.payoutWinDays}
-            onChange={(v) => onPatch({ payoutWinDays: v })}
           />
           <Field label="Passage en financé" hint="Le compte financé repart de cette date">
             <Input

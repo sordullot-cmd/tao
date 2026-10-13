@@ -19,7 +19,7 @@ import { pnlCurve } from "@/lib/ui/pnlCurve";
 import { resolveAccountRules } from "@/lib/propFirmRules";
 import {
   CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, contractOf, resolveObjectives,
-  evalProgress, payoutState, withContract, withPayout, withoutPayout,
+  evalProgress, payoutState, withContract, withPayout, withoutPayout, contractTypeOf, isFailedAccount,
 } from "@/lib/accountContracts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import ContractCard from "@/components/ui/contractCard";
@@ -361,7 +361,7 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
   const evalState = React.useMemo(
     () => evalProgress(
       accountTrades, objectives,
-      account?.account_type === "funded" ? { from: contract.fundedAt, payouts: contract.payouts } : {},
+      contractTypeOf(account, contract) === "funded" ? { from: contract.fundedAt, payouts: contract.payouts } : {},
     ),
     [accountTrades, objectives, account, contract],
   );
@@ -433,15 +433,18 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
     ? "Comptes eval passés"
     : (account?.name || "Compte");
 
-  const type = account?.account_type || "live";
+  /* Un compte en échec se lit sous son type d'AVANT : c'est lui qui dit quel
+     visage de la carte de contrat montrer, et quel barème appliquer. */
+  const type = account ? contractTypeOf(account, contract) : "live";
+  const failedSuffix = isFailedAccount(account) ? " · Échec" : "";
   const typeLabel = aggregatedAll
     ? `${archivedAccts.length} compte${archivedAccts.length > 1 ? "s" : ""} archivé${archivedAccts.length > 1 ? "s" : ""}`
     : isArchivedView
       ? `Eval passé${account?.eval_account_size ? ` ${account.eval_account_size}` : ""}`
       : type === "eval"
-        ? `Eval${account?.eval_account_size ? ` ${account.eval_account_size}` : ""}`
+        ? `Eval${account?.eval_account_size ? ` ${account.eval_account_size}` : ""}${failedSuffix}`
         : type === "funded"
-          ? `Funded${account?.eval_account_size ? ` ${account.eval_account_size}` : ""}`
+          ? `Funded${account?.eval_account_size ? ` ${account.eval_account_size}` : ""}${failedSuffix}`
           : "Live";
 
   // Capital : agrégat (somme des tailles) en vue « tous », sinon celui du compte.

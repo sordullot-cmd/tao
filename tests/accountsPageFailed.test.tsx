@@ -62,34 +62,40 @@ const inActive = () =>
 beforeEach(() => cloudStore.clear());
 
 describe("Page Comptes — comptes en échec", () => {
-  it("sort un compte échoué de sa firme et le laisse seul sur sa ligne", () => {
+  it("sort un compte échoué de sa firme et le range dans le groupe, même seul", () => {
     renderPage(
       [acc("ok", "Vivant"), acc("ko", "Tombé")],
       [trade("ok", 300), trade("ko", -2_100)],
     );
-    // La firme ne compte plus que le compte vivant.
-    fireEvent.click(inTable().getAllByRole("button", { name: /déplier|expand/i })[0]);
-    expect(inTable().getByText("Vivant")).toBeTruthy();
-    // Un seul échoué : pas de groupe, sa ligne à lui.
-    expect(inTable().queryByText("Comptes échoués")).toBeNull();
+    // Le groupe existe dès le premier échec, replié comme une firme.
+    expect(inTable().getByText("Comptes échoués")).toBeTruthy();
+    expect(inTable().queryByText("Tombé")).toBeNull();
+    const chevrons = inTable().getAllByRole("button", { name: /déplier|expand/i });
+    // Le groupe vient après les firmes : c'est le dernier chevron du tableau.
+    fireEvent.click(chevrons[chevrons.length - 1]);
     expect(inTable().getByText("Tombé")).toBeTruthy();
-    expect(inActive().queryByText("Tombé")).toBeNull();
+    // La firme, dépliée à son tour, ne liste plus que le compte vivant.
+    fireEvent.click(chevrons[0]);
+    expect(inTable().getAllByText("Vivant")).toHaveLength(1);
+    expect(inTable().getAllByText("Tombé")).toHaveLength(1);
   });
 
-  it("regroupe les comptes échoués dès qu'il y en a deux", () => {
+  it("montre le compte échoué seul dans les plus actifs, sur sa propre carte", () => {
+    renderPage(
+      [acc("ok", "Vivant"), acc("ko", "Tombé")],
+      [trade("ok", 300), trade("ko", -2_100)],
+    );
+    expect(inActive().getByText("Tombé")).toBeTruthy();
+    expect(inActive().queryByText("Comptes échoués")).toBeNull();
+  });
+
+  it("résume plusieurs échecs en une seule carte de groupe dans les plus actifs", () => {
     renderPage(
       [acc("ok", "Vivant"), acc("ko1", "Tombé 1"), acc("ko2", "Tombé 2")],
       [trade("ok", 300), trade("ko1", -2_100), trade("ko2", -2_500)],
     );
-    const groupe = inTable().getByText("Comptes échoués");
-    expect(groupe).toBeTruthy();
-    // Replié par défaut, comme une firme.
-    expect(inTable().queryByText("Tombé 1")).toBeNull();
-    // Le groupe vient après les firmes : c'est le dernier chevron du tableau.
-    const chevrons = inTable().getAllByRole("button", { name: /déplier|expand/i });
-    fireEvent.click(chevrons[chevrons.length - 1]);
-    expect(inTable().getByText("Tombé 1")).toBeTruthy();
-    expect(inTable().getByText("Tombé 2")).toBeTruthy();
+    expect(inActive().getByText("Comptes échoués")).toBeTruthy();
     expect(inActive().queryByText("Tombé 1")).toBeNull();
+    expect(inActive().queryByText("Tombé 2")).toBeNull();
   });
 });

@@ -69,6 +69,12 @@ export interface AccountContract {
   /** Jour de passage financé : les compteurs du financé repartent de là. */
   fundedAt: string | null;
   payouts: Payout[];
+  /**
+   * Type du compte AVANT son passage en échec. `account_type` vaut alors
+   * « failed », et sans ce champ on ne saurait plus quel barème ni quel point
+   * de départ (éval ou financé) relire sur la page du compte.
+   */
+  failedFrom: "eval" | "funded" | null;
 }
 
 export type ContractStore = Record<string, AccountContract>;
@@ -76,7 +82,7 @@ export type ContractStore = Record<string, AccountContract>;
 const EMPTY: AccountContract = {
   target: null, maxDD: null, minDays: null, dailyLoss: null, trailing: null,
   payoutMin: null, payoutBuffer: null, payoutDays: null, payoutWinDays: null,
-  fundedAt: null, payouts: [],
+  fundedAt: null, payouts: [], failedFrom: null,
 };
 
 const num = (v: unknown): number | null => {
@@ -101,6 +107,7 @@ export function normalizeContract(raw: unknown): AccountContract {
     payoutDays: num(r.payoutDays),
     payoutWinDays: num(r.payoutWinDays),
     fundedAt: dayOf(r.fundedAt) || null,
+    failedFrom: r.failedFrom === "eval" || r.failedFrom === "funded" ? r.failedFrom : null,
     payouts: payouts
       .map((p, i) => {
         const o = (p || {}) as Record<string, unknown>;
@@ -558,6 +565,29 @@ export function withoutPayout(
   return withContract(store, accountId, { payouts: base.payouts.filter(p => p.id !== payoutId) });
 }
 
+/* ─── Comptes en échec ───────────────────────────────────────────────────── */
+
+export const FAILED_TYPE = "failed";
+
+/** Le compte a été basculé en échec — c'est le seul test que les pages font. */
+export function isFailedAccount(account: object | null | undefined): boolean {
+  // `object` et non un type de compte : les hooks n'exposent pas tous `account_type`.
+  return ((account as { account_type?: string | null } | null)?.account_type || "") === FAILED_TYPE;
+}
+
+/**
+ * Le type sous lequel LIRE un compte : celui d'avant l'échec s'il est tombé.
+ * Le barème et le point de départ (éval entière, ou financé depuis son
+ * passage) en dépendent ; « failed » n'en dit rien.
+ */
+export function contractTypeOf(
+  account: { account_type?: string | null } | null | undefined,
+  contract: AccountContract,
+): string {
+  const type = account?.account_type || "live";
+  return type === FAILED_TYPE ? contract.failedFrom || "eval" : type;
+}
+
 /* ─── Vue d'ensemble ─────────────────────────────────────────────────────── */
 
 interface PayoutAccount {
@@ -626,13 +656,34 @@ export function progressByAccount(
 
   const out = new Map<string, EvalProgress>();
   for (const acc of accounts || []) {
-    const type = acc.account_type || "live";
-    if (type !== "eval" && type !== "funded") continue;
     const contract = contractOf(store, acc.id);
+    const type = contractTypeOf(acc, contract);
+    if (type !== "eval" && type !== "funded") continue;
     const firm = (acc.firm_id ? firmById?.get(acc.firm_id) : null) ?? null;
     const rules = resolveAccountRules(firmBrandId(firm), parseAccountSize(acc.eval_account_size));
     const scope = type === "funded" ? { from: contract.fundedAt, payouts: contract.payouts } : {};
     out.set(acc.id, evalProgress(byAccount.get(acc.id) || [], resolveObjectives(contract, rules), scope));
+  }
+  return out;
+}
+
+/**
+ * Les comptes encore vivants dont le plancher vient d'être touché : ceux que
+ * la coquille doit basculer en échec. Un compte déjà « failed » n'y figure
+ * jamais — la bascule n'a lieu qu'une fois.
+ */
+export function accountsToFail(
+  accounts: PayoutAccount[] | null | undefined,
+  trades: (ContractTrade & { account_id?: string })[] | null | undefined,
+  store: ContractStore | null | undefined,
+  firmById: Map<string, { brand?: string | null; name?: string }> | null | undefined,
+): Array<{ id: string; from: "eval" | "funded" }> {
+  const alive = (accounts || []).filter(a => !isFailedAccount(a));
+  const progress = progressByAccount(alive, trades, store, firmById);
+  const out: Array<{ id: string; from: "eval" | "funded" }> = [];
+  for (const acc of alive) {
+    if (!progress.get(acc.id)?.breached) continue;
+    out.push({ id: acc.id, from: acc.account_type === "funded" ? "funded" : "eval" });
   }
   return out;
 }

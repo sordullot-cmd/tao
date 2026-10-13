@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Plus, Trash2, Pencil, FolderPlus, CornerDownLeft, SlidersHorizontal } from "lucide-react";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -14,8 +14,9 @@ import { CARD, AreaDotsDefs, areaDotsFill, PeriodPills } from "@/components/ui/d
 import { Field, FieldGrid, Input, Select, Textarea, Modal, PillButton, IconButton, CheckChip } from "@/components/ui/form";
 import {
   emptyJournal, normalizeJournal, effectiveR, tagStats, strategyStats, summarize,
-  sessionLabel, groupBySession, equityBySession,
+  sessionLabel, groupBySession, equityBySession, tagCatalog, rememberTags, strategyBase,
 } from "@/lib/backtest/journal";
+import { emptyPlaybook, normalizePlaybook } from "@/lib/playbook/model";
 
 /**
  * Page Backtest — le journal des setups rejoués à la main.
@@ -74,6 +75,11 @@ export default function BacktestPage() {
   const { strategies } = useApp();
   const [raw, setRaw, hydrated] = useCloudState(STORAGE_KEY, CLOUD_KEY, emptyJournal());
   const journal = useMemo(() => normalizeJournal(raw), [raw]);
+  /* Lu pour les erreurs fréquentes de chaque stratégie, base de la liste
+     « Erreurs » d'un backtest qui lui est rattaché. Même clé que la section
+     Playbook : le hook relaie, une erreur ajoutée là-bas apparaît ici. */
+  const [playbookRaw] = useCloudState("tao_playbook", "playbook", emptyPlaybook());
+  const playbook = useMemo(() => normalizePlaybook(playbookRaw), [playbookRaw]);
   const { pushUndo } = useUndo();
 
   const [filter, setFilter] = useState("all");
@@ -110,6 +116,11 @@ export default function BacktestPage() {
     () => new Map((strategies || []).map(st => [String(st.id), st])),
     [strategies],
   );
+  const baseOf = useCallback((strategyId) => {
+    if (!strategyId) return { confluences: [], mistakes: [] };
+    const setup = playbook.setups.find(s => s.strategyId === String(strategyId));
+    return strategyBase(strategyById.get(String(strategyId)), setup?.mistakes);
+  }, [playbook, strategyById]);
   const byStrategy = useMemo(
     () => strategyStats(entries).map(stat => ({
       ...stat,
@@ -164,13 +175,11 @@ export default function BacktestPage() {
       createdAt: previous?.createdAt ?? new Date().toISOString(),
     };
     update(store => ({
-      ...store,
       /* Les tags saisis rejoignent les catalogues : une confluence inventée
          pendant la saisie doit être cochable au backtest suivant, sinon on la
          retape à chaque fois — et deux graphies du même mot font deux lignes
-         dans le classement. */
-      confluences: mergeTags(store.confluences, entry.confluences),
-      mistakes: mergeTags(store.mistakes, entry.mistakes),
+         dans le classement. Celui de la stratégie si le backtest en a une. */
+      ...rememberTags(store, entry, baseOf(entry.strategyId)),
       entries: editingId
         ? store.entries.map(e => (e.id === editingId ? entry : e))
         : [entry, ...store.entries],
@@ -419,6 +428,7 @@ export default function BacktestPage() {
           form={form} setForm={setForm}
           journal={journal}
           strategies={strategies || []}
+          baseOf={baseOf}
           editing={editingId !== null}
           onClose={() => { setForm(null); setEditingId(null); }}
           onSave={save}
@@ -441,12 +451,6 @@ export default function BacktestPage() {
 }
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
-
-function mergeTags(catalog, added) {
-  const out = [...catalog];
-  for (const tag of added) if (!out.includes(tag)) out.push(tag);
-  return out;
-}
 
 /** « +2,5R » — un signe toujours présent : sur une colonne de résultats, c'est
  *  lui qu'on suit du regard, pas le chiffre. */
@@ -1011,44 +1015,76 @@ function EquityCurve({ curve, breaks = [] }) {
 /** Un groupe de cases à cocher avec ajout libre : le vocabulaire d'un trader
  *  n'est pas celui d'un autre, et une liste figée se contourne en écrivant tout
  *  dans le champ de texte — là où rien ne se compte. */
-function TagPicker({ label, hint, catalog, selected, color, onToggle, onAdd }) {
-  const [draft, setDraft] = useState("");
+function TagPicker({ label, hint, catalog, selected, color, empty, onToggle, onAdd }) {
+  const [draft, setDraft] = useState(null);   // null = champ replié
   const commit = () => {
-    const value = draft.trim();
-    if (!value) return;
-    onAdd(value);
-    setDraft("");
+    const value = (draft || "").trim();
+    if (value) onAdd(value);
+    setDraft(null);
   };
+  /* Une case cochée hors catalogue (backtest passé d'une stratégie à une
+     autre) reste affichée : la masquer la garderait cochée sans qu'on puisse
+     la décocher. */
+  const tags = [...catalog, ...selected.filter(tag => !catalog.includes(tag))];
   return (
     <Field label={label} hint={hint}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        {catalog.map(tag => (
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        {tags.length === 0 && draft === null && (
+          <span style={{ ...TYPE.label, color: T.textMut, marginRight: 4 }}>{empty}</span>
+        )}
+        {tags.map(tag => (
           <CheckChip key={tag} label={tag} color={color}
                      checked={selected.includes(tag)} onClick={() => onToggle(tag)} />
         ))}
+        {/* L'ajout se tient à la taille d'une puce, au bout de la liste : un
+            champ pleine largeur sous chaque groupe pesait autant que les
+            cases elles-mêmes, pour un geste rare. */}
+        {draft === null ? (
+          <button type="button" onClick={() => setDraft("")} aria-label={`Ajouter — ${label}`}
+            style={{
+              minHeight: 34, padding: "0 12px", borderRadius: 999, border: `1px dashed ${HAIRLINE}`,
+              background: "transparent", color: T.textSub, cursor: "pointer", fontFamily: "inherit",
+              ...TYPE.label, display: "inline-flex", alignItems: "center", gap: 4,
+            }}>
+            <Plus size={12} strokeWidth={2} /> Ajouter
+          </button>
+        ) : (
+          <input
+            autoFocus
+            aria-label={`Nouveau tag — ${label}`}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            /* Entrée valide le tag et NON le formulaire : dans une modale, la
+               touche partirait sinon enregistrer le backtest au milieu de la
+               saisie du vocabulaire. Échap replie sans rien ajouter. */
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); commit(); }
+              else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setDraft(null); }
+            }}
+            onBlur={commit}
+            placeholder="Nouveau…"
+            style={{
+              minHeight: 34, width: 150, padding: "0 12px", borderRadius: 999, border: "none", outline: "none",
+              background: FIELD_BG, color: T.text, fontFamily: "inherit", ...TYPE.label,
+            }}
+          />
+        )}
       </div>
-      <Input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        /* Entrée valide le tag et NON le formulaire : dans une modale, la
-           touche partirait sinon enregistrer le backtest au milieu de la
-           saisie du vocabulaire. */
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
-        onBlur={commit}
-        placeholder="Ajouter…"
-        compact
-      />
     </Field>
   );
 }
 
-function EntryModal({ form, setForm, journal, strategies, editing, onClose, onSave, onDelete }) {
+function EntryModal({ form, setForm, journal, strategies, baseOf, editing, onClose, onSave, onDelete }) {
   const sessionOf = (id) => journal.sessions.find(s => s.id === id);
   const set = (patch) => setForm(prev => ({ ...prev, ...patch }));
   const toggle = (key, tag) => set({
     [key]: form[key].includes(tag) ? form[key].filter(t => t !== tag) : [...form[key], tag],
   });
   const add = (key, tag) => { if (!form[key].includes(tag)) set({ [key]: [...form[key], tag] }); };
+  /* Une stratégie choisie remplace le catalogue général par le sien : ses
+     règles, ses erreurs fréquentes, et ce qu'on y a déjà ajouté en backtest. */
+  const catalog = tagCatalog(journal, form.strategyId || null, baseOf(form.strategyId));
+  const withStrategy = Boolean(form.strategyId);
 
   return (
     <Modal
@@ -1127,14 +1163,18 @@ function EntryModal({ form, setForm, journal, strategies, editing, onClose, onSa
         </FieldGrid>
 
         <TagPicker
-          label="Confluences" hint="Ce qui justifiait l'entrée."
-          catalog={journal.confluences} selected={form.confluences} color={PALETTE.green}
+          label="Confluences"
+          hint={withStrategy ? "Les règles de la stratégie. Un ajout reste propre à ses backtests." : "Ce qui justifiait l'entrée."}
+          empty="Aucune règle sur cette stratégie."
+          catalog={catalog.confluences} selected={form.confluences} color={PALETTE.green}
           onToggle={(tag) => toggle("confluences", tag)} onAdd={(tag) => add("confluences", tag)}
         />
 
         <TagPicker
-          label="Erreurs" hint="Ce qui a été mal exécuté, même sur un gagnant."
-          catalog={journal.mistakes} selected={form.mistakes} color={PALETTE.red}
+          label="Erreurs"
+          hint={withStrategy ? "Les erreurs fréquentes de son playbook. Un ajout reste propre à ses backtests." : "Ce qui a été mal exécuté, même sur un gagnant."}
+          empty="Aucune erreur notée pour cette stratégie."
+          catalog={catalog.mistakes} selected={form.mistakes} color={PALETTE.red}
           onToggle={(tag) => toggle("mistakes", tag)} onAdd={(tag) => add("mistakes", tag)}
         />
 

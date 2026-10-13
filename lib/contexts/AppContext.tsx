@@ -5,6 +5,7 @@ import { useTrades } from "@/lib/hooks/useTradeData";
 import { useStrategies } from "@/lib/hooks/useUserData";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { useTradingAccounts } from "@/lib/hooks/useTradingAccounts";
+import { isFailedAccount } from "@/lib/accountContracts";
 import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 
 type AccountType = "live" | "eval";
@@ -108,14 +109,20 @@ export function AppProvider({ children, initialPage = "dashboard" }: AppProvider
      valeur dérivée (tous les comptes réels) pour les consommateurs existants,
      et `tradesByAccount` ne filtre plus que le compte placeholder. */
   const rawTrades = tradesApi.trades || [];
+  /* Les comptes en échec en sortent aussi, comme dans la coquille : leurs
+     trades ne doivent plus nourrir les totaux de qui lit ce contexte. */
   const selectedAccountIds = useMemo(
-    () => (rawAccounts || []).map(a => a.id).filter(id => !isPlaceholderAccount(id)),
+    () => (rawAccounts || [])
+      .filter(a => !isFailedAccount(a))
+      .map(a => a.id)
+      .filter(id => !isPlaceholderAccount(id)),
     [rawAccounts]
   );
-  const tradesByAccount = useMemo(
-    () => rawTrades.filter((t: { account_id?: string }) => !isPlaceholderAccount(t.account_id || "")),
-    [rawTrades]
-  );
+  const tradesByAccount = useMemo(() => {
+    const failed = new Set((rawAccounts || []).filter(isFailedAccount).map(a => a.id));
+    return rawTrades.filter((t: { account_id?: string }) =>
+      !isPlaceholderAccount(t.account_id || "") && !failed.has(t.account_id || ""));
+  }, [rawTrades, rawAccounts]);
   const setAccountType = (t: AccountType) => {
     _setAccountType(t);
     writeLS("accountType", t);

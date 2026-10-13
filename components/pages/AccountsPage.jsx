@@ -28,7 +28,7 @@ import { moveEntry, orderEntries } from "@/lib/accountsOrder";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
 import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm, passAccountToFunded } from "@/lib/propFirms";
-import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount, progressByAccount } from "@/lib/accountContracts";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount, progressByAccount, isFailedAccount } from "@/lib/accountContracts";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { firmLogo } from "@/lib/accountBrand";
@@ -118,7 +118,9 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     [accounts, trades, contractStore, firmById],
   );
   const isFailed = React.useCallback(
-    (acc) => !!(acc && progressStates.get(acc.id)?.breached),
+    /* Le type « failed » posé par la coquille, ou le plancher touché à
+       l'instant — avant que la bascule n'ait fait l'aller-retour en base. */
+    (acc) => !!(acc && (isFailedAccount(acc) || progressStates.get(acc.id)?.breached)),
     [progressStates],
   );
   /* Un compte en échec ne se trade plus : il sort de sa firme et des « plus
@@ -295,16 +297,18 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   }, [notPlaceholder, trades, fundedMeta]);
 
   const totals = React.useMemo(() => {
-    // Totaux du site = comptes actifs uniquement (les eval archivés en sont
-    // exclus : leur P&L n'apparaît que sur leur propre carte / détail).
+    // Totaux du site = comptes actifs uniquement (les eval archivés et les
+    // comptes en échec en sont exclus : leur P&L n'apparaît que sur leur
+    // propre carte / détail, et dans le groupe « Comptes échoués »).
     let trades = 0, pnl = 0, wins = 0, capital = 0;
-    for (const acc of visibleAccounts) {
+    for (const acc of liveAccounts) {
       const s = stats.get(acc.id);
       if (s) { trades += s.trades; pnl += s.pnl; wins += s.wins; }
       capital += parseEvalSize(acc.eval_account_size) || 0;
     }
-    return { trades, pnl, wins, capital, accounts: visibleAccounts.length };
-  }, [stats, visibleAccounts]);
+    return { trades, pnl, wins, capital, accounts: liveAccounts.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- liveAccounts est refait à chaque rendu ; ses sources sont listées
+  }, [stats, visibleAccounts, progressStates]);
 
 
   const onOpenDetail = (id) => {
@@ -412,9 +416,13 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
      peut pas additionner les séries par compte : elles n'ont pas les mêmes
      dates ni le même nombre de points. */
   const seriesByFirm = React.useMemo(() => {
+    /* Les comptes en échec ne nourrissent plus la courbe de leur firme : ils
+       forment leur propre groupe, sous la clé FAILED_GROUP, dont la carte des
+       plus actifs trace la courbe comme celle d'une firme. */
     const firmOfAccount = new Map();
     visibleAccounts.forEach((a) => {
-      if (a.firm_id && firmById.has(a.firm_id)) firmOfAccount.set(a.id, a.firm_id);
+      if (isFailed(a)) firmOfAccount.set(a.id, FAILED_GROUP);
+      else if (a.firm_id && firmById.has(a.firm_id)) firmOfAccount.set(a.id, a.firm_id);
     });
     const accById = new Map(notPlaceholder.map((a) => [a.id, a]));
     const sorted = [...(trades || [])]
@@ -435,7 +443,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
       map.set(fid, arr);
     }
     return map;
-  }, [visibleAccounts, firmById, notPlaceholder, trades, fundedMeta]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- visibleAccounts est refait à chaque rendu ; `accounts` est sa source
+  }, [accounts, archivedMeta, firmById, notPlaceholder, trades, fundedMeta, isFailed]);
 
   const payoutStates = React.useMemo(
     () => payoutsByAccount(notPlaceholder, trades, normalizeStore(contractStore), firmById),
@@ -480,7 +489,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
      comme partout ailleurs sur la page. */
   const topActiveEntities = React.useMemo(() => {
     const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const activity = new Map(liveAccounts.map((a) => [a.id, { recent: 0, last: 0 }]));
+    const activity = new Map(visibleAccounts.map((a) => [a.id, { recent: 0, last: 0 }]));
     for (const tr of trades || []) {
       const entry = activity.get(tr.account_id);
       if (!entry) continue;
@@ -494,9 +503,13 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
        tous ses comptes. Sans ça, une firme à dix comptes actifs occupait les
        cartes avec ses comptes pris un à un. */
     const entities = new Map();
-    for (const acc of liveAccounts) {
-      const firm = acc.firm_id ? firmById.get(acc.firm_id) : null;
-      const key = firm ? `firm:${firm.id}` : `acc:${acc.id}`;
+    /* Les comptes en échec se rangent sous une entité à eux, comme les comptes
+       d'une firme : un seul garde sa carte de compte (règle juste en dessous),
+       plusieurs se résument en une carte « Comptes échoués ». */
+    for (const acc of visibleAccounts) {
+      const failed = isFailed(acc);
+      const firm = !failed && acc.firm_id ? firmById.get(acc.firm_id) : null;
+      const key = failed ? FAILED_GROUP : firm ? `firm:${firm.id}` : `acc:${acc.id}`;
       const a = activity.get(acc.id) || { recent: 0, last: 0 };
       const v = viewOf(acc);
       const prev = entities.get(key);
@@ -507,7 +520,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         prev.accounts.push(acc);
       } else {
         entities.set(key, {
-          key, firm, account: firm ? null : acc,
+          key, firm, failed, account: firm || failed ? null : acc,
           recent: a.recent, last: a.last, trades: v.trades,
           accounts: [acc],
         });
@@ -519,10 +532,10 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
        à son compte — le logo et le nom de la firme restent portés par la
        carte de compte. */
     for (const [key, e] of [...entities]) {
-      if (e.firm && e.accounts.length === 1) {
+      if ((e.firm || e.failed) && e.accounts.length === 1) {
         entities.delete(key);
         const acc = e.accounts[0];
-        entities.set(`acc:${acc.id}`, { ...e, key: `acc:${acc.id}`, firm: null, account: acc });
+        entities.set(`acc:${acc.id}`, { ...e, key: `acc:${acc.id}`, firm: null, failed: false, account: acc });
       }
     }
     return [...entities.values()]
@@ -567,6 +580,17 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     () => new Set(Array.isArray(expandedIds) ? expandedIds : []),
     [expandedIds]
   );
+  /* La carte « Comptes échoués » ouvre le groupe dans la liste plutôt que de
+     le refermer s'il l'était déjà : un clic sur une carte ne replie rien. */
+  const openFailedGroup = () => {
+    setExpandedIds((prev) => {
+      const arr = Array.isArray(prev) ? prev : [];
+      return arr.includes(FAILED_GROUP) ? arr : [...arr, FAILED_GROUP];
+    });
+    if (typeof document !== "undefined") {
+      document.getElementById("tao-failed-accounts")?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }
+  };
   const toggleRow = (id) => setExpandedIds((prev) => {
     const arr = Array.isArray(prev) ? prev : [];
     return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
@@ -768,13 +792,12 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     );
   };
 
-  /* Comptes en échec. Un seul garde sa ligne de compte : un groupe d'un
-     élément ne regrouperait rien et coûterait un clic. À partir de deux, ils se
-     rangent sous une ligne dépliable, comme les comptes d'une firme. */
+  /* Comptes en échec : TOUJOURS sous leur ligne dépliable, même seuls. La
+     liste est l'index exhaustif, et un compte tombé doit s'y trouver au même
+     endroit qu'il soit le premier ou le dixième. */
   const renderFailedRows = () => {
     if (failedAccounts.length === 0) return null;
-    if (failedAccounts.length === 1) return renderAccountRow(failedAccounts[0]);
-    const id = "failed";
+    const id = FAILED_GROUP;
     const open = expanded.has(id);
     const views = failedAccounts.map(viewOf);
     const pnl = views.reduce((sum, v) => sum + v.pnl, 0);
@@ -854,8 +877,6 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         label={acc.name || "Compte"}
         badge={canPassFunded(acc) ? (
           <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
-        ) : isFailed(acc) ? (
-          <span style={{ fontSize: 11, fontWeight: 500, color: T.red }}>Échec</span>
         ) : null}
         cells={[
           "1",
@@ -1045,6 +1066,38 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                     />
                   );
                 }
+                if (entity.failed) {
+                  const views = entity.accounts.map(viewOf);
+                  const pnl = views.reduce((sum, v) => sum + v.pnl, 0);
+                  const capital = views.reduce((sum, v) => sum + (v.capital || 0), 0);
+                  const count = views.reduce((sum, v) => sum + v.trades, 0);
+                  const wins = entity.accounts.reduce((sum, a) => {
+                    const s = stats.get(a.id);
+                    return s ? sum + (a.account_type === "funded" ? s.fundedWins : s.wins) : sum;
+                  }, 0);
+                  return (
+                    <LiveAccountCard
+                      key={entity.key}
+                      account={{ id: FAILED_GROUP, name: "Comptes échoués" }}
+                      firm={null}
+                      groupBadge="Échec"
+                      failed
+                      firmName={t("firms.nAccounts").replace("{n}", String(entity.accounts.length))}
+                      view={{
+                        pnl,
+                        trades: count,
+                        capital: capital > 0 ? capital : null,
+                        value: capital > 0 ? capital + pnl : pnl,
+                        winRate: count > 0 ? (wins / count) * 100 : null,
+                        pnlPct: capital > 0 ? (pnl / capital) * 100 : null,
+                      }}
+                      series={seriesByFirm.get(FAILED_GROUP)}
+                      canPass={false}
+                      passing={false}
+                      onOpen={openFailedGroup}
+                    />
+                  );
+                }
                 const acc = entity.account;
                 return (
                   <LiveAccountCard
@@ -1091,7 +1144,9 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                   ? renderFirmRow(row.summary, dragFor(row.id))
                   : renderAccountRow(row.account, dragFor(row.id))))}
 
-                {renderFailedRows()}
+                <div id="tao-failed-accounts">
+                  {renderFailedRows()}
+                </div>
 
                 {/* Enfin l'agrégat des comptes eval archivés (hors totaux du site) */}
                 {archivedAccounts.length > 0 && (() => {
@@ -1402,7 +1457,7 @@ function Sparkline({ values: rawValues, color, height = 131, fill = false }) {
    Carte carrée : logo rond 34, puis nom 14 + badge de type sur la même ligne,
    firme ou plateforme 12 à 40 % en dessous, courbe d'équity étirée, et le
    montant légendé en pied. */
-function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false, failed = false }) {
+function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false, failed = false, groupBadge = null }) {
   /* Le logo est celui de la PROP FIRM du compte. La plateforme d'exécution ne
      sert qu'à l'import : elle n'identifie pas le compte. Sans firme (live ou
      démo personnel), on retombe sur le broker, seul rattachement du compte. */
@@ -1413,7 +1468,7 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
      Un compte ordinaire, lui, n'a pas de firme à afficher : on y met sa
      PLATEFORME d'exécution, seul rattachement qu'il possède — sans quoi la
      ligne restait vide et les cartes ne s'alignaient plus entre elles. */
-  const subtitle = firmName || (isFirm ? "" : platformName(account.broker)) || "—";
+  const subtitle = firmName || (isFirm || groupBadge ? "" : platformName(account.broker)) || "—";
   /* Badge de tête : le type du compte avec sa taille, ou « Prop firm » pour une
      carte de firme — dont le type n'a pas de sens, ses comptes pouvant être de
      types différents. */
@@ -1464,7 +1519,7 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
               border: `1px solid ${failed ? T.red : T.border}`, background: T.bg,
               fontSize: 11, lineHeight: "15px", fontWeight: 500, color: failed ? T.red : T.textSub, whiteSpace: "nowrap",
             }}>
-              {isFirm ? t("firms.badge") : failed ? `${accountTypeLabel(account)} · Échec` : accountTypeLabel(account)}
+              {groupBadge || (isFirm ? t("firms.badge") : failed && !isFailedAccount(account) ? `${accountTypeLabel(account)} · Échec` : accountTypeLabel(account))}
             </span>
           </div>
           {/* Firme pour un compte rattaché, plateforme pour un compte ordinaire. */}
@@ -1533,10 +1588,15 @@ function AccountDot({ account, firm }) {
   );
 }
 
+/* Clé du groupe des comptes en échec — ligne dépliée, entité des plus actifs
+   et série agrégée. Préfixée pour ne jamais croiser un id de firme. */
+const FAILED_GROUP = "group:failed";
+
 /* Le type reste lisible à côté du mot : « Échec » seul ne dirait pas si c'est
    l'éval ou le financé qui est tombé, et la couleur ne suffit jamais. */
 function FailedLabel({ account }) {
-  return <span style={{ color: T.red }}>{accountTypeLabel(account)} · Échec</span>;
+  const label = isFailedAccount(account) ? accountTypeLabel(account) : `${accountTypeLabel(account)} · Échec`;
+  return <span style={{ color: T.red }}>{label}</span>;
 }
 
 /* Libellé de repli quand le compte n'a pas de broker renseigné. */
@@ -1545,6 +1605,7 @@ function accountTypeLabel(account) {
   const size = account.eval_account_size ? ` · ${account.eval_account_size}` : "";
   if (type === "eval") return `Eval${size}`;
   if (type === "funded") return `Funded${size}`;
+  if (type === "failed") return `Échec${size}`;
   if (type === "demo") return t("accountsPage.demo");
   return t("accountsPage.live");
 }

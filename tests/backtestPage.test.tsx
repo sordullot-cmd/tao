@@ -34,7 +34,8 @@ vi.mock("@/lib/contexts/UndoContext", () => ({ useUndo: () => ({ pushUndo: vi.fn
 vi.mock("@/lib/contexts/AppContext", () => ({
   useApp: () => ({
     strategies: [
-      { id: "s1", name: "Breakout NY", color: "#58CC02" },
+      { id: "s1", name: "Breakout NY", color: "#58CC02",
+        groups: [{ id: 1, name: "Entrée", rules: [{ id: 2, text: "Cassure du range asiatique" }] }] },
       { id: "s2", name: "Reversal Londres", color: "#1CB0F6" },
     ],
   }),
@@ -118,13 +119,40 @@ describe("Page Backtest", () => {
     render(<BacktestPage />);
     fireEvent.click(screen.getAllByText("Ajouter un backtest")[0]);
     let dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getAllByPlaceholderText("Ajouter…")[0], { target: { value: "Wyckoff spring" } });
-    fireEvent.keyDown(within(dialog).getAllByPlaceholderText("Ajouter…")[0], { key: "Enter" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ajouter — Confluences" }));
+    fireEvent.change(within(dialog).getByPlaceholderText("Nouveau…"), { target: { value: "Wyckoff spring" } });
+    fireEvent.keyDown(within(dialog).getByPlaceholderText("Nouveau…"), { key: "Enter" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Ajouter" }));
 
     fireEvent.click(screen.getAllByText("Ajouter un backtest")[0]);
     dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("checkbox", { name: "Wyckoff spring" })).toBeTruthy();
+  });
+
+  it("propose les règles de la stratégie choisie, et garde ses ajouts pour elle seule", () => {
+    render(<BacktestPage />);
+    fireEvent.click(screen.getAllByText("Ajouter un backtest")[0]);
+    let dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByPlaceholderText("NQ, EURUSD…"), { target: { value: "NQ" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Stratégie" }), { target: { value: "s1" } });
+    // La règle de la stratégie remplace le catalogue général.
+    expect(within(dialog).getByRole("checkbox", { name: "Cassure du range asiatique" })).toBeTruthy();
+    expect(within(dialog).queryByRole("checkbox", { name: "Order block" })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ajouter — Confluences" }));
+    fireEvent.change(within(dialog).getByPlaceholderText("Nouveau…"), { target: { value: "Retest du VWAP" } });
+    fireEvent.keyDown(within(dialog).getByPlaceholderText("Nouveau…"), { key: "Enter" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ajouter" }));
+
+    // Revenu sur la même stratégie : l'ajout y est.
+    fireEvent.click(screen.getAllByText("Ajouter un backtest")[0]);
+    dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Stratégie" }), { target: { value: "s1" } });
+    expect(within(dialog).getByRole("checkbox", { name: "Retest du VWAP" })).toBeTruthy();
+    // Sur une autre, ou sans stratégie : il n'y est pas.
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Stratégie" }), { target: { value: "s2" } });
+    expect(within(dialog).queryByRole("checkbox", { name: "Retest du VWAP" })).toBeNull();
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Stratégie" }), { target: { value: "" } });
+    expect(within(dialog).queryByRole("checkbox", { name: "Retest du VWAP" })).toBeNull();
   });
 
   it("rattache un backtest à une stratégie de la coquille et la montre sur la ligne", () => {

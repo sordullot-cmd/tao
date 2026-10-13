@@ -29,6 +29,16 @@
  * la vue d'ensemble reste là pour les classements qui gagnent à tout agréger.
  * Les backtests d'avant les sessions restent « sans session » plutôt que d'être
  * versés d'office dans une séance qui n'a pas eu lieu.
+ *
+ * ── Le vocabulaire d'une stratégie ────────────────────────────────────────
+ * Une stratégie a déjà ses confluences : ses règles, décrites dans
+ * « Stratégies », et ses erreurs fréquentes, notées dans son playbook. Un
+ * backtest rattaché à une stratégie coche CELLES-LÀ plutôt que le catalogue
+ * général — tester un setup, c'est vérifier ses propres conditions, pas une
+ * liste générique. Ce qu'on invente pendant ces backtests reste rangé sous la
+ * stratégie (`byStrategy`) : il ne remonte ni dans les règles de la stratégie
+ * (le backtest ne réécrit pas le plan), ni dans le catalogue général (une
+ * confluence propre à un setup n'a rien à faire dans la liste des autres).
  */
 
 /** Ce que l'utilisateur DÉCLARE du trade. Le « BE » couvre le scratch : sorti
@@ -79,7 +89,17 @@ export interface BacktestJournal {
   entries: BacktestEntry[];
   /** Du plus récent au plus ancien. */
   sessions: BacktestSession[];
-  /** Catalogues de cases à cocher, enrichis par l'usage. */
+  /** Catalogues de cases à cocher, enrichis par l'usage — ceux des backtests
+   *  sans stratégie. */
+  confluences: string[];
+  mistakes: string[];
+  /** Les tags créés pendant les backtests d'une stratégie, par id de
+   *  stratégie. Ne contient que les ajouts : la base (règles, erreurs du
+   *  playbook) se relit à la source, pour suivre ses modifications. */
+  byStrategy: Record<string, TagCatalog>;
+}
+
+export interface TagCatalog {
   confluences: string[];
   mistakes: string[];
 }
@@ -116,6 +136,7 @@ export function emptyJournal(): BacktestJournal {
     sessions: [],
     confluences: [...DEFAULT_CONFLUENCES],
     mistakes: [...DEFAULT_MISTAKES],
+    byStrategy: {},
   };
 }
 
@@ -213,8 +234,24 @@ export function normalizeJournal(raw: unknown): BacktestJournal {
        même jour, et leur séquence est ce qu'on vient relire. */
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
 
+  /* Le catalogue général n'absorbe que les backtests sans stratégie : ceux
+     d'une stratégie nourrissent la sienne, plus bas. Les anciens catalogues
+     gardent ce qu'ils avaient déjà absorbé — rien n'y est retiré. */
+  const loose = entries.filter(e => e.strategyId === null);
   const used = (key: "confluences" | "mistakes") =>
-    cleanTags([...(Array.isArray(src[key]) ? src[key] : []), ...entries.flatMap(e => e[key])]);
+    cleanTags([...(Array.isArray(src[key]) ? src[key] : []), ...loose.flatMap(e => e[key])]);
+
+  const rawBy = (src.byStrategy && typeof src.byStrategy === "object" ? src.byStrategy : {}) as Record<string, Partial<TagCatalog>>;
+  const byStrategy: Record<string, TagCatalog> = {};
+  const ids = new Set([...Object.keys(rawBy), ...entries.flatMap(e => (e.strategyId ? [e.strategyId] : []))]);
+  for (const id of ids) {
+    const own = entries.filter(e => e.strategyId === id);
+    const catalog = {
+      confluences: cleanTags([...(rawBy[id]?.confluences ?? []), ...own.flatMap(e => e.confluences)]),
+      mistakes: cleanTags([...(rawBy[id]?.mistakes ?? []), ...own.flatMap(e => e.mistakes)]),
+    };
+    if (catalog.confluences.length || catalog.mistakes.length) byStrategy[id] = catalog;
+  }
 
   const confluences = used("confluences");
   const mistakes = used("mistakes");
@@ -226,6 +263,50 @@ export function normalizeJournal(raw: unknown): BacktestJournal {
        décoché verrait la liste d'usine revenir à chaque rechargement. */
     confluences: src.confluences === undefined && confluences.length === 0 ? [...DEFAULT_CONFLUENCES] : confluences,
     mistakes: src.mistakes === undefined && mistakes.length === 0 ? [...DEFAULT_MISTAKES] : mistakes,
+    byStrategy,
+  };
+}
+
+/** Les cases à cocher d'un backtest : sans stratégie, le catalogue général ;
+ *  avec, la base de la stratégie suivie de ce qu'on y a ajouté en backtest. */
+export function tagCatalog(journal: BacktestJournal, strategyId: string | null, base: TagCatalog): TagCatalog {
+  if (!strategyId) return { confluences: journal.confluences, mistakes: journal.mistakes };
+  const own = journal.byStrategy[strategyId];
+  return {
+    confluences: cleanTags([...base.confluences, ...(own?.confluences ?? [])]),
+    mistakes: cleanTags([...base.mistakes, ...(own?.mistakes ?? [])]),
+  };
+}
+
+/** Range les tags d'une entrée enregistrée là où on les retrouvera : sous sa
+ *  stratégie (hors base, qui vit déjà ailleurs) ou dans le catalogue général. */
+export function rememberTags(journal: BacktestJournal, entry: Pick<BacktestEntry, "strategyId" | "confluences" | "mistakes">, base: TagCatalog): BacktestJournal {
+  if (!entry.strategyId) {
+    return {
+      ...journal,
+      confluences: cleanTags([...journal.confluences, ...entry.confluences]),
+      mistakes: cleanTags([...journal.mistakes, ...entry.mistakes]),
+    };
+  }
+  const own = journal.byStrategy[entry.strategyId] ?? { confluences: [], mistakes: [] };
+  const added = (key: "confluences" | "mistakes") =>
+    cleanTags([...own[key], ...entry[key].filter(tag => !base[key].includes(tag))]);
+  return {
+    ...journal,
+    byStrategy: { ...journal.byStrategy, [entry.strategyId]: { confluences: added("confluences"), mistakes: added("mistakes") } },
+  };
+}
+
+/** La base d'une stratégie : ses règles pour confluences, les erreurs
+ *  fréquentes de son playbook pour erreurs. Les formes sont lâches parce que
+ *  les deux sources le sont (table Supabase, magasin JSON). */
+export function strategyBase(
+  strategy: { groups?: { rules?: { text?: string }[] }[] } | null | undefined,
+  playbookMistakes: { text?: string }[] = [],
+): TagCatalog {
+  return {
+    confluences: cleanTags((strategy?.groups ?? []).flatMap(g => (g?.rules ?? []).map(r => r?.text))),
+    mistakes: cleanTags(playbookMistakes.map(m => m?.text)),
   };
 }
 

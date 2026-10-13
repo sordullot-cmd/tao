@@ -96,7 +96,7 @@ const BOOK: Record<string, FirmBook> = {
        firme, et une grille corrigée ne doit pas tenir à une formule. */
     sizes: {
       25_000:  { target: 1_500, maxDD: 1_500, payoutBuffer: 1_600 },
-      50_000:  { target: 3_000, maxDD: 2_500, payoutBuffer: 2_600 },
+      50_000:  { target: 3_000, maxDD: 2_000, payoutBuffer: 2_100 },
       100_000: { target: 6_000, maxDD: 3_000, payoutBuffer: 3_100 },
       150_000: { target: 9_000, maxDD: 5_000, payoutBuffer: 5_100 },
       250_000: { target: 15_000, maxDD: 6_500, payoutBuffer: 6_600 },
@@ -122,7 +122,7 @@ const NEUTRAL: Omit<AccountRules, "source"> = {
 
 /**
  * Le barème d'un compte : celui de sa firme si elle est au catalogue, sinon le
- * repli historique (6 % de cible, 5 % de drawdown).
+ * repli historique (6 % de cible, 4 % de drawdown).
  *
  * `capital` nul rend un barème à zéro plutôt que null : l'appelant affiche
  * alors « à renseigner » sans avoir à distinguer deux formes de réponse.

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   emptyJournal, normalizeJournal, effectiveR, tagStats, strategyStats, summarize,
   DEFAULT_CONFLUENCES, groupBySession, equityBySession, sessionLabel,
+  tagCatalog, rememberTags, strategyBase,
 } from "@/lib/backtest/journal";
 
 /** Raccourci de saisie : tout ce qui n'est pas dit n'a pas d'importance pour
@@ -212,3 +213,31 @@ describe("sessions de backtest", () => {
   });
 });
 
+
+describe("vocabulaire par stratégie", () => {
+  const base = strategyBase(
+    { groups: [{ rules: [{ text: "Cassure" }, { text: " " }] }] },
+    [{ text: "FOMO" }],
+  );
+
+  it("tire la base des règles de la stratégie et des erreurs de son playbook", () => {
+    expect(base).toEqual({ confluences: ["Cassure"], mistakes: ["FOMO"] });
+  });
+
+  it("range sous la stratégie ce qu'on y invente, sans toucher au catalogue général", () => {
+    const journal = rememberTags(normalizeJournal({}), { strategyId: "s1", confluences: ["Cassure", "VWAP"], mistakes: [] }, base);
+    expect(journal.byStrategy.s1.confluences).toEqual(["VWAP"]);
+    expect(journal.confluences).not.toContain("VWAP");
+    expect(tagCatalog(journal, "s1", base).confluences).toEqual(["Cassure", "VWAP"]);
+    expect(tagCatalog(journal, "s2", { confluences: [], mistakes: [] }).confluences).toEqual([]);
+  });
+
+  it("ne verse pas les tags d'un backtest de stratégie dans le catalogue général à la relecture", () => {
+    const store = normalizeJournal({
+      entries: [entry({ strategyId: "s1", confluences: ["VWAP"] })],
+      confluences: ["Order block"], mistakes: [],
+    });
+    expect(store.confluences).toEqual(["Order block"]);
+    expect(store.byStrategy.s1.confluences).toEqual(["VWAP"]);
+  });
+});

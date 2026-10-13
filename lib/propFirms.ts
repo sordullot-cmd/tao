@@ -46,7 +46,7 @@ export interface FirmAccount {
 
 /** Seuils appliqués à tous les comptes (en % du capital du compte). */
 export const DEFAULT_TARGET_PCT = 6;
-export const DEFAULT_MAX_DD_PCT = 5;
+export const DEFAULT_MAX_DD_PCT = 4;
 
 export const ACCOUNT_TYPES: AccountType[] = ["eval", "funded", "live", "demo"];
 

@@ -61,20 +61,20 @@ describe("visage « évaluation »", () => {
   });
 
   it("annonce la valeur du compte à ne pas franchir : le capital moins le drawdown", () => {
-    // Compte encore en perte, donc jamais de pic : 50k − 2 500 de drawdown Apex.
+    // Compte encore en perte, donc jamais de pic : 50k − 2 000 de drawdown Apex.
     renderCard({ trades: [{ date: "2026-09-01", pnl: -300 }] });
-    expect(screen.getByText("$47,500.00")).toBeTruthy();
+    expect(screen.getByText("$48,000.00")).toBeTruthy();
   });
 
   it("fait monter ce plancher avec le pic quand le drawdown est trailing", () => {
     /* Apex mesure son drawdown depuis le PIC : à +2 000, le plancher est déjà
-       remonté de 2 000. L'afficher figé à 47 500 donnerait une réserve qui
+       remonté de 2 000. L'afficher figé à 48 000 donnerait une réserve qui
        n'existe plus. */
     renderCard({ trades: [{ date: "2026-09-01", pnl: 2_000 }, { date: "2026-09-02", pnl: -800 }] });
-    expect(screen.getByText("$49,500.00")).toBeTruthy();
+    expect(screen.getByText("$50,000.00")).toBeTruthy();
     // La marge restante descend en ligne de détail, sans case à cocher : elle
     // se consomme, elle ne s'atteint pas.
-    expect(screen.getByText("$1,700.00")).toBeTruthy();
+    expect(screen.getByText("$1,200.00")).toBeTruthy();
   });
 
   it("pose le gain du moment sur la barre, à l'endroit où il en est", () => {
@@ -137,16 +137,16 @@ describe("visage « payouts »", () => {
   });
 
   it("ne propose au retrait que ce qui dépasse le matelas de la firme", () => {
-    /* Apex 50k : 2 600 de safety net. Sur 3 200 gagnés, 600 sortent — et la
-       carte doit dire où sont passés les 2 600 autres, sinon le chiffre se lit
+    /* Apex 50k : 2 100 de safety net. Sur 3 200 gagnés, 1 100 sortent — et la
+       carte doit dire où sont passés les 2 100 autres, sinon le chiffre se lit
        comme un calcul qui a perdu de l'argent. */
     renderCard({
       funded: true,
       contract: { ...financé, payoutDays: 0 },
       trades: [{ date: "2026-09-02", pnl: 3_200 }],
     });
-    expect(screen.getByText("$600.00 à retirer")).toBeTruthy();
-    expect(screen.getByText(/\$2,600\.00 de buffer restent sur le compte/)).toBeTruthy();
+    expect(screen.getByText("$1,100.00 à retirer")).toBeTruthy();
+    expect(screen.getByText(/\$2,100\.00 de buffer restent sur le compte/)).toBeTruthy();
   });
 
   it("bloque le retrait tant que le matelas n'est pas dépassé", () => {
@@ -158,7 +158,7 @@ describe("visage « payouts »", () => {
     expect(screen.queryByText(/à retirer/)).toBeNull();
     expect(screen.getByText(/Buffer à conserver pas encore dépassé/)).toBeTruthy();
     // La jauge dit de combien on est loin, sans avoir à ouvrir les réglages.
-    expect(screen.getByText("$2,000.00 / $2,600.00")).toBeTruthy();
+    expect(screen.getByText("$2,000.00 / $2,100.00")).toBeTruthy();
   });
 
   it("dit franchement qu'aucun retrait n'a encore été enregistré", () => {

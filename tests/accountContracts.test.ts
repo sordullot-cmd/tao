@@ -10,23 +10,24 @@
 import { describe, it, expect } from "vitest";
 import { resolveAccountRules } from "@/lib/propFirmRules";
 import {
-  accountAxis, contractOf, evalProgress, normalizeContract, normalizeStore, payoutState,
+  accountAxis, accountsToFail, contractOf, contractTypeOf, evalProgress, isFailedAccount,
+  normalizeContract, normalizeStore, payoutState, progressByAccount,
   payoutsByAccount, resolveObjectives, withContract, withPayout, withoutPayout,
 } from "@/lib/accountContracts";
 
 const tr = (date: string, pnl: number, time = "10:00") => ({ date, exit_time: time, pnl });
 const EMPTY = normalizeContract({});
 
-/** Les objectifs d'un compte 50k sans firme connue : repli 6 % / 5 %. */
+/** Les objectifs d'un compte 50k sans firme connue : repli 6 % / 4 %. */
 const plain = (over: Record<string, unknown> = {}) =>
   resolveObjectives(normalizeContract(over), resolveAccountRules(null, 50_000));
 
 describe("barème des firmes", () => {
   it("prend la grille de la firme plutôt que le repli en pourcentage", () => {
-    // Apex 50k : 2 500 de drawdown, là où 5 % en donnerait 2 500 aussi — mais
-    // sur un 100k la grille dit 3 000 quand le repli dirait 5 000.
+    // Apex 50k : 2 000 de drawdown, là où 4 % en donnerait 2 000 aussi — mais
+    // sur un 100k la grille dit 3 000 quand le repli dirait 4 000.
     expect(resolveAccountRules("apex", 100_000)).toMatchObject({ target: 6_000, maxDD: 3_000, source: "firm" });
-    expect(resolveAccountRules(null, 100_000)).toMatchObject({ target: 6_000, maxDD: 5_000, source: "default" });
+    expect(resolveAccountRules(null, 100_000)).toMatchObject({ target: 6_000, maxDD: 4_000, source: "default" });
   });
 
   it("dit que le drawdown d'Apex et de Topstep suit le pic, pas celui de FTMO", () => {
@@ -43,9 +44,9 @@ describe("barème des firmes", () => {
   });
 
   it("reprend le safety net d'Apex comme matelas à conserver", () => {
-    // Apex le publie en valeur de compte — 52 600 sur un 50k, 103 100 sur un
+    // Apex le publie en valeur de compte — 52 100 sur un 50k, 103 100 sur un
     // 100k — soit le drawdown de la taille plus 100 $, ramené ici en profit.
-    expect(resolveAccountRules("apex", 50_000).payoutBuffer).toBe(2_600);
+    expect(resolveAccountRules("apex", 50_000).payoutBuffer).toBe(2_100);
     expect(resolveAccountRules("apex", 100_000).payoutBuffer).toBe(3_100);
     // Personne d'autre n'en impose un : un matelas inventé bloquerait un retrait
     // légitime, ce qui est pire que de ne rien annoncer.
@@ -96,16 +97,16 @@ describe("drawdown EOD et échec du compte", () => {
 
   it("ne fait pas payer un pic intraday rendu dans la séance", () => {
     // +2 000 à 10 h, −1 800 à 14 h : la clôture est à +200, le plancher n'a
-    // monté que de 200. En trailing intraday il serait à −500 et le compte mort.
+    // monté que de 200. En trailing intraday il serait déjà verrouillé à 0.
     const seance = [tr("2026-09-01", 2_000, "10:00"), tr("2026-09-01", -1_800, "14:00")];
     const p = evalProgress(seance, apex);
     expect(p.peak).toBe(200);
-    expect(p.floor).toBe(-2_300);
+    expect(p.floor).toBe(-1_800);
     expect(p.breached).toBe(false);
   });
 
   it("fait monter le plancher avec la clôture, et le touche en séance", () => {
-    // Clôture à +2 000 : plancher à −500. Le lendemain, −2 500 le touche.
+    // Clôture à +2 000 : plancher verrouillé à 0. Le lendemain, −2 500 le touche.
     const p = evalProgress([tr("2026-09-01", 2_000), tr("2026-09-02", -2_500)], apex);
     expect(p.breached).toBe(true);
     expect(p.failReason).toBe("drawdown");
@@ -114,7 +115,7 @@ describe("drawdown EOD et échec du compte", () => {
   });
 
   it("arrête le plancher au capital de départ", () => {
-    // +6 000 à la clôture : sans verrou le plancher serait à +3 500.
+    // +6 000 à la clôture : sans verrou le plancher serait à +4 000.
     const p = evalProgress([tr("2026-09-01", 6_000), tr("2026-09-02", -3_000)], apex);
     expect(p.floor).toBe(0);
     expect(p.breached).toBe(false);
@@ -161,6 +162,38 @@ describe("drawdown EOD et échec du compte", () => {
   });
 });
 
+describe("bascule en type « échec »", () => {
+  const trades = [
+    { ...tr("2026-09-01", -2_600), account_id: "ko" },
+    { ...tr("2026-09-01", 300), account_id: "ok" },
+  ];
+  const comptes = [
+    { id: "ko", account_type: "eval", eval_account_size: "50k" },
+    { id: "ok", account_type: "eval", eval_account_size: "50k" },
+    { id: "live", account_type: "live" },
+  ];
+
+  it("désigne les seuls comptes vivants dont le plancher vient d'être touché", () => {
+    expect(accountsToFail(comptes, trades, {}, new Map())).toEqual([{ id: "ko", from: "eval" }]);
+  });
+
+  it("ne rebascule jamais un compte déjà en échec", () => {
+    const tombé = comptes.map(a => (a.id === "ko" ? { ...a, account_type: "failed" } : a));
+    expect(accountsToFail(tombé, trades, {}, new Map())).toEqual([]);
+    expect(isFailedAccount(tombé[0])).toBe(true);
+  });
+
+  it("relit un compte tombé sous son type d'avant", () => {
+    const contrat = normalizeContract({ failedFrom: "funded" });
+    expect(contractTypeOf({ account_type: "failed" }, contrat)).toBe("funded");
+    // Sans trace du type d'avant, l'éval est la lecture la plus fréquente.
+    expect(contractTypeOf({ account_type: "failed" }, EMPTY)).toBe("eval");
+    const store = { ko: normalizeContract({ failedFrom: "eval" }) };
+    const tombé = [{ id: "ko", account_type: "failed", eval_account_size: "50k" }];
+    expect(progressByAccount(tombé, trades, store, new Map()).get("ko")?.breached).toBe(true);
+  });
+});
+
 describe("l'axe du compte", () => {
   const apex = resolveObjectives(EMPTY, resolveAccountRules("apex", 50_000));
   const axeDe = (trades: Array<{ date: string; exit_time?: string; pnl: number }>) =>
@@ -168,14 +201,14 @@ describe("l'axe du compte", () => {
 
   it("pose le plancher à « capital moins drawdown » tant qu'aucun pic n'a été fait", () => {
     const axe = axeDe([tr("2026-09-01", -300)]);
-    expect(axe.floor).toBe(47_500);
+    expect(axe.floor).toBe(48_000);
     expect(axe.ceiling).toBe(53_000);
     expect(axe.current).toBe(49_700);
   });
 
   it("fait monter le plancher avec le pic quand le drawdown suit", () => {
     // +2 000 puis -800 : le pic reste à 2 000, le plancher a suivi.
-    expect(axeDe([tr("2026-09-01", 2_000), tr("2026-09-02", -800)]).floor).toBe(49_500);
+    expect(axeDe([tr("2026-09-01", 2_000), tr("2026-09-02", -800)]).floor).toBe(50_000);
   });
 
   it("laisse le plancher immobile quand le drawdown est statique", () => {
@@ -187,7 +220,7 @@ describe("l'axe du compte", () => {
   it("retombe en P&L pur quand la taille du compte n'est pas renseignée", () => {
     const axe = accountAxis(null, evalProgress([tr("2026-09-01", 500)], apex), apex);
     expect(axe.start).toBe(0);
-    expect(axe.floor).toBe(-2_000);
+    expect(axe.floor).toBe(-1_500);
   });
 });
 
@@ -267,7 +300,7 @@ describe("magasin des contrats", () => {
   it("laisse le barème de la firme là où l'utilisateur n'a rien posé", () => {
     const obj = resolveObjectives(normalizeContract({ target: 4_000 }), resolveAccountRules("apex", 50_000));
     expect(obj.target).toBe(4_000);
-    expect(obj.maxDD).toBe(2_500);
+    expect(obj.maxDD).toBe(2_000);
     expect(obj.source).toBe("custom");
   });
 

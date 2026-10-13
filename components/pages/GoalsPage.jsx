@@ -13,6 +13,7 @@ import { getCurrencySymbol } from "@/lib/userPrefs";
 // le formulaire d'objectif s'y range plutôt que d'inventer sa propre fenêtre.
 import { ModalShell, PrimaryBtn } from "@/components/modals/AccountModals";
 import { useTrades, useTradingAccounts } from "@/lib/hooks/useTradeData";
+import { isFailedAccount } from "@/lib/accountContracts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { useFirstLoad } from "@/lib/hooks/useFirstLoad";
 import { PageSkeleton } from "@/components/ui/Skeleton";
@@ -188,6 +189,14 @@ function rangeOf(horizon) {
 // l'objectif et des données passées (trades, comptes). Réutilisé tel quel par la
 // page « Vie RPG » pour dériver l'XP des catégories rattachées.
 export function computeGoalProgress(g, trades = [], accounts = [], habitHistory = {}) {
+  /* Un compte en échec ne compte plus pour aucun objectif — ni ses trades, ni
+     lui-même dans un décompte de comptes. Un objectif rattaché à lui seul
+     retombe donc à zéro : il visait un compte qui n'existe plus pour la firme. */
+  const failedIds = new Set((accounts || []).filter(isFailedAccount).map(a => String(a.id)));
+  if (failedIds.size > 0) {
+    trades = (trades || []).filter(t => !failedIds.has(String(t.account_id)));
+    accounts = (accounts || []).filter(a => !failedIds.has(String(a.id)));
+  }
   /* Source habitudes : la cible n'est pas saisie, elle EST la deadline — le
      nombre de jours comptables d'ici là. La recalculer plutôt que lire
      `g.target` garde l'objectif juste quand l'échéance bouge. */
@@ -1104,8 +1113,9 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                 // Groupes par type : n'affiche « Tous les comptes <type> » que
                 // pour les types réellement présents parmi les comptes.
                 const TYPE_LABELS = { live: "Live", funded: "Funded" };
+                const alive = (accounts || []).filter(a => !isFailedAccount(a));
                 const presentTypes = ["live", "funded"].filter(ty =>
-                  (accounts || []).some(a => (a.account_type || "live") === ty)
+                  alive.some(a => (a.account_type || "live") === ty)
                 );
                 return [
                   { id: "all", label: "Tous mes comptes" },
@@ -1113,7 +1123,7 @@ export default function GoalsPage({ embedded = false, registerCreate }) {
                     id: `type:${ty}`,
                     label: `Tous les comptes ${TYPE_LABELS[ty]}`,
                   })),
-                  ...((accounts || []).map(a => ({
+                  ...(alive.map(a => ({
                     id: String(a.id),
                     label: `${a.name || "Compte"}${a.account_type ? ` · ${a.account_type}` : ""}`,
                   }))),
