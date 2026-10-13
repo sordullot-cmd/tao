@@ -27,7 +27,7 @@
  */
 
 import React from "react";
-import { Plus, Pencil, Trash2, Settings2, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Settings2, ChevronDown, XCircle } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { getCurrencySymbol } from "@/lib/userPrefs";
@@ -518,7 +518,11 @@ export default function PropFirmDetailPage({
           sous-titre. */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <LogoTile src={logo} size={44} name={firm.name} />
+          <LogoTile
+            src={logo} size={44} name={firm.name}
+            // Le groupe des échecs porte la marque de sa ligne et de sa carte.
+            fallback={isGroup ? <XCircle size={22} strokeWidth={1.75} color={T.red} /> : undefined}
+          />
           <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minWidth: 0 }}>
             <h1 style={{
               margin: 0, fontSize: 16, fontWeight: 500, lineHeight: 1.25, color: T.text,

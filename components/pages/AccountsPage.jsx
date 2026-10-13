@@ -1078,6 +1078,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                       account={{ id: FAILED_GROUP, name: "Comptes échoués" }}
                       firm={null}
                       groupBadge="Échec"
+                      /* Même marque que la ligne du groupe dans la liste. */
+                      logoFallback={<XCircle size={18} strokeWidth={1.75} color={T.red} />}
                       failed
                       firmName={t("firms.nAccounts").replace("{n}", String(entity.accounts.length))}
                       view={{
@@ -1452,7 +1454,7 @@ function Sparkline({ values: rawValues, color, height = 131, fill = false }) {
    Carte carrée : logo rond 34, puis nom 14 + badge de type sur la même ligne,
    firme ou plateforme 12 à 40 % en dessous, courbe d'équity étirée, et le
    montant légendé en pied. */
-function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false, failed = false, groupBadge = null }) {
+function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false, failed = false, groupBadge = null, logoFallback = null }) {
   /* Le logo est celui de la PROP FIRM du compte. La plateforme d'exécution ne
      sert qu'à l'import : elle n'identifie pas le compte. Sans firme (live ou
      démo personnel), on retombe sur le broker, seul rattachement du compte. */
@@ -1500,7 +1502,7 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
       {/* Nom (et firme / plateforme) posés À DROITE du logo : c'est le logo qui
           ouvre la ligne d'identité, comme dans les lignes du tableau. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-        <LogoTile src={logo} size={34} name={firm?.name || firmName || account.name} />
+        <LogoTile src={logo} size={34} name={firm?.name || firmName || account.name} fallback={logoFallback} />
         <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: 1 }}>
           {/* Le badge partage la ligne du nom : posé dans une colonne à part, à
               droite du bloc de texte, il flottait entre les deux lignes. */}
