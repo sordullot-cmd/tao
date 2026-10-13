@@ -20,7 +20,7 @@ const fmtNoCents = (n) => {
   const prefix = v < 0 ? "-" : "";
   return `${prefix}${sym}${Math.abs(v).toLocaleString("en-US")}`;
 };
-import { Plus, Trophy, Wallet, Users, Target as TargetIcon, Pencil, Trash2, Check, Calendar, ChevronDown, Building2 } from "lucide-react";
+import { Plus, Trophy, Wallet, XCircle, Users, Target as TargetIcon, Pencil, Trash2, Check, Calendar, ChevronDown, Building2 } from "lucide-react";
 import { isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { isArchivedAccount, ARCHIVED_VIEW_ID } from "@/lib/utils/archivedAccounts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
@@ -105,6 +105,28 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   // dédiée en bas). Un compte archivé garde ses trades mais son P&L ne compte
   // plus dans les totaux du site.
   const visibleAccounts = notPlaceholder.filter((a) => !isArchivedAccount(a.id, archivedMeta));
+
+  /* Contrats des comptes (objectifs, retraits enregistrés) — même magasin que
+     la carte de la page d'un compte, donc mêmes chiffres des deux côtés. */
+  const [contractStore] = useCloudState(CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, {});
+  /* Comptes dont le plancher a été touché : même calcul que la carte du
+     compte, pour qu'aucune des deux pages ne dise « en vie » quand l'autre dit
+     « en échec ». */
+  const progressStates = React.useMemo(
+    () => progressByAccount(notPlaceholder, trades, normalizeStore(contractStore), firmById),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- notPlaceholder est refait à chaque rendu ; `accounts` est sa source
+    [accounts, trades, contractStore, firmById],
+  );
+  const isFailed = React.useCallback(
+    (acc) => !!(acc && progressStates.get(acc.id)?.breached),
+    [progressStates],
+  );
+  /* Un compte en échec ne se trade plus : il sort de sa firme et des « plus
+     actifs », où il prenait la place d'un compte vivant, pour n'apparaître que
+     dans son propre groupe en bas de la liste. Il reste dans les totaux — ses
+     pertes ont bien eu lieu. */
+  const failedAccounts = visibleAccounts.filter(isFailed);
+  const liveAccounts = visibleAccounts.filter((a) => !isFailed(a));
   // Comptes eval passés : le compte a été SUPPRIMÉ de la base, on le
   // reconstruit à partir des métadonnées d'archivage (nom, taille, trade_ids).
   const archivedAccounts = React.useMemo(
@@ -299,14 +321,15 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   // Les comptes rattachés à une firme sont représentés par la carte de leur
   // firme (cliquable → page détail = paramètres de la firme).
   const standaloneAccounts = React.useMemo(
-    () => visibleAccounts.filter((a) => !a.firm_id || !firmById.has(a.firm_id)),
-    [visibleAccounts, firmById]
+    () => liveAccounts.filter((a) => !a.firm_id || !firmById.has(a.firm_id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- liveAccounts est refait à chaque rendu ; ses sources sont listées
+    [visibleAccounts, firmById, progressStates]
   );
 
   // Agrégats par firme, calculés depuis les comptes actifs de la firme.
   const firmSummaries = React.useMemo(() => {
     return (firms || []).map((firm) => {
-      const accs = visibleAccounts.filter((a) => a.firm_id === firm.id);
+      const accs = liveAccounts.filter((a) => a.firm_id === firm.id);
       let tradeCount = 0, wins = 0, pnl = 0, capital = 0;
       const byType = { eval: 0, funded: 0, live: 0, demo: 0 };
       accs.forEach((a) => {
@@ -332,7 +355,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         winRate: tradeCount > 0 ? (wins / tradeCount) * 100 : 0,
       };
     });
-  }, [firms, visibleAccounts, stats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf. standaloneAccounts
+  }, [firms, visibleAccounts, stats, progressStates]);
 
   // Stats des comptes eval passés : leurs trades ont perdu account_id (compte
   // supprimé), on les retrouve par trade_ids stockés dans l'archivage.
@@ -413,24 +437,9 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     return map;
   }, [visibleAccounts, firmById, notPlaceholder, trades, fundedMeta]);
 
-  /* Contrats des comptes (objectifs, retraits enregistrés) — même magasin que
-     la carte de la page d'un compte, donc mêmes chiffres des deux côtés. */
-  const [contractStore] = useCloudState(CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, {});
   const payoutStates = React.useMemo(
     () => payoutsByAccount(notPlaceholder, trades, normalizeStore(contractStore), firmById),
     [notPlaceholder, trades, contractStore, firmById],
-  );
-
-  /* Comptes dont le plancher a été touché : même calcul que la carte du
-     compte, pour qu'aucune des deux pages ne dise « en vie » quand l'autre dit
-     « en échec ». */
-  const progressStates = React.useMemo(
-    () => progressByAccount(notPlaceholder, trades, normalizeStore(contractStore), firmById),
-    [notPlaceholder, trades, contractStore, firmById],
-  );
-  const isFailed = React.useCallback(
-    (acc) => !!(acc && progressStates.get(acc.id)?.breached),
-    [progressStates],
   );
 
   /* Payout disponible d'un compte : ce qui reste sur le compte financé UNE FOIS
@@ -471,7 +480,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
      comme partout ailleurs sur la page. */
   const topActiveEntities = React.useMemo(() => {
     const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const activity = new Map(visibleAccounts.map((a) => [a.id, { recent: 0, last: 0 }]));
+    const activity = new Map(liveAccounts.map((a) => [a.id, { recent: 0, last: 0 }]));
     for (const tr of trades || []) {
       const entry = activity.get(tr.account_id);
       if (!entry) continue;
@@ -485,7 +494,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
        tous ses comptes. Sans ça, une firme à dix comptes actifs occupait les
        cartes avec ses comptes pris un à un. */
     const entities = new Map();
-    for (const acc of visibleAccounts) {
+    for (const acc of liveAccounts) {
       const firm = acc.firm_id ? firmById.get(acc.firm_id) : null;
       const key = firm ? `firm:${firm.id}` : `acc:${acc.id}`;
       const a = activity.get(acc.id) || { recent: 0, last: 0 };
@@ -523,7 +532,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         return b.last - a.last;
       })
       .slice(0, 6);
-  }, [visibleAccounts, trades, viewOf, firmById]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cf. standaloneAccounts
+  }, [visibleAccounts, trades, viewOf, firmById, progressStates]);
 
 
   /* Un compte eval qui a atteint sa cible de profit peut passer funded. */
@@ -758,6 +768,79 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     );
   };
 
+  /* Comptes en échec. Un seul garde sa ligne de compte : un groupe d'un
+     élément ne regrouperait rien et coûterait un clic. À partir de deux, ils se
+     rangent sous une ligne dépliable, comme les comptes d'une firme. */
+  const renderFailedRows = () => {
+    if (failedAccounts.length === 0) return null;
+    if (failedAccounts.length === 1) return renderAccountRow(failedAccounts[0]);
+    const id = "failed";
+    const open = expanded.has(id);
+    const views = failedAccounts.map(viewOf);
+    const pnl = views.reduce((sum, v) => sum + v.pnl, 0);
+    const capital = views.reduce((sum, v) => sum + (v.capital || 0), 0);
+    const count = views.reduce((sum, v) => sum + v.trades, 0);
+    const wins = failedAccounts.reduce((sum, a) => {
+      const st = stats.get(a.id);
+      if (!st) return sum;
+      return sum + ((a.account_type || "live") === "funded" ? st.fundedWins : st.wins);
+    }, 0);
+    return (
+      <TableRow
+        key={id}
+        flat
+        icon={null}
+        fallbackIcon={<XCircle size={12} strokeWidth={1.75} color={T.red} />}
+        label="Comptes échoués"
+        cells={[
+          String(failedAccounts.length),
+          capital > 0 ? fmtNoCents(capital + pnl) : fmt(pnl, false),
+          count > 0 ? `${Math.round((wins / count) * 100)}%` : "—",
+          fmtNoCents(0),
+        ]}
+        expandable
+        open={open}
+        onToggle={() => toggleRow(id)}
+        onOpen={() => toggleRow(id)}
+        reserveActions
+      >
+        {failedAccounts.map((acc) => {
+          const v = viewOf(acc);
+          const firm = acc.firm_id ? firmById.get(acc.firm_id) : null;
+          return (
+            <SubRow
+              key={acc.id}
+              label={acc.name || acc.eval_account_size || "Compte"}
+              dot={<AccountDot account={acc} firm={firm} />}
+              cells={[
+                <FailedLabel key="type" account={acc} />,
+                v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
+                v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
+                fmtNoCents(0),
+              ]}
+              onOpen={() => onOpenDetail(acc.id)}
+              actions={
+                <>
+                  <RowIconButton label={t("common.edit")} onClick={() => setEditingAccount(acc)}>
+                    <Pencil size={14} strokeWidth={1.75} />
+                  </RowIconButton>
+                  <RowIconButton
+                    label={t("common.delete")}
+                    danger
+                    busy={deleting && confirmDelete?.id === acc.id}
+                    onClick={() => setConfirmDelete(acc)}
+                  >
+                    <Trash2 size={14} strokeWidth={1.75} />
+                  </RowIconButton>
+                </>
+              }
+            />
+          );
+        })}
+      </TableRow>
+    );
+  };
+
   /* Un compte qui ne dépend d'aucune firme — même ligne, sans dépliage. */
   const renderAccountRow = (acc, drag) => {
     const v = viewOf(acc);
@@ -771,6 +854,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         label={acc.name || "Compte"}
         badge={canPassFunded(acc) ? (
           <PassFundedButton busy={passing === acc.id} onClick={() => setConfirmFunded(acc)} />
+        ) : isFailed(acc) ? (
+          <span style={{ fontSize: 11, fontWeight: 500, color: T.red }}>Échec</span>
         ) : null}
         cells={[
           "1",
@@ -984,7 +1069,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
         )}
 
         {/* ─── Prop Firms : tableau de lignes-cartes dépliables ─── */}
-        {(firmSummaries.length > 0 || standaloneAccounts.length > 0 || archivedAccounts.length > 0) ? (
+        {(firmSummaries.length > 0 || standaloneAccounts.length > 0 || failedAccounts.length > 0 || archivedAccounts.length > 0) ? (
           <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {/* La liste est l'index exhaustif : les 3 comptes mis en avant plus
                 haut y figurent aussi, sinon les agrégats par firme seraient
@@ -1005,6 +1090,8 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                 {orderedRows.map((row) => (row.kind === "firm"
                   ? renderFirmRow(row.summary, dragFor(row.id))
                   : renderAccountRow(row.account, dragFor(row.id))))}
+
+                {renderFailedRows()}
 
                 {/* Enfin l'agrégat des comptes eval archivés (hors totaux du site) */}
                 {archivedAccounts.length > 0 && (() => {

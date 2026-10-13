@@ -109,7 +109,11 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
       const side = tradeSideRef.current;
       if (!node) return;
       // Désactivé en mobile (la CSS passe en max-height:none, layout empilé).
-      if (window.innerWidth <= 767) {
+      // Désactivé aussi en mode embarqué : le tableau y est posé au bas d'une
+      // page qui défile (détail de stratégie). Caler sa hauteur sur le bas de
+      // l'écran l'écrasait au plancher de 240 px — et le panneau « Trade info »
+      // avec lui, qui s'ouvrait tronqué.
+      if (embedded || window.innerWidth <= 767) {
         node.style.maxHeight = "";
         if (side) side.style.maxHeight = "";
         return;
@@ -1202,7 +1206,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
         {/* LEFT - TRADES TABLE.
             Carte de la maquette : coins 12, ombre très douce, PAS de bordure —
             la séparation des lignes se fait par l'espace, pas par des filets. */}
-        <div ref={tradesMainRef} className="tao-trades-main" style={{...CARD,flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,display:"flex",flexDirection:"column",maxHeight:isMobile?"none":"calc(100vh - 200px)",padding:isMobile?10:16,gap:12}}>
+        <div ref={tradesMainRef} className="tao-trades-main" style={{...CARD,flex:selectedTrade?"0 0 calc(100% - 376px)":"1",minWidth:0,display:"flex",flexDirection:"column",maxHeight:(isMobile||embedded)?"none":"calc(100vh - 200px)",padding:isMobile?10:16,gap:12}}>
 
           {/* Sur téléphone, c'est la PAGE qui défile — pas un cadre interne.
               Un conteneur à défilement propre y créerait deux zones
@@ -1812,8 +1816,14 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           // Mode embarqué (journal) : panneau "Trade info" plus compact
           // (paddings et marges verticales réduits). Le même panneau, plus dense.
           const compact = embedded;
+          // Embarqué, le tableau prend sa hauteur naturelle et c'est la page
+          // qui défile : le panneau colle au haut de la fenêtre pour rester
+          // lisible entier quelle que soit la rangée cliquée.
+          const sideFit = embedded
+            ? { position:"sticky", top:16, maxHeight:"calc(100vh - 32px)" }
+            : { maxHeight:"calc(100vh - 200px)" };
           const panel = (
-          <div ref={tradeSideRef} className="tao-trade-side" style={{...CARD,padding:0,width:360,maxHeight:"calc(100vh - 200px)",display:"flex",flexDirection:"column"}}>
+          <div ref={tradeSideRef} className="tao-trade-side" style={{...CARD,padding:0,width:360,...sideFit,display:"flex",flexDirection:"column"}}>
 
             {/* EN-TÊTE — plus de titre : « Trade info » nommait ce que le
                 contenu montre déjà (l'instrument, le sens, le P&L sont juste

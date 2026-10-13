@@ -45,14 +45,16 @@ const setups = () => (cloudStore.get("tao_playbook") as { setups: { strategyId: 
 describe("Playbook de la stratégie", () => {
   beforeEach(() => { cloudStore.clear(); pushUndo.mockClear(); });
 
-  it("crée une fiche rattachée à la stratégie, avec les quatre blocs repris", () => {
+  it("crée une fiche rattachée à la stratégie, sans bloc de captures", () => {
     render(<StrategyPlaybook strategy={STRATEGY} />);
     fireEvent.click(screen.getByText("Créer le playbook"));
 
-    for (const title of ["Captures", "Plan de trade", "Erreurs fréquentes", "Exemples",
+    for (const title of ["Plan de trade", "Erreurs fréquentes", "Exemples",
       "Entrée", "Stop loss", "Take profit", "Invalidation"]) {
       expect(screen.getByText(title)).toBeTruthy();
     }
+    // Les captures vivent sur les exemples gagnants et perdants, plus dans un bloc à part.
+    expect(screen.queryByText("Captures")).toBeNull();
     // L'id numérique d'une stratégie est rangé en chaîne, comme le normalise le modèle.
     expect(setups()[0].strategyId).toBe("7");
   });

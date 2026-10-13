@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useRef, useState } from "react";
-import { Plus, Trash2, Pencil, ImagePlus, X } from "lucide-react";
+import { Plus, Pencil, ImagePlus, X } from "lucide-react";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { useTradeScreenshots } from "@/lib/hooks/useTradeScreenshots";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
@@ -21,9 +21,12 @@ import { uploadPlaybookImage } from "@/lib/playbook/images";
  * poser. La fiche est désormais une SECTION du détail de la stratégie, une
  * seule par stratégie, et le lien est implicite.
  *
- * N'ont été repris que les quatre blocs qu'on relit vraiment avant de cliquer :
- * les captures, le plan (entrée, stop, objectif, invalidation), les exemples
- * gagnants et perdants, les erreurs qu'on y refait. Statut, complétude et
+ * N'ont été repris que les blocs qu'on relit vraiment avant de cliquer :
+ * le plan (entrée, stop, objectif, invalidation), les exemples gagnants et
+ * perdants, les erreurs qu'on y refait. Le bloc « Captures » a suivi : une
+ * capture n'a de sens qu'attachée à un trade, et elle vit désormais sur les
+ * exemples gagnants et perdants. Le champ `screenshots` reste dans le modèle
+ * — vider les fiches existantes n'aurait rien apporté. Statut, complétude et
  * statistiques ont été laissés : le détail de la stratégie a déjà les siennes,
  * calculées sur les trades réels.
  *
@@ -178,8 +181,7 @@ export default function StrategyPlaybook({ strategy, trades = [] }) {
         <div style={{ ...CARD, padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Aucune fiche pour cette stratégie</div>
           <div style={{ fontSize: 13, color: T.textSub, maxWidth: 420, lineHeight: 1.5 }}>
-            Des captures du setup type, le plan d&apos;exécution, des exemples gagnants et
-            perdants — ce qu&apos;on relit juste avant de cliquer.
+            Le plan d&apos;exécution, des exemples gagnants et perdants — ce qu&apos;on relit juste avant de cliquer.
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
             <PillButton variant="primary" onClick={create}>
@@ -197,15 +199,6 @@ export default function StrategyPlaybook({ strategy, trades = [] }) {
         </div>
       ) : (
         <>
-          <Screenshots
-            images={setup.screenshots}
-            userId={user?.id}
-            onAdd={(urls) => patch(s => ({ screenshots: [...s.screenshots, ...urls.map(url => ({ id: newId("img"), url, caption: "" }))] }))}
-            onCaption={(id, caption) => patch(s => ({ screenshots: s.screenshots.map(i => (i.id === id ? { ...i, caption } : i)) }))}
-            onRemove={(id) => patch(s => ({ screenshots: s.screenshots.filter(i => i.id !== id) }))}
-            onView={setViewer}
-          />
-
           <div className="tao-field-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "stretch" }}>
             <CardShell title="Plan de trade" sub="Ce qui déclenche, où l'on sort, ce qui annule.">
               {PLAN.map((row, i) => (
@@ -366,64 +359,6 @@ function useImageUpload(userId) {
     }
   };
   return { busy: busy > 0, upload };
-}
-
-function Screenshots({ images, userId, onAdd, onCaption, onRemove, onView }) {
-  const input = useRef(null);
-  const { busy, upload } = useImageUpload(userId);
-  const [over, setOver] = useState(false);
-  const take = async (files) => { const urls = await upload(files); if (urls.length) onAdd(urls); };
-
-  return (
-    <div
-      /* Coller (⌘V) et glisser-déposer : une capture se prend au clavier,
-         l'enregistrer dans un fichier pour la rechoisir ensuite est le détour
-         qui fait qu'on ne le fait jamais. */
-      tabIndex={0}
-      onPaste={(e) => { const files = imagesOf(e.clipboardData?.items); if (files.length) { e.preventDefault(); take(files); } }}
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => { e.preventDefault(); setOver(false); take(imagesOf(e.dataTransfer?.files)); }}
-      style={{ outline: "none", borderRadius: 12, boxShadow: over ? `0 0 0 2px ${T.text}` : "none" }}
-    >
-      <CardShell
-        title="Captures"
-        sub="Le setup type, annoté. Colle une capture (⌘V) ou glisse une image ici."
-        action={
-          <PillButton compact onClick={() => input.current?.click()} disabled={busy}>
-            <Plus size={13} strokeWidth={2} /> {busy ? "Envoi…" : "Ajouter"}
-          </PillButton>
-        }
-      >
-        <input ref={input} type="file" accept="image/*" multiple hidden
-               onChange={(e) => { take(imagesOf(e.target.files)); e.target.value = ""; }} />
-        {images.length === 0 ? (
-          <div style={{ padding: "24px 20px", fontSize: 13, color: T.textMut, textAlign: "center" }}>Aucune capture pour l&apos;instant.</div>
-        ) : (
-          <div style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(240px, 100%), 1fr))", gap: 12 }}>
-            {images.map(img => (
-              <div key={img.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", background: FIELD_BG, aspectRatio: "16 / 10" }}>
-                  <button type="button" onClick={() => onView(img.url)} aria-label="Agrandir la capture"
-                          style={{ all: "unset", cursor: "zoom-in", display: "block", width: "100%", height: "100%" }}>
-                    <img src={img.url} alt={img.caption || "Capture du setup"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </button>
-                  <div style={{ position: "absolute", top: 6, right: 6 }}>
-                    <IconButton tone="danger" aria-label="Retirer la capture" onClick={() => onRemove(img.id)} style={{ background: T.white }}>
-                      <Trash2 size={13} strokeWidth={1.75} />
-                    </IconButton>
-                  </div>
-                </div>
-                <input aria-label="Légende" value={img.caption} placeholder="Légende…"
-                       onChange={(e) => onCaption(img.id, e.target.value)}
-                       style={{ padding: 0, border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 12, color: T.textSub }} />
-              </div>
-            ))}
-          </div>
-        )}
-      </CardShell>
-    </div>
-  );
 }
 
 /** Gagnants et perdants côte à côte, séparés d'un filet — la disposition
