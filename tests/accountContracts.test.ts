@@ -172,6 +172,32 @@ describe("drawdown EOD et échec du compte", () => {
   });
 });
 
+describe("drawdown d'un financé", () => {
+  it("passe tout financé en EOD trailing, même chez une firme à plancher statique", () => {
+    const ftmo = resolveAccountRules("ftmo", 100_000);
+    expect(resolveObjectives(EMPTY, ftmo).trailing).toBe(false);
+    expect(resolveObjectives(EMPTY, ftmo, { funded: true }).trailing).toBe(true);
+    // Un choix posé sur le compte reste le plus fort.
+    expect(resolveObjectives(normalizeContract({ trailing: false }), ftmo, { funded: true }).trailing).toBe(false);
+  });
+
+  it("prend 2 000 de drawdown quand la taille du compte manque", () => {
+    expect(resolveObjectives(EMPTY, resolveAccountRules(null, null), { funded: true }).maxDD).toBe(2_000);
+  });
+
+  it("bloque le plancher au capital une fois que la clôture a rattrapé les 2 000", () => {
+    const obj = resolveObjectives(EMPTY, resolveAccountRules("apex", 50_000), { funded: true });
+    const avant = evalProgress([tr("2026-09-02", 1_500)], obj, { from: "2026-09-01" });
+    expect(avant.locked).toBe(false);
+    expect(avant.floor).toBe(-500);
+    // +2 600 à la clôture : sans verrou le plancher monterait à +600, soit 50 600.
+    const après = evalProgress([tr("2026-09-02", 2_600), tr("2026-09-03", -1_000)], obj, { from: "2026-09-01" });
+    expect(après.locked).toBe(true);
+    expect(après.floor).toBe(0);
+    expect(accountAxis(50_000, après, obj).floor).toBe(50_000);
+  });
+});
+
 describe("bascule en type « échec »", () => {
   const trades = [
     { ...tr("2026-09-01", -2_600), account_id: "ko" },

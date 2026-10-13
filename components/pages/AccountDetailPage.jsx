@@ -353,17 +353,19 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
     ),
     [account, firmById],
   );
+  const isFunded = contractTypeOf(account, contract) === "funded";
   const objectives = React.useMemo(
-    () => resolveObjectives(contract, accountRules), [contract, accountRules]
+    () => resolveObjectives(contract, accountRules, { funded: isFunded }),
+    [contract, accountRules, isFunded],
   );
   /* Un financé a son propre plancher, compté depuis le passage et retraits
      déduits : les gains de l'éval ne doivent pas lui prêter une marge. */
   const evalState = React.useMemo(
     () => evalProgress(
       accountTrades, objectives,
-      contractTypeOf(account, contract) === "funded" ? { from: contract.fundedAt, payouts: contract.payouts } : {},
+      isFunded ? { from: contract.fundedAt, payouts: contract.payouts } : {},
     ),
-    [accountTrades, objectives, account, contract],
+    [accountTrades, objectives, isFunded, contract],
   );
   const payout = React.useMemo(
     () => payoutState(accountTrades, contract, objectives), [accountTrades, contract, objectives]

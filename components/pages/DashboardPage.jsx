@@ -105,7 +105,11 @@ function StackedAmount({ value, align = "flex-end" }) {
   );
 }
 
-export default function DashboardPage({ trades = [], allTrades = [], accounts = [], selectedAccountIds = [], strategies = [], setPage, onlyFailedTrades = false }) {
+/* `trades` nourrit les statistiques (Tao Score, performance, trades récents…)
+   et compte les comptes en échec : c'est ce qui a été tradé. `pnlTrades`, sans
+   eux, ne nourrit que le P&L total, sa courbe et le calendrier — l'argent
+   encore en jeu. Absent, il vaut `trades`. */
+export default function DashboardPage({ trades = [], pnlTrades = null, allTrades = [], accounts = [], selectedAccountIds = [], strategies = [], setPage, onlyFailedTrades = false }) {
   useLang();
   // Le site n'a plus de filtre de dates : le clic sur un jour ouvre simplement
   // la page Trades, qui liste tout l'historique.
@@ -350,7 +354,8 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // Trades du mois affiché dans le calendrier — servent UNIQUEMENT au calendrier
   // (cases du mois et pourcentages associés). Les autres blocs du dashboard ne
   // sont pas bornés au mois affiché.
-  const monthTrades = trades.filter(t => {
+  const pnlBase = pnlTrades || trades;
+  const monthTrades = pnlBase.filter(t => {
     try {
       const d = new Date(t.date);
       if (isNaN(d.getTime())) return false;
@@ -374,8 +379,8 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   // dont l'axe va du 26 juillet au 2 août). Sans ça, un mois sans trade affiche
   // 0 € et « Pas de données » alors que le compte a un historique.
   const curveTrades = selectedDay !== null
-    ? (pnlByDay[selectedDay] || [])
-    : trades;
+    ? pnlBase.filter(t => { const d = new Date(t.date); return !isNaN(d.getTime()) && d.getDay() === selectedDay; })
+    : pnlBase;
 
   const totalPnL = curveTrades.reduce((s,t)=>s+t.pnl,0);
   const wins = filteredTrades.filter(t=>t.pnl>0);
@@ -425,7 +430,7 @@ export default function DashboardPage({ trades = [], allTrades = [], accounts = 
   for (let i = 1; i <= daysInMonth; i++) calendarDays.push(i);
 
   const dayPnLMap = {};
-  trades.forEach(t => {
+  pnlBase.forEach(t => {
     try {
       const d = new Date(t.date);
       if (!isNaN(d.getTime()) && d.getMonth() === month && d.getFullYear() === year) {

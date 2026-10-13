@@ -979,7 +979,9 @@ export default function App() {
   ]);
 
   const pages = {
-    dashboard:  <DashboardPage onlyFailedTrades={onlyFailedTrades} trades={filteredTrades} allTrades={filteredTrades} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
+    /* Statistiques sur tout ce qui a été tradé, comptes en échec compris ; le
+       P&L et le calendrier, eux, sans ces comptes (`pnlTrades`). */
+    dashboard:  <DashboardPage onlyFailedTrades={onlyFailedTrades} trades={journalTrades} pnlTrades={filteredTrades} allTrades={journalTrades} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} strategies={strategies} setPage={setPage} />,
     "add-trade": <AddTradePage setPage={setPage} setAccounts={setAccounts} accounts={accounts.filter(a => !isFailedAccount(a))} firms={firms} user={user} />,
     /* La page Trades garde les comptes en échec : c'est le registre de ce
        qui a été tradé, pas un tableau de bord. */

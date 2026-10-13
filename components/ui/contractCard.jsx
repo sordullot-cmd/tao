@@ -339,7 +339,9 @@ function failureLine(progress) {
 function DrawdownGauge({ progress, axis, hasCapital }) {
   return (
     <Gauge
-      label="Perte maximale"
+      /* Une fois rattrapé, le plancher ne bouge plus : le dire évite de
+         guetter une remontée qui n'arrivera pas. */
+      label={progress.locked ? "Plancher bloqué" : "Perte maximale"}
       ratio={progress.ddUsed / progress.maxDD}
       /* Le nombre qu'on surveille en séance : la valeur du compte à ne
          jamais franchir (le capital moins le drawdown). Sans taille de
@@ -350,8 +352,8 @@ function DrawdownGauge({ progress, axis, hasCapital }) {
   );
 }
 
-function EvalFace({ progress, objectives, axis, hasCapital, onPassFunded }) {
-  const { pnl, target, pct, ddLeft, maxDD, daysTraded, minDays, worstDay, dailyLoss } = progress;
+function EvalFace({ progress, axis, hasCapital, onPassFunded }) {
+  const { pnl, target, pct, maxDD, daysTraded, minDays } = progress;
   const reste = Math.max(0, target - pnl);
 
   /* Le chiffre héros est ce qui RESTE, pas ce qui est fait : c'est celui sur
@@ -400,25 +402,12 @@ function EvalFace({ progress, objectives, axis, hasCapital, onPassFunded }) {
         maxDD > 0 ? <DrawdownGauge key="dd" progress={progress} axis={axis} hasCapital={hasCapital} /> : null,
       ].filter(Boolean)}
     >
-      <Rule />
-      {maxDD > 0 && (
-        <Condition
-          label={objectives.trailing ? "Marge avant le plancher (il suit la clôture)" : "Marge avant le plancher"}
-          value={fmt(ddLeft)}
-        />
-      )}
+      {minDays > 0 && <Rule />}
       {minDays > 0 && (
         <Condition
           label="Jours de trading"
           value={`${daysTraded} / ${minDays}`}
           done={daysTraded >= minDays}
-        />
-      )}
-      {dailyLoss > 0 && (
-        <Condition
-          label="Pire journée"
-          value={`${fmt(worstDay)} / ${fmt(-dailyLoss)}`}
-          done={-worstDay < dailyLoss}
         />
       )}
     </Face>
@@ -586,7 +575,6 @@ export default function ContractCard({
         : (
           <EvalFace
             progress={progress}
-            objectives={objectives}
             axis={accountAxis(capital, progress, objectives)}
             hasCapital={Number(capital) > 0}
             onPassFunded={onPassFunded}

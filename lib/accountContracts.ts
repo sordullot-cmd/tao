@@ -184,8 +184,22 @@ export interface Objectives {
   source: "firm" | "default" | "custom";
 }
 
-/** Le barème de la firme, écrasé champ par champ par ce que l'utilisateur a posé. */
-export function resolveObjectives(contract: AccountContract, rules: AccountRules): Objectives {
+/** Drawdown d'un financé quand ni la firme ni le compte n'en disent rien. */
+export const FUNDED_DEFAULT_DD = 2_000;
+
+/**
+ * Le barème de la firme, écrasé champ par champ par ce que l'utilisateur a posé.
+ *
+ * Un FINANCÉ est en EOD trailing d'office, quel que soit le barème : c'est la
+ * règle des comptes financés futures, et un plancher statique y annoncerait
+ * une marge qui grossit avec les gains alors qu'elle reste de 2 000. Seul un
+ * choix explicite sur le compte (`trailing: false`) l'en sort.
+ */
+export function resolveObjectives(
+  contract: AccountContract,
+  rules: AccountRules,
+  { funded = false }: { funded?: boolean } = {},
+): Objectives {
   const pick = (mine: number | null, theirs: number) => (mine == null ? theirs : mine);
   const edited = [
     contract.target, contract.maxDD, contract.minDays, contract.dailyLoss,
@@ -194,8 +208,8 @@ export function resolveObjectives(contract: AccountContract, rules: AccountRules
   ].some(v => v != null);
   return {
     target: pick(contract.target, rules.target),
-    maxDD: pick(contract.maxDD, rules.maxDD),
-    trailing: contract.trailing ?? rules.trailing,
+    maxDD: pick(contract.maxDD, rules.maxDD || (funded ? FUNDED_DEFAULT_DD : 0)),
+    trailing: contract.trailing ?? (funded ? true : rules.trailing),
     minDays: pick(contract.minDays, rules.minDays),
     dailyLoss: pick(contract.dailyLoss, rules.dailyLoss),
     payoutMin: pick(contract.payoutMin, rules.payoutMin),
@@ -251,6 +265,12 @@ export interface EvalProgress {
   ddLeft: number;
   /** Le plancher en P&L : le cumul à ne jamais toucher. */
   floor: number;
+  /**
+   * Le trailing a rattrapé le capital de départ : le plancher n'en bougera
+   * plus. C'est le moment où la marge cesse d'être un sursis et devient du
+   * profit qu'on peut perdre sans perdre le compte.
+   */
+  locked: boolean;
   daysTraded: number;
   minDays: number;
   /** La pire journée, en négatif. */
@@ -372,6 +392,7 @@ export function evalProgress(
     maxDD: obj.maxDD,
     ddLeft,
     floor,
+    locked: obj.trailing && obj.maxDD > 0 && eodPeak >= obj.maxDD,
     daysTraded,
     minDays: obj.minDays,
     worstDay,
@@ -632,7 +653,7 @@ export function payoutsByAccount(
     const contract = contractOf(store, acc.id);
     const firm = (acc.firm_id ? firmById?.get(acc.firm_id) : null) ?? null;
     const rules = resolveAccountRules(firmBrandId(firm), parseAccountSize(acc.eval_account_size));
-    out.set(acc.id, payoutState(byAccount.get(acc.id) || [], contract, resolveObjectives(contract, rules)));
+    out.set(acc.id, payoutState(byAccount.get(acc.id) || [], contract, resolveObjectives(contract, rules, { funded: true })));
   }
   return out;
 }
@@ -667,7 +688,8 @@ export function progressByAccount(
     const firm = (acc.firm_id ? firmById?.get(acc.firm_id) : null) ?? null;
     const rules = resolveAccountRules(firmBrandId(firm), parseAccountSize(acc.eval_account_size));
     const scope = type === "funded" ? { from: contract.fundedAt, payouts: contract.payouts } : {};
-    out.set(acc.id, evalProgress(byAccount.get(acc.id) || [], resolveObjectives(contract, rules), scope));
+    const obj = resolveObjectives(contract, rules, { funded: type === "funded" });
+    out.set(acc.id, evalProgress(byAccount.get(acc.id) || [], obj, scope));
   }
   return out;
 }

@@ -72,9 +72,6 @@ describe("visage « évaluation »", () => {
        n'existe plus. */
     renderCard({ trades: [{ date: "2026-09-01", pnl: 2_000 }, { date: "2026-09-02", pnl: -800 }] });
     expect(screen.getByText("$50,000.00")).toBeTruthy();
-    // La marge restante descend en ligne de détail, sans case à cocher : elle
-    // se consomme, elle ne s'atteint pas.
-    expect(screen.getByText("$1,200.00")).toBeTruthy();
   });
 
   it("pose le gain du moment sur la barre, à l'endroit où il en est", () => {
@@ -159,6 +156,12 @@ describe("visage « payouts »", () => {
     expect(screen.getByText(/Buffer à conserver pas encore dépassé/)).toBeTruthy();
     // La jauge dit de combien on est loin, sans avoir à ouvrir les réglages.
     expect(screen.getByText("$2,000.00 / $2,100.00")).toBeTruthy();
+  });
+
+  it("annonce le plancher bloqué à 50k une fois rattrapé", () => {
+    renderCard({ funded: true, contract: financé, trades: [{ date: "2026-09-02", pnl: 2_600 }] });
+    expect(screen.getByText("Plancher bloqué")).toBeTruthy();
+    expect(screen.getByText("$50,000.00")).toBeTruthy();
   });
 
   it("dit franchement qu'aucun retrait n'a encore été enregistré", () => {
