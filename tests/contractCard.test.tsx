@@ -34,7 +34,7 @@ const renderCard = (
       contract={c}
       objectives={objectives}
       rules={RULES}
-      progress={evalProgress(trades, objectives)}
+      progress={evalProgress(trades, objectives, funded ? { from: c.fundedAt, payouts: c.payouts } : {})}
       payout={payoutState(trades, c, objectives)}
       onPatch={vi.fn()}
       onAddPayout={vi.fn()}
@@ -85,7 +85,20 @@ describe("visage « évaluation »", () => {
   it("ne propose plus rien quand la limite est franchie — il n'y a rien à rattraper", () => {
     renderCard({ trades: [{ date: "2026-09-01", pnl: -3_000 }] });
     expect(screen.queryByRole("button", { name: /financé/ })).toBeNull();
-    expect(screen.getByText(/Limite dépassée/)).toBeTruthy();
+    expect(screen.getByText("Compte en échec")).toBeTruthy();
+    expect(screen.getByText(/Plancher du drawdown touché/)).toBeTruthy();
+  });
+});
+
+describe("visage « payouts » d'un compte tombé", () => {
+  it("annonce l'échec et retire la saisie d'un retrait", () => {
+    renderCard({
+      funded: true,
+      contract: { fundedAt: "2026-09-01" },
+      trades: [{ date: "2026-09-02", pnl: -2_600 }],
+    });
+    expect(screen.getByText("Compte en échec")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Enregistrer un retrait/ })).toBeNull();
   });
 });
 

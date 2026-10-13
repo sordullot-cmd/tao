@@ -112,8 +112,11 @@ const BOOK: Record<string, FirmBook> = {
   },
 };
 
+/* `trailing: true` par défaut : un compte de prop firm sans barème connu est
+   bien plus souvent en EOD trailing qu'en statique, et se tromper dans ce
+   sens-là annonce une marge PLUS petite que la vraie — l'erreur prudente. */
 const NEUTRAL: Omit<AccountRules, "source"> = {
-  target: 0, maxDD: 0, trailing: false, minDays: 0, dailyLoss: 0,
+  target: 0, maxDD: 0, trailing: true, minDays: 0, dailyLoss: 0,
   payoutMin: 0, payoutBuffer: 0, payoutDays: 0, payoutWinDays: 0, winDayMin: 0,
 };
 

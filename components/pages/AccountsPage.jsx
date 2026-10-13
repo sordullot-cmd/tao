@@ -28,7 +28,7 @@ import { moveEntry, orderEntries } from "@/lib/accountsOrder";
 import { RoadmapSection } from "@/components/pages/ScalingPage";
 import { PropFirmModal, AccountModal, ConfirmModal, firmErrorLabel } from "@/components/modals/AccountModals";
 import { resolveRules, readFundedMeta, readFirmMeta, deleteTradingAccount, deleteFirm, passAccountToFunded } from "@/lib/propFirms";
-import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount } from "@/lib/accountContracts";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount, progressByAccount } from "@/lib/accountContracts";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import { resolvePlatformIcon, platformName } from "@/lib/brokers/platforms";
 import { firmLogo } from "@/lib/accountBrand";
@@ -421,6 +421,18 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     [notPlaceholder, trades, contractStore, firmById],
   );
 
+  /* Comptes dont le plancher a été touché : même calcul que la carte du
+     compte, pour qu'aucune des deux pages ne dise « en vie » quand l'autre dit
+     « en échec ». */
+  const progressStates = React.useMemo(
+    () => progressByAccount(notPlaceholder, trades, normalizeStore(contractStore), firmById),
+    [notPlaceholder, trades, contractStore, firmById],
+  );
+  const isFailed = React.useCallback(
+    (acc) => !!(acc && progressStates.get(acc.id)?.breached),
+    [progressStates],
+  );
+
   /* Payout disponible d'un compte : ce qui reste sur le compte financé UNE FOIS
      RETIRÉ ce qui en est déjà sorti, et seulement si les conditions de la firme
      sont réunies. La colonne montrait le P&L brut moins le minimum de retrait :
@@ -517,12 +529,14 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
   /* Un compte eval qui a atteint sa cible de profit peut passer funded. */
   const canPassFunded = React.useCallback((acc) => {
     if ((acc.account_type || "live") !== "eval") return false;
+    // Une éval perdue ne passe pas, même si la cible a été touchée avant.
+    if (isFailed(acc)) return false;
     const capital = parseEvalSize(acc.eval_account_size);
     if (!capital) return false;
     const params = inferEvalParams(capital);
     const s = stats.get(acc.id);
     return !!params && params.profitTarget > 0 && (s?.pnl || 0) >= params.profitTarget;
-  }, [stats]);
+  }, [stats, isFailed]);
 
   /* Lignes du tableau « Prop Firms » : une par firme (dépliable sur ses
      comptes), puis une par compte hors firme, puis l'agrégat des eval archivés.
@@ -713,7 +727,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                 /* Le type reste écrit en toutes lettres : la pastille
                    de gauche le code par la couleur, elle ne le dit
                    pas — et la couleur seule ne suffit jamais. */
-                accountTypeLabel(acc),
+                isFailed(acc) ? <FailedLabel account={acc} /> : accountTypeLabel(acc),
                 v.capital != null ? fmtNoCents(v.value) : fmt(v.pnl, false),
                 v.winRate != null ? `${Math.round(v.winRate)}%` : "—",
                 fmtNoCents(v.payout),
@@ -958,6 +972,7 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                     view={viewOf(acc)}
                     series={seriesByAccount.get(acc.id)}
                     canPass={canPassFunded(acc)}
+                    failed={isFailed(acc)}
                     passing={passing === acc.id}
                     onPass={() => setConfirmFunded(acc)}
                     onOpen={() => onOpenDetail(acc.id)}
@@ -1300,7 +1315,7 @@ function Sparkline({ values: rawValues, color, height = 131, fill = false }) {
    Carte carrée : logo rond 34, puis nom 14 + badge de type sur la même ligne,
    firme ou plateforme 12 à 40 % en dessous, courbe d'équity étirée, et le
    montant légendé en pied. */
-function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false }) {
+function LiveAccountCard({ account, firm, firmName, view, series, canPass, passing, onPass, onOpen, heroMode = "value", isFirm = false, failed = false }) {
   /* Le logo est celui de la PROP FIRM du compte. La plateforme d'exécution ne
      sert qu'à l'import : elle n'identifie pas le compte. Sans firme (live ou
      démo personnel), on retombe sur le broker, seul rattachement du compte. */
@@ -1359,10 +1374,10 @@ function LiveAccountCard({ account, firm, firmName, view, series, canPass, passi
               marginLeft: "auto", flexShrink: 0,
               display: "inline-flex", alignItems: "center",
               padding: "2px 8px", borderRadius: 999,
-              border: `1px solid ${T.border}`, background: T.bg,
-              fontSize: 11, lineHeight: "15px", fontWeight: 500, color: T.textSub, whiteSpace: "nowrap",
+              border: `1px solid ${failed ? T.red : T.border}`, background: T.bg,
+              fontSize: 11, lineHeight: "15px", fontWeight: 500, color: failed ? T.red : T.textSub, whiteSpace: "nowrap",
             }}>
-              {isFirm ? t("firms.badge") : accountTypeLabel(account)}
+              {isFirm ? t("firms.badge") : failed ? `${accountTypeLabel(account)} · Échec` : accountTypeLabel(account)}
             </span>
           </div>
           {/* Firme pour un compte rattaché, plateforme pour un compte ordinaire. */}
@@ -1429,6 +1444,12 @@ function AccountDot({ account, firm }) {
       }}
     />
   );
+}
+
+/* Le type reste lisible à côté du mot : « Échec » seul ne dirait pas si c'est
+   l'éval ou le financé qui est tombé, et la couleur ne suffit jamais. */
+function FailedLabel({ account }) {
+  return <span style={{ color: T.red }}>{accountTypeLabel(account)} · Échec</span>;
 }
 
 /* Libellé de repli quand le compte n'a pas de broker renseigné. */

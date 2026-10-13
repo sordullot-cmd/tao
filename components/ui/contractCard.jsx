@@ -219,7 +219,7 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
             onChange={(v) => onPatch({ target: v })}
           />
           <RuleField
-            label={objectives.trailing ? "Drawdown (suit le pic)" : "Drawdown maximal"}
+            label={objectives.trailing ? "Drawdown EOD (suit la clôture)" : "Drawdown maximal"}
             value={contract.maxDD} fallback={rules.maxDD}
             onChange={(v) => onPatch({ maxDD: v })}
           />
@@ -233,6 +233,17 @@ function RulesModal({ open, onClose, contract, objectives, rules, firmName, onPa
             onChange={(v) => onPatch({ dailyLoss: v })}
           />
         </div>
+
+        {/* Revenir au barème de la firme = repasser à `null`, pas figer sa
+            valeur du moment : une grille corrigée plus tard doit s'appliquer. */}
+        <CheckChip
+          label="Drawdown EOD trailing — le plancher monte avec chaque clôture"
+          checked={objectives.trailing}
+          onClick={() => {
+            const next = !objectives.trailing;
+            onPatch({ trailing: next === rules.trailing ? null : next });
+          }}
+        />
 
         <div style={{ height: 1, background: HAIRLINE }} />
 
@@ -321,18 +332,40 @@ function PayoutModal({ open, onClose, suggested, onSubmit }) {
 
 /* ─── Les deux visages ────────────────────────────────────────────────────── */
 
+/** Ce qui a fait tomber le compte, et quand — la phrase sous « en échec ». */
+function failureLine(progress) {
+  const what = progress.failReason === "daily" ? "Perte maximale du jour atteinte" : "Plancher du drawdown touché";
+  const when = progress.failedAt ? ` le ${fmtDay(progress.failedAt)}` : "";
+  return `${what}${when} · ${fmt(progress.pnl, true)}`;
+}
+
+/** La jauge du drawdown, commune aux deux visages : on la surveille avant comme après le passage. */
+function DrawdownGauge({ progress, axis, hasCapital }) {
+  return (
+    <Gauge
+      label="Perte maximale"
+      ratio={progress.ddUsed / progress.maxDD}
+      /* Le nombre qu'on surveille en séance : la valeur du compte à ne
+         jamais franchir (le capital moins le drawdown). Sans taille de
+         compte renseignée, l'axe est en P&L pur et le nombre est négatif. */
+      value={hasCapital ? fmt(axis.floor) : fmt(progress.floor)}
+      spent
+    />
+  );
+}
+
 function EvalFace({ progress, objectives, axis, hasCapital, onPassFunded }) {
-  const { pnl, target, pct, ddUsed, ddLeft, maxDD, daysTraded, minDays, worstDay, dailyLoss } = progress;
+  const { pnl, target, pct, ddLeft, maxDD, daysTraded, minDays, worstDay, dailyLoss } = progress;
   const reste = Math.max(0, target - pnl);
 
   /* Le chiffre héros est ce qui RESTE, pas ce qui est fait : c'est celui sur
      lequel on agit demain matin. « $2 340 acquis » se contemple, « $660 à
      faire » se trade. */
   const hero = progress.breached
-    ? fmt(pnl, true)
+    ? "Compte en échec"
     : reste > 0 ? `${fmt(reste)} à faire` : `Cible atteinte`;
   const sub = progress.breached
-    ? "Limite dépassée — l'évaluation est perdue chez la plupart des firmes."
+    ? failureLine(progress)
     : reste > 0
       ? `${Math.round(pct * 100)} % de la cible de ${fmt(target)}`
       : !progress.passed && daysTraded < minDays
@@ -368,24 +401,13 @@ function EvalFace({ progress, objectives, axis, hasCapital, onPassFunded }) {
             tone: pnl > 0 ? T.pnlPos : pnl < 0 ? T.pnlNeg : T.text,
           }}
         />,
-        maxDD > 0 ? (
-          <Gauge
-            key="dd"
-            label="Perte maximale"
-            ratio={ddUsed / maxDD}
-            /* Le nombre qu'on surveille en séance : la valeur du compte à ne
-               jamais franchir (le capital moins le drawdown). Sans taille de
-               compte renseignée, l'axe est en P&L pur et le nombre est négatif. */
-            value={hasCapital ? fmt(axis.floor) : fmt(-maxDD)}
-            spent
-          />
-        ) : null,
+        maxDD > 0 ? <DrawdownGauge key="dd" progress={progress} axis={axis} hasCapital={hasCapital} /> : null,
       ].filter(Boolean)}
     >
       <Rule />
       {maxDD > 0 && (
         <Condition
-          label={objectives.trailing ? "Marge avant le plancher (il suit le pic)" : "Marge avant le plancher"}
+          label={objectives.trailing ? "Marge avant le plancher (il suit la clôture)" : "Marge avant le plancher"}
           value={fmt(ddLeft)}
         />
       )}
@@ -407,15 +429,19 @@ function EvalFace({ progress, objectives, axis, hasCapital, onPassFunded }) {
   );
 }
 
-function FundedFace({ state, payouts, onAdd, onRemove }) {
+function FundedFace({ state, payouts, progress, axis, hasCapital, onAdd, onRemove }) {
   /* Même squelette que l'évaluation : le montant sur lequel on agit, puis ce
      qui le replace. Ce qui bloque prend la place du pourcentage — c'est la
      phrase utile quand le chiffre, lui, ne bouge pas encore. */
-  const hero = state.eligible ? `${fmt(state.available)} à retirer` : fmt(state.balance);
+  const failed = progress.breached;
+  const hero = failed ? "Compte en échec"
+    : state.eligible ? `${fmt(state.available)} à retirer` : fmt(state.balance);
   /* Quand un buffer existe, le dire ICI et pas seulement dans la jauge : le
      chiffre héros est plus petit que le solde affiché la veille, et sans la
      raison à côté de lui, ça se lit comme un calcul qui a perdu de l'argent. */
-  const sub = state.eligible
+  const sub = failed
+    ? `${failureLine(progress)} · ${fmt(state.withdrawn)} déjà retirés`
+    : state.eligible
     ? [
         state.buffer > 0 ? `${fmt(state.buffer)} de buffer restent sur le compte` : null,
         `${fmt(state.withdrawn)} déjà retirés`,
@@ -426,10 +452,12 @@ function FundedFace({ state, payouts, onAdd, onRemove }) {
   return (
     <Face
       hero={hero}
-      heroTone={state.eligible ? T.pnlPos : T.text}
+      heroTone={failed ? T.red : state.eligible ? T.pnlPos : T.text}
       sub={sub}
-      action={<PillButton onClick={onAdd}><Plus size={14} strokeWidth={2} /> Enregistrer un retrait</PillButton>}
+      /* Un compte fermé ne verse plus rien : l'historique reste, la saisie part. */
+      action={failed ? null : <PillButton onClick={onAdd}><Plus size={14} strokeWidth={2} /> Enregistrer un retrait</PillButton>}
       gauges={[
+        progress.maxDD > 0 ? <DrawdownGauge key="dd" progress={progress} axis={axis} hasCapital={hasCapital} /> : null,
         state.daysRequired > 0 ? (
           <Gauge
             key="days"
@@ -552,6 +580,9 @@ export default function ContractCard({
           <FundedFace
             state={payout}
             payouts={contract.payouts}
+            progress={progress}
+            axis={accountAxis(capital, progress, objectives)}
+            hasCapital={Number(capital) > 0}
             onAdd={() => setPayoutOpen(true)}
             onRemove={onRemovePayout}
           />

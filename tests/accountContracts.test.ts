@@ -64,10 +64,11 @@ describe("progression d'une évaluation", () => {
   it("mesure le drawdown depuis le PIC quand la firme le veut ainsi", () => {
     // +2 000 puis -800 : le trailing a mangé 800, le statique rien du tout —
     // le cumul n'est jamais repassé sous zéro.
-    const trailing = evalProgress(parcours, plain({ maxDD: 2_500 }));
-    expect(trailing.ddUsed).toBe(0);
+    const deuxJours = parcours.slice(0, 2);
+    const ftmo = resolveObjectives(EMPTY, resolveAccountRules("ftmo", 100_000));
+    expect(evalProgress(deuxJours, ftmo).ddUsed).toBe(0);
     const apex = resolveObjectives(EMPTY, resolveAccountRules("apex", 50_000));
-    expect(evalProgress(parcours, apex).ddUsed).toBe(800);
+    expect(evalProgress(deuxJours, apex).ddUsed).toBe(800);
   });
 
   it("n'annonce le passage que si la cible ET les jours minimum sont tenus", () => {
@@ -87,6 +88,76 @@ describe("progression d'une évaluation", () => {
   it("compte la pire JOURNÉE, pas le pire trade", () => {
     const journee = [tr("2026-09-01", -400, "09:00"), tr("2026-09-01", 300, "14:00")];
     expect(evalProgress(journee, plain({ dailyLoss: 350 })).worstDay).toBe(-100);
+  });
+});
+
+describe("drawdown EOD et échec du compte", () => {
+  const apex = resolveObjectives(EMPTY, resolveAccountRules("apex", 50_000));
+
+  it("ne fait pas payer un pic intraday rendu dans la séance", () => {
+    // +2 000 à 10 h, −1 800 à 14 h : la clôture est à +200, le plancher n'a
+    // monté que de 200. En trailing intraday il serait à −500 et le compte mort.
+    const seance = [tr("2026-09-01", 2_000, "10:00"), tr("2026-09-01", -1_800, "14:00")];
+    const p = evalProgress(seance, apex);
+    expect(p.peak).toBe(200);
+    expect(p.floor).toBe(-2_300);
+    expect(p.breached).toBe(false);
+  });
+
+  it("fait monter le plancher avec la clôture, et le touche en séance", () => {
+    // Clôture à +2 000 : plancher à −500. Le lendemain, −2 500 le touche.
+    const p = evalProgress([tr("2026-09-01", 2_000), tr("2026-09-02", -2_500)], apex);
+    expect(p.breached).toBe(true);
+    expect(p.failReason).toBe("drawdown");
+    expect(p.failedAt).toBe("2026-09-02");
+    expect(p.ddLeft).toBe(0);
+  });
+
+  it("arrête le plancher au capital de départ", () => {
+    // +6 000 à la clôture : sans verrou le plancher serait à +3 500.
+    const p = evalProgress([tr("2026-09-01", 6_000), tr("2026-09-02", -3_000)], apex);
+    expect(p.floor).toBe(0);
+    expect(p.breached).toBe(false);
+    expect(p.ddLeft).toBe(3_000);
+  });
+
+  it("reste en échec même quand le P&L remonte ensuite", () => {
+    const p = evalProgress([tr("2026-09-01", -2_600), tr("2026-09-02", 4_000)], apex);
+    expect(p.breached).toBe(true);
+    expect(p.passed).toBe(false);
+    expect(p.failedAt).toBe("2026-09-01");
+  });
+
+  it("garde le drawdown statique quand le compte le demande", () => {
+    const statique = plain({ maxDD: 2_500, trailing: false });
+    const p = evalProgress([tr("2026-09-01", 2_000), tr("2026-09-02", -2_400)], statique);
+    expect(p.floor).toBe(-2_500);
+    expect(p.breached).toBe(false);
+  });
+
+  it("met en échec un financé qui touche son plancher depuis le passage", () => {
+    const contrat = normalizeContract({ fundedAt: "2026-09-01" });
+    // Les gains d'éval (avant le passage) ne prêtent aucune marge au financé.
+    const trades = [tr("2026-08-20", 3_000), tr("2026-09-02", -2_500)];
+    const p = evalProgress(trades, apex, { from: contrat.fundedAt, payouts: contrat.payouts });
+    expect(p.breached).toBe(true);
+    const etat = payoutState(trades, contrat, apex);
+    expect(etat.failed).toBe(true);
+    expect(etat.eligible).toBe(false);
+    expect(etat.blocker).toBe("Compte en échec");
+  });
+
+  it("déduit les retraits du solde sans faire bouger le plancher", () => {
+    const contrat = normalizeContract({
+      fundedAt: "2026-09-01",
+      payouts: [{ date: "2026-09-03", amount: 3_000 }],
+    });
+    // Clôture à +6 000 : plancher verrouillé à 0. Retrait de 3 000 → +3 000.
+    const trades = [tr("2026-09-02", 6_000), tr("2026-09-04", -2_000)];
+    const p = evalProgress(trades, apex, { from: contrat.fundedAt, payouts: contrat.payouts });
+    expect(p.pnl).toBe(1_000);
+    expect(p.floor).toBe(0);
+    expect(p.breached).toBe(false);
   });
 });
 

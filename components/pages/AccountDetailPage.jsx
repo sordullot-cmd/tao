@@ -356,8 +356,14 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
   const objectives = React.useMemo(
     () => resolveObjectives(contract, accountRules), [contract, accountRules]
   );
+  /* Un financé a son propre plancher, compté depuis le passage et retraits
+     déduits : les gains de l'éval ne doivent pas lui prêter une marge. */
   const evalState = React.useMemo(
-    () => evalProgress(accountTrades, objectives), [accountTrades, objectives]
+    () => evalProgress(
+      accountTrades, objectives,
+      account?.account_type === "funded" ? { from: contract.fundedAt, payouts: contract.payouts } : {},
+    ),
+    [accountTrades, objectives, account, contract],
   );
   const payout = React.useMemo(
     () => payoutState(accountTrades, contract, objectives), [accountTrades, contract, objectives]

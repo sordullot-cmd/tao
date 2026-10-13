@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/da";
 import { assignSeriesColors, firmBrandColor } from "@/lib/ui/brandColors";
 import { pnlCurve, cumulativeByDay } from "@/lib/ui/pnlCurve";
-import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount } from "@/lib/accountContracts";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, payoutsByAccount, progressByAccount } from "@/lib/accountContracts";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { refreshTradesCache } from "@/lib/tradesCache";
 import TradesList from "@/components/ui/tradesList";
@@ -204,6 +204,10 @@ export default function PropFirmDetailPage({
     () => payoutsByAccount(firmAccounts, trades, normalizeStore(contractStore), firmOnly),
     [firmAccounts, trades, contractStore, firmOnly],
   );
+  const progressStates = React.useMemo(
+    () => progressByAccount(firmAccounts, trades, normalizeStore(contractStore), firmOnly),
+    [firmAccounts, trades, contractStore, firmOnly],
+  );
   const viewOf = React.useCallback((acc) => {
     const s = statsByAccount.get(acc.id) || { trades: 0, wins: 0, pnl: 0 };
     const capital = parseAccountSize(acc.eval_account_size);
@@ -213,9 +217,10 @@ export default function PropFirmDetailPage({
       capital,
       value: capital != null ? capital + s.pnl : s.pnl,
       winRate: s.trades > 0 ? (s.wins / s.trades) * 100 : null,
+      failed: !!progressStates.get(acc.id)?.breached,
       payout: payoutStates.get(acc.id)?.available || 0,
     };
-  }, [statsByAccount, payoutStates]);
+  }, [statsByAccount, payoutStates, progressStates]);
 
   const totals = React.useMemo(() => {
     let count = 0, tradeCount = 0, wins = 0, pnl = 0, capital = 0;
@@ -994,7 +999,7 @@ function AccountsMenu({ label, accounts = [], colorByAccount, viewOf, onOpenAcco
                       background: colorByAccount?.get(acc.id) || T.textSub,
                     }} />}
                     name={acc.name || acc.eval_account_size || "Compte"}
-                    type={typeLabel(acc.account_type)}
+                    type={v.failed ? `${typeLabel(acc.account_type)} · Échec` : typeLabel(acc.account_type)}
                     value={value}
                     valueColor={v.pnl > 0 ? T.pnlPos : v.pnl < 0 ? T.pnlNeg : T.textSub}
                   />

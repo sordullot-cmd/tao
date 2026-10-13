@@ -56,6 +56,11 @@ export interface AccountContract {
   maxDD: number | null;
   minDays: number | null;
   dailyLoss: number | null;
+  /**
+   * Drawdown EOD trailing (`true`) ou statique (`false`). `null` suit la
+   * firme — FTMO est statique, presque tout le monde ailleurs est en EOD.
+   */
+  trailing: boolean | null;
   payoutMin: number | null;
   /** Matelas à laisser sur le compte : il ne part jamais avec le retrait. */
   payoutBuffer: number | null;
@@ -69,7 +74,7 @@ export interface AccountContract {
 export type ContractStore = Record<string, AccountContract>;
 
 const EMPTY: AccountContract = {
-  target: null, maxDD: null, minDays: null, dailyLoss: null,
+  target: null, maxDD: null, minDays: null, dailyLoss: null, trailing: null,
   payoutMin: null, payoutBuffer: null, payoutDays: null, payoutWinDays: null,
   fundedAt: null, payouts: [],
 };
@@ -90,6 +95,7 @@ export function normalizeContract(raw: unknown): AccountContract {
     maxDD: num(r.maxDD),
     minDays: num(r.minDays),
     dailyLoss: num(r.dailyLoss),
+    trailing: typeof r.trailing === "boolean" ? r.trailing : null,
     payoutMin: num(r.payoutMin),
     payoutBuffer: num(r.payoutBuffer),
     payoutDays: num(r.payoutDays),
@@ -177,11 +183,12 @@ export function resolveObjectives(contract: AccountContract, rules: AccountRules
   const edited = [
     contract.target, contract.maxDD, contract.minDays, contract.dailyLoss,
     contract.payoutMin, contract.payoutBuffer, contract.payoutDays, contract.payoutWinDays,
+    contract.trailing,
   ].some(v => v != null);
   return {
     target: pick(contract.target, rules.target),
     maxDD: pick(contract.maxDD, rules.maxDD),
-    trailing: rules.trailing,
+    trailing: contract.trailing ?? rules.trailing,
     minDays: pick(contract.minDays, rules.minDays),
     dailyLoss: pick(contract.dailyLoss, rules.dailyLoss),
     payoutMin: pick(contract.payoutMin, rules.payoutMin),
@@ -222,15 +229,21 @@ function dailyPnl(trades: ContractTrade[]): Map<string, number> {
 
 export interface EvalProgress {
   pnl: number;
-  /** Le plus haut cumul atteint — c'est lui qui fait monter un drawdown trailing. */
+  /**
+   * Le plus haut cumul de CLÔTURE atteint — c'est lui, et non le plus haut du
+   * jour, qui fait monter un drawdown EOD.
+   */
   peak: number;
   target: number;
   /** 0 à 1 — borné, pour une barre qui ne déborde pas. */
   pct: number;
-  /** Perte depuis le pic (trailing) ou depuis le départ. */
+  /** Ce qui est déjà mangé de la marge, maintenant. */
   ddUsed: number;
   maxDD: number;
+  /** Ce qui sépare le solde du plancher, maintenant. */
   ddLeft: number;
+  /** Le plancher en P&L : le cumul à ne jamais toucher. */
+  floor: number;
   daysTraded: number;
   minDays: number;
   /** La pire journée, en négatif. */
@@ -240,50 +253,126 @@ export interface EvalProgress {
   passed: boolean;
   /** Une limite a été franchie — le compte est perdu, pas en retard. */
   breached: boolean;
+  /** Jour où la limite a été touchée, `AAAA-MM-JJ`. */
+  failedAt: string | null;
+  /** Laquelle : le plancher du drawdown, ou la perte maximale du jour. */
+  failReason: "drawdown" | "daily" | null;
+}
+
+interface ProgressScope {
+  /** Les compteurs repartent de ce jour (passage financé). */
+  from?: string | null;
+  /** Retraits : l'argent sorti fait baisser le solde, pas le plancher. */
+  payouts?: Payout[] | null;
 }
 
 /**
- * Où en est une évaluation.
+ * Où en est un compte face à ses limites.
  *
  * Le drawdown se mesure de deux façons selon la firme, et la différence n'est
  * pas un détail : STATIQUE, il se compte depuis le capital de départ ;
  * TRAILING, il suit le plus haut atteint — à +2 000 sur un compte à 2 500 de
  * marge, il reste 2 500 et non 4 500. Se tromper de mesure fait croire à une
  * réserve qui n'existe pas.
+ *
+ * Le trailing est EOD : le plancher ne monte qu'avec la CLÔTURE de la journée.
+ * Le suivre trade par trade, comme avant, faisait payer un pic intraday rendu
+ * dans la séance — exactement ce que l'EOD épargne, et la raison pour laquelle
+ * on choisit ce type de compte. En revanche le plancher est TOUCHÉ en séance :
+ * c'est chaque trade qui se compare à lui, pas la clôture.
+ *
+ * Il cesse de monter au capital de départ (plancher à 0 en P&L), comme chez
+ * Topstep : sinon un compte à +10 000 aurait un plancher à +7 500, et
+ * annoncerait l'échec d'un compte qui, chez la firme, est encore largement
+ * vivant.
+ *
+ * L'échec est COLLANT : un plancher touché ne se rattrape pas en regagnant ce
+ * qui a été perdu. La firme a déjà fermé le compte.
  */
-export function evalProgress(trades: ContractTrade[] | null | undefined, obj: Objectives): EvalProgress {
-  const list = since(trades, null);
-  let cum = 0, peak = 0, worstDD = 0;
-  for (const tr of list) {
-    cum += Number(tr.pnl) || 0;
-    if (cum > peak) peak = cum;
-    const drop = obj.trailing ? peak - cum : -Math.min(0, cum);
-    if (drop > worstDD) worstDD = drop;
+export function evalProgress(
+  trades: ContractTrade[] | null | undefined,
+  obj: Objectives,
+  scope: ProgressScope = {},
+): EvalProgress {
+  const list = since(trades, scope.from ?? null);
+  const floorOf = (eodPeak: number) =>
+    (obj.trailing ? Math.min(Math.max(0, eodPeak), obj.maxDD) : 0) - obj.maxDD;
+
+  /* Les retraits se rangent à leur jour, après les trades : ils baissent le
+     solde de clôture sans jamais faire monter le pic. */
+  const payoutsByDay = new Map<string, number>();
+  for (const p of scope.payouts || []) {
+    if (scope.from && p.date < scope.from) continue;
+    payoutsByDay.set(p.date, (payoutsByDay.get(p.date) || 0) + (Number(p.amount) || 0));
   }
 
-  const byDay = dailyPnl(list);
-  const worstDay = byDay.size ? Math.min(0, ...byDay.values()) : 0;
-  const daysTraded = byDay.size;
+  let cum = 0, eodPeak = 0, worstDay = 0;
+  let failedAt: string | null = null;
+  let failReason: EvalProgress["failReason"] = null;
+  const days = new Set<string>();
+  let current = "", dayPnl = 0;
+  const fail = (day: string, reason: "drawdown" | "daily") => {
+    if (failedAt) return;
+    failedAt = day;
+    failReason = reason;
+  };
 
+  /* La pire journée se lit à la CLÔTURE (c'est le chiffre du calendrier) ;
+     la limite journalière, elle, se touche en séance — d'où deux mesures. */
+  const closeDay = (day: string) => {
+    if (dayPnl < worstDay) worstDay = dayPnl;
+    cum -= payoutsByDay.get(day) || 0;
+    payoutsByDay.delete(day);
+    if (cum > eodPeak) eodPeak = cum;
+  };
+
+  for (const tr of list) {
+    const day = dayOf(tr.date);
+    if (day !== current) {
+      if (current) closeDay(current);
+      /* Un retrait posé un jour SANS trade doit passer avant la séance
+         suivante, sinon il gonflerait le solde le temps d'une journée. */
+      for (const d of [...payoutsByDay.keys()].sort()) {
+        if (d < day) { cum -= payoutsByDay.get(d) || 0; payoutsByDay.delete(d); }
+      }
+      current = day;
+      dayPnl = 0;
+      days.add(day);
+    }
+    const floor = floorOf(eodPeak);
+    const pnl = Number(tr.pnl) || 0;
+    cum += pnl;
+    dayPnl += pnl;
+    if (obj.maxDD > 0 && cum <= floor) fail(day, "drawdown");
+    if (obj.dailyLoss > 0 && -dayPnl >= obj.dailyLoss) fail(day, "daily");
+  }
+  if (current) closeDay(current);
+  for (const v of payoutsByDay.values()) cum -= v;
+
+  const floor = floorOf(eodPeak);
+  const breached = failedAt !== null;
+  const ddLeft = obj.maxDD > 0 && !breached ? Math.max(0, cum - floor) : 0;
+  const daysTraded = days.size;
   const targetOk = obj.target > 0 && cum >= obj.target;
   const daysOk = daysTraded >= obj.minDays;
-  const ddBreach = obj.maxDD > 0 && worstDD >= obj.maxDD;
-  const dayBreach = obj.dailyLoss > 0 && -worstDay >= obj.dailyLoss;
 
   return {
     pnl: cum,
-    peak,
+    peak: eodPeak,
     target: obj.target,
     pct: obj.target > 0 ? Math.max(0, Math.min(1, cum / obj.target)) : 0,
-    ddUsed: worstDD,
+    ddUsed: obj.maxDD > 0 ? Math.max(0, obj.maxDD - ddLeft) : 0,
     maxDD: obj.maxDD,
-    ddLeft: Math.max(0, obj.maxDD - worstDD),
+    ddLeft,
+    floor,
     daysTraded,
     minDays: obj.minDays,
     worstDay,
     dailyLoss: obj.dailyLoss,
-    passed: targetOk && daysOk && !ddBreach && !dayBreach,
-    breached: ddBreach || dayBreach,
+    passed: targetOk && daysOk && !breached,
+    breached,
+    failedAt,
+    failReason,
   };
 }
 
@@ -304,7 +393,7 @@ export interface AccountAxis {
  *
  * Le plancher est le nombre qu'on regarde vraiment en séance — « 50k moins le
  * drawdown », soit la valeur à ne jamais franchir. Il ne vaut `capital − maxDD`
- * qu'au départ : sur un drawdown TRAILING, il monte avec le plus haut atteint
+ * qu'au départ : sur un drawdown TRAILING, il monte avec la plus haute clôture
  * (à +2 000 sur un compte à 2 500 de marge, le plancher est déjà remonté de
  * 2 000). L'afficher figé donnerait une réserve qui n'existe plus.
  *
@@ -318,9 +407,8 @@ export function accountAxis(
 ): AccountAxis {
   const c = Number(capital);
   const start = Number.isFinite(c) && c > 0 ? c : 0;
-  const lifted = obj.trailing ? Math.max(0, progress.peak) : 0;
   return {
-    floor: start + lifted - obj.maxDD,
+    floor: start + progress.floor,
     ceiling: start + obj.target,
     current: start + progress.pnl,
     start,
@@ -351,6 +439,8 @@ export interface PayoutState {
   blocker: string | null;
   /** Date du dernier retrait, pour la lecture de l'historique. */
   lastAt: string | null;
+  /** Le plancher a été touché depuis le passage financé : le compte est perdu. */
+  failed: boolean;
 }
 
 /**
@@ -395,12 +485,16 @@ export function payoutState(
      ouvrir une demande vide. */
   const belowBuffer = buffer > 0 && balance <= buffer;
   const belowMin = obj.payoutMin > 0 && withdrawable < obj.payoutMin;
+  /* Le financé a son propre plancher, compté depuis le passage : la firme ne
+     verse rien sur un compte qu'elle a fermé, quel que soit le solde affiché. */
+  const failed = evalProgress(trades, obj, { from: contract.fundedAt, payouts: contract.payouts }).breached;
 
   /* Un seul obstacle annoncé à la fois, le plus proche du terrain : savoir
      qu'il manque « 2 jours gagnants ET 300 $ » n'aide pas plus que de savoir
      ce qui bloque en premier, et deux phrases se lisent moins vite qu'une. */
   const blocker =
-    balance <= 0 ? "Rien à retirer pour le moment"
+    failed ? "Compte en échec"
+    : balance <= 0 ? "Rien à retirer pour le moment"
     : daysMissing > 0 ? `Encore ${daysMissing} jour${daysMissing > 1 ? "s" : ""} tradé${daysMissing > 1 ? "s" : ""}`
     : winMissing > 0 ? `Encore ${winMissing} jour${winMissing > 1 ? "s" : ""} gagnant${winMissing > 1 ? "s" : ""}`
     : belowBuffer ? `Buffer à conserver pas encore dépassé`
@@ -422,6 +516,7 @@ export function payoutState(
     available: blocker === null ? withdrawable : 0,
     blocker,
     lastAt: contract.payouts[0]?.date ?? null,
+    failed,
   };
 }
 
@@ -503,6 +598,41 @@ export function payoutsByAccount(
     const firm = (acc.firm_id ? firmById?.get(acc.firm_id) : null) ?? null;
     const rules = resolveAccountRules(firmBrandId(firm), parseAccountSize(acc.eval_account_size));
     out.set(acc.id, payoutState(byAccount.get(acc.id) || [], contract, resolveObjectives(contract, rules)));
+  }
+  return out;
+}
+
+/**
+ * L'état face aux limites de chaque compte de prop firm, en un passage.
+ *
+ * Même raison d'être que `payoutsByAccount` : la liste des comptes doit dire
+ * « échec » sur le même calcul que la carte du compte, sans le refaire à sa
+ * façon. Un financé se compte depuis son passage, retraits déduits.
+ */
+export function progressByAccount(
+  accounts: PayoutAccount[] | null | undefined,
+  trades: (ContractTrade & { account_id?: string })[] | null | undefined,
+  store: ContractStore | null | undefined,
+  firmById: Map<string, { brand?: string | null; name?: string }> | null | undefined,
+): Map<string, EvalProgress> {
+  const byAccount = new Map<string, ContractTrade[]>();
+  for (const tr of trades || []) {
+    const id = String(tr?.account_id ?? "");
+    if (!id) continue;
+    const list = byAccount.get(id);
+    if (list) list.push(tr);
+    else byAccount.set(id, [tr]);
+  }
+
+  const out = new Map<string, EvalProgress>();
+  for (const acc of accounts || []) {
+    const type = acc.account_type || "live";
+    if (type !== "eval" && type !== "funded") continue;
+    const contract = contractOf(store, acc.id);
+    const firm = (acc.firm_id ? firmById?.get(acc.firm_id) : null) ?? null;
+    const rules = resolveAccountRules(firmBrandId(firm), parseAccountSize(acc.eval_account_size));
+    const scope = type === "funded" ? { from: contract.fundedAt, payouts: contract.payouts } : {};
+    out.set(acc.id, evalProgress(byAccount.get(acc.id) || [], resolveObjectives(contract, rules), scope));
   }
   return out;
 }
