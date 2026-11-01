@@ -300,13 +300,24 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
     // Totaux du site = comptes actifs uniquement (les eval archivés et les
     // comptes en échec en sont exclus : leur P&L n'apparaît que sur leur
     // propre carte / détail, et dans le groupe « Comptes échoués »).
-    let trades = 0, pnl = 0, wins = 0, capital = 0;
+    // Le « Total financé » écarte en plus les eval : un capital d'évaluation
+    // n'est pas encore confié par la firme, l'additionner gonflait le chiffre
+    // héros d'argent que le trader ne gère pas. Les repères (P&L, capital,
+    // trades) restent sur tous les comptes actifs.
+    let trades = 0, pnl = 0, wins = 0, capital = 0, fundedCapital = 0, fundedPnl = 0;
     for (const acc of liveAccounts) {
       const s = stats.get(acc.id);
+      const type = acc.account_type || "live";
+      const size = parseEvalSize(acc.eval_account_size) || 0;
       if (s) { trades += s.trades; pnl += s.pnl; wins += s.wins; }
-      capital += parseEvalSize(acc.eval_account_size) || 0;
+      capital += size;
+      if (type === "eval") continue;
+      fundedCapital += size;
+      // Même règle que la ligne Prop Firms : un funded ne compte que ses
+      // trades depuis son passage funded.
+      if (s) fundedPnl += type === "funded" ? s.fundedPnl : s.pnl;
     }
-    return { trades, pnl, wins, capital, accounts: liveAccounts.length };
+    return { trades, pnl, wins, capital, fundedCapital, fundedPnl, accounts: liveAccounts.length };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- liveAccounts est refait à chaque rendu ; ses sources sont listées
   }, [stats, visibleAccounts, progressStates]);
 
@@ -959,7 +970,25 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
               {/* Pas de ligne de variation sous le montant : le P&L ouvre la
                   rangée de repères juste en dessous, l'afficher deux fois de
                   suite n'apporterait rien. */}
-              <HeroAmount value={totals.capital > 0 ? totals.capital + totals.pnl : totals.pnl} />
+              <HeroAmount value={totals.fundedCapital > 0 ? totals.fundedCapital + totals.fundedPnl : totals.fundedPnl} />
+              {/* Repères en une ligne discrète sous le héros, comme sur le
+                  dashboard : en colonnes de 20 px ils lui disputaient le
+                  regard. Ordre de lecture : la performance d'abord (P&L,
+                  winrate), les volumes ensuite (capital, comptes, trades). */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 24, flexWrap: "wrap", rowGap: 4, fontSize: 14, lineHeight: "18.6px", whiteSpace: "nowrap" }}>
+                {[
+                  { label: "P&L", value: fmt(totals.pnl, true), color: totals.pnl > 0 ? T.pnlPos : totals.pnl < 0 ? T.pnlNeg : undefined },
+                  { label: t("accountsPage.colWinrate"), value: totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—" },
+                  { label: t("accountsPage.capitalShort"), value: totals.capital > 0 ? fmtNoCents(totals.capital) : "—" },
+                  { label: t("accountsPage.kpiAccounts"), value: String(totals.accounts) },
+                  { label: t("common.trades"), value: String(totals.trades) },
+                ].map((k) => (
+                  <span key={k.label} style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+                    <span style={{ color: T.textSub }}>{k.label}</span>
+                    <span style={{ color: k.color || T.text, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{k.value}</span>
+                  </span>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
@@ -988,25 +1017,6 @@ export default function AccountsPage({ accountsLoading = false, accounts = [], t
                 <Building2 size={13} strokeWidth={1.75} /> {t("firms.newFirm")}
               </button>
             </div>
-          </div>
-
-          {/* Ordre de lecture : la performance d'abord (P&L, winrate), les
-              volumes ensuite (capital, comptes, trades). */}
-          <div style={{ display: "flex", alignItems: "center", gap: 56, flexWrap: "wrap", rowGap: 20 }}>
-            {[
-              { label: "P&L", value: fmt(totals.pnl, true), color: totals.pnl > 0 ? T.pnlPos : totals.pnl < 0 ? T.pnlNeg : undefined },
-              { label: t("accountsPage.colWinrate"), value: totals.trades > 0 ? `${winRateGlobal.toFixed(1)}%` : "—" },
-              { label: t("accountsPage.capitalShort"), value: totals.capital > 0 ? fmtNoCents(totals.capital) : "—" },
-              { label: t("accountsPage.kpiAccounts"), value: String(totals.accounts) },
-              { label: t("common.trades"), value: String(totals.trades) },
-            ].map((k) => (
-              <div key={k.label} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
-                <span style={{ fontSize: 14, lineHeight: "18.6px", color: T.textSub, whiteSpace: "nowrap" }}>{k.label}</span>
-                <span style={{ fontSize: 20, fontWeight: 500, lineHeight: 1, color: k.color || T.text, whiteSpace: "nowrap" }}>
-                  {k.value}
-                </span>
-              </div>
-            ))}
           </div>
         </div>
 

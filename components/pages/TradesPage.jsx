@@ -29,12 +29,13 @@ import { useApp } from "@/lib/contexts/AppContext";
 import { SkeletonScreen, Skeleton, showSkeleton } from "@/components/ui/Skeleton";
 import { fmt } from "@/lib/ui/format";
 import {
-  CARD, TH, DirectionTag, SymbolCell, TableFilter, symbolLabel,
+  CARD, TH, DirectionTag, SymbolCell, symbolLabel,
   HAIRLINE, FIELD_BG, WRITING_BG, FieldLabel, StatRow, CheckChip,
 } from "@/components/ui/da";
 import { rMultiple, fmtR } from "@/lib/userPrefs";
 import { calculateFees } from "@/lib/tradeFees";
 import { groupExecutions } from "@/lib/tradeGrouping";
+import { GRADES } from "@/lib/tradingDay";
 import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import { useTradeNotes } from "@/lib/hooks/useTradeNotes";
@@ -46,6 +47,8 @@ import { useEscapeDismiss } from "@/lib/hooks/useEscapeDismiss";
 import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 import { FIELD_BG as DA_FIELD_BG } from "@/lib/ui/tokens";
 import { Modal as DAModal, PillButton as DAPillButton } from "@/components/ui/form";
+import TradesFilterBar from "@/components/ui/TradesFilterBar";
+import { EMPTY_FILTERS, filterTrades, tradeStats } from "@/lib/tradeFilters";
 
 /* Tailles de page proposées sous le tableau. Le choix est mémorisé en local
    (clé tao_trades_page_size). */
@@ -73,7 +76,7 @@ const HIDDEN_WHEN_EMBEDDED = ["entryDate", "exitDate", "pnlPct", "weekday", "acc
    briques de texte (`FieldLabel`, `StatRow`) vivent dans components/ui/da.jsx :
    les pages portées dans cette DA s'en servent toutes. */
 
-export default function TradesPage({ trades = [], strategies = [], accounts = [], onImportClick, onDeleteTrade, onClearTrades, embedded = false, maxRows = null, lockColumns = false }) {
+export default function TradesPage({ trades = [], strategies = [], accounts = [], onImportClick, onDeleteTrade, onClearTrades, embedded = false, maxRows = null, lockColumns = false, panelOnly = false, panelTrade = null, onPanelClose, onRecapChange }) {
   useLang();
   const { user } = useAuth();
   const { notes: notesFromHook, setNote: setNoteHook } = useTradeNotes();
@@ -214,10 +217,8 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const [sortBy, setSortBy] = useCloudState("tao_trades_sort_by", "trades_sort_by", "date");
   const [sortDir, setSortDir] = useCloudState("tao_trades_sort_dir", "trades_sort_dir", "desc");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  // Filtres de la barre au-dessus du tableau (maquette node 293:12628).
-  const [symbolFilter, setSymbolFilter] = useState([]);
-  const [accountFilter, setAccountFilter] = useState("");
-  const [sideFilter, setSideFilter] = useState("");
+  // Filtres de la barre au-dessus du tableau (cf. components/ui/TradesFilterBar).
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   // Mode embarqué (journal) : "voir plus" pour dépasser la limite maxRows.
   const [embeddedShowAll, setEmbeddedShowAll] = useState(false);
   const [dragColId, setDragColId] = useState(null);
@@ -276,14 +277,11 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   // Réponses à la checklist Oui/Non par trade : { [tradeId]: { [questionId]: "yes" | "no" } }
   // Persistées côté compte (Supabase via useCloudState) avec fallback localStorage.
   const [tradeChecklist, setTradeChecklist] = useCloudState("tao_trade_checklist", "trades_checklist", {});
-  // Unité de temps (timeframe) d'analyse par trade : { [tradeId]: "M15" }. Sélection unique.
-  // Persistée côté compte (Supabase via useCloudState) avec fallback localStorage.
-  const [tradeTimeframe, setTradeTimeframe] = useCloudState("tao_trade_timeframe", "trades_timeframe", {});
-  const TIMEFRAME_OPTIONS = ["M1", "M5", "M15", "H1", "H4"];
-  // Catégorie multi-sélection du panneau détail : type d'entrée.
-  // Structure { [tradeId]: [tagId, ...] }. Persistée côté compte
-  // (Supabase via useCloudState) avec fallback localStorage.
-  const [tradeEntryTags, setTradeEntryTags] = useCloudState("tao_trade_entry_tags", "trades_entry_tags", {});
+  // Note donnée à la main, en lettre (F → A, l'échelle de la journée) :
+  // { [tradeId]: "B" }. Elle remplace la note calculée sur 10, qui ne voyait
+  // que des cases cochées, pas le jugement du trader. Même clé que la page
+  // Journée, où elle compte pour « recappé ».
+  const [tradeRatings, setTradeRatings] = useCloudState("tao_trade_rating", "trades_rating", {});
   // Liste complète des règles de la checklist (base + ajoutées), toutes
   // éditables/supprimables. Persistée globalement.
   const DEFAULT_CHECKLIST_RULES = [
@@ -481,47 +479,6 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     { id: "earlyexit", label: "Sortie anticipée", color: TAG_COLORS.purple }
   ];
 
-  // Type d'entrée (ICT/SMC) — multi-sélection.
-  const allEntryTags = [
-    { id: "fvg", label: "FVG", color: TAG_COLORS.blue },
-    { id: "ifvg", label: "IFVG", color: TAG_COLORS.green },
-    { id: "ob", label: "OB", color: TAG_COLORS.purple },
-    { id: "rejectionblock", label: "RB", color: TAG_COLORS.orange }
-  ];
-
-  // Questions de la checklist Oui/Non du panneau détail (remplace direction + horaires)
-  const checklistQuestions = Array.isArray(checklistRules) ? checklistRules : DEFAULT_CHECKLIST_RULES;
-
-  // Nature de chaque émotion pour la note du trade (+1 positif, -1 négatif).
-  const EMOTION_SENTIMENT = {
-    calm: 1, followed: 1,
-    fomo: -1, revenge: -1, overconfident: -1, hesitation: -1, boredom: -1, earlyexit: -1,
-  };
-  // Note du trade (sur 10) calculée depuis les règles respectées + les émotions.
-  // Règle "Oui" = positif, "Non" = négatif ; émotion selon EMOTION_SENTIMENT.
-  // Renvoie null si rien n'est renseigné.
-  const computeTradeNote = (trade) => {
-    const id = trade?.id;
-    if (!id) return null;
-    const answers = tradeChecklist[id] || {};
-    let pos = 0, neg = 0;
-    checklistQuestions.forEach((q) => {
-      const a = answers[q.id];
-      if (a === "yes") pos += 1;
-      else if (a === "no") neg += 1;
-    });
-    (emotionTags[id] || []).forEach((eid) => {
-      const s = EMOTION_SENTIMENT[eid] || 0;
-      if (s > 0) pos += 1;
-      else if (s < 0) neg += 1;
-    });
-    const total = pos + neg;
-    if (total === 0) return null;
-    const score = Math.round((pos / total) * 10);
-    const color = score >= 7 ? TAG_COLORS.green : score >= 4 ? TAG_COLORS.orange : TAG_COLORS.red;
-    return { score, color };
-  };
-
   // Coche une réponse de checklist et la propage aux trades enfants d'un groupe.
   const setChecklistAnswer = (selectedTrade, questionId, answer) => {
     const targets = childrenOf(selectedTrade);
@@ -541,19 +498,18 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     });
   };
 
-  // Sélectionne l'unité de temps (sélection unique) et la propage aux trades
-  // enfants d'un groupe. Re-cliquer la valeur active la retire (toggle).
-  const setTimeframeFor = (selectedTrade, tf) => {
+  // Pose la note et la propage aux trades enfants d'un groupe : un trade
+  // fractionné se juge d'un bloc. Re-cliquer la note active la retire.
+  const setRatingFor = (selectedTrade, grade) => {
     const targets = childrenOf(selectedTrade);
-    setTradeTimeframe((prev) => {
+    setTradeRatings((prev) => {
       const updated = { ...prev };
       for (const child of targets) {
         const cid = child.id;
         if (!cid) continue;
-        if (updated[cid] === tf) delete updated[cid];
-        else updated[cid] = tf;
+        if (updated[cid] === grade) delete updated[cid];
+        else updated[cid] = grade;
       }
-      try { localStorage.setItem("tao_trade_timeframe", JSON.stringify(updated)); } catch {}
       return updated;
     });
   };
@@ -579,6 +535,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     }
     setEmotionTags(updated);
     try { localStorage.setItem("tao_emotion_tags", JSON.stringify(updated)); } catch {}
+    onRecapChange?.({ type: "emotions", emotions: updated });
   };
 
   // Bascule une erreur (multi-sélection) et propage aux trades enfants d'un groupe.
@@ -603,27 +560,6 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     setErrorTags(updated);
     try { localStorage.setItem("tao_error_tags", JSON.stringify(updated)); } catch {}
   };
-
-  // Bascule un tag (multi-sélection) sur un state persisté par useCloudState et
-  // propage aux trades enfants d'un groupe.
-  const toggleCloudTag = (setState, selectedTrade, tagId) => {
-    const tradeId = selectedTrade?.id;
-    if (!tradeId) return;
-    const targets = childrenOf(selectedTrade);
-    setState((prev) => {
-      const updated = { ...prev };
-      const isSelected = (prev[tradeId] || []).includes(tagId);
-      for (const child of targets) {
-        const cid = child.id;
-        if (!cid) continue;
-        const cur = updated[cid] || [];
-        if (isSelected) updated[cid] = cur.filter((x) => x !== tagId);
-        else if (!cur.includes(tagId)) updated[cid] = [...cur, tagId];
-      }
-      return updated;
-    });
-  };
-  const toggleEntryTag = (selectedTrade, tagId) => toggleCloudTag(setTradeEntryTags, selectedTrade, tagId);
 
   const allErrorTags = [
     { id: "poorentry", label: "Mauvaise entrée", color: TAG_COLORS.red },
@@ -715,7 +651,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
         setErrorTags(JSON.parse(savedErrorTags));
       }
 
-      // tradeChecklist & tradeTimeframe : hydratation gérée par useCloudState
+      // tradeChecklist & tradeRatings : hydratation gérée par useCloudState
       // (localStorage + Supabase), plus de chargement manuel ici.
 
       const savedRules = localStorage.getItem("tao_checklist_rules_v2");
@@ -873,6 +809,15 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     return () => window.removeEventListener("paste", onPaste);
   }, [selectedTrade, screenshotUrls, uploadScreenshot]);
 
+  /* Mode « panneau seul » — la journée de trading pose CE panneau à droite de
+     sa propre liste : le recap y est celui de la page Trades, pas une copie
+     qui finirait par en diverger. Le trade ouvert est piloté par l'appelant ;
+     on reçoit la ligne telle qu'il l'affiche (fusionnée, avec `_children`),
+     pour que les réponses se propagent aux exécutions comme ici. */
+  React.useEffect(() => {
+    if (panelOnly) setSelectedTrade(panelTrade || null);
+  }, [panelOnly, panelTrade]);
+
   // Auto-close selected trade panel if trade was deleted
   React.useEffect(() => {
     if (selectedTrade && trades) {
@@ -887,26 +832,17 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
     }
   }, [trades]);
 
-  /* Filtres de la maquette (node 293:12628) : symboles, compte, type, sens du
-     tri sur la date d'entrée. Volontairement AUCUN filtre de plage de dates —
-     le site montre tout l'historique, et « Date de débuts » ne pilote donc que
-     l'ordre, pas le périmètre. */
-  const symbolOptions = React.useMemo(() => {
-    const seen = new Map();
-    (trades || []).forEach(tr => {
-      const code = String(tr.symbol || "").trim();
-      if (code && !seen.has(code)) seen.set(code, symbolLabel(code));
-    });
-    return Array.from(seen.entries())
-      /* Le contrat exact quand il en existe un (« MNQU6 »), la racine sinon :
-         le filtre porte sur le symbole tel qu'il est stocké, donc deux
-         échéances doivent rester deux entrées distinguables. */
-      .map(([code, l]) => ({ id: code, label: l.code || l.name }))
-      .sort((a, b) => a.label.localeCompare(b.label, "fr"));
-  }, [trades]);
+  /* Plus de filtre « Symboles » à cocher : la recherche lit le symbole, la
+     stratégie et le compte, et se tape plus vite qu'une liste ne se parcourt.
+     La période, elle, est revenue — l'historique entier ne se relit pas, on
+     relit sa semaine ou son mois. */
   const accountOptions = React.useMemo(
     () => (accounts || []).map(a => ({ id: a.id, label: a.name || "Compte" })),
     [accounts]
+  );
+  const strategyOptions = React.useMemo(
+    () => effectiveStrategies.filter(st => strategyTradeCounts[st.id]).map(st => ({ id: st.id, label: st.name })),
+    [effectiveStrategies, strategyTradeCounts]
   );
   /* Colonne « Compte » : le trade ne porte qu'un account_id. Un id inconnu
      (compte supprimé au passage funded — la FK repasse à NULL) retombe sur
@@ -917,15 +853,19 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   );
 
   const filteredTrades = React.useMemo(() => {
-    let out = trades || [];
-    if (symbolFilter.length) out = out.filter(tr => symbolFilter.includes(String(tr.symbol || "").trim()));
-    if (accountFilter) out = out.filter(tr => tr.account_id === accountFilter);
-    if (sideFilter) {
-      const wantShort = sideFilter === "short";
-      out = out.filter(tr => String(tr.direction || "").toLowerCase().startsWith("s") === wantShort);
-    }
-    return out;
-  }, [trades, symbolFilter, accountFilter, sideFilter]);
+    const strategyIdsOf = (tr) => Array.from(new Set(indexKeysOf(tr).flatMap(k => tradeStrategies[k] || [])));
+    const nameOf = (id) => effectiveStrategies.find(x => x.id === id)?.name || "";
+    return filterTrades(trades || [], filters, {
+      outcomeOf: (tr) => tradeOutcome(netPnlOf(tr)),
+      strategyIdsOf,
+      searchTextOf: (tr) => [
+        symbolLabel(String(tr.symbol || "").trim())?.name,
+        accountNameById.get(tr.account_id),
+        ...strategyIdsOf(tr).map(nameOf),
+      ].filter(Boolean).join(" "),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trades, filters, tradeStrategies, effectiveStrategies, accountNameById]);
 
   /* ─── Groupes triés ────────────────────────────────────────────────────
      Le regroupement des exécutions et le tri vivaient dans le JSX ; ils sont
@@ -980,7 +920,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
   const pageCount = paginated ? Math.max(1, Math.ceil(sortedGroups.length / pageSize)) : 1;
 
   // Revenir à la première page quand le contenu change (filtres, tri, taille).
-  React.useEffect(() => { setPageIndex(0); }, [symbolFilter, accountFilter, sideFilter, sortBy, sortDir, pageSize]);
+  React.useEffect(() => { setPageIndex(0); }, [filters, sortBy, sortDir, pageSize]);
   // Et rester dans les bornes si la liste rétrécit (suppression de trades).
   React.useEffect(() => {
     setPageIndex((p) => Math.min(p, pageCount - 1));
@@ -1091,6 +1031,465 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
 
   const topSymbol = Object.entries(symbolStats).sort((a,b)=>b[1].totalPnL-a[1].totalPnL)[0];
 
+  /* RIGHT - DETAIL PANEL WITH TABS — calculé hors du JSX pour être rendu seul
+     en mode `panelOnly`. Mobile : rendu via un portal (plein écran) pour
+     échapper au bloc englobant créé par l'animation .anim-1. */
+  const sidePanel = selectedTrade ? (() => {
+    // Mode embarqué (journal) : panneau "Trade info" plus compact
+    // (paddings et marges verticales réduits). Le même panneau, plus dense.
+    const compact = embedded;
+    // Embarqué, le tableau prend sa hauteur naturelle et c'est la page
+    // qui défile : le panneau colle au haut de la fenêtre pour rester
+    // lisible entier quelle que soit la rangée cliquée.
+    const sideFit = embedded
+      ? { position:"sticky", top:16, maxHeight:"calc(100vh - 32px)" }
+      : { maxHeight:"calc(100vh - 200px)" };
+    const panel = (
+    <div ref={tradeSideRef} className="tao-trade-side" style={{...CARD,padding:0,width:360,...sideFit,display:"flex",flexDirection:"column"}}>
+
+      {/* EN-TÊTE — plus de titre : « Trade info » nommait ce que le
+          contenu montre déjà (l'instrument, le sens, le P&L sont juste
+          dessous). Ne reste que la fermeture, seule commande de la barre ;
+          le filet disparaît avec le titre — il séparait deux blocs, il n'y
+          en a plus qu'un. */}
+      <div style={{padding:compact?"8px 14px 0":"12px 16px 0",display:"flex",justifyContent:"flex-end",alignItems:"center",flexShrink:0}}>
+        <button onClick={()=>{ setSelectedTrade(null); onPanelClose?.(); }} aria-label={t("trades.detail.close")}
+          style={{width: 34,height: 34,borderRadius:999,background:"transparent",border:"none",cursor:"pointer",color:T.textSub,
+                  display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+                  transition:"background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)"}}
+          onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG;e.currentTarget.style.color=T.text;}}
+          onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textSub;}}>
+          <LucideX size={16} strokeWidth={1.75} />
+        </button>
+      </div>
+
+      {/* CONTENU — les sections ne sont plus séparées par des traits mais
+          par l'espace, comme les cartes du détail d'un compte. */}
+      <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",gap:compact?18:22,padding:compact?"8px 16px 18px":"10px 18px 22px"}}>
+
+        {/* INFOS */}
+        {(() => {
+          const dirRaw = String(selectedTrade.direction || "").toUpperCase();
+          const isLong = dirRaw.includes("LONG") || dirRaw === "BUY";
+          const rVal = rMultiple({ ...selectedTrade, pnl: netPnlOf(selectedTrade) });
+          const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d); return isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }); };
+          const pnlVal = Number(selectedTrade.pnl) || 0; // déjà net de frais
+          const outcome = tradeOutcome(pnlVal);
+          const isBe = outcome === "be";
+          const pnlColor = pnlColorFor(pnlVal);
+          const dateTime = fmtDate(selectedTrade.date);
+          const manualRating = tradeRatings[selectedTrade.id];
+          const ratingColor = (g) => g === "A" || g === "B" ? TAG_COLORS.green : g === "C" ? TAG_COLORS.orange : TAG_COLORS.red;
+          return (
+          <>
+            {/* HERO — données automatiques (P&L mis en avant).
+                L'instrument passe par la même vignette que le tableau
+                (`SymbolCell`) et le sens par la même pastille
+                (`DirectionTag`) : le panneau et la ligne qu'il détaille
+                montraient jusqu'ici deux représentations du même trade. */}
+            <div style={{order:-2,display:"flex",flexDirection:"column",gap:compact?10:14}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                <SymbolCell symbol={selectedTrade.symbol} size={32} nameSize={15} />
+                <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <DirectionTag direction={isLong ? "long" : "short"} />
+                  {isBe && (
+                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"2px 12px",borderRadius:48,fontSize:14,lineHeight:"17.05px",background:FIELD_BG,color:T.textSub}}>
+                      BE
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              {/* P&L héro + R-multiple. Graisse 500 comme les montants
+                  héros de la DA ; la couleur, elle, reste porteuse de
+                  sens (gain / perte). */}
+              <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:compact?26:32,fontWeight:500,letterSpacing:-0.4,color:pnlColor,lineHeight:1}}>{pnlVal>=0?"+":""}{fmt(pnlVal,true)}</span>
+                {rVal != null && Number.isFinite(rVal) && (
+                  <span style={{fontSize:14,fontWeight:500,color:pnlColor,opacity:0.75,letterSpacing:-0.1}}>{fmtR(rVal)}</span>
+                )}
+              </div>
+
+              {/* Ce que le trade dit de lui-même, en lignes
+                  « libellé → valeur » comme les cartes de statistiques. */}
+              <div style={{display:"flex",flexDirection:"column",gap:compact?7:9}}>
+                <StatRow label="Date" value={dateTime} />
+                {/* NOTE — à la place de la note calculée sur 10, et dans sa
+                    forme : une ligne « libellé → valeur » dont la valeur se
+                    choisit. Cinq lettres nues, la retenue se teinte. */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                  <span style={{fontSize:12,color:T.text,opacity:0.5}}>{t("trades.detail.rating")}</span>
+                  <div role="radiogroup" aria-label={t("trades.detail.rating")} style={{display:"flex",gap:2}}>
+                    {GRADES.map((g)=>{
+                      const active = manualRating === g;
+                      return (
+                        <button key={g} type="button" role="radio" aria-checked={active} aria-label={g} onClick={()=>setRatingFor(selectedTrade, g)}
+                          style={{width:24,height:24,padding:0,borderRadius:999,border:"none",
+                            background:active?FIELD_BG:"transparent",
+                            color:active?ratingColor(g):T.textSub,
+                            fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                            transition:"color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out)",
+                          }}>
+                          {g}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* EMOTION TAGS — menu déroulant multi-sélection */}
+            <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}} key={`emotion-${selectedTrade.date}-${selectedTrade.symbol}-${selectedTrade.entry}`}>
+              <FieldLabel>{t("trades.detail.emotionTags")}</FieldLabel>
+              <TagMultiSelect
+                placeholder={t("trades.detail.emotionTags")}
+                allTags={allEmotionTags}
+                selected={emotionTags[selectedTrade.id] || []}
+                onToggle={(id)=>toggleEmotion(selectedTrade, id)}
+              />
+            </div>
+
+
+            {/* SCREENSHOT — placé sous les tags d'erreurs */}
+            {(() => {
+              const tradeId = selectedTrade.id;
+              const url = screenshotUrls[tradeId];
+              const handleFile = async (file) => {
+                if (!file || !file.type?.startsWith("image/")) return;
+                setScreenshotBusy(true);
+                try { await uploadScreenshot(tradeId, file); }
+                finally { setScreenshotBusy(false); }
+              };
+              const extractImageFromClipboard = (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return null;
+                for (const it of items) {
+                  if (it.kind === "file" && it.type?.startsWith("image/")) {
+                    const f = it.getAsFile();
+                    if (f) return f;
+                  }
+                }
+                return null;
+              };
+              return (
+                <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                    <FieldLabel>Screenshot</FieldLabel>
+                    {url && (
+                      <div style={{display:"inline-flex",alignItems:"center",gap:2}}>
+                        <label
+                          style={{padding:"2px 6px",fontSize:12,fontWeight:500,color:T.text,opacity:0.5,background:"transparent",border:"none",cursor:screenshotBusy?"not-allowed":"pointer",fontFamily:"inherit"}}>
+                          {t("trades.detail.modify")}
+                          <input type="file" accept="image/*" disabled={screenshotBusy}
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0]; if (!f) { return; }
+                              setScreenshotBusy(true);
+                              try { await removeScreenshot(tradeId); await uploadScreenshot(tradeId, f); }
+                              finally { setScreenshotBusy(false); e.target.value = ""; }
+                            }}
+                            style={{display:"none"}} />
+                        </label>
+                        <button type="button" onClick={async () => { setScreenshotBusy(true); try { await removeScreenshot(tradeId); } finally { setScreenshotBusy(false); } }}
+                          disabled={screenshotBusy}
+                          style={{padding: "2px 6px",fontSize:12,fontWeight:500,color:T.red,background:"transparent",border:"none",cursor:screenshotBusy?"not-allowed":"pointer",fontFamily:"inherit"}}>
+                          {t("trades.detail.delete")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {url ? (
+                    <button type="button" onClick={() => setLightboxUrl(url)}
+                      style={{display:"block",width:"100%",padding:0,border:"none",borderRadius:12,overflow:"hidden",background:FIELD_BG,cursor:"zoom-in",fontFamily:"inherit"}}>
+                      <img src={url} alt="Trade screenshot" style={{display:"block",width:"100%",maxHeight:320,objectFit:"contain"}} />
+                    </button>
+                  ) : (
+                    /* Zone de dépôt : le pointillé est ce qui la signale
+                       comme telle, on le garde — mais dilué comme les
+                       autres traits du panneau. */
+                    <label
+                      tabIndex={0}
+                      onPaste={async (e) => {
+                        const f = extractImageFromClipboard(e);
+                        if (f) { e.preventDefault(); await handleFile(f); }
+                      }}
+                      onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = T.text; }}
+                      onDragLeave={(e) => { e.currentTarget.style.borderColor = HAIRLINE; }}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        e.currentTarget.style.borderColor = HAIRLINE;
+                        const f = e.dataTransfer.files?.[0];
+                        if (f) await handleFile(f);
+                      }}
+                      style={{
+                        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,
+                        padding:compact?"16px":"26px 16px",border:`1.5px dashed ${HAIRLINE}`,borderRadius:12,
+                        cursor:screenshotBusy?"not-allowed":"pointer",background:FIELD_BG,
+                        color:T.textSub,fontSize:12,fontWeight:500,
+                        outline: "none",
+                        transition:"border-color var(--dur-fast) var(--ease-out)",
+                      }}>
+                      <span style={{width:40,height:40,borderRadius:"50%",background:T.white,boxShadow:T.elevPill,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                        <LucideImage size={18} strokeWidth={1.75} color={T.textSub} />
+                      </span>
+                      <span style={{fontSize:12,fontWeight:500,color:T.textSub}}>{screenshotBusy ? t("trades.detail.uploading") : t("trades.detail.dragImage")}</span>
+                      <input type="file" accept="image/*" disabled={screenshotBusy}
+                        onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; await handleFile(f); e.target.value = ""; }}
+                        style={{display:"none"}} />
+                    </label>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* NOTES (manuel) */}
+            <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
+              <FieldLabel>Notes</FieldLabel>
+              <textarea
+                placeholder={t("trades.notePlaceholder")}
+                value={tradeNotes[noteKeyOf(selectedTrade)] ?? tradeNotes[selectedTrade.id] ?? ""}
+                onChange={(e)=>{
+                  const key = noteKeyOf(selectedTrade);
+                  if (!key) return;
+                  const updated = {...tradeNotes, [key]: e.target.value};
+                  setTradeNotes(updated);
+                  localStorage.setItem("tao_trade_notes", JSON.stringify(updated));
+                  persistNote(key, e.target.value);
+                  onRecapChange?.({ type: "note", tradeId: key, text: e.target.value });
+                }}
+                /* Même zone d'écriture que les notes du journal : pas de
+                   cadre — la carte est déjà une surface — et un aplat
+                   exprimé en transparence d'encre. */
+                style={{
+                  flex:1,
+                  minHeight:compact?90:120,
+                  border:"none",
+                  borderRadius:10,
+                  padding:"14px 16px",
+                  fontSize:13,
+                  lineHeight:1.55,
+                  fontFamily:"var(--font-sans)",
+                  color:T.text,
+                  background:WRITING_BG,
+                  resize:"none",
+                  outline:"none"
+                }}
+              />
+            </div>
+          </>
+          );
+        })()}
+
+        {/* STRATÉGIE */}
+        {(() => {
+          const tradeId = selectedTrade.date + selectedTrade.symbol + selectedTrade.entry;
+          // Toutes les clés sous lesquelles ce trade peut être indexé (l'import en crée 3) :
+          // UUID Supabase, composite, composite normalisé. On les met TOUTES à jour pour
+          // éviter qu'une stratégie reste fantôme via une clé non nettoyée.
+          // Inclut les clés de TOUS les trades du groupe (si groupé) pour appliquer en bloc
+          const allTrades = childrenOf(selectedTrade);
+          const tradeKeys = Array.from(new Set(
+            allTrades.flatMap(tr => [
+              tr.id,
+              `${tr.date || ""}${tr.symbol || ""}${tr.entry ?? ""}`,
+              (tr.date && tr.symbol && tr.entry != null)
+                ? `${tr.date}${tr.symbol}${parseFloat(tr.entry).toFixed(2)}`
+                : null,
+            ]).filter(Boolean).map(String)
+          ));
+          // Source de vérité pour l'UI : union de toutes les stratégies trouvées sur n'importe quelle clé
+          const selectedIds = Array.from(new Set(tradeKeys.flatMap(k => tradeStrategies[k] || [])));
+          
+          // Calculate total rules checked across all selected strategies
+          const allSelectedStrats = effectiveStrategies.filter(s => selectedIds.includes(s.id));
+          const totalRulesCount = allSelectedStrats.reduce((sum, s) => sum + (s.groups?.flatMap(g => g.rules) || []).length, 0);
+          const totalCheckedCount = allSelectedStrats.reduce((sum, s) => {
+            const rulesForStrat = (s.groups?.flatMap(g => g.rules) || []);
+            const checkedInStrat = rulesForStrat.filter(r => {
+              const key = `${selectedTrade.date}_${selectedTrade.symbol}_${selectedTrade.entry}_${selectedTrade.exit}_${selectedTrade.direction}_${s.id}_${r.id}`;
+              return checkedRules[key];
+            }).length;
+            return sum + checkedInStrat;
+          }, 0);
+          const progressPercent = totalRulesCount > 0 ? (totalCheckedCount / totalRulesCount) * 100 : 0;
+          
+          return (
+            <div style={{order:-1,display:"flex",flexDirection:"column",gap:compact?8:10}}>
+              <FieldLabel>Stratégie</FieldLabel>
+              {allSelectedStrats.length === 0 ? (
+                <>
+                  <div style={{position:"relative",width:"100%",display:"flex"}}>
+                    <button
+                      onClick={()=>setShowStrategyDropdown(!showStrategyDropdown)}
+                      style={{
+                        width:"100%",
+                        minHeight: 34, padding: "8px 16px",
+                        borderRadius:999,
+                        border:"none",
+                        background:FIELD_BG,
+                        fontSize: 13,
+                        fontWeight:500,
+                        color:T.text,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        justifyContent:"center",
+                        gap:6,
+                        transition:"background var(--dur-fast) var(--ease-out)",
+                        fontFamily:"var(--font-sans)",
+                      }}
+                      onMouseEnter={(e)=>{e.currentTarget.style.background=HAIRLINE}}
+                      onMouseLeave={(e)=>{e.currentTarget.style.background=FIELD_BG}}
+                    >
+                      <LucidePlus size={14} strokeWidth={1.75} />
+                      {t("trades.detail.addStrategy")}
+                    </button>
+
+                    {/* STRATEGY DROPDOWN */}
+                    {showStrategyDropdown && (
+                      <div style={{
+                        position:"absolute",
+                        top:"100%",
+                        left:0,
+                        right:0,
+                        marginTop:6,
+                        background:T.white,
+                        border:"none",
+                        borderRadius:12,
+                        boxShadow:"var(--elev-overlay)",
+                        padding:6,
+                        zIndex:100,
+                        maxHeight:240,
+                        overflowY:"auto"
+                      }}>
+                        {effectiveStrategies.length === 0 ? (
+                          <div style={{padding:12,textAlign:"center",fontSize:12,color:T.textSub}}>{t("trades.detail.noStrategy")}</div>
+                        ) : (
+                          strategiesByUsage.map(strat=>{
+                            const isSelected = selectedIds.includes(strat.id);
+                            const tradeCount = strategyTradeCounts[strat.id] || 0;
+                            return (
+                              <button key={strat.id} onClick={()=>{
+                                // Mise à jour cohérente sur TOUTES les clés du trade
+                                const newTradeStrategies = {...tradeStrategies};
+                                tradeKeys.forEach(k => {
+                                  const current = newTradeStrategies[k] || [];
+                                  const updated = isSelected
+                                    ? current.filter(id => id !== strat.id)
+                                    : (current.includes(strat.id) ? current : [...current, strat.id]);
+                                  newTradeStrategies[k] = updated;
+                                });
+                                setTradeStrategies(newTradeStrategies);
+                                setShowStrategyDropdown(false);
+                              }} style={{width:"100%",padding: "8px 10px",borderRadius:8,background:isSelected?FIELD_BG:"transparent",border:"none",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,fontFamily:"inherit",transition:"background var(--dur-fast) var(--ease-out)"}}
+                                onMouseEnter={(e)=>{if(!isSelected) e.currentTarget.style.background=FIELD_BG;}}
+                                onMouseLeave={(e)=>{if(!isSelected) e.currentTarget.style.background="transparent";}}>
+                              <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:strat.color}}/>
+                              {/* Le nom et son sous-titre étaient rendus à 9 px :
+                                  illisibles. Ils reprennent l'échelle des listes
+                                  de la DA (13 px / 12 px atténué). */}
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:500,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{strat.name}</div>
+                                <div style={{fontSize:12,color:T.text,opacity:0.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t("trades.detail.groupCount").replace("{n}", String(strat.groups?.length || 0))}{tradeCount > 0 ? ` · ${tradeCount} trade${tradeCount > 1 ? "s" : ""}` : ""}</div>
+                              </div>
+                              {isSelected && <LucideCheck size={14} strokeWidth={2} color={T.text} style={{flexShrink:0}} />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : null}
+
+              {/* SELECTED STRATEGIES DETAILS */}
+              {(() => {
+                const selectedStrats = effectiveStrategies.filter(s => selectedIds.includes(s.id));
+                return selectedStrats.length > 0 ? (
+                  <div style={{width:"100%",display:"flex",flexDirection:"column",gap:18}}>
+                    {selectedStrats.map((strat,idx)=>{
+                      const allRules = strat.groups.flatMap(g=>g.rules);
+                      const checkedCount = allRules.filter(r=>{
+                        const key = `${selectedTrade.date}_${selectedTrade.symbol}_${selectedTrade.entry}_${selectedTrade.exit}_${selectedTrade.direction}_${strat.id}_${r.id}`;
+                        return checkedRules[key];
+                      }).length;
+                      const stratProgressPercent = allRules.length > 0 ? (checkedCount / allRules.length) * 100 : 0;
+                      return (
+                        <div key={strat.id} style={{display:"flex",flexDirection:"column",gap:12}}>
+                          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:strat.color}}/>
+                              <div style={{fontSize:13,fontWeight:600,color:T.text,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{strat.name}</div>
+                              <StratMenu
+                                open={openStratMenuId === strat.id}
+                                onToggle={()=>setOpenStratMenuId(openStratMenuId===strat.id?null:strat.id)}
+                                onClose={()=>setOpenStratMenuId(null)}
+                                onDetach={(thenPick)=>{
+                                  // Retirer la stratégie de TOUTES les clés du trade
+                                  const newTradeStrategies = {...tradeStrategies};
+                                  tradeKeys.forEach(k => {
+                                    const current = newTradeStrategies[k] || [];
+                                    newTradeStrategies[k] = current.filter(id => id !== strat.id);
+                                  });
+                                  setTradeStrategies(newTradeStrategies);
+                                  localStorage.setItem("tao_trade_strategies", JSON.stringify(newTradeStrategies));
+                                  setOpenStratMenuId(null);
+                                  if (thenPick) setShowStrategyDropdown(true);
+                                }}
+                              />
+                            </div>
+                            {/* AVANCEMENT — libellé à gauche, compte à droite,
+                                comme les lignes de statistiques ; la piste
+                                reprend l'aplat des autres contrôles. */}
+                            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                              <StatRow label="Règles suivies" value={`${checkedCount}/${allRules.length}`} />
+                              <div style={{width:"100%",height:6,background:FIELD_BG,borderRadius:999,overflow:"hidden"}}>
+                                <div style={{height:"100%",borderRadius:999,background:T.text,width:`${stratProgressPercent}%`,transition:"width var(--dur-base) var(--ease-out)"}}/>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                            {strat.groups.map(group=>(
+                              <div key={group.id} style={{display:"flex",flexDirection:"column",gap:8}}>
+                                <FieldLabel>{group.name}</FieldLabel>
+                                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                                  {group.rules.map(rule=>{
+                                    const ruleKey = `${selectedTrade.date}_${selectedTrade.symbol}_${selectedTrade.entry}_${selectedTrade.exit}_${selectedTrade.direction}_${strat.id}_${rule.id}`;
+                                    const isChecked = checkedRules[ruleKey] || false;
+                                    return (
+                                      <CheckChip
+                                        key={rule.id}
+                                        label={rule.text}
+                                        checked={isChecked}
+                                        onClick={()=>setCheckedRules({...checkedRules,[ruleKey]:!isChecked})}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null;
+              })()}
+            </div>
+          );
+        })()}
+
+      </div>
+
+    </div>
+    );
+    return isMobile ? ReactDOM.createPortal(panel, document.body) : panel;
+  })() : null;
+
+  if (panelOnly) return sidePanel;
+
   return (
     /* 14 px de retrait haut : la barre du haut apporte déjà 20 px, ce qui place
        le titre aux 34 px de la maquette (même calcul que le dashboard). */
@@ -1140,63 +1539,21 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
         </DAModal>
       )}
 
-      {/* BARRE DE FILTRES — libellés à 40 % d'opacité, hors carte, retrait de
-          28 px pour s'aligner sur le contenu de la carte (maquette 293:12628). */}
       {!embedded && (
-        /* La barre d'outils colle au tableau qu'elle pilote : le retrait négatif
-           reprend l'essentiel des 48 px d'écart entre sections de la page, qui
-           l'en éloignaient comme s'il s'agissait de deux blocs sans rapport.
-           (Le conteneur en colonne qui enveloppait cette rangée n'avait qu'un
-           seul enfant : il ne servait qu'à porter un gap inutilisé.) */
-        <div style={{marginBottom:-30}}>
-          <div style={{display:"flex",alignItems:"center",gap:26,padding:"0 28px",flexWrap:"wrap"}}>
-            <TableFilter
-              multi
-              label={t("trades.filterSymbols")}
-              value={symbolFilter}
-              options={symbolOptions}
-              onChange={setSymbolFilter}
-            />
-            {accountOptions.length > 0 && (
-              <TableFilter
-                label={t("addTrade.account")}
-                value={accountFilter}
-                options={accountOptions}
-                onChange={setAccountFilter}
-              />
-            )}
-            <TableFilter
-              label={t("trades.filterTypes")}
-              value={sideFilter}
-              options={[{ id: "long", label: "Long" }, { id: "short", label: "Short" }]}
-              onChange={setSideFilter}
-            />
-            <TableFilter
-              /* Tri par défaut du tableau, pas un filtre posé par l'utilisateur :
-                 il reste gris comme les autres. */
-              neutral
-              label={t("trades.filterEntryDate")}
-              value={sortBy === "date" ? sortDir : ""}
-              options={[{ id: "desc", label: t("trades.newestFirst") }, { id: "asc", label: t("trades.oldestFirst") }]}
-              onChange={(dir) => { setSortBy("date"); setSortDir(dir || "desc"); }}
-            />
-            {/* « Importer » vit sur la MÊME ligne que les filtres, poussé à
-                droite : c'est la barre d'outils du tableau, la séparer en deux
-                rangées éloignait l'action de ce sur quoi elle agit.
-                Le retrait négatif annule POUR LUI le padding de 28 px de la
-                barre : ce retrait aligne les libellés de filtres sur le contenu
-                de la carte, mais il arrêtait l'action 28 px avant le bord droit
-                de la page, là où tous les autres boutons du site s'arrêtent. */}
-            <button
-              type="button"
-              onClick={onImportClick}
-              style={{display:"inline-flex",alignItems:"center",gap:6,marginLeft:"auto",marginRight:-28,padding: "8px 16px",minHeight: 34, borderRadius:999,
-                      background:T.text,border:"none",color:T.textInverted,fontSize: 13,fontWeight:500,
-                      cursor:"pointer",fontFamily:"inherit"}}
-            >
-              <LucidePlus size={13} strokeWidth={1.75} /> {t("trades.importBtn")}
-            </button>
-          </div>
+        /* Le retrait négatif rapproche la barre du tableau qu'elle pilote : les
+           48 px d'écart entre sections de la page l'en éloignaient comme s'il
+           s'agissait de deux blocs sans rapport. */
+        <div style={{marginBottom:-36}}>
+          <TradesFilterBar
+            filters={filters}
+            onChange={setFilters}
+            accountOptions={accountOptions}
+            strategyOptions={strategyOptions}
+            sort={`${sortBy === "pnl" ? "pnl" : "date"}:${sortDir === "asc" ? "asc" : "desc"}`}
+            onSort={(id) => { const [by, dir] = id.split(":"); setSortBy(by); setSortDir(dir); }}
+            stats={tradeStats(filteredTrades.map(netPnlOf), (n) => tradeOutcome(n) === "win")}
+            onImport={onImportClick}
+          />
         </div>
       )}
 
@@ -1395,7 +1752,7 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                       <div style={{fontSize:14,color:T.textSub,marginBottom:12}}>{t("trades.noneForFilters")}</div>
                       <button
                         type="button"
-                        onClick={() => { setSymbolFilter([]); setAccountFilter(""); setSideFilter(""); }}
+                        onClick={() => setFilters(EMPTY_FILTERS)}
                         style={{padding: "8px 16px",minHeight: 34, borderRadius:999,border:"none",
                                 background:T.white,boxShadow:T.elevPill,color:T.text,
                                 fontSize: 13,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}
@@ -1424,8 +1781,11 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                       ? { ...g.parent, _children: g.children, _groupKey: g.key, _groupPnl: g.pnlSum, _groupFees: g.feesSum, _groupNet: g.netSum, _groupQty: g.qtySum, _groupVolume: g.volSum }
                       : g.parent;
                     rows.push({ trade: parentTrade, isGroupParent: isGroup, isChild: false, groupKey: g.key, groupSize: g.children.length });
+                    /* Déplié, le groupe liste TOUTES ses exécutions, la première
+                       comprise : la ligne de groupe porte les totaux, et chaque
+                       exécution doit pouvoir se cocher à part. */
                     if (isGroup && expandedGroups.has(g.key)) {
-                      for (let ci = 1; ci < g.children.length; ci++) {
+                      for (let ci = 0; ci < g.children.length; ci++) {
                         rows.push({ trade: g.children[ci], isGroupParent: false, isChild: true, groupKey: g.key, groupSize: g.children.length });
                       }
                     }
@@ -1433,6 +1793,9 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                   // En mode embarqué : on borne le nombre de lignes visibles
                   // (maxRows) avec un bouton "voir plus / voir moins".
                   const rowsToShow = (maxRows != null && !embeddedShowAll) ? rows.slice(0, maxRows) : rows;
+                  // Libellés lus ICI : dans la boucle, `t` désigne le trade, plus la traduction.
+                  const selectGroupLabel = t("trades.selectGroup");
+                  const selectTradeLabel = t("trades.selectTrade");
                   const mapped = rowsToShow.map(({ trade: t, isGroupParent, isChild, groupKey, groupSize }, i) => {
                   // Toutes les métriques dérivées (%, R, P&L net) sont calculées net de frais.
                   const rowNet = t._groupNet != null ? t._groupNet : netPnlOf(t);
@@ -1452,9 +1815,12 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                   const isChecked = isGroupParent
                     ? (groupChildKeys && groupChildKeys.length > 0 && groupChildKeys.every(k => selectedIds.has(k)))
                     : selectedIds.has(tKey);
-                  const isHovered = hoveredRowId === tKey;
+                  const isPartial = isGroupParent && !isChecked && !!groupChildKeys?.some(k => selectedIds.has(k));
+                  // La première exécution partage sa clé avec la ligne de groupe : le survol se distingue.
+                  const hoverKey = isChild ? `child:${tKey}` : tKey;
+                  const isHovered = hoveredRowId === hoverKey;
                   const isOpen = selectedTrade && tradeKey(selectedTrade) === tKey;
-                  const showCheckbox = isChecked || isHovered;
+                  const showCheckbox = isChecked || isPartial || isHovered || selectedIds.size > 0;
                   // Coche/décoche la ligne (gère Shift+clic pour sélectionner une plage).
                   const onCheckboxClick = (e) => {
                     e.stopPropagation();
@@ -1605,63 +1971,67 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
                           setSelectedTrade(t);
                         }
                       }}
-                      onMouseEnter={()=>setHoveredRowId(tKey)}
+                      onMouseEnter={()=>setHoveredRowId(hoverKey)}
                       onMouseLeave={()=>setHoveredRowId(null)}
                     >
                       {/* Symbol : vignette ronde + nom/code (maquette 283:6806).
                           Le carré de 22 px qui porte le chevron de groupe ou la case
                           à cocher reste devant, à largeur fixe, pour que la vignette
                           ne se décale jamais au survol. */}
-                      <td style={{padding:"12px 6px",boxSizing:"border-box",borderTopLeftRadius:12,borderBottomLeftRadius:12,color:T.text,minWidth:182,width:182, paddingLeft: isChild ? 34 : 12}}>
+                      <td style={{padding:"12px 6px",boxSizing:"border-box",borderTopLeftRadius:12,borderBottomLeftRadius:12,color:T.text,minWidth:182,width:182, paddingLeft: isChild ? 24 : 12}}>
                         <span style={{display:"inline-flex",alignItems:"center",gap:8,verticalAlign:"middle"}}>
-                          {!isChild && (
-                            // Carré unique 22px : contient l'icône du symbole (ou le chevron de
-                            // groupe) par défaut, et la case à cocher au survol/sélection. La
-                            // largeur étant fixe, le texte ne se décale jamais.
-                            <span style={{width:22,height:22,borderRadius:6,background:"transparent",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                              {isGroupParent && !isChecked ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setExpandedGroups(prev => {
-                                      const next = new Set(prev);
-                                      if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
-                                      return next;
-                                    });
-                                  }}
-                                  aria-label={expandedGroups.has(groupKey) ? "Replier" : "Déplier"}
-                                  style={{
-                                    width: 22, height: 22, borderRadius: 6,
-                                    background: "transparent", border: "none",
-                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                    cursor: "pointer", color: T.textMut, flexShrink: 0, padding: 0,
-                                    transform: expandedGroups.has(groupKey) ? "rotate(0deg)" : "rotate(-90deg)",
-                                    transition: "transform .15s ease",
-                                  }}
-                                >
-                                  <LucideChevronDown size={13} strokeWidth={2} />
-                                </button>
-                              ) : (isGroupParent || showCheckbox) ? (
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {}}
-                                  onClick={onCheckboxClick}
-                                  style={{cursor:"pointer",width:14,height:14,accentColor:T.text,margin:0,display:"block",verticalAlign:"middle",flexShrink:0}}
-                                />
-                              ) : null}
-                            </span>
-                          )}
+                          {/* Une case pour chaque ligne — trade seul, groupe ET
+                              exécution d'un groupe. Elle n'occupait le carré qu'au
+                              survol, et le chevron d'un groupe la remplaçait : un
+                              groupe ne se cochait jamais d'un clic. Le chevron a
+                              désormais sa place à lui, après la case. Dès qu'une
+                              ligne est cochée, toutes les cases restent visibles :
+                              on est en train de composer une sélection. */}
+                          <span style={{width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            {showCheckbox && (
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                ref={(el) => { if (el) el.indeterminate = isPartial; }}
+                                aria-label={isGroupParent ? selectGroupLabel : selectTradeLabel}
+                                onChange={() => {}}
+                                onClick={onCheckboxClick}
+                                style={{cursor:"pointer",width:14,height:14,accentColor:T.text,margin:0,display:"block",flexShrink:0}}
+                              />
+                            )}
+                          </span>
                           <SymbolCell symbol={t.symbol} />
+                          {/* Le chevron vit dans la pastille « ×3 » : posé dans une
+                              colonne à lui, il décalait le symbole des groupes, et
+                              lui réserver la place sur chaque ligne laissait un
+                              trou dans la colonne. La pastille dit déjà « ce trade
+                              en contient plusieurs » : c'est elle qu'on ouvre. */}
                           {isGroupParent && (
-                            <span style={{
-                              fontSize: 10, fontWeight: 700, color: T.textSub,
-                              padding: "1px 6px", borderRadius: 999,
-                              background: T.bg, border: `1px solid ${T.border}`,
-                            }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedGroups(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
+                                  return next;
+                                });
+                              }}
+                              aria-label={expandedGroups.has(groupKey) ? "Replier" : "Déplier"}
+                              aria-expanded={expandedGroups.has(groupKey)}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0,
+                                fontSize: 10, fontWeight: 700, color: T.textSub, fontFamily: "inherit",
+                                padding: "1px 4px 1px 6px", borderRadius: 999, cursor: "pointer",
+                                background: T.bg, border: `1px solid ${T.border}`,
+                              }}
+                            >
                               ×{groupSize}
-                            </span>
+                              <LucideChevronDown size={11} strokeWidth={2.25} style={{
+                                transform: expandedGroups.has(groupKey) ? "rotate(180deg)" : "none",
+                                transition: "transform .15s ease",
+                              }} />
+                            </button>
                           )}
                         </span>
                       </td>
@@ -1809,488 +2179,8 @@ export default function TradesPage({ trades = [], strategies = [], accounts = []
           )}
         </div>
 
-        {/* RIGHT - DETAIL PANEL WITH TABS.
-            Mobile : rendu via un portal (plein écran) pour échapper au bloc englobant
-            créé par l'animation .anim-1 (transform résiduel), sinon le fixed serait confiné. */}
-        {selectedTrade && (() => {
-          // Mode embarqué (journal) : panneau "Trade info" plus compact
-          // (paddings et marges verticales réduits). Le même panneau, plus dense.
-          const compact = embedded;
-          // Embarqué, le tableau prend sa hauteur naturelle et c'est la page
-          // qui défile : le panneau colle au haut de la fenêtre pour rester
-          // lisible entier quelle que soit la rangée cliquée.
-          const sideFit = embedded
-            ? { position:"sticky", top:16, maxHeight:"calc(100vh - 32px)" }
-            : { maxHeight:"calc(100vh - 200px)" };
-          const panel = (
-          <div ref={tradeSideRef} className="tao-trade-side" style={{...CARD,padding:0,width:360,...sideFit,display:"flex",flexDirection:"column"}}>
-
-            {/* EN-TÊTE — plus de titre : « Trade info » nommait ce que le
-                contenu montre déjà (l'instrument, le sens, le P&L sont juste
-                dessous). Ne reste que la fermeture, seule commande de la barre ;
-                le filet disparaît avec le titre — il séparait deux blocs, il n'y
-                en a plus qu'un. */}
-            <div style={{padding:compact?"8px 14px 0":"12px 16px 0",display:"flex",justifyContent:"flex-end",alignItems:"center",flexShrink:0}}>
-              <button onClick={()=>setSelectedTrade(null)} aria-label={t("trades.detail.close")}
-                style={{width: 34,height: 34,borderRadius:999,background:"transparent",border:"none",cursor:"pointer",color:T.textSub,
-                        display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,
-                        transition:"background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)"}}
-                onMouseEnter={(e)=>{e.currentTarget.style.background=FIELD_BG;e.currentTarget.style.color=T.text;}}
-                onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=T.textSub;}}>
-                <LucideX size={16} strokeWidth={1.75} />
-              </button>
-            </div>
-
-            {/* CONTENU — les sections ne sont plus séparées par des traits mais
-                par l'espace, comme les cartes du détail d'un compte. */}
-            <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",gap:compact?18:22,padding:compact?"8px 16px 18px":"10px 18px 22px"}}>
-
-              {/* INFOS */}
-              {(() => {
-                const dirRaw = String(selectedTrade.direction || "").toUpperCase();
-                const isLong = dirRaw.includes("LONG") || dirRaw === "BUY";
-                const entryTime = selectedTrade.entryTime || selectedTrade.entry_time || "";
-                const exitTime = selectedTrade.exitTime || selectedTrade.exit_time || "";
-                const rVal = rMultiple({ ...selectedTrade, pnl: netPnlOf(selectedTrade) });
-                const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d); return isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }); };
-                const pnlVal = Number(selectedTrade.pnl) || 0; // déjà net de frais
-                const outcome = tradeOutcome(pnlVal);
-                const isBe = outcome === "be";
-                const pnlColor = pnlColorFor(pnlVal);
-                const dateTime = fmtDate(selectedTrade.date);
-                const tradeNote = computeTradeNote(selectedTrade);
-                return (
-                <>
-                  {/* HERO — données automatiques (P&L mis en avant).
-                      L'instrument passe par la même vignette que le tableau
-                      (`SymbolCell`) et le sens par la même pastille
-                      (`DirectionTag`) : le panneau et la ligne qu'il détaille
-                      montraient jusqu'ici deux représentations du même trade. */}
-                  <div style={{order:-2,display:"flex",flexDirection:"column",gap:compact?10:14}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-                      <SymbolCell symbol={selectedTrade.symbol} size={32} nameSize={15} />
-                      <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
-                        <DirectionTag direction={isLong ? "long" : "short"} />
-                        {isBe && (
-                          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"2px 12px",borderRadius:48,fontSize:14,lineHeight:"17.05px",background:FIELD_BG,color:T.textSub}}>
-                            BE
-                          </span>
-                        )}
-                      </span>
-                    </div>
-
-                    {/* P&L héro + R-multiple. Graisse 500 comme les montants
-                        héros de la DA ; la couleur, elle, reste porteuse de
-                        sens (gain / perte). */}
-                    <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
-                      <span style={{fontSize:compact?26:32,fontWeight:500,letterSpacing:-0.4,color:pnlColor,lineHeight:1}}>{pnlVal>=0?"+":""}{fmt(pnlVal,true)}</span>
-                      {rVal != null && Number.isFinite(rVal) && (
-                        <span style={{fontSize:14,fontWeight:500,color:pnlColor,opacity:0.75,letterSpacing:-0.1}}>{fmtR(rVal)}</span>
-                      )}
-                    </div>
-
-                    {/* Ce que le trade dit de lui-même, en lignes
-                        « libellé → valeur » comme les cartes de statistiques. */}
-                    <div style={{display:"flex",flexDirection:"column",gap:compact?7:9}}>
-                      <StatRow label="Date" value={dateTime} />
-                      <StatRow label="Heure d'entrée" value={entryTime || "—"} />
-                      <StatRow label="Heure de sortie" value={exitTime || "—"} />
-                      <StatRow label="Note" value={tradeNote ? `${tradeNote.score}/10` : "—"} color={tradeNote ? tradeNote.color : T.textSub} />
-                    </div>
-                  </div>
-
-                  {/* UNITÉ DE TEMPS (timeframe d'analyse) — sélection unique.
-                      Le seul segmenté qui garde sa piste grise et sa mise en
-                      page locale, pour deux raisons : il vit DANS la carte
-                      blanche du panneau (sans piste, le bloc de l'actif serait
-                      blanc sur blanc), et ses items sont à largeur égale
-                      (`flex: 1`), ce que `PeriodPills` ne fait pas — elle
-                      dimensionne chaque pastille sur son libellé. */}
-                  <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <FieldLabel>Unité de temps</FieldLabel>
-                    <div role="radiogroup" aria-label="Unité de temps" style={{display:"flex",gap:2,padding:3,background:T.segmentTrack,borderRadius:999}}>
-                      {TIMEFRAME_OPTIONS.map((opt)=>{
-                        const active = (tradeTimeframe[selectedTrade.id] || "") === opt;
-                        return (
-                          <button key={opt} type="button" role="radio" aria-checked={active} aria-label={opt} onClick={()=>setTimeframeFor(selectedTrade, opt)}
-                            style={{minHeight: 34,
-                              flex:1,padding:"6px 0",borderRadius:999,border:"none",
-                              background:active?T.white:"transparent",
-                              color:active?T.text:T.textSub,
-                              fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit",
-                              boxShadow:active?T.elevPill:"none",
-                              transition:"color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out)",
-                            }}>
-                            {opt}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* ENTRÉE — type d'entrée (multi-sélection) */}
-                  <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <FieldLabel>Entrée</FieldLabel>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                      {allEntryTags.map((tag)=>(
-                        <CheckChip
-                          key={tag.id}
-                          label={tag.label}
-                          color={tag.color}
-                          checked={(tradeEntryTags[selectedTrade.id] || []).includes(tag.id)}
-                          onClick={()=>toggleEntryTag(selectedTrade, tag.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* EMOTION TAGS — menu déroulant multi-sélection */}
-                  <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}} key={`emotion-${selectedTrade.date}-${selectedTrade.symbol}-${selectedTrade.entry}`}>
-                    <FieldLabel>{t("trades.detail.emotionTags")}</FieldLabel>
-                    <TagMultiSelect
-                      placeholder={t("trades.detail.emotionTags")}
-                      allTags={allEmotionTags}
-                      selected={emotionTags[selectedTrade.id] || []}
-                      onToggle={(id)=>toggleEmotion(selectedTrade, id)}
-                    />
-                  </div>
-
-
-                  {/* SCREENSHOT — placé sous les tags d'erreurs */}
-                  {(() => {
-                    const tradeId = selectedTrade.id;
-                    const url = screenshotUrls[tradeId];
-                    const handleFile = async (file) => {
-                      if (!file || !file.type?.startsWith("image/")) return;
-                      setScreenshotBusy(true);
-                      try { await uploadScreenshot(tradeId, file); }
-                      finally { setScreenshotBusy(false); }
-                    };
-                    const extractImageFromClipboard = (e) => {
-                      const items = e.clipboardData?.items;
-                      if (!items) return null;
-                      for (const it of items) {
-                        if (it.kind === "file" && it.type?.startsWith("image/")) {
-                          const f = it.getAsFile();
-                          if (f) return f;
-                        }
-                      }
-                      return null;
-                    };
-                    return (
-                      <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                          <FieldLabel>Screenshot</FieldLabel>
-                          {url && (
-                            <div style={{display:"inline-flex",alignItems:"center",gap:2}}>
-                              <label
-                                style={{padding:"2px 6px",fontSize:12,fontWeight:500,color:T.text,opacity:0.5,background:"transparent",border:"none",cursor:screenshotBusy?"not-allowed":"pointer",fontFamily:"inherit"}}>
-                                {t("trades.detail.modify")}
-                                <input type="file" accept="image/*" disabled={screenshotBusy}
-                                  onChange={async (e) => {
-                                    const f = e.target.files?.[0]; if (!f) { return; }
-                                    setScreenshotBusy(true);
-                                    try { await removeScreenshot(tradeId); await uploadScreenshot(tradeId, f); }
-                                    finally { setScreenshotBusy(false); e.target.value = ""; }
-                                  }}
-                                  style={{display:"none"}} />
-                              </label>
-                              <button type="button" onClick={async () => { setScreenshotBusy(true); try { await removeScreenshot(tradeId); } finally { setScreenshotBusy(false); } }}
-                                disabled={screenshotBusy}
-                                style={{padding: "2px 6px",fontSize:12,fontWeight:500,color:T.red,background:"transparent",border:"none",cursor:screenshotBusy?"not-allowed":"pointer",fontFamily:"inherit"}}>
-                                {t("trades.detail.delete")}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        {url ? (
-                          <button type="button" onClick={() => setLightboxUrl(url)}
-                            style={{display:"block",width:"100%",padding:0,border:"none",borderRadius:12,overflow:"hidden",background:FIELD_BG,cursor:"zoom-in",fontFamily:"inherit"}}>
-                            <img src={url} alt="Trade screenshot" style={{display:"block",width:"100%",maxHeight:320,objectFit:"contain"}} />
-                          </button>
-                        ) : (
-                          /* Zone de dépôt : le pointillé est ce qui la signale
-                             comme telle, on le garde — mais dilué comme les
-                             autres traits du panneau. */
-                          <label
-                            tabIndex={0}
-                            onPaste={async (e) => {
-                              const f = extractImageFromClipboard(e);
-                              if (f) { e.preventDefault(); await handleFile(f); }
-                            }}
-                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = T.text; }}
-                            onDragLeave={(e) => { e.currentTarget.style.borderColor = HAIRLINE; }}
-                            onDrop={async (e) => {
-                              e.preventDefault();
-                              e.currentTarget.style.borderColor = HAIRLINE;
-                              const f = e.dataTransfer.files?.[0];
-                              if (f) await handleFile(f);
-                            }}
-                            style={{
-                              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,
-                              padding:compact?"16px":"26px 16px",border:`1.5px dashed ${HAIRLINE}`,borderRadius:12,
-                              cursor:screenshotBusy?"not-allowed":"pointer",background:FIELD_BG,
-                              color:T.textSub,fontSize:12,fontWeight:500,
-                              outline: "none",
-                              transition:"border-color var(--dur-fast) var(--ease-out)",
-                            }}>
-                            <span style={{width:40,height:40,borderRadius:"50%",background:T.white,boxShadow:T.elevPill,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-                              <LucideImage size={18} strokeWidth={1.75} color={T.textSub} />
-                            </span>
-                            <span style={{fontSize:12,fontWeight:500,color:T.textSub}}>{screenshotBusy ? t("trades.detail.uploading") : t("trades.detail.dragImage")}</span>
-                            <input type="file" accept="image/*" disabled={screenshotBusy}
-                              onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; await handleFile(f); e.target.value = ""; }}
-                              style={{display:"none"}} />
-                          </label>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* NOTES (manuel) */}
-                  <div style={{display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <FieldLabel>Notes</FieldLabel>
-                    <textarea
-                      placeholder={t("trades.notePlaceholder")}
-                      value={tradeNotes[noteKeyOf(selectedTrade)] ?? tradeNotes[selectedTrade.id] ?? ""}
-                      onChange={(e)=>{
-                        const key = noteKeyOf(selectedTrade);
-                        if (!key) return;
-                        const updated = {...tradeNotes, [key]: e.target.value};
-                        setTradeNotes(updated);
-                        localStorage.setItem("tao_trade_notes", JSON.stringify(updated));
-                        persistNote(key, e.target.value);
-                      }}
-                      /* Même zone d'écriture que les notes du journal : pas de
-                         cadre — la carte est déjà une surface — et un aplat
-                         exprimé en transparence d'encre. */
-                      style={{
-                        flex:1,
-                        minHeight:compact?90:120,
-                        border:"none",
-                        borderRadius:10,
-                        padding:"14px 16px",
-                        fontSize:13,
-                        lineHeight:1.55,
-                        fontFamily:"var(--font-sans)",
-                        color:T.text,
-                        background:WRITING_BG,
-                        resize:"none",
-                        outline:"none"
-                      }}
-                    />
-                  </div>
-                </>
-                );
-              })()}
-
-              {/* STRATÉGIE */}
-              {(() => {
-                const tradeId = selectedTrade.date + selectedTrade.symbol + selectedTrade.entry;
-                // Toutes les clés sous lesquelles ce trade peut être indexé (l'import en crée 3) :
-                // UUID Supabase, composite, composite normalisé. On les met TOUTES à jour pour
-                // éviter qu'une stratégie reste fantôme via une clé non nettoyée.
-                // Inclut les clés de TOUS les trades du groupe (si groupé) pour appliquer en bloc
-                const allTrades = childrenOf(selectedTrade);
-                const tradeKeys = Array.from(new Set(
-                  allTrades.flatMap(tr => [
-                    tr.id,
-                    `${tr.date || ""}${tr.symbol || ""}${tr.entry ?? ""}`,
-                    (tr.date && tr.symbol && tr.entry != null)
-                      ? `${tr.date}${tr.symbol}${parseFloat(tr.entry).toFixed(2)}`
-                      : null,
-                  ]).filter(Boolean).map(String)
-                ));
-                // Source de vérité pour l'UI : union de toutes les stratégies trouvées sur n'importe quelle clé
-                const selectedIds = Array.from(new Set(tradeKeys.flatMap(k => tradeStrategies[k] || [])));
-                
-                // Calculate total rules checked across all selected strategies
-                const allSelectedStrats = effectiveStrategies.filter(s => selectedIds.includes(s.id));
-                const totalRulesCount = allSelectedStrats.reduce((sum, s) => sum + (s.groups?.flatMap(g => g.rules) || []).length, 0);
-                const totalCheckedCount = allSelectedStrats.reduce((sum, s) => {
-                  const rulesForStrat = (s.groups?.flatMap(g => g.rules) || []);
-                  const checkedInStrat = rulesForStrat.filter(r => {
-                    const key = `${selectedTrade.date}_${selectedTrade.symbol}_${selectedTrade.entry}_${selectedTrade.exit}_${selectedTrade.direction}_${s.id}_${r.id}`;
-                    return checkedRules[key];
-                  }).length;
-                  return sum + checkedInStrat;
-                }, 0);
-                const progressPercent = totalRulesCount > 0 ? (totalCheckedCount / totalRulesCount) * 100 : 0;
-                
-                return (
-                  <div style={{order:-1,display:"flex",flexDirection:"column",gap:compact?8:10}}>
-                    <FieldLabel>Stratégie</FieldLabel>
-                    {allSelectedStrats.length === 0 ? (
-                      <>
-                        <div style={{position:"relative",width:"100%",display:"flex"}}>
-                          <button
-                            onClick={()=>setShowStrategyDropdown(!showStrategyDropdown)}
-                            style={{
-                              width:"100%",
-                              minHeight: 34, padding: "8px 16px",
-                              borderRadius:999,
-                              border:"none",
-                              background:FIELD_BG,
-                              fontSize: 13,
-                              fontWeight:500,
-                              color:T.text,
-                              cursor:"pointer",
-                              display:"flex",
-                              alignItems:"center",
-                              justifyContent:"center",
-                              gap:6,
-                              transition:"background var(--dur-fast) var(--ease-out)",
-                              fontFamily:"var(--font-sans)",
-                            }}
-                            onMouseEnter={(e)=>{e.currentTarget.style.background=HAIRLINE}}
-                            onMouseLeave={(e)=>{e.currentTarget.style.background=FIELD_BG}}
-                          >
-                            <LucidePlus size={14} strokeWidth={1.75} />
-                            {t("trades.detail.addStrategy")}
-                          </button>
-
-                          {/* STRATEGY DROPDOWN */}
-                          {showStrategyDropdown && (
-                            <div style={{
-                              position:"absolute",
-                              top:"100%",
-                              left:0,
-                              right:0,
-                              marginTop:6,
-                              background:T.white,
-                              border:"none",
-                              borderRadius:12,
-                              boxShadow:"var(--elev-overlay)",
-                              padding:6,
-                              zIndex:100,
-                              maxHeight:240,
-                              overflowY:"auto"
-                            }}>
-                              {effectiveStrategies.length === 0 ? (
-                                <div style={{padding:12,textAlign:"center",fontSize:12,color:T.textSub}}>{t("trades.detail.noStrategy")}</div>
-                              ) : (
-                                strategiesByUsage.map(strat=>{
-                                  const isSelected = selectedIds.includes(strat.id);
-                                  const tradeCount = strategyTradeCounts[strat.id] || 0;
-                                  return (
-                                    <button key={strat.id} onClick={()=>{
-                                      // Mise à jour cohérente sur TOUTES les clés du trade
-                                      const newTradeStrategies = {...tradeStrategies};
-                                      tradeKeys.forEach(k => {
-                                        const current = newTradeStrategies[k] || [];
-                                        const updated = isSelected
-                                          ? current.filter(id => id !== strat.id)
-                                          : (current.includes(strat.id) ? current : [...current, strat.id]);
-                                        newTradeStrategies[k] = updated;
-                                      });
-                                      setTradeStrategies(newTradeStrategies);
-                                      setShowStrategyDropdown(false);
-                                    }} style={{width:"100%",padding: "8px 10px",borderRadius:8,background:isSelected?FIELD_BG:"transparent",border:"none",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,fontFamily:"inherit",transition:"background var(--dur-fast) var(--ease-out)"}}
-                                      onMouseEnter={(e)=>{if(!isSelected) e.currentTarget.style.background=FIELD_BG;}}
-                                      onMouseLeave={(e)=>{if(!isSelected) e.currentTarget.style.background="transparent";}}>
-                                    <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:strat.color}}/>
-                                    {/* Le nom et son sous-titre étaient rendus à 9 px :
-                                        illisibles. Ils reprennent l'échelle des listes
-                                        de la DA (13 px / 12 px atténué). */}
-                                    <div style={{flex:1,minWidth:0}}>
-                                      <div style={{fontSize:13,fontWeight:500,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{strat.name}</div>
-                                      <div style={{fontSize:12,color:T.text,opacity:0.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t("trades.detail.groupCount").replace("{n}", String(strat.groups?.length || 0))}{tradeCount > 0 ? ` · ${tradeCount} trade${tradeCount > 1 ? "s" : ""}` : ""}</div>
-                                    </div>
-                                    {isSelected && <LucideCheck size={14} strokeWidth={2} color={T.text} style={{flexShrink:0}} />}
-                                    </button>
-                                  );
-                                })
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    ) : null}
-
-                    {/* SELECTED STRATEGIES DETAILS */}
-                    {(() => {
-                      const selectedStrats = effectiveStrategies.filter(s => selectedIds.includes(s.id));
-                      return selectedStrats.length > 0 ? (
-                        <div style={{width:"100%",display:"flex",flexDirection:"column",gap:18}}>
-                          {selectedStrats.map((strat,idx)=>{
-                            const allRules = strat.groups.flatMap(g=>g.rules);
-                            const checkedCount = allRules.filter(r=>{
-                              const key = `${selectedTrade.date}_${selectedTrade.symbol}_${selectedTrade.entry}_${selectedTrade.exit}_${selectedTrade.direction}_${strat.id}_${r.id}`;
-                              return checkedRules[key];
-                            }).length;
-                            const stratProgressPercent = allRules.length > 0 ? (checkedCount / allRules.length) * 100 : 0;
-                            return (
-                              <div key={strat.id} style={{display:"flex",flexDirection:"column",gap:12}}>
-                                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                    <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:strat.color}}/>
-                                    <div style={{fontSize:13,fontWeight:600,color:T.text,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{strat.name}</div>
-                                    <StratMenu
-                                      open={openStratMenuId === strat.id}
-                                      onToggle={()=>setOpenStratMenuId(openStratMenuId===strat.id?null:strat.id)}
-                                      onClose={()=>setOpenStratMenuId(null)}
-                                      onDetach={(thenPick)=>{
-                                        // Retirer la stratégie de TOUTES les clés du trade
-                                        const newTradeStrategies = {...tradeStrategies};
-                                        tradeKeys.forEach(k => {
-                                          const current = newTradeStrategies[k] || [];
-                                          newTradeStrategies[k] = current.filter(id => id !== strat.id);
-                                        });
-                                        setTradeStrategies(newTradeStrategies);
-                                        localStorage.setItem("tao_trade_strategies", JSON.stringify(newTradeStrategies));
-                                        setOpenStratMenuId(null);
-                                        if (thenPick) setShowStrategyDropdown(true);
-                                      }}
-                                    />
-                                  </div>
-                                  {/* AVANCEMENT — libellé à gauche, compte à droite,
-                                      comme les lignes de statistiques ; la piste
-                                      reprend l'aplat des autres contrôles. */}
-                                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                                    <StatRow label="Règles suivies" value={`${checkedCount}/${allRules.length}`} />
-                                    <div style={{width:"100%",height:6,background:FIELD_BG,borderRadius:999,overflow:"hidden"}}>
-                                      <div style={{height:"100%",borderRadius:999,background:T.text,width:`${stratProgressPercent}%`,transition:"width var(--dur-base) var(--ease-out)"}}/>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                                  {strat.groups.map(group=>(
-                                    <div key={group.id} style={{display:"flex",flexDirection:"column",gap:8}}>
-                                      <FieldLabel>{group.name}</FieldLabel>
-                                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                                        {group.rules.map(rule=>{
-                                          const ruleKey = `${selectedTrade.date}_${selectedTrade.symbol}_${selectedTrade.entry}_${selectedTrade.exit}_${selectedTrade.direction}_${strat.id}_${rule.id}`;
-                                          const isChecked = checkedRules[ruleKey] || false;
-                                          return (
-                                            <CheckChip
-                                              key={rule.id}
-                                              label={rule.text}
-                                              checked={isChecked}
-                                              onClick={()=>setCheckedRules({...checkedRules,[ruleKey]:!isChecked})}
-                                            />
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null;
-                    })()}
-                  </div>
-                );
-              })()}
-
-            </div>
-
-          </div>
-          );
-          return isMobile ? ReactDOM.createPortal(panel, document.body) : panel;
-        })()}
+        {/* RIGHT - DETAIL PANEL WITH TABS (cf. `sidePanel`). */}
+        {sidePanel}
 
       </div>
 

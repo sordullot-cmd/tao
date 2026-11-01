@@ -2560,7 +2560,7 @@ export default function AgendaPage() {
         display: "flex", flexDirection: "column", gap: 16, fontFamily: "var(--font-sans)",
         ...(isMobile ? { minHeight: "100%" } : {
           position: "absolute",
-          top: "var(--page-pad-top, 14px)",
+          top: "var(--page-pad-top, 38px)",
           bottom: "var(--page-pad-bottom, 24px)",
           left: "var(--content-left, 40px)",
           right: "var(--page-gutter, 40px)",

@@ -714,3 +714,31 @@ export function accountsToFail(
   }
   return out;
 }
+
+/**
+ * L'inverse : les comptes « failed » que le calcul ne fait plus tomber, à
+ * rendre à leur type d'avant. L'échec reste collant face aux TRADES — un
+ * plancher touché le reste, et le calcul le redit à chaque passage —, mais pas
+ * face à une RÈGLE retirée : la perte journalière par défaut a fait tomber des
+ * comptes que la firme n'a jamais fermés.
+ *
+ * Un compte sans aucun trade chargé n'est pas rendu : faute de trades, le
+ * calcul ne voit rien de touché, ce qui ne prouve pas que rien ne l'a été.
+ */
+export function accountsToRevive(
+  accounts: PayoutAccount[] | null | undefined,
+  trades: (ContractTrade & { account_id?: string })[] | null | undefined,
+  store: ContractStore | null | undefined,
+  firmById: Map<string, { brand?: string | null; name?: string }> | null | undefined,
+): Array<{ id: string; to: "eval" | "funded" }> {
+  const withTrades = new Set((trades || []).map(tr => String(tr?.account_id ?? "")));
+  const fallen = (accounts || []).filter(a => isFailedAccount(a) && withTrades.has(a.id));
+  const progress = progressByAccount(fallen, trades, store, firmById);
+  const out: Array<{ id: string; to: "eval" | "funded" }> = [];
+  for (const acc of fallen) {
+    const p = progress.get(acc.id);
+    if (!p || p.breached) continue;
+    out.push({ id: acc.id, to: contractOf(store, acc.id).failedFrom || "eval" });
+  }
+  return out;
+}

@@ -177,6 +177,24 @@ export function addList(store: RoutineStore, name: string, strategyId: string | 
   return { lists: [...store.lists, list], activeId: id };
 }
 
+/**
+ * Crée ou remplace une liste ENTIÈRE, sans toucher à la liste active : la
+ * journée de trading édite ses listes de tâches dans une modale, et changer
+ * au passage la pastille de la page Discipline serait un effet de bord.
+ * L'identifiant vient de l'appelant, qui doit pouvoir ajouter la liste à sa
+ * séance dans la foulée.
+ */
+export function upsertList(store: RoutineStore, list: RoutineList): RoutineStore {
+  const clean: RoutineList = {
+    ...list,
+    name: list.name.trim() || DEFAULT_LIST_NAME,
+    items: list.items.map(it => ({ id: it.id, label: it.label.trim() })).filter(it => it.label),
+  };
+  return store.lists.some(l => l.id === list.id)
+    ? mapList(store, list.id, () => clean)
+    : { ...store, lists: [...store.lists, clean] };
+}
+
 export function renameList(store: RoutineStore, id: string, name: string): RoutineStore {
   const clean = name.trim();
   return clean ? mapList(store, id, l => ({ ...l, name: clean })) : store;

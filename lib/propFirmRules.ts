@@ -21,7 +21,7 @@
  */
 
 import {
-  DEFAULT_TARGET_PCT, DEFAULT_MAX_DD_PCT, DEFAULT_DAILY_LOSS_PCT, DEFAULT_MIN_DAYS,
+  DEFAULT_TARGET_PCT, DEFAULT_MAX_DD_PCT, DEFAULT_MIN_DAYS,
 } from "@/lib/propFirms";
 
 export interface AccountRules {
@@ -82,9 +82,9 @@ const BOOK: Record<string, FirmBook> = {
   topstep: {
     common: { trailing: true, minDays: 2, payoutWinDays: 5, winDayMin: 200 },
     sizes: {
-      50_000:  { target: 3_000, maxDD: 2_000, dailyLoss: 1_000 },
-      100_000: { target: 6_000, maxDD: 3_000, dailyLoss: 2_000 },
-      150_000: { target: 9_000, maxDD: 4_500, dailyLoss: 3_000 },
+      50_000:  { target: 3_000, maxDD: 2_000 },
+      100_000: { target: 6_000, maxDD: 3_000 },
+      150_000: { target: 9_000, maxDD: 4_500 },
     },
   },
   apex: {
@@ -124,7 +124,13 @@ const NEUTRAL: Omit<AccountRules, "source"> = {
 
 /**
  * Le barème d'un compte : celui de sa firme si elle est au catalogue, sinon le
- * repli (6 % de cible, 4 % de drawdown, 2 % de perte par jour, 2 jours minimum).
+ * repli (6 % de cible, 4 % de drawdown, 2 jours minimum).
+ *
+ * AUCUNE perte journalière par défaut. Elle faisait tomber le compte au
+ * premier jour à −1 000 sur un 50k, alors que chez la plupart des firmes
+ * futures (Topstep en tête) la limite journalière suspend la séance sans
+ * fermer le compte. Seule la firme qui la publie comme éliminatoire (FTMO) ou
+ * l'utilisateur, sur la carte du compte, l'impose.
  *
  * `capital` nul rend un barème à zéro plutôt que null : l'appelant affiche
  * alors « à renseigner » sans avoir à distinguer deux formes de réponse.
@@ -138,7 +144,6 @@ export function resolveAccountRules(brand: string | null | undefined, capital: n
       ...NEUTRAL,
       target: Math.round(c * (DEFAULT_TARGET_PCT / 100)),
       maxDD: Math.round(c * (DEFAULT_MAX_DD_PCT / 100)),
-      dailyLoss: Math.round(c * (DEFAULT_DAILY_LOSS_PCT / 100)),
       minDays: DEFAULT_MIN_DAYS,
       source: "default",
     };

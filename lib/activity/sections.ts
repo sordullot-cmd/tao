@@ -33,6 +33,7 @@ export const SECTION_OF_PAGE: Record<string, SelfSection> = {
   // Trading — de la saisie au bilan, journal et discipline compris.
   dashboard: "trading",
   "add-trade": "trading",
+  "trading-day": "trading",
   trades: "trading",
   "trade-chart": "trading",
   calendar: "trading",

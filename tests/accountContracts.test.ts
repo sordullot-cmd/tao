@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest";
 import { resolveAccountRules } from "@/lib/propFirmRules";
 import {
-  accountAxis, accountsToFail, contractOf, contractTypeOf, evalProgress, isFailedAccount,
+  accountAxis, accountsToFail, accountsToRevive, contractOf, contractTypeOf, evalProgress, isFailedAccount,
   normalizeContract, normalizeStore, payoutState, progressByAccount,
   payoutsByAccount, resolveObjectives, withContract, withPayout, withoutPayout,
 } from "@/lib/accountContracts";
@@ -54,13 +54,15 @@ describe("barème des firmes", () => {
     expect(resolveAccountRules("topstep", 50_000).payoutBuffer).toBe(0);
   });
 
-  it("remplit une éval sans barème connu : 3 000 de cible, 2 000 de DD, 2 jours, 1 000 par jour sur un 50k", () => {
+  it("remplit une éval sans barème connu : 3 000 de cible, 2 000 de DD, 2 jours, aucune perte journalière sur un 50k", () => {
     expect(resolveAccountRules(null, 50_000)).toMatchObject({
-      target: 3_000, maxDD: 2_000, minDays: 2, dailyLoss: 1_000, source: "default",
+      target: 3_000, maxDD: 2_000, minDays: 2, dailyLoss: 0, source: "default",
     });
     expect(resolveAccountRules("topstep", 50_000)).toMatchObject({
-      target: 3_000, maxDD: 2_000, minDays: 2, dailyLoss: 1_000,
+      target: 3_000, maxDD: 2_000, minDays: 2, dailyLoss: 0,
     });
+    // Seule la firme qui la publie comme éliminatoire la garde.
+    expect(resolveAccountRules("ftmo", 100_000).dailyLoss).toBe(5_000);
   });
 
   it("ne prête à personne le barème d'une voisine", () => {
@@ -217,6 +219,26 @@ describe("bascule en type « échec »", () => {
     const tombé = comptes.map(a => (a.id === "ko" ? { ...a, account_type: "failed" } : a));
     expect(accountsToFail(tombé, trades, {}, new Map())).toEqual([]);
     expect(isFailedAccount(tombé[0])).toBe(true);
+  });
+
+  it("ne fait plus tomber un compte sur une seule journée à −1 000", () => {
+    const journée = [{ ...tr("2026-09-01", -1_200), account_id: "a" }];
+    expect(accountsToFail([{ id: "a", account_type: "eval", eval_account_size: "50k" }], journée, {}, new Map())).toEqual([]);
+  });
+
+  it("rend à son type d'avant le compte que plus rien ne fait tomber", () => {
+    const journée = [
+      { ...tr("2026-09-01", -1_200), account_id: "dll" },
+      { ...tr("2026-09-01", -2_600), account_id: "dd" },
+    ];
+    const tombés = [
+      { id: "dll", account_type: "failed", eval_account_size: "50k" },
+      { id: "dd", account_type: "failed", eval_account_size: "50k" },
+      { id: "vide", account_type: "failed", eval_account_size: "50k" },
+    ];
+    const store = { dll: normalizeContract({ failedFrom: "funded", fundedAt: "2026-08-01" }) };
+    // Le drawdown reste touché ; un compte sans trade chargé ne prouve rien.
+    expect(accountsToRevive(tombés, journée, store, new Map())).toEqual([{ id: "dll", to: "funded" }]);
   });
 
   it("relit un compte tombé sous son type d'avant", () => {

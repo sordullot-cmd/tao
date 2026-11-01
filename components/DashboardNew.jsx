@@ -20,7 +20,7 @@ import { useApp } from "@/lib/contexts/AppContext";
 import { useUndo } from "@/lib/contexts/UndoContext";
 import { getPlaceholderAccountId, isPlaceholderAccount } from "@/lib/utils/placeholderAccount";
 import { readArchivedMeta, writeArchivedMeta, isArchivedAccount } from "@/lib/utils/archivedAccounts";
-import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, withContract, accountsToFail, isFailedAccount, FAILED_TYPE, FAILED_GROUP } from "@/lib/accountContracts";
+import { CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, withContract, accountsToFail, accountsToRevive, isFailedAccount, FAILED_TYPE, FAILED_GROUP } from "@/lib/accountContracts";
 import { updateTradingAccount } from "@/lib/propFirms";
 import StrategyPage from "@/components/StrategyPage";
 import StrategyDetailPage from "@/components/StrategyDetailPage";
@@ -54,6 +54,7 @@ import JournalPage from "@/components/pages/JournalPage";
 import DashboardPage from "@/components/pages/DashboardPage";
 import DisciplinePage from "@/components/pages/DisciplinePage";
 import TradesPage from "@/components/pages/TradesPage";
+import TradingDayPage from "@/components/pages/TradingDayPage";
 import TradeChartPage from "@/components/pages/TradeChartPage";
 import AddTradePage from "@/components/pages/AddTradePage";
 import BacktestPage from "@/components/pages/BacktestPage";
@@ -81,11 +82,10 @@ import { T } from "@/lib/ui/tokens";
 import { TYPE } from "@/lib/ui/type";
 import { t, useLang } from "@/lib/i18n";
 import {
-  LayoutDashboard,
+  LayoutGrid,
   Calendar as LucideCalendar,
   ListChecks,
-  NotebookPen,
-  ShieldCheck,
+  TableProperties as LucideTableProperties,
   FlaskConical,
   Target as LucideTarget,
   Upload as LucideUpload,
@@ -144,7 +144,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trades", "calendar", "accounts", "account-detail", "firm-detail", "failed-accounts", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "communication", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
+const DA_PAGES = ["dashboard", "trading-day", "trades", "calendar", "accounts", "account-detail", "firm-detail", "failed-accounts", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "communication", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -458,6 +458,30 @@ export default function App() {
   useEffect(() => {
     if (!user?.id || accountsLoading || !trades?.length) return;
     const firmById = new Map((firms || []).map(f => [f.id, f]));
+
+    /* Avant de faire tomber, rendre ce qu'une règle retirée avait fait tomber
+       à tort (cf. `accountsToRevive`). `failingRef` sert aussi de verrou ici :
+       une écriture en vol ne doit pas repartir à chaque rendu. */
+    const revive = accountsToRevive(ownedAccounts, trades, normalizeStore(contractStore), firmById)
+      .filter(d => !failingRef.current.has(d.id));
+    if (revive.length > 0) {
+      revive.forEach(d => failingRef.current.add(d.id));
+      setContractStore(prev => revive.reduce(
+        (store, d) => withContract(store, d.id, { failedFrom: null }),
+        normalizeStore(prev),
+      ));
+      const back = new Map(revive.map(d => [d.id, d.to]));
+      setAccounts(prev => (prev || []).map(a => (back.has(a.id) ? { ...a, account_type: back.get(a.id) } : a)));
+      for (const d of revive) {
+        updateTradingAccount(d.id, { account_type: d.to })
+          .then(() => failingRef.current.delete(d.id))
+          .catch((e) => {
+            console.error("⚠️ sortie d'échec:", e);
+            failingRef.current.delete(d.id);
+          });
+      }
+    }
+
     const due = accountsToFail(ownedAccounts, trades, normalizeStore(contractStore), firmById)
       .filter(d => !failingRef.current.has(d.id));
     if (due.length === 0) return;
@@ -761,17 +785,22 @@ export default function App() {
       label: t("nav.trading"),
       items: [
         { id: "add-trade",  icon: LucideUpload,       label: t("nav.addTrade") },
-        { id: "dashboard",  icon: LayoutDashboard,    label: t("nav.dashboard") },
-        { id: "calendar",   icon: LucideCalendar,     label: t("nav.calendar") },
-        { id: "trades",     icon: ListChecks,         label: t("nav.trades") },
+        { id: "dashboard",  icon: LayoutGrid,         label: t("nav.dashboard") },
+        /* « Calendrier » n'est plus dans la navigation : le tableau de bord en
+           porte déjà un. La page reste routée et joignable par la palette
+           de commandes — masquée ici, pas retirée. */
+        /* « Daily flow » ne porte plus d'onglets : Trades, Journal et
+           Discipline en sont sortis — la journée se suit seule. Journal et
+           Discipline restent routées et joignables par la palette de
+           commandes ; Trades a regagné la barre, le registre complet se
+           consultant trop souvent pour passer par la palette. */
+        { id: "trading-day", icon: ListChecks,        label: t("nav.dailyFlow") },
         { id: "accounts",   icon: LucideWallet,       label: t("nav.accounts") },
+        { id: "trades",     icon: LucideTableProperties, label: t("nav.trades") },
         { id: "strategies", icon: LucideTarget,       label: t("nav.strategies") },
         /* Le backtesting suit « Stratégies » : on rejoue à la main les setups
-           d'une stratégie qu'on vient d'y décrire. Il précède « Journal », qui
-           relève lui les trades RÉELLEMENT pris. */
+           d'une stratégie qu'on vient d'y décrire. */
         { id: "backtest",   icon: FlaskConical,       label: t("nav.backtest") },
-        { id: "journal",    icon: NotebookPen,        label: t("nav.journal") },
-        { id: "discipline", icon: ShieldCheck,        label: t("nav.discipline") },
       ],
     },
     /* Vie perso — tout le hors-trading : le quotidien, le corps, les idées et
@@ -836,6 +865,10 @@ export default function App() {
   // Raccourcis clavier : Alt+1..9 pour naviguer entre les pages de la sidebar
   const flatNavIds = SIDEBAR_SECTIONS.flatMap(s => s.items.map(i => i.id));
 
+  /* Entrée de navigation allumée. Elle ne diffère plus de `page` depuis que
+     « Daily flow » n'a plus d'onglets ; le nom reste pour dire ce qu'on lit. */
+  const navId = page;
+
   /* Pages visitées, de la plus récente à la plus ancienne — la page courante
      en tête. C'est un ordre d'USAGE, pas l'ordre de la sidebar : Ctrl+Tab
      faisait défiler la navigation cran par cran, ce qui obligeait à traverser
@@ -885,8 +918,8 @@ export default function App() {
      latérale telles quelles — deux listes tenues en parallèle finiraient par
      diverger au premier écran ajouté. */
   const MOBILE_TABS = [
-    { id: "dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
-    { id: "trades",    label: t("nav.trades"),    icon: ListChecks },
+    { id: "dashboard", label: t("nav.dashboard"), icon: LayoutGrid },
+    { id: "trading-day", label: t("nav.dailyFlow"),  icon: ListChecks },
     /* « Ajouter » est une ACTION, pas une destination : pastille pleine au
        centre, et jamais d'état actif (cf. TabBar). C'est le geste le plus
        fréquent de l'app, et le centre de la barre est le point le plus sûr du
@@ -905,6 +938,9 @@ export default function App() {
      pas la précision. */
   const MOBILE_TITLES = {
     ...Object.fromEntries(SIDEBAR_SECTIONS.flatMap(s => s.items.map(i => [i.id, i.label]))),
+    calendar:                  t("nav.calendar"),
+    journal:                   t("nav.journal"),
+    discipline:                t("nav.discipline"),
     "trade-chart":             t("nav.trades"),
     "strategy-detail":         t("nav.strategies"),
     "account-detail":          t("nav.accounts"),
@@ -931,7 +967,7 @@ export default function App() {
      C'est un retour d'HISTORIQUE, pas un raccourci vers un écran choisi
      d'avance : depuis le détail d'un compte on revient là d'où l'on vient,
      comme le bouton système d'Android et le balayage depuis le bord d'iOS. */
-  const mobileBack = !flatNavIds.includes(page) && pageHistory.current.length > 1
+  const mobileBack = !flatNavIds.includes(navId) && pageHistory.current.length > 1
     ? () => goRecent(1)
     : undefined;
 
@@ -946,13 +982,13 @@ export default function App() {
       style={{
         width: "100%", display: "flex", alignItems: "center", gap: 12,
         minHeight: 48, padding: "0 12px", borderRadius: 10, border: "none",
-        background: page === id ? T.navActiveBg : "transparent",
-        color: page === id ? T.navActiveText : T.text,
+        background: navId === id ? T.navActiveBg : "transparent",
+        color: navId === id ? T.navActiveText : T.text,
         ...TYPE.callout,
         textAlign: "left", fontFamily: "inherit", touchAction: "manipulation",
       }}
     >
-      <Icon size={19} strokeWidth={page === id ? 2.2 : 1.75} />
+      <Icon size={19} strokeWidth={navId === id ? 2.2 : 1.75} />
       <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
     </button>
   );
@@ -985,10 +1021,11 @@ export default function App() {
     "add-trade": <AddTradePage setPage={setPage} setAccounts={setAccounts} accounts={accounts.filter(a => !isFailedAccount(a))} firms={firms} user={user} />,
     /* La page Trades garde les comptes en échec : c'est le registre de ce
        qui a été tradé, pas un tableau de bord. */
+    "trading-day": <TradingDayPage trades={journalTrades} strategies={strategies} accounts={ownedAccounts} />,
     trades:     <TradesPage trades={journalTrades} strategies={strategies} accounts={ownedAccounts} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     "trade-chart": <TradeChartPage trades={filteredTrades} />,
     calendar:   <CalendarPage onlyFailedTrades={onlyFailedTrades} trades={filteredTrades} accountType={accountType} evalAccountSize={selectedEvalAccount} accounts={visibleAccounts} selectedAccountIds={selectedAccountIds} setPage={setPage} />,
-    journal: <JournalPage trades={journalTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
+    journal:    <JournalPage trades={journalTrades} strategies={strategies} onImportClick={() => setPage("add-trade")} onDeleteTrade={handleDeleteTrade} onClearTrades={handleClearTrades} />,
     discipline: <DisciplinePage trades={disciplineTrades} />,
     strategies: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
     "strategy-detail": <StrategyDetailPage setPage={setPage} />,
@@ -1089,7 +1126,7 @@ export default function App() {
           le contenu part ainsi du bord de la fenêtre, et un bloc pleine largeur
           peut reprendre cette réserve pour passer derrière la barre. Remise à 0
           en mobile, où la barre est un tiroir (cf. globals.css). */}
-      <div className="tao-root" style={{display:"flex",minHeight:"100vh",background:"var(--color-bg-subtle, #F5F5F5)","--shell-left":`${sidebarWidth + 12}px`}}>
+      <div className="tao-root" style={{display:"flex",minHeight:"100vh",background:"var(--color-bg-subtle, #FBFBFB)","--shell-left":`${sidebarWidth + 12}px`}}>
         {/* SIDEBAR (OpenAI-style) */}
         <Sidebar
           mobileOpen={mobileNavOpen}
@@ -1115,7 +1152,7 @@ export default function App() {
           workspaces={visibleAccounts.map(a => ({ id: a.id, name: a.name || "Compte" }))}
           onCreateWorkspace={() => setPage("add-trade")}
           sections={SIDEBAR_SECTIONS}
-          activeId={page}
+          activeId={navId}
           onSelect={(id) => {
             // Plus de sélection à mettre de côté / restaurer en entrant et en
             // sortant d'« Ajouter un trade » : tous les comptes restent actifs.
@@ -1154,7 +1191,7 @@ export default function App() {
               haute de son bloc de tête (`HEAD_PAD_TOP`), ce qui pose son chiffre
               héros à la même hauteur que le premier élément des autres pages
               sans river la courbe au passage. */}
-          <div className="tao-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #F5F5F5)",padding:page === "dashboard" ? "0 28px 0 calc(var(--shell-left, 0px) + 28px)" : "10px 28px 10px calc(var(--shell-left, 0px) + 28px)",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
+          <div className="tao-topbar" style={{flexShrink:0,zIndex:10,background:"var(--color-bg-subtle, #FBFBFB)",padding:page === "dashboard" ? "0 28px 0 calc(var(--shell-left, 0px) + 28px)" : "10px 28px 10px calc(var(--shell-left, 0px) + 28px)",display:"flex",alignItems:"center",gap:12,fontFamily:"var(--font-sans)"}}>
             <button
               type="button"
               className="tao-hamburger"
@@ -1195,8 +1232,10 @@ export default function App() {
               /* Respiration verticale, elle aussi commune à TOUTES les pages :
                  les pages n'ont plus de `paddingTop` à elles (elles allaient de
                  8 à 20 px selon l'endroit), c'est le conteneur qui défile qui la
-                 porte, une fois. */
-              "--page-pad-top": "14px",
+                 porte, une fois. 38 px : les 14 d'origine collaient le premier
+                 bloc au haut de la fenêtre, 24 de plus ont été essayés sur
+                 trois pages avant d'être étendus à toutes. */
+              "--page-pad-top": "38px",
               "--page-pad-bottom": "24px",
               /* La réserve de la barre latérale est portée ICI, par le
                  conteneur scrollable lui-même, et pas par le cadre au-dessus :
@@ -1243,7 +1282,7 @@ export default function App() {
         <>
           <TabBar
             items={MOBILE_TABS}
-            activeId={page}
+            activeId={navId}
             moreOpen={moreOpen}
             onSelect={(id) => {
               /* « Plus » BASCULE : un second appui sur l'onglet allumé referme

@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { T } from "@/lib/ui/tokens";
+import { TYPE } from "@/lib/ui/type";
 import { TAG_COLORS } from "@/lib/ui/tradingColors";
 import { t, useLang } from "@/lib/i18n";
 import { fmt } from "@/lib/ui/format";
 import { byMostRecent } from "@/lib/tradeOrder";
 import { periodStart } from "@/lib/ui/period";
 import { getCurrencySymbol } from "@/lib/userPrefs";
-import { parseAccountSize } from "@/lib/propFirms";
 import { Skeleton, SkeletonCard, SkeletonList, SkeletonStats, SkeletonToolbar, SkeletonScreen, showSkeleton } from "@/components/ui/Skeleton";
 import { useApp } from "@/lib/contexts/AppContext";
 import {
@@ -16,14 +16,17 @@ import {
   HoverFadeDefs, hoverFadeMask, hoverFadeStyle, HOVER_FADE, TILE_HOVER,
 } from "@/components/ui/da";
 import TradesList, { COMPACT_TRADE_COLUMNS } from "@/components/ui/tradesList";
-import { LayoutDashboard, Plus, ChevronLeft, ChevronRight, ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { DayFlowSummary } from "@/components/pages/TradingDayPage";
+import { LayoutGrid, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 
 /* ============================================================================
    Briques visuelles de la nouvelle DA (maquette Figma « Tableau de bord »).
    Toutes les couleurs passent par les tokens pour suivre le thème sombre.
    ========================================================================== */
 
-/** Carte blanche : coins 12, ombre très douce, pas de bordure. */
+/** Carte blanche : coins 12, ombre très douce, pas de bordure.
+ *  Un liseré gris (HAIRLINE, 1 px puis 0,5 px) a été essayé ici : même au plus
+ *  fin, il encadrait les blocs plus qu'il ne les détachait. */
 const CARD = {
   background: T.white,
   borderRadius: 12,
@@ -32,28 +35,57 @@ const CARD = {
   overflow: "hidden",
 };
 
-/** Titre de section (24px Medium), posé hors carte. */
-function SectionTitle({ children, action }) {
+/* En-tête DANS la carte. Les titres de 24 px posés au-dessus de chaque bloc
+   faisaient deux étages par bloc — un titre qui flotte, une carte muette — et
+   la page se lisait comme une suite de rubriques plutôt que comme un tableau.
+   Le titre descend au cran `headline` et partage sa ligne avec ce qui le
+   qualifie : la navigation du mois, la note, un lien vers la page entière. */
+function CardHeader({ title, aside, onMore, style }) {
   return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%"}}>
-      <h2 style={{fontSize:24,fontWeight:500,lineHeight:"26.35px",color:T.text,margin:0}}>{children}</h2>
-      {action}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,minHeight:28,minWidth:0,...style}}>
+      <h2 style={{...TYPE.headline,fontWeight:600,color:T.text,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title}</h2>
+      {aside}
+      {onMore && <MoreLink onClick={onMore} />}
     </div>
+  );
+}
+
+/** « Voir plus › » : gris tant qu'on ne le survole pas — il ne doit pas
+    rivaliser avec le titre dont il partage la ligne. */
+function MoreLink({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{display:"inline-flex",alignItems:"center",gap:2,flexShrink:0,minHeight:28,padding:"0 2px",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",...TYPE.label,color:T.textSub,transition:"color var(--dur-fast) var(--ease-out)"}}
+      onMouseEnter={e => { e.currentTarget.style.color = T.text; }}
+      onMouseLeave={e => { e.currentTarget.style.color = T.textSub; }}
+    >
+      Voir plus <ChevronRight size={13} strokeWidth={2} aria-hidden />
+    </button>
   );
 }
 
 /** En-tête de tableau : 12px Medium en capitales, atténué. */
 const TH = { fontSize:12, fontWeight:500, lineHeight:"17.05px", color:T.text };
 
+/** Flèches du mois : une cible de 28 px pour une icône de 15. */
+const MONTH_NAV = {
+  width:28, height:28, borderRadius:8, padding:0, border:"none", background:"none",
+  cursor:"pointer", color:T.textSub, display:"inline-flex", alignItems:"center", justifyContent:"center",
+};
+
 /* Grille de « Performance par jour ». Une vraie grille plutôt que sept colonnes
    flexibles espacées de 60 px : les chiffres tombent au pixel sous leur en-tête,
    et le nom du jour absorbe la place que les colonnes de valeurs n'utilisent pas
-   au lieu de la laisser en gouttière. */
+   au lieu de la laisser en gouttière. Quatre colonnes depuis que le tableau
+   tient dans un tiers de page : gain moyen, perte moyenne et part du total y
+   écrasaient les montants — l'espérance les résume. */
 const DAY_GRID = {
   display: "grid",
-  gridTemplateColumns: "minmax(0,1.4fr) repeat(6, minmax(0,1fr))",
+  gridTemplateColumns: "minmax(0,1.3fr) repeat(3, minmax(0,1fr))",
   alignItems: "center",
-  gap: 12,
+  gap: 8,
 };
 
 /* Les quatre familles de tags, choisies par un sélecteur au lieu d'être empilées
@@ -66,13 +98,13 @@ const BREAKDOWNS = [
 ];
 
 /* Grille d'une ligne de catégorie du Tao Score : libellé, occurrences, winrate,
-   P&L. Les largeurs étaient figées (100/117/117 px) dans une carte de demi-page,
-   où elles ne laissaient plus rien au libellé. */
+   P&L. Resserrée pour un tiers de page : à 132 px, la colonne P&L ne laissait
+   plus rien au libellé. */
 const CAT_GRID = {
   display: "grid",
-  gridTemplateColumns: "minmax(0,1fr) 64px 72px 132px",
+  gridTemplateColumns: "minmax(0,1fr) 44px 44px 96px",
   alignItems: "center",
-  gap: 12,
+  gap: 8,
 };
 
 /* La vignette du symbole, son libellé et la table des instruments vivaient ici
@@ -100,7 +132,7 @@ function StackedAmount({ value, align = "flex-end" }) {
   const color = value > 0 ? T.pnlPos : value < 0 ? T.pnlNeg : T.textSub;
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:align,justifyContent:"center",color,fontWeight:500,whiteSpace:"nowrap"}}>
-      <span style={{fontSize:16,lineHeight:"18.6px"}}>{value > 0 ? "+" : ""}{fmt(value, false)}</span>
+      <span style={{fontSize:14,lineHeight:"18.6px"}}>{value > 0 ? "+" : ""}{fmt(value, false)}</span>
     </div>
   );
 }
@@ -265,18 +297,6 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
     load("tao_trade_timeframe", setTimeframeTags);
   }, []);
 
-  /* Capital des comptes actifs — base du pourcentage de variation quand la
-     fenêtre de la courbe part de zéro (cas « Tout » : le premier point est le
-     zéro posé la veille du premier trade, il ne peut pas servir de diviseur).
-     Zéro si aucune taille de compte n'est renseignée : le pourcentage est alors
-     masqué plutôt qu'affiché à 0,00 %. */
-  const baseCapital = React.useMemo(() => {
-    const ids = new Set(selectedAccountIds);
-    return (accounts || [])
-      .filter(a => ids.size === 0 || ids.has(a.id))
-      .reduce((s, a) => s + (parseAccountSize(a.eval_account_size) || 0), 0);
-  }, [accounts, selectedAccountIds]);
-
   // Pendant que les trades arrivent depuis Supabase, afficher un skeleton
   // plutôt que l'état vide (évite le flash "Aucun trade" puis re-render).
   const { tradesLoading } = useApp();
@@ -306,7 +326,7 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
               <Skeleton width={104} height={18} />
               <Skeleton width={232} height={31} radius={8} />
-              <Skeleton width={148} height={18} />
+              <Skeleton width={340} height={18} />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               {[54, 54, 54, 54, 60].map((w, i) => <Skeleton key={i} width={w} height={34} radius={999} />)}
@@ -324,9 +344,9 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   if ((!trades || trades.length === 0) && !onlyFailedTrades) {
     return (
       <div style={{display:"flex",flexDirection:"column",gap:24,fontFamily:"var(--font-sans)"}} className="anim-1">
-        <div style={{background:T.white,borderRadius:12,boxShadow:T.elevCard,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+        <div style={{...CARD,padding:"64px 40px",textAlign:"center",minHeight:"50vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
           <div style={{width:48,height:48,borderRadius:12,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
-            <LayoutDashboard size={22} strokeWidth={1.75} color={T.text}/>
+            <LayoutGrid size={22} strokeWidth={1.75} color={T.text}/>
           </div>
           <div style={{fontSize:20,fontWeight:500,color:T.text,marginBottom:6}}>{t("dash.noTrades")}</div>
           <div style={{fontSize:14,color:T.textSub,marginBottom:20,maxWidth:380,lineHeight:1.5}}>{t("dash.noTradesSub")}</div>
@@ -389,6 +409,14 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   const lossCount = losses.length;
   const winRate = ((winCount/(winCount+lossCount||1))*100).toFixed(1);
   const profitFactor = (wins.reduce((s,t)=>s+t.pnl,0)/Math.abs(losses.reduce((s,t)=>s+t.pnl,0)||1)).toFixed(2);
+
+  // Jours tradés : dates locales distinctes, sur la même base que le winrate.
+  // Clé locale et non `toISOString()` : un trade du soir basculerait sinon au
+  // lendemain UTC et compterait un jour de trop.
+  const tradingDays = new Set(filteredTrades.map(tr => {
+    const d = new Date(tr.date);
+    return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }).filter(Boolean)).size;
 
   // WR Today = winrate sur les trades d'aujourd'hui
   const todayIso = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
@@ -713,26 +741,6 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   });
   const emotionStats = categoryStats(allEmotionTags, tr => emotionTags[tr.id] || []);
 
-  // Delta affiché sous le chiffre héros : variation du cumulé sur toute la
-  // fenêtre visible (et non entre les deux derniers points, qui affichait
-  // presque toujours un delta insignifiant).
-  const lastCum = pnlCurve.length ? pnlCurve[pnlCurve.length - 1].cum : 0;
-  const firstCum = pnlCurve.length ? pnlCurve[0].cum : 0;
-  const deltaAbs = lastCum - firstCum;
-  /* Base du pourcentage : le SOLDE au début de la fenêtre, c'est-à-dire le
-     capital des comptes plus le cumulé déjà acquis à ce moment-là. Le cumulé
-     seul ne marchait pas : sur « Tout » la fenêtre part du zéro posé avant le
-     premier trade, et le pourcentage restait figé à 0,00 % ; sur les fenêtres
-     courtes, un cumulé de départ proche de zéro faisait exploser le rapport.
-     Sans capital connu, on retombe sur le cumulé de départ, et à défaut le
-     pourcentage n'est pas affiché du tout. */
-  const deltaBase = baseCapital
-    ? Math.abs(baseCapital + firstCum)
-    : Math.abs(firstCum);
-  const deltaPct = deltaBase ? Math.abs((deltaAbs / deltaBase) * 100) : null;
-  const deltaColor = deltaAbs > 0 ? T.pnlPos : deltaAbs < 0 ? T.pnlNeg : T.textSub;
-  const DeltaIcon = deltaAbs >= 0 ? ArrowUpRight : ArrowDownRight;
-
   /* ── Marge du haut, alignée sur le reste du site ───────────────────────────
      Ailleurs, le premier élément d'une page tombe sous la seule barre du haut
      (20 px) : le conteneur qui défile est à padding-top 0 et les pages ne
@@ -779,23 +787,24 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
           display:"flex", alignItems:"flex-start", justifyContent:"space-between",
           gap:16, flexWrap:"nowrap", pointerEvents:"none",
         }}>
+          {/* Les repères de base empilés : le P&L net en héros, winrate, jours
+              tradés et profit factor en une ligne discrète dessous. À côté du
+              héros, en même taille, ils lui disputaient le regard. Pas de delta
+              de période : sur « Tout » il redisait le P&L au centime près. */}
           <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
-            <div style={{fontSize:14,lineHeight:"18.6px",color:T.textSub}}>{t("dash.kpi.totalPnL")}</div>
+            <div style={{fontSize:14,lineHeight:"18.6px",color:T.textSub}}>{t("dash.kpi.netPnL")}</div>
             <HeroAmount value={totalPnL} />
-            <div style={{display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:500,lineHeight:"18.6px",color:deltaColor}}>
-              <span>{deltaAbs > 0 ? "+" : ""}{fmt(deltaAbs, false)}</span>
-              {/* Sans base de calcul, la flèche seule : des parenthèses vides
-                  se liraient comme une valeur manquante. */}
-              {deltaPct != null ? (
-                <span style={{display:"inline-flex",alignItems:"center"}}>
-                  <span>(</span>
-                  <DeltaIcon size={20} strokeWidth={1.75} style={{margin:"0 1px"}} />
-                  <span>{deltaPct.toFixed(2)}%</span>
-                  <span>&nbsp;)</span>
+            <div style={{display:"flex",alignItems:"baseline",gap:24,fontSize:14,lineHeight:"18.6px",whiteSpace:"nowrap"}}>
+              {[
+                { label: t("dash.kpi.winRate"), value: `${winRate}%` },
+                { label: t("dash.kpi.tradingDays"), value: tradingDays },
+                { label: t("dash.kpi.profitFactor"), value: profitFactor },
+              ].map(k => (
+                <span key={k.label} style={{display:"inline-flex",alignItems:"baseline",gap:6}}>
+                  <span style={{color:T.textSub}}>{k.label}</span>
+                  <span style={{color:T.text,fontWeight:500,fontVariantNumeric:"tabular-nums"}}>{k.value}</span>
                 </span>
-              ) : (
-                <DeltaIcon size={20} strokeWidth={1.75} />
-              )}
+              ))}
             </div>
           </div>
 
@@ -1036,318 +1045,312 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
         )}
       </div>
 
-      {/* CALENDRIER P&L + TRADES RÉCENTS */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"stretch"}}>
+      {/* ═══ TROIS COLONNES ══════════════════════════════════════════════════
+          Sous la courbe, tout va par trois : calendrier, journée, trades en
+          tête ; leurs lectures dessous. Des colonnes et non des rangées : les
+          blocs de tête gardent leur hauteur naturelle (un calendrier et une
+          liste n'ont aucune raison de mesurer pareil), c'est le DERNIER bloc
+          de chaque colonne qui s'étire pour que les trois finissent ensemble. */}
+      <div className="tao-dash-cols" style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:20,alignItems:"stretch"}}>
 
-        {/* Calendrier P&L */}
-        <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
-          <SectionTitle>{t("dash.calendar")}</SectionTitle>
-          {/* Hauteur en plancher, plus en valeur figée : les jours sont des
-              carrés (aspect-ratio 1), donc la hauteur du mois découle de la
-              largeur de la carte et non l'inverse. */}
-          <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,minHeight:429}}>
-            {/* Navigation du mois */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%"}}>
-              <button
-                type="button"
-                aria-label="Mois précédent"
-                onClick={() => {
-                  if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(selectedYear - 1); }
-                  else setSelectedMonth(selectedMonth - 1);
-                }}
-                style={{background:"none",border:"none",padding:0,cursor:"pointer",color:T.text,display:"flex",alignItems:"center",justifyContent:"center"}}
-              >
-                <ChevronLeft size={16} strokeWidth={1.75} />
-              </button>
-              <div style={{fontSize:16,lineHeight:1,color:T.text}}>
-                {new Date(year, month).toLocaleString("en-US", { month: "long", year: "numeric" })}
-              </div>
-              <button
-                type="button"
-                aria-label="Mois suivant"
-                onClick={() => {
-                  if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(selectedYear + 1); }
-                  else setSelectedMonth(selectedMonth + 1);
-                }}
-                style={{background:"none",border:"none",padding:0,cursor:"pointer",color:T.text,display:"flex",alignItems:"center",justifyContent:"center"}}
-              >
-                <ChevronRight size={16} strokeWidth={1.75} />
-              </button>
-            </div>
-
-            {/* Grille du mois */}
-            <div style={{paddingTop:8,flex:1,minHeight:0}}>
-              <div style={{
-                display:"grid",
-                gridTemplateColumns:"repeat(7,minmax(0,1fr))",
-                /* Rangées dimensionnées par leur contenu : ce sont les cases,
-                   carrées, qui donnent la hauteur. Des rangées en 1fr sur une
-                   hauteur imposée les auraient rendues rectangulaires. */
-                gridAutoRows:"auto",
-                gap:3,
-              }}>
-                {["L","M","M","J","V","S","D"].map((d, idx) => (
-                  <div key={`h-${idx}`} style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <span style={{fontSize:10,lineHeight:"12.4px",color:T.textMut,textAlign:"center"}}>{d}</span>
-                  </div>
-                ))}
-                {calendarDays.map((day, i) => {
-                  if (!day) return <div key={`e-${i}`} />;
-                  const pnl = dayPnLMap[day] || 0;
-                  const dayIso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  const clickable = pnl !== 0;
-                  const pct = monthPnL !== 0 ? Math.abs((pnl / monthPnL) * 100) : 0;
-                  /* Même palette que la page Calendrier (DayCell) : aplat très
-                     léger `*Surface` plutôt que le `*Bg` à 20 %, montant en
-                     `*Text`, sous-ligne en `*Sub` atténuée. Les deux
-                     calendriers se lisaient sinon comme deux composants. */
-                  const bg = pnl > 0 ? T.calPosSurface : pnl < 0 ? T.calNegSurface : T.calEmptyBg;
-                  const fg = pnl > 0 ? T.calPosText : pnl < 0 ? T.calNegText : T.calEmptyText;
-                  const subFg = pnl > 0 ? T.calPosSub : pnl < 0 ? T.calNegText : T.calEmptyText;
-                  return (
-                    <div
-                      key={`d-${i}`}
-                      onClick={clickable ? () => goToTradesForDate(dayIso) : undefined}
-                      title={clickable ? "Voir les trades du jour" : undefined}
-                      style={{
-                        background:bg, borderRadius:3,
-                        aspectRatio:"1 / 1",
-                        display:"flex", flexDirection:"column",
-                        alignItems:"center", justifyContent:"center",
-                        color:fg, cursor: clickable ? "pointer" : "default",
-                        transition:"box-shadow .15s ease", minWidth:0, overflow:"hidden",
+        <div style={{display:"flex",flexDirection:"column",gap:20,minWidth:0}}>
+          {/* Calendrier P&L */}
+          <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+            {/* Aucune hauteur imposée : les jours sont des carrés (aspect-ratio
+                1), la hauteur du mois découle donc de la largeur de la colonne. */}
+            <div style={{...CARD,display:"flex",flexDirection:"column",gap:12}}>
+              {/* La navigation du mois loge à droite du titre : elle
+                  occupait déjà une rangée à elle, centrée, qui ne disait rien
+                  de plus qu'un en-tête. */}
+              <CardHeader
+                title={t("dash.calendar")}
+                aside={
+                  <div style={{display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}>
+                    <button
+                      type="button"
+                      aria-label="Mois précédent"
+                      onClick={() => {
+                        if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(selectedYear - 1); }
+                        else setSelectedMonth(selectedMonth - 1);
                       }}
-                      onMouseEnter={clickable ? (e) => { e.currentTarget.style.boxShadow = TILE_HOVER; } : undefined}
-                      onMouseLeave={clickable ? (e) => { e.currentTarget.style.boxShadow = "none"; } : undefined}
+                      style={MONTH_NAV}
                     >
-                      {pnl !== 0 ? (
-                        <>
-                          <span style={{fontSize:14,lineHeight:"17.05px",whiteSpace:"nowrap"}}>{pnl > 0 ? "+" : ""}{fmt(pnl, false)}</span>
-                          <span style={{fontSize:10,lineHeight:"17.05px",whiteSpace:"nowrap",color:subFg,opacity:0.6}}>( {pct.toFixed(2)}% )</span>
-                        </>
-                      ) : (
-                        <span style={{fontSize:14,lineHeight:"17.05px"}}>{day}</span>
-                      )}
+                      <ChevronLeft size={15} strokeWidth={1.75} />
+                    </button>
+                    <span style={{...TYPE.label,color:T.textSub,minWidth:96,textAlign:"center",fontVariantNumeric:"tabular-nums"}}>
+                      {new Date(year, month).toLocaleString("en-US", { month: "long", year: "numeric" })}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Mois suivant"
+                      onClick={() => {
+                        if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(selectedYear + 1); }
+                        else setSelectedMonth(selectedMonth + 1);
+                      }}
+                      style={MONTH_NAV}
+                    >
+                      <ChevronRight size={15} strokeWidth={1.75} />
+                    </button>
+                  </div>
+                }
+              />
+
+              {/* Grille du mois */}
+              <div style={{flex:1,minHeight:0}}>
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:"repeat(7,minmax(0,1fr))",
+                  /* Rangées dimensionnées par leur contenu : ce sont les cases,
+                     carrées, qui donnent la hauteur. Des rangées en 1fr sur une
+                     hauteur imposée les auraient rendues rectangulaires. */
+                  gridAutoRows:"auto",
+                  gap:3,
+                }}>
+                  {["L","M","M","J","V","S","D"].map((d, idx) => (
+                    <div key={`h-${idx}`} style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <span style={{fontSize:10,lineHeight:"12.4px",color:T.textMut,textAlign:"center"}}>{d}</span>
                     </div>
+                  ))}
+                  {calendarDays.map((day, i) => {
+                    if (!day) return <div key={`e-${i}`} />;
+                    const pnl = dayPnLMap[day] || 0;
+                    const dayIso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                    const clickable = pnl !== 0;
+                    const pct = monthPnL !== 0 ? Math.abs((pnl / monthPnL) * 100) : 0;
+                    /* Même palette que la page Calendrier (DayCell) : aplat très
+                       léger `*Surface` plutôt que le `*Bg` à 20 %, montant en
+                       `*Text`, sous-ligne en `*Sub` atténuée. Les deux
+                       calendriers se lisaient sinon comme deux composants. */
+                    const bg = pnl > 0 ? T.calPosSurface : pnl < 0 ? T.calNegSurface : T.calEmptyBg;
+                    const fg = pnl > 0 ? T.calPosText : pnl < 0 ? T.calNegText : T.calEmptyText;
+                    const subFg = pnl > 0 ? T.calPosSub : pnl < 0 ? T.calNegText : T.calEmptyText;
+                    return (
+                      <div
+                        key={`d-${i}`}
+                        onClick={clickable ? () => goToTradesForDate(dayIso) : undefined}
+                        title={clickable ? "Voir les trades du jour" : undefined}
+                        style={{
+                          background:bg, borderRadius:3,
+                          aspectRatio:"1 / 1",
+                          display:"flex", flexDirection:"column",
+                          alignItems:"center", justifyContent:"center",
+                          color:fg, cursor: clickable ? "pointer" : "default",
+                          transition:"box-shadow .15s ease", minWidth:0, overflow:"hidden",
+                        }}
+                        onMouseEnter={clickable ? (e) => { e.currentTarget.style.boxShadow = TILE_HOVER; } : undefined}
+                        onMouseLeave={clickable ? (e) => { e.currentTarget.style.boxShadow = "none"; } : undefined}
+                      >
+                        {pnl !== 0 ? (
+                          <>
+                            <span style={{fontSize:14,lineHeight:"17.05px",whiteSpace:"nowrap"}}>{pnl > 0 ? "+" : ""}{fmt(pnl, false)}</span>
+                            <span style={{fontSize:10,lineHeight:"17.05px",whiteSpace:"nowrap",color:subFg,opacity:0.6}}>( {pct.toFixed(2)}% )</span>
+                          </>
+                        ) : (
+                          <span style={{fontSize:14,lineHeight:"17.05px"}}>{day}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Impacts : émotion, type d'entrée, liquidité, timeframe. */}
+          <div style={{display:"flex",flexDirection:"column",gap:16,flex:1}}>
+            <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,flex:1}}>
+              <CardHeader title={t("dash.impacts")} />
+              <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                {BREAKDOWNS.map(b => {
+                  const active = breakdown === b.id;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setBreakdown(b.id)}
+                      aria-pressed={active}
+                      style={{
+                        padding: "8px 16px", minHeight: 34, borderRadius:999, border:"none",
+                        background: active ? T.accentBg : "transparent",
+                        color: T.text, opacity: active ? 1 : 0.5,
+                        fontSize: 13, fontWeight:500,
+                        cursor:"pointer", fontFamily:"inherit",
+                        transition:"background 140ms ease, opacity 140ms ease",
+                      }}
+                    >
+                      {b.label()}
+                    </button>
                   );
                 })}
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Trades récents */}
-        <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
-          <SectionTitle
-            action={
-              <button
-                type="button"
-                onClick={() => setPage?.("trades")}
-                style={{background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:"inherit",fontSize:14,lineHeight:"26.35px",color:T.text,opacity:0.4}}
-              >
-                Voir plus
-              </button>
-            }
-          >
-            {selectedDay !== null
-              ? t("trades.tradesOfDay").replace("{day}", [t("wd.monday"),t("wd.tuesday"),t("wd.wednesday"),t("wd.thursday"),t("wd.friday"),t("wd.saturday"),t("wd.sunday")][selectedDay])
-              : t("dash.recentTrades")}
-          </SectionTitle>
-          {/* Même brique que le détail d'un compte, en jeu de colonnes court :
-              la carte ne fait qu'une demi-largeur, dix colonnes n'y tiendraient
-              pas. Le reste (stratégie, session, frais…) est dans le dépliage. */}
-          {(() => {
-            const source = selectedDay !== null ? (pnlByDay[selectedDay] || []) : filteredTrades;
-            /* Douze lignes : au-delà de dix, c'est la liste qui donne sa hauteur
-               à la rangée (grille en `stretch`) et le calendrier qui s'étire —
-               assumé, le vide était du mauvais côté. */
-            /* Tri à la seconde (lib/tradeOrder.ts) : sur la seule date, une
-               journée importée d'un coup ressortait dans l'ordre d'insertion —
-               à l'envers — et les « douze premiers » étaient les douze plus
-               anciens. */
-            const list = [...source].sort(byMostRecent).slice(0, 12);
-            return (
-              <TradesList
-                trades={list}
-                strategies={strategies}
-                tradeStrategies={tradeStrategiesData}
-                columns={COMPACT_TRADE_COLUMNS}
-                empty="Aucun trade sur la période"
-                style={{ flex: 1, minHeight: 0 }}
-              />
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* ═══ TAO SCORE ════════════════════════════════════════════════════════
-          La note d'ensemble et sa forme à gauche, ce qui la fabrique à droite :
-          la répartition par tags, qui occupait une section entière plus bas. */}
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <SectionTitle
-          action={
-            <span style={{display:"inline-flex",alignItems:"baseline",gap:5}}>
-              <span style={{fontSize:28,fontWeight:500,color:T.text,lineHeight:1,letterSpacing:-0.2}}>{pentagonMetrics.overallScore}</span>
-              <span style={{fontSize:14,color:T.textMut}}>/ 100</span>
-            </span>
-          }
-        >
-          {t("dash.taoScore")}
-        </SectionTitle>
-
-        <div className="tao-dash-score" style={{
-          display:"grid", gridTemplateColumns:"minmax(330px,400px) minmax(0,1fr)",
-          gap:12, alignItems:"stretch",
-        }}>
-          {/* Le radar seul dans sa carte, largement margé : il touchait les
-              bords, et les cinq notes qu'on avait posées dessous encombraient
-              plus qu'elles n'aidaient — le radar montre déjà la forme. */}
-          <div style={{...CARD,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 48px"}}>
-            <PentagonRadar metrics={pentagonMetrics} size={240} />
-          </div>
-
-          {/* À droite du radar : la répartition par tags, qui occupait une
-              section à elle seule plus bas. Les deux se lisent ensemble — la note
-              d'un côté, ce qui la fabrique de l'autre. */}
-          <div style={{...CARD,display:"flex",flexDirection:"column",gap:16}}>
-            <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
-              {BREAKDOWNS.map(b => {
-                const active = breakdown === b.id;
-                return (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => setBreakdown(b.id)}
-                    aria-pressed={active}
-                    style={{
-                      padding: "8px 16px", minHeight: 34, borderRadius:999, border:"none",
-                      background: active ? T.accentBg : "transparent",
-                      color: T.text, opacity: active ? 1 : 0.5,
-                      fontSize: 13, fontWeight:500,
-                      cursor:"pointer", fontFamily:"inherit",
-                      transition:"background 140ms ease, opacity 140ms ease",
-                    }}
-                  >
-                    {b.label()}
-                  </button>
-                );
-              })}
-            </div>
-
-            {(() => {
-              const rows = { emotion: emotionStats, entry: entryStats, liquidity: liquidityStats, timeframe: timeframeStats }[breakdown] || [];
-              if (rows.length === 0) {
-                return (
-                  <div style={{fontSize:13,color:T.textMut,padding:"18px 2px"}}>
-                    {t("dash.noCategoryData")}
-                  </div>
-                );
-              }
-              // Part de chaque ligne dans le volume de la catégorie : c'est ce que
-              // mesure la barre, pas le P&L (qui a déjà sa colonne signée).
-              const maxCount = Math.max(...rows.map(r => r.count), 1);
-              return (
-                <div style={{display:"flex",flexDirection:"column"}}>
-                  <div style={{...CAT_GRID,padding:"0 2px 8px",opacity:0.4}}>
-                    <span style={TH} />
-                    <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
-                    <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
-                    <span style={{...TH,textAlign:"right"}}>P&L</span>
-                  </div>
-                  {rows.map(r => (
-                    <div key={r.id} style={{...CAT_GRID,padding:"11px 2px",borderTop:`1px solid ${T.border}`}}>
-                      <span style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
-                        <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-                          <span style={{width:9,height:9,borderRadius:96,background:r.color,flexShrink:0}}/>
-                          <span style={{fontSize:14,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
-                        </span>
-                        <span style={{height:4,borderRadius:999,background:T.accentBg,overflow:"hidden",maxWidth:260}}>
-                          <span style={{
-                            display:"block", height:"100%", borderRadius:999,
-                            width:`${(r.count / maxCount) * 100}%`, background:r.color, opacity:0.55,
-                          }} />
-                        </span>
-                      </span>
-                      <span style={{textAlign:"right",fontSize:14,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
-                      <span style={{textAlign:"right",fontSize:14,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
-                      <StackedAmount value={r.pnl} />
+              {(() => {
+                const rows = { emotion: emotionStats, entry: entryStats, liquidity: liquidityStats, timeframe: timeframeStats }[breakdown] || [];
+                if (rows.length === 0) {
+                  return (
+                    <div style={{fontSize:13,color:T.textMut,padding:"18px 2px"}}>
+                      {t("dash.noCategoryData")}
                     </div>
-                  ))}
-                </div>
+                  );
+                }
+                // Part de chaque ligne dans le volume de la catégorie : c'est ce que
+                // mesure la barre, pas le P&L (qui a déjà sa colonne signée).
+                const maxCount = Math.max(...rows.map(r => r.count), 1);
+                return (
+                  <div style={{display:"flex",flexDirection:"column"}}>
+                    <div style={{...CAT_GRID,padding:"0 2px 8px",opacity:0.4}}>
+                      <span style={TH} />
+                      <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
+                      <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
+                      <span style={{...TH,textAlign:"right"}}>P&L</span>
+                    </div>
+                    {rows.map(r => (
+                      <div key={r.id} style={{...CAT_GRID,padding:"11px 2px",borderTop:`1px solid ${T.border}`}}>
+                        <span style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+                          <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                            <span style={{width:9,height:9,borderRadius:96,background:r.color,flexShrink:0}}/>
+                            <span style={{fontSize:14,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
+                          </span>
+                          <span style={{height:4,borderRadius:999,background:T.accentBg,overflow:"hidden",maxWidth:260}}>
+                            <span style={{
+                              display:"block", height:"100%", borderRadius:999,
+                              width:`${(r.count / maxCount) * 100}%`, background:r.color, opacity:0.55,
+                            }} />
+                          </span>
+                        </span>
+                        <span style={{textAlign:"right",fontSize:14,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
+                        <span style={{textAlign:"right",fontSize:14,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
+                        <StackedAmount value={r.pnl} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:20,minWidth:0}}>
+          <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+            <DayFlowSummary
+              trades={trades}
+              onOpen={() => setPage?.("trading-day")}
+              header={<CardHeader title={t("nav.dailyFlow")} onMore={() => setPage?.("trading-day")} />}
+            />
+          </div>
+
+          {/* Tao Score : le radar, et la note à droite du titre — c'est elle
+              qu'on vient lire, le radar dit d'où elle vient. */}
+          <div style={{...CARD,flex:1,display:"flex",flexDirection:"column",gap:12}}>
+            <CardHeader
+              title={t("dash.taoScore")}
+              aside={
+                <span style={{display:"inline-flex",alignItems:"baseline",gap:4,flexShrink:0}}>
+                  <span style={{...TYPE.title2,color:T.text,fontVariantNumeric:"tabular-nums"}}>{pentagonMetrics.overallScore}</span>
+                  <span style={{...TYPE.label,color:T.textMut}}>/ 100</span>
+                </span>
+              }
+            />
+            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 8px 8px"}}>
+              <PentagonRadar metrics={pentagonMetrics} size={240} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:20,minWidth:0}}>
+          {/* Trades récents */}
+          <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+            {/* Même brique que le détail d'un compte, en jeu de colonnes court :
+                la carte ne fait qu'un tiers de largeur, dix colonnes n'y tiendraient
+                pas. Le reste (stratégie, session, frais…) est dans le dépliage. */}
+            {(() => {
+              const source = selectedDay !== null ? (pnlByDay[selectedDay] || []) : filteredTrades;
+              /* Tri à la seconde (lib/tradeOrder.ts) : sur la seule date, une
+                 journée importée d'un coup ressortait dans l'ordre d'insertion —
+                 à l'envers — et les « douze premiers » étaient les douze plus
+                 anciens. */
+              const list = [...source].sort(byMostRecent).slice(0, 12);
+              return (
+                <TradesList
+                  trades={list}
+                  strategies={strategies}
+                  tradeStrategies={tradeStrategiesData}
+                  columns={COMPACT_TRADE_COLUMNS}
+                  header={
+                    <CardHeader
+                      title={selectedDay !== null
+                        ? t("trades.tradesOfDay").replace("{day}", [t("wd.monday"),t("wd.tuesday"),t("wd.wednesday"),t("wd.thursday"),t("wd.friday"),t("wd.saturday"),t("wd.sunday")][selectedDay])
+                        : t("dash.recentTrades")}
+                      onMore={() => setPage?.("trades")}
+                    />
+                  }
+                  empty="Aucun trade sur la période"
+                  style={{ flex: 1, minHeight: 0 }}
+                />
               );
             })()}
           </div>
 
-        </div>
-      </div>
+        {/* ═══ PERFORMANCE PAR JOUR ═════════════════════════════════════════════
+            Un tableau, rien de plus : les barres signées ajoutées sous chaque ligne
+            se lisaient comme des traits parasites — sur un jour sans trade il ne
+            restait que le trait d'axe, sans rien à mesurer. */}
+        <div style={{display:"flex",flexDirection:"column",gap:16,flex:1}}>
+          <div style={{...CARD,flex:1,display:"flex",flexDirection:"column",gap:2}}>
+            <CardHeader title={t("dash.perfByDay")} style={{marginBottom:10}} />
+            <div style={{...DAY_GRID,padding:"0 12px 8px",opacity:0.4}}>
+              <span style={TH}>{t("dash.day")}</span>
+              <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
+              <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
+              <span style={{...TH,textAlign:"right"}}>{t("dash.expectancy")}</span>
+            </div>
 
-      {/* ═══ PERFORMANCE PAR JOUR ═════════════════════════════════════════════
-          Un tableau, rien de plus : les barres signées ajoutées sous chaque ligne
-          se lisaient comme des traits parasites — sur un jour sans trade il ne
-          restait que le trait d'axe, sans rien à mesurer. */}
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <SectionTitle>{t("dash.perfByDay")}</SectionTitle>
-        <div style={{...CARD,display:"flex",flexDirection:"column",gap:2}}>
-          <div style={{...DAY_GRID,padding:"0 12px 8px",opacity:0.4}}>
-            <span style={TH}>{t("dash.day")}</span>
-            <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
-            <span style={{...TH,textAlign:"right"}}>%{t("common.total")}</span>
-            <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
-            <span style={{...TH,textAlign:"right"}}>{t("dash.avgGain")}</span>
-            <span style={{...TH,textAlign:"right"}}>{t("dash.avgLossHdr")}</span>
-            <span style={{...TH,textAlign:"right"}}>{t("dash.expectancy")}</span>
+            {(() => {
+              const dayNames = [t("wd.monday"),t("wd.tuesday"),t("wd.wednesday"),t("wd.thursday"),t("wd.friday"),t("wd.saturday"),t("wd.sunday")]
+                .map(s => s.charAt(0).toUpperCase() + s.slice(1));
+              /* Semaine ouvrée par défaut ; samedi et dimanche n'apparaissent que
+                 s'ils portent des trades. */
+              const days = [0,1,2,3,4].concat([5,6].filter(d => (pnlByDay[d] || []).length > 0));
+              if (selectedDay !== null) days.sort((a, b) => (a === selectedDay ? -1 : b === selectedDay ? 1 : 0));
+              return days.map(idx => {
+                const dayTrades = pnlByDay[idx] || [];
+                const dayPnL = dayTrades.reduce((s, tr) => s + tr.pnl, 0);
+                const dayWins = dayTrades.filter(tr => tr.pnl > 0).length;
+                const dayWinRate = dayTrades.length ? ((dayWins / dayTrades.length) * 100).toFixed(0) : "0";
+                const expectancy = dayPnL / Math.max(dayTrades.length, 1);
+                const isSelected = selectedDay === idx;
+                if (selectedDay !== null && !isSelected) return null;
+                const CELL = { fontSize:14, fontWeight:500, lineHeight:"17.05px", color:T.text, textAlign:"right", fontVariantNumeric:"tabular-nums" };
+                return (
+                    <div
+                      key={idx}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedDay(isSelected ? null : idx)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedDay(isSelected ? null : idx); }
+                      }}
+                      style={{
+                        ...DAY_GRID, padding:"10px 12px", borderRadius:10,
+                        background: isSelected ? T.rowHighlight : "transparent",
+                        cursor:"pointer", transition:"background 140ms ease",
+                      }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = T.rowHighlight; }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <span style={{...CELL,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dayNames[idx]}</span>
+                      <span style={CELL}>{dayTrades.length}</span>
+                      <span style={{...CELL,color: Number(dayWinRate) >= 50 ? T.pnlPos : T.pnlNeg}}>{dayWinRate}%</span>
+                      <span style={{...CELL,color: expectancy > 0 ? T.pnlPos : expectancy < 0 ? T.pnlNeg : T.textSub}}>
+                        {fmt(expectancy, true)}
+                      </span>
+                    </div>
+                );
+              });
+            })()}
           </div>
-
-          {(() => {
-            const dayNames = [t("wd.monday"),t("wd.tuesday"),t("wd.wednesday"),t("wd.thursday"),t("wd.friday"),t("wd.saturday"),t("wd.sunday")]
-              .map(s => s.charAt(0).toUpperCase() + s.slice(1));
-            /* Semaine ouvrée par défaut ; samedi et dimanche n'apparaissent que
-               s'ils portent des trades. */
-            const days = [0,1,2,3,4].concat([5,6].filter(d => (pnlByDay[d] || []).length > 0));
-            if (selectedDay !== null) days.sort((a, b) => (a === selectedDay ? -1 : b === selectedDay ? 1 : 0));
-            return days.map(idx => {
-              const dayTrades = pnlByDay[idx] || [];
-              const dayPnL = dayTrades.reduce((s, tr) => s + tr.pnl, 0);
-              const dayWins = dayTrades.filter(tr => tr.pnl > 0).length;
-              const dayWinRate = dayTrades.length ? ((dayWins / dayTrades.length) * 100).toFixed(0) : "0";
-              const dayAvgWin = dayWins ? dayTrades.filter(tr => tr.pnl > 0).reduce((s, tr) => s + tr.pnl, 0) / dayWins : 0;
-              const dayLosses = dayTrades.length - dayWins;
-              const dayAvgLoss = dayLosses ? dayTrades.filter(tr => tr.pnl < 0).reduce((s, tr) => s + tr.pnl, 0) / dayLosses : 0;
-              const expectancy = dayPnL / Math.max(dayTrades.length, 1);
-              const isSelected = selectedDay === idx;
-              if (selectedDay !== null && !isSelected) return null;
-              const CELL = { fontSize:14, fontWeight:500, lineHeight:"17.05px", color:T.text, textAlign:"right", fontVariantNumeric:"tabular-nums" };
-              return (
-                  <div
-                    key={idx}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isSelected}
-                    onClick={() => setSelectedDay(isSelected ? null : idx)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedDay(isSelected ? null : idx); }
-                    }}
-                    style={{
-                      ...DAY_GRID, padding:"10px 12px", borderRadius:10,
-                      background: isSelected ? T.rowHighlight : "transparent",
-                      cursor:"pointer", transition:"background 140ms ease",
-                    }}
-                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = T.rowHighlight; }}
-                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <span style={{...CELL,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dayNames[idx]}</span>
-                    <span style={CELL}>{dayTrades.length}</span>
-                    <span style={{...CELL,color:T.textSub}}>{((dayTrades.length / Math.max(trades.length, 1)) * 100).toFixed(1)}%</span>
-                    <span style={{...CELL,color: Number(dayWinRate) >= 50 ? T.pnlPos : T.pnlNeg}}>{dayWinRate}%</span>
-                    <span style={CELL}>{fmt(dayAvgWin, true)}</span>
-                    <span style={CELL}>{fmt(dayAvgLoss, true)}</span>
-                    <span style={{...CELL,color: expectancy > 0 ? T.pnlPos : expectancy < 0 ? T.pnlNeg : T.textSub}}>
-                      {fmt(expectancy, true)}
-                    </span>
-                  </div>
-              );
-            });
-          })()}
+        </div>
         </div>
       </div>
     </div>

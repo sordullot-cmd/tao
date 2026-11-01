@@ -50,17 +50,20 @@
      l'ombre, qui est trop douce pour ça toute seule.
      La série essayée depuis, en écart de clarté (L*) sous la carte blanche :
        #FAFBFB  1,7 — rien ne détache plus les blocs
-       #F7F7F7  2,8 — Polar, encore léger
-       #F5F5F5  3,5 — retenu
+       #FCFCFC  ~1   — trop pâle, l'écran redevient une seule surface
+       #FBFBFB  ~1,3 — retenu, entre les deux voisins
+       #FAFAFA  ~1,7 — un rien trop gris
+       #F8F8F8  2,5
+       #F7F7F7  2,8 — Polar
+       #F5F5F5  3,5 — essayé, jugé trop gris à l'usage
        #F3F3F3  4,2 — le fond commence à peser
        #F1F2F4  4,6 — trop lourd, et bleuté avec ça
-     #F5F5F5 est donc le cran du milieu, et il est NEUTRE comme les gris de la
-     charte : le #F1F2F4 d'origine tirait sur le bleu, ce qui refroidissait tout
-     l'écran dès que le fond prenait de la surface. La charte ne publie rien
-     entre Polar (#F7F7F7) et Swan (#E5E5E5) — d'où une valeur intermédiaire.
+     #FBFBFB garde un fond presque blanc tout en laissant les cartes se
+     détacher. Le gris reste NEUTRE comme ceux de la charte : le #F1F2F4
+     d'origine tirait sur le bleu et refroidissait tout l'écran.
      C'est le fond de PAGE ; la barre latérale reste sur --color-card-bg et
      ressort donc en blanc, ce qui la sépare du contenu sans lui poser de trait. */
-  --color-bg-subtle: #F5F5F5; /* entre Polar et Swan */
+  --color-bg-subtle: #FBFBFB; /* le plus clair qui détache encore les cartes */
   --color-card-bg: #FFFFFF;
   --color-hover-bg: #F0F0F0;
   --color-active-bg: #EBEBEB;
@@ -1075,7 +1078,10 @@ button:not([data-no-press]):not(:disabled):active {
    `pointer-events` suit l'opacité — un bouton invisible mais cliquable est un
    piège. Uniquement là où un survol existe : sur un pointeur grossier ils
    restent affichés, faute de quoi ils seraient inatteignables. Le focus clavier
-   les rappelle aussi, sans quoi la tabulation traverserait des cibles fantômes. */
+   les rappelle aussi, sans quoi la tabulation traverserait des cibles fantômes.
+   Le focus CLAVIER seulement (`:focus-visible`) : avec `:focus-within`, un
+   simple clic dans la carte y laissait le focus, et les boutons restaient
+   allumés une fois la souris partie. */
 [data-card-actions] {
   transition: opacity var(--dur-fast) var(--ease-out);
 }
@@ -1085,13 +1091,32 @@ button:not([data-no-press]):not(:disabled):active {
     pointer-events: none;
   }
   [data-card]:hover [data-card-actions],
-  [data-card]:focus-within [data-card-actions],
+  [data-card]:has(:focus-visible) [data-card-actions],
   /* Même règle pour les LIGNES de liste (`data-row` : une firme, un compte).
      Un attribut distinct de `data-card` parce que la carte se soulève au survol
      (`translateY`) : sur une ligne de tableau, ce décalage désaligne ses
      colonnes de l'en-tête. Seul l'effacement des actions est partagé. */
   [data-row]:hover [data-card-actions],
-  [data-row]:focus-within [data-card-actions] {
+  [data-row]:has(:focus-visible) [data-card-actions] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Actions d'un set de la page Journée (modifier, retirer). Un attribut à elles
+   et non `data-card-actions` : le bloc qui contient les sets porte déjà
+   `data-row`, et le survoler aurait allumé les boutons de TOUS ses sets. Ici,
+   seul le set visé montre les siens. Même garde-fous que ci-dessus. */
+[data-set-actions] {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-set-actions] {
+    opacity: 0;
+    pointer-events: none;
+  }
+  [data-set]:hover [data-set-actions],
+  [data-set]:has(:focus-visible) [data-set-actions] {
     opacity: 1;
     pointer-events: auto;
   }
@@ -1928,6 +1953,21 @@ button img,
      Éloquence (progression + conseils). Même repli, une seule déclaration. */
   .tao-dash-score,
   .tao-eloq-follow { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* Daily flow : trois carrés + résumé sur une rangée. En dessous de 1024 px les
+   carrés (3 × 240) ne laissent plus rien au résumé : il passe dessous, et les
+   carrés vont à la ligne plutôt que de déborder. */
+@media (max-width: 1023px) {
+  .tao-day-head { grid-template-columns: minmax(0, 1fr) !important; }
+  .tao-day-head > [role="tablist"] { flex-wrap: wrap; }
+}
+
+/* Tableau de bord : trois colonnes en desktop. Sous 1280 px, un tiers ne tient
+   plus le calendrier lisible (cases sous 40 px) : on passe à une colonne, dans
+   l'ordre des colonnes — chacune garde ses deux blocs ensemble. */
+@media (max-width: 1279px) {
+  .tao-dash-cols { grid-template-columns: minmax(0, 1fr) !important; row-gap: 48px !important; }
 }
 
 /* Journal : notes à gauche / trades à droite, empilés quand la liste de trades

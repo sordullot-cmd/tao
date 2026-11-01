@@ -14,6 +14,15 @@ vi.mock("@/lib/hooks/useCloudState", () => ({
   },
 }));
 
+/* Le bloc « Daily flow » du tableau de bord lit les notes de trades et de
+   séance, qui passent par l'authentification. */
+vi.mock("@/lib/hooks/useTradeNotes", () => ({
+  useTradeNotes: () => ({ notes: {}, setNote: async () => {} }),
+}));
+vi.mock("@/lib/hooks/useDailySessionNotes", () => ({
+  useDailySessionNotes: () => ({ notes: {}, setNote: async () => {} }),
+}));
+
 import { t } from "@/lib/i18n";
 import CalendarPage from "@/components/pages/CalendarPage";
 import DashboardPage from "@/components/pages/DashboardPage";

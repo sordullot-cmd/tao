@@ -174,7 +174,8 @@ const COLUMN_DEFS = {
   account: {
     label: "Compte",
     hide: "mobile",
-    text: (c) => c.account?.name || "—",
+    // Une ligne fusionnée (même ordre sur plusieurs comptes) n'a pas UN compte.
+    text: (c) => (c.tr._children?.length > 1 ? `${c.tr._children.length} comptes` : c.account?.name || "—"),
   },
   strategy: {
     label: "Stratégie",
@@ -209,6 +210,9 @@ const COLUMN_DEFS = {
     ),
     text: (c) => c.dateLabel,
   },
+  /* L'heure seule, pour les listes d'UNE journée : y répéter la date sur
+     chaque ligne ne dit rien. */
+  time: { label: "Heure", text: (c) => c.entryT },
   session: { label: "Session", hide: "narrow", text: (c) => sessionLabel(c.tr) },
   duration: { label: "Durée", hide: "mobile", text: (c) => durationLabel(c.tr) },
   lots: {
@@ -258,6 +262,16 @@ export default function TradesList({
   accounts = [],
   columns = DEFAULT_TRADE_COLUMNS,
   empty = "Aucun trade.",
+  /* Commande posée au bout de la ligne, HORS du bouton qui la déplie : un
+     bouton dans un bouton n'est pas du HTML valide, et le clic sur l'action
+     déplierait la ligne au passage. Largeur fixe, pour que l'en-tête puisse
+     lui réserver la même place. */
+  rowAction,
+  rowActionWidth = 0,
+  /** Trade dont le détail est ouvert À CÔTÉ de la liste : sa ligne reste allumée. */
+  activeId = null,
+  /** En-tête posé dans la carte, au-dessus des colonnes (titre du bloc). */
+  header = null,
   style,
 }) {
   const [hover, setHover] = React.useState(null);
@@ -274,6 +288,7 @@ export default function TradesList({
   return (
     <div style={{ ...CARD, overflow: "hidden", ...style }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+        {header && <div style={{ marginBottom: 4 }}>{header}</div>}
 
         {/* En-tête, dans la carte, aligné sur les cellules (12 px de retrait
             comme les lignes). Les libellés servent à interpréter « 1.4 » ou
@@ -286,6 +301,7 @@ export default function TradesList({
             </span>
           ))}
           <span style={{ width: 16, flexShrink: 0 }} />
+          {rowAction && <span style={{ width: rowActionWidth, flexShrink: 0 }} />}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -328,44 +344,54 @@ export default function TradesList({
 
             return (
               <div key={key}>
-                <button
-                  type="button"
-                  onClick={() => setOpen(v => (v === key ? null : key))}
-                  aria-expanded={isOpen}
-                  onMouseEnter={() => setHover(key)}
-                  onMouseLeave={() => setHover(null)}
-                  style={{
-                    width: "100%", textAlign: "left", font: "inherit", border: "none",
-                    display: "flex", alignItems: "center", gap: 12, padding: "0 12px",
-                    height: 48, boxSizing: "border-box", borderRadius: 10, cursor: "pointer",
-                    background: (hover === key || isOpen) ? T.rowHighlight : "transparent",
-                    transition: "background var(--dur-fast) var(--ease-out)",
-                  }}
-                >
-                  {cols.map(id => {
-                    const def = COLUMN_DEFS[id];
-                    const extra = typeof def.style === "function" ? def.style(c) : def.style;
-                    return (
-                      <span
-                        key={id}
-                        className={hideClass(def)}
-                        style={{ ...(def.wrap ? { ...COL, ...def.wrap } : CELL), ...extra }}
-                      >
-                        {def.cell ? def.cell(c) : def.text(c)}
-                      </span>
-                    );
-                  })}
-
-                  <ChevronDown
-                    size={16}
-                    aria-hidden
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(v => (v === key ? null : key))}
+                    aria-expanded={isOpen}
+                    onMouseEnter={() => setHover(key)}
+                    onMouseLeave={() => setHover(null)}
                     style={{
-                      flexShrink: 0, color: T.textMut, opacity: hover === key || isOpen ? 0.8 : 0.35,
-                      transform: isOpen ? "rotate(180deg)" : "none",
-                      transition: "transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out)",
+                      flex: 1, minWidth: 0, textAlign: "left", font: "inherit", border: "none",
+                      display: "flex", alignItems: "center", gap: 12, padding: "0 12px",
+                      height: 48, boxSizing: "border-box", borderRadius: 10, cursor: "pointer",
+                      background: (hover === key || isOpen || (activeId != null && tr.id === activeId)) ? T.rowHighlight : "transparent",
+                      transition: "background var(--dur-fast) var(--ease-out)",
                     }}
-                  />
-                </button>
+                  >
+                    {cols.map(id => {
+                      const def = COLUMN_DEFS[id];
+                      const extra = typeof def.style === "function" ? def.style(c) : def.style;
+                      return (
+                        <span
+                          key={id}
+                          className={hideClass(def)}
+                          style={{ ...(def.wrap ? { ...COL, ...def.wrap } : CELL), ...extra }}
+                        >
+                          {def.cell ? def.cell(c) : def.text(c)}
+                        </span>
+                      );
+                    })}
+  
+                    <ChevronDown
+                      size={16}
+                      aria-hidden
+                      style={{
+                        flexShrink: 0, color: T.textMut, opacity: hover === key || isOpen ? 0.8 : 0.35,
+                        transform: isOpen ? "rotate(180deg)" : "none",
+                        transition: "transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out)",
+                      }}
+                    />
+                  </button>
+                  {rowAction && (
+                    /* Calée à gauche, contre les données : poussée à droite d'une
+                       colonne fixe, une action courte laissait un vide entre
+                       le trade et ce qu'on en fait. */
+                    <span style={{ width: rowActionWidth, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 8 }}>
+                      {rowAction(tr)}
+                    </span>
+                  )}
+                </div>
 
                 {/* Détail replié : 0fr → 1fr anime la hauteur sans la mesurer. */}
                 <div style={{
