@@ -42,7 +42,7 @@ export const SECTION_OF_PAGE: Record<string, SelfSection> = {
   strategies: "trading",
   "strategy-detail": "trading",
   playbook: "trading",
-  backtest: "trading",
+  study: "trading",
   brokers: "trading",
   accounts: "trading",
   "account-detail": "trading",

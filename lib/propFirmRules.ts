@@ -21,7 +21,7 @@
  */
 
 import {
-  DEFAULT_TARGET_PCT, DEFAULT_MAX_DD_PCT, DEFAULT_MIN_DAYS,
+  DEFAULT_TARGET_PCT, DEFAULT_MIN_DAYS,
 } from "@/lib/propFirms";
 
 export interface AccountRules {
@@ -123,8 +123,21 @@ const NEUTRAL: Omit<AccountRules, "source"> = {
 };
 
 /**
+ * Le drawdown de TOUT compte prop, éval comme financé : 2 000 en EOD trailing.
+ *
+ * Il écrase la grille de la firme plutôt que de la compléter. Les tailles
+ * tradées ici sont des 50k, où toutes les firmes futures de la table disent
+ * déjà 2 000 ; ailleurs, la grille et le repli en pourcentage annonçaient 3 000
+ * ou 4 000 sur un 100k, et c'est ce chiffre-là qui faisait croire à une marge
+ * qu'on ne s'accorde pas. Un compte qui a vraiment un autre plancher le porte
+ * sur sa carte, où la saisie l'emporte toujours.
+ */
+export const PROP_MAX_DD = 2_000;
+
+/**
  * Le barème d'un compte : celui de sa firme si elle est au catalogue, sinon le
- * repli (6 % de cible, 4 % de drawdown, 2 jours minimum).
+ * repli (6 % de cible, 2 jours minimum). Le drawdown, lui, est toujours
+ * `PROP_MAX_DD` en EOD trailing.
  *
  * AUCUNE perte journalière par défaut. Elle faisait tomber le compte au
  * premier jour à −1 000 sur un 50k, alors que chez la plupart des firmes
@@ -143,7 +156,8 @@ export function resolveAccountRules(brand: string | null | undefined, capital: n
     return {
       ...NEUTRAL,
       target: Math.round(c * (DEFAULT_TARGET_PCT / 100)),
-      maxDD: Math.round(c * (DEFAULT_MAX_DD_PCT / 100)),
+      maxDD: PROP_MAX_DD,
+      trailing: true,
       minDays: DEFAULT_MIN_DAYS,
       source: "default",
     };
@@ -169,7 +183,8 @@ export function resolveAccountRules(brand: string | null | undefined, capital: n
   return {
     ...merged,
     target: merged.target || Math.round(c * (DEFAULT_TARGET_PCT / 100)),
-    maxDD: merged.maxDD || Math.round(c * (DEFAULT_MAX_DD_PCT / 100)),
+    maxDD: PROP_MAX_DD,
+    trailing: true,
     source: known ? "firm" : "default",
   };
 }

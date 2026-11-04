@@ -26,6 +26,9 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export async function uploadPlaybookImage(
   userId: string | null | undefined,
   file: File,
+  /* Sous-dossier de rangement : la page Étude envoie ses captures dans le même
+     bucket, sous `study/`, pour les mêmes raisons qu'ici. */
+  folder = "playbook",
 ): Promise<{ url: string } | { error: string }> {
   if (!userId) return { error: "Connecte-toi pour ajouter des captures." };
   if (!file.type.startsWith("image/")) return { error: "Ce fichier n'est pas une image." };
@@ -35,7 +38,7 @@ export async function uploadPlaybookImage(
   }
   const supabase = createClient();
   const ext = (file.name.split(".").pop() || file.type.split("/")[1] || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const path = `${userId}/playbook/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
+  const path = `${userId}/${folder}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     cacheControl: "31536000",
     upsert: false,

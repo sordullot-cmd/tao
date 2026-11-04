@@ -206,7 +206,7 @@ function RulesModal({ open, onClose, funded, contract, objectives, rules, firmNa
     ? `Barème ${firmName || "de la firme"} — modifiable ici, compte par compte.`
     : objectives.source === "custom"
       ? "Valeurs saisies pour ce compte. Vider un champ le rend au barème."
-      : "Aucun barème connu pour cette firme : ces valeurs sont un défaut (6 % de cible, 4 % de drawdown, 2 % de perte par jour, 2 jours minimum). Corrige-les.";
+      : "Aucun barème connu pour cette firme : ces valeurs sont un défaut (6 % de cible, 2 000 de drawdown EOD, 2 jours minimum). Corrige-les.";
 
   return (
     <Modal open onClose={onClose} title="Objectifs du compte" width={520} scrim>

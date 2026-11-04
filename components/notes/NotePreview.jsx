@@ -11,8 +11,11 @@ import { renderRichText } from "@/lib/ui/richText";
 import { toggleTaskLine } from "@/lib/notes/blocks";
 import "katex/dist/katex.min.css";
 
-export default function NotePreview({ content, onChange, onOpenNote, onEditAt }) {
-  const html = useMemo(() => renderRichText(content), [content]);
+export default function NotePreview({ content, onChange, onOpenNote, onEditAt, onSeek = undefined }) {
+  /* `onSeek` n'est passé que par la page Étude : c'est lui qui allume le rendu
+     des minutages de vidéo, inutiles partout ailleurs. */
+  const times = Boolean(onSeek);
+  const html = useMemo(() => renderRichText(content, times ? { times } : undefined), [content, times]);
 
   /* Un seul écouteur pour tout l'aperçu : le HTML est injecté, il n'y a pas de
      nœud React sur lequel poser un handler. Trois gestes s'y partagent le clic,
@@ -23,6 +26,12 @@ export default function NotePreview({ content, onChange, onOpenNote, onEditAt })
     if (box && onChange) {
       e.preventDefault();
       onChange(toggleTaskLine(content, Number(box.dataset.line)));
+      return;
+    }
+    const time = e.target.closest?.(".rt-time[data-t], .rt-stamp[data-t]");
+    if (time && onSeek) {
+      e.preventDefault();
+      onSeek(Number(time.dataset.t));
       return;
     }
     const link = e.target.closest?.(".rt-wiki[data-note]");
@@ -38,11 +47,11 @@ export default function NotePreview({ content, onChange, onOpenNote, onEditAt })
     if (!onEditAt) return;
     const block = e.target.closest?.("[data-line]");
     onEditAt(block ? Number(block.dataset.line) : null);
-  }, [content, onChange, onOpenNote, onEditAt]);
+  }, [content, onChange, onOpenNote, onEditAt, onSeek]);
 
   const onKeyDown = useCallback((e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
-    if (!e.target.closest?.(".rt-box[data-line], .rt-wiki[data-note]")) return;
+    if (!e.target.closest?.(".rt-box[data-line], .rt-wiki[data-note], .rt-time[data-t], .rt-stamp[data-t]")) return;
     onActivate(e);
   }, [onActivate]);
 
@@ -82,6 +91,7 @@ export default function NotePreview({ content, onChange, onOpenNote, onEditAt })
         }
 
         .rt-p { margin: 0 0 10px; }
+        .rt-ln { display: block; position: relative; }
 
         /* Listes : marge de puce serrée (le texte prime sur le marqueur) et
            items assez espacés pour se lire un par un. */
@@ -161,6 +171,32 @@ export default function NotePreview({ content, onChange, onOpenNote, onEditAt })
         .rt-callout-warning { --rt-cl-bd: var(--color-amber-bd);  --rt-cl-bg: var(--color-amber-bg);  --rt-cl-fg: var(--color-amber); }
         .rt-callout-danger  { --rt-cl-bd: var(--color-red-bd);    --rt-cl-bg: var(--color-red-bg);    --rt-cl-fg: var(--color-red); }
         .rt-callout-quote   { --rt-cl-bd: var(--color-border-strong, #D4D4D4); }
+        /* Maxime : une règle à retenir. Ni aplat ni couleur — un trait et du
+           corps, pour qu'elle ressorte à la relecture sans crier. */
+        .rt-callout.rt-callout-maxim {
+          background: none; border: none; border-left: 3px solid var(--color-text, #0D0D0D);
+          border-radius: 0; padding: 2px 0 2px 14px;
+        }
+        .rt-callout-maxim .rt-callout-head {
+          font-size: var(--text-title3, 1.25rem); font-weight: 500; line-height: 1.3;
+          color: var(--color-text, #0D0D0D);
+        }
+        .rt-callout-maxim .rt-callout-head::before {
+          content: "MAXIME"; display: block; margin-bottom: 2px;
+          font-size: var(--text-caption2, 0.625rem); letter-spacing: 0.08em; font-weight: 500;
+          color: var(--color-text-muted, #6B6B6B);
+        }
+        .rt-mark {
+          background: color-mix(in srgb, var(--color-amber, #FF9600) 28%, transparent);
+          color: inherit; border-radius: 3px; padding: 0 2px;
+        }
+        .rt-time {
+          display: inline-flex; align-items: center; padding: 0 6px; margin: 0 2px;
+          border-radius: 6px; background: var(--color-hover-bg, #F0F0F0); cursor: pointer;
+          font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.82em;
+          font-variant-numeric: tabular-nums; color: var(--color-text, #0D0D0D);
+        }
+        .rt-time:hover { background: var(--color-border, #E5E5E5); }
 
         .rt-callout-head, .rt-callout-summary {
           font-weight: 600;

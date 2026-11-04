@@ -26,14 +26,16 @@ describe("barème des firmes", () => {
   it("prend la grille de la firme plutôt que le repli en pourcentage", () => {
     // Apex 50k : 2 000 de drawdown, là où 4 % en donnerait 2 000 aussi — mais
     // sur un 100k la grille dit 3 000 quand le repli dirait 4 000.
-    expect(resolveAccountRules("apex", 100_000)).toMatchObject({ target: 6_000, maxDD: 3_000, source: "firm" });
-    expect(resolveAccountRules(null, 100_000)).toMatchObject({ target: 6_000, maxDD: 4_000, source: "default" });
+    expect(resolveAccountRules("apex", 100_000)).toMatchObject({ target: 6_000, source: "firm" });
+    expect(resolveAccountRules(null, 100_000)).toMatchObject({ target: 6_000, source: "default" });
   });
 
-  it("dit que le drawdown d'Apex et de Topstep suit le pic, pas celui de FTMO", () => {
-    expect(resolveAccountRules("apex", 50_000).trailing).toBe(true);
-    expect(resolveAccountRules("topstep", 50_000).trailing).toBe(true);
-    expect(resolveAccountRules("ftmo", 100_000).trailing).toBe(false);
+  it("pose 2 000 en EOD trailing sur tout compte prop, quelle que soit la grille", () => {
+    // Le 100k d'Apex disait 3 000, le statique de FTMO 10 000 : ni l'un ni
+    // l'autre ne passe devant le plancher commun.
+    for (const [brand, size] of [["apex", 100_000], ["topstep", 50_000], ["ftmo", 100_000], [null, 100_000], [null, null]] as const) {
+      expect(resolveAccountRules(brand, size)).toMatchObject({ maxDD: 2_000, trailing: true });
+    }
   });
 
   it("met la grille à l'échelle d'une taille absente du catalogue", () => {
@@ -77,8 +79,8 @@ describe("progression d'une évaluation", () => {
     // +2 000 puis -800 : le trailing a mangé 800, le statique rien du tout —
     // le cumul n'est jamais repassé sous zéro.
     const deuxJours = parcours.slice(0, 2);
-    const ftmo = resolveObjectives(EMPTY, resolveAccountRules("ftmo", 100_000));
-    expect(evalProgress(deuxJours, ftmo).ddUsed).toBe(0);
+    const statique = resolveObjectives(normalizeContract({ trailing: false }), resolveAccountRules("ftmo", 100_000));
+    expect(evalProgress(deuxJours, statique).ddUsed).toBe(0);
     const apex = resolveObjectives(EMPTY, resolveAccountRules("apex", 50_000));
     expect(evalProgress(deuxJours, apex).ddUsed).toBe(800);
   });
@@ -177,7 +179,6 @@ describe("drawdown EOD et échec du compte", () => {
 describe("drawdown d'un financé", () => {
   it("passe tout financé en EOD trailing, même chez une firme à plancher statique", () => {
     const ftmo = resolveAccountRules("ftmo", 100_000);
-    expect(resolveObjectives(EMPTY, ftmo).trailing).toBe(false);
     expect(resolveObjectives(EMPTY, ftmo, { funded: true }).trailing).toBe(true);
     // Un choix posé sur le compte reste le plus fort.
     expect(resolveObjectives(normalizeContract({ trailing: false }), ftmo, { funded: true }).trailing).toBe(false);
@@ -270,9 +271,9 @@ describe("l'axe du compte", () => {
   });
 
   it("laisse le plancher immobile quand le drawdown est statique", () => {
-    const ftmo = resolveObjectives(EMPTY, resolveAccountRules("ftmo", 100_000));
-    const axe = accountAxis(100_000, evalProgress([tr("2026-09-01", 4_000)], ftmo), ftmo);
-    expect(axe.floor).toBe(90_000);
+    const statique = resolveObjectives(normalizeContract({ trailing: false }), resolveAccountRules("ftmo", 100_000));
+    const axe = accountAxis(100_000, evalProgress([tr("2026-09-01", 4_000)], statique), statique);
+    expect(axe.floor).toBe(98_000);
   });
 
   it("retombe en P&L pur quand la taille du compte n'est pas renseignée", () => {

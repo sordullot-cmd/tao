@@ -57,7 +57,7 @@ import TradesPage from "@/components/pages/TradesPage";
 import TradingDayPage from "@/components/pages/TradingDayPage";
 import TradeChartPage from "@/components/pages/TradeChartPage";
 import AddTradePage from "@/components/pages/AddTradePage";
-import BacktestPage from "@/components/pages/BacktestPage";
+import StudyPage from "@/components/pages/StudyPage";
 import BrokersPage from "@/components/pages/BrokersPage";
 import AccountsPage from "@/components/pages/AccountsPage";
 import AccountDetailPage from "@/components/pages/AccountDetailPage";
@@ -86,7 +86,7 @@ import {
   Calendar as LucideCalendar,
   ListChecks,
   TableProperties as LucideTableProperties,
-  FlaskConical,
+  GraduationCap,
   Target as LucideTarget,
   Upload as LucideUpload,
   FileText as LucideFileText,
@@ -144,7 +144,7 @@ const fmt = (n, sign=false) => `${sign && n>0?"+":""}${n<0?"-":""}${getCurrencyS
    elle est vide, et le contenu doit pouvoir monter jusqu'au bord.
    Une page rejoint cette liste quand ses blocs sont devenus des cartes `CARD` —
    sinon elle flotterait sur le gris sans rien pour porter son contenu. */
-const DA_PAGES = ["dashboard", "trading-day", "trades", "calendar", "accounts", "account-detail", "firm-detail", "failed-accounts", "life-rpg", "strategies", "playbook", "backtest", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "communication", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
+const DA_PAGES = ["dashboard", "trading-day", "trades", "calendar", "accounts", "account-detail", "firm-detail", "failed-accounts", "life-rpg", "strategies", "playbook", "study", "journal", "discipline", "add-trade", "cashflow", "budget", "sport", "notes", "agenda", "eloquence", "communication", "strategy-detail", "daily-planner", "goals", "patrimoine", "patrimoine-asset", "patrimoine-class", "patrimoine-holding", "patrimoine-bank", "patrimoine-liabilities", "spending", "revisions", "focus", "activity", "activity-reports", "activity-rules"];
 
 // Bouton compte utilisateur dans la barre du haut (à droite du gris)
 
@@ -798,9 +798,9 @@ export default function App() {
         { id: "accounts",   icon: LucideWallet,       label: t("nav.accounts") },
         { id: "trades",     icon: LucideTableProperties, label: t("nav.trades") },
         { id: "strategies", icon: LucideTarget,       label: t("nav.strategies") },
-        /* Le backtesting suit « Stratégies » : on rejoue à la main les setups
-           d'une stratégie qu'on vient d'y décrire. */
-        { id: "backtest",   icon: FlaskConical,       label: t("nav.backtest") },
+        /* L'étude ferme la marche : c'est là qu'on range ce qu'on apprend, et
+           les trades qu'on y relie sont ceux saisis plus haut. */
+        { id: "study",      icon: GraduationCap,      label: t("nav.study") },
       ],
     },
     /* Vie perso — tout le hors-trading : le quotidien, le corps, les idées et
@@ -1033,7 +1033,7 @@ export default function App() {
        reste pour la page mémorisée d'une session antérieure : sans elle, on
        rouvrirait l'app sur un écran vide. */
     playbook: <StrategyPage setPage={setPage} setSelectedStrategyId={setSelectedStrategyId} />,
-    backtest: <BacktestPage />,
+    study: <StudyPage trades={journalTrades} strategies={strategies} />,
     brokers: <BrokersPage />,
     accounts: <AccountsPage accountsLoading={accountsLoading} accounts={accounts} trades={trades} setPage={setPage} selectedAccountIds={selectedAccountIds} setSelectedAccountDetailId={setSelectedAccountDetailId} setSelectedFirmId={setSelectedFirmId} setAccounts={setAccounts} firms={firms} setFirms={setFirms} userId={user?.id} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
     "account-detail": <AccountDetailPage accountsLoading={accountsLoading} accountId={selectedAccountDetailId} accounts={accounts} firms={firms} trades={trades} strategies={strategies} setPage={setPage} setSelectedFirmId={setSelectedFirmId} setSelectedAccountDetailId={setSelectedAccountDetailId} setAccounts={setAccounts} archivedMeta={archivedMeta} setArchivedMeta={setArchivedMeta} />,
