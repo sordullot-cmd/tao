@@ -5,7 +5,7 @@ import { T } from "@/lib/ui/tokens";
 import { TYPE } from "@/lib/ui/type";
 import { TAG_COLORS } from "@/lib/ui/tradingColors";
 import { t, useLang } from "@/lib/i18n";
-import { fmt } from "@/lib/ui/format";
+import { fmt, fmtInt, fmtCompact } from "@/lib/ui/format";
 import { byMostRecent } from "@/lib/tradeOrder";
 import { periodStart } from "@/lib/ui/period";
 import { getCurrencySymbol } from "@/lib/userPrefs";
@@ -1310,7 +1310,8 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
                       <div
                         key={`d-${i}`}
                         onClick={clickable ? () => goToTradesForDate(dayIso) : undefined}
-                        title={clickable ? "Voir les trades du jour" : undefined}
+                        className="tao-dash-day"
+                        title={clickable ? `${day} — ${fmt(pnl, true)} · ${pct.toFixed(1)}%` : undefined}
                         style={{
                           background:bg, borderRadius:3,
                           aspectRatio:"1 / 1",
@@ -1324,11 +1325,18 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
                       >
                         {pnl !== 0 ? (
                           <>
-                            <span style={{fontSize:14,lineHeight:"17.05px",whiteSpace:"nowrap"}}>{pnl > 0 ? "+" : ""}{fmt(pnl, false)}</span>
-                            <span style={{fontSize:10,lineHeight:"17.05px",whiteSpace:"nowrap",color:subFg,opacity:0.6}}>( {pct.toFixed(2)}% )</span>
+                            {/* Deux écritures du même montant, l'une ou l'autre
+                                montrée selon la largeur RÉELLE de la case
+                                (container query, globals.css) : la colonne du
+                                calendrier va de 40 px par jour en trois colonnes
+                                à plus du double en une seule. Les centimes, eux,
+                                ne passent jamais — ils sont dans l'info-bulle. */}
+                            <span className="tao-dash-day-full" style={{fontSize:13,lineHeight:"16px",whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>{fmtInt(pnl, true)}</span>
+                            <span className="tao-dash-day-short" style={{fontSize:11,lineHeight:"14px",whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums",letterSpacing:"-0.02em"}}>{fmtCompact(pnl, true)}</span>
+                            <span className="tao-dash-day-pct" style={{fontSize:10,lineHeight:"13px",whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums",color:subFg,opacity:0.6}}>{pct.toFixed(pct >= 10 ? 0 : 1)}%</span>
                           </>
                         ) : (
-                          <span style={{fontSize:14,lineHeight:"17.05px"}}>{day}</span>
+                          <span style={{fontSize:13,lineHeight:"16px",fontVariantNumeric:"tabular-nums"}}>{day}</span>
                         )}
                       </div>
                     );

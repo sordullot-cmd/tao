@@ -1936,6 +1936,22 @@ button img,
   .tao-dash-cols { grid-template-columns: minmax(0, 1fr) !important; row-gap: 48px !important; }
 }
 
+/* Cases du calendrier P&L du tableau de bord. Le seuil se lit sur la CASE et
+   non sur la fenêtre : à 1440 px la case fait ~45 px (trois colonnes), à
+   1200 px elle en fait le double (une seule). Une media query se tromperait
+   dans les deux sens. Large : montant entier + part du mois ; étroite :
+   montant abrégé, et la part saute — deux lignes ne tiennent pas dans un
+   carré de 40 px sans écraser la première. */
+.tao-dash-day { container-type: inline-size; }
+.tao-dash-day-short { display: none; }
+@container (max-width: 63px) {
+  .tao-dash-day-full { display: none; }
+  .tao-dash-day-short { display: inline; }
+}
+@container (max-width: 47px) {
+  .tao-dash-day-pct { display: none; }
+}
+
 /* Lectures croisées du tableau de bord : deux colonnes, une seule quand la
    moitié de page ne tient plus les libellés de confluence. */
 @media (max-width: 1023px) {

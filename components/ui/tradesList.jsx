@@ -21,7 +21,7 @@
    ========================================================================== */
 
 import React from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { T } from "@/lib/ui/tokens";
 import { fmt } from "@/lib/ui/format";
 import { rMultiple, fmtR } from "@/lib/userPrefs";
@@ -270,6 +270,10 @@ export default function TradesList({
   rowActionWidth = 0,
   /** Trade dont le détail est ouvert À CÔTÉ de la liste : sa ligne reste allumée. */
   activeId = null,
+  /* Clic sur la ligne : quand la page la fournit, la ligne ouvre CE que la
+     page veut (le formulaire de revue, par ex.) au lieu de déplier le détail —
+     deux gestes sur la même ligne, et l'on ne saurait jamais lequel on obtient. */
+  onRowClick,
   /** En-tête posé dans la carte, au-dessus des colonnes (titre du bloc). */
   header = null,
   style,
@@ -347,8 +351,9 @@ export default function TradesList({
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <button
                     type="button"
-                    onClick={() => setOpen(v => (v === key ? null : key))}
-                    aria-expanded={isOpen}
+                    onClick={() => (onRowClick ? onRowClick(tr) : setOpen(v => (v === key ? null : key)))}
+                    aria-expanded={onRowClick ? undefined : isOpen}
+                    aria-pressed={onRowClick ? activeId != null && tr.id === activeId : undefined}
                     onMouseEnter={() => setHover(key)}
                     onMouseLeave={() => setHover(null)}
                     style={{
@@ -373,15 +378,27 @@ export default function TradesList({
                       );
                     })}
   
-                    <ChevronDown
-                      size={16}
-                      aria-hidden
-                      style={{
-                        flexShrink: 0, color: T.textMut, opacity: hover === key || isOpen ? 0.8 : 0.35,
-                        transform: isOpen ? "rotate(180deg)" : "none",
-                        transition: "transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out)",
-                      }}
-                    />
+                    {onRowClick ? (
+                      <ChevronRight
+                        size={16}
+                        aria-hidden
+                        style={{
+                          flexShrink: 0, color: T.textMut,
+                          opacity: hover === key || (activeId != null && tr.id === activeId) ? 0.8 : 0.35,
+                          transition: "opacity var(--dur-fast) var(--ease-out)",
+                        }}
+                      />
+                    ) : (
+                      <ChevronDown
+                        size={16}
+                        aria-hidden
+                        style={{
+                          flexShrink: 0, color: T.textMut, opacity: hover === key || isOpen ? 0.8 : 0.35,
+                          transform: isOpen ? "rotate(180deg)" : "none",
+                          transition: "transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out)",
+                        }}
+                      />
+                    )}
                   </button>
                   {rowAction && (
                     /* Calée à gauche, contre les données : poussée à droite d'une

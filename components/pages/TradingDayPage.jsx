@@ -1537,14 +1537,17 @@ function RecapPanel({ dayTrades, rawDayTrades, summary, recapped, recapState, ac
         </div>
 
         {/* La base commune à toutes les listes de trades du site — mêmes
-            colonnes, même détail qui se déplie — avec, au bout de chaque
-            ligne, l'état de la revue et la commande qui ouvre le formulaire. */}
+            colonnes — avec, au bout de chaque ligne, l'état de la revue. Ici
+            la ligne entière ouvre le formulaire : c'est ce qu'on vient faire
+            sur cette étape, le détail replié n'y apprenait rien de plus que
+            le panneau. */}
         <TradesList
           trades={dayTrades}
           strategies={strategies}
           accounts={accounts}
           columns={RECAP_COLUMNS}
           activeId={recapId}
+          onRowClick={(tr) => setRecapId(id => (id === tr.id ? null : tr.id))}
           empty={t("day.noTrades")}
           rowActionWidth={176}
           style={{ minWidth: 0, boxShadow: "none" }}

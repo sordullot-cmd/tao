@@ -54,3 +54,28 @@ export const fmtInt = (n: number, sign = false): string => {
   const prefix = sign && rounded > 0 ? "+" : rounded < 0 ? "-" : "";
   return `${prefix}${sym}${Math.abs(rounded).toLocaleString("en-US")}`;
 };
+
+/**
+ * Montant abrégé au millier, pour les cases où même `fmtInt` déborde (le
+ * calendrier du tableau de bord, sept jours dans un tiers de page : une case
+ * de 40 px ne loge pas « +$1,158 »). Une décimale sous 10 k seulement — au-delà
+ * elle rallonge sans rien apprendre de plus à l'œil.
+ * fmtCompact(842, true)   → "+$842"
+ * fmtCompact(1158, true)  → "+$1.2k"
+ * fmtCompact(-12480)      → "-$12k"
+ */
+export const fmtCompact = (n: number, sign = false): string => {
+  const sym = getCurrencySymbol();
+  const abs = Math.abs(n);
+  const rounded = Math.round(n);
+  const prefix = sign && rounded > 0 ? "+" : rounded < 0 ? "-" : "";
+  // Seuil sur l'arrondi : 999,6 doit donner « 1k », pas « $1000 ».
+  if (Math.abs(rounded) < 1000) return `${prefix}${sym}${Math.abs(rounded)}`;
+  if (abs < 1e6) {
+    const k = abs / 1000;
+    // `toFixed(1)` sur 9.96 rend « 10.0 » : on retombe alors sur l'entier.
+    const txt = k < 9.95 ? k.toFixed(1).replace(/\.0$/, "") : String(Math.round(k));
+    return `${prefix}${sym}${txt}k`;
+  }
+  return `${prefix}${sym}${(abs / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
+};
