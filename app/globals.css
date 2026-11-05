@@ -1936,6 +1936,12 @@ button img,
   .tao-dash-cols { grid-template-columns: minmax(0, 1fr) !important; row-gap: 48px !important; }
 }
 
+/* Lectures croisées du tableau de bord : deux colonnes, une seule quand la
+   moitié de page ne tient plus les libellés de confluence. */
+@media (max-width: 1023px) {
+  .tao-dash-insights { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
 /* Journal : notes à gauche / trades à droite, empilés quand la liste de trades
    n'a plus la place de tenir ses colonnes à côté de la zone de notes. */
 @media (max-width: 1023px) {

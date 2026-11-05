@@ -17,6 +17,11 @@ import {
 } from "@/components/ui/da";
 import TradesList, { COMPACT_TRADE_COLUMNS } from "@/components/ui/tradesList";
 import { DayFlowSummary } from "@/components/pages/TradingDayPage";
+import { useCloudState } from "@/lib/hooks/useCloudState";
+import { GRADES } from "@/lib/tradingDay";
+import {
+  bucketStats, valencesOf, directionOf, confluenceKey, payingConfluences, CONFLUENCE_SEP,
+} from "@/lib/tradeInsights";
 import { LayoutGrid, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 
 /* ============================================================================
@@ -137,6 +142,122 @@ function StackedAmount({ value, align = "flex-end" }) {
   );
 }
 
+/* Teinte d'une note : la même que le sélecteur de la fiche trade
+   (TradesPage) — A et B verts, C orange, D et F rouges. */
+const gradeColor = (g) => g === "A" || g === "B" ? TAG_COLORS.green : g === "C" ? TAG_COLORS.orange : TAG_COLORS.red;
+
+/* Lignes « libellé · trades · winrate · P&L », partagées par « Impacts » et les
+   blocs de lecture croisée : des tableaux qui se lisent côte à côte doivent
+   avoir la même grille, au pixel. `bar` dit ce que mesure la barre sous le
+   libellé — la part du volume par défaut, le winrate quand c'est lui qu'on
+   compare (sur une échelle fixe de 100 %, pas relative au meilleur : un 40 %
+   n'a pas à remplir la barre parce que les autres font pire). */
+function CategoryRows({ rows, bar = "count", empty }) {
+  if (rows.length === 0) {
+    return (
+      <div style={{fontSize:13,color:T.textMut,padding:"18px 2px"}}>
+        {empty ?? t("dash.noCategoryData")}
+      </div>
+    );
+  }
+  const maxCount = Math.max(...rows.map(r => r.count), 1);
+  return (
+    <div style={{display:"flex",flexDirection:"column"}}>
+      <div style={{...CAT_GRID,padding:"0 2px 8px",opacity:0.4}}>
+        <span style={TH} />
+        <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
+        <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
+        <span style={{...TH,textAlign:"right"}}>P&L</span>
+      </div>
+      {rows.map(r => (
+        <div key={r.id} style={{...CAT_GRID,padding:"11px 2px",borderTop:`1px solid ${T.border}`}}>
+          <span style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+            <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              <span style={{width:9,height:9,borderRadius:96,background:r.color || T.textMut,flexShrink:0}}/>
+              <span title={r.label} style={{fontSize:14,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
+            </span>
+            <span style={{height:4,borderRadius:999,background:T.accentBg,overflow:"hidden",maxWidth:260}}>
+              <span style={{
+                display:"block", height:"100%", borderRadius:999,
+                width:`${bar === "winrate" ? r.winrate : (r.count / maxCount) * 100}%`,
+                background:r.color || T.textMut, opacity:0.55,
+              }} />
+            </span>
+          </span>
+          <span style={{textAlign:"right",fontSize:14,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
+          <span style={{textAlign:"right",fontSize:14,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
+          <StackedAmount value={r.pnl} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Pastilles d'un sélecteur de carte (Impacts, type de trade). */
+function CardPills({ items, value, onChange }) {
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+      {items.map(b => {
+        const active = value === b.id;
+        return (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => onChange(b.id)}
+            aria-pressed={active}
+            style={{
+              padding: "8px 16px", minHeight: 34, borderRadius:999, border:"none",
+              background: active ? T.accentBg : "transparent",
+              color: T.text, opacity: active ? 1 : 0.5,
+              fontSize: 13, fontWeight:500,
+              cursor:"pointer", fontFamily:"inherit",
+              transition:"background 140ms ease, opacity 140ms ease",
+            }}
+          >
+            {b.label()}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Familles du bloc « Win rate par type de trade ». */
+const TRADE_TYPES = [
+  { id: "entry",     label: () => t("dash.entryType") },
+  { id: "direction", label: () => t("dash.direction") },
+  { id: "strategy",  label: () => t("dash.strategy") },
+];
+
+/** Un camp de la comparaison émotionnelle : P&L en tête, le reste dessous. */
+function ValenceTile({ label, color, stats }) {
+  const s = stats || { count: 0, winrate: 0, pnl: 0, expectancy: 0 };
+  const empty = s.count === 0;
+  return (
+    <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:10,padding:14,borderRadius:10,background:T.rowHighlight}}>
+      <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+        <span style={{width:9,height:9,borderRadius:96,background:color,flexShrink:0}}/>
+        <span style={{...TYPE.callout,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
+      </span>
+      <span style={{...TYPE.title3,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",color: empty ? T.textMut : s.pnl > 0 ? T.pnlPos : s.pnl < 0 ? T.pnlNeg : T.textSub}}>
+        {empty ? "—" : `${s.pnl > 0 ? "+" : ""}${fmt(s.pnl, false)}`}
+      </span>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+        {[
+          [t("common.trades"), s.count],
+          [t("common.winRate"), empty ? "—" : `${s.winrate.toFixed(0)}%`],
+          [t("dash.expectancy"), empty ? "—" : fmt(s.expectancy, true)],
+        ].map(([k, v]) => (
+          <span key={k} style={{display:"flex",justifyContent:"space-between",gap:8,...TYPE.body}}>
+            <span style={{color:T.textSub}}>{k}</span>
+            <span style={{color:T.text,fontWeight:500,fontVariantNumeric:"tabular-nums"}}>{v}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* `trades` nourrit les statistiques (Tao Score, performance, trades récents…)
    et compte les comptes en échec : c'est ce qui a été tradé. `pnlTrades`, sans
    eux, ne nourrit que le P&L total, sa courbe et le calendrier — l'argent
@@ -196,6 +317,13 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   const [period, setPeriod] = React.useState("Tout");
   // Famille de tags affichée dans « Répartition ».
   const [breakdown, setBreakdown] = React.useState("emotion");
+  // Famille affichée dans « Win rate par type de trade ».
+  const [tradeType, setTradeType] = React.useState("entry");
+  /* Note A→F posée à la main sur la fiche trade. Lue par useCloudState et non
+     par un localStorage figé au montage comme les tags ci-dessus : c'est la
+     même clé que la page Journée, et une note posée ailleurs doit se voir ici
+     sans recharger. */
+  const [tradeRatings] = useCloudState("tao_trade_rating", "trades_rating", {});
   // Largeur réelle de la zone de graphique. La trame de points qui remplit
   // l'aire sous la courbe est un <pattern> SVG : il faut dessiner à l'échelle
   // 1:1, sinon preserveAspectRatio="none" écraserait les points en ellipses.
@@ -594,6 +722,18 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
     );
   };
 
+  // IDs de stratégie d'un trade — trois formats de clé possibles selon l'âge
+  // du rattachement. Partagé par le Tao Score et « Win rate par type de trade ».
+  const strategyIdsOf = (t) => {
+    if (t.id && tradeStrategiesData[t.id]) return tradeStrategiesData[t.id];
+    if (t.date && t.symbol && t.entry != null) {
+      const k1 = `${t.date}${t.symbol}${t.entry}`;
+      const k2 = `${t.date}${t.symbol}${parseFloat(t.entry).toFixed(2)}`;
+      return tradeStrategiesData[k1] || tradeStrategiesData[k2] || [];
+    }
+    return [];
+  };
+
   // PENTAGON METRICS CALCULATION
   const pentagonMetrics = (() => {
     const winPercent = parseFloat(winRate);
@@ -616,15 +756,7 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
     // → 100 (neutre, rien à pénaliser).
     const adherencePcts = [];
     filteredTrades.forEach((t) => {
-      // Récupère les IDs de stratégie du trade (3 formats de clé possibles)
-      let strategyIds = [];
-      if (t.id && tradeStrategiesData[t.id]) {
-        strategyIds = tradeStrategiesData[t.id];
-      } else if (t.date && t.symbol && t.entry != null) {
-        const k1 = `${t.date}${t.symbol}${t.entry}`;
-        const k2 = `${t.date}${t.symbol}${parseFloat(t.entry).toFixed(2)}`;
-        strategyIds = tradeStrategiesData[k1] || tradeStrategiesData[k2] || [];
-      }
+      const strategyIds = strategyIdsOf(t);
       if (!strategyIds.length) return;
 
       let checked = 0, total = 0;
@@ -740,6 +872,56 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
     return v ? [v] : [];
   });
   const emotionStats = categoryStats(allEmotionTags, tr => emotionTags[tr.id] || []);
+
+  /* ── Lectures croisées ────────────────────────────────────────────────────
+     Même base que les autres stats (`filteredTrades`) : un clic sur un jour de
+     « Performance par jour » les restreint aussi. */
+
+  // P&L par note, de A à F — l'ordre de l'échelle, pas celui du P&L : on lit
+  // si la note suit le résultat, il faut donc voir la pente.
+  const UNRATED = "__none";
+  const gradeStats = bucketStats(
+    filteredTrades,
+    tr => [tradeRatings?.[tr.id] || UNRATED],
+    [...[...GRADES].reverse(), UNRATED],
+  ).map(b => b.id === UNRATED
+    ? { ...b, label: t("dash.unrated"), color: T.textMut }
+    : { ...b, label: b.id, color: gradeColor(b.id) });
+  // Une seule ligne « sans note » ne dit rien : le bloc invite alors à noter.
+  const hasGrades = gradeStats.some(b => b.id !== UNRATED);
+
+  const valenceStats = Object.fromEntries(
+    bucketStats(filteredTrades, tr => valencesOf(emotionTags[tr.id])).map(b => [b.id, b]),
+  );
+
+  const confluenceLabel = (() => {
+    const all = [...allEntryTags, ...allLiquidityTags, ...allTimeframeTags];
+    return (key) => key.split(CONFLUENCE_SEP).map(id => all.find(x => x.id === id)?.label ?? id).join(" + ");
+  })();
+  const confluenceOrders = { entry: allEntryTags.map(x => x.id), liquidity: allLiquidityTags.map(x => x.id) };
+  const confluenceRows = payingConfluences(bucketStats(filteredTrades, tr => {
+    const k = confluenceKey(entryTags[tr.id], liquidityTags[tr.id], timeframeTags[tr.id], confluenceOrders);
+    return k ? [k] : [];
+  })).map(b => ({ ...b, label: confluenceLabel(b.id), color: TAG_COLORS.green }));
+
+  // Trié par winrate : c'est la question posée par le bloc. À égalité, le plus
+  // fréquent d'abord.
+  const byWinrate = (a, b) => b.winrate - a.winrate || b.count - a.count;
+  const tradeTypeRows = (() => {
+    if (tradeType === "direction") {
+      return bucketStats(filteredTrades, tr => { const d = directionOf(tr); return d ? [d] : []; }, ["long", "short"])
+        .map(b => ({ ...b, label: t(`common.${b.id}`), color: b.id === "long" ? TAG_COLORS.green : TAG_COLORS.red }));
+    }
+    if (tradeType === "strategy") {
+      // Une stratégie supprimée laisse des rattachements orphelins : on les tait.
+      return bucketStats(filteredTrades, tr => strategyIdsOf(tr).map(String))
+        .map(b => ({ ...b, strat: (strategies || []).find(x => String(x.id) === b.id) }))
+        .filter(b => b.strat)
+        .map(({ strat, ...b }) => ({ ...b, label: strat.name || "—", color: strat.color || TAG_COLORS.blue }))
+        .sort(byWinrate);
+    }
+    return entryStats.slice().sort(byWinrate);
+  })();
 
   /* ── Marge du haut, alignée sur le reste du site ───────────────────────────
      Ailleurs, le premier élément d'une page tombe sous la seule barre du haut
@@ -1160,72 +1342,8 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
           <div style={{display:"flex",flexDirection:"column",gap:16,flex:1}}>
             <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,flex:1}}>
               <CardHeader title={t("dash.impacts")} />
-              <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
-                {BREAKDOWNS.map(b => {
-                  const active = breakdown === b.id;
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => setBreakdown(b.id)}
-                      aria-pressed={active}
-                      style={{
-                        padding: "8px 16px", minHeight: 34, borderRadius:999, border:"none",
-                        background: active ? T.accentBg : "transparent",
-                        color: T.text, opacity: active ? 1 : 0.5,
-                        fontSize: 13, fontWeight:500,
-                        cursor:"pointer", fontFamily:"inherit",
-                        transition:"background 140ms ease, opacity 140ms ease",
-                      }}
-                    >
-                      {b.label()}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {(() => {
-                const rows = { emotion: emotionStats, entry: entryStats, liquidity: liquidityStats, timeframe: timeframeStats }[breakdown] || [];
-                if (rows.length === 0) {
-                  return (
-                    <div style={{fontSize:13,color:T.textMut,padding:"18px 2px"}}>
-                      {t("dash.noCategoryData")}
-                    </div>
-                  );
-                }
-                // Part de chaque ligne dans le volume de la catégorie : c'est ce que
-                // mesure la barre, pas le P&L (qui a déjà sa colonne signée).
-                const maxCount = Math.max(...rows.map(r => r.count), 1);
-                return (
-                  <div style={{display:"flex",flexDirection:"column"}}>
-                    <div style={{...CAT_GRID,padding:"0 2px 8px",opacity:0.4}}>
-                      <span style={TH} />
-                      <span style={{...TH,textAlign:"right"}}>{t("common.trades")}</span>
-                      <span style={{...TH,textAlign:"right"}}>{t("common.winRate")}</span>
-                      <span style={{...TH,textAlign:"right"}}>P&L</span>
-                    </div>
-                    {rows.map(r => (
-                      <div key={r.id} style={{...CAT_GRID,padding:"11px 2px",borderTop:`1px solid ${T.border}`}}>
-                        <span style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
-                          <span style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-                            <span style={{width:9,height:9,borderRadius:96,background:r.color,flexShrink:0}}/>
-                            <span style={{fontSize:14,fontWeight:500,lineHeight:"17.05px",color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
-                          </span>
-                          <span style={{height:4,borderRadius:999,background:T.accentBg,overflow:"hidden",maxWidth:260}}>
-                            <span style={{
-                              display:"block", height:"100%", borderRadius:999,
-                              width:`${(r.count / maxCount) * 100}%`, background:r.color, opacity:0.55,
-                            }} />
-                          </span>
-                        </span>
-                        <span style={{textAlign:"right",fontSize:14,fontWeight:500,color:T.text,fontVariantNumeric:"tabular-nums"}}>{r.count}</span>
-                        <span style={{textAlign:"right",fontSize:14,fontWeight:500,fontVariantNumeric:"tabular-nums",color:r.winrate>=50?T.pnlPos:T.pnlNeg}}>{r.winrate.toFixed(0)}%</span>
-                        <StackedAmount value={r.pnl} />
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
+              <CardPills items={BREAKDOWNS} value={breakdown} onChange={setBreakdown} />
+              <CategoryRows rows={{ emotion: emotionStats, entry: entryStats, liquidity: liquidityStats, timeframe: timeframeStats }[breakdown] || []} />
             </div>
           </div>
         </div>
@@ -1351,6 +1469,40 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
             })()}
           </div>
         </div>
+        </div>
+      </div>
+
+      {/* ═══ LECTURES CROISÉES ═══════════════════════════════════════════════
+          Ce que les tags et la note disent du résultat. Deux colonnes et non
+          trois : ces tableaux portent des libellés longs (« FVG + PDH/PDL +
+          M5 »), un tiers de page les tronquerait tous. */}
+      <div className="tao-dash-insights" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:20,alignItems:"stretch"}}>
+        <div style={{...CARD,display:"flex",flexDirection:"column",gap:12}}>
+          <CardHeader title={t("dash.pnlByGrade")} />
+          <CategoryRows rows={hasGrades ? gradeStats : []} empty={t("dash.noGrades")} />
+        </div>
+
+        <div style={{...CARD,display:"flex",flexDirection:"column",gap:12}}>
+          <CardHeader title={t("dash.emotionValence")} />
+          {valenceStats.positive || valenceStats.negative ? (
+            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              <ValenceTile label={t("dash.emotionPositive")} color={TAG_COLORS.green} stats={valenceStats.positive} />
+              <ValenceTile label={t("dash.emotionNegative")} color={TAG_COLORS.red} stats={valenceStats.negative} />
+            </div>
+          ) : (
+            <CategoryRows rows={[]} />
+          )}
+        </div>
+
+        <div style={{...CARD,display:"flex",flexDirection:"column",gap:12}}>
+          <CardHeader title={t("dash.payingConfluences")} />
+          <CategoryRows rows={confluenceRows} empty={t("dash.noPayingConfluence")} />
+        </div>
+
+        <div style={{...CARD,display:"flex",flexDirection:"column",gap:12}}>
+          <CardHeader title={t("dash.winRateByType")} />
+          <CardPills items={TRADE_TYPES} value={tradeType} onChange={setTradeType} />
+          <CategoryRows rows={tradeTypeRows} bar="winrate" />
         </div>
       </div>
     </div>
