@@ -24,7 +24,7 @@ const renderCard = (
   handlers: Record<string, unknown> = {},
 ) => {
   const c = normalizeContract(contract);
-  const objectives = resolveObjectives(c, RULES);
+  const objectives = resolveObjectives(c, RULES, { funded });
   return render(
     <ContractCard
       funded={funded}
@@ -46,6 +46,14 @@ const renderCard = (
 };
 
 describe("visage « évaluation »", () => {
+  it("affiche la limite par défaut de 50 % et bloque le passage si le meilleur jour la dépasse", () => {
+    renderCard({
+      trades: [{ date: "2026-09-01", pnl: 900 }, { date: "2026-09-02", pnl: 100 }],
+    });
+    expect(screen.getAllByText(/90.0 % \/ 50 %/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /Marquer comme financé/ })).toBeDisabled();
+  });
+
   it("refuse le passage tant que la cible n'est pas atteinte, et dit ce qu'il manque", () => {
     renderCard({ trades: [{ date: "2026-09-01", pnl: 1_000 }] });
     expect(screen.getByRole("button", { name: /Marquer comme financé/ })).toBeDisabled();
@@ -55,7 +63,10 @@ describe("visage « évaluation »", () => {
 
   it("ouvre le passage dès que tout est tenu, et le dit", () => {
     const onPassFunded = vi.fn();
-    renderCard({ trades: [{ date: "2026-09-01", pnl: 3_200 }] }, { onPassFunded });
+    renderCard({
+      contract: { consistencyPct: 0 },
+      trades: [{ date: "2026-09-01", pnl: 3_200 }],
+    }, { onPassFunded });
     fireEvent.click(screen.getByRole("button", { name: /Marquer comme financé/ }));
     expect(onPassFunded).toHaveBeenCalled();
   });
@@ -121,6 +132,7 @@ describe("visage « payouts »", () => {
       trades: deuxSeances,
       contract: {
         ...financé,
+        consistencyPct: 0,
         payoutDays: 0,
         // Le matelas d'Apex est mis de côté ici : ce cas ne parle que du double
         // comptage, et il a sa propre épreuve juste en dessous.
@@ -139,7 +151,7 @@ describe("visage « payouts »", () => {
        comme un calcul qui a perdu de l'argent. */
     renderCard({
       funded: true,
-      contract: { ...financé, payoutDays: 0 },
+      contract: { ...financé, consistencyPct: 0, payoutDays: 0 },
       trades: [{ date: "2026-09-02", pnl: 3_200 }],
     });
     expect(screen.getByText("$1,100.00 à retirer")).toBeTruthy();
@@ -168,6 +180,19 @@ describe("visage « payouts »", () => {
     renderCard({ funded: true, contract: financé, trades: deuxSeances });
     expect(screen.getByText("Aucun retrait enregistré.")).toBeTruthy();
   });
+
+  it("applique 40 % au funded et bloque un retrait si le meilleur jour dépasse la limite", () => {
+    renderCard({
+      funded: true,
+      contract: { ...financé, payoutDays: 0, payoutBuffer: 0, payoutMin: 0 },
+      trades: [
+        { date: "2026-09-02", pnl: 900 },
+        { date: "2026-09-03", pnl: 1_000 },
+      ],
+    });
+    expect(screen.getAllByText(/52.6 % \/ 40 %/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Limite de consistency dépassée/)).toBeTruthy();
+  });
 });
 
 describe("réglages des objectifs", () => {
@@ -188,5 +213,16 @@ describe("réglages des objectifs", () => {
     // la modale porte.
     expect(screen.getByText("Le compte financé repart de cette date")).toBeTruthy();
     expect(screen.queryByText("Jours de trading minimum")).toBeNull();
+  });
+
+  it("propose un seuil de 50 % en éval et de 40 % en funded", () => {
+    const { unmount } = renderCard();
+    ouvrir();
+    expect(screen.getByPlaceholderText("50")).toBeTruthy();
+    unmount();
+
+    renderCard({ funded: true, contract: { fundedAt: "2026-09-01" } });
+    ouvrir();
+    expect(screen.getByPlaceholderText("40")).toBeTruthy();
   });
 });

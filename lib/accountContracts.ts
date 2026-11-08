@@ -47,9 +47,9 @@ export interface Payout {
 /**
  * Ce que l'utilisateur a posé LUI-MÊME sur ce compte.
  *
- * Tout ce qui vaut `null` suit le barème de la firme : c'est ce qui permet à
- * une grille corrigée dans lib/propFirmRules de profiter aux comptes qui n'ont
- * jamais été édités, sans écraser ceux qui l'ont été.
+ * Tout ce qui vaut `null` suit le barème de la firme ou le défaut du type de
+ * compte : les comptes jamais édités profitent des règles corrigées sans
+ * écraser les valeurs saisies à la main.
  */
 export interface AccountContract {
   target: number | null;
@@ -103,7 +103,7 @@ export function normalizeContract(raw: unknown): AccountContract {
     maxDD: num(r.maxDD),
     minDays: num(r.minDays),
     dailyLoss: num(r.dailyLoss),
-    consistencyPct: num(r.consistencyPct),
+    consistencyPct: r.consistencyPct == null || r.consistencyPct === "" ? null : num(r.consistencyPct),
     trailing: typeof r.trailing === "boolean" ? r.trailing : null,
     payoutMin: num(r.payoutMin),
     payoutBuffer: num(r.payoutBuffer),
@@ -548,11 +548,11 @@ export function payoutState(
   const blocker =
     failed ? "Compte en échec"
     : balance <= 0 ? "Rien à retirer pour le moment"
-    : !progress.consistencyMet ? "Limite de consistency dépassée"
     : daysMissing > 0 ? `Encore ${daysMissing} jour${daysMissing > 1 ? "s" : ""} tradé${daysMissing > 1 ? "s" : ""}`
     : winMissing > 0 ? `Encore ${winMissing} jour${winMissing > 1 ? "s" : ""} gagnant${winMissing > 1 ? "s" : ""}`
     : belowBuffer ? `Buffer à conserver pas encore dépassé`
     : belowMin ? `Minimum de retrait non atteint`
+    : !progress.consistencyMet ? "Limite de consistency dépassée"
     : null;
 
   return {

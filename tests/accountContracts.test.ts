@@ -20,7 +20,7 @@ const EMPTY = normalizeContract({});
 
 /** Les objectifs d'un compte 50k sans firme connue : repli 6 % / 4 % / 2 % par jour. */
 const plain = (over: Record<string, unknown> = {}) =>
-  resolveObjectives(normalizeContract(over), resolveAccountRules(null, 50_000));
+  resolveObjectives(normalizeContract({ consistencyPct: 0, ...over }), resolveAccountRules(null, 50_000));
 
 describe("barème des firmes", () => {
   it("prend la grille de la firme plutôt que le repli en pourcentage", () => {
@@ -69,6 +69,50 @@ describe("barème des firmes", () => {
 
   it("ne prête à personne le barème d'une voisine", () => {
     expect(resolveAccountRules("tradeify", 50_000).source).toBe("default");
+  });
+});
+
+describe("règle de consistency", () => {
+  it("applique 50 % en éval et 40 % en funded, avec une surcharge par compte", () => {
+    expect(resolveObjectives(EMPTY, resolveAccountRules(null, 50_000)).consistencyPct).toBe(50);
+    expect(resolveObjectives(EMPTY, resolveAccountRules(null, 50_000), { funded: true }).consistencyPct).toBe(40);
+    expect(resolveObjectives(normalizeContract({ consistencyPct: 25 }), resolveAccountRules(null, 50_000)).consistencyPct).toBe(25);
+    expect(resolveObjectives(
+      normalizeContract({ consistencyPct: null }),
+      resolveAccountRules(null, 50_000),
+    ).consistencyPct).toBe(50);
+  });
+
+  it("retarde le passage tant que le meilleur jour dépasse la limite", () => {
+    const obj = plain({ target: 1_000, minDays: 0, consistencyPct: 50 });
+    const tropConcentré = evalProgress([tr("2026-09-01", 900), tr("2026-09-02", 100)], obj);
+    expect(tropConcentré.bestDayPct).toBe(90);
+    expect(tropConcentré.consistencyMet).toBe(false);
+    expect(tropConcentré.passed).toBe(false);
+
+    const régulier = evalProgress([
+      tr("2026-09-01", 900), tr("2026-09-02", 100), tr("2026-09-03", 1_000),
+    ], obj);
+    expect(régulier.bestDayPct).toBe(50);
+    expect(régulier.passed).toBe(true);
+  });
+
+  it("vérifie la consistency funded depuis le passage et sans déduire les retraits", () => {
+    const contract = normalizeContract({
+      fundedAt: "2026-09-01", consistencyPct: 40, payoutDays: 0, payoutBuffer: 0, payoutMin: 0,
+      payouts: [{ id: "p1", date: "2026-09-04", amount: 500 }],
+    });
+    const obj = resolveObjectives(contract, resolveAccountRules(null, 50_000), { funded: true });
+    const trades = [
+      tr("2026-08-20", 10_000),
+      tr("2026-09-02", 900),
+      tr("2026-09-03", 1_000),
+    ];
+    const état = payoutState(trades, contract, obj);
+    expect(état.blocker).toBe("Limite de consistency dépassée");
+
+    const conforme = payoutState([...trades, tr("2026-09-05", 1_000)], contract, obj);
+    expect(conforme.eligible).toBe(true);
   });
 });
 
@@ -399,7 +443,11 @@ describe("vue d'ensemble des payouts", () => {
       { account_id: "f1", date: "2026-09-02", pnl: 2_000 },
       { account_id: "e1", date: "2026-09-02", pnl: 9_000 },
     ];
-    const store = withPayout({}, "f1", { date: "2026-09-03", amount: 800 });
+    const store = withContract(
+      withPayout({}, "f1", { date: "2026-09-03", amount: 800 }),
+      "f1",
+      { consistencyPct: 0 },
+    );
     const map = payoutsByAccount(accounts, trades, store, new Map());
     expect(map.get("f1")?.available).toBe(1_200);
     expect(map.has("e1")).toBe(false);
