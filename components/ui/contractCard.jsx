@@ -236,6 +236,11 @@ function RulesModal({ open, onClose, funded, contract, objectives, rules, firmNa
             value={contract.dailyLoss} fallback={rules.dailyLoss}
             onChange={(v) => onPatch({ dailyLoss: v })}
           />
+          <RuleField
+            label="Limite de consistency (%)" hint="Meilleur jour / profit total · 0 = désactivée"
+            value={contract.consistencyPct} fallback={objectives.consistencyPct}
+            onChange={(v) => onPatch({ consistencyPct: v })}
+          />
         </div>
 
         {/* Revenir au barème de la firme = repasser à `null`, pas figer sa
@@ -335,6 +340,12 @@ function failureLine(progress) {
   return `${what}${when} · ${fmt(progress.pnl, true)}`;
 }
 
+function consistencyValue(progress) {
+  return progress.tradingPnl > 0
+    ? `${progress.bestDayPct.toFixed(1)} % / ${progress.consistencyLimit} %`
+    : `En attente de gains · max ${progress.consistencyLimit} %`;
+}
+
 /** La jauge du drawdown, commune aux deux visages : on la surveille avant comme après le passage. */
 function DrawdownGauge({ progress, axis, hasCapital }) {
   return (
@@ -366,8 +377,11 @@ function EvalFace({ progress, axis, hasCapital, onPassFunded }) {
     ? failureLine(progress)
     : reste > 0
       ? `${Math.round(pct * 100)} % de la cible de ${fmt(target)}`
-      : !progress.passed && daysTraded < minDays
-        ? `Il reste les jours de trading à faire`
+      : !progress.passed
+        ? [
+            daysTraded < minDays ? `Il reste les jours de trading à faire` : null,
+            !progress.consistencyMet ? `Limite de consistency dépassée (${consistencyValue(progress)})` : null,
+          ].filter(Boolean).join(" · ")
         : `Le compte peut passer financé`;
 
   return (
@@ -400,14 +414,30 @@ function EvalFace({ progress, axis, hasCapital, onPassFunded }) {
           }}
         />,
         maxDD > 0 ? <DrawdownGauge key="dd" progress={progress} axis={axis} hasCapital={hasCapital} /> : null,
+        progress.consistencyLimit > 0 ? (
+          <Gauge
+            key="consistency"
+            label="Consistency"
+            ratio={progress.bestDayPct / progress.consistencyLimit}
+            value={consistencyValue(progress)}
+            spent
+          />
+        ) : null,
       ].filter(Boolean)}
     >
-      {minDays > 0 && <Rule />}
+      {(minDays > 0 || progress.consistencyLimit > 0) && <Rule />}
       {minDays > 0 && (
         <Condition
           label="Jours de trading"
           value={`${daysTraded} / ${minDays}`}
           done={daysTraded >= minDays}
+        />
+      )}
+      {progress.consistencyLimit > 0 && (
+        <Condition
+          label="Règle de consistency"
+          value={consistencyValue(progress)}
+          done={progress.consistencyMet}
         />
       )}
     </Face>
@@ -443,6 +473,15 @@ function FundedFace({ state, payouts, progress, axis, hasCapital, onAdd, onRemov
       action={failed ? null : <PillButton onClick={onAdd}><Plus size={14} strokeWidth={2} /> Enregistrer un retrait</PillButton>}
       gauges={[
         progress.maxDD > 0 ? <DrawdownGauge key="dd" progress={progress} axis={axis} hasCapital={hasCapital} /> : null,
+        progress.consistencyLimit > 0 ? (
+          <Gauge
+            key="consistency"
+            label="Consistency"
+            ratio={progress.bestDayPct / progress.consistencyLimit}
+            value={consistencyValue(progress)}
+            spent
+          />
+        ) : null,
         state.daysRequired > 0 ? (
           <Gauge
             key="days"
