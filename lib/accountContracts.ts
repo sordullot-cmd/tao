@@ -56,6 +56,8 @@ export interface AccountContract {
   maxDD: number | null;
   minDays: number | null;
   dailyLoss: number | null;
+  /** Part maximale du profit total que peut représenter le meilleur jour. */
+  consistencyPct: number | null;
   /**
    * Drawdown EOD trailing (`true`) ou statique (`false`). `null` suit la
    * firme — FTMO est statique, presque tout le monde ailleurs est en EOD.
@@ -80,7 +82,7 @@ export interface AccountContract {
 export type ContractStore = Record<string, AccountContract>;
 
 const EMPTY: AccountContract = {
-  target: null, maxDD: null, minDays: null, dailyLoss: null, trailing: null,
+  target: null, maxDD: null, minDays: null, dailyLoss: null, consistencyPct: null, trailing: null,
   payoutMin: null, payoutBuffer: null, payoutDays: null, payoutWinDays: null,
   fundedAt: null, payouts: [], failedFrom: null,
 };
@@ -101,6 +103,7 @@ export function normalizeContract(raw: unknown): AccountContract {
     maxDD: num(r.maxDD),
     minDays: num(r.minDays),
     dailyLoss: num(r.dailyLoss),
+    consistencyPct: num(r.consistencyPct),
     trailing: typeof r.trailing === "boolean" ? r.trailing : null,
     payoutMin: num(r.payoutMin),
     payoutBuffer: num(r.payoutBuffer),
@@ -175,6 +178,8 @@ export interface Objectives {
   trailing: boolean;
   minDays: number;
   dailyLoss: number;
+  /** Part maximale du profit total attribuable au meilleur jour. 0 = désactivée. */
+  consistencyPct: number;
   payoutMin: number;
   payoutBuffer: number;
   payoutDays: number;
@@ -203,6 +208,7 @@ export function resolveObjectives(
   const pick = (mine: number | null, theirs: number) => (mine == null ? theirs : mine);
   const edited = [
     contract.target, contract.maxDD, contract.minDays, contract.dailyLoss,
+    contract.consistencyPct,
     contract.payoutMin, contract.payoutBuffer, contract.payoutDays, contract.payoutWinDays,
     contract.trailing,
   ].some(v => v != null);
@@ -212,6 +218,7 @@ export function resolveObjectives(
     trailing: contract.trailing ?? (funded ? true : rules.trailing),
     minDays: pick(contract.minDays, rules.minDays),
     dailyLoss: pick(contract.dailyLoss, rules.dailyLoss),
+    consistencyPct: pick(contract.consistencyPct, funded ? 40 : 50),
     payoutMin: pick(contract.payoutMin, rules.payoutMin),
     payoutBuffer: pick(contract.payoutBuffer, rules.payoutBuffer),
     payoutDays: pick(contract.payoutDays, rules.payoutDays),
@@ -275,6 +282,14 @@ export interface EvalProgress {
   minDays: number;
   /** La pire journée, en négatif. */
   worstDay: number;
+  /** Plus gros P&L journalier positif depuis le début de la période. */
+  bestDay: number;
+  /** Profit des trades, avant retraits. */
+  tradingPnl: number;
+  /** Part du profit total attribuable au meilleur jour. */
+  bestDayPct: number;
+  consistencyLimit: number;
+  consistencyMet: boolean;
   dailyLoss: number;
   /** Tous les objectifs sont tenus : le compte peut passer financé. */
   passed: boolean;
@@ -333,7 +348,7 @@ export function evalProgress(
     payoutsByDay.set(p.date, (payoutsByDay.get(p.date) || 0) + (Number(p.amount) || 0));
   }
 
-  let cum = 0, eodPeak = 0, worstDay = 0;
+  let cum = 0, tradingPnl = 0, eodPeak = 0, worstDay = 0, bestDay = 0;
   let failedAt: string | null = null;
   let failReason: EvalProgress["failReason"] = null;
   const days = new Set<string>();
@@ -348,6 +363,7 @@ export function evalProgress(
      la limite journalière, elle, se touche en séance — d'où deux mesures. */
   const closeDay = (day: string) => {
     if (dayPnl < worstDay) worstDay = dayPnl;
+    if (dayPnl > bestDay) bestDay = dayPnl;
     cum -= payoutsByDay.get(day) || 0;
     payoutsByDay.delete(day);
     if (cum > eodPeak) eodPeak = cum;
@@ -369,6 +385,7 @@ export function evalProgress(
     const floor = floorOf(eodPeak);
     const pnl = Number(tr.pnl) || 0;
     cum += pnl;
+    tradingPnl += pnl;
     dayPnl += pnl;
     if (obj.maxDD > 0 && cum <= floor) fail(day, "drawdown");
     if (obj.dailyLoss > 0 && -dayPnl >= obj.dailyLoss) fail(day, "daily");
@@ -382,6 +399,8 @@ export function evalProgress(
   const daysTraded = days.size;
   const targetOk = obj.target > 0 && cum >= obj.target;
   const daysOk = daysTraded >= obj.minDays;
+  const bestDayPct = tradingPnl > 0 ? bestDay / tradingPnl * 100 : 0;
+  const consistencyMet = obj.consistencyPct <= 0 || tradingPnl <= 0 || bestDayPct <= obj.consistencyPct;
 
   return {
     pnl: cum,
@@ -396,8 +415,13 @@ export function evalProgress(
     daysTraded,
     minDays: obj.minDays,
     worstDay,
+    bestDay,
+    tradingPnl,
+    bestDayPct,
+    consistencyLimit: obj.consistencyPct,
+    consistencyMet,
     dailyLoss: obj.dailyLoss,
-    passed: targetOk && daysOk && !breached,
+    passed: targetOk && daysOk && consistencyMet && !breached,
     breached,
     failedAt,
     failReason,
@@ -515,7 +539,8 @@ export function payoutState(
   const belowMin = obj.payoutMin > 0 && withdrawable < obj.payoutMin;
   /* Le financé a son propre plancher, compté depuis le passage : la firme ne
      verse rien sur un compte qu'elle a fermé, quel que soit le solde affiché. */
-  const failed = evalProgress(trades, obj, { from: contract.fundedAt, payouts: contract.payouts }).breached;
+  const progress = evalProgress(trades, obj, { from: contract.fundedAt, payouts: contract.payouts });
+  const failed = progress.breached;
 
   /* Un seul obstacle annoncé à la fois, le plus proche du terrain : savoir
      qu'il manque « 2 jours gagnants ET 300 $ » n'aide pas plus que de savoir
@@ -523,6 +548,7 @@ export function payoutState(
   const blocker =
     failed ? "Compte en échec"
     : balance <= 0 ? "Rien à retirer pour le moment"
+    : !progress.consistencyMet ? "Limite de consistency dépassée"
     : daysMissing > 0 ? `Encore ${daysMissing} jour${daysMissing > 1 ? "s" : ""} tradé${daysMissing > 1 ? "s" : ""}`
     : winMissing > 0 ? `Encore ${winMissing} jour${winMissing > 1 ? "s" : ""} gagnant${winMissing > 1 ? "s" : ""}`
     : belowBuffer ? `Buffer à conserver pas encore dépassé`
