@@ -822,19 +822,20 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   // filtre de données. `days: null` (« Tout ») = historique complet.
   const pnlCurve = (() => {
     if (pnlCurveFull.length === 0) return pnlCurveFull;
-    const last = new Date(pnlCurveFull[pnlCurveFull.length - 1].date);
+    const [year, month, day] = pnlCurveFull[pnlCurveFull.length - 1].date.split("-").map(Number);
+    const last = new Date(year, month - 1, day);
     if (isNaN(last.getTime())) return pnlCurveFull;
     /* Fenêtre calée sur le calendrier (cf. `lib/ui/period`) : « 1 mois » part du
        1er du mois du dernier point. « Tout » n'en a pas — la courbe entière. */
     const from = periodStart(period, last);
     if (!from) return pnlCurveFull;
-    const windowed = pnlCurveFull.filter(p => {
-      const d = new Date(p.date);
-      return !isNaN(d.getTime()) && d >= from;
-    });
-    // Une courbe a besoin d'au moins deux points pour être tracée : si la
-    // fenêtre est trop étroite, on retombe sur les deux derniers points.
-    return windowed.length > 1 ? windowed : pnlCurveFull.slice(-2);
+    const fromKey = [
+      from.getFullYear(),
+      String(from.getMonth() + 1).padStart(2, "0"),
+      String(from.getDate()).padStart(2, "0"),
+    ].join("-");
+    const windowed = pnlCurveFull.filter(p => p.date >= fromKey);
+    return windowed;
   })();
 
   // Symbol stats

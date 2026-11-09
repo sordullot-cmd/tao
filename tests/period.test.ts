@@ -67,12 +67,11 @@ describe("periodRange", () => {
     expect(range("1M", 1, new Date(2026, 2, 10))).toEqual({ start: "2026-02-01", end: "2026-02-28" });
   });
 
-  it("laisse « 1 semaine » glissante", () => {
-    // Sept jours pleins, bornes incluses — une semaine civile aurait donné un
-    // seul jour tous les lundis.
-    expect(range("1S", 0, AOUT_14)).toEqual({ start: "2026-08-08", end: "2026-08-14" });
-    expect(range("1S", 1, AOUT_14)).toEqual({ start: "2026-08-01", end: "2026-08-07" });
-    expect(periodDays("1S", AOUT_14)).toBe(7);
+  it("fait commencer « 1 semaine » le lundi, sans fenêtre glissante de sept jours", () => {
+    expect(range("1S", 0, AOUT_14)).toEqual({ start: "2026-08-10", end: "2026-08-14" });
+    expect(range("1S", 1, AOUT_14)).toEqual({ start: "2026-08-03", end: "2026-08-09" });
+    expect(periodDays("1S", AOUT_14)).toBe(5);
+    expect(periodDays("1S", new Date(2026, 7, 10))).toBe(1);
   });
 
   it("ne borne rien pour un identifiant qui ne désigne pas de fenêtre", () => {

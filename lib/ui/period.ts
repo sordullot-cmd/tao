@@ -17,16 +17,14 @@
  *   6M   idem sur six ;
  *   1A   du 1er janvier de l'année courante à aujourd'hui.
  *
- * 1S reste GLISSANTE, sept jours pleins. Une semaine civile n'a pas la même
- * évidence qu'un mois — elle commence lundi ici, dimanche ailleurs — et surtout
- * elle ne porte aucune échéance : rien ne tombe « le 1er de la semaine ». La
- * caler aurait donné une fenêtre d'un seul jour tous les lundis.
+ * 1S commence le lundi de la semaine civile. Les jours sont des bornes de
+ * calendrier, comme le 1er du mois et le 1er janvier : un changement de jour
+ * ne doit pas déplacer la fenêtre de 24 heures.
  *
- * `offset` recule la fenêtre d'un cran ENTIER : le mois précédent pour 1M, le
- * trimestre précédent pour 3M, l'année précédente pour 1A. C'est ce qui permet
- * de remonter le temps sans que deux fenêtres voisines se chevauchent ou
- * laissent un trou — ce qu'un décalage en jours ne garantissait pas dès que les
- * mois n'ont pas la même longueur.
+ * `offset` recule la fenêtre d'un cran ENTIER : la semaine précédente pour 1S,
+ * le mois précédent pour 1M, le trimestre précédent pour 3M, l'année
+ * précédente pour 1A. C'est ce qui permet de remonter le temps sans que deux
+ * fenêtres voisines se chevauchent ou laissent un trou.
  *
  * La fenêtre courante (`offset` 0) s'arrête AUJOURD'HUI et non à la fin du mois :
  * un mois en cours n'a pas de futur à montrer, et une fenêtre qui court jusqu'au
@@ -35,9 +33,6 @@
 
 /** Nombre de mois civils couverts par une fenêtre — les autres n'en couvrent pas. */
 const MONTHS: Record<string, number> = { "1M": 1, "3M": 3, "6M": 6 };
-
-/** Jours d'une fenêtre glissante — 1S seule, cf. l'en-tête. */
-const ROLLING: Record<string, number> = { "1S": 7 };
 
 /** Une fenêtre de jours, bornes INCLUSES. */
 export interface PeriodRange {
@@ -57,10 +52,12 @@ const atMidnight = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.
 export function periodRange(id: string, offset = 0, today: Date = new Date()): PeriodRange | null {
   const now = atMidnight(today);
 
-  const rolling = ROLLING[id];
-  if (rolling) {
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset * rolling);
-    const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - rolling + 1);
+  if (id === "1S") {
+    const daysSinceMonday = (now.getDay() + 6) % 7;
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday - offset * 7);
+    const end = offset === 0
+      ? now
+      : new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
     return { start, end };
   }
 

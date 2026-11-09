@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/da";
 import { accountBrandColor, assignSeriesColors } from "@/lib/ui/brandColors";
 import { pnlCurve } from "@/lib/ui/pnlCurve";
+import { periodRange } from "@/lib/ui/period";
 import { resolveAccountRules } from "@/lib/propFirmRules";
 import {
   CONTRACTS_KEY, CONTRACTS_CLOUD_KEY, normalizeStore, contractOf, resolveObjectives,
@@ -157,6 +158,43 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
     }
     return (trades || []).filter(t => t.account_id === accountId);
   }, [isArchivedView, filterId, archivedAccts, archivedTrades, trades, accountId]);
+
+  const fullCurve = React.useMemo(() => pnlCurve(accountTrades), [accountTrades]);
+  const periodTrades = React.useMemo(() => {
+    const last = fullCurve[fullCurve.length - 1];
+    if (!last) return accountTrades;
+    const [year, month, day] = String(last.date).slice(0, 10).split("-").map(Number);
+    const range = periodRange(period, 0, new Date(year, month - 1, day));
+    if (!range) return accountTrades;
+    const dayKey = (date) => [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+    const start = dayKey(range.start);
+    const end = dayKey(range.end);
+    return accountTrades.filter(trade => {
+      const date = String(trade.date || trade.entry_time || "").slice(0, 10);
+      return date >= start && date <= end;
+    });
+  }, [accountTrades, fullCurve, period]);
+  const periodStats = React.useMemo(() => {
+    let wins = 0, grossWin = 0, grossLoss = 0;
+    const days = new Set();
+    for (const trade of periodTrades) {
+      const pnl = Number(trade.pnl) || 0;
+      if (pnl > 0) { wins += 1; grossWin += pnl; }
+      else if (pnl < 0) grossLoss += Math.abs(pnl);
+      const day = String(trade.date || trade.entry_time || "").slice(0, 10);
+      if (day) days.add(day);
+    }
+    return {
+      winRate: periodTrades.length ? (wins / periodTrades.length) * 100 : 0,
+      profitFactor: grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0,
+      tradingDays: days.size,
+      total: periodTrades.length,
+    };
+  }, [periodTrades]);
 
   const stats = React.useMemo(() => {
     let pnl = 0, wins = 0, losses = 0, scratch = 0, grossWin = 0, grossLoss = 0;
@@ -311,7 +349,6 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
   /* Courbe du compte puis fenêtre 1S/1M/3M/6M/1A. La maille est la MÊME partout
      — un point par trade, l'année comme la semaine (cf. lib/ui/pnlCurve) : seule
      la profondeur change d'une pastille à l'autre, pas la nature du tracé. */
-  const fullCurve = React.useMemo(() => pnlCurve(accountTrades), [accountTrades]);
   const curve = React.useMemo(() => windowSeries(fullCurve, period, p => p.date), [fullCurve, period]);
 
   // Séries des autres comptes : la maquette montre plusieurs courbes. On ne les
@@ -500,12 +537,12 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
       // Coloré au seuil de 50 %, comme la page d'une prop firm : la maquette
       // montre « 33.3% » en rouge, mais ne dit pas où bascule la couleur.
       label: t("accountsPage.winRateL"),
-      value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—",
-      tone: stats.total === 0 ? undefined : stats.winRate >= 50 ? "pos" : "neg",
+      value: periodStats.total > 0 ? `${periodStats.winRate.toFixed(1)}%` : "—",
+      tone: periodStats.total === 0 ? undefined : periodStats.winRate >= 50 ? "pos" : "neg",
     },
     {
       label: t("accountsPage.profitFactor"),
-      value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? stats.profitFactor.toFixed(2) : "—"),
+      value: periodStats.profitFactor === Infinity ? "∞" : (periodStats.total > 0 ? periodStats.profitFactor.toFixed(2) : "—"),
     },
     { label: "Trades", value: String(stats.total) },
   ];
@@ -771,6 +808,7 @@ export default function AccountDetailPage({ accountsLoading = false, accountId, 
       {/* ================= STATISTIQUES (node 369:4167) ================= */}
       <StatsSection
         stats={stats}
+        periodStats={periodStats}
         capital={capital}
         balance={balance}
         expanded={statsExpanded}
@@ -926,7 +964,7 @@ function LinkFirmMenu({ account, firms = [], onLinked, onCreateFirm }) {
           {firms.length === 0 ? (
             <>
               <div style={{ padding: "8px 10px", fontSize: 12, color: T.textSub, lineHeight: 1.45 }}>
-                Aucune prop firm enregistrée pour l'instant.
+                Aucune prop firm enregistrée pour l&apos;instant.
               </div>
               <button type="button" onClick={() => { setOpen(false); onCreateFirm?.(); }} style={firmOptionStyle(false)}>
                 <span style={{
@@ -998,7 +1036,7 @@ function firmOptionStyle(active) {
    montre que 4 lignes par carte ; « Voir plus » déplie la totalité des mesures
    déjà calculées par la page (aucune statistique n'est perdue).
    ------------------------------------------------------------------------- */
-function StatsSection({ stats, capital, balance, expanded, onToggle }) {
+function StatsSection({ stats, periodStats, capital, balance, expanded, onToggle }) {
   const money = (v) => fmt(v);
   const num = (v, dec = 2) => Number(v).toFixed(dec);
   const mins = (m) => {
@@ -1049,8 +1087,8 @@ function StatsSection({ stats, capital, balance, expanded, onToggle }) {
       // une seule ligne, sinon la carte affiche deux fois le même chiffre.
       title: t("accountsPage.catEdge"),
       rows: [
-        { label: t("accountsPage.profitFactor"), value: stats.profitFactor === Infinity ? "∞" : (stats.total > 0 ? num(stats.profitFactor) : "—") },
-        { label: t("accountsPage.winRateL"), value: stats.total > 0 ? `${stats.winRate.toFixed(1)}%` : "—" },
+        { label: t("accountsPage.profitFactor"), value: periodStats.profitFactor === Infinity ? "∞" : (periodStats.total > 0 ? num(periodStats.profitFactor) : "—") },
+        { label: t("accountsPage.winRateL"), value: periodStats.total > 0 ? `${periodStats.winRate.toFixed(1)}%` : "—" },
         { label: t("accountsPage.expectancyL"), value: stats.total > 0 ? money(stats.expectancy) : "—" },
         { label: t("accountsPage.avgWinner"), value: stats.wins ? money(stats.avgWin) : "—" },
         { label: t("accountsPage.avgLoser"), value: stats.losses ? `-${fmt(stats.avgLoss)}` : "—" },
@@ -1064,7 +1102,7 @@ function StatsSection({ stats, capital, balance, expanded, onToggle }) {
         { label: t("accountsPage.avgWinDayPnL"), value: stats.winDays ? money(stats.avgWinDayPnL) : "—" },
         { label: t("accountsPage.avgLoseDayPnL"), value: stats.loseDays ? money(stats.avgLoseDayPnL) : "—" },
         { label: t("accountsPage.avgDailyPnL"), value: stats.tradingDays ? money(stats.avgDailyPnL) : "—" },
-        { label: t("accountsPage.totalDaysL"), value: String(stats.tradingDays) },
+        { label: t("accountsPage.totalDaysL"), value: String(periodStats.tradingDays) },
         { label: t("accountsPage.avgDailyVolume"), value: stats.tradingDays ? num(stats.avgDailyVolume, 1) : "—" },
       ],
     },

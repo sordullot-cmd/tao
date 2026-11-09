@@ -814,29 +814,36 @@ export function StepperPill({ label, onPrev, onNext, onLabel, labelTitle, prevLa
 }
 
 /**
- * Ne garde que la fin d'une série pour la fenêtre demandée. La série reste
- * cumulée depuis le début (c'est un zoom, pas un filtre de données) et on
- * retombe sur les deux derniers points si la fenêtre est trop étroite.
+ * Ne garde que les points de la fenêtre demandée. La série reste cumulée depuis
+ * le début (c'est un zoom, pas un filtre de données), mais aucun point hors
+ * fenêtre ne sert de repli : il ferait mentir la période sélectionnée.
  *
  * `PERIOD_ALL` rend la série entière. La fenêtre se mesure depuis le DERNIER
  * point et non depuis aujourd'hui : une série qui s'arrête il y a un mois doit
  * montrer sa dernière semaine de données, pas un graphique vide.
  *
- * Le début est CALÉ SUR LE CALENDRIER (cf. `lib/ui/period`) : « 1 mois » part du
- * 1er du mois du dernier point, « 1 an » de son 1er janvier. Une courbe et un
- * total qui portent la même pastille doivent couvrir les mêmes jours.
+ * Le début est CALÉ SUR LE CALENDRIER (cf. `lib/ui/period`) : la semaine part du
+ * lundi, le mois du 1er, l'année du 1er janvier. Une courbe et un total qui
+ * portent la même pastille doivent couvrir les mêmes jours.
  */
 export function windowSeries(points, periodId, getDate = p => p.date) {
   if (!points || points.length === 0) return points || [];
   if (periodId === PERIOD_ALL) return points;
-  const last = new Date(getDate(points[points.length - 1]));
+  const lastKey = String(getDate(points[points.length - 1])).slice(0, 10);
+  const [year, month, day] = lastKey.split("-").map(Number);
+  const last = new Date(year, month - 1, day);
   if (isNaN(last.getTime())) return points;
   const from = periodStart(periodId, last) || periodStart("1M", last);
+  const fromKey = [
+    from.getFullYear(),
+    String(from.getMonth() + 1).padStart(2, "0"),
+    String(from.getDate()).padStart(2, "0"),
+  ].join("-");
   const windowed = points.filter(p => {
-    const d = new Date(getDate(p));
-    return !isNaN(d.getTime()) && d >= from;
+    const dateKey = String(getDate(p)).slice(0, 10);
+    return dateKey >= fromKey;
   });
-  return windowed.length > 1 ? windowed : points.slice(-2);
+  return windowed;
 }
 
 /**

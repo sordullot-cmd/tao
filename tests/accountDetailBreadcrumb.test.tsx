@@ -20,7 +20,7 @@ const ACCOUNTS = [
   { id: "a2", name: "Compte perso", firm_id: null, account_type: "live", broker: "Tradovate" },
 ];
 
-const renderPage = (accountId: string) => {
+const renderPage = (accountId: string, trades: Array<Record<string, unknown>> = []) => {
   const setPage = vi.fn();
   const setSelectedFirmId = vi.fn();
   render(
@@ -28,7 +28,7 @@ const renderPage = (accountId: string) => {
       accountId={accountId}
       accounts={ACCOUNTS}
       firms={FIRMS}
-      trades={[]}
+      trades={trades as never[]}
       strategies={[]}
       setPage={setPage}
       setSelectedFirmId={setSelectedFirmId}
@@ -44,6 +44,30 @@ describe("Fiche d'un compte — retour au parent", () => {
     fireEvent.click(screen.getByRole("button", { name: "Topstep" }));
     expect(setSelectedFirmId).toHaveBeenCalledWith("f1");
     expect(setPage).toHaveBeenCalledWith("firm-detail");
+  });
+
+  describe("Statistiques selon la période de la timeline", () => {
+    it("recalcule le winrate, le profit factor et les jours tradés pour la période choisie", () => {
+      renderPage("a2", [
+        { id: "old", account_id: "a2", date: "2025-11-15", pnl: 100 },
+        { id: "feb", account_id: "a2", date: "2026-02-01", pnl: -100 },
+        { id: "sunday", account_id: "a2", date: "2026-11-08", pnl: 100 },
+        { id: "one", account_id: "a2", date: "2026-11-09", pnl: 100 },
+        { id: "two", account_id: "a2", date: "2026-11-10", pnl: 100 },
+        { id: "three", account_id: "a2", date: "2026-11-12", pnl: -50 },
+      ]);
+
+      expect(screen.getAllByText("60.0%").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("2.00").length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByRole("button", { name: "1S" }));
+      expect(screen.getAllByText("66.7%").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("4.00").length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByRole("button", { name: "Voir plus" }));
+      const daysLabel = screen.getByText("Total trading days");
+      expect(daysLabel.parentElement?.textContent).toContain("3");
+    });
   });
 
   /* Un compte de prop firm ne renvoie QU'À sa firme : la liste des comptes est

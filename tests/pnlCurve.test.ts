@@ -12,6 +12,7 @@
 
 import { describe, it, expect } from "vitest";
 import { cumulativeByDay, cumulativeByTrade, pnlCurve } from "@/lib/ui/pnlCurve";
+import { windowSeries } from "@/components/ui/da";
 
 /* Une journée qui plonge puis se rattrape : son cumul quotidien (+50) ne dit
    rien du -150 traversé en cours de séance. C'est exactement ce que la maille
@@ -71,5 +72,15 @@ describe("pnlCurve", () => {
 
   it("n'invente pas d'ancre pour une série vide", () => {
     expect(pnlCurve([], { anchorZero: true })).toEqual([]);
+  });
+});
+
+describe("windowSeries", () => {
+  it("part du lundi et ne garde pas un point du dimanche précédent pour remplir la courbe", () => {
+    const points = [
+      { date: "2026-11-08T23:59:00", cum: 100 },
+      { date: "2026-11-09T00:01:00", cum: 150 },
+    ];
+    expect(windowSeries(points, "1S")).toEqual([points[1]]);
   });
 });
