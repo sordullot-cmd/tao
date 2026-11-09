@@ -341,9 +341,9 @@ function failureLine(progress) {
 }
 
 function consistencyValue(progress) {
-  return progress.tradingPnl > 0
-    ? `${progress.bestDayPct.toFixed(1)} % / ${progress.consistencyLimit} %`
-    : `En attente de gains · max ${progress.consistencyLimit} %`;
+  if (progress.consistencyMet) return "Respectée";
+  if (progress.tradingPnl <= 0) return "En attente de profits";
+  return `Encore ${fmt(progress.consistencyRemaining)} à répartir sur les prochains jours`;
 }
 
 /** La jauge du drawdown, commune aux deux visages : on la surveille avant comme après le passage. */

@@ -46,11 +46,11 @@ const renderCard = (
 };
 
 describe("visage « évaluation »", () => {
-  it("affiche la limite par défaut de 50 % et bloque le passage si le meilleur jour la dépasse", () => {
+  it("affiche le complément à gagner et bloque le passage si la consistency n'est pas tenue", () => {
     renderCard({
       trades: [{ date: "2026-09-01", pnl: 900 }, { date: "2026-09-02", pnl: 100 }],
     });
-    expect(screen.getAllByText(/90.0 % \/ 50 %/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Encore \$800\.00 à répartir sur les prochains jours/).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /Marquer comme financé/ })).toBeDisabled();
   });
 
@@ -190,7 +190,7 @@ describe("visage « payouts »", () => {
         { date: "2026-09-03", pnl: 1_000 },
       ],
     });
-    expect(screen.getAllByText(/52.6 % \/ 40 %/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Encore \$600\.00 à répartir sur les prochains jours/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Limite de consistency dépassée/)).toBeTruthy();
   });
 });

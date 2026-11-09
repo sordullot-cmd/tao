@@ -88,12 +88,14 @@ describe("règle de consistency", () => {
     const tropConcentré = evalProgress([tr("2026-09-01", 900), tr("2026-09-02", 100)], obj);
     expect(tropConcentré.bestDayPct).toBe(90);
     expect(tropConcentré.consistencyMet).toBe(false);
+    expect(tropConcentré.consistencyRemaining).toBe(800);
     expect(tropConcentré.passed).toBe(false);
 
     const régulier = evalProgress([
       tr("2026-09-01", 900), tr("2026-09-02", 100), tr("2026-09-03", 1_000),
     ], obj);
     expect(régulier.bestDayPct).toBe(50);
+    expect(régulier.consistencyRemaining).toBe(0);
     expect(régulier.passed).toBe(true);
   });
 
@@ -113,6 +115,14 @@ describe("règle de consistency", () => {
 
     const conforme = payoutState([...trades, tr("2026-09-05", 1_000)], contract, obj);
     expect(conforme.eligible).toBe(true);
+  });
+
+  it("arrondit le complément au centime supérieur pour ne pas rester juste au-dessus du seuil", () => {
+    const obj = plain({ consistencyPct: 40 });
+    const état = evalProgress([
+      tr("2026-09-01", 100), tr("2026-09-02", 50.003), tr("2026-09-03", 50.003),
+    ], obj);
+    expect(état.consistencyRemaining).toBe(50);
   });
 });
 

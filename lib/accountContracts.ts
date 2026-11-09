@@ -289,6 +289,8 @@ export interface EvalProgress {
   /** Part du profit total attribuable au meilleur jour. */
   bestDayPct: number;
   consistencyLimit: number;
+  /** Profit net supplémentaire à répartir sur de futurs jours pour respecter la règle. */
+  consistencyRemaining: number;
   consistencyMet: boolean;
   dailyLoss: number;
   /** Tous les objectifs sont tenus : le compte peut passer financé. */
@@ -401,6 +403,9 @@ export function evalProgress(
   const daysOk = daysTraded >= obj.minDays;
   const bestDayPct = tradingPnl > 0 ? bestDay / tradingPnl * 100 : 0;
   const consistencyMet = obj.consistencyPct <= 0 || tradingPnl <= 0 || bestDayPct <= obj.consistencyPct;
+  const consistencyRemaining = consistencyMet || tradingPnl <= 0 || bestDay <= 0
+    ? 0
+    : Math.ceil(Math.max(0, bestDay / (obj.consistencyPct / 100) - tradingPnl) * 100) / 100;
 
   return {
     pnl: cum,
@@ -419,6 +424,7 @@ export function evalProgress(
     tradingPnl,
     bestDayPct,
     consistencyLimit: obj.consistencyPct,
+    consistencyRemaining,
     consistencyMet,
     dailyLoss: obj.dailyLoss,
     passed: targetOk && daysOk && consistencyMet && !breached,
