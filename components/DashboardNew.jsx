@@ -31,6 +31,7 @@ import NotesPage from "@/components/pages/NotesPage";
 import RevisionsPage from "@/components/pages/RevisionsPage";
 import FocusPage from "@/components/pages/FocusPage";
 import FocusSentinel from "@/components/focus/FocusSentinel";
+import FloatingStudyVideo from "@/components/study/FloatingStudyVideo";
 import TrayBridge from "@/components/TrayBridge";
 import TrayTimer from "@/components/TrayTimer";
 import { useAccentSetting } from "@/lib/hooks/useAccentSetting";
@@ -1116,6 +1117,9 @@ export default function App() {
           cachée, c'est-à-dire quand ce menu est le seul accès à la routine.
           Ne rend rien ; inerte hors de l'app de bureau. */}
       <TrayBridge />
+      {/* La vidéo de l'Étude quittée en pleine lecture continue ici, dans un
+          coin : la page se démonte, la coquille non. */}
+      <FloatingStudyVideo />
       {/* Le décompte de la session en cours, à côté de l'icône de la barre de
           menus : c'est la seule façon de savoir combien il reste sans rouvrir
           la fenêtre — donc sans couper la session qu'on regarde. */}

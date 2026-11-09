@@ -37,6 +37,7 @@ import NoteRows from "@/components/study/NoteRows";
 import StudyNoteView, { fetchYouTubeTitle } from "@/components/study/StudyNoteView";
 import { fmtDay, dayOf } from "@/components/study/tradeFormat";
 import { usePlayerPrefs } from "@/components/study/playerPrefs";
+import { takeOpenRequest, onOpenRequest } from "@/components/study/floatingVideo";
 
 const STORAGE_KEY = "tao_study";
 const CLOUD_KEY = "study";
@@ -147,6 +148,23 @@ export default function StudyPage({ trades = [], strategies = [] }) {
       return { stack: [...n.stack.slice(0, n.index + 1), v], index: n.index + 1 };
     });
   };
+
+  /* « Revenir à la note » depuis la vidéo flottante : demandé au montage
+     (on arrivait d'une autre page) ou pendant (on était déjà sur l'Étude). */
+  useEffect(() => {
+    const serve = () => {
+      const id = takeOpenRequest();
+      if (!id) return;
+      setQuery(null);
+      setNav(n => {
+        const cur = n.stack[n.index];
+        if (cur.kind === "note" && cur.id === id) return n;
+        return { stack: [...n.stack.slice(0, n.index + 1), { kind: "note", id }], index: n.index + 1 };
+      });
+    };
+    serve();
+    return onOpenRequest(serve);
+  }, []);
 
   const canBack = nav.index > 0;
   const canForward = nav.index < nav.stack.length - 1;

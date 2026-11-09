@@ -308,6 +308,7 @@ export default function StudyNoteView({ note, store, trades, strategies = [], us
           key={main.youtubeId}
           ref={clock}
           video={main}
+          noteId={note.id}
           marks={marks}
           prefs={effPrefs}
           setPrefs={setPrefs}

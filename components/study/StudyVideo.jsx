@@ -7,6 +7,7 @@ import { TYPE, TABULAR } from "@/lib/ui/type";
 import { youTubeThumbs } from "@/lib/study/model";
 import { secondsToClock } from "@/lib/study/stamps";
 import { CORNERS } from "@/components/study/playerPrefs";
+import { handOff, claim } from "@/components/study/floatingVideo";
 
 /* Voile posé sur une vignette vidéo. Volontairement hors thème : il repose sur
    une image, pas sur le fond de page, et doit rester sombre en thème clair
@@ -35,7 +36,7 @@ const frameWidth = (h, room) => {
    premier clic sur « Lire » : tant qu'on n'a rien lancé, rien ne part chez
    YouTube hormis la vignette. */
 let apiPromise = null;
-function loadYouTubeApi() {
+export function loadYouTubeApi() {
   if (typeof window === "undefined") return Promise.reject(new Error("pas de fenêtre"));
   if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
   if (!apiPromise) {
@@ -66,9 +67,13 @@ function loadYouTubeApi() {
  *   mini  petite, dans un coin de l'écran.
  * Le même nœud DOM sert aux trois : changer de disposition ne recharge pas
  * l'iframe, la lecture continue.
+ *
+ * Quitter la note en pleine lecture ne coupe pas la vidéo : au démontage, le
+ * lecteur la confie à la fenêtre flottante de la coquille
+ * (`FloatingStudyVideo`), et la reprend à son retour (cf. `floatingVideo.js`).
  */
 const StudyVideo = React.forwardRef(function StudyVideo(
-  { video, marks, prefs, setPrefs, onPosition, onChange, onRemove, contained = false },
+  { video, noteId, marks, prefs, setPrefs, onPosition, onChange, onRemove, contained = false },
   ref,
 ) {
   const host = useRef(null);
@@ -128,11 +133,35 @@ const StudyVideo = React.forwardRef(function StudyVideo(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- une seule création par chargement
   }, [loaded]);
 
+  /* De retour d'une autre page : la fenêtre flottante rend la main, et la
+     lecture repart là où elle en était, sans repasser par la vignette. */
+  useEffect(() => {
+    const at = claim(noteId, video.youtubeId);
+    if (at != null) { setTime(at); start(at); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une seule reprise, au montage
+  }, []);
+
+  /* « Retirer » démonte aussi le lecteur : ce départ-là ne doit pas flotter. */
+  const removed = useRef(false);
+  const titleRef = useRef(video.title);
+  titleRef.current = video.title;
+
   /* Le parent remonte le lecteur à chaque vidéo (clé = id YouTube) : le
-     nettoyage n'a lieu qu'au démontage. */
+     nettoyage n'a lieu qu'au démontage. C'est aussi le seul moment où l'on
+     sait qu'on quitte la note — d'où la passation ici, avant de détruire.
+     Seulement si ça JOUAIT : une vidéo en pause qu'on laisse derrière soi n'a
+     pas à vous suivre. */
   useEffect(() => () => {
-    try { player.current?.destroy?.(); } catch { /* déjà détruit */ }
+    const p = player.current;
+    try {
+      if (!removed.current && p?.getPlayerState?.() === 1) {
+        const at = p.getCurrentTime?.() || 0;
+        handOff({ noteId, videoId: video.id, youtubeId: video.youtubeId, title: titleRef.current, time: at });
+      }
+    } catch { /* lecteur à moitié détruit : on n'a rien à transmettre */ }
+    try { p?.destroy?.(); } catch { /* déjà détruit */ }
     player.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nettoyage du démontage seul
   }, []);
 
   /* L'horloge affichée, et une sauvegarde de position en cours de lecture
@@ -306,7 +335,7 @@ const StudyVideo = React.forwardRef(function StudyVideo(
         {!mini && (
           <div style={{ display: "flex", gap: 2, flexShrink: 0, paddingLeft: 6, borderLeft: `1px solid ${HAIRLINE}` }}>
             <ModeBtn onClick={onChange} label="Changer de vidéo"><Replace size={14} strokeWidth={1.75} /></ModeBtn>
-            <ModeBtn onClick={onRemove} label="Retirer la vidéo" danger><X size={14} strokeWidth={1.75} /></ModeBtn>
+            <ModeBtn onClick={() => { removed.current = true; onRemove(); }} label="Retirer la vidéo" danger><X size={14} strokeWidth={1.75} /></ModeBtn>
           </div>
         )}
       </div>
