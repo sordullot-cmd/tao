@@ -7,7 +7,7 @@ import { TAG_COLORS } from "@/lib/ui/tradingColors";
 import { t, useLang } from "@/lib/i18n";
 import { fmt, fmtInt, fmtCompact } from "@/lib/ui/format";
 import { byMostRecent } from "@/lib/tradeOrder";
-import { periodStart } from "@/lib/ui/period";
+import { periodRange } from "@/lib/ui/period";
 import { getCurrencySymbol } from "@/lib/userPrefs";
 import { Skeleton, SkeletonCard, SkeletonList, SkeletonStats, SkeletonToolbar, SkeletonScreen, showSkeleton } from "@/components/ui/Skeleton";
 import { useApp } from "@/lib/contexts/AppContext";
@@ -92,15 +92,6 @@ const DAY_GRID = {
   alignItems: "center",
   gap: 8,
 };
-
-/* Les quatre familles de tags, choisies par un sélecteur au lieu d'être empilées
-   dans quatre blocs identiques. */
-const BREAKDOWNS = [
-  { id: "emotion",   label: () => t("dash.emotionalImpact") },
-  { id: "entry",     label: () => t("dash.entryType") },
-  { id: "liquidity", label: () => t("dash.liquidity") },
-  { id: "timeframe", label: () => t("dash.timeframe") },
-];
 
 /* Grille d'une ligne de catégorie du Tao Score : libellé, occurrences, winrate,
    P&L. Resserrée pour un tiers de page : à 132 px, la colonne P&L ne laissait
@@ -308,15 +299,11 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   const [selectedDay, setSelectedDay] = React.useState(null);
   const [hoveredChart, setHoveredChart] = React.useState(null);
   const [tooltipPos, setTooltipPos] = React.useState({ x: 0, y: 0 });
-  // Fenêtre de la courbe P&L — pastilles de la maquette. C'est un zoom sur la
-  // fin de la courbe, pas un filtre de données : « Tout » (par défaut) montre
-  // l'historique complet depuis le premier trade déposé.
+  // La période sélectionnée borne ensemble le P&L, ses KPI et sa courbe.
   const PERIODS = [
     { id: "1S" }, { id: "1M" }, { id: "3M" }, { id: "6M" }, { id: "1A" }, { id: "Tout" },
   ];
   const [period, setPeriod] = React.useState("Tout");
-  // Famille de tags affichée dans « Répartition ».
-  const [breakdown, setBreakdown] = React.useState("emotion");
   // Famille affichée dans « Win rate par type de trade ».
   const [tradeType, setTradeType] = React.useState("entry");
   /* Note A→F posée à la main sur la fiche trade. Lue par useCloudState et non
@@ -499,9 +486,8 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
     } catch (e) {}
   });
 
-  // Trades du mois affiché dans le calendrier — servent UNIQUEMENT au calendrier
-  // (cases du mois et pourcentages associés). Les autres blocs du dashboard ne
-  // sont pas bornés au mois affiché.
+  // Trades du mois affiché dans le calendrier — servent uniquement aux cases
+  // du calendrier et à leurs pourcentages.
   const pnlBase = pnlTrades || trades;
   const monthTrades = pnlBase.filter(t => {
     try {
@@ -514,25 +500,54 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   });
   const monthPnL = monthTrades.reduce((s,t)=>s+t.pnl,0);
 
-  // Base de toutes les stats du dashboard (Tao Score, performance par jour,
-  // radar, trades récents) : l'historique complet, indépendamment du mois
-  // affiché dans le calendrier. Seul un clic sur un jour de la semaine dans
-  // « Performance par jour » restreint la page à ce jour-là.
+  // Les analyses gardent l'historique complet ; les KPI et la courbe ont leur
+  // propre fenêtre calendaire ci-dessous.
   const filteredTrades = selectedDay !== null
     ? (pnlByDay[selectedDay] || [])
     : trades;
 
-  // Le bloc « P&L total » et sa courbe ne sont PAS bornés au mois affiché dans
-  // le calendrier : ils couvrent toute la plage sélectionnée (comme la maquette,
-  // dont l'axe va du 26 juillet au 2 août). Sans ça, un mois sans trade affiche
-  // 0 € et « Pas de données » alors que le compte a un historique.
+  const dateKeyOf = (trade) => String(trade?.date || trade?.entry_time || "").slice(0, 10);
+  const latestTradeDate = [...pnlBase, ...trades]
+    .map(dateKeyOf)
+    .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .sort()
+    .slice(-1)[0];
+  const [lastYear, lastMonth, lastDay] = (latestTradeDate || "").split("-").map(Number);
+  const periodAnchor = latestTradeDate
+    ? new Date(lastYear, lastMonth - 1, lastDay)
+    : new Date();
+  const periodBounds = periodRange(period, 0, periodAnchor);
+  const inSelectedPeriod = (trade) => {
+    if (!periodBounds) return true;
+    const date = dateKeyOf(trade);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+    const keyOf = (d) => [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0"),
+    ].join("-");
+    return date >= keyOf(periodBounds.start) && date <= keyOf(periodBounds.end);
+  };
+  const periodStatTrades = trades.filter(inSelectedPeriod);
+  const periodPnlTrades = pnlBase.filter(inSelectedPeriod);
   const curveTrades = selectedDay !== null
-    ? pnlBase.filter(t => { const d = new Date(t.date); return !isNaN(d.getTime()) && d.getDay() === selectedDay; })
-    : pnlBase;
+    ? periodPnlTrades.filter(t => {
+        const date = dateKeyOf(t);
+        const [year, month, day] = date.split("-").map(Number);
+        return date && new Date(year, month - 1, day).getDay() === selectedDay;
+      })
+    : periodPnlTrades;
+  const periodStatDayTrades = selectedDay !== null
+    ? periodStatTrades.filter(t => {
+        const date = dateKeyOf(t);
+        const [year, month, day] = date.split("-").map(Number);
+        return date && new Date(year, month - 1, day).getDay() === selectedDay;
+      })
+    : periodStatTrades;
 
   const totalPnL = curveTrades.reduce((s,t)=>s+t.pnl,0);
-  const wins = filteredTrades.filter(t=>t.pnl>0);
-  const losses = filteredTrades.filter(t=>t.pnl<0);
+  const wins = periodStatDayTrades.filter(t=>t.pnl>0);
+  const losses = periodStatDayTrades.filter(t=>t.pnl<0);
   const winCount = wins.length;
   const lossCount = losses.length;
   const winRate = ((winCount/(winCount+lossCount||1))*100).toFixed(1);
@@ -541,10 +556,7 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
   // Jours tradés : dates locales distinctes, sur la même base que le winrate.
   // Clé locale et non `toISOString()` : un trade du soir basculerait sinon au
   // lendemain UTC et compterait un jour de trop.
-  const tradingDays = new Set(filteredTrades.map(tr => {
-    const d = new Date(tr.date);
-    return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  }).filter(Boolean)).size;
+  const tradingDays = new Set(periodStatDayTrades.map(dateKeyOf).filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))).size;
 
   // WR Today = winrate sur les trades d'aujourd'hui
   const todayIso = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
@@ -789,54 +801,39 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
     };
   })();
 
-  // P&L curve - grouped by day (sur toute la plage, pas seulement le mois affiché)
+  // Courbe P&L de la période sélectionnée, cumulée à partir de zéro.
   const sortedTrades = [...curveTrades].sort((a,b)=>new Date(a.date)-new Date(b.date));
   const dailyPnL = {};
   // Nombre de trades par jour, porté par chaque point de la courbe.
   const dailyCount = {};
   sortedTrades.forEach(t=>{
     try {
-      const dateKey = new Date(t.date).toISOString().split('T')[0];
+      const dateKey = dateKeyOf(t);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
       if (!dailyPnL[dateKey]) dailyPnL[dateKey] = 0;
-      dailyPnL[dateKey] += t.pnl;
+      dailyPnL[dateKey] += Number(t.pnl) || 0;
       dailyCount[dateKey] = (dailyCount[dateKey] || 0) + 1;
     } catch (e) {}
   });
 
-  const pnlCurveFull = [];
+  const pnlCurve = [];
   let cum = 0;
   const sortedDates = Object.keys(dailyPnL).sort();
-  // Point de départ à 0, la veille du premier trade
+  // Point zéro au début de la période (ou à la veille du premier trade pour « Tout »).
   if (sortedDates.length > 0) {
-    const first = new Date(sortedDates[0]);
-    first.setDate(first.getDate() - 1);
-    pnlCurveFull.push({ cum: 0, pnl: 0, count: 0, date: first.toISOString().split('T')[0] });
+    const first = periodBounds ? new Date(periodBounds.start) : new Date(`${sortedDates[0]}T00:00:00`);
+    if (!periodBounds) first.setDate(first.getDate() - 1);
+    const anchorDate = [
+      first.getFullYear(),
+      String(first.getMonth() + 1).padStart(2, "0"),
+      String(first.getDate()).padStart(2, "0"),
+    ].join("-");
+    pnlCurve.push({ cum: 0, pnl: 0, count: 0, date: anchorDate });
   }
   sortedDates.forEach(date=>{
     cum += dailyPnL[date];
-    pnlCurveFull.push({cum, pnl:dailyPnL[date], count:dailyCount[date] || 0, date});
+    pnlCurve.push({cum, pnl:dailyPnL[date], count:dailyCount[date] || 0, date});
   });
-
-  // Fenêtre de la courbe : on ne garde que la fin. Le cumulé reste celui du
-  // début (on ne recalcule pas à zéro), la pastille est un zoom et non un
-  // filtre de données. `days: null` (« Tout ») = historique complet.
-  const pnlCurve = (() => {
-    if (pnlCurveFull.length === 0) return pnlCurveFull;
-    const [year, month, day] = pnlCurveFull[pnlCurveFull.length - 1].date.split("-").map(Number);
-    const last = new Date(year, month - 1, day);
-    if (isNaN(last.getTime())) return pnlCurveFull;
-    /* Fenêtre calée sur le calendrier (cf. `lib/ui/period`) : « 1 mois » part du
-       1er du mois du dernier point. « Tout » n'en a pas — la courbe entière. */
-    const from = periodStart(period, last);
-    if (!from) return pnlCurveFull;
-    const fromKey = [
-      from.getFullYear(),
-      String(from.getMonth() + 1).padStart(2, "0"),
-      String(from.getDate()).padStart(2, "0"),
-    ].join("-");
-    const windowed = pnlCurveFull.filter(p => p.date >= fromKey);
-    return windowed;
-  })();
 
   // Symbol stats
   const symbolStats = {};
@@ -1347,12 +1344,11 @@ export default function DashboardPage({ trades = [], pnlTrades = null, allTrades
             </div>
           </div>
 
-          {/* Impacts : émotion, type d'entrée, liquidité, timeframe. */}
+          {/* Les impacts affichent les émotions ; les autres tags restent dans leurs analyses dédiées. */}
           <div style={{display:"flex",flexDirection:"column",gap:16,flex:1}}>
             <div style={{...CARD,display:"flex",flexDirection:"column",gap:12,flex:1}}>
               <CardHeader title={t("dash.impacts")} />
-              <CardPills items={BREAKDOWNS} value={breakdown} onChange={setBreakdown} />
-              <CategoryRows rows={{ emotion: emotionStats, entry: entryStats, liquidity: liquidityStats, timeframe: timeframeStats }[breakdown] || []} />
+              <CategoryRows rows={emotionStats} />
             </div>
           </div>
         </div>

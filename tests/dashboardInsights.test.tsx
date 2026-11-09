@@ -43,6 +43,15 @@ beforeEach(() => {
 });
 
 describe("lectures croisées du tableau de bord", () => {
+  it("réserve la carte Impacts aux émotions", () => {
+    render(<DashboardPage trades={TRADES} />);
+    const c = card(t("dash.impacts"));
+    expect(within(c).queryByRole("button", { name: t("dash.entryType") })).toBeNull();
+    expect(within(c).queryByRole("button", { name: t("dash.liquidity") })).toBeNull();
+    expect(within(c).queryByRole("button", { name: t("dash.timeframe") })).toBeNull();
+    expect(within(card(t("dash.winRateByType"))).getByRole("button", { name: t("dash.entryType") })).toBeTruthy();
+  });
+
   it("range le P&L par note, de A à F, avec les trades sans note à part", () => {
     render(<DashboardPage trades={TRADES} />);
     const rows = within(card(t("dash.pnlByGrade"))).getAllByText((_, n) => ["A", "F", t("dash.unrated")].includes(n?.textContent ?? "") && n?.children.length === 0)
@@ -70,5 +79,26 @@ describe("lectures croisées du tableau de bord", () => {
     fireEvent.click(within(c).getByRole("button", { name: t("dash.direction") }));
     expect(within(c).getByText(t("common.long"))).toBeTruthy();
     expect(within(c).getByText("100%")).toBeTruthy();       // t1 et t3, tous deux gagnants
+  });
+
+  it("recalcule les KPI et la courbe sur la semaine civile choisie", () => {
+    const trades = [
+      { id: "old", date: "2026-09-30T10:00:00", symbol: "NQ", pnl: 1000 },
+      ...TRADES,
+    ];
+    const { container } = render(<DashboardPage trades={trades} />);
+    const kpis = () => screen.getAllByText(t("dash.kpi.netPnL"))[0].parentElement!.parentElement!;
+
+    expect(within(kpis()).getByText(t("dash.kpi.winRate")).parentElement?.textContent).toContain("75.0%");
+    expect(within(kpis()).getByText(t("dash.kpi.tradingDays")).parentElement?.textContent).toContain("4");
+    expect(within(kpis()).getByText(t("dash.kpi.profitFactor")).parentElement?.textContent).toContain("13.50");
+
+    fireEvent.click(screen.getByRole("button", { name: "1S" }));
+
+    expect(within(kpis()).getByText(t("dash.kpi.winRate")).parentElement?.textContent).toContain("66.7%");
+    expect(within(kpis()).getByText(t("dash.kpi.tradingDays")).parentElement?.textContent).toContain("3");
+    expect(within(kpis()).getByText(t("dash.kpi.profitFactor")).parentElement?.textContent).toContain("3.50");
+    expect(kpis().textContent).toContain("250.00");
+    expect(container.querySelector('svg path[stroke-linecap="round"]')).not.toBeNull();
   });
 });
