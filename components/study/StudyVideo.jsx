@@ -12,7 +12,7 @@ import { handOff, claim } from "@/components/study/floatingVideo";
 /* Voile posé sur une vignette vidéo. Volontairement hors thème : il repose sur
    une image, pas sur le fond de page, et doit rester sombre en thème clair
    comme en thème sombre pour que le blanc du bouton se lise. */
-const SCRIM = "rgba(13, 13, 13, 0.72)";
+export const SCRIM = "rgba(13, 13, 13, 0.72)";
 const MODES = [
   { id: "top", label: "Haut", Icon: PanelTop },
   { id: "side", label: "Côté", Icon: PanelRight },

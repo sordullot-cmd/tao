@@ -27,6 +27,14 @@
  *    Recoller le relevé est le geste naturel pour réparer ça ; encore faut-il
  *    que l'import en tire quelque chose. D'où `toRefresh` : les frais réels que
  *    le lot apporte à des trades déjà en base qui ne les ont pas.
+ *
+ * 4. Le même raisonnement vaut pour le P&L et les lots. La signature ne porte
+ *    ni l'un ni l'autre — c'est voulu, elle identifie le trade, pas son
+ *    résultat —, si bien qu'un trade entré faux (collage partiel : 1 lot sur
+ *    les 1 + 18 + 1 d'une même position) était reconnu au recollage du relevé
+ *    complet, déclaré doublon, et gardait son P&L faux pour toujours. Seuls
+ *    ses frais étaient mis à jour : le P&L net d'un +223 $ ressortait à −11 $.
+ *    Le relevé fait foi ; ce qu'il chiffre remplace ce que la base a gardé.
  */
 
 const norm = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -45,6 +53,10 @@ export interface SignableTrade {
   id?: unknown;
   /** Frais réels. `null` en base = jamais renseignés. */
   fees?: unknown;
+  /** P&L BRUT, comme en base. */
+  pnl?: unknown;
+  quantity?: unknown;
+  volume?: unknown;
 }
 
 /**
@@ -65,16 +77,20 @@ export const tradeSignature = (tr: SignableTrade): string =>
     norm(tr.exit_time),
   ].join("|");
 
-/** Frais réels à poser sur un trade déjà en base. */
+/** Ce que le relevé corrige sur un trade déjà en base — seuls les champs qui
+    changent sont présents, pour que la mise à jour n'écrive que ceux-là. */
 export interface FeeRefresh {
   id: unknown;
-  fees: number;
+  fees?: number;
+  pnl?: number;
+  quantity?: number;
+  volume?: number;
 }
 
 export interface DedupeResult<T> {
   toInsert: T[];
   duplicates: number;
-  /** Doublons dont le lot corrige les frais. Vide dans le cas courant. */
+  /** Doublons dont le lot corrige frais, P&L ou lots. Vide dans le cas courant. */
   toRefresh: FeeRefresh[];
 }
 
@@ -109,8 +125,8 @@ export const splitNewTrades = <T extends SignableTrade>(
     const prev = queue && queue.length ? queue.shift() : undefined;
     if (prev) {
       duplicates += 1;
-      const fees = feeRefreshFor(prev, tr);
-      if (fees !== null) toRefresh.push({ id: prev.id, fees });
+      const refresh = refreshFor(prev, tr);
+      if (refresh) toRefresh.push(refresh);
       continue;
     }
     toInsert.push(tr);
@@ -120,20 +136,29 @@ export const splitNewTrades = <T extends SignableTrade>(
 };
 
 /**
- * Les frais que le lot apporte à un trade déjà en base, ou `null` s'il n'y a
- * rien à corriger.
+ * Ce que le lot corrige sur un trade déjà en base, ou `null` s'il n'y a rien.
  *
- * On ne rafraîchit QUE vers une valeur connue : un relevé muet sur les frais ne
- * doit jamais effacer ceux qu'un autre import avait chiffrés. Un trade sans id
+ * On ne rafraîchit QUE vers une valeur connue : un relevé muet sur un champ ne
+ * doit jamais effacer ce qu'un autre import avait chiffré. Un trade sans id
  * est hors de portée (l'appelant n'a pas relu la colonne), et une valeur
  * identique au centime ne vaut pas une écriture.
  */
-function feeRefreshFor(prev: SignableTrade, incoming: SignableTrade): number | null {
+function refreshFor(prev: SignableTrade, incoming: SignableTrade): FeeRefresh | null {
   if (prev.id == null) return null;
-  if (incoming.fees == null || incoming.fees === "") return null;
-  const next = Number(incoming.fees);
-  if (!Number.isFinite(next) || next < 0) return null;
-  const before = prev.fees == null || prev.fees === "" ? null : Number(prev.fees);
-  if (before !== null && Number.isFinite(before) && round2(before) === round2(next)) return null;
-  return round2(next);
+  const out: FeeRefresh = { id: prev.id };
+  let changed = false;
+  for (const field of ["fees", "pnl", "quantity", "volume"] as const) {
+    const raw = incoming[field];
+    if (raw == null || raw === "") continue;
+    const next = Number(raw);
+    if (!Number.isFinite(next)) continue;
+    // Des frais ou des lots négatifs n'ont pas de sens ; un P&L, si.
+    if (field !== "pnl" && next < 0) continue;
+    const old = prev[field];
+    const before = old == null || old === "" ? null : Number(old);
+    if (before !== null && Number.isFinite(before) && round2(before) === round2(next)) continue;
+    out[field] = round2(next);
+    changed = true;
+  }
+  return changed ? out : null;
 }

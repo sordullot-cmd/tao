@@ -274,6 +274,10 @@ export default function TradesList({
      page veut (le formulaire de revue, par ex.) au lieu de déplier le détail —
      deux gestes sur la même ligne, et l'on ne saurait jamais lequel on obtient. */
   onRowClick,
+  /* Avec `onRowClick` : déplie aussi le détail de la ligne active. Le détail
+     suit `activeId` au lieu d'un état propre — un seul geste, et la ligne se
+     replie quand la page referme ce qu'elle a ouvert à côté. */
+  expandActive = false,
   /** En-tête posé dans la carte, au-dessus des colonnes (titre du bloc). */
   header = null,
   style,
@@ -313,7 +317,9 @@ export default function TradesList({
             <div style={{ fontSize: 14, color: T.textMut, padding: "12px 8px" }}>{empty}</div>
           ) : trades.map((tr, i) => {
             const key = tr.id ?? i;
-            const isOpen = open === key;
+            const isOpen = onRowClick
+              ? expandActive && activeId != null && tr.id === activeId
+              : open === key;
             const d = new Date(tr.date);
             const net = Number(tr.pnl) || 0;
             const entryPx = Number(tr.entry);
@@ -352,7 +358,7 @@ export default function TradesList({
                   <button
                     type="button"
                     onClick={() => (onRowClick ? onRowClick(tr) : setOpen(v => (v === key ? null : key)))}
-                    aria-expanded={onRowClick ? undefined : isOpen}
+                    aria-expanded={onRowClick && !expandActive ? undefined : isOpen}
                     aria-pressed={onRowClick ? activeId != null && tr.id === activeId : undefined}
                     onMouseEnter={() => setHover(key)}
                     onMouseLeave={() => setHover(null)}

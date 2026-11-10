@@ -883,7 +883,7 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
            tient les deux côtés. */
         const { data: existingTrades } = await supabase
           .from("apex_trades")
-          .select("id, fees, date, symbol, direction, entry, exit, entry_time, exit_time")
+          .select("id, fees, pnl, quantity, volume, date, symbol, direction, entry, exit, entry_time, exit_time")
           .eq("user_id", userId)
           .eq("account_id", targetId);
 
@@ -894,10 +894,12 @@ export default function AddTradePage({ setPage, setAccounts, accounts = [], firm
         /* Frais réels apportés à des trades déjà là. Sans ça, recoller un
            relevé pour réparer un P&L faussé par le barème n'aurait servi à
            rien : tout serait ressorti « doublon ignoré ». */
-        for (const { id, fees } of toRefresh) {
+        /* Frais, P&L brut et lots : le relevé recollé répare aussi un trade
+           entré faux, pas seulement ses frais (cf. lib/importDedupe.ts, §4). */
+        for (const { id, ...patch } of toRefresh) {
           const { error: feeError } = await supabase
             .from("apex_trades")
-            .update({ fees })
+            .update(patch)
             .eq("id", id)
             .eq("user_id", userId);
           if (feeError) {

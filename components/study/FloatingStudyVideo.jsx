@@ -1,23 +1,25 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef } from "react";
-import { MoveDiagonal, Maximize2, X } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Maximize2, X } from "lucide-react";
 import { T, FIELD_BG } from "@/lib/ui/tokens";
-import { TYPE } from "@/lib/ui/type";
 import { useApp } from "@/lib/contexts/AppContext";
 import { useCloudState } from "@/lib/hooks/useCloudState";
 import { emptyStudy, normalizeStudy } from "@/lib/study/model";
-import { usePlayerPrefs, CORNERS } from "@/components/study/playerPrefs";
 import { useFloatingVideo, track, dismiss, requestOpen } from "@/components/study/floatingVideo";
-import { loadYouTubeApi } from "@/components/study/StudyVideo";
+import { loadYouTubeApi, SCRIM } from "@/components/study/StudyVideo";
 
 /**
- * La vidéo d'étude qu'on a quittée en pleine lecture, qui continue dans un
- * coin de l'écran pendant qu'on va voir ailleurs.
+ * La vidéo d'étude qu'on a quittée en pleine lecture, qui continue par-dessus
+ * l'app pendant qu'on va voir ailleurs.
  *
  * Montée dans la coquille (`DashboardNew`), comme `FocusSentinel` : une page
  * se démonte dès qu'on la quitte, la coquille jamais. Ne rend rien tant
  * qu'aucune vidéo n'a été confiée (cf. `floatingVideo.js`).
+ *
+ * Rien que la vidéo : pas de cadre, pas de rangée de boutons. On la saisit
+ * pour la déplacer, on tire un coin pour la redimensionner, et les deux seuls
+ * gestes — revenir à la note, fermer — apparaissent au survol, sur l'image.
  */
 export default function FloatingStudyVideo() {
   const entry = useFloatingVideo();
@@ -27,9 +29,17 @@ export default function FloatingStudyVideo() {
   return <Floating key={`${entry.noteId}:${entry.youtubeId}`} entry={entry} />;
 }
 
+const RATIO = 16 / 9;
+const MIN_W = 200;
+const MARGIN = 8;
+/* Hauteur de la barre de commandes YouTube, laissée hors du calque de saisie :
+   la barre de progression et le volume restent à portée. */
+const CONTROLS_H = 48;
+const GRIP = 14;
+const BOX_KEY = "tao_study_float";
+
 function Floating({ entry }) {
   const { setPage } = useApp();
-  const [prefs, setPrefs] = usePlayerPrefs();
   /* Même clé que la page Étude : le relais de `useCloudState` garde les deux
      d'accord si la page est montée en même temps (accueil de l'Étude). */
   const [, setRaw] = useCloudState("tao_study", "study", emptyStudy());
@@ -39,7 +49,7 @@ function Floating({ entry }) {
 
   /* La position remonte dans la note, comme depuis le lecteur d'origine :
      c'est elle qui nourrit « Reprendre à » si l'on rouvre la note plus tard
-     au lieu de revenir par ce bouton. Sans toucher `updatedAt` — regarder
+     au lieu de revenir par le bouton. Sans toucher `updatedAt` — regarder
      n'est pas modifier. */
   const save = useCallback((sec, force = false) => {
     const s = Math.floor(sec);
@@ -102,40 +112,160 @@ function Floating({ entry }) {
     setPage("study");
   };
 
-  const corner = prefs.corner;
+  const [box, setBox] = useState(readBox);
+  const live = useRef(box);
+  useEffect(() => { live.current = box; }, [box]);
+  const frame = useRef(null);
+  /* Écrit directement sur le nœud pendant le geste, retenu à la fin : un
+     rendu React par mouvement de souris ferait saccader l'iframe. */
+  const paint = (b) => {
+    live.current = b;
+    const el = frame.current;
+    if (!el) return;
+    el.style.left = `${b.x}px`; el.style.top = `${b.y}px`; el.style.width = `${b.w}px`;
+  };
+  const commit = (b) => { setBox(b); writeBox(b); };
+
+  /* La fenêtre rétrécie peut laisser la vidéo hors champ : on la ramène. */
+  useEffect(() => {
+    const onResize = () => { const b = fit(live.current); paint(b); setBox(b); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  /* Le geste suit le pointeur capturé : sans capture, passer au-dessus de
+     l'iframe en allant vite ferait perdre les mouvements à YouTube. */
+  const drag = (e, onMove, onEnd) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const up = () => {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      onEnd();
+    };
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  };
+
+  /* Saisir la vidéo la déplace ; un clic sans mouvement met en pause ou
+     relance — le calque qui capte le geste masque le clic de YouTube, il
+     doit donc le rendre. */
+  const onMoveDown = (e) => {
+    if (e.button !== 0) return;
+    const start = live.current;
+    const sx = e.clientX, sy = e.clientY;
+    let moved = false;
+    drag(e, (ev) => {
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (!moved && Math.hypot(dx, dy) < 4) return;
+      moved = true;
+      paint(fit({ ...start, x: start.x + dx, y: start.y + dy }));
+    }, () => {
+      if (moved) { commit(live.current); return; }
+      const p = player.current;
+      if (!p?.getPlayerState) return;
+      if (p.getPlayerState() === 1) p.pauseVideo(); else p.playVideo();
+    });
+  };
+
+  /* Redimensionner par un coin : le coin opposé reste en place, et le cadre
+     garde son 16:9 — seule la largeur se règle, la hauteur suit. */
+  const onResizeDown = (corner) => (e) => {
+    if (e.button !== 0) return;
+    const start = live.current;
+    const sx = e.clientX;
+    const right = start.x + start.w;
+    const bottom = start.y + start.w / RATIO;
+    drag(e, (ev) => {
+      const dx = ev.clientX - sx;
+      const w = clampW(corner.includes("l") ? start.w - dx : start.w + dx);
+      paint(fit({
+        w,
+        x: corner.includes("l") ? right - w : start.x,
+        y: corner.includes("t") ? bottom - w / RATIO : start.y,
+      }));
+    }, () => commit(live.current));
+  };
+
   return (
-    <div role="region" aria-label="Vidéo d'étude en cours" style={{
-      position: "fixed", zIndex: 40, width: "min(340px, calc(100vw - 32px))", padding: 10, borderRadius: 14,
-      background: T.white, boxShadow: "var(--elev-overlay)", display: "flex", flexDirection: "column", gap: 6,
-      ...(corner.includes("b") ? { bottom: 24 } : { top: 84 }),
-      ...(corner.includes("r") ? { right: 16 } : { left: 16 }),
+    <div ref={frame} role="region" aria-label="Vidéo d'étude en cours" className="study-float" style={{
+      position: "fixed", zIndex: 40, left: box.x, top: box.y, width: box.w, aspectRatio: "16 / 9",
+      borderRadius: 12, overflow: "hidden", background: FIELD_BG, boxShadow: "var(--elev-overlay)",
     }}>
-      <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 10, overflow: "hidden", background: FIELD_BG }}>
-        {/* Même débord rogné que le lecteur de la note : sans lui, un liseré
-            noir du lecteur YouTube dépasse sur les bords. */}
-        <div style={{ position: "absolute", inset: -3 }}><div ref={host} style={{ width: "100%", height: "100%" }} /></div>
+      {/* Même débord rogné que le lecteur de la note : sans lui, un liseré
+          noir du lecteur YouTube dépasse sur les bords. */}
+      <div style={{ position: "absolute", inset: -3 }}><div ref={host} style={{ width: "100%", height: "100%" }} /></div>
+      <div onPointerDown={onMoveDown} title="Glisser pour déplacer — clic pour lecture / pause"
+           style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: CONTROLS_H, cursor: "grab", touchAction: "none" }} />
+      <div className="study-float-actions" style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6 }}>
+        <Btn label="Revenir à la note" onClick={back}><Maximize2 size={14} strokeWidth={2} /></Btn>
+        <Btn label="Fermer la vidéo" onClick={dismiss}><X size={15} strokeWidth={2} /></Btn>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-        <span style={{ flex: 1, minWidth: 0, ...TYPE.label, color: T.textSub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: 2 }}>
-          {entry.title || "Vidéo d'étude"}
-        </span>
-        <Btn label="Revenir à la note" onClick={back}><Maximize2 size={14} strokeWidth={1.75} /></Btn>
-        <Btn label="Changer de coin" onClick={() => setPrefs({ corner: CORNERS[(CORNERS.indexOf(corner) + 1) % CORNERS.length] })}>
-          <MoveDiagonal size={14} strokeWidth={1.75} />
-        </Btn>
-        <Btn label="Fermer la vidéo" onClick={dismiss}><X size={14} strokeWidth={1.75} /></Btn>
-      </div>
-      <style>{`.study-float-btn:hover, .study-float-btn:focus-visible { color: ${T.text} !important; background: ${FIELD_BG} !important; }`}</style>
+      {["tl", "tr", "bl", "br"].map(c => (
+        <div key={c} aria-hidden onPointerDown={onResizeDown(c)} style={{
+          position: "absolute", width: GRIP, height: GRIP, touchAction: "none",
+          ...(c.includes("t") ? { top: 0 } : { bottom: 0 }),
+          ...(c.includes("l") ? { left: 0 } : { right: 0 }),
+          cursor: c === "tl" || c === "br" ? "nwse-resize" : "nesw-resize",
+        }} />
+      ))}
+      {/* Les boutons n'apparaissent qu'au survol : le reste du temps, il n'y a
+          que la vidéo. Toujours visibles au toucher, faute de survol. */}
+      <style>{`
+        .study-float .study-float-actions { opacity: 0; transition: opacity 140ms var(--ease-out, ease); }
+        .study-float:hover .study-float-actions, .study-float:focus-within .study-float-actions { opacity: 1; }
+        @media (hover: none) { .study-float .study-float-actions { opacity: 1; } }
+        .study-float-btn:hover, .study-float-btn:focus-visible { transform: scale(1.06); }
+      `}</style>
     </div>
   );
 }
 
+const clampW = (w) => Math.max(MIN_W, Math.min(w, window.innerWidth - 2 * MARGIN));
+
+/** Garde la vidéo entière dans la fenêtre, quelle que soit sa taille. */
+function fit(b) {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const w = Math.min(clampW(b.w), (vh - 2 * MARGIN) * RATIO);
+  const h = w / RATIO;
+  return {
+    w,
+    x: Math.max(MARGIN, Math.min(b.x, vw - w - MARGIN)),
+    y: Math.max(MARGIN, Math.min(b.y, vh - h - MARGIN)),
+  };
+}
+
+/* Place et taille retenues par appareil, comme les réglages du lecteur : ce
+   qui convient à un grand écran n'a pas de sens sur un portable. Par défaut,
+   en bas à droite. */
+function readBox() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BOX_KEY) || "null");
+    if (raw && [raw.x, raw.y, raw.w].every(Number.isFinite)) return fit(raw);
+  } catch { /* navigation privée ou valeur abîmée */ }
+  const w = 360;
+  return fit({ w, x: window.innerWidth - w - 24, y: window.innerHeight - w / RATIO - 24 });
+}
+
+function writeBox(b) {
+  try {
+    localStorage.setItem(BOX_KEY, JSON.stringify({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w) }));
+  } catch { /* navigation privée */ }
+}
+
+/* Posé sur l'image : le voile reste sombre dans les deux thèmes (cf. SCRIM). */
 function Btn({ label, onClick, children }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} title={label} className="study-float-btn"
+    <button type="button" onClick={onClick} onPointerDown={e => e.stopPropagation()}
+            aria-label={label} title={label} className="study-float-btn"
             style={{
               all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, borderRadius: 6, color: T.textMut, flexShrink: 0,
+              width: 28, height: 28, borderRadius: 999, background: SCRIM, color: T.onSolid,
+              transition: "transform 120ms var(--ease-out, ease)",
             }}>
       {children}
     </button>

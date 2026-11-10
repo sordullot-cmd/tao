@@ -2,7 +2,7 @@ import { useAuth } from "@/lib/auth/supabaseAuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import { getErrorMessage } from "@/lib/utils/errorUtils";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { withNetPnl } from "@/lib/tradeFees";
+import { toStoredTrade, withNetPnl } from "@/lib/tradeFees";
 
 /**
  * Hook pour gérer les détails de trades (notes, tags, etc.)
@@ -379,8 +379,11 @@ export function useTrades() {
         console.log("➕ Adding trade:", tradeData);
         
         // Créer localement d'abord (mapping camelCase → snake_case pour Supabase)
+        /* `toStoredTrade` : un trade venu de l'écran est NET (cf. `netTrades`
+           plus bas). Le réinsérer tel quel — c'est ce que font les annulations
+           de suppression — retirait les frais deux fois. */
         const newTrade: any = {
-          ...tradeData,
+          ...toStoredTrade(tradeData),
           id: tradeData.id || crypto.randomUUID?.() || Date.now().toString(),
           user_id: user.id,
           created_at: new Date().toISOString()
@@ -400,15 +403,24 @@ export function useTrades() {
         // Essayer Supabase en arrière-plan (ne garder que les colonnes existantes)
         const allowed = [
           "id","user_id","account_id","date","symbol","direction","entry","exit",
-          "pnl","entry_time","exit_time","contract_type","quantity","volume","created_at"
+          "pnl","entry_time","exit_time","contract_type","quantity","volume","created_at",
+          // Frais réels : sans eux, le trade restauré retombe sur le barème.
+          "fees"
         ];
         const dbTrade: any = {};
         for (const k of allowed) if (newTrade[k] !== undefined) dbTrade[k] = newTrade[k];
 
-        const { data, error: err } = await supabase
+        let { data, error: err } = await supabase
           .from("apex_trades")
           .insert([dbTrade])
           .select();
+
+        /* Même tolérance que l'import (AddTradePage) : une base sans la
+           colonne `fees` (migration 035) garde le trade, au prix du barème. */
+        if (err && /could not find the 'fees' column/i.test(err.message || "")) {
+          const { fees: _omit, ...withoutFees } = dbTrade;
+          ({ data, error: err } = await supabase.from("apex_trades").insert([withoutFees]).select());
+        }
 
         if (err) {
           console.error("⚠️ Erreur Supabase ajout trade:", err);

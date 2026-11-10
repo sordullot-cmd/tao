@@ -89,7 +89,8 @@ describe("Page Journée", () => {
     expect(within(panel()).getByText("Heure")).toBeInTheDocument();
     expect(within(panel()).getAllByText("2 comptes").length).toBeGreaterThan(0);
 
-    fireEvent.click(recaps[0]);
+    // Le plus récent en haut : NQ (fusionné, pris le premier) ferme la liste.
+    fireEvent.click(recaps[recaps.length - 1]);
     const side = screen.getByRole("complementary", { name: "Trade panel" });
     expect(side).toHaveAttribute("data-panel-only", "true");
     expect(side).toHaveAttribute("data-executions", "2");
@@ -99,15 +100,16 @@ describe("Page Journée", () => {
     expect(screen.queryByRole("complementary", { name: "Trade panel" })).toBeNull();
   });
 
-  it("ouvre le formulaire de revue d'un clic sur la ligne, au lieu d'en déplier le détail", () => {
+  it("ouvre le formulaire de revue d'un clic sur la ligne, et en déplie le détail", () => {
     render(<TradingDayPage trades={trades} accounts={accounts} />);
     fireEvent.click(tab(/Trade recap/));
     const row = within(panel()).getByRole("button", { name: /ES/ });
-    expect(row).not.toHaveAttribute("aria-expanded");
+    expect(row).toHaveAttribute("aria-expanded", "false");
 
     fireEvent.click(row);
     expect(screen.getByRole("complementary", { name: "Trade panel" })).toHaveAttribute("data-executions", "1");
     expect(row).toHaveAttribute("aria-pressed", "true");
+    expect(row).toHaveAttribute("aria-expanded", "true");
     // Un second clic sur la même ligne referme, comme la commande en bout de ligne.
     fireEvent.click(row);
     expect(screen.queryByRole("complementary", { name: "Trade panel" })).toBeNull();

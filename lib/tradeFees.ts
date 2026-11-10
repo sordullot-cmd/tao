@@ -63,6 +63,26 @@ export function applyNetPnl<T extends TradeLike>(trade: T): T {
   return { ...trade, pnlGross: gross, pnl: gross - fees };
 }
 
+/**
+ * Inverse de `applyNetPnl` : la forme à RÉÉCRIRE en base d'un trade tel que
+ * l'app l'expose. Sert à l'annulation d'une suppression, qui réinsère un trade
+ * relu depuis l'écran — donc net.
+ *
+ * Deux pièges, chacun suffisant pour fausser le P&L :
+ * - réécrire `pnl` tel quel stockait le NET comme brut, et la lecture
+ *   suivante retirait les frais une seconde fois ;
+ * - perdre `fees` faisait retomber sur le barème, qui n'est pas ce que le
+ *   relevé a facturé.
+ * `pnlGross` n'est pas une colonne : il disparaît une fois le brut remis
+ * dans `pnl`.
+ */
+export function toStoredTrade<T extends TradeLike>(trade: T): Omit<T, "pnlGross"> {
+  const { pnlGross, ...rest } = trade;
+  return pnlGross != null && pnlGross !== ""
+    ? { ...rest, pnl: Number(pnlGross) }
+    : rest;
+}
+
 /** Applique `applyNetPnl` à une liste de trades. */
 export function withNetPnl<T extends TradeLike>(list: T[]): T[] {
   return Array.isArray(list) ? list.map(applyNetPnl) : list;

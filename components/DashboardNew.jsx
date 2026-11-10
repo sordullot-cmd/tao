@@ -762,9 +762,13 @@ export default function App() {
                 user_id: userId,
                 account_id: newId,
                 date: tr.date, symbol: tr.symbol, direction: tr.direction,
-                // On réécrit le P&L BRUT (les frais sont recalculés au chargement).
+                // On réécrit le P&L BRUT : les frais sont déduits au chargement.
                 entry: tr.entry, exit: tr.exit, pnl: tr.pnlGross != null ? tr.pnlGross : tr.pnl,
                 entry_time: tr.entry_time || null, exit_time: tr.exit_time || null,
+                /* Les frais réels et les lots suivent : sans `fees`, le trade
+                   restauré retombait sur le barème, et le P&L du compte
+                   changeait d'une suppression annulée à l'autre. */
+                quantity: tr.quantity ?? null, volume: tr.volume ?? null, fees: tr.fees ?? null,
               })));
             }
             const { data: after } = await sb.from("trading_accounts").select("*").eq("user_id", userId).order("created_at", { ascending: false });

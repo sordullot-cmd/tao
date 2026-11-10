@@ -145,3 +145,21 @@ describe("barème moyen contre frais du relevé", () => {
     expect(calculateFees({ symbol: "MNQ", quantity: 2 })).toBe(3.64);
   });
 });
+
+describe("P&L et lots rapportés par un réimport", () => {
+  it("répare un trade entré faux au lieu de le déclarer doublon et de le laisser tel quel", () => {
+    // Collage partiel : 1 lot gardé sur les 1 + 18 + 1 de la position.
+    const existing = [tr({ id: "u1", pnl: 12.5, quantity: 1, fees: 1.32 })];
+    const { toInsert, toRefresh } = splitNewTrades(
+      [tr({ pnl: 250, quantity: 20, fees: 26.4 })],
+      existing,
+    );
+    expect(toInsert).toHaveLength(0);
+    expect(toRefresh).toEqual([{ id: "u1", pnl: 250, quantity: 20, fees: 26.4 }]);
+  });
+
+  it("n'écrit rien quand le relevé redit ce que la base sait déjà", () => {
+    const existing = [tr({ id: "u1", pnl: 250, quantity: 20, fees: 26.4 })];
+    expect(splitNewTrades([tr({ pnl: 250, quantity: 20, fees: 26.4 })], existing).toRefresh).toEqual([]);
+  });
+});

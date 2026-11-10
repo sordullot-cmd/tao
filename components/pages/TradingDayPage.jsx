@@ -89,8 +89,9 @@ const bodyOf = (content) => {
 };
 
 /* Colonnes du recap : l'heure seule (la carte EST une journée), le compte
-   (une ligne fusionnée annonce « 2 comptes »), puis durée, R et P&L. */
-const RECAP_COLUMNS = ["symbol", "direction", "time", "account", "duration", "r", "pnl"];
+   (une ligne fusionnée annonce « 2 comptes »), puis durée, lots, R et P&L.
+   Les lots d'une ligne fusionnée sont la somme des copies (`mergeExecutions`). */
+const RECAP_COLUMNS = ["symbol", "direction", "time", "account", "duration", "lots", "r", "pnl"];
 
 const readEmotionCache = () => {
   try { return JSON.parse(localStorage.getItem("tao_emotion_tags") || "{}") || {}; } catch { return {}; }
@@ -453,7 +454,10 @@ export function DayFlowSummary({ trades = [], onOpen, header = null }) {
   // au point de pousser le Tao Score hors de l'écran.
   const [openList, setOpenList] = React.useState(null);
   const pendingTasks = taskLists.flatMap(l => l.items.filter(it => !routineChecks[it.id]));
-  const pendingTrades = dayTrades.filter(tr => !isTradeRecapped(tr, recapState));
+  // Le dernier trade en haut : c'est celui qu'on vient de clôturer et qu'on
+  // cherche à relire. L'ordre chronologique reste celui de `dayTrades`, dont
+  // les objectifs dépendent — on n'inverse qu'à l'affichage.
+  const pendingTrades = dayTrades.filter(tr => !isTradeRecapped(tr, recapState)).reverse();
   const current = steps.findIndex(s => !s.done);
   const reached = current === -1 ? steps.length : current;
   const link = (i) => (i < reached ? T.brand : HAIRLINE);
@@ -1516,6 +1520,8 @@ function TaskListModal({ list, onClose, onSave, onDelete }) {
 function RecapPanel({ dayTrades, rawDayTrades, summary, recapped, recapState, accounts, strategies, onRecapChange }) {
   const [recapId, setRecapId] = React.useState(null);
   const recapTrade = dayTrades.find(tr => tr.id === recapId) || null;
+  // Plus récent en haut, comme la liste repliée du tableau de bord.
+  const newestFirst = React.useMemo(() => [...dayTrades].reverse(), [dayTrades]);
 
   return (
     /* Deux blocs blancs côte à côte : la liste, et le formulaire du trade
@@ -1538,15 +1544,16 @@ function RecapPanel({ dayTrades, rawDayTrades, summary, recapped, recapState, ac
 
         {/* La base commune à toutes les listes de trades du site — mêmes
             colonnes — avec, au bout de chaque ligne, l'état de la revue. Ici
-            la ligne entière ouvre le formulaire : c'est ce qu'on vient faire
-            sur cette étape, le détail replié n'y apprenait rien de plus que
-            le panneau. */}
+            la ligne entière ouvre le formulaire ET déplie son détail (prix,
+            heures, frais) : on remplit la revue avec les chiffres du trade
+            sous les yeux. */}
         <TradesList
-          trades={dayTrades}
+          trades={newestFirst}
           strategies={strategies}
           accounts={accounts}
           columns={RECAP_COLUMNS}
           activeId={recapId}
+          expandActive
           onRowClick={(tr) => setRecapId(id => (id === tr.id ? null : tr.id))}
           empty={t("day.noTrades")}
           rowActionWidth={176}
